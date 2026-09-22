@@ -223,7 +223,7 @@ export const MOTIF_TASK: AnalysisTask = {
   id: 'motif',
   title: 'Find a motif',
   blurb: 'Every place a motif occurs, as sites and as a density track.',
-  group: 'tracks',
+  group: '1d',
   // The residues live in the annotations worker and are never shipped out
   // whole, so the search goes to them — see the module docstring and
   // `analysis/job.ts`'s `SequenceReader`.

@@ -50,17 +50,6 @@ export interface StructureView {
   chord: readonly [number, number] | null
   /** Loops drawn as chords (§25.5): each pair's anchors, as beads. */
   chords: ReadonlyArray<readonly [number, number]>
-  /**
-   * A size per bead, as a factor of the bead radius, or `null` for every
-   * bead the same (`StructureStyle.sizeBy`).
-   */
-  sizes: Float32Array | null
-  /**
-   * The map's contacts from the pinned bead as chords: the bead at the far
-   * end, the contact's weight (0–1 of the strongest) and its colour on the
-   * map's scale.
-   */
-  contactChords: ReadonlyArray<{ bead: number; weight: number; colour: string }>
   /** The reader's measurements: pairs of beads joined by a dashed line, with the distance written at the middle. */
   measures: ReadonlyArray<readonly [number, number]>
   /**
@@ -184,7 +173,6 @@ export function drawStructure(
   if (drawBeads) {
     for (let i = 0; i < n; i++) if (shown[i] === 1) marks.push({ depth: depth[i], kind: 0, a: i, b: -1 })
   }
-  const sizeOf = (i: number): number => (view.sizes === null ? 1 : view.sizes[i])
   marks.sort((m, o) => o.depth - m.depth)
 
   ctx.lineCap = 'round'
@@ -252,7 +240,7 @@ export function drawStructure(
       continue
     }
     const t = fade(i)
-    const radius = Math.max(0.4, beadRadius * sizeOf(i) * size[i] * (1 - DEPTH_SHRINK * t))
+    const radius = Math.max(0.4, beadRadius * size[i] * (1 - DEPTH_SHRINK * t))
     const marked = view.hovered.includes(i) || view.pinned === i
     if (marked) {
       ctx.globalAlpha = 1
@@ -275,7 +263,7 @@ export function drawStructure(
     if (shown[mark.bead] !== 1) continue
     const i = mark.bead
     const t = fade(i)
-    const radius = Math.max(0.8, beadRadius * sizeOf(i) * size[i] * MARKED_BEAD * (1 - DEPTH_SHRINK * t))
+    const radius = Math.max(0.8, beadRadius * size[i] * MARKED_BEAD * (1 - DEPTH_SHRINK * t))
     ctx.globalAlpha = view.lit !== null && view.lit[i] === 0 ? style.opacity : 1
     ctx.fillStyle = paled(mark.colour, background, DEPTH_FADE * t)
     ctx.beginPath()
@@ -296,22 +284,6 @@ export function drawStructure(
       ctx.lineTo(px[b], py[b])
     }
     ctx.stroke()
-  }
-
-  // The map's contacts from the pinned bead: a line per contact, as wide as
-  // the contact is strong, in the map's colour for it.
-  if (view.pinned >= 0 && view.contactChords.length > 0 && shown[view.pinned] === 1) {
-    const p = view.pinned
-    ctx.globalAlpha = 0.85
-    for (const contact of view.contactChords) {
-      if (shown[contact.bead] !== 1) continue
-      ctx.strokeStyle = contact.colour
-      ctx.lineWidth = Math.max(0.8, stickRadius * (0.5 + 2 * contact.weight))
-      ctx.beginPath()
-      ctx.moveTo(px[p], py[p])
-      ctx.lineTo(px[contact.bead], py[contact.bead])
-      ctx.stroke()
-    }
   }
 
   // The reader's measurements: dashed ink, the distance written at the middle.

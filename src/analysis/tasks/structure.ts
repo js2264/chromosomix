@@ -74,9 +74,39 @@ function availability(context: AnalysisContext) {
  */
 const PAIRS_PER_SECOND = 160e6
 
-/** How long a hundred refinement steps take at that rate: the step and its stress, both a pass over every pair. */
-function refineWords(beads: number): string {
-  const seconds = (100 * 2 * beads * beads) / PAIRS_PER_SECOND
+/**
+ * Pairs a second one evaluation of the negative binomial visits.
+ *
+ * Measured against {@link PAIRS_PER_SECOND} on the same map and the same
+ * machine: a likelihood evaluation costs about 2.3 times a SMACOF pass, which
+ * is a `log1p` and a `log` per pair where the other has a square root. The
+ * ratio is what is stable across machines, so it is the ratio that is written
+ * down and this constant is derived from it.
+ */
+const NB_PAIRS_PER_SECOND = PAIRS_PER_SECOND / 2.3
+
+/**
+ * Evaluations of the likelihood one pastis-NB step costs.
+ *
+ * An L-BFGS iteration is one line search, and a line search is a value and a
+ * gradient at each step length it tries — usually one, sometimes three. Just
+ * over one on the runs this was measured on, which is what a quasi-Newton
+ * direction scaled to a unit step is supposed to give.
+ */
+const NB_EVALUATIONS_PER_STEP = 1.3
+
+/**
+ * How long a hundred refinement steps take at that rate.
+ *
+ * A ShRec3D step is the move and its stress, both a pass over every pair; a
+ * pastis-NB step is a line search over a function that costs rather more per
+ * pair. About half again as long, and the reader is told which before pressing
+ * run rather than after.
+ */
+function refineWords(beads: number, nb: boolean): string {
+  const seconds = nb
+    ? (100 * NB_EVALUATIONS_PER_STEP * beads * beads) / NB_PAIRS_PER_SECOND
+    : (100 * 2 * beads * beads) / PAIRS_PER_SECOND
   if (seconds < 1) return 'well under a second per hundred steps'
   if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps`
   return `about ${Math.round(seconds / 60)} minutes per hundred steps`
@@ -144,7 +174,7 @@ export const STRUCTURE_MAP_TASK: AnalysisTask = {
   id: 'structuremap',
   title: 'Model versus map',
   blurb: 'How well a 3D model’s distances agree with the contacts the map counted.',
-  group: 'map',
+  group: '3d',
   venue: 'analysis',
   version: 1,
   availability,
@@ -189,7 +219,7 @@ export const SPATIAL_TRACKS_TASK: AnalysisTask = {
   id: 'spatialtracks',
   title: 'Spatial tracks',
   blurb: 'The model as tracks: radial position, distance to a locus, local compaction.',
-  group: 'map',
+  group: '3d',
   venue: 'analysis',
   version: 1,
   availability,
@@ -199,6 +229,29 @@ export const SPATIAL_TRACKS_TASK: AnalysisTask = {
 }
 
 const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
+  {
+    kind: 'choice',
+    key: 'method',
+    label: 'method',
+    default: 'nb',
+    // Not two settings of one algorithm: the fact the control cannot show is
+    // that the answer changes the model rather than the speed. What each
+    // position *means* is on the options, where `ParamForm` puts an option's
+    // own hint, and the argument between them is §25.6's to make.
+    hint: 'The two published readings of a contact count, which give different models of the same map.',
+    options: [
+      {
+        value: 'nb',
+        label: 'pastis-NB · a count is a count',
+        hint: 'Fits the model the counts are likeliest under, so a pair counted zero times is evidence rather than a distance to invent.',
+      },
+      {
+        value: 'shrec3d',
+        label: 'ShRec3D · a count is a distance',
+        hint: 'Faster, and what most published models were made with, but it has to invent a distance for every pair the map never counted.',
+      },
+    ],
+  },
   {
     kind: 'region',
     key: 'region',
@@ -215,7 +268,11 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'alpha',
     label: 'exponent α',
-    hint: 'Distance = c^(−1/α); 3 is the usual value, 1 flattens the near-diagonal, 6 stretches it.',
+    // One sentence, and no formula: the exponent means one thing to each method
+    // — a mean falling as d^(−α), a distance read back as c^(−1/α) — and a
+    // hint that printed both would be teaching §25.6 on a number box. What a
+    // reader setting it needs is which way it leans and where to start.
+    hint: 'How steeply contacts fall off with distance: 3 is the fractal-globule value, 1 flattens the near diagonal, 6 stretches it.',
     default: 3,
     min: 0.5,
     max: 6,
@@ -225,6 +282,10 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     key: 'weights',
     label: 'weight pairs by',
     default: 'contacts',
+    // pastis-NB has no weighting to set: the likelihood *is* the weighting, and
+    // offering a control that does nothing under the default method would be a
+    // question whose answer is never read.
+    when: (params) => params.method === 'shrec3d',
     // The three cases are on the options, which is where `ParamForm` puts an
     // option's own `hint` — in its `title` — rather than in a four-line
     // paragraph beside the control. A hint says what the control wants; what
@@ -253,8 +314,8 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     key: 'iterations',
     label: 'refinement steps',
     hint:
-      'How many SMACOF steps move the beads after the classical start, stopping earlier once a ' +
-      'step improves the fit by less than a millionth.',
+      'How many steps refine the beads after the start, stopping earlier once a step stops ' +
+      'buying anything.',
     default: 150,
     min: 0,
     max: 2000,
@@ -303,9 +364,12 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   const framed = framing === null ? 0 : Math.max(framing.rows[1] - framing.rows[0], framing.cols[1] - framing.cols[0])
   const blocks = wholeFile ? context.contigs.length : Math.max(1, named.length)
   const beads = wholeFile ? context.nBins : named.length === 0 ? framed : named.reduce((sum, at) => sum + at.bins, 0)
-  // Borrowed only when the block is at the file's own resolution and holds
-  // everything asked for; otherwise every pair of sequences is a read.
-  const drawnAsRead = framing !== null && framing.binsPerCell === 1
+  // Borrowed only when the block is at the file's own resolution, holds
+  // everything asked for, **and is the counts this method wants**; otherwise
+  // every pair of sequences is a read. pastis-NB wants raw counts, so a
+  // balanced view is a view it cannot borrow (§25.6).
+  const drawnAsRead =
+    framing !== null && framing.binsPerCell === 1 && !(params.method !== 'shrec3d' && framing.balance)
   const covered =
     drawnAsRead &&
     framing !== null &&
@@ -316,11 +380,12 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
     )
   const reads = !covered && !(drawnAsRead && named.length === 0 && !wholeFile)
   const pairs = beads * beads
+  const nb = params.method !== 'shrec3d'
   const note =
     beads === 0
       ? 'The block the view holds, at the resolution it is drawn at.'
       : `${beads.toLocaleString()} beads at ${binWords(context.binsize)}, ${pairs.toLocaleString()} pairs a step; ` +
-        `${refineWords(beads)}, ${matrixWords(beads)}` +
+        `${refineWords(beads, nb)}, ${matrixWords(beads)}` +
         (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file` : '')
   return {
     class: reads ? 'scan' : 'bounded',
@@ -351,7 +416,7 @@ export const RECONSTRUCT_TASK: AnalysisTask = {
   id: 'reconstruct3d',
   title: 'Model from the map',
   blurb: 'A 3D model of what is loaded: contacts read as distances, beads placed to honour them.',
-  group: 'map',
+  group: '3d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

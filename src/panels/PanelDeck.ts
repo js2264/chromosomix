@@ -108,6 +108,7 @@ import {
   localCompanions,
   withLocalCompanions,
   readDeckLook,
+  type DeckLocal,
   withLook,
   type DeckLook,
   type GrowDirection,
@@ -458,9 +459,8 @@ const NO_MAP_LEAD =
  * in its own tooltip. Left with the opening sentence on it, it was a promise it
  * could no longer keep.
  */
-const ADD_STRUCTURE = 'Open a cell drawing the session’s 3D structure beside the maps'
+const ADD_STRUCTURE = 'Open a cell drawing a 3D structure beside the maps; each model gets its own'
 
-const ONE_STRUCTURE = 'The deck already holds its one structure cell.'
 
 const NO_ROOM =
   `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
@@ -934,8 +934,29 @@ export class PanelDeck {
       // say (§16.6). What this session privately remembers about those cells is
       // merged back in here — resolved ones become live panels again, and the
       // rest stay vacancies that at least know what they were.
+      //
+      // **The cells this deck is already holding count first.** A `~` is all
+      // the hash can say about a local map, and what it is resolved against
+      // was, until now, only the *stored* record — which is re-opened through
+      // a filesystem grant. A file that arrived by **drag and drop** has no
+      // grant: the browser hands over a `File`, not a handle, and nothing can
+      // ask for one afterwards. So dropping four coolers on a deck opened four
+      // live panels, published, came back through here, failed to resolve any
+      // of the four, and replaced all of them with vacancies reading *this cell
+      // held that file and it could not be re-opened* — about files that were
+      // open a frame earlier and whose bytes this deck still had in hand.
+      //
+      // A slot that is live is the best possible answer for its own index, so
+      // it is asked before the record is. Positional, which is exactly the
+      // correspondence {@link publish} writes and `rememberedCompanions`
+      // already assumes; and only ever over a `~`, so a link that put a remote
+      // map or a structure cell at that index still wins.
+      const live: DeckLocal[] = []
+      this.slots.forEach((slot, index) => {
+        if (slot.ref.kind === 'local') live.push({ index, uri: slot.ref.uri })
+      })
       const wanted = withLocalCompanions(
-        parseMaps(state.maps),
+        withLocalCompanions(parseMaps(state.maps), live),
         locals.filter((local) => local.source !== null),
       )
       if (!sameRefs(wanted, this.slots.map((slot) => slot.ref))) this.adopt(wanted, locals)
@@ -1449,6 +1470,7 @@ export class PanelDeck {
         name: ref.uri,
         onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onStructure: (id) => this.showStructure(id),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1471,6 +1493,13 @@ export class PanelDeck {
                 contacts(from, to),
               contactsScale: () => shared?.contactsScale?.() ?? null,
             }),
+        // What the *other* structure cells are drawing, so this one does not
+        // fall to a model already on screen.
+        taken: () =>
+          this.slots
+            .filter((held) => held !== slot && held.ref.kind === 'structure')
+            .map((held) => held.cell?.shownModel?.() ?? null)
+            .filter((id): id is string => id !== null),
         memoryKey: () => this.props.memoryKey(),
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),
@@ -1507,6 +1536,7 @@ export class PanelDeck {
         // is the cell that opens — {@link add} would look for the *first* empty
         // one, which in a 2 × 2 with three gaps is not the one they aimed at.
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onStructure: (id) => this.showStructure(id),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -2043,8 +2073,7 @@ export class PanelDeck {
     if (isStructureName(picked.uri)) {
       if (picked.source.kind === 'local') this.props.structure?.onDrop(picked.source.file)
       else this.props.structure?.onDropUrl(picked.uri)
-      if (this.hasStructure()) this.remove(slot)
-      else this.occupy(slot, { kind: 'structure' })
+      this.occupy(slot, { kind: 'structure' })
       return
     }
     this.occupy(
@@ -2115,12 +2144,6 @@ export class PanelDeck {
    * adding a map disagree about what the deck is.
    */
   add(ref: PanelRef, source?: SourceSpec): void {
-    // One structure cell per deck (§25): a second press, or a second g3d
-    // dropped, keeps the one there is.
-    if (ref.kind === 'structure' && this.hasStructure()) {
-      this.hideAdd()
-      return
-    }
     if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
       this.warn(NO_MAP_LEAD)
       return
@@ -2404,9 +2427,8 @@ export class PanelDeck {
     // the deck's own word for its occupants (§16.11).
     const adding = !this.addRow.classList.contains('hidden')
     const cellsOnly = this.props.mapsAllowed?.() === false
-    const hasStructure = this.hasStructure()
-    this.structureButton.disabled = hasStructure
-    this.structureButton.title = hasStructure ? ONE_STRUCTURE : ADD_STRUCTURE
+    this.structureButton.disabled = false
+    this.structureButton.title = ADD_STRUCTURE
     this.addRow.classList.toggle('is-cells-only', cellsOnly)
     // And the `+` edges say the same thing the row does: what a cell here can
     // hold. Told on every paint, because a session moves between a map lead and
@@ -2770,30 +2792,60 @@ export class PanelDeck {
     return this.leadAxis?.windows() ?? null
   }
 
-  /** Whether the deck already holds its one structure cell (§25). */
+  /** Whether the deck holds any structure cell at all (§25). */
   hasStructure(): boolean {
     return this.slots.some((slot) => slot.ref.kind === 'structure')
   }
 
   /**
-   * Draw this structure row in the structure cell, opening the cell if the
-   * deck has none. The Structures card's *show in the deck* lands here.
+   * Draw this structure row in **its own cell**, opening one if no cell is
+   * drawing it. The Structures card's eye lands here.
+   *
+   * It used to be one cell per deck: a second model took the cell the first
+   * was in, so a reader with two models could compare them only by swapping
+   * back and forth, and a reconstruction landing destroyed the picture it was
+   * to be judged against. A model gets a cell of its own now, and a cell keeps
+   * the model it was given — which is what makes two of them a comparison.
+   *
+   * Nothing happens where a cell already draws it: the eye is a state, and
+   * pressing a lit one is {@link hideStructure}'s business.
    */
   showStructure(id: string): void {
-    if (!this.hasStructure()) this.add({ kind: 'structure' })
-    for (const slot of this.slots) slot.cell?.showModel?.(id)
+    for (const slot of this.slots) {
+      if (slot.cell?.shownModel?.() === id) return
+    }
+    // An empty structure cell first — one whose row has gone, or one opened
+    // from the bar before any model arrived — because a reader who made room
+    // meant it to be filled.
+    const empty = this.slots.find(
+      (slot) => slot.ref.kind === 'structure' && (slot.cell?.shownModel?.() ?? null) === null,
+    )
+    if (empty !== undefined) {
+      empty.cell?.showModel?.(id)
+      return
+    }
+    // The slots this deck held before the cell was opened, so the new one can
+    // be told apart: a fresh structure cell falls back to the first row the
+    // moment it syncs, so *the one with no model* would never find it.
+    const before = new Set(this.slots.filter((slot) => slot.ref.kind === 'structure'))
+    this.add({ kind: 'structure' })
+    const opened = this.slots.find((slot) => slot.ref.kind === 'structure' && !before.has(slot))
+    opened?.cell?.showModel?.(id)
   }
 
   /**
-   * Take the structure cell out of the deck, where there is one.
+   * Take a structure cell out of the deck: the one drawing `id`, or every one
+   * where no id is given.
    *
    * The counterpart of {@link showStructure}, for the eye on a Structures row:
-   * showing a model opens the cell, hiding it closes the cell again. The deck
+   * showing a model opens its cell, hiding it closes that cell again. The deck
    * publishes as ever, so a deck left with nothing in it goes with it.
    */
-  hideStructure(): void {
+  hideStructure(id?: string): void {
     for (const slot of [...this.slots]) {
-      if (slot.ref.kind === 'structure') this.remove(slot)
+      if (slot.ref.kind !== 'structure') continue
+      if (id !== undefined && slot.cell?.shownModel?.() !== id) continue
+      this.remove(slot)
     }
   }
 
@@ -2813,13 +2865,14 @@ export class PanelDeck {
     return out
   }
 
-  /** The structure row the structure cell is drawing, or `null` where there is no cell. */
-  shownStructure(): string | null {
+  /** Every structure row the deck is drawing, one per structure cell. */
+  shownStructures(): string[] {
+    const out: string[] = []
     for (const slot of this.slots) {
       const shown = slot.cell?.shownModel?.()
-      if (shown !== undefined) return shown
+      if (shown !== undefined && shown !== null && !out.includes(shown)) out.push(shown)
     }
-    return null
+    return out
   }
 
   /** Whether any cell beside the lead holds a map. */

@@ -12,6 +12,7 @@ import { AnnotationStore } from '@/annotations/store'
 import type { AnnotationLoader } from '@/annotations/loader'
 import type { AnnotationEntry, ComputedSource } from '@/annotations/types'
 import { defaultStyle } from '@/annotations/types'
+import { STRUCTURE_DRAG_TYPE } from '@/ui/dom'
 import { StructureCard } from '@/ui/StructureCard'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -54,7 +55,7 @@ function seed(store: AnnotationStore, id: string, source: Parameters<AnnotationS
   })
 }
 
-function make(options: { onShow?: (entry: AnnotationEntry) => void; onHide?: () => void; shown?: () => string | null; onRecompute?: (entry: AnnotationEntry) => void } = {}) {
+function make(options: { onShow?: (entry: AnnotationEntry) => void; onHide?: (entry: AnnotationEntry) => void; shown?: (id: string) => boolean; onRecompute?: (entry: AnnotationEntry) => void } = {}) {
   const store = new AnnotationStore(`structures-${Math.random()}.cool`, { persist: false })
   const added: string[] = []
   const loader = {
@@ -83,6 +84,37 @@ describe('the Structures card', () => {
     expect(card.el.querySelector('.ann-drop-label')?.textContent).toBe('Load a structure')
   })
 
+  it('gives every row a grip that carries the model into the deck', () => {
+    const { store, card } = make()
+    seed(store, 'a.g3d', { kind: 'detached', name: 'a.g3d' })
+    seed(store, 'b.g3d', { kind: 'detached', name: 'b.g3d' })
+    const rows = all<HTMLElement>(card.el, '.ann-row')
+    expect(rows).toHaveLength(2)
+    // One per row, and each carrying its own model — the point of the gesture
+    // being *that one, there* where the row's button always means the one cell.
+    for (const row of rows) {
+      const grip = row.querySelector<HTMLElement>('.ann-grip')
+      expect(grip?.getAttribute('draggable')).toBe('true')
+      expect(grip?.dataset['grip']).toBe(row.dataset['id'])
+    }
+    // The drag carries the id under this app's own type, which is what lets an
+    // empty cell tell a model apart from a file while the drag is still up.
+    const carried = new Map<string, string>()
+    const transfer = {
+      effectAllowed: '',
+      setData: (type: string, value: string) => carried.set(type, value),
+      setDragImage: () => {},
+    }
+    const grip = rows[1].querySelector<HTMLElement>('.ann-grip')
+    const event = new Event('dragstart', { bubbles: true }) as Event & { dataTransfer: unknown }
+    Object.defineProperty(event, 'dataTransfer', { value: transfer })
+    grip?.dispatchEvent(event)
+    expect(carried.get(STRUCTURE_DRAG_TYPE)).toBe('b.g3d')
+    // …and something under `text/plain` too, because a browser cancels a drag
+    // that carries nothing at all.
+    expect(carried.get('text/plain')).toBeDefined()
+  })
+
   /**
    * **The eye is the row's one show/hide.** There was a *show in the deck* text
    * button here as well, which did the same thing, relabelled itself *shown in
@@ -93,12 +125,12 @@ describe('the Structures card', () => {
    */
   it('puts a model in the deck with the eye, and says which one is there', () => {
     const shown: string[] = []
-    const hidden: number[] = []
-    let current: string | null = null
+    const hidden: string[] = []
+    const drawn = new Set<string>()
     const { store, card } = make({
       onShow: (entry) => shown.push(entry.id),
-      onHide: () => hidden.push(1),
-      shown: () => current,
+      onHide: (entry) => hidden.push(entry.id),
+      shown: (id) => drawn.has(id),
     })
     seed(store, 'a.g3d', { kind: 'detached', name: 'a.g3d' })
     seed(store, 'b.g3d', { kind: 'detached', name: 'b.g3d' })
@@ -108,14 +140,15 @@ describe('the Structures card', () => {
     expect(eyes.map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     eyes[1].click()
     expect(shown).toEqual(['b.g3d'])
-    current = 'b.g3d'
+    drawn.add('b.g3d')
     card.refresh()
     const after = all<HTMLButtonElement>(card.el, '.ann-eye')
     expect(after.map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
     expect(all<HTMLElement>(card.el, '.ann-row.is-shown').map((row) => row.dataset['id'])).toEqual(['b.g3d'])
-    // …and the lit one takes it back out, which is what a reader presses it for.
+    // …and the lit one takes *that row's* cell back out, which is what a reader
+    // presses it for. Per row, since each model has a cell of its own (§25.3).
     after[1].click()
-    expect(hidden).toEqual([1])
+    expect(hidden).toEqual(['b.g3d'])
   })
 
   it('offers no eye where no deck is possible, and disables the export until the row is ready', () => {
@@ -157,7 +190,7 @@ describe('the Structures card', () => {
     const { store, card } = make({
       onShow: (entry) => { shown = entry.id },
       onHide: () => { shown = null },
-      shown: () => shown,
+      shown: (id) => shown === id,
     })
     seed(store, 'model.g3d', COMPUTED)
     const eye = (): HTMLButtonElement | null => card.el.querySelector<HTMLButtonElement>('.ann-eye')

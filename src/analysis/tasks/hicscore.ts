@@ -206,7 +206,7 @@ export const HIC_SCORE_TASK: AnalysisTask = {
   id: 'hicscore',
   title: 'HiC score',
   blurb: 'The mean contact a bin makes with its near neighbourhood.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   // Bumped twice over this cycle: version 1 summed the whole square window, 2
   // took the mean of its upper triangle, and this one is the mean of the bin's

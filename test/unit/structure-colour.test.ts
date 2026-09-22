@@ -146,3 +146,38 @@ describe('resolving a colouring', () => {
     expect(colours.key.title).toBe('sequence')
   })
 })
+
+describe('the colour scale', () => {
+  const base = { ...defaultStructureStyle(), colourBy: 'position' }
+
+  it('draws a ramp colouring on the reader’s scale, and says so in the key', () => {
+    const s = scene()
+    const own = resolveColours(s, base)
+    const chosen = resolveColours(s, { ...base, colormap: 'magma' })
+    expect(own.key).toMatchObject({ kind: 'ramp', colormap: 'viridis' })
+    expect(chosen.key).toMatchObject({ kind: 'ramp', colormap: 'magma' })
+    // …and the beads move with the key, which is the point: a legend that
+    // named one ramp while the model was drawn on another would be a lie.
+    expect(chosen.css).not.toEqual(own.css)
+  })
+
+  it('overrides a source’s own scale only where one was chosen', () => {
+    const s = scene()
+    const values = new Float32Array(s.set.length).fill(0).map((_, i) => i)
+    const source = { label: 'a track', values, colormap: 'cividis' }
+    const lane = resolveColours(s, { ...base, colourBy: 'track:x' }, source)
+    // Left at its own, a track keeps the lane's colormap so the bead and the
+    // lane cannot disagree at the same value (§25.5).
+    expect(lane.key).toMatchObject({ colormap: 'cividis' })
+    const chosen = resolveColours(s, { ...base, colourBy: 'track:x', colormap: 'magma' }, source)
+    expect(chosen.key).toMatchObject({ colormap: 'magma' })
+  })
+
+  it('leaves a levels colouring alone, which has no ramp to change', () => {
+    const s = scene()
+    const plain = resolveColours(s, defaultStructureStyle())
+    const asked = resolveColours(s, { ...defaultStructureStyle(), colormap: 'magma' })
+    expect(asked.key.kind).toBe('levels')
+    expect(asked.css).toEqual(plain.css)
+  })
+})

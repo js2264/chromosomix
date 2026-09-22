@@ -44,6 +44,7 @@ import {
   DirectionalLight,
   Fog,
   FrontSide,
+  InstancedBufferAttribute,
   InstancedMesh,
   LineBasicMaterial,
   LineSegments,
@@ -66,12 +67,18 @@ import {
 } from 'three'
 
 import { basis, eyeOf, halfHeight, project } from './camera'
-import { hexOf, parseColour } from './colour'
+import { hexOf } from './colour'
 import { MARKED_BEAD } from './painter'
 import type { StructureView } from './painter'
 import { centroidOf } from './scene'
 import type { Structure } from './scene'
 import type { BeadColours } from './colour'
+
+/** The attribute {@link ghostable} reads each bead's alpha from. */
+const GHOST_ALPHA = 'ghostAlpha'
+
+/** Below this an alpha is *gone*: the fragment is discarded and writes no depth. */
+const GHOST_GONE = 0.004
 
 /** What the renderer clears to and writes labels in, read off the page. */
 export interface RenderPalette {
@@ -109,8 +116,6 @@ export class StructureRenderer {
   /** The loops as chords (§25.5): one cylinder of ink per pair. */
   private chords: InstancedMesh | null = null
   /** The map's contacts from the pinned bead, one coloured cylinder each. */
-  private contactChords: InstancedMesh | null = null
-  private contactChordsFrom: ReadonlyArray<{ bead: number; weight: number; colour: string }> | null = null
   /** The reader's measurements, as dashed ink. */
   private measures: InstancedMesh | null = null
   private measuresFrom: ReadonlyArray<readonly [number, number]> | null = null
@@ -193,8 +198,7 @@ export class StructureRenderer {
 
   setPalette(palette: RenderPalette): void {
     this.palette = palette
-    // Ghosted and paled colours are mixed with the background, so they are
-    // colours of the page as well as of the model.
+    // The fog and the ink are the page's, so a change of theme is a recolour.
     this.recolour()
     this.render()
   }
@@ -459,7 +463,7 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
-    for (const ink of [this.chords, this.chord, this.gapDashes, this.contactChords, this.measures, this.ticks, this.marks]) {
+    for (const ink of [this.chords, this.chord, this.gapDashes, this.measures, this.ticks, this.marks]) {
       if (ink === null) continue
       this.root.remove(ink)
       ink.geometry.dispose()
@@ -468,8 +472,6 @@ export class StructureRenderer {
     this.chords = null
     this.chordsFrom = null
     this.gapDashes = null
-    this.contactChords = null
-    this.contactChordsFrom = null
     this.measures = null
     this.measuresFrom = null
     this.ticks = null
@@ -532,11 +534,12 @@ export class StructureRenderer {
 
     if (drawBeads) {
       this.beads = new InstancedMesh(new SphereGeometry(1, 16, 12), surface(lit), Math.max(1, count))
+      this.beads.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(count, true))
       this.beads.count = count
       at = 0
       for (let i = 0; i < n; i++) {
         if (shown[i] === 0) continue
-        const r = beadRadius * (view.sizes === null ? 1 : view.sizes[i])
+        const r = beadRadius
         matrix.makeScale(r, r, r)
         matrix.setPosition(structure.x[i], structure.y[i], structure.z[i])
         this.beads.setMatrixAt(at, matrix)
@@ -550,12 +553,21 @@ export class StructureRenderer {
     // The dashes across every gap, whatever else is drawn: ink, a little
     // wider than a stick, so a chain that stops where a bead is missing reads
     // as one chain with a hole in it rather than as two chains.
+    //
+    // **Ghosted with the chain they belong to.** They were flat ink at full
+    // opacity, so a ghosted chromosome kept its dashes at full strength: a
+    // model faded to almost nothing still had a cage of black dashes over it,
+    // which read as the one thing being *shown*. A gap is a fact about a
+    // chain, so it fades with the chain — which means remembering, per
+    // segment, which pair of beads it crosses.
     const gaps = gapPairsOf(view, shown)
     if (gaps.length > 0) {
       const segments: Array<[Vector3, Vector3]> = []
+      const owners: number[] = []
       const dash = stickRadius * 3
       const gap = stickRadius * 2
-      for (const [a, b] of gaps) {
+      for (let g = 0; g < gaps.length; g++) {
+        const [a, b] = gaps[g]
         const from = new Vector3(structure.x[a], structure.y[a], structure.z[a])
         const to = new Vector3(structure.x[b], structure.y[b], structure.z[b])
         const length = from.distanceTo(to)
@@ -563,9 +575,13 @@ export class StructureRenderer {
         for (let at = 0; at < length; at += dash + gap) {
           const end = Math.min(length, at + dash)
           segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, end)])
+          owners.push(g)
         }
       }
-      this.gapDashes = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 1))
+      this.gapDashes = cylinders(segments, stickRadius * INK_SHARE, ghostable(inkMaterial(this.palette.ink, 1)))
+      this.gapDashes.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(Math.max(1, segments.length), true))
+      this.gapDashes.userData['gaps'] = gaps
+      this.gapDashes.userData['owners'] = Int32Array.from(owners)
       this.root.add(this.gapDashes)
     }
 
@@ -581,6 +597,7 @@ export class StructureRenderer {
           surface(lit),
           pairs.length,
         )
+        this.sticks.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(pairs.length, true))
         const q = new Quaternion()
         const up = new Vector3(0, 1, 0)
         const dir = new Vector3()
@@ -628,6 +645,7 @@ export class StructureRenderer {
               owner[s] = run[t < 0.5 ? k : k + 1]
             }
             geometry.setAttribute('color', new BufferAttribute(new Float32Array(geometry.attributes.position.count * 3), 3))
+            geometry.setAttribute(GHOST_ALPHA, ghostAttribute(geometry.attributes.position.count, false))
             const mesh = new Mesh(geometry, surface(lit, true))
             mesh.userData['owner'] = owner
             mesh.userData['radial'] = RADIAL
@@ -677,53 +695,75 @@ export class StructureRenderer {
     const { structure } = view
     const n = structure.set.length
     const rgb = view.colours.rgb
-    const background = parseColour(this.palette.background)
+    // **The colour is the bead's own, ghosted or not.** Fading is alpha
+    // (`ghostable`), not a mix towards the page: a ghosted bead keeps its hue,
+    // lets the model behind it through rather than painting over it, and at an
+    // opacity of zero is gone rather than page-coloured and still in the way.
     const colourOf = (i: number, out: Color): void => {
-      // A ghosted bead is its colour mixed towards the page by the style's
-      // ghost opacity — 0.15 leaves a trace — which reads as transparency on
-      // a page with nothing behind the model.
-      const ghost = view.lit !== null && view.lit[i] === 0
-      const mix = ghost ? 1 - view.style.opacity : 0
-      out.setRGB(
-        rgb[i * 3] + (background[0] - rgb[i * 3]) * mix,
-        rgb[i * 3 + 1] + (background[1] - rgb[i * 3 + 1]) * mix,
-        rgb[i * 3 + 2] + (background[2] - rgb[i * 3 + 2]) * mix,
-      )
+      out.setRGB(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2])
     }
+    const alphaOf = (i: number): number => (view.lit !== null && view.lit[i] === 0 ? view.style.opacity : 1)
     const colour = new Color()
     if (this.beads !== null) {
+      const alpha = this.beads.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
       for (let at = 0; at < this.pickBeads.length; at++) {
         colourOf(this.pickBeads[at], colour)
         this.beads.setColorAt(at, colour)
+        alpha.setX(at, alphaOf(this.pickBeads[at]))
       }
       if (this.beads.instanceColor !== null) this.beads.instanceColor.needsUpdate = true
+      alpha.needsUpdate = true
     }
     if (this.sticks !== null) {
       const pairs = this.sticks.userData['pairs'] as Array<[number, number]>
+      const alpha = this.sticks.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
       const other = new Color()
       for (let p = 0; p < pairs.length; p++) {
         colourOf(pairs[p][0], colour)
         colourOf(pairs[p][1], other)
         colour.lerp(other, 0.5)
         this.sticks.setColorAt(p, colour)
+        // A stick spanning the edge of the window fades to the mean of its two
+        // ends, so the fibre thins into the ghost rather than stopping dead.
+        alpha.setX(p, (alphaOf(pairs[p][0]) + alphaOf(pairs[p][1])) / 2)
       }
       if (this.sticks.instanceColor !== null) this.sticks.instanceColor.needsUpdate = true
+      alpha.needsUpdate = true
+    }
+    if (this.gapDashes !== null) {
+      // The mean of the pair it crosses, as a stick takes: a gap that spans
+      // the edge of the window thins into the ghost rather than stopping dead.
+      const gaps = this.gapDashes.userData['gaps'] as Array<[number, number]> | undefined
+      const owners = this.gapDashes.userData['owners'] as Int32Array | undefined
+      const alpha = this.gapDashes.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute | undefined
+      if (gaps !== undefined && owners !== undefined && alpha !== undefined) {
+        for (let s = 0; s < owners.length; s++) {
+          const [a, b] = gaps[owners[s]]
+          alpha.setX(s, (alphaOf(a) + alphaOf(b)) / 2)
+        }
+        alpha.needsUpdate = true
+      }
     }
     for (const tube of this.tubes) {
       const owner = tube.userData['owner'] as Int32Array
       const radial = tube.userData['radial'] as number
       const attribute = tube.geometry.getAttribute('color') as BufferAttribute
       const array = attribute.array as Float32Array
+      const alpha = tube.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
+      const alphas = alpha.array as Float32Array
       for (let s = 0; s < owner.length; s++) {
         colourOf(owner[s], colour)
+        const a = alphaOf(owner[s])
         for (let ring = 0; ring <= radial; ring++) {
           const v = s * (radial + 1) + ring
           array[v * 3] = colour.r
           array[v * 3 + 1] = colour.g
           array[v * 3 + 2] = colour.b
+          alphas[v] = a
         }
       }
       attribute.needsUpdate = true
+      alpha.needsUpdate = true
     }
     if (this.halos !== null) {
       ;(this.halos.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
@@ -778,43 +818,6 @@ export class StructureRenderer {
         )
         this.chords = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 0.9))
         this.root.add(this.chords)
-      }
-    }
-
-    // The map's contacts from the pinned bead: a cylinder per contact, as
-    // thick as the contact is strong, in the map's colour for it.
-    const contacts = style.contactChords && view.pinned >= 0 && this.shown[view.pinned] === 1 ? view.contactChords : NO_CONTACTS
-    if (this.contactChordsFrom !== contacts) {
-      this.contactChordsFrom = contacts
-      if (this.contactChords !== null) {
-        this.root.remove(this.contactChords)
-        this.contactChords.geometry.dispose()
-        this.contactChords = null
-      }
-      const kept = contacts.filter((c) => this.shown[c.bead] === 1)
-      if (kept.length > 0) {
-        const p = view.pinned
-        const from = new Vector3(structure.x[p], structure.y[p], structure.z[p])
-        const mesh = new InstancedMesh(new CylinderGeometry(1, 1, 1, 8, 1, true), new MeshBasicMaterial({ transparent: true, opacity: 0.85 }), kept.length)
-        const matrix = new Matrix4()
-        const q = new Quaternion()
-        const up = new Vector3(0, 1, 0)
-        const colour = new Color()
-        kept.forEach((c, at) => {
-          const to = new Vector3(structure.x[c.bead], structure.y[c.bead], structure.z[c.bead])
-          const dir = to.clone().sub(from)
-          const length = dir.length()
-          q.setFromUnitVectors(up, length > 0 ? dir.normalize() : up)
-          const r = stickRadius * (0.3 + 1.2 * c.weight)
-          matrix.compose(from.clone().add(to).multiplyScalar(0.5), q, new Vector3(r, Math.max(length, 1e-6), r))
-          mesh.setMatrixAt(at, matrix)
-          mesh.setColorAt(at, colour.setHex(hexOf(c.colour)))
-        })
-        mesh.instanceMatrix.needsUpdate = true
-        if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
-        mesh.frustumCulled = false
-        this.contactChords = mesh
-        this.root.add(mesh)
       }
     }
 
@@ -884,13 +887,24 @@ export class StructureRenderer {
       if (kept.length > 0) {
         const mesh = new InstancedMesh(
           new SphereGeometry(1, 16, 12),
-          new MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 }),
+          // **No `vertexColors`.** The colour of a marked bead comes from the
+          // instance, through `setColorAt`, and asking for vertex colours as
+          // well made every one of them *black*: `vertexColors` defines
+          // `USE_COLOR`, whose shader does `vColor.rgb *= color`, and `color`
+          // is an attribute a plain sphere has not got. A missing attribute
+          // reads as `(0, 0, 0)` — `defaultAttributeValues` would have said
+          // otherwise but exists only on `ShaderMaterial` — and the next line
+          // of the same chunk multiplies the instance colour into that zero.
+          // So a mark drawn in the colour the Manual annotations card gave it
+          // came out black, while the same mark in an exported PDF came out
+          // right, the 2D painter taking the colour as a colour.
+          new MeshStandardMaterial({ roughness: 0.55, metalness: 0 }),
           kept.length,
         )
         const matrix = new Matrix4()
         const colour = new Color()
         kept.forEach((mark, at) => {
-          const r = structure.step * style.beadRadius * (view.sizes === null ? 1 : view.sizes[mark.bead]) * MARKED_BEAD
+          const r = structure.step * style.beadRadius * MARKED_BEAD
           matrix.makeScale(r, r, r)
           matrix.setPosition(structure.x[mark.bead], structure.y[mark.bead], structure.z[mark.bead])
           mesh.setMatrixAt(at, matrix)
@@ -1053,9 +1067,70 @@ export class StructureRenderer {
 
 /** The material a bead, a stick or a tube is drawn in: shaded, or flat. */
 function surface(lit: boolean, vertexColors = false): MeshStandardMaterial | MeshBasicMaterial {
-  return lit
-    ? new MeshStandardMaterial({ roughness: 0.6, metalness: 0.05, vertexColors })
-    : new MeshBasicMaterial({ vertexColors })
+  return ghostable(
+    lit
+      ? new MeshStandardMaterial({ roughness: 0.6, metalness: 0.05, vertexColors })
+      : new MeshBasicMaterial({ vertexColors }),
+  )
+}
+
+/**
+ * Let a material draw each bead at its own alpha, from a {@link GHOST_ALPHA}
+ * attribute.
+ *
+ * **Ghosting used to be a colour, and a colour is not transparency.** A ghosted
+ * bead was its own colour mixed towards the page, which on a white page reads
+ * as *pale* — the thing behind it is still hidden, because the geometry is
+ * still opaque and still writes depth, and at an opacity of zero the bead does
+ * not disappear, it becomes a white bead that punches a hole in whatever it is
+ * in front of. The 2D painter never had this problem (`painter.ts` sets
+ * `globalAlpha` and always has), so the same model exported to PDF and drawn on
+ * screen disagreed about what ghosting meant. This is the screen catching up:
+ * the alpha is real, `0` is gone and `1` is as drawn, exactly as §25.5 says.
+ *
+ * One attribute serves both kinds of geometry because GLSL does not care which
+ * it came from: on an `InstancedMesh` an `InstancedBufferAttribute` of this name
+ * is one value per instance, and on a plain `Mesh` a `BufferAttribute` of it is
+ * one per vertex, and `attribute float` reads either.
+ *
+ * A fragment under {@link GHOST_GONE} is **discarded** rather than blended.
+ * That is what makes zero mean *gone*: a discarded fragment writes no depth, so
+ * a bead the reader has faded all the way out stops hiding the model behind it
+ * instead of standing there invisibly in the way.
+ *
+ * `defaultAttributeValues` is the safety net for a geometry that has no such
+ * attribute at all — the overlay's tubes, anything added later. Without it a
+ * missing attribute reads as zero and every fragment would discard, which is a
+ * model that silently does not draw.
+ */
+function ghostable<T extends MeshStandardMaterial | MeshBasicMaterial>(material: T): T {
+  material.transparent = true
+  // `defaultAttributeValues` is a real property of every three material and is
+  // missing from its types, so it is reached through a narrow cast rather than
+  // left out — without it a geometry with no such attribute reads zero and
+  // discards every fragment, which is a model that silently does not draw.
+  const defaults = material as unknown as { defaultAttributeValues?: Record<string, number[]> }
+  defaults.defaultAttributeValues = { ...defaults.defaultAttributeValues, [GHOST_ALPHA]: [1] }
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = `attribute float ${GHOST_ALPHA};\nvarying float vGhostAlpha;\n${shader.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>\n\tvGhostAlpha = ${GHOST_ALPHA};`,
+    )
+    shader.fragmentShader = `varying float vGhostAlpha;\n${shader.fragmentShader}`.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>\n\tif ( vGhostAlpha < ${GHOST_GONE.toFixed(4)} ) discard;\n\tgl_FragColor.a *= vGhostAlpha;`,
+    )
+  }
+  // Without a key of its own three would hand this material a program compiled
+  // for an unpatched one of the same kind, and the attribute would never exist.
+  material.customProgramCacheKey = () => GHOST_ALPHA
+  return material
+}
+
+/** One value per instance or per vertex, filled opaque, for {@link ghostable}. */
+function ghostAttribute(count: number, instanced: boolean): BufferAttribute | InstancedBufferAttribute {
+  const values = new Float32Array(Math.max(1, count)).fill(1)
+  return instanced ? new InstancedBufferAttribute(values, 1) : new BufferAttribute(values, 1)
 }
 
 /** Which beads are drawn at all under this view. */
@@ -1105,7 +1180,6 @@ function gapPairsOf(view: StructureView, shown: Uint8Array): Array<[number, numb
 }
 
 const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
-const NO_CONTACTS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
 
 /**
  * A black line along or across the fibre — a gap's dashes, a loop's chord — as
@@ -1156,13 +1230,6 @@ function cylinders(
   return mesh
 }
 
-/** A short hash of a size array, so the key changes when the sizes do. */
-function sizesKey(sizes: Float32Array): string {
-  let hash = 0
-  for (let i = 0; i < sizes.length; i++) hash = (hash * 31 + Math.round(sizes[i] * 100)) | 0
-  return `${sizes.length}:${hash}`
-}
-
 /** Cumulative polyline length at each point, from zero. */
 function cumulative(points: Vector3[]): number[] {
   const out = [0]
@@ -1189,8 +1256,6 @@ function buildKey(view: StructureView): string {
     style.tube,
     style.beadRadius,
     style.tubeRadius,
-    // The sizes are part of the geometry: a new array is a new set of beads.
-    view.sizes === null ? '' : sizesKey(view.sizes),
     view.haplotype,
     style.others,
     litKey,

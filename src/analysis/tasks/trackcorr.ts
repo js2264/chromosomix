@@ -102,7 +102,7 @@ export const TRACK_CORRELATION_TASK: AnalysisTask = {
   id: 'trackcorr',
   title: 'Track correlation',
   blurb: 'How much every pair of loaded tracks agrees.',
-  group: 'tracks',
+  group: '1d',
   venue: 'annotations',
   version: 1,
   // No map required, for the reason `overlap.ts` gives.

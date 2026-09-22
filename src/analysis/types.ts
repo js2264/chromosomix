@@ -1161,8 +1161,24 @@ export interface AnalysisContext {
  */
 export type TaskVenue = 'analysis' | 'annotations'
 
-/** Which heading a task sits under in the panel. */
-export type TaskGroup = 'map' | 'tracks' | 'metagenome'
+/**
+ * Which card a task sits in, in the Analysis panel.
+ *
+ * **By the dimension the question is about**, not by the file it reads: a task
+ * is 2D when its subject is the contact matrix, 3D when its subject is a model
+ * of beads in space, 1D when its subject is a track or an interval set along
+ * the sequence. That cut puts *aggregate peak analysis* with the matrix it
+ * piles up rather than with the loop set that says where, and *metaplot* with
+ * the track it averages rather than with the features it averages over — each
+ * beside the thing a reader would go looking under.
+ *
+ * `metagenome` is the one group that is not a dimension, and it stays one
+ * because its four tasks are not about a dimension: a MAG is a *bin of an
+ * assembly*, and *split-MAG detection* belongs beside *MAG purity* rather than
+ * beside *compartments*. It is absent on a file that has no genomes, so the
+ * card never appears where it would mean nothing.
+ */
+export type TaskGroup = '2d' | '3d' | '1d' | 'metagenome'
 
 export interface AnalysisTask {
   /** Stable. Storage, provenance and the config all key on it; never a title. */

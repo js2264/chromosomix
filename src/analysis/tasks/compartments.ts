@@ -465,7 +465,7 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   id: 'compartments',
   title: 'Compartments (eigenvectors)',
   blurb: 'Observed/expected, correlated, and its leading components.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   // Absent on a metacool, which is a scientific judgement rather than a

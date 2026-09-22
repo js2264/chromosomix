@@ -163,7 +163,7 @@ export const HICREP_TASK: AnalysisTask = {
   id: 'hicrep',
   title: 'Reproducibility (HiCRep)',
   blurb: 'How much the maps on screen agree, stratum by stratum and pooled.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   needsPeers: true,

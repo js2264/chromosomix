@@ -50,21 +50,25 @@ import { RECONSTRUCT_TASK, SPATIAL_TRACKS_TASK, STRUCTURE_MAP_TASK } from "./tas
 import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
 
 export const TASKS: readonly AnalysisTask[] = [
-  // The map group reads outward from the axis: what every bin *has* first
-  // (coverage and the marginals), then what every *sequence* has — cis, trans
-  // and which pairs of sequences touch, which is the same question one level up
-  // and the one that says whether the assembly is the karyotype — then how
-  // contact falls away from the diagonal (P(s)),
-  // then how far each *bin* reaches within that decay (the scalogram, which is
-  // P(s) kept per bin instead of averaged over the sequence),
-  // then one locus's slice of that decay (4C), then the domains it resolves
-  // into — insulation, the directionality index that reads the same edge from
-  // its asymmetry, and the HiC score that says how much contact is there at all
-  // rather than how it is shared out — then the compartments those domains sit
-  // in. Each is a question the one before it makes it sensible to ask. Detection comes last
-  // of the map group and is the only one that *calls* anything: it needs the
-  // decay the tasks above it describe, and what it produces — a loop set — is
-  // what the aggregation tasks below it take as input.
+  // Registry order is catalogue order (§18.8), and the cards come out in the
+  // order their first task does — so this list is read as four blocks.
+  //
+  // **2D.** Outward from the axis: what every bin *has* first (coverage and the
+  // marginals), then what every *sequence* has — cis, trans and which pairs of
+  // sequences touch, which is the same question one level up and the one that
+  // says whether the assembly is the karyotype — then how contact falls away
+  // from the diagonal (P(s)), then how far each *bin* reaches within that decay
+  // (the scalogram, which is P(s) kept per bin instead of averaged over the
+  // sequence), then one locus's slice of that decay (4C), then the domains it
+  // resolves into — insulation, the directionality index that reads the same
+  // edge from its asymmetry, and the HiC score that says how much contact is
+  // there at all rather than how it is shared out — then the compartments those
+  // domains sit in. Each is a question the one before it makes it sensible to
+  // ask. Detection comes next and is the only one that *calls* anything: it
+  // needs the decay the tasks above it describe, and what it produces — a loop
+  // set — is what the pileup under it takes as input. Reproducibility and the
+  // pileup close the card: both read the matrix against something else, another
+  // map in one case and a set of places in the other.
   COVERAGE_TASK,
   CIS_TRANS_TASK,
   CELL_QC_TASK,
@@ -77,20 +81,25 @@ export const TASKS: readonly AnalysisTask[] = [
   COMPARTMENTS_TASK,
   CHROMOSIGHT_TASK,
   HICREP_TASK,
-  // The tracks group opens with the one task that *makes* an interval set out of
-  // the file rather than reading one somebody loaded: a motif search answers
-  // where a sequence occurs, and what it produces is exactly the input the three
-  // below it take. Same reading order as the map group's — the thing that comes
-  // first is the thing the next one is built on.
+  APA_TASK,
+  // **3D**, and the one that *makes* a model comes first, because the other two
+  // read one: a reader with no structure loaded has exactly one thing to do in
+  // this card, and it should be the first row rather than the third.
+  RECONSTRUCT_TASK,
+  STRUCTURE_MAP_TASK,
+  SPATIAL_TRACKS_TASK,
+  // **1D**, opening with the one task that *makes* an interval set out of the
+  // file rather than reading one somebody loaded: a motif search answers where a
+  // sequence occurs, and what it produces is exactly the input the four below it
+  // take. Same reading order as the 2D card's — the thing that comes first is
+  // the thing the next one is built on.
   MOTIF_TASK,
   METAPLOT_TASK,
-  APA_TASK,
   TRACK_CORRELATION_TASK,
   FRIP_TASK,
   OVERLAP_TASK,
-  STRUCTURE_MAP_TASK,
-  SPATIAL_TRACKS_TASK,
-  RECONSTRUCT_TASK,
+  // **Metagenome**, absent unless the file has genomes, so the card is there
+  // for a metacool and nowhere else.
   MAG_QC_TASK,
   MAG_NETWORK_TASK,
   MAG_PURITY_TASK,
@@ -133,7 +142,9 @@ export function runnableTasks(context: AnalysisContext): AnalysisTask[] {
  * identifier is a heading nobody chose.
  */
 export const TASK_GROUP_LABELS: Record<TaskGroup, string> = {
-  map: "On the map",
-  tracks: "Tracks and features",
+  "2d": "2D tasks",
+  "3d": "3D tasks",
+  "1d": "1D tasks",
   metagenome: "Metagenome",
 };
+

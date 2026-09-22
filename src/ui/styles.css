@@ -9980,9 +9980,6 @@ span.deck-name {
 .structure-card .structure-actions {
   gap: 6px;
 }
-.structure-card .ann-row.is-shown {
-  box-shadow: inset 3px 0 0 var(--accent, #1f5fa9);
-}
 
 .structure-note:empty {
   display: none;
@@ -10356,17 +10353,19 @@ span.deck-name {
    is a column. What follows is only what a *list of jobs* has that a list of
    controls does not. */
 
-.analysis-group {
-  margin: 0 0 0.15rem;
-  font-size: var(--step--1);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
+/* One card per group (§18.8): the same frame, mark and fold as every other card
+   in every other column, so *2D tasks* folds away exactly as *Tracks* does. The
+   rows inside want no extra inset — `.card` already pads — and the cards want
+   the gap a column of cards has, which `.panel-column` gives them. */
+.analysis-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-/* Both, because a group's shared waiting line sits between the heading and the
-   first row and is a sibling of them whether or not it is shown. */
-.analysis-group + .analysis-row,
+/* The shared waiting line sits between the card's heading and its first row and
+   is a sibling of both, whether or not it is shown. */
+.analysis-card > .card-head + .analysis-row,
 .analysis-group-needs + .analysis-row {
   margin-top: 0;
 }
@@ -11874,13 +11873,62 @@ span.deck-name {
   grid-template-columns: 7.5rem minmax(0, 1fr);
 }
 
+/* Label | the control that arms a thing | the number that shapes it, on one
+   line: *fog* and its depth, *contacts from the pin* and its threshold, the
+   ghost's choice and its opacity. Each of those was two rows, and the second
+   carried a label that repeated the first — `fog`, then `fog depth`. The arm
+   column is `auto` because it holds either a 15 px toggle or a short select. */
+.structure-settings .field.structure-field-armed {
+  display: grid;
+  grid-template-columns: 7.5rem auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* A toggle is a 15 px mark, not a bar. As a grid item it stretched across the
    whole value column, which read as an empty text box with an icon in the
    corner of it — and as a *segmented switch* beside the icon-sized toggles of
    `drawn as` four rows up. */
 .structure-settings .field > .btn-toggle,
-.structure-settings .structure-field-with-toggle > .btn-toggle {
+.structure-settings .structure-field-with-toggle > .btn-toggle,
+.structure-settings .structure-field-armed > .btn-toggle {
   justify-self: start;
+}
+
+/* A select and its label share a line wherever the line has room, and drop to
+   two only where they do not.
+
+   Asked of the *card* rather than of the window, because this card is drawn in
+   two places of very different width: a 200-pixel Aesthetics column beside a
+   deck, and the enlarged dialog's sidebar, which is twice that and resizable.
+   A media query would have answered for the window in both. Below 15rem the
+   value column is about seven characters, which turned `Yeast_structure` into
+   `Yeast_str`; at that width the label goes above, which is the shape these
+   rows had before and the right one for a narrow column. */
+.structure-settings {
+  container-type: inline-size;
+}
+
+@container (max-width: 15rem) {
+  .structure-settings .field.structure-field-pick {
+    display: block;
+  }
+
+  .structure-settings .field.structure-field-pick > .field-label {
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+
+  /* The armed rows fold the same way: the label and its arm keep one line and
+     the slider takes the next, which is better than a slider two characters
+     wide beside a toggle. */
+  .structure-settings .field.structure-field-armed {
+    grid-template-columns: 1fr auto;
+  }
+
+  .structure-settings .field.structure-field-armed > .plot-icon-row {
+    grid-column: 1 / -1;
+  }
 }
 
 /* The number a slider is at, after it. Six of these were bare sliders with the

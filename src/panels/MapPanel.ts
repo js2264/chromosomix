@@ -62,7 +62,7 @@ import {
 } from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
-import { el, fmt } from '../ui/dom'
+import { STRUCTURE_DRAG_TYPE, dragHasFiles, dragHasStructure, el, fmt } from '../ui/dom'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
@@ -1562,6 +1562,18 @@ export class VacantPanel {
      * because the URL is the lesser one.
      */
     onOpenUrl(url: string): void
+    /**
+     * A **model** dropped here from the Structures card (§25.3): the cell
+     * becomes the structure cell and draws it.
+     *
+     * A file is not the only thing a reader can have ready for an empty cell.
+     * With three models loaded the card's own button always means *the* one
+     * structure cell, wherever that is; dragging one here says where as well as
+     * which, and a cell somebody left empty is a place they already made room
+     * in. Optional, because a deck that cannot hold a structure cell should not
+     * light up as though it could.
+     */
+    onStructure?(id: string): void
     onClose(): void
   }) {
     const drawn = props.origin === 'drawn'
@@ -1587,7 +1599,8 @@ export class VacantPanel {
       el('span', {
         class: 'ann-drop-hint',
         text: drawn
-          ? 'Drop a cooler here, or click to choose. Leaving it empty is fine — the link keeps it.'
+          ? 'Drop a cooler here, or a model from the Structures card, or click to choose. ' +
+            'Leaving it empty is fine — the link keeps it.'
           : remembered
             ? 'This cell held that file and it could not be re-opened. Drop it here again and the ' +
               'panel comes back where it was.'
@@ -1602,14 +1615,26 @@ export class VacantPanel {
     zone.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') input.click()
     })
+    const takesStructure = (event: DragEvent): boolean =>
+      props.onStructure !== undefined && dragHasStructure(event)
     zone.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event) && !takesStructure(event)) return
       event.preventDefault()
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'copy'
       zone.classList.add('over')
     })
     zone.addEventListener('dragleave', () => zone.classList.remove('over'))
     zone.addEventListener('drop', (event) => {
       event.preventDefault()
       zone.classList.remove('over')
+      // A model first: a drag from the Structures card carries no file, and
+      // asking for one would drop it on the floor.
+      const model = event.dataTransfer?.getData(STRUCTURE_DRAG_TYPE) ?? ''
+      if (model !== '' && props.onStructure !== undefined) {
+        event.stopPropagation()
+        props.onStructure(model)
+        return
+      }
       const file = event.dataTransfer?.files?.[0]
       if (file !== undefined) props.onOpen(file)
     })

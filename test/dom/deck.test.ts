@@ -488,6 +488,41 @@ describe('the hash', () => {
     deck.grow('beside')
     expect(published[published.length - 1]).toBe('~')
   })
+
+  it('keeps the maps it is already holding when the hash comes back with no grant for them', () => {
+    // The bug this is here for: a file dropped on the window arrives as a
+    // `File`, not as a filesystem handle, so nothing can re-open it later. The
+    // hash says `~` for each, the session resolves none of them, and the deck
+    // used to replace four live panels with four vacancies reading *this cell
+    // held that file and it could not be re-opened* — about files it still had
+    // in hand. Dropping four coolers gave four empty cells.
+    const { deck, published } = make()
+    deck.add({ kind: 'local', uri: 'rep2.cool' })
+    deck.add({ kind: 'local', uri: 'rep3.cool' })
+    deck.add({ kind: 'local', uri: 'rep4.cool' })
+    expect(published[published.length - 1]).toBe('~|~|~')
+    // The state coming back round, with nothing resolved: exactly what a drop
+    // produces, since a dropped file has no grant to resolve through.
+    deck.apply(
+      { uri: 'lead.cool', view: 'region', region: 'chr1', maps: '~|~|~' } as unknown as ViewState,
+      [],
+    )
+    // Four panels: the lead cell, and the three companions still live.
+    expect(all(deck.el, '.deck-grid > .deck-panel')).toHaveLength(4)
+    expect(deck.el.textContent).not.toContain('could not be re-opened')
+  })
+
+  it('still lets a link put something else where a local map was', () => {
+    // The rule is only ever over a `~`: a list that names a remote map at that
+    // index means the remote map, and the live cell goes.
+    const { deck } = make()
+    deck.add({ kind: 'local', uri: 'rep2.cool' })
+    deck.apply(
+      { uri: 'lead.cool', view: 'region', region: 'chr1', maps: 'https://x.example.org/b.cool' } as unknown as ViewState,
+      [],
+    )
+    expect(deck.el.textContent).not.toContain('rep2.cool')
+  })
 })
 
 describe('growing the deck', () => {

@@ -43,6 +43,13 @@ function job(params: Params, notes: string[] = []): JobContext {
     chromsizes: new Map([['I', BINS * BINSIZE]]),
     contigExtent: () => [0, BINS] as [number, number],
     names: { find: () => null },
+    // The weights `cooler balance` writes, which pastis-NB reads its per-bead
+    // coverage bias from. Uneven, and every bin kept; the one test about a bin
+    // the balancer *rejected* puts the `NaN` in itself.
+    binColumn: (column: string, lo: number, hi: number) => {
+      if (column !== 'weight') throw new Error(`no /bins/${column}`)
+      return Float64Array.from({ length: hi - lo }, (_, i) => 1 / (1 + ((lo + i) % 4)))
+    },
     matrix: async (query: { rows: [number, number]; cols: [number, number] }) => {
       const nrows = query.rows[1] - query.rows[0]
       const ncols = query.cols[1] - query.cols[0]
@@ -73,9 +80,20 @@ function job(params: Params, notes: string[] = []): JobContext {
   } as unknown as JobContext
 }
 
+/** A row of a fit table by its name, because a table gains rows over time. */
+function row(table: TableOutput | undefined, what: string): string | undefined {
+  const found = table?.rows.find((entry) => entry.what === what)
+  return found === undefined ? undefined : String(found.value)
+}
+
+/** Where the contacts came from, which every fit table says. */
+function contacts(table: TableOutput | undefined): string | undefined {
+  return row(table, 'Contacts')
+}
+
 describe('model versus map', () => {
-  it('is listed under map, waiting for a map and then for a structure', () => {
-    expect(STRUCTURE_MAP_TASK.group).toBe('map')
+  it('is listed under 3D, waiting for a map and then for a structure', () => {
+    expect(STRUCTURE_MAP_TASK.group).toBe('3d')
     const base = { hasMap: false, entries: [] } as never
     expect(STRUCTURE_MAP_TASK.availability(base).state).toBe('waiting')
     const withMap = { hasMap: true, entries: [] } as never
@@ -163,8 +181,8 @@ describe('model from the map', () => {
     return { ...base, framing, inputs: { ...base.inputs, block } } as unknown as JobContext
   }
 
-  it('is listed under map and needs only a map', () => {
-    expect(RECONSTRUCT_TASK.group).toBe('map')
+  it('is listed under 3D and needs only a map', () => {
+    expect(RECONSTRUCT_TASK.group).toBe('3d')
     expect(RECONSTRUCT_TASK.availability({ hasMap: false, entries: [] } as never).state).toBe('waiting')
     expect(RECONSTRUCT_TASK.availability({ hasMap: true, entries: [] } as never).state).toBe('ready')
   })
@@ -196,9 +214,9 @@ describe('model from the map', () => {
     expect(locus.note).toMatch(/^400 beads/)
   })
 
-  it('makes a structure row from the block, one bead per cell, that orders the pairs as the map does', async () => {
+  it('makes a ShRec3D row from the block, one bead per cell, that orders the pairs as the map does', async () => {
     const notes: string[] = []
-    const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 100 }, notes))
+    const outputs = await runReconstruct(blockJob({ method: 'shrec3d', alpha: 3, iterations: 100 }, notes))
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     expect(model).toBeDefined()
     expect(model?.entryKind).toBe('structure')
@@ -225,12 +243,147 @@ describe('model from the map', () => {
     // and the near ones worse.
     const rho = table?.rows.find((row) => String(row.what).startsWith('Spearman'))?.value
     expect(Number(rho)).toBeGreaterThan(0.75)
-    expect(table?.rows.find((row) => row.what === 'Pairs weighted by')?.value).toBe('the contact count')
+    expect(row(table, 'Method')).toMatch(/ShRec3D/)
+    expect(row(table, 'Pairs weighted by')).toBe('the contact count')
     expect(notes).toEqual([])
-    const equal = await runReconstruct(blockJob({ alpha: 3, iterations: 100, weights: 'equal' }, []))
+    const equal = await runReconstruct(
+      blockJob({ method: 'shrec3d', alpha: 3, iterations: 100, weights: 'equal' }, []),
+    )
     const equalTable = equal.find((o): o is TableOutput => o.kind === 'table')
     expect(Number(equalTable?.rows.find((row) => String(row.what).startsWith('Spearman'))?.value)).toBeGreaterThan(0.85)
-    expect(equalTable?.rows.find((row) => row.what === 'Pairs weighted by')?.value).toMatch(/alike/)
+    expect(row(equalTable, 'Pairs weighted by')).toMatch(/alike/)
+  })
+
+  it('offers the two methods, pastis-NB first and by default, and hides the weighting under it', () => {
+    const method = RECONSTRUCT_TASK.params.find((spec) => spec.key === 'method')
+    expect(method?.kind).toBe('choice')
+    if (method === undefined || method.kind !== 'choice') throw new Error('no method control')
+    expect(method.default).toBe('nb')
+    expect(method.options.map((option) => option.value)).toEqual(['nb', 'shrec3d'])
+    // First, because it governs what the controls under it mean.
+    expect(RECONSTRUCT_TASK.params[0]?.key).toBe('method')
+    // The weighting is ShRec3D's question and nobody's under a likelihood.
+    const weights = RECONSTRUCT_TASK.params.find((spec) => spec.key === 'weights')
+    expect(weights?.when?.({ method: 'nb' })).toBe(false)
+    expect(weights?.when?.({ method: 'shrec3d' })).toBe(true)
+    // …and the exponent is a question for both, so it is never hidden.
+    expect(RECONSTRUCT_TASK.params.find((spec) => spec.key === 'alpha')?.when).toBeUndefined()
+  })
+
+  it('prices pastis-NB above ShRec3D, because a likelihood costs more a pair', () => {
+    const context = {
+      hasMap: true,
+      binsize: BINSIZE,
+      nBins: 4000,
+      contigs: [{ name: 'I', length: 4000 * BINSIZE, bins: 4000, startBin: 0 }],
+      framing: { ...FRAMING, rows: [0, 4000] as [number, number], cols: [0, 4000] as [number, number] },
+      blockLoaded: true,
+      entries: [],
+    } as never
+    const nb = RECONSTRUCT_TASK.estimate(context, { method: 'nb' })
+    const shrec = RECONSTRUCT_TASK.estimate(context, { method: 'shrec3d' })
+    const seconds = (note: string): number => Number(/about (\d+) seconds per hundred steps/.exec(note)?.[1])
+    expect(seconds(nb.note ?? '')).toBeGreaterThan(seconds(shrec.note ?? ''))
+    // Both hold the same two matrices: the likelihood adds vectors, not squares.
+    const matrices = (note: string): string => String(/(\d+) MB of matrices/.exec(note)?.[1])
+    expect(matrices(nb.note ?? '')).toBe(matrices(shrec.note ?? ''))
+  })
+
+  it('models with pastis-NB by default, and says what the likelihood did', async () => {
+    const notes: string[] = []
+    const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 120 }, notes))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    const set = model.payload.data
+    expect(set.length).toBe(BINS)
+    const m = set.model as NonNullable<typeof set.model>
+    const d = (i: number, j: number): number => Math.hypot(m.x[i] - m.x[j], m.y[i] - m.y[j], m.z[i] - m.z[j])
+    // The map falls with separation, so the model's distances rise with it.
+    expect(d(0, 1)).toBeLessThan(d(0, 5))
+    expect(d(0, 5)).toBeLessThan(d(0, 19))
+
+    const table = outputs.find((o): o is TableOutput => o.kind === 'table')
+    expect(row(table, 'Method')).toMatch(/pastis-NB/)
+    // This file carries balancing weights, so the coverage is corrected where
+    // pastis puts it: in the mean, not in the data.
+    expect(row(table, 'Mean of a pair')).toBe('μ = β · bᵢ · bⱼ · d^(−3)')
+    expect(row(table, 'Counts')).toMatch(/^raw, with/)
+    // The weighting is ShRec3D's row and is not reported for a run that had none.
+    expect(row(table, 'Pairs weighted by')).toBeUndefined()
+    expect(row(table, 'Weighted stress')).toBeUndefined()
+    // This map's counts are exact at every separation, so there is nothing for
+    // the negative binomial to find and it says so rather than implying a
+    // dispersion it did not measure.
+    expect(row(table, 'Overdispersion (r)')).toMatch(/none/)
+    expect(row(table, 'Zeros used as evidence')).toMatch(/0 of the 190 pairs/)
+    expect(row(table, 'MDS start')).toMatch(/SMACOF steps/)
+    expect(row(table, 'Stopped on')).toBeDefined()
+    expect(Number(row(table, 'Scale β'))).toBeGreaterThan(0)
+    // 1/(1+s) read as a mean of β·d^(−3) is a chain no three axes hold
+    // exactly, so the rank agreement over every pair is good rather than
+    // perfect — the same bar the ShRec3D run above is held to.
+    expect(Number(row(table, 'Spearman ρ (1/d vs contacts)'))).toBeGreaterThan(0.75)
+    expect(notes).toEqual([])
+  })
+
+  it('reads a counted zero as evidence rather than dropping the pair', async () => {
+    // Every pair further than five bins apart came back empty. Under ShRec3D
+    // those are not distances and the filling invents them; under pastis-NB
+    // each is a reading, and the run says how many it used.
+    const notes: string[] = []
+    const sparse = blockJob({ alpha: 3, iterations: 120 }, notes)
+    const block = sparse.inputs.block as unknown as { values: Float32Array; nrows: number; ncols: number }
+    for (let r = 0; r < block.nrows; r++) {
+      for (let c = 0; c < block.ncols; c++) {
+        if (Math.abs(r - c) > 5) block.values[r * block.ncols + c] = 0
+      }
+    }
+    const table = (await runReconstruct(sparse)).find((o): o is TableOutput => o.kind === 'table')
+    const zeros = Number(/^([\d,]+) of/.exec(row(table, 'Zeros used as evidence') ?? '')?.[1]?.replace(/,/g, ''))
+    expect(zeros).toBeGreaterThan(90)
+    // The pairs are *observed*, so none of them is lost and no bead is dropped.
+    expect(row(table, 'Zeros used as evidence')).toMatch(/of the 190 pairs/)
+    expect(notes).toEqual([])
+  })
+
+  it('solves pastis-NB on the raw counts under a balanced view, and folds the weights into the mean', async () => {
+    const notes: string[] = []
+    const balanced = blockJob({ alpha: 3, iterations: 40, balance: true }, notes, 1, true)
+    // Bin 7 is one the balancer rejected — a `NaN` weight — which the balanced
+    // view of this map does not draw at all.
+    const mc = balanced.mc as unknown as Record<string, unknown>
+    mc['binColumn'] = (column: string, lo: number, hi: number) => {
+      if (column !== 'weight') throw new Error(`no /bins/${column}`)
+      return Float64Array.from({ length: hi - lo }, (_, i) => (lo + i === 7 ? Number.NaN : 1 / (1 + ((lo + i) % 4))))
+    }
+    const table = (await runReconstruct(balanced)).find((o): o is TableOutput => o.kind === 'table')
+    // A balanced value is a count times two weights, and `variance > mean` is a
+    // question about a count — so the counts stay raw and the weights go into
+    // the mean. The run says both, in the table and to the reader.
+    expect(row(table, 'Mean of a pair')).toBe('μ = β · bᵢ · bⱼ · d^(−3)')
+    expect(row(table, 'Counts')).toMatch(/raw, with the file’s balancing weights folded into the mean/)
+    expect(notes.join(' ')).toMatch(/raw counts underneath/)
+    // The block on screen is balanced, so it is not the counts this method
+    // wants and the file is read instead.
+    expect(contacts(table)).toMatch(/read from the file/)
+    // Bin 7's weight is a `NaN` — the balancer rejected it — so the bead is not
+    // in the model, exactly as the balanced road would leave it out.
+    expect(row(table, 'Beads')).toMatch(/^19 of 20 cells/)
+    expect(notes.join(' ')).toMatch(/1 of 20 cells had no counted pair/)
+  })
+
+  it('leaves the bias out on a file with no weights to read', async () => {
+    const notes: string[] = []
+    const plain = blockJob({ alpha: 3, iterations: 40 }, notes)
+    const mc = plain.mc as unknown as Record<string, unknown>
+    mc['binColumn'] = () => {
+      throw new Error('This file has no /bins/weight column.')
+    }
+    const table = (await runReconstruct(plain)).find((o): o is TableOutput => o.kind === 'table')
+    expect(row(table, 'Mean of a pair')).toBe('μ = β · d^(−3)')
+    expect(row(table, 'Counts')).toMatch(/no balancing weights/)
+    // Every bead is kept: there is no weight to reject one by.
+    expect(row(table, 'Beads')).toMatch(/^20 of 20 cells/)
   })
 
   it('refuses a pooled block and reads the file instead, so a bead is a bin', async () => {
@@ -239,7 +392,7 @@ describe('model from the map', () => {
     // resolution — one bead per bin, one bin wide (§25.6).
     const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20 }, [], 2))
     const table = outputs.find((o): o is TableOutput => o.kind === 'table')
-    expect(table?.rows[0]?.value).toMatch(/read from the file, one bin to a bead/)
+    expect(contacts(table)).toMatch(/read from the file, one bin to a bead/)
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
     expect(model.payload.data.length).toBe(BINS)
@@ -251,7 +404,7 @@ describe('model from the map', () => {
     const notes: string[] = []
     const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20, balance: true }, notes, 2, false))
     const table = outputs.find((o): o is TableOutput => o.kind === 'table')
-    expect(table?.rows[0]?.value).toMatch(/read from the file/)
+    expect(contacts(table)).toMatch(/read from the file/)
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
     // Read at the file's own bin size, so one bead per bin again.

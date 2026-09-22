@@ -90,6 +90,23 @@ export function dragHasTrack(event: DragEvent): boolean {
   return Array.from(event.dataTransfer?.types ?? []).includes(TRACK_DRAG_TYPE)
 }
 
+/**
+ * A row of the **Structures** card, dragged onto a cell of the deck (§25.3).
+ *
+ * Its own type beside {@link TRACK_DRAG_TYPE} rather than a reuse of it,
+ * because the two mean different things where they land: a track dropped on the
+ * map's edge is drawn along that edge, and a structure dropped on an empty cell
+ * turns that cell into the model. A single type would leave each drop target
+ * guessing which it had caught from an id alone, and only `types` is readable
+ * while the drag is still in the air.
+ */
+export const STRUCTURE_DRAG_TYPE = 'application/x-metacooler-structure'
+
+/** Whether a drag is carrying one of the Structures card's rows. */
+export function dragHasStructure(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes(STRUCTURE_DRAG_TYPE)
+}
+
 /** Remove every child of a node. */
 export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild)

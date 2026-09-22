@@ -3564,9 +3564,11 @@ export class Session {
       if (known && !replaced) continue
       fresh = entry.id
     }
-    // …and it is the one the cell draws: a model that has just arrived — a
-    // file dropped, a reconstruction landing — is the one the reader is
-    // waiting to see, whichever the cell was showing before (§25.6).
+    // …and it gets a cell of its own: a model that has just arrived — a file
+    // dropped, a reconstruction landing — is the one the reader is waiting to
+    // see, and it is drawn **beside** whatever was already there rather than
+    // over it (§25.3). A run that wiped out the model it was to be compared
+    // against was the commonest way to lose a picture in this app.
     if (fresh !== null && this.deckIsPossible) this.ensureDeck().showStructure(fresh)
   }
 
@@ -3876,11 +3878,14 @@ export class Session {
               this.ensureDeck().showStructure(entry.id)
               this.structureCard?.refresh()
             },
-            onHide: () => {
-              this.deck?.hideStructure()
+            // This row's own cell, not every one: each model has a cell of its
+            // own (§25.3), so the eye on a row closes that row's picture and
+            // leaves the others where they are.
+            onHide: (entry) => {
+              this.deck?.hideStructure(entry.id)
               this.structureCard?.refresh()
             },
-            shown: () => this.deck?.shownStructure() ?? null,
+            shown: (id) => this.deck?.shownStructures().includes(id) ?? false,
           }
         : {}),
       onRecompute: (entry) => this.analysis?.recompute(entry),
@@ -4666,6 +4671,7 @@ export class Session {
    * at 5 kb are one file.
    */
   private circularHeld: { key: string; store: CircularStore } | null = null
+
 
   private circularStore(): CircularStore | null {
     const key = this.sessionKey()

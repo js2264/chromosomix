@@ -16,6 +16,8 @@ npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
+node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
+node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -24,7 +26,21 @@ drawn as a chart, a matrix recoloured, a ⌘-drag over a heatmap and the double 
 it, and the two figures that carry an aggregate: a pileup with a track profile along each edge
 and a metaplot's per-feature heatmap. Run it after any change to `src/figures/`.
 
-Those last two need a form filled in before the run, which is why they are driven by name rather
+The third drives *Model from the map* under **both** methods (§25.6) and prints each fit table to
+stdout as well as shooting it: the first gallery runs the task once, with whatever the form
+defaults to, and stops where the drawer's table runs past the window — so the rows that say what
+the negative binomial found, and the weighting control that only ShRec3D asks about, are exactly
+what it cannot show. Run it after any change to the reconstruction or its form.
+
+The fourth drives the structure cell's **gestures**, which a gallery of arrivals cannot show: the
+ghost-opacity slider at each of four values (0 has to be *gone*, not pale), two long drags that
+carry the model over the pole, the telomere toggle, the colour-scale picker appearing for a ramp and
+not for levels, the three sticky mode buttons pressed, and the grips on the Structures card. It
+prints what it found to stdout as well as shooting it, so a control that silently did not appear is
+a line in the log rather than something to spot in a picture. Run it after any change to
+`structure/three.ts`, `structure/camera.ts` or the cell's settings.
+
+Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
 the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
 of figure titles changes** — waiting for a chart to exist returns at once, since the drawer still

@@ -29,9 +29,9 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
 import { chooseFiles, filesFrom } from './chooseFiles'
-import { button, dragHasFiles, el } from './dom'
+import { STRUCTURE_DRAG_TYPE, button, dragHasFiles, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
-import { cardTitle, iconButton } from './icons'
+import { cardTitle, icon, iconButton } from './icons'
 
 export interface StructureCardOptions {
   store: AnnotationStore
@@ -44,15 +44,17 @@ export interface StructureCardOptions {
    */
   onShow?(entry: AnnotationEntry): void
   /**
-   * Take the structure cell out of the deck: the eye's other half.
+   * Take **this row's** cell out of the deck: the eye's other half.
    *
    * A structure row has no lane and no track to hide, so `visible` meant
    * nothing on one — the eye toggled a flag no picture read. What a reader
-   * means by the eye on a model is *stop showing it*, which is the cell.
+   * means by the eye on a model is *stop showing it*, which is the cell. Per
+   * row, because each model has a cell of its own (§25.3): closing one leaves
+   * the others where they are.
    */
-  onHide?(): void
-  /** Which model the cell is showing, if any, so its row can say so. */
-  shown?(): string | null
+  onHide?(entry: AnnotationEntry): void
+  /** Whether a cell is drawing this row, so its eye can say so. */
+  shown?(id: string): boolean
   /** A detached computed row's way back: the task, with its recipe, in the drawer. */
   onRecompute?(entry: AnnotationEntry): void
 }
@@ -139,8 +141,44 @@ export class StructureCard {
     return active instanceof HTMLInputElement || active instanceof HTMLSelectElement
   }
 
+  /**
+   * The handle that carries a model into the deck.
+   *
+   * The Tracks card has had one of these since there were two tracks to put in
+   * an order, and a reader with three models loaded had no way to say *that
+   * one, there* but the row's own button — which always means the one structure
+   * cell, wherever it happens to be. Dragging says where as well as which, and
+   * an empty cell is a place a reader has already made room in.
+   *
+   * Reordering is not what this one does: the Structures card has no order to
+   * change. It carries the id, under a type of its own, to whatever catches it.
+   */
+  private grip(entry: AnnotationEntry): HTMLElement {
+    const node = el(
+      'span',
+      {
+        class: 'ann-grip',
+        title: 'Drag into an empty cell of the deck to draw this model there',
+        attrs: { draggable: 'true', 'data-grip': entry.id },
+      },
+      icon('grip-vertical', { size: 12 }),
+    )
+    node.addEventListener('dragstart', (event) => {
+      if (event.dataTransfer === null) return
+      event.dataTransfer.effectAllowed = 'copy'
+      // Some browsers cancel a drag that carries nothing at all.
+      event.dataTransfer.setData('text/plain', entry.label)
+      event.dataTransfer.setData(STRUCTURE_DRAG_TYPE, entry.id)
+      // The row, not the handle: a twelve-pixel ghost says nothing about what
+      // is being moved.
+      const row = node.closest('.ann-row')
+      if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 12, 12)
+    })
+    return node
+  }
+
   private row(entry: AnnotationEntry): HTMLElement {
-    const shown = this.options.shown?.() === entry.id
+    const shown = this.options.shown?.(entry.id) === true
     const row = el('div', {
       class: `ann-row ann-${entry.status}${shown ? ' is-shown' : ''}`,
       attrs: { 'data-id': entry.id },
@@ -149,6 +187,7 @@ export class StructureCard {
       el(
         'div',
         { class: 'ann-head' },
+        this.grip(entry),
         this.swatch(entry),
         this.name(entry),
         this.visibility(entry),
@@ -269,13 +308,13 @@ export class StructureCard {
     // out of there. On the way in it opens the cell; on the way out it closes
     // it, and a deck left holding nothing goes with it. It is the row's only
     // show/hide — see {@link actions} for the button that used to duplicate it.
-    const shown = this.options.shown?.() === entry.id
+    const shown = this.options.shown?.(entry.id) === true
     const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
     const node = iconButton(
       shown ? 'eye' : 'eye-off',
-      shown ? 'Hide the model: take the structure cell out of the deck' : 'Show the model in the deck, opening the cell if there is none',
+      shown ? 'Hide the model: take its cell out of the deck' : 'Show the model in the deck, in a cell of its own',
       () => {
-        if (shown) this.options.onHide?.()
+        if (shown) this.options.onHide?.(entry)
         else this.options.onShow?.(entry)
       },
       { class: 'btn btn-icon ann-eye', size: 14 },

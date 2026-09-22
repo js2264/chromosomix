@@ -12,7 +12,148 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **The analysis tasks are four cards, cut by dimension (§18.8).** *2D tasks*, *3D tasks*, *1D tasks*
+  and *Metagenome*, each with the frame, mark and fold every other card in every other column has,
+  where there was one flat list under three headings. The cut is **by the dimension the question is
+  about** rather than by the file it reads: aggregate peak analysis sits with the matrix it piles up
+  rather than with the loop set that says where, and metaplot with the track it averages rather than
+  with the features it averages over. Metagenome stays a group of its own because its four tasks are
+  not about a dimension — a MAG is a bin of an assembly — and its card is absent on a file with no
+  genomes, as any card whose every task is absent now is. Within a card the task that *makes* the
+  thing the others read comes first, so **model from the map** opens the 3D card: a reader with no
+  structure loaded has exactly one thing to do in it, and it was the third row.
+
+- **A structure gets a cell of its own (§25.3).** The deck held one structure cell, so showing a
+  second model destroyed the picture of the first — which made two models something a reader could
+  only compare by swapping back and forth, and made a reconstruction landing wipe out the model it
+  was to be judged against, the commonest way to lose a picture in this application. A model that
+  arrives, dropped or computed, now opens a cell **beside** whatever was there; the eye on each
+  Structures row toggles that row's own cell and leaves the others standing; and a cell falling back
+  to a model picks the first no sibling is already drawing, so a deck restored with two structure
+  cells does not draw one picture twice. The cell's own picker still swaps a model in place, which
+  is the other question: the eye is a model asking for a cell, the picker a cell asking for a model.
+
+- **The enlarged 3D viewer carries the three settings the Map card owns (§25.3, §26.3).** `legend`,
+  `crosshair` and `tooltip` are preferences about every picture in the app, and the card that offers
+  them is in the column *behind* the dialog while a model is enlarged — so the one switch for the
+  key the reader was looking at was the one they could not reach. They appear as a *shared* row at
+  the foot of the dialog's sidebar for as long as it is up, and nowhere else. The cell also *hears*
+  them change now: turning the key off on the Map card used to leave the model's key drawn until
+  something else happened to repaint the cell.
+
+- **A second way to build a model, and it is now the default: pastis-NB (§25.6).** *Model from the
+  map* gains a **method** control offering the two positions the literature actually takes on what a
+  contact count *is*. **ShRec3D**, which is what the task did before and still does when picked,
+  reads a count as a *measurement of a distance*, `c^(−1/α)`, fills in the pairs the map never
+  counted so the matrix is complete, and places the beads by classical scaling and weighted SMACOF.
+  **pastis-NB** (Varoquaux, Ay, Noble & Vert 2014; Varoquaux, Noble & Vert 2023) reads a count as a
+  *count* — negative binomial, with a mean of `β·d^(−α)` — and returns the model that makes the
+  counts most probable.
+
+  **Two things follow, and they are why it is the default.** A **zero becomes evidence** rather than
+  a problem: `0^(−1/α)` is infinite, so ShRec3D has to either drop such a pair or invent a distance
+  for it, and the invention is the one step of that pipeline that is a guess. Under a likelihood a
+  zero is a reading — *probably far*, and past a point indifferent to how far, which is exactly what
+  a pair a shallow experiment missed should say — so **nothing is filled in at all**. On a simulated
+  map that is three-quarters zeros, the classical start orders the pairs at ρ = 0.22 and the
+  likelihood brings the same beads to **ρ = 0.92**. And a **count's precision is in the likelihood
+  itself**, so a pair seen ten thousand times holds its beads ten thousand times as firmly with
+  nothing weighted by hand — which is why **weight pairs by** is hidden under this method rather
+  than being asked twice.
+
+  **It reads the raw counts, and the balancing goes into the mean.** Not a preference — a necessity,
+  and the one thing about this that is easy to get quietly wrong. A balanced value is a count times
+  two weights, and *overdispersion is a statement about a count*: `variance > mean` compares a
+  squared quantity with a linear one, so scaling the data scales the two sides differently and a
+  balanced map is **never** found overdispersed, whatever it actually is. Handed balanced values the
+  negative binomial would silently collapse back into a Poisson, on nearly every real file. So the
+  counts stay raw and the weights go where pastis puts them — into the mean, `μ = β·bᵢ·bⱼ·d^(−α)`
+  with `bᵢ = 1/wᵢ`. The coverage is still corrected; it is corrected in the mean rather than in the
+  data, and the run says so in a note and in the table. A bin the balancer rejected is left out, as
+  the balanced view of the same map leaves it out. The reported Spearman ρ is taken against
+  `raw/(bᵢbⱼ)` — which *is* the balanced value — so it stays the number *Model versus map* would
+  give and does not score the model on coverage it was right to remove.
+
+  **The dispersion is fitted from your map, per genomic separation**, by the method of moments over
+  log-spaced separation bins — pastis-NB's one claim over pastis-PM2 being that overdispersion is
+  not one number for a map but grows as the counts thin out with distance. The whole of the negative
+  binomial over the Poisson turns out to be a single factor: the pull on a pair is the Poisson's own
+  `μ − c`, **shrunk by `r/(r + μ)`**. Where a map shows no overdispersion the run says so in as many
+  words — *none: these counts are Poisson, so this is pastis-PM2* — rather than implying a parameter
+  it did not measure. On a helix whose far counts were corrupted, the fitted dispersion holds the
+  near diagonal about **twice as well** as a flat Poisson does.
+
+  **The fit table now names the method** and reports what that method has to report: for pastis-NB,
+  the mean's law, how many zeros were used as evidence, the dispersion near the diagonal and far
+  from it, the MDS start, the likelihood steps and evaluations, why the optimiser stopped, the final
+  `−log L` and the fitted `β`. Both methods still end with Spearman's ρ against the counts.
+
+  **The cost, said before you press Run.** The estimate prices the method you picked: a likelihood
+  evaluation is about 2.3 SMACOF passes' worth, and a step is a line search of just over one
+  evaluation, so pastis-NB is roughly half again the wall clock of ShRec3D for the same step count.
+  Memory is unchanged — **two `n × n` matrices either way**, because the likelihood adds vectors and
+  not squares: L-BFGS at depth eight keeps twenty vectors of `3n + 1` doubles, six megabytes beside
+  a twelve-thousand-bead gigabyte, where a full quasi-Newton method's Hessian at that size would be
+  thirty terabytes. The whole addition is **9.7 kB minified, 3.5 kB gzipped**, in the chunk the
+  analysis panel already loads.
+
+  **Mechanics.** `structure/negbinom.ts` is the model — dispersion, objective, gradient, fit — and
+  `structure/lbfgs.ts` is a limited-memory BFGS with a strong-Wolfe line search (Nocedal & Wright
+  3.5/3.6), the optimiser pastis itself reaches for through SciPy. Both are pure over arrays, and
+  both are generators: the likelihood yields between **evaluations** rather than between steps,
+  because a line search is several passes over the pairs and each is as long as a SMACOF step, so
+  the bar moves and a cancel always has somewhere to land. pastis-NB is started from the MDS model
+  ShRec3D would have given — sixty SMACOF steps, fixed, since it has only to land in the right
+  basin — which is pastis' own initialisation, so the new method stands on the old one rather than
+  replacing it. `α` stays the reader's control under both, and is not fitted, so a model made here
+  and a model made by either published tool mean the same thing by it. What is refused is named in
+  §25.8: no restarts, no alternation between dispersion and structure, no physical unit.
+
+- **A yellow bead on every telomere (§25.5).** A toggle under *overlays* in the 3D structure card marks
+  the ends of each linear sequence. It is careful about what it claims, because the end of a *chain*
+  is not the end of a *chromosome*: the start is a first bead at base zero, which the model says by
+  itself; the far end is claimed only where this session knows the sequence's true length — the
+  file's own, not a lower bound read off its last feature — so a model of `IV:1,000,000–1,400,000`
+  gets none, and neither does a sequence ticked **circular** in the Chromosomes table. Names are
+  matched as everywhere else, so a g3d written `chr4` finds a cooler's `IV`. Drawn through the same
+  channel a reader's own mark is, so the beads are the same size under every drawing and every
+  colouring, and the vector export carries them without a second road.
+
+- **A grip on every Structures row, and an empty cell that takes one (§25.3).** With several models
+  loaded, the row's own button always meant *the* structure cell, wherever it happened to be.
+  Dragging a row into an empty cell of the deck now says where as well as which, and the cell becomes
+  the structure cell drawing that model. The drag carries the row under a type of this application's
+  own, so an empty cell can tell a model from a file while the drag is still in the air; its hint
+  offers both.
+
+- **The colour scale is the reader's (§25.5).** A picker under *colour by* lists every colormap the
+  application carries. *The colouring's own* — the default — keeps the existing rule, that a track's
+  beads take the lane's colormap and contacts take the map's, so a bead and the picture beside it
+  cannot disagree at the same value; choosing one overrides both. Offered only for a ramp, since a
+  colouring by sequence or haplotype is levels and has no scale to change.
+
 ### Changed
+
+- **A structure setting is one row (§25.3).** A select sits on one line with its label wherever the
+  card is wide enough to read the value, and drops the label above it only below about 15 rem —
+  asked of the *card* through a container query rather than of the window, because this card is
+  drawn both in a 200-pixel Aesthetics column and in the enlarged dialog's sidebar, which is twice
+  that. And a slider that only **shapes** something a toggle or a select **arms** shares that
+  control's row: *fog* carries its depth, *outside the window* its opacity. Each of those was two
+  rows, and the second carried a label that repeated the first. *Overlays* moved up beside *drawn
+  as*, the two being one question asked twice — what the model is drawn as, and what is drawn over
+  it.
+
+- **A named `.g3d`, `.3dg` or `.bed3d` is not sniffed at all (§25.2).** The two content tests exist
+  to tell a structure from a BED whose columns happen to be numbers, and a file that names its
+  format has been told apart already — by the reader who named it. A name used to be spared the
+  *fractional* test but not the *chain* test, so a model whose beads are a scatter rather than a
+  walk — a randomised control, a draw from a null, a fragment set nobody has folded — fell through
+  to BED and opened as a lane of boxes whose end is a coordinate in space. The row had already been
+  sent to the Structures card by the same name, so the row and its payload disagreed about what had
+  been loaded.
 
 - **The interface has one grammar, and SPECS.md §26 states it.** A deep audit of every reader-facing
   surface found the same kinds of drift in twenty places at once — not bugs in any one panel, but
@@ -586,6 +727,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The *size by* setting (§25.3).** A track whose value at each bead set the bead's size, as a
+  second channel beside the colour. The channel is gone with the control: every bead is the bead
+  radius.
+
+- **The contact chords, and their threshold (§25.5).** The map's row through a pinned bead was drawn
+  as cylinders from it to every bead above a threshold, under a *pin contacts* toggle. *Colour by
+  contacts with the pinned bead* says the same thing in the representation the model is already in,
+  and a cage of coloured cylinders over a globule was a second answer to a question the first had
+  answered. The colouring stays.
+
+- **The accent bar down a shown Structures row (§25.3, §26.3).** The lit eye already says which
+  models are drawn, and a second way of saying it in the row's left gutter is a second look for one
+  state.
+
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
   reader who missed by one key lost the session rather than a tab. The command stays in the palette.
 
@@ -607,6 +762,57 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Dropping several local coolers no longer gives a row of empty cells (§16.6).** Each opened a
+  live panel and then, a frame later, every one of them was replaced by a vacancy reading *this cell
+  held that file and it could not be re-opened* — about files the deck still had in hand. The hash
+  can say no more than `~` about a local map, and what a `~` was resolved against was the stored
+  record, re-opened through a filesystem grant; a file that arrived by **drag and drop** has no
+  grant, because the browser hands over a `File` rather than a handle and nothing can ask for one
+  afterwards. A cell the deck is already holding is now the first answer for its own index, and the
+  record answers for the rest.
+
+- **A pair the map never counted is the pale end of the ramp, not the dark one (§25.5).** Colouring
+  a model by *contacts with the pinned bead* put every uncounted pair at the **top** of the scale, so
+  the darkest beads in a virtual 4C were exactly the ones with no contact at all. `log10`'s clamp
+  folds a zero to `0`, which is numpy's and right on a map whose scale starts there — but the scale
+  here is the map's *transformed* range, and a balanced map's runs from about −3.6 to about 0.
+
+- **A ghosted chromosome's dashes are ghosted too (§25.5).** The dashed run of ink across every gap
+  in a chain was flat ink at full opacity, so a model faded almost to nothing still carried a cage
+  of black dashes over it — which read as the one thing being *shown*. A gap is a fact about a
+  chain, so it fades with the chain, and a gap spanning the edge of the window thins into the ghost
+  as a stick does.
+
+- **The telomere mark is both ends of every chain (§25.5).** It asked the session before claiming an
+  end — the start only from a first bead at base zero, the far end only against a length the file
+  itself declared, neither for a sequence ticked circular — and the argument was sound: the end of a
+  chain is not the end of a chromosome. It was also useless. A model's own lengths are a lower bound,
+  a lower bound cannot establish an end, and a whole yeast genome came out with five marks where a
+  reader was looking for thirty-two. The mark is a chain end and claims no more.
+
+- **A marked bead is the colour you gave it, not black (§25.4).** Every bead drawn for one of the
+  reader's own 1D annotations came out black on screen, whatever colour the Manual annotations card
+  showed beside it — and the same mark exported to PDF came out right, because the 2D painter takes
+  a colour as a colour. The sphere's material asked for **vertex** colours as well as the instance
+  colour it actually uses; `USE_COLOR`'s shader multiplies in a `color` attribute a plain sphere has
+  not got, a missing attribute reads as `(0, 0, 0)`, and the instance colour was multiplied into that
+  zero. (`defaultAttributeValues` would have supplied a white one, but three defines it only on
+  `ShaderMaterial`.) Dropping the flag is the whole fix; the colour has always come from the card.
+
+- **Ghosting is a transparency now, not a pale colour (§25.5).** A ghosted bead — one outside the
+  deck's window, or clicked away in the key — was its own colour *mixed towards the page*, which on
+  a white page reads as washed-out rather than faint, left the geometry fully opaque so it still hid
+  whatever was behind it, and at an opacity of **0** left a page-coloured bead punching a hole in the
+  model rather than getting out of the way. It is real alpha now: the hue is kept, what is behind
+  shows through, and 0 is **gone**. The 2D painter always did it this way, so a model on screen and
+  the same model in an exported PDF no longer disagree about what ghosting means.
+
+- **The model turns without limit (§25.5).** A drag used to stop dead a hair short of the poles, so
+  turning a globule over to see its far side ran into a wall halfway through the gesture. Both
+  angles now wrap: the model goes over the top and keeps going. The clamp was a turntable's
+  convention for keeping a horizon level, and a structure has no horizon; nothing in the arithmetic
+  needed it, the camera's frame being orthonormal at every elevation.
 
 - **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
   way round, on the argument that a band along a genomic axis is what a contact map is *for* — which

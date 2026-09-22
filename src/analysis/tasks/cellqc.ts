@@ -142,7 +142,7 @@ export const CELL_QC_TASK: AnalysisTask = {
   id: 'cellqc',
   title: 'Per-cell contact QC',
   blurb: 'What each cell’s contacts look like, and where in the cycle that puts it.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   // Absent rather than waiting on every other container, which is §8.5's rule

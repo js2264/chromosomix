@@ -443,3 +443,38 @@ export function centroidOf(
   }
   return { x: cx, y: cy, z: cz, radius }
 }
+
+/**
+ * The beads that sit at a **telomere**: the two ends of every chain.
+ *
+ * Both ends, every chain, with nothing asked of the session. An earlier rule
+ * asked — the start only from a first bead at base zero, the far end only
+ * against a length the file itself declared, and neither for a sequence ticked
+ * circular — on the argument that the end of a *chain* is not the end of a
+ * *chromosome*. It is a true argument and it made the mark useless: on a whole
+ * yeast genome it painted five beads out of the thirty-two a reader was
+ * looking for, because a model's own lengths are a lower bound and a lower
+ * bound cannot establish an end. The mark is a **chain end**, drawn wherever a
+ * chain ends, and that is what it now claims.
+ *
+ * Beads the file left unplaced are skipped, so a chain that begins with a gap
+ * is measured from the first bead that is actually somewhere. A chain of one
+ * bead gets one mark rather than two: it is one place, and drawing it twice
+ * would say there were two.
+ */
+export function telomereBeads(structure: Structure): number[] {
+  const out: number[] = []
+  for (const chain of structure.chains) {
+    let first = -1
+    let last = -1
+    for (const bead of chain.beads) {
+      if (structure.present[bead] !== 1) continue
+      if (first < 0) first = bead
+      last = bead
+    }
+    if (first < 0) continue
+    out.push(first)
+    if (last !== first) out.push(last)
+  }
+  return out
+}

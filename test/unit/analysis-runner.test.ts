@@ -169,7 +169,7 @@ function task(id: string, over: Partial<AnalysisTask> = {}): AnalysisTask {
     id,
     title: id,
     blurb: '',
-    group: 'map',
+    group: '2d',
     venue: 'analysis',
     version: 3,
     availability: () => READY,
@@ -850,7 +850,7 @@ describe('a view with no map', () => {
       annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
     })
 
-    runner.run(task('metaplot', { group: 'tracks', venue: 'annotations' }), {})
+    runner.run(task('metaplot', { group: '1d', venue: 'annotations' }), {})
     await settle()
 
     expect(runner.stateOf('metaplot').status).toBe('done')
@@ -874,7 +874,7 @@ describe('a view with no map', () => {
       source: () => null,
       annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
     })
-    runner.run(task('trackcorr', { group: 'tracks', venue: 'annotations' }), {})
+    runner.run(task('trackcorr', { group: '1d', venue: 'annotations' }), {})
     await settle()
     expect(runner.stateOf('trackcorr').status).toBe('done')
     runner.destroy()

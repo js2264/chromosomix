@@ -101,7 +101,7 @@ export const OVERLAP_TASK: AnalysisTask = {
   id: 'overlap',
   title: 'Interval set overlap',
   blurb: 'Jaccard, shared bases, how many features touch — and whether that is more than chance.',
-  group: 'tracks',
+  group: '1d',
   venue: 'annotations',
   version: 2,
   // No map required: two interval sets compared against each other say nothing
