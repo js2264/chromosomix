@@ -115,6 +115,7 @@ import {
   setPlotOption,
   PLOT_OPTION_ICONS,
   PLOT_OPTION_LABELS,
+  STRUCTURE_OPTIONS,
   subscribePlotOptions,
   type PlotOptionKey,
 } from '../ui/plotOptions'
@@ -181,6 +182,16 @@ export interface StructurePanelProps {
    * Absent for a cell with no deck around it, which is seat 0.
    */
   seat?(): number
+  /**
+   * The shared preferences (§26.3) another card in **this column** already
+   * offers — the Map card's, or the 1D browser's.
+   *
+   * What the cell needs is not *which view is this* but *what is already on
+   * offer*, so the answer stays right when a card's own list changes: the
+   * structure card fills the gap and never doubles a control. Absent is the
+   * safe answer — nothing is offered elsewhere, so everything is offered here.
+   */
+  sharedElsewhere?(): readonly PlotOptionKey[]
   memoryKey(): string
   /** The × on the heading. */
   onClose(): void
@@ -220,21 +231,14 @@ function seatScope(scope: string, seat: number): string {
 function clamp(value: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, value))
 }
-/**
- * The settings this cell reads that are **not** the row's own (§26.3).
- *
- * `legend`, `crosshair` and `tooltip` are preferences about every picture in
- * the app, kept in `ui/plotOptions.ts` and offered on the Map card — which is
- * in the column behind the dialog while the model is enlarged, so the one
- * control for the key the reader is looking at is the one they cannot reach.
- * They are borrowed into the dialog's sidebar for as long as it is up, and are
- * not repeated on the card: the Map card already offers them there, and §26.3
- * wants a control offered once per column.
- *
- * Exactly the three the renderer asks for. A fourth borrowed here would be a
- * control that does nothing to the picture it was pressed beside.
+/*
+ * The settings this cell reads that are **not** the row's own live in
+ * `ui/plotOptions.ts` as {@link STRUCTURE_OPTIONS}, beside the matrix's and
+ * the tracks' — which picture each preference is about is one question, and
+ * that file is where it is answered. This module used to keep its own copy of
+ * the list, which is a list that stops being the answer the day a fourth
+ * preference is one the model honours.
  */
-const BORROWED_OPTIONS: readonly PlotOptionKey[] = ['legend', 'crosshair', 'tooltip']
 
 /** Where the enlarged dialog's sidebar width is kept, so a reader sets it once. */
 const SIDE_SCOPE = 'structure:side'
@@ -564,7 +568,7 @@ export class StructurePanel implements DeckCell {
       window.removeEventListener('keyup', this.onKeyUp)
       window.removeEventListener('blur', this.onWindowBlur)
     })
-    // The three shared preferences this cell reads ({@link BORROWED_OPTIONS}).
+    // The shared preferences this cell reads (`STRUCTURE_OPTIONS`).
     // It never heard them change: turning the key off on the Map card left the
     // model's key drawn until something else happened to repaint the cell.
     this.unsubscribes.push(
@@ -2852,22 +2856,39 @@ export class StructurePanel implements DeckCell {
       }),
     )
 
-    // Borrowed from the Map card for as long as the dialog is up (§26.3): the
-    // three shared preferences this cell reads and the column behind the
-    // dialog owns. Last, under the model's own settings, because they are
-    // about every picture rather than about this one.
-    if (this.expanded !== null) {
+    // The shared preferences this picture reads (§26.3), offered **wherever
+    // nothing else in this column offers them**.
+    //
+    // Three cases, one rule. Enlarged, the model is the window and every other
+    // card is *behind* the dialog, so all of them are borrowed in — the one
+    // switch for the key the reader is looking at should not be the one they
+    // cannot reach. Beside a map, the Map card offers all three and this row
+    // is empty, because §26.3 wants a control offered once per column and two
+    // copies ten lines apart read as two settings. Beside the **1D browser**,
+    // whose Tracks card offers the crosshair and the card but has no *legend*
+    // — a browser has no key to hide — this row is the model's key toggle and
+    // nothing else, where it used to be nowhere at all: a reader in a
+    // browser-led deck could turn the key off only by enlarging the model.
+    const offeredElsewhere = new Set(this.props.sharedElsewhere?.() ?? [])
+    const shared = this.expanded !== null
+      ? STRUCTURE_OPTIONS
+      : STRUCTURE_OPTIONS.filter((key) => !offeredElsewhere.has(key))
+    if (shared.length > 0) {
       rows.push(
         settingsField(
           'shared',
           row(
-            ...BORROWED_OPTIONS.map((key) => {
+            ...shared.map((key) => {
               const { label, hint } = PLOT_OPTION_LABELS[key]
               const on = getPlotOptions()[key]
-              return toggleIcon(PLOT_OPTION_ICONS[key], `${label} — ${hint}`, on, () => setPlotOption(key, !on))
+              return toggleIcon(PLOT_OPTION_ICONS[key], `${label} — ${hint}`, on, () => setPlotOption(key, !on), {
+                class: `structure-shared structure-shared-${key}`,
+              })
             }),
           ),
-          'Settings the Map card owns and this picture reads, offered here because that card is behind the dialog.',
+          this.expanded !== null
+            ? 'Settings about every picture in the app that this one reads, offered here because the cards that own them are behind the dialog.'
+            : 'Settings about every picture in the app that this one reads, and that no other card in this column offers.',
         ),
       )
     }

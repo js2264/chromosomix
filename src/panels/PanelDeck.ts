@@ -1511,6 +1511,11 @@ export class PanelDeck {
         // minted fresh on every build and would remember nothing across a
         // reload; the seats are restored in the order the hash lists them.
         seat: () => this.slots.filter((held) => held.ref.kind === 'structure').indexOf(slot),
+        // Passed straight through: what the column already offers is the
+        // session's to know — it is the session that puts the cards in it.
+        ...(shared?.sharedElsewhere === undefined
+          ? {}
+          : { sharedElsewhere: () => shared.sharedElsewhere?.() ?? [] }),
         memoryKey: () => this.props.memoryKey(),
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),

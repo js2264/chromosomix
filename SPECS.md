@@ -7899,13 +7899,24 @@ since two corner-bracket glyphs side by side were told apart only by hovering th
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
 camera controls — and gives it back where it was.
 
-**And it borrows three settings that are not the row's own.** `legend`, `crosshair` and `tooltip`
-are preferences about every picture in the app (§26.3), kept in one store and offered on the *Map*
-card — which is in the column *behind* the dialog while the model is enlarged, so the one switch for
-the key the reader is looking at was the one they could not reach. They appear as a **shared** row at
-the foot of the sidebar for as long as the dialog is up, and nowhere else: §26.3 wants a control
-offered once per column, and the Map card offers them there. Exactly the three this picture reads; a
-fourth would be a control that does nothing to the thing it was pressed beside.
+**And it carries the settings that are not the row's own.** `legend`, `crosshair` and `tooltip` are
+preferences about every picture in the app (§26.3), kept in one store; which picture each of them is
+about is declared once, in `ui/plotOptions.ts`, beside the matrix's list and the tracks' —
+`STRUCTURE_OPTIONS` is the model's, and a list copied into the cell is a list that stops being the
+answer the day a fourth preference is one the model honours. They appear as a **shared** row on the
+card, and what is in it is **whatever no other card in the column offers**:
+
+- **Enlarged**, all three. The model is the window and every card that owns one of them is *behind*
+  the dialog, so the one switch for the key the reader is looking at is not the one they cannot
+  reach.
+- **Beside a map**, none: the *Map* card offers all three, and §26.3 wants a control offered once per
+  column — two copies ten lines apart read as two settings.
+- **Beside the 1D browser**, the key alone. That card offers the crosshair and the hover card but no
+  *legend*, a browser having no key of its own to hide, so the model's key was reachable only by
+  enlarging it.
+
+Exactly the three this picture reads; a fourth would be a control that does nothing to the thing it
+was pressed beside.
 
 The card also carries a **depth slab** (two clipping planes either side
 of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
@@ -7965,7 +7976,13 @@ facts discoverable only by pressing things. It is a **readout and not a control*
 pill, the translucent backing the map's key has — because a bordered pill three pixels from five
 bordered buttons is a button a reader presses and nothing happens; and the **readout of where the
 pointer is** sits under it in the same column, since the legend is five rows or six and a readout
-pinned below it by a number would sit on top of it half the time. A **tap** of the centre key alone
+pinned below it by a number would sit on top of it half the time. **In a small cell it is the live
+row alone**, and the rest come back while the pointer is on the picture: five rows of keys over a
+cell 330 pixels wide is a caption taking the corner of the thing it captions, a reader four cells
+across is looking at shapes rather than learning keys, and the moment the keys *are* wanted is the
+moment the hand is already there. Asked of the **cell** through a container query and not of the
+window, for the settings card's reason (§25.3): the same cell is 330 pixels in a four-across deck
+and thirteen hundred in the enlarged viewer. A **tap** of the centre key alone
 shows or hides the **centre of rotation**, which the card's *overlays* row also does; the keys act
 only while the pointer is over the cell, its canvas is focused or its dialog is open. The three **sticky** modes — *mark*, *loop* and
 *measure* — stay on until pressed again, so each button is lit while its mode runs (§26.3) and the

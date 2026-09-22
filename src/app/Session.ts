@@ -61,7 +61,7 @@ import {
 } from '../state/ViewState'
 import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
-import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import { MATRIX_OPTIONS, TRACK_OPTIONS, getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
 import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
@@ -5605,6 +5605,15 @@ export class Session {
         // pinned bead, on the scale the map draws with (§25.5).
         contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,
         contactsScale: () => this.current?.panel?.shownScale() ?? null,
+        // What the rest of this column already offers of the shared
+        // preferences (§26.3), so the model's card fills the gap rather than
+        // doubling a control. A view with a **Map card** offers all three the
+        // model reads; the **1D browser** offers the crosshair and the hover
+        // card but has no key of its own to hide, so the model's own key
+        // toggle is the gap. Read at paint time, not captured, because a
+        // session becomes a browser and a browser becomes a map.
+        sharedElsewhere: () =>
+          this.current?.panel?.controlsEl === undefined ? TRACK_OPTIONS : MATRIX_OPTIONS,
         onGoTo: (range) => this.goToLocus(formatLocus(range)),
         onDrop: (file) => this.dropped(file),
         onDropUrl: (url) => {

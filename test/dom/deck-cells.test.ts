@@ -25,6 +25,7 @@ import { defaultStyle } from '@/annotations/types'
 import type { MatrixPanel } from '@/ui/MatrixPanel'
 import type { LocusWindow } from '@/render/locus'
 import { setHoverPlace } from '@/ui/hoverLocus'
+import { MATRIX_OPTIONS, TRACK_OPTIONS, type PlotOptionKey } from '@/ui/plotOptions'
 import type { ViewState } from '@/types'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -172,7 +173,7 @@ function tracksContext(): TracksContext {
 function make(
   store: ReturnType<typeof fakeStore> | undefined,
   tracks?: TracksContext,
-  options: { mapsAllowed?: boolean } = {},
+  options: { mapsAllowed?: boolean; sharedElsewhere?: readonly PlotOptionKey[] } = {},
 ) {
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
@@ -188,6 +189,9 @@ function make(
       store: () => store as unknown as AnnotationStore | undefined,
       manual: () => manual,
       contacts: () => null,
+      ...(options.sharedElsewhere === undefined
+        ? {}
+        : { sharedElsewhere: () => options.sharedElsewhere ?? [] }),
       onGoTo: (range) => went.push(range),
       onDrop: (file) => dropped.push(file.name),
       onDropUrl: (url) => dropped.push(url),
@@ -456,6 +460,30 @@ describe('what the cell says', () => {
     link?.click()
     const after = settingsRow(deck, 'camera')?.querySelector<HTMLButtonElement>('.structure-turn-with')
     expect(after?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('offers the shared settings no other card in the column offers (§26.3)', () => {
+    // Beside a **map**, the Map card offers all three the model reads, so the
+    // row is empty: one control per column, and two copies ten lines apart
+    // read as two settings.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: MATRIX_OPTIONS })
+    deck.add({ kind: 'structure' })
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
+  })
+
+  it('offers the key beside a browser, whose own card has no key to hide', () => {
+    // The 1D browser offers the crosshair and the hover card and no *legend* —
+    // a browser has no key of its own. So the model's key toggle is the gap,
+    // and it used to be nowhere at all: a reader in a browser-led deck could
+    // turn the model's key off only by enlarging it.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: TRACK_OPTIONS })
+    deck.add({ kind: 'structure' })
+    const shared = settingsRow(deck, 'shared')
+    expect(shared).toBeDefined()
+    const offered = all<HTMLElement>(shared as HTMLElement, '.structure-shared').map((node) =>
+      node.className.split(' ').find((name) => name.startsWith('structure-shared-')),
+    )
+    expect(offered).toEqual(['structure-shared-legend'])
   })
 
   it('is resized by the bar under it, and given back to the row on a double-click', () => {
@@ -747,6 +775,31 @@ describe('the model, enlarged', () => {
     // The card is the deck's again, out of the dialog.
     expect(document.querySelector('.modal-structure .structure-settings')).toBeNull()
     expect(deck.structureSettings()?.classList.contains('structure-settings')).toBe(true)
+  })
+
+  it('carries every shared setting into the full viewer, whoever owns them (§26.3)', () => {
+    // Enlarged, the model *is* the window and every card that owns one of
+    // these is behind the dialog — so all three come in, including the ones the
+    // Map card would normally be the only place to reach. The one switch for
+    // the key the reader is looking at should not be the one they cannot get
+    // to.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: MATRIX_OPTIONS })
+    deck.add({ kind: 'structure' })
+    // Nothing on the card while the Map card offers all three.
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    const shared = all<HTMLElement>(
+      document.querySelector('.modal-structure') as HTMLElement,
+      '.structure-shared',
+    ).map((node) => node.className.split(' ').find((name) => name.startsWith('structure-shared-')))
+    expect(shared).toEqual([
+      'structure-shared-legend',
+      'structure-shared-crosshair',
+      'structure-shared-tooltip',
+    ])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    // …and they go back where they came from when the dialog closes.
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
   })
 
   it('closes its dialog when the cell is destroyed', () => {

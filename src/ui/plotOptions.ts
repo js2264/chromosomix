@@ -106,6 +106,23 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
 ]
 
 /**
+ * What the **3D structure** reads (§25.3).
+ *
+ * A third list beside the two above, and here rather than in the cell that
+ * reads them, because *which picture each preference is about* is one question
+ * and this file is where it is answered. A control added to the store later is
+ * assigned to its pictures in one place; a hardcoded copy in the structure
+ * panel is a list that silently stops being the answer the day a fourth
+ * preference is one the model honours.
+ *
+ * Exactly the three the renderer asks for: the key in the corner, the lines
+ * and halo through what the pointer is on, and the card that follows it. The
+ * rest are about a track's ink or a matrix's gutters, and a toggle that does
+ * nothing to the picture it was pressed beside is worse than no toggle.
+ */
+export const STRUCTURE_OPTIONS: readonly PlotOptionKey[] = ['legend', 'crosshair', 'tooltip']
+
+/**
  * What a Tracks card offers when a **Map card is above it**.
  *
  * Beside a map the two shared preferences appeared in both rows of one column,

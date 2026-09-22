@@ -58,7 +58,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   fog, and a sticky mode at the top while it runs. It was one chip naming the current gesture, which
   told a reader who already knew the keys which key they were holding and everybody else nothing:
   that Shift moves the model, that ⌘ puts the centre somewhere and that Space and the wheel are the
-  fog were facts discoverable only by pressing things.
+  fog were facts discoverable only by pressing things. **In a small cell it is the live row alone**,
+  the rest coming back while the pointer is on the picture: five rows of keys over a cell 330 pixels
+  wide is a caption taking the corner of the thing it captions, and the moment the keys are wanted
+  is the moment the hand is already there. Asked of the cell through a container query, since the
+  same cell is 330 pixels four across and thirteen hundred in the enlarged viewer.
 
 - **The structure cell is resized by a bar under it (§25.3).** Dragged, nudged with the arrow keys,
   double-clicked to give the height back to the row, and remembered per seat. A model has no axis to
@@ -830,6 +834,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **Every shared setting the model reads is reachable from the model (§26.3).** `legend`, `crosshair`
+  and `tooltip` are preferences about every picture in the app, and the structure cell borrowed them
+  into its enlarged dialog from a list written out by hand in the cell. Two things follow. Which
+  picture each preference is about is now declared once, in `ui/plotOptions.ts` beside the matrix's
+  list and the tracks' — a copy in the cell is a list that stops being the answer the day a fourth
+  preference is one the model honours. And the *shared* row now carries **whatever no other card in
+  the column offers**: all three in the enlarged viewer, where every card that owns one is behind
+  the dialog; none beside a map, whose Map card offers all three; and **the key alone beside the 1D
+  browser**, whose card offers the crosshair and the hover card but no legend — a browser has no key
+  of its own to hide. In a browser-led deck the model's own key could be turned off only by
+  enlarging the model.
 
 - **A mark outside the window is ghosted like the bead it sits on (§25.5).** Telomeres, the reader's
   own marked places and the genomic ruler's ticks were drawn at full strength whatever the model was

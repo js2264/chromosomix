@@ -9743,8 +9743,15 @@ span.deck-name {
   border-radius: var(--radius);
   background: var(--bg-sunken);
   /* The canvas below sizes itself from this box (`StructurePanel.remeasure`),
-     so the box must not size itself from the canvas. */
-  contain: size layout;
+     so the box must not size itself from the canvas. `container-type: size`
+     says that and one thing more: what is drawn over the picture asks *this
+     box* how much room there is, rather than asking the window. A cell four
+     across in a deck and the same cell filling the enlarged dialog are the
+     same element at two sizes, and only a container query can tell them
+     apart. It subsumes the `contain: size layout` that was here — a size
+     container has layout, style and size containment by definition. */
+  container-type: size;
+  container-name: structure-cell;
   touch-action: none;
   user-select: none;
 }
@@ -9892,9 +9899,15 @@ span.deck-name {
 }
 
 /* Where the pointer is, in words: the locus, the chain, the bead. Placed by
-   the top-left column it sits in (`.structure-topleft`), under the legend. */
+   the top-left column it sits in (`.structure-topleft`), under the legend, and
+   cut to that column's width where the cell is too narrow for the whole of it
+   — the status line under the window carries the same reading in full, which
+   is where a reader with no room for it looks. */
 .structure-readout {
   align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 2px 6px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -11871,6 +11884,37 @@ span.deck-name {
 .structure-guide-what {
   color: var(--text-dim);
   opacity: 0.7;
+}
+
+/* **In a small cell, the live row alone.** Five rows of keys over a picture
+   330 pixels wide is a caption taking the corner of the thing it captions, and
+   a reader four cells across is looking at the shapes rather than learning the
+   keys. The row that is lit stays — it is the badge this grew out of, and what
+   the hand is doing is worth a line at any size — and the rest come back
+   **while the pointer is on the cell**, which is exactly when the keys are
+   wanted and the only time the legend is in the way of nothing: the hand is
+   already there.
+
+   Asked of the cell and not of the window, because the same cell is 330 pixels
+   in a four-across deck and 1300 in the enlarged viewer. */
+@container structure-cell (max-width: 28rem) {
+  .structure-wrap:not(:hover) .structure-guide-row:not(.is-on) {
+    display: none;
+  }
+  /* And under the corner buttons rather than beside them. They are the one
+     thing in the cell that keeps its size as the cell loses its own — five
+     buttons are 12rem wide in a cell of 17 — so the live row and the five
+     buttons were sharing a line that fits one of them, and `drag turn` came
+     out reading `drag tu`. */
+  .structure-topleft {
+    top: 2.4rem;
+  }
+}
+
+@container structure-cell (max-height: 20rem) {
+  .structure-wrap:not(:hover) .structure-guide-row:not(.is-on) {
+    display: none;
+  }
 }
 
 /* The live row, which is what the old one-chip badge said on its own: the
