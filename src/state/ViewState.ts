@@ -655,6 +655,141 @@ export function viewForSequences(
   return { uri, view: 'selection', regions: names.join(',') }
 }
 
+// ---------------------------------------------------------------------------
+// The view, as a set of genomes or of one genome's contigs
+// ---------------------------------------------------------------------------
+
+/**
+ * What a metagenome's Sequences card lists: its genomes, or one genome's contigs.
+ *
+ * A metacool has two units where a cooler has one, so the card has two lists
+ * and the view decides which: a picture of genomes — the whole metagenome, a
+ * pair, several ticked — lists genomes; a picture inside one genome — the
+ * genome itself, one of its contigs, several of them — lists that genome's
+ * contigs. Read off the state and nothing else, so a pasted link rebuilds the
+ * same card as the session that made it.
+ */
+export type MetaScope = { kind: 'genomes' } | { kind: 'contigs'; genome: string }
+
+/**
+ * Which list a view is a picture from, or `null` where it says nothing — a
+ * table, the browser — and the card should stay as it is.
+ *
+ * A contig view that does not carry its genome (opened from the Contigs table,
+ * or a pair's cell) is placed by `genomeOf`, and only when every contig in it
+ * belongs to the same one: a block between two genomes' contigs is not a
+ * picture inside either.
+ */
+export function metaScopeOf(
+  state: ViewState,
+  contigs: readonly string[],
+  genomeOf: (contig: string) => string | undefined,
+): MetaScope | null {
+  const inside = (names: readonly string[]): MetaScope | null => {
+    const genome = state.genome ?? commonGenome(names, genomeOf)
+    return genome === undefined ? null : { kind: 'contigs', genome }
+  }
+  switch (state.view) {
+    case 'whole':
+    case 'overview':
+    case 'pair':
+      return { kind: 'genomes' }
+    case 'genome':
+      return state.genome === undefined ? null : { kind: 'contigs', genome: state.genome }
+    // Through `sequencesShown`, which strips coordinates against the file's own
+    // names — a contig may be called `NODE_1:2`.
+    case 'region':
+      return inside(sequencesShown(state, contigs) ?? [])
+    case 'selection': {
+      const selection = selectionOf(state)
+      if (selection === null) return null
+      return selection.kind === 'genome' ? { kind: 'genomes' } : inside(selection.names)
+    }
+    default:
+      return null
+  }
+}
+
+function commonGenome(
+  names: readonly string[],
+  genomeOf: (contig: string) => string | undefined,
+): string | undefined {
+  if (names.length === 0) return undefined
+  const genomes = new Set(names.map(genomeOf))
+  const [only] = genomes
+  return genomes.size === 1 ? only : undefined
+}
+
+/**
+ * Which names in `scope`'s list this view is a picture of — {@link sequencesShown}
+ * for a metagenome, with the same `null` for *do not ask*.
+ *
+ * `contigs` is the file's own name column, for the reason `sequencesShown`
+ * takes one: a contig may be called `NODE_1:2`.
+ */
+export function metaShown(
+  state: ViewState,
+  scope: MetaScope,
+  contigs: readonly string[],
+): string[] | null {
+  if (scope.kind === 'genomes') {
+    switch (state.view) {
+      case 'whole':
+      case 'overview':
+        return []
+      case 'pair':
+        return [...new Set([state.genome, state.genome2])].filter(
+          (name): name is string => name !== undefined,
+        )
+      case 'selection': {
+        const selection = selectionOf(state)
+        return selection?.kind === 'genome' ? selection.names : null
+      }
+      default:
+        return null
+    }
+  }
+  switch (state.view) {
+    case 'genome':
+      return []
+    case 'region':
+    case 'selection':
+      return sequencesShown(state, contigs)
+    default:
+      return null
+  }
+}
+
+/**
+ * The view that draws exactly these names of `scope`'s list —
+ * {@link metaShown} run backwards.
+ *
+ * **One genome ticked is a selection of one**, not the genome view. The genome
+ * view is a picture *inside* the genome and lists its contigs, so a tick that
+ * went there would swap the list out from under the reader halfway through
+ * ticking a second genome. Opening a genome is the name's click, as it is on
+ * every row of this card.
+ *
+ * Inside a genome the genome rides along on every view, which is what keeps the
+ * list — and the crumb — on it: none ticked is the genome itself, one is that
+ * contig, several are those contigs against each other.
+ */
+export function viewForMeta(
+  uri: string,
+  scope: MetaScope,
+  names: readonly string[],
+): ViewState {
+  if (scope.kind === 'genomes') {
+    return names.length === 0
+      ? { uri, view: 'overview' }
+      : { uri, view: 'selection', genomes: names.join(',') }
+  }
+  const genome = scope.genome
+  if (names.length === 0) return { uri, view: 'genome', genome }
+  if (names.length === 1) return { uri, view: 'region', region: names[0], genome }
+  return { uri, view: 'selection', regions: names.join(','), genome }
+}
+
 /** A view state naming a file but nothing inside it — the landing view (§5.1). */
 export function landingState(uri: string, view: ViewKind = 'genomes'): ViewState {
   return { uri, view }

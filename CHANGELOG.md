@@ -14,6 +14,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome's General column lists its genomes, and a genome's contigs, with ticks (§5.8).**
+  The Sequences card a cooler is steered from now has a metacool counterpart: over the whole
+  metagenome, a pair or a selection it lists the **Genomes**, and ticking any number draws them
+  together; inside a genome it lists that genome's **Contigs**, and ticking several draws them
+  against each other, with `↑ genomes` to step back out. The genome view's own contig list in the
+  Aesthetics column is gone, since this one does what it did and more.
+
+- **The map's level is in the General column (§7.3).** One `level` select at the head of the
+  Sequences / Genomes / Contigs card replaces the Map card's `level` (genome, pair, a cooler's whole
+  genome) and the metagenome's separate `Level` card.
+
+- **Manual annotations can be imported (§8.1).** The card had a way out and no way back in: an
+  *Import* section above *Export* now takes a BED or BEDPE — clicked, or dropped anywhere on the
+  card. A BED row is a line on the axis its name column says; a BEDPE row is an arrowhead when both
+  anchors are one base wide and a rectangle otherwise, so the card's own exports round-trip. Marks
+  already on the map are not added twice, and a line under the zone says what each file gave.
+
 - **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
   IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
   eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC
@@ -220,6 +237,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The File card does not wrap.** Every row is one line and the card scrolls sideways, so a long
+  URI no longer stacks a dozen characters at a time down the column.
+
 
 - **A structure setting is one row (§25.3).** A select sits on one line with its label wherever the
   card is wide enough to read the value, and drops the label above it only below about 15 rem —
@@ -863,6 +884,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **The whole metagenome no longer dies with *Array buffer allocation failed* at bin level (§7.3).**
+  The bin-level block was summed into a full-square `Float64` and copied to `Float32`, about 200 MB
+  at its peak against the contig level's 134 MB for the same raster, so on a tab short of memory the
+  default level failed where the others worked. It now sums the upper triangle and finishes straight
+  into `Float32`, which is what the other levels cost. And if the tab still cannot allocate it, the
+  view falls back to `contig × contig` (a cooler's `chromosome × chromosome`), starts that read
+  without asking again, and greys out `bin × bin` with a line saying why.
+
+- **A metagenome's whole-file view is the *Whole metagenome*.** Its crumb, heading, gate and
+  compute button said *whole genome*, which is a cooler's view, while the command palette already
+  said *Whole metagenome*. The genomes table's button reads `whole metagenome →` too.
+
+- **The Manual card's save button sits inside the card.** Its export row kept the width of its
+  longest option plus the button, which pushed the button past the card's right edge in the sidebar;
+  the format select now shrinks instead.
 
 - **The mirror moves the model, not only its labels (§25.5).** A reflection was applied to the built
   coordinates and the renderer never noticed: what it has built is keyed on the counts and the

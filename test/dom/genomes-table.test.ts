@@ -209,7 +209,7 @@ describe('the other doors', () => {
   it('offers the whole file, with the key that reaches it', () => {
     const made = make()
     const button = all<HTMLButtonElement>(made.view.el, '.table-toolbar button').find((node) =>
-      (node.textContent ?? '').includes('whole genome →'),
+      (node.textContent ?? '').includes('whole metagenome →'),
     )
     expect(button?.title).toContain('Every genome at once')
     // The badge is part of the button, so the label is not its whole text.

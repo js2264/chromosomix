@@ -145,7 +145,8 @@ export async function readWrapped(
     }
     const pooled = await mc.pooledMatrix(query, plan, env.hooks ?? {})
     env.throwIfCancelled()
-    return { nrows: pooled.nrows, ncols: pooled.ncols, values: Float32Array.from(pooled.values) }
+    const values = pooled.values instanceof Float32Array ? pooled.values : Float32Array.from(pooled.values)
+    return { nrows: pooled.nrows, ncols: pooled.ncols, values }
   }
 
   const grid: Sub[][] = []

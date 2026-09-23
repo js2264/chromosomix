@@ -54,9 +54,13 @@ import {
   matrixLevel,
   overviewLevel,
   selectionOf,
+  metaScopeOf,
+  metaShown,
   sequencesShown,
+  viewForMeta,
   viewForSequences,
   viewStateEquals,
+  type MetaScope,
   type UnitSelection,
 } from '../state/ViewState'
 import { parseRegionString } from '../metacooler/range'
@@ -151,11 +155,18 @@ import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
 import { MinimapCard, suitsMinimap, type MinimapRange } from '../ui/MinimapCard'
-import { Overview, wholeFileLevelCard } from '../ui/Overview'
+import { Overview, WHOLE_FILE_LEVELS } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/RecordCard'
 import { RegionView } from '../ui/RegionView'
-import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
+import {
+  BROWSER_TICKS,
+  CONTIG_TICKS,
+  GENOME_TICKS,
+  MAP_TICKS,
+  sequenceCard,
+  type SequenceRow,
+} from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, type Command } from '../ui/commands'
@@ -861,6 +872,32 @@ export class Session {
    */
   private echoingSequences = false
   /**
+   * The map's **level** (§7.3), at the head of the Sequences card.
+   *
+   * One element for the session's life, handed to every card built and filled
+   * per view by {@link paintLevel}: the level belongs to the view on screen and
+   * the list does not, so a change of view must not rebuild the list.
+   */
+  private readonly levelSlot = el('div', { class: 'seq-level hidden' })
+  /** Which list a metagenome's card holds; see {@link paintMetaSequences}. */
+  private metaScope: MetaScope | null = null
+  /** That card's ticks — never persisted: on a metagenome they follow the view. */
+  private metaSelection: SequenceSelection | null = null
+  /** The card's rows in their own order, which is the order ticks are drawn in. */
+  private metaOrder: string[] = []
+  /**
+   * Files whose bin-level whole-file read this tab could not allocate (§7.3).
+   *
+   * Kept for the session rather than the view: the machine's memory did not
+   * change because the reader navigated, so the level stays greyed out and a
+   * link or the back button asking for it lands one level up instead.
+   */
+  private readonly binRefused = new Set<string>()
+  /** The file whose next whole-file view starts its read at once; see {@link refuseBinLevel}. */
+  private startNext: string | null = null
+  /** Contig → genome, built once per contigs table; see {@link genomeOfContig}. */
+  private contigOwners: { from: ContigsResult; owners: Map<string, string> } | null = null
+  /**
    * A config waiting for the file it describes.
    *
    * An exported session names its file; a local one cannot be re-opened from a
@@ -1243,6 +1280,9 @@ export class Session {
     this.assembly = null
     this.sequenceListener?.()
     this.sequenceListener = null
+    this.metaScope = null
+    this.metaSelection = null
+    this.contigOwners = null
     this.reader?.terminate()
     this.reader = null
   }
@@ -3044,10 +3084,10 @@ export class Session {
    * record card, which could only ever describe the one sequence already named
    * in the breadcrumb — see {@link recordsFor}.
    *
-   * **A cooler only.** A metacool's unit is the genome (§5.1) and its contig
-   * list is the thousands of pieces those genomes were assembled from; a picker
-   * with a hundred thousand tick boxes in it is not a picker, and the genomes
-   * table is where that file's selection is made. Its record card stays.
+   * **A metagenome gets the same card over its own two units**
+   * ({@link paintMetaSequences}): its genomes over a picture of genomes, and one
+   * genome's contigs inside one — never the file's whole contig list, which is
+   * a hundred thousand pieces of four thousand assemblies and not a picker.
    *
    * Built once per file — the list arrives with the `/chroms` read that
    * {@link setUpAnnotations} already pays for — and never rebuilt: the ticks
@@ -3059,7 +3099,7 @@ export class Session {
     const panel = this.infoPanel
     if (file === null || panel === null) return
     if (file.info.hasGenomes) {
-      panel.setSequences(null)
+      this.paintMetaSequences(this.metaScope ?? { kind: 'genomes' })
       return
     }
     const assembly = this.assemblyOfFile(file)
@@ -3085,9 +3125,219 @@ export class Session {
         // The same destination a click on a row of the Chromosomes table
         // reaches, because it is the same act: show me that chromosome.
         onGoTo: (name) => this.navigate({ uri: file.uri, view: 'region', region: name }),
+        head: [this.levelSlot],
         ...MAP_TICKS,
       }),
     )
+  }
+
+  /**
+   * The Sequences card of a **metagenome**: its genomes, or one genome's contigs.
+   *
+   * Which one is the view's to say (`metaScopeOf`): a picture of genomes — the
+   * whole metagenome, a pair, several ticked — lists the genomes, and a picture
+   * inside one genome lists that genome's contigs, so ticking several of either
+   * is the same gesture a cooler's chromosomes answer. A name's click goes one
+   * level in (a genome, or a contig of it) and the line under a contig list's
+   * title goes one level out.
+   *
+   * Rebuilt when the list changes and not otherwise, for the reason the
+   * cooler's card is built once: the ticks follow the view, and a rebuild would
+   * throw away the filter and the scroll of a list being read.
+   */
+  private paintMetaSequences(scope: MetaScope): void {
+    const file = this.file
+    const panel = this.infoPanel
+    if (file === null || panel === null) return
+    const rows = scope.kind === 'genomes' ? this.genomeRows() : this.contigRowsOf(scope.genome)
+    const selection = new SequenceSelection()
+    this.sequenceListener?.()
+    this.sequenceListener = selection.subscribe(() => this.metaChosen())
+    this.metaScope = scope
+    this.metaSelection = selection
+    this.metaOrder = rows.map((row) => row.name)
+    const uri = file.uri
+    const head: HTMLElement[] = [this.levelSlot]
+    if (scope.kind === 'contigs') {
+      head.unshift(
+        el(
+          'p',
+          { class: 'hint seq-scope' },
+          el('span', { text: 'of ' }),
+          el('strong', { text: scope.genome }),
+          el('span', { text: ' · ' }),
+          button('↑ genomes', () => this.navigate(viewForMeta(uri, { kind: 'genomes' }, [scope.genome])), {
+            class: 'seq-all',
+            title: 'Back to the list of genomes, with this one ticked',
+          }),
+        ),
+      )
+    }
+    panel.setSequences(
+      sequenceCard({
+        contigs: rows,
+        selection,
+        head,
+        onGoTo: (name) =>
+          this.navigate(
+            scope.kind === 'genomes'
+              ? { uri, view: 'genome', genome: name }
+              : { uri, view: 'region', region: name, genome: scope.genome },
+          ),
+        ...(scope.kind === 'genomes' ? GENOME_TICKS : CONTIG_TICKS),
+      }),
+    )
+  }
+
+  /** The genomes, in the order the file displays them, `__unbinned__` left out. */
+  private genomeRows(): SequenceRow[] {
+    const file = this.file
+    if (file === null) return []
+    const names = file.genomes.table.data['name']
+    const lengths = file.genomes.table.data['length']
+    const lengthOf = new Map<string, number>()
+    if (Array.isArray(names) && lengths !== undefined && !Array.isArray(lengths)) {
+      ;(names as string[]).forEach((name, row) => lengthOf.set(name, Number(lengths[row])))
+    }
+    return file.displayNames.map((name) => ({ name, length: lengthOf.get(name) ?? 0 }))
+  }
+
+  /** One genome's contigs, in file order, from the contigs table's `genome_id`. */
+  private contigRowsOf(genome: string): SequenceRow[] {
+    const file = this.file
+    const table = file?.contigs?.table
+    const genomeNames = file?.genomes.table.data['name']
+    if (table === undefined || !Array.isArray(genomeNames)) return []
+    const index = (genomeNames as string[]).indexOf(genome)
+    const names = table.data['name']
+    const ids = table.data['genome_id']
+    const lengths = table.data['length']
+    if (
+      index < 0 ||
+      !Array.isArray(names) ||
+      ids === undefined ||
+      Array.isArray(ids) ||
+      lengths === undefined ||
+      Array.isArray(lengths)
+    ) {
+      return []
+    }
+    const rows: SequenceRow[] = []
+    for (let row = 0; row < names.length; row++) {
+      if (Number(ids[row]) === index) {
+        rows.push({ name: (names as string[])[row], length: Number(lengths[row]) })
+      }
+    }
+    return rows
+  }
+
+  /** The genome a contig belongs to, once the contigs table is in. */
+  private genomeOfContig(contig: string): string | undefined {
+    const contigs = this.file?.contigs ?? null
+    if (contigs === null) return undefined
+    if (this.contigOwners?.from !== contigs) {
+      this.contigOwners = {
+        from: contigs,
+        owners: contigGenomes(contigs, this.file?.genomes.table ?? null),
+      }
+    }
+    return this.contigOwners.owners.get(contig)
+  }
+
+  /** A tick changed on a metagenome's card: draw what is ticked, in list order. */
+  private metaChosen(): void {
+    if (this.echoingSequences) return
+    const file = this.file
+    const scope = this.metaScope
+    const selection = this.metaSelection
+    if (file === null || scope === null || selection === null) return
+    const chosen = new Set(selection.names)
+    this.navigate(viewForMeta(file.uri, scope, this.metaOrder.filter((name) => chosen.has(name))))
+  }
+
+  /**
+   * {@link syncSequenceTicks} for a metagenome: pick the list the view is from,
+   * then tick what it draws.
+   *
+   * A genome view does not read the contigs table, and one genome's list is
+   * built from it — so the first visit to one reads it and comes back here.
+   */
+  private syncMetaTicks(state: ViewState): void {
+    const file = this.file
+    if (file === null) return
+    const names = this.contigNames() ?? []
+    const scope = metaScopeOf(state, names, (contig) => this.genomeOfContig(contig))
+    if (scope !== null && !sameScope(scope, this.metaScope)) {
+      if (scope.kind === 'contigs' && file.contigs === null) {
+        void this.contigs().then(
+          () => {
+            if (!this.destroyed && this.store.state === state) this.syncMetaTicks(state)
+          },
+          () => {},
+        )
+        return
+      }
+      this.paintMetaSequences(scope)
+    }
+    const current = this.metaScope
+    const selection = this.metaSelection
+    if (current === null || selection === null) return
+    const shown = metaShown(state, current, names)
+    if (shown === null) return
+    this.echoingSequences = true
+    try {
+      selection.set(shown)
+    } finally {
+      this.echoingSequences = false
+    }
+  }
+
+  /**
+   * Fill the level slot for the view on screen, or empty it (§7.3).
+   *
+   * The level was a control inside each view — the Map card's `level` on a
+   * genome, a pair and a cooler's whole genome, and a `Level` card of its own
+   * over a metagenome's — and it is one question about the map: what one cell
+   * holds. So it sits once, at the head of the list the map is picked from, and
+   * says only what the view on screen can draw.
+   */
+  private paintLevel(state: ViewState): void {
+    const file = this.file
+    // The overview's own default, which an advertised edge list moves to the
+    // genome level (see {@link mountOverview}); the select must name what is drawn.
+    const landing = state.level === undefined && this.edgeListUrl() !== undefined ? 'genome' : undefined
+    const refused = this.binRefused.has(state.uri)
+    const choices =
+      file === null
+        ? null
+        : levelChoices(state, file.info.hasGenomes, file.info.nContigs, landing, refused)
+    if (choices === null) {
+      this.levelSlot.replaceChildren()
+      this.levelSlot.classList.add('hidden')
+      return
+    }
+    const select = el('select', { class: 'select' })
+    for (const choice of choices.options) {
+      const option = el('option', { value: choice.value, text: choice.label, title: choice.hint })
+      option.disabled = choice.disabled === true
+      select.appendChild(option)
+    }
+    select.value = choices.current
+    const hint = (): string =>
+      choices.options.find((choice) => choice.value === select.value)?.hint ?? ''
+    select.title = hint()
+    select.addEventListener('change', () => {
+      select.title = hint()
+      this.store.patch({ level: select.value as 'bin' | 'contig' | 'genome' }, { replace: true })
+    })
+    const binOffered = choices.options.some((choice) => choice.value === 'bin')
+    this.levelSlot.replaceChildren(
+      el('div', { class: 'field' }, el('span', { class: 'field-label', text: 'level' }), select),
+      ...(refused && binOffered
+        ? [el('p', { class: 'hint seq-level-note', text: BIN_REFUSED })]
+        : []),
+    )
+    this.levelSlot.classList.remove('hidden')
   }
 
   /**
@@ -3143,8 +3393,12 @@ export class Session {
    */
   private syncSequenceTicks(state: ViewState): void {
     const file = this.file
+    if (file?.info.hasGenomes === true) {
+      this.syncMetaTicks(state)
+      return
+    }
     const selection = this.sequences
-    if (file === null || selection === null || file.info.hasGenomes) return
+    if (file === null || selection === null) return
     // The file's own name column, not a list derived per call: `sequencesShown`
     // resolves through `contigOf`, whose index is held against the array's own
     // identity (§5.9), and a fresh array per render is a fresh whole-table index
@@ -4199,6 +4453,9 @@ export class Session {
     this.sequenceListener?.()
     this.sequenceListener = null
     this.sequences = null
+    this.metaScope = null
+    this.metaSelection = null
+    this.contigOwners = null
     this.breadcrumb = null
     this.breadcrumbHost.replaceChildren()
   }
@@ -6619,6 +6876,7 @@ export class Session {
     // …and for the same reason, since the ticks are read against that table: a
     // link straight to a region arrives before anything has opened one.
     this.syncSequenceTicks(state)
+    this.paintLevel(state)
     // Here rather than beside the mount, because a *pan* mounts nothing: the
     // browser reports its window into the store (`onLocusChange`), which comes
     // back through this same path, so this is the one place a jump and a drag
@@ -6983,12 +7241,15 @@ export class Session {
     const file = this.file
     if (file === null) return
     const level = matrixLevel(state)
+    if (level === 'bin' && this.binRefused.has(state.uri)) {
+      this.navigate({ ...state, level: 'contig' }, { replace: true })
+      return
+    }
     const balance = this.balanceOf(state)
     // On a metagenome this view is one level of the whole-file picker rather
-    // than a view of its own (see {@link mountOverview}), so it carries that
-    // picker and not the panel's two-entry one — which would sit beside it
-    // offering a *second* `contig`, meaning the roll-up of this read rather
-    // than the scan the other level draws.
+    // than a view of its own (see {@link mountOverview}), and is labelled and
+    // clicked by genome like the other two. The picker itself is in the General
+    // column's card, for every level and every file (`paintLevel`).
     const picker = this.isMetacool
     // The locus box's example, from the file in front of the reader (§26.6).
     const first = this.assemblyOfFile(file)?.contigs[0]?.name ?? null
@@ -7006,9 +7267,6 @@ export class Session {
           ...(picker
             ? {
                 wholeFileLevel: {
-                  card: wholeFileLevelCard(level, (next) =>
-                    this.store.patch({ level: next }, { replace: true }),
-                  ),
                   onOpenGenome: (genome: string) =>
                     this.navigate({ uri: state.uri, view: 'genome', genome }),
                   // The same two destinations the overview's own cells open,
@@ -7039,13 +7297,6 @@ export class Session {
           scale: this.scaleOf(state),
           balance,
           ...this.scoreProps(state),
-          // Offered for a cooler too, now that the roll-up accumulates from the
-          // stored pixels: a chromosome-level whole-genome view of yeast is
-          // 17 x 17 cells and always fits, which makes it the honest answer when
-          // the bin-level block does not. It is only meaningless on a file with
-          // one sequence, where every level is a single cell — and on a
-          // metagenome, where the card above already offers all three.
-          offerLevel: !picker && file.info.nContigs > 1,
           noun: file.info.hasGenomes ? 'contig' : 'chromosome',
           // The example in the locus box, and what the read costs in bytes: the
           // gate priced itself in stored pixels alone, which is the wrong currency
@@ -7061,7 +7312,6 @@ export class Session {
           // anyway: a file either has a genome layer to name in the tooltip
           // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
           namesGenomes: file.info.hasGenomes,
-          onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScoreChange: (choice) => this.setScore(choice),
           derive: this.derivePresentation(state),
           turn: this.turnPresentation(state),
@@ -7074,6 +7324,8 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
+          onOutOfMemory: () => this.refuseBinLevel(state),
+          start: this.takeStart(state.uri),
         })
       },
     )
@@ -7123,9 +7375,6 @@ export class Session {
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
-      // No level toggle: the roll-up reads a bin range, and a selection is not
-      // one. The sequences are already the axis at bin level here.
-      offerLevel: false,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
       ...(first === null ? {} : { first }),
       sourceKind: file.info.sourceKind,
@@ -7136,7 +7385,6 @@ export class Session {
       ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
       namesGenomes: file.info.hasGenomes,
       selection: { ...selection, bins, contigs },
-      onLevelChange: () => {},
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
@@ -7245,7 +7493,6 @@ export class Session {
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
       scale: this.scaleOf(state),
-      onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region) =>
         this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
@@ -7282,7 +7529,6 @@ export class Session {
       level: matrixLevel(state),
       scale: this.scaleOf(state),
       onChangeGenomes: (genome, genome2) => this.navigate({ ...state, genome, genome2 }),
-      onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenContig: (region, region2) =>
@@ -7410,7 +7656,6 @@ export class Session {
           level,
           scale: this.scaleOf(state),
           genomeNames: file.displayNames,
-          onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
             this.navigate({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
@@ -7423,8 +7668,32 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
+          start: this.takeStart(state.uri),
         }),
     )
+  }
+
+  /**
+   * The bin-level whole-file read ran out of memory: go one level up, and stop
+   * offering the level that failed (§7.3).
+   *
+   * One level up is `contig × contig` on a metagenome and `chromosome ×
+   * chromosome` on a cooler — `level=contig` both — and it is started at once,
+   * because the reader pressed *compute* for a pass over every pixel and this is
+   * that pass, at the level the machine can hold. Its accumulator is budgeted
+   * (`worker/overview.ts`), which the bin level's fixed raster-sized block is not.
+   */
+  private refuseBinLevel(state: ViewState): void {
+    this.binRefused.add(state.uri)
+    this.startNext = state.uri
+    this.navigate({ ...state, level: 'contig' }, { replace: true })
+  }
+
+  /** Whether the whole-file view about to be built should skip its gate, once. */
+  private takeStart(uri: string): boolean {
+    if (this.startNext !== uri) return false
+    this.startNext = null
+    return true
   }
 
   /**
@@ -8675,4 +8944,59 @@ function contigLengths(contigs: ContigsResult | null): Map<string, number> {
   if (names.length === 0 || lengths === undefined || Array.isArray(lengths)) return out
   for (let i = 0; i < names.length; i++) out.set(names[i], Number(lengths[i]))
   return out
+}
+
+function sameScope(a: MetaScope, b: MetaScope | null): boolean {
+  if (b === null || a.kind !== b.kind) return false
+  return a.kind === 'genomes' || (b.kind === 'contigs' && a.genome === b.genome)
+}
+
+/** One entry of the level select: the value in the URL, its name, what a cell holds. */
+interface LevelChoice {
+  value: 'bin' | 'contig' | 'genome'
+  label: string
+  hint: string
+  disabled?: boolean
+}
+
+/** Why `bin × bin` is greyed out, once this tab could not hold it. */
+const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
+
+/**
+ * Which levels the view on screen can draw, or `null` for none (§7.3).
+ *
+ * A metagenome's whole-file view offers all three; a genome or a pair, bins or
+ * contigs; a cooler's whole genome, bins or chromosomes — and only with more
+ * than one, where every level would be a single cell. Everything else is at the
+ * one level it has.
+ */
+function levelChoices(
+  state: ViewState,
+  hasGenomes: boolean,
+  nContigs: number,
+  landing?: 'genome',
+  binRefused = false,
+): { options: LevelChoice[]; current: string } | null {
+  // Greyed out rather than removed: a level that vanished from the list would
+  // leave the reader wondering where the default went.
+  const refuse = (options: LevelChoice[]): LevelChoice[] =>
+    binRefused
+      ? options.map((choice) =>
+          choice.value === 'bin' ? { ...choice, disabled: true, hint: BIN_REFUSED } : choice,
+        )
+      : options
+  if (hasGenomes && state.view === 'overview') {
+    return { options: refuse([...WHOLE_FILE_LEVELS]), current: landing ?? overviewLevel(state) }
+  }
+  const pair = (contig: string): LevelChoice[] => [
+    { value: 'bin', label: 'bin × bin', hint: 'Equal-width bins: one colour scale fits the whole map.' },
+    { value: 'contig', label: `${contig} × ${contig}`, hint: `One cell per ${contig}.` },
+  ]
+  if (hasGenomes && (state.view === 'genome' || state.view === 'pair')) {
+    return { options: pair('contig'), current: matrixLevel(state) }
+  }
+  if (!hasGenomes && state.view === 'whole' && nContigs > 1) {
+    return { options: refuse(pair('chromosome')), current: matrixLevel(state) }
+  }
+  return null
 }

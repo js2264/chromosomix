@@ -1193,7 +1193,9 @@ export class MetaCooler {
     aim: PoolPlan,
     options: SpanScanOptions = {},
   ): Promise<
-    Omit<AggregatedMatrix, 'level'> & {
+    Omit<AggregatedMatrix, 'level' | 'values'> & {
+      /** `Float32` where the block was folded on the diagonal; see `pixelAccumulator`. */
+      values: Float64Array | Float32Array
       binsPerCell: number
       contigsPerCell: number
       rowMembers: BinPooling
@@ -1212,6 +1214,9 @@ export class MetaCooler {
     const colPool = onDiagonal
       ? rowPool
       : poolBins(this.coords, cols[0], cols[1], aim, POOLED_CELL_CAP, groups)
+    // Narrowing: this block goes to the wire as `Float32` whatever it is summed
+    // in, and on the diagonal — the whole-file read — the triangle form is what
+    // keeps the default level inside the memory the other two levels use.
     const acc = pixelAccumulator(
       rows,
       cols,
@@ -1219,6 +1224,7 @@ export class MetaCooler {
       colPool,
       plan.mode,
       this.storageMode === 'symmetric-upper',
+      true,
     )
     // Weights are read once per axis for the bins on screen, exactly as the
     // dense and roll-up paths do — the one bounded read of `/bins` (§6.4).

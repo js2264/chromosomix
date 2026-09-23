@@ -72,6 +72,23 @@ export interface SequenceCardProps {
   tickTitle(name: string): string
   /** The tooltip on the *whole genome* button under the list. */
   clearTitle: string
+  /**
+   * What the list is called, and what its rows are — `Sequences` of a cooler;
+   * `Genomes`, or one genome's `Contigs`, of a metagenome (§5.8).
+   */
+  title?: string
+  /** The rows' plural, for the filter box: `sequences`, `genomes`, `contigs`. */
+  noun?: string
+  /** The button under the list that unticks everything, in this list's words. */
+  clearLabel?: string
+  /** The tooltip on a row's name, where *show the whole sequence* is not what a click does. */
+  goTitle?(row: SequenceRow): string
+  /**
+   * Nodes between the title and the list: the map's **level** (§7.3), and on a
+   * metagenome the line saying whose contigs these are. Held by the caller, so
+   * the level can change with the view without the list being rebuilt.
+   */
+  head?: readonly HTMLElement[]
 }
 
 export function sequenceCard(props: SequenceCardProps): HTMLElement {
@@ -113,9 +130,10 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
             class: 'seq-go',
             type: 'button',
             title:
+              props.goTitle?.(contig) ??
               `${contig.name} — ${fmt.int(contig.length)} bp` +
-              (round ? ', read as a circle (declared in the Chromosomes table)' : '') +
-              '. Click to show the whole sequence.',
+                (round ? ', read as a circle (declared in the Chromosomes table)' : '') +
+                '. Click to show the whole sequence.',
           },
           el(
             'span',
@@ -176,7 +194,7 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
         ? []
         : [
             el('span', { text: `${fmt.int(count)} of ${fmt.int(contigs.length)} ticked · ` }),
-            button('show the whole genome', () => selection.clear(), {
+            button(props.clearLabel ?? 'show the whole genome', () => selection.clear(), {
               class: 'seq-all',
               title: props.clearTitle,
             }),
@@ -188,7 +206,7 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
   const filter = el('input', {
     class: 'input input-tiny seq-filter',
     type: 'search',
-    placeholder: `filter ${fmt.int(contigs.length)} sequences…`,
+    placeholder: `filter ${fmt.int(contigs.length)} ${props.noun ?? 'sequences'}…`,
   })
   filter.addEventListener('input', () => {
     paint(filter.value)
@@ -223,7 +241,8 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
   return el(
     'div',
     { class: 'card seq-card' },
-    cardTitle('Sequences', 'list'),
+    cardTitle(props.title ?? 'Sequences', 'list'),
+    ...(props.head ?? []),
     ...(contigs.length > SEQUENCES_WORTH_FILTERING ? [filter] : []),
     list,
     chosen,
@@ -245,4 +264,24 @@ export const MAP_TICKS = {
     `Draw the ticked sequences. With none ticked the map is the whole genome; ticking ${name} ` +
     'alone draws its block, and ticking several draws those sequences against each other.',
   clearTitle: 'Untick every sequence, which puts the whole genome back on the map',
+}
+
+/** A metagenome's list of genomes: a tick draws them together, a name opens one. */
+export const GENOME_TICKS = {
+  tickTitle: (name: string): string => `Draw the ticked genomes together — tick ${name} to add it.`,
+  clearTitle: 'Untick every genome: the whole metagenome',
+  title: 'Genomes',
+  noun: 'genomes',
+  clearLabel: 'show the whole metagenome',
+  goTitle: (row: { name: string; length: number }): string =>
+    `${row.name} — ${fmt.int(row.length)} bp. Click to open it and list its contigs.`,
+}
+
+/** …and one genome's contigs, where none ticked is the genome itself. */
+export const CONTIG_TICKS = {
+  tickTitle: (name: string): string => `Draw the ticked contigs together — tick ${name} to add it.`,
+  clearTitle: 'Untick every contig: the whole genome',
+  title: 'Contigs',
+  noun: 'contigs',
+  clearLabel: 'show the whole genome',
 }

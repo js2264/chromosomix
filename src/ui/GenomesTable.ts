@@ -160,7 +160,7 @@ export class GenomesTable {
     this.table.addToolbarItem(none)
     this.table.addToolbarItem(show)
     this.table.addToolbarItem(
-      keyedButton('whole genome →', KEYS.whole, () => options.onOpenWhole(), {
+      keyedButton('whole metagenome →', KEYS.whole, () => options.onOpenWhole(), {
         title: withKey('Every genome at once, as one map', KEYS.whole),
       }),
     )

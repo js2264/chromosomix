@@ -19,7 +19,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { SequenceSelection } from '@/genome/selection'
-import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '@/ui/SequenceCard'
+import { BROWSER_TICKS, GENOME_TICKS, MAP_TICKS, sequenceCard } from '@/ui/SequenceCard'
 import { all, buttonNamed, mounted, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -255,5 +255,36 @@ describe('the circular mark (§8.15)', () => {
     // spoken to — the same teardown the selection's listener has.
     expect(() => circular.set('I', true)).not.toThrow()
     expect(el.querySelector('.seq-circular')).toBeNull()
+  })
+})
+
+describe('a metagenome’s list of genomes (§5.8)', () => {
+  const GENOMES = Array.from({ length: 14 }, (_, at) => ({ name: `MAG_${at}`, length: 1_000_000 }))
+
+  it('speaks of genomes, and its way back is the whole metagenome', () => {
+    const selection = new SequenceSelection()
+    const el = sequenceCard({ contigs: GENOMES, selection, onGoTo: () => {}, ...GENOME_TICKS })
+    mounted(el, () => {
+      expect(el.querySelector('.card-title, .card-head')?.textContent).toContain('Genomes')
+      expect(el.querySelector<HTMLInputElement>('.seq-filter')?.placeholder).toBe('filter 14 genomes…')
+      selection.set(['MAG_1'])
+      buttonNamed(el, 'show the whole metagenome')?.click()
+      expect(selection.isWhole).toBe(true)
+    })
+  })
+
+  it('carries what it is handed between its title and its list — the level', () => {
+    const level = document.createElement('div')
+    level.className = 'seq-level'
+    const el = sequenceCard({
+      contigs: GENOMES,
+      selection: new SequenceSelection(),
+      onGoTo: () => {},
+      head: [level],
+      ...GENOME_TICKS,
+    })
+    const order = Array.from(el.children).map((child) => child.className)
+    expect(order.indexOf('seq-level')).toBeGreaterThan(0)
+    expect(order.indexOf('seq-level')).toBeLessThan(order.findIndex((name) => name.includes('seq-list')))
   })
 })

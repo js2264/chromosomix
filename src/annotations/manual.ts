@@ -156,6 +156,33 @@ export class ManualStore {
   }
 
   /**
+   * Many marks in one change, as an imported file brings them — each given an
+   * id and the next colour, and one notification rather than one per row.
+   *
+   * A mark already on the file is not added twice: importing the file you just
+   * exported, or the same file again, is a thing readers do by accident, and a
+   * second copy of a mark is drawn exactly on top of the first so nobody could
+   * see it was there to remove. *Already there* is the place, not the colour or
+   * the id, since the file carries neither. Returns how many went in.
+   */
+  addAll(marks: ReadonlyArray<DistributiveOmit<ManualMark, 'id' | 'colour'>>): number {
+    const seen = new Set(this.items.map(placeOf))
+    const added: ManualMark[] = []
+    for (const mark of marks) {
+      const key = placeOf(mark)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const colour = MANUAL_PALETTE[(this.items.length + added.length) % MANUAL_PALETTE.length]
+      added.push({ ...mark, id: mintMarkId(), colour } as ManualMark)
+    }
+    if (added.length > 0) {
+      this.items = [...this.items, ...added]
+      this.changed()
+    }
+    return added.length
+  }
+
+  /**
    * Change one mark in place.
    *
    * The patch is what every kind shares, which is the colour. The three kinds'
@@ -202,6 +229,16 @@ export class ManualStore {
 }
 
 const SCOPE = 'manual-annotations'
+
+/** `Omit` over each member of a union rather than over what they share. */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+
+/** A mark's geometry as one string: what two marks at the same place share. */
+function placeOf(mark: DistributiveOmit<ManualMark, 'id' | 'colour'>): string {
+  if (mark.kind === 'line') return `line ${mark.axis} ${formatPoint(mark.at)}`
+  if (mark.kind === 'rect') return `rect ${formatSpan(mark.a)} ${formatSpan(mark.b)}`
+  return `arrowhead ${formatPoint(mark.a)} ${formatPoint(mark.b)}`
+}
 
 function isPoint(value: unknown): value is ManualPoint {
   if (typeof value !== 'object' || value === null) return false

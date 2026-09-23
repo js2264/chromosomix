@@ -50,6 +50,12 @@ export interface AggregatedMatrix {
   level: AggregationLevel
 }
 
+/** What {@link pixelAccumulator} hands back: a place to put pixels, and the block. */
+export interface PixelAccumulator<V extends Float64Array | Float32Array> {
+  place(bin1: number, bin2: number, value: number): void
+  finish(): Omit<AggregatedMatrix, 'level' | 'values'> & { values: V }
+}
+
 /** A grouping of an axis: which output slot each input row falls into. */
 export interface AxisGrouping {
   /** Output slot of every input row/column. */
@@ -293,17 +299,49 @@ export function pixelAccumulator(
   rowGroups: AxisGrouping,
   colGroups: AxisGrouping,
   plan: PlacementMode,
+  upperTriangular?: boolean,
+): PixelAccumulator<Float64Array>
+/**
+ * …and the **narrowing** form, for a block whose next stop is the wire.
+ *
+ * On a folded diagonal — one square axis, one stored triangle — it keeps only
+ * the upper triangle, in `Float64`, and finishes straight into the `Float32`
+ * square the worker would have narrowed it to anyway. The full-square `Float64`
+ * and its `Float32` copy were both alive at the end of a whole-file read:
+ * 12 B a cell, 200 MB at the raster's 4,096², which is the allocation a browser
+ * refuses first. This is 8 B a cell at the peak — what the contig and genome
+ * levels have always cost (`worker/overview.ts`) — so the level that is the
+ * default no longer needs more memory than the two beside it.
+ *
+ * Off the diagonal, or over a square store, nothing is folded and the ordinary
+ * `Float64` square comes back, exactly as the other form.
+ */
+export function pixelAccumulator(
+  rows: Extent,
+  cols: Extent,
+  rowGroups: AxisGrouping,
+  colGroups: AxisGrouping,
+  plan: PlacementMode,
+  upperTriangular: boolean,
+  narrow: true,
+): PixelAccumulator<Float64Array | Float32Array>
+export function pixelAccumulator(
+  rows: Extent,
+  cols: Extent,
+  rowGroups: AxisGrouping,
+  colGroups: AxisGrouping,
+  plan: PlacementMode,
   upperTriangular = true,
-): {
-  place(bin1: number, bin2: number, value: number): void
-  finish(): Omit<AggregatedMatrix, 'level'>
-} {
+  narrow = false,
+): PixelAccumulator<Float64Array | Float32Array> {
   const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
   const fold = onDiagonal && upperTriangular
 
   const nrows = rowGroups.ids.length
   const ncols = colGroups.ids.length
-  const values = new Float64Array(nrows * ncols)
+  // The triangle, where the fold makes the lower half a copy of the upper.
+  const triangle = narrow && fold && nrows === ncols
+  const values = new Float64Array(triangle ? (nrows * (nrows + 1)) / 2 : nrows * ncols)
   const [r0, r1] = rows
   const [c0, c1] = cols
   const placeDirect = plan !== 'transpose'
@@ -329,6 +367,12 @@ export function pixelAccumulator(
     if (a < 0 || b < 0) return
     // Upper-triangular in *group* space too, mirroring `to_upper_triangle`, so
     // the fold below has one triangle to mirror rather than two half-filled ones.
+    if (triangle) {
+      const lo = a < b ? a : b
+      const hi = a < b ? b : a
+      values[lo * nrows - (lo * (lo - 1)) / 2 + (hi - lo)] += value
+      return
+    }
     values[fold && a > b ? b * ncols + a : a * ncols + b] += value
   }
 
@@ -351,7 +395,21 @@ export function pixelAccumulator(
         add(bin2 - r0, bin1 - c0, value)
       }
     },
-    finish(): Omit<AggregatedMatrix, 'level'> {
+    finish() {
+      if (triangle) {
+        // Row by row through the triangle, which is the order it is stored in,
+        // so the one strided write is the mirror and the reads are sequential.
+        const square = new Float32Array(nrows * nrows)
+        let at = 0
+        for (let a = 0; a < nrows; a++) {
+          for (let b = a; b < nrows; b++, at++) {
+            const v = values[at]
+            square[a * nrows + b] = v
+            square[b * nrows + a] = v
+          }
+        }
+        return { nrows, ncols, values: square, rowIds: rowGroups.ids, colIds: colGroups.ids }
+      }
       if (fold) {
         for (let a = 0; a < nrows; a++) {
           for (let b = a + 1; b < ncols; b++) values[b * ncols + a] = values[a * ncols + b]

@@ -272,3 +272,81 @@ function scoreOf(score: number): string {
 function strandChar(strand: number): string {
   return strand > 0 ? '+' : strand < 0 ? '-' : '.'
 }
+
+// ---------------------------------------------------------------------------
+// Reading marks back
+// ---------------------------------------------------------------------------
+
+/** A mark as a file states it: where, and nothing about how it is drawn. */
+export type UncolouredMark =
+  | Omit<ManualLine, 'id' | 'colour'>
+  | Omit<ManualArrowhead, 'id' | 'colour'>
+  | Omit<ManualRect, 'id' | 'colour'>
+
+/** What {@link readMarks} made of a file: marks without colours, and what it left. */
+export interface ReadMarks {
+  /** In file order, each still to be given an id and a colour by the store. */
+  marks: UncolouredMark[]
+  /** Rows that were neither a BED nor a BEDPE interval. */
+  skipped: number
+}
+
+/**
+ * A file {@link formatMarks} wrote — or any BED or BEDPE — back as marks.
+ *
+ * The export's mirror, and it reads what the export writes before anything
+ * else: a BED row is a **line**, on the axis its name column says (`vertical`,
+ * `horizontal`, `both`) and on both when the name is anything else, since a
+ * peak file's names are not axes. A BEDPE row is an **arrowhead** when both of
+ * its anchors are the single base an arrowhead is written as, and a
+ * **rectangle** otherwise — the same test the export makes in the other
+ * direction, so a round trip gives back the kinds that went out.
+ *
+ * Told apart per row by its column count, not per file by its extension: a
+ * `.txt` of either is what a colleague sends. Six coordinate columns with
+ * numbers in the second, third, fifth and sixth is a BEDPE; three is a BED.
+ * `#`, `track` and `browser` lines are skipped silently, as every reader of
+ * these formats does; anything else that does not parse is counted.
+ *
+ * A line is placed at its interval's first base, which is where the export put
+ * it; a wider interval (a peak, say) is marked at its start rather than refused.
+ */
+export function readMarks(text: string): ReadMarks {
+  const marks: ReadMarks['marks'] = []
+  let skipped = 0
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line === '' || line.startsWith('#') || /^(track|browser)\b/.test(line)) continue
+    const cols = line.split(/\t|\s+/)
+    const n = (i: number): number => (cols[i] === undefined ? NaN : Number(cols[i]))
+    if (cols.length >= 6 && [1, 2, 4, 5].every((i) => Number.isFinite(n(i)))) {
+      const [s1, e1, s2, e2] = [n(1), n(2), n(4), n(5)]
+      if (s1 < 0 || s2 < 0 || e1 < s1 || e2 < s2) {
+        skipped++
+        continue
+      }
+      if (e1 - s1 <= 1 && e2 - s2 <= 1) {
+        marks.push({
+          kind: 'arrowhead',
+          a: { contig: cols[0], bp: s1 },
+          b: { contig: cols[3], bp: s2 },
+        })
+      } else {
+        marks.push({
+          kind: 'rect',
+          a: { contig: cols[0], from: s1, to: e1 },
+          b: { contig: cols[3], from: s2, to: e2 },
+        })
+      }
+      continue
+    }
+    if (cols.length >= 3 && Number.isFinite(n(1)) && Number.isFinite(n(2)) && n(1) >= 0) {
+      const name = cols[3] ?? ''
+      const axis = name === 'vertical' || name === 'horizontal' ? name : 'both'
+      marks.push({ kind: 'line', axis, at: { contig: cols[0], bp: n(1) } })
+      continue
+    }
+    skipped++
+  }
+  return { marks, skipped }
+}
