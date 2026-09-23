@@ -158,11 +158,14 @@ export function parseMaps(value: string | undefined): PanelRef[] {
   for (const part of value.split(MAPS_SEPARATOR)) {
     const trimmed = part.trim()
     if (trimmed === '') continue
-    // One structure cell per deck (§25): a second `3d` in a link is dropped
-    // rather than opened twice, since both would show the one row the session
-    // has. A tracks cell may be repeated — two stacks of the session's tracks
-    // beside two maps is a legitimate arrangement.
-    if (trimmed === STRUCTURE_REF && refs.some((ref) => ref.kind === 'structure')) continue
+    // A structure cell **may be repeated**, as a tracks cell always could. It
+    // used to be one per deck, and then one per model, on the reasoning that
+    // two cells of one row are one picture drawn twice — which is only true
+    // while the two are the same picture. They are not: each cell has its own
+    // camera, its own mirror and its own planted axes (§25.3), so two cells of
+    // one model are two views of it, which is the usual way anybody looks at a
+    // fold. Which model each seat draws is this session's own memory, beside
+    // the local companions and for the same reason (`deck:models`).
     refs.push(
       trimmed === VACANT
         ? { kind: 'vacant' }

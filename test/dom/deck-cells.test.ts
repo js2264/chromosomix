@@ -25,6 +25,7 @@ import { defaultStyle } from '@/annotations/types'
 import type { MatrixPanel } from '@/ui/MatrixPanel'
 import type { LocusWindow } from '@/render/locus'
 import { setHoverPlace } from '@/ui/hoverLocus'
+import { MATRIX_OPTIONS, TRACK_OPTIONS, type PlotOptionKey } from '@/ui/plotOptions'
 import type { ViewState } from '@/types'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -172,7 +173,7 @@ function tracksContext(): TracksContext {
 function make(
   store: ReturnType<typeof fakeStore> | undefined,
   tracks?: TracksContext,
-  options: { mapsAllowed?: boolean } = {},
+  options: { mapsAllowed?: boolean; sharedElsewhere?: readonly PlotOptionKey[] } = {},
 ) {
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
@@ -188,6 +189,9 @@ function make(
       store: () => store as unknown as AnnotationStore | undefined,
       manual: () => manual,
       contacts: () => null,
+      ...(options.sharedElsewhere === undefined
+        ? {}
+        : { sharedElsewhere: () => options.sharedElsewhere ?? [] }),
       onGoTo: (range) => went.push(range),
       onDrop: (file) => dropped.push(file.name),
       onDropUrl: (url) => dropped.push(url),
@@ -248,6 +252,44 @@ describe('a structure cell in the deck', () => {
     const again = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
     expect(again?.disabled).toBe(false)
     expect(again?.title).toContain('Open a cell')
+  })
+
+  it('comes back from a link as two cells, not one (§25.3)', () => {
+    // A `3d` repeated in a link used to be dropped on the way in, on the
+    // reasoning that both cells would draw the one model the session has. Two
+    // cells of one model are two *views* of it — each has its own camera, its
+    // own mirror and its own planted axes — so the link keeps what it was
+    // given.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.apply(state('3d|3d'))
+    expect(structureCells(deck)).toHaveLength(2)
+  })
+
+  it('draws one model in two cells when a row is dropped on the second', () => {
+    // The gesture that says *where* as well as *which* (§25.3): the Structures
+    // card's grip, dropped on the cell that is to hold it. A cell already
+    // drawing the model is not a reason to refuse — that is the whole request.
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'structure' })
+    const cells = structureCells(deck)
+    expect(cells).toHaveLength(2)
+    // jsdom has no `DataTransfer`, so the drag carries the same two methods
+    // the code reads off one — the pattern `files-panel.test.ts` uses.
+    const data = new Map<string, string>([['application/x-metacooler-structure', 'a1']])
+    const transfer = {
+      getData: (type: string) => data.get(type) ?? '',
+      types: [...data.keys()],
+      dropEffect: '',
+    }
+    const drop = new window.Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+    cells[1].querySelector('.structure-wrap')?.dispatchEvent(drop)
+    expect(deck.shownStructures()).toEqual(['a1'])
+    // Both cells name it, which is what `shownStructures` de-duplicates away.
+    const named = structureCells(deck).map((cell) => cell.querySelector('.deck-name')?.textContent)
+    expect(named).toEqual(['model.g3d', 'model.g3d'])
   })
 
   it('takes the first empty cell, as a map would', () => {
@@ -356,6 +398,154 @@ describe('what the cell says', () => {
     expect(store.restyled.length).toBeGreaterThan(0)
     expect(store.restyled[0]?.id).toBe('a1')
     expect(store.restyled[0]?.patch.structure).toBeDefined()
+  })
+
+  it('mirrors the model from the frame row, each flip on its own (§25.5)', () => {
+    // A model from contacts is fixed only up to reflection, so this is how one
+    // is brought into the same hand as another — and it is a property of the
+    // row, like every other reading of the model.
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const frame = settingsRow(deck, 'frame')
+    expect(frame).toBeDefined()
+    const x = frame?.querySelector<HTMLButtonElement>('.structure-mirror-x')
+    const y = frame?.querySelector<HTMLButtonElement>('.structure-mirror-y')
+    expect(x?.getAttribute('aria-pressed')).toBe('false')
+    x?.click()
+    expect(store.restyled.at(-1)?.patch.structure?.mirrorX).toBe(true)
+    expect(store.restyled.at(-1)?.patch.structure?.mirrorY).toBe(false)
+    y?.click()
+    expect(store.restyled.at(-1)?.patch.structure?.mirrorY).toBe(true)
+  })
+
+  it('replants the axes along the view, moving neither the model nor the centre', () => {
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const before = deck.structureSettings()
+    const replant = before?.querySelector<HTMLButtonElement>('.structure-replant')
+    expect(replant).toBeDefined()
+    replant?.click()
+    const patch = store.restyled.at(-1)?.patch.structure
+    // The centre is shown — replanting axes nobody can see says nothing — and
+    // the frame is the camera's, which the default three-quarter view is not.
+    expect(patch?.axes).toBe(true)
+    expect(patch?.axesFrame).toBeDefined()
+    expect(patch?.axesFrame).not.toEqual([0, 0, 0, 1])
+    expect(Math.hypot(...(patch?.axesFrame ?? [0, 0, 0, 0]))).toBeCloseTo(1, 10)
+  })
+
+  it('offers another model as a frame to be read in, beside the one it draws over it', () => {
+    // `compare with` draws the other model; `in the frame of` turns this one
+    // into its frame and draws nothing extra (§25.5). Both are offered, and
+    // only where there is another model to name.
+    const store = fakeStore([structureEntry(), { ...structureEntry(), id: 'a2', label: 'other.g3d' }])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const into = settingsRow(deck, 'in the frame of')?.querySelector<HTMLSelectElement>('select')
+    expect(into).toBeDefined()
+    expect(Array.from(into?.options ?? []).map((option) => option.textContent)).toEqual(['its own', 'other.g3d'])
+    if (into === null || into === undefined) return
+    into.value = 'a2'
+    into.dispatchEvent(new Event('change'))
+    expect(store.restyled.at(-1)?.patch.structure?.align).toBe('a2')
+  })
+
+  it('turns with the other cells that are, and says so on the camera row (§25.3)', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const link = settingsRow(deck, 'camera')?.querySelector<HTMLButtonElement>('.structure-turn-with')
+    expect(link?.getAttribute('aria-pressed')).toBe('false')
+    link?.click()
+    const after = settingsRow(deck, 'camera')?.querySelector<HTMLButtonElement>('.structure-turn-with')
+    expect(after?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('offers the shared settings no other card in the column offers (§26.3)', () => {
+    // Beside a **map**, the Map card offers all three the model reads, so the
+    // row is empty: one control per column, and two copies ten lines apart
+    // read as two settings.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: MATRIX_OPTIONS })
+    deck.add({ kind: 'structure' })
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
+  })
+
+  it('offers the key beside a browser, whose own card has no key to hide', () => {
+    // The 1D browser offers the crosshair and the hover card and no *legend* —
+    // a browser has no key of its own. So the model's key toggle is the gap,
+    // and it used to be nowhere at all: a reader in a browser-led deck could
+    // turn the model's key off only by enlarging it.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: TRACK_OPTIONS })
+    deck.add({ kind: 'structure' })
+    const shared = settingsRow(deck, 'shared')
+    expect(shared).toBeDefined()
+    const offered = all<HTMLElement>(shared as HTMLElement, '.structure-shared').map((node) =>
+      node.className.split(' ').find((name) => name.startsWith('structure-shared-')),
+    )
+    expect(offered).toEqual(['structure-shared-legend'])
+  })
+
+  it('stars one cell, and the settings card is that cell\u2019s (§25.3)', () => {
+    // A deck may hold several models and the column holds one card, so the
+    // card follows a cell the reader names. It used to be whichever cell was
+    // built first — which a reader with two models discovers by dragging a
+    // slider and watching the *other* picture change.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const cells = () => structureCells(deck)
+    // One model, one card: a radio with one option is a button that does
+    // nothing, so there is no star to press.
+    expect(cells()[0].querySelector('.structure-star')?.classList.contains('hidden')).toBe(true)
+    deck.add({ kind: 'structure' })
+    const stars = () => cells().map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    expect(stars().every((star) => star?.classList.contains('hidden') === false)).toBe(true)
+    // Exactly one filled, and a filled star is a dead button.
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
+    expect(stars()[0]?.disabled).toBe(true)
+    const first = deck.structureSettings()
+    stars()[1]?.click()
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    const second = deck.structureSettings()
+    expect(second).not.toBe(first)
+    expect(cells()[1].contains(second as Node)).toBe(false)
+    // The card is the second cell's: it is the element that cell hands over.
+    expect(second).not.toBeNull()
+  })
+
+  it('moves the star off a cell that closes, so the card is never about a picture that is gone', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'structure' })
+    const cells = structureCells(deck)
+    cells[1].querySelector<HTMLButtonElement>('.structure-star')?.click()
+    const starred = deck.structureSettings()
+    cells[1].querySelector<HTMLButtonElement>('.btn-close')?.click()
+    expect(structureCells(deck)).toHaveLength(1)
+    const left = deck.structureSettings()
+    expect(left).not.toBeNull()
+    expect(left).not.toBe(starred)
+    // …and the one cell left offers no star, there being nothing to choose.
+    expect(
+      structureCells(deck)[0].querySelector('.structure-star')?.classList.contains('hidden'),
+    ).toBe(true)
+  })
+
+  it('is resized by the bar under it, and given back to the row on a double-click', () => {
+    // A model has no axis to line up with the map's, so it is the one cell
+    // whose height is the reader's own business (§25.3).
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    const grip = cell.querySelector<HTMLElement>('.structure-resize')
+    expect(grip).not.toBeNull()
+    expect(cell.classList.contains('has-height')).toBe(false)
+    grip?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(cell.classList.contains('has-height')).toBe(true)
+    expect(cell.style.getPropertyValue('--structure-h')).toMatch(/^\d+px$/)
+    grip?.dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }))
+    expect(cell.classList.contains('has-height')).toBe(false)
+    expect(cell.style.getPropertyValue('--structure-h')).toBe('')
   })
 })
 
@@ -632,6 +822,31 @@ describe('the model, enlarged', () => {
     expect(deck.structureSettings()?.classList.contains('structure-settings')).toBe(true)
   })
 
+  it('carries every shared setting into the full viewer, whoever owns them (§26.3)', () => {
+    // Enlarged, the model *is* the window and every card that owns one of
+    // these is behind the dialog — so all three come in, including the ones the
+    // Map card would normally be the only place to reach. The one switch for
+    // the key the reader is looking at should not be the one they cannot get
+    // to.
+    const { deck } = make(fakeStore([structureEntry()]), undefined, { sharedElsewhere: MATRIX_OPTIONS })
+    deck.add({ kind: 'structure' })
+    // Nothing on the card while the Map card offers all three.
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    const shared = all<HTMLElement>(
+      document.querySelector('.modal-structure') as HTMLElement,
+      '.structure-shared',
+    ).map((node) => node.className.split(' ').find((name) => name.startsWith('structure-shared-')))
+    expect(shared).toEqual([
+      'structure-shared-legend',
+      'structure-shared-crosshair',
+      'structure-shared-tooltip',
+    ])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    // …and they go back where they came from when the dialog closes.
+    expect(settingsRow(deck, 'shared')).toBeUndefined()
+  })
+
   it('closes its dialog when the cell is destroyed', () => {
     const { deck } = make(fakeStore([structureEntry()]))
     deck.add({ kind: 'structure' })
@@ -805,27 +1020,37 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
       const button = cell.querySelector(which)
       return button?.classList.contains('is-on') === true && button.getAttribute('aria-pressed') === 'true'
     }
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
+    // The corner's legend lists every control and **lights the live one**
+    // (§25.4); `.structure-mode` is that lit row, which is the one-chip badge
+    // this grew out of. Read by the word rather than by the row's whole text,
+    // since a row is its key and its word — `⇧ move`, not `move`.
+    const live = (): string | undefined =>
+      cell.querySelector('.structure-mode > .structure-guide-what')?.textContent ?? undefined
+    expect(live()).toBe('turn')
     press('.structure-select')
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('mark')
+    expect(live()).toBe('mark')
     expect(on('.structure-select')).toBe(true)
     // One mode at a time: arming the next disarms the one that was on.
     press('.structure-loop')
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('loop')
+    expect(live()).toBe('loop')
     expect(on('.structure-loop')).toBe(true)
     expect(on('.structure-select')).toBe(false)
     press('.structure-measure')
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('measure')
+    expect(live()).toBe('measure')
     expect(on('.structure-measure')).toBe(true)
     expect(on('.structure-loop')).toBe(false)
     // …and pressing the one that is on turns it off.
     press('.structure-measure')
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
+    expect(live()).toBe('turn')
     expect(on('.structure-measure')).toBe(false)
-    // The badge names the mode, which is what the stylesheet accents it by —
+    // The lit row names the mode, which is what the stylesheet accents it by —
     // `mark`, not the `select` the button's class is still called.
     press('.structure-select')
     expect(cell.querySelector<HTMLElement>('.structure-mode')?.dataset['mode']).toBe('mark')
+    // And the controls a reader has *not* got their hand on are listed too,
+    // each with its key: the legend is how the keys are found at all.
+    const listed = Array.from(cell.querySelectorAll('.structure-guide-what')).map((node) => node.textContent)
+    expect(listed).toEqual(expect.arrayContaining(['turn', 'zoom', 'move', 'centre', 'fog']))
   })
 
   it('offers the reader\'s arrowheads as chords, the fog, the centre and the three drawings on the card', () => {
@@ -870,7 +1095,7 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
     cell.querySelector<HTMLButtonElement>('.structure-measure')?.click()
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('measure')
+    expect(cell.querySelector('.structure-mode > .structure-guide-what')?.textContent).toBe('measure')
     const ids = deck.cellCommands().map((c) => c.id)
     expect(ids).toEqual(expect.arrayContaining(['structure-frame', 'structure-all', 'structure-measure', 'structure-turn', 'structure-tube']))
     const turn = deck.cellCommands().find((c) => c.id === 'structure-turn')

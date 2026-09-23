@@ -57,9 +57,11 @@ function generatorShards(): string[] {
 }
 
 describe('the shipped stores, on a page', () => {
-  it('are six, in the order the tiles offer them', () => {
+  it('are seven, in the order the tiles offer them', () => {
     expect(builtinStores().map((front) => front.id)).toEqual([
       'rsg',
+      // The lab's other shelf, beside its first.
+      'dbz',
       'igv',
       '4dn',
       'encode',
@@ -71,6 +73,8 @@ describe('the shipped stores, on a page', () => {
     ])
     expect(builtinStores().map((front) => front.kind)).toEqual([
       'gallery',
+      // IGV's cards, from one file of its own.
+      'genomes',
       'genomes',
       'portal',
       'portal',
@@ -120,6 +124,13 @@ describe('the shipped stores, on a page', () => {
       'https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt',
     )
     expect(frontById('roadmap')?.sessions).toBeUndefined()
+    // The DNA Bacterial Zoo is the lab's own analyses, not a file the workflow
+    // writes: it lives beside its data on the lab's bucket, one file with its
+    // sessions among its rows — and says what publishes it, since it is not the
+    // workflow the default sentence names.
+    expect(frontById('dbz')?.rows?.url).toBe('https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json')
+    expect(frontById('dbz')?.sessions).toBeUndefined()
+    expect(frontById('dbz')?.rows?.publishedBy).toContain('s3://rsglab-data/dbz/')
   })
 
   it('points every shipped store and the hub door at the people who made it', () => {
@@ -131,6 +142,7 @@ describe('the shipped stores, on a page', () => {
       expect(front.home, front.id).toMatch(/^https:\/\//)
     }
     expect(frontById('rsg')?.home).toContain('research.pasteur.fr')
+    expect(frontById('dbz')?.home).toBe(frontById('rsg')?.home)
     expect(frontById('roadmap')?.home).toBe('https://egg2.wustl.edu/roadmap/web_portal/')
     // …and the hub door points at where hubs are, rather than at a hub.
     expect(frontById('hub')?.home).toBe('https://genome-euro.ucsc.edu/cgi-bin/hgHubConnect')
@@ -166,6 +178,9 @@ describe('the shipped stores, on a page', () => {
     expect(frontById('dnazoo')?.headline).toEqual(['common'])
     expect(frontById('dnazoo')?.axes).toEqual(['assembly', 'format'])
     expect(frontById('encode')?.axes).toEqual(['assay', 'biosample'])
+    // A card a species, with its sample and its replicon count on it.
+    expect(frontById('dbz')?.group).toBe('species')
+    expect(frontById('dbz')?.headline).toEqual(['id', 'sequences'])
   })
 })
 
@@ -176,6 +191,7 @@ describe('stores the reader connected', () => {
     const fronts = storeFronts()
     expect(fronts.map((front) => front.id)).toEqual([
       'rsg',
+      'dbz',
       'igv',
       '4dn',
       'encode',

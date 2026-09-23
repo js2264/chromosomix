@@ -215,3 +215,49 @@ export function topEigenvector(a: number[][]): number[] {
   const norm = Math.hypot(...out)
   return out.map((value) => value / (norm || 1))
 }
+
+/**
+ * The model as the reader has placed it (§25.5): reflected, turned into
+ * another model's frame, or both.
+ *
+ * **Reflection first, then the fit**, and that order is the whole of why the
+ * two are one function. A reconstruction from contacts is determined only up
+ * to reflection — a model and its mirror image explain the same counts equally
+ * well — so two models of one map routinely come out in opposite hands, and no
+ * rotation will ever bring one onto the other. Mirroring is what makes the fit
+ * possible; fitting first and mirroring after would reflect the answer instead
+ * of the question.
+ *
+ * Returns the structure unchanged where there is nothing to do, so a caller
+ * can compare by identity to decide whether anything moved.
+ */
+export function placeStructure(
+  structure: Structure,
+  place: { mirrorX: boolean; mirrorY: boolean; onto: Structure | null },
+): Structure {
+  const { mirrorX, mirrorY, onto } = place
+  if (!mirrorX && !mirrorY && onto === null) return structure
+  let held = structure
+  if (mirrorX || mirrorY) {
+    const x = mirrorX ? negated(held.x) : held.x
+    const y = mirrorY ? negated(held.y) : held.y
+    held = { ...held, x, y }
+  }
+  if (onto !== null) {
+    // `alignTo(a, b)` puts **b** in a's frame, so the model being placed is
+    // the second argument: this is the same superposition `compare with`
+    // makes, read the other way round — there the other model is moved onto
+    // this one and drawn, here this one is moved onto the other and the other
+    // is not drawn at all.
+    const fit = alignTo(onto, held)
+    if (fit !== null) held = { ...held, x: fit.x, y: fit.y, z: fit.z }
+  }
+  return held
+}
+
+/** A copy with every finite value negated; `NaN` stays `NaN`, a bead with no place. */
+function negated(values: Float32Array): Float32Array {
+  const out = new Float32Array(values.length)
+  for (let i = 0; i < values.length; i++) out[i] = -values[i]
+  return out
+}

@@ -54,8 +54,25 @@ import { resolutionLabel } from '../units'
 export const G3D_FIELD_HAPLOTYPE = 'haplotype'
 
 /**
+ * Which layout a file **name** says it holds, or `null` where it says nothing.
+ *
+ * The one place a name is read, so every road asks it the same question: the
+ * drop routing, the sniffers' tiebreak, and {@link isStructureName}. A name
+ * reaches here as a path or as a URL, so the directories are dropped and a
+ * `?query` or `#fragment` is cut off first — `model.bed3d?token=1` is a
+ * bed3d, and the anchored suffix test alone would have said it was not.
+ */
+function structureNameLayout(name: string): StructureLayout | null {
+  const last = name.split(/[\\/]/).pop() ?? name
+  const bare = last.split(/[?#]/)[0] ?? last
+  if (/\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(bare)) return 'g3d'
+  if (/\.bed3d(\.txt)?(\.gz)?$/i.test(bare)) return 'bed3d'
+  return null
+}
+
+/**
  * Whether a file **name** says it is a structure — `.g3d`, the text g3dtools
- * takes or the container it writes, or a `.3dg`, gzipped or not.
+ * takes or the container it writes, a `.3dg`, or a `.bed3d`, gzipped or not.
  *
  * By name only, which is what a road that has not read the file yet can ask:
  * the deck routing a drop to its structure cell, the session deciding to open
@@ -63,8 +80,7 @@ export const G3D_FIELD_HAPLOTYPE = 'haplotype'
  * {@link sniffG3d}; it simply arrives as a row without opening a cell.
  */
 export function isStructureName(name: string): boolean {
-  const last = name.split(/[\\/]/).pop() ?? name
-  return /\.(g3d|3dg|bed3d)(\.txt)?(\.gz)?$/i.test(last.split(/[?#]/)[0] ?? last)
+  return structureNameLayout(name) !== null
 }
 
 /**
@@ -139,10 +155,19 @@ export function sniffBed3d(text: string, fileName = ''): boolean {
 }
 
 function sniffStructure(text: string, fileName: string, layout: StructureLayout): boolean {
-  const named =
-    layout === 'g3d'
-      ? /\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(fileName)
-      : /\.bed3d(\.txt)?(\.gz)?$/i.test(fileName)
+  // **A file that names its format is not sniffed at all** (§25.2). Not a
+  // tiebreak applied after the tests, which is what this was: every test below
+  // could still veto a `.bed3d`, and one did — a solver writes `nan` for a bin
+  // it could not place, three columns of it on a row that is otherwise a bead,
+  // and one such row made the whole file "not a structure". A `.g3d` of 1,683
+  // beads with 33 unplaced was refused by the g3d parser as a BED, and the
+  // `.bed3d` beside it — whose third column *is* an integer end — was drawn as
+  // a lane of 1,683 boxes whose name is an x coordinate. The reader who named
+  // the format has answered every question these tests ask; the parser says
+  // what is wrong with a file that then turns out not to be one, in the
+  // format's own words, rather than the file being silently drawn as something
+  // else.
+  if (structureNameLayout(fileName) === layout) return true
   const sample: Row[] = []
   let fractional = false
   let index = 0
@@ -162,6 +187,15 @@ function sniffStructure(text: string, fileName: string, layout: StructureLayout)
     const columns = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/)
     const row = rowOf(columns, layout)
     if (row === null) return false
+    // A bead the solver never placed is still a bead: it says where it is in
+    // the genome and `nan` where it is in space, and it is the commonest thing
+    // in a model of a real map — a bin nothing mapped to has no position. It
+    // is no evidence either way, so it is passed over rather than counted
+    // against the file. A file of nothing else leaves the sample empty and is
+    // refused below, which is what keeps this from opening a door: a BED6
+    // whose three "coordinates" are a name, a score and a strand is not a page
+    // of unplaced beads, it fails {@link rowOf} outright.
+    if (row === UNPLACED) continue
     if (!Number.isInteger(row.xyz[0]) || !Number.isInteger(row.xyz[1]) || !Number.isInteger(row.xyz[2])) {
       fractional = true
     } else if (row.xyz[0] < 0 || row.xyz[1] < 0 || row.xyz[2] < 0) {
@@ -170,20 +204,39 @@ function sniffStructure(text: string, fileName: string, layout: StructureLayout)
     sample.push(row)
   }
   if (sample.length === 0) return false
-  // **A named file is not asked either question.** Both tests below exist to
-  // tell a structure from a BED that happens to have numbers in the right
-  // columns, and a file called `.g3d`, `.3dg` or `.bed3d` has already been told
-  // apart — by the reader who named it. The fractional test was spared for
-  // that reason from the start; `looksCoherent` was not, and a model whose
-  // beads are a scatter rather than a chain — a randomised control, a draw
-  // from a null, a fragment set that has not been folded — was read back as a
-  // lane of boxes whose "end" is a coordinate in space. `guessOf` had already
-  // put such a file on the Structures card by the same name, so the row and its
-  // payload disagreed about what had been loaded.
-  if (named) return true
+  // Both questions are for a file that named no format. They exist to tell a
+  // structure from a BED that happens to have numbers in the right columns —
+  // are the coordinates **fractional**, and do the beads walk like a **chain**
+  // — and a model whose beads are a scatter (a randomised control, a draw from
+  // a null, a fragment set nobody has folded) passes only the first. That is
+  // the cost of not naming the file, and it is why the name is read first.
   if (!fractional) return false
   return looksCoherent(sample)
 }
+
+/**
+ * A row that is shaped like a bead but says the solver never placed it.
+ *
+ * Its own answer rather than `null`, because the two mean opposite things
+ * about the file: `null` is *these columns are not a bead's*, which settles
+ * what the file is, and this is *this bead has no place*, which says nothing
+ * about the file at all. A solver writes one for every bin it was given no
+ * counts for — a repeat, a gap in the assembly, a bin nothing mapped to — so a
+ * real model of a real map arrives with a scattering of them.
+ */
+type Unplaced = typeof UNPLACED
+const UNPLACED = 'unplaced'
+
+/**
+ * The spellings of "no number here" a solver's output carries.
+ *
+ * numpy writes `nan` and `inf`, R writes `NA`, pandas writes `NaN` or leaves
+ * the field empty, and a BED-family file writes `.` for a value it has not
+ * got. All of them mean the same thing in a coordinate column, and none of
+ * them is a place. `-` is deliberately absent: it is a strand, and a strand is
+ * a BED6 — which is a file this must keep out, not a model with a gap.
+ */
+const NO_PLACE = /^(|[+-]?nan|na|n\/a|none|null|\.|[+-]?inf(inity)?)$/i
 
 /** One row, read the way both the sniffer and the parser read it. */
 interface Row {
@@ -196,7 +249,8 @@ interface Row {
 }
 
 /**
- * A row's columns as a bead, or `null` where they are not one.
+ * A row's columns as a bead, {@link UNPLACED} where they are a bead with no
+ * place, or `null` where they are not a bead at all.
  *
  * The `.3dg` rule lives here so the sniffer and the parser agree about it: a
  * chromosome written `chr7(mat)` with no sixth column is `chr7` on the
@@ -204,7 +258,7 @@ interface Row {
  * `g3dtools` writes, so a `.3dg` and a g3d of the same model name their
  * homologues the same way.
  */
-function rowOf(columns: string[], layout: StructureLayout): Row | null {
+function rowOf(columns: string[], layout: StructureLayout): Row | Unplaced | null {
   // Where the coordinates start: after the start in a g3d, after the end in a
   // bed3d. Everything after them reads the same.
   const at = layout === 'g3d' ? 2 : 3
@@ -216,10 +270,14 @@ function rowOf(columns: string[], layout: StructureLayout): Row | null {
     end = Number(columns[2])
     if (end <= Number(columns[1])) return null
   }
-  const x = Number(columns[at])
-  const y = Number(columns[at + 1])
-  const z = Number(columns[at + 2])
-  if (columns[at] === '' || columns[at + 1] === '' || columns[at + 2] === '') return null
+  const places = [columns[at], columns[at + 1], columns[at + 2]]
+  // Read before the numbers, because the answer *is* one of the answers: a
+  // coordinate written `nan` is a bead the solver was given nothing to place,
+  // and a coordinate written `peak1` is a file that is not a structure. Both
+  // are `Number(...) === NaN`, and telling them apart is the whole of the
+  // difference between a model with a gap in it and a BED.
+  if (places.some((place) => place !== undefined && NO_PLACE.test(place))) return UNPLACED
+  const [x, y, z] = places.map(Number)
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null
   let contig = columns[0]
   let hap = columns[at + 3]
@@ -369,18 +427,28 @@ export function parseBed3d(text: string, fileName = ''): FeatureSet {
 function parseStructure(text: string, fileName: string, layout: StructureLayout): FeatureSet {
   const rows: Row[] = []
   let skipped = 0
+  let unplaced = 0
   forEachRow(text, (columns) => {
     const row = rowOf(columns, layout)
-    if (row === null) skipped++
+    if (row === UNPLACED) unplaced++
+    else if (row === null) skipped++
     else rows.push(row)
   })
   if (rows.length === 0) {
     const shape = layout === 'g3d' ? 'chromosome, start, x, y, z' : 'chromosome, start, end, x, y, z'
+    // Counted apart from the rows that are not beads, because a file of
+    // nothing but unplaced beads is a solver's answer rather than the wrong
+    // file: every bin it was asked about, it was given nothing to place. The
+    // sentence that names the columns would send that reader to look at their
+    // columns, which are fine.
     throw new Error(
-      skipped > 0
-        ? `No usable rows: all ${skipped} lines failed the "${shape}" test that ` +
-          `a ${layout} begins with.`
-        : `${fileName === '' ? 'This file' : fileName} has no rows.`,
+      unplaced > 0 && skipped === 0
+        ? `No bead in this file has a place: all ${unplaced} rows carry \`nan\` where their ` +
+          'coordinates go.'
+        : skipped > 0
+          ? `No usable rows: all ${skipped} lines failed the "${shape}" test that ` +
+            `a ${layout} begins with.`
+          : `${fileName === '' ? 'This file' : fileName} has no rows.`,
     )
   }
   const haplotypes: string[] = []

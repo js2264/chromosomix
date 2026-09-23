@@ -3,7 +3,9 @@
  *
  * Two shapes of the same page. The **add** tile has no store yet: a box for a
  * URL, and once one has been read, the same portal view every catalogue gets
- * plus the offer to remember it. A **remembered** store has its URL already and
+ * plus the offer to remember it — or IGV's cards, one per group, when the file
+ * asks for them (`layout: "cards"`, §24.1): how a lab's shelf reads best is a
+ * fact about the shelf, and its author is the one who knows it. A **remembered** store has its URL already and
  * opens straight into the portal view, with the URL on its heading and the way
  * to forget it beside — the other half of remembering, so that *forget
  * everything* under About is not the only way to drop one lab's shelf.
@@ -20,6 +22,7 @@ import { fetchStore, storeFromText, type StoreFile } from '../../state/store'
 import { addStoreRow, readStoreRows, removeStoreRow } from '../../state/stores'
 import { exampleHubText, exampleStoreText } from '../examples'
 import type { StoreView } from '../../state/facets'
+import { GenomesView } from './GenomesView'
 import { PortalView, storeFailure } from './PortalView'
 import type { StoreHost } from './host'
 import type { StoreFront } from './registry'
@@ -58,7 +61,8 @@ export class CustomView {
   private readonly statusEl = el('p', { class: 'hint portal-status hidden' })
   private readonly keepSlot = el('span', { class: 'custom-keep' })
   private readonly body = el('div', { class: 'custom-body' })
-  private portal: PortalView | null = null
+  /** What the store that landed is drawn by: the portal, or the cards it asked for. */
+  private portal: PortalView | GenomesView | null = null
   private pending = 0
   private destroyed = false
 
@@ -281,15 +285,24 @@ export class CustomView {
       ...this.props.front,
       label: file.name === '' ? this.props.front.label : file.name,
       rows: { id: this.props.front.id, label: file.name, url, builtin: false },
+      // The file's own grouping over the door's: a hub door groups by assembly
+      // because every hub does, and a store that names a field of its own
+      // knows its rows better than the door it came through.
+      ...(file.group === undefined ? {} : { group: file.group }),
+      ...(file.headline === undefined ? {} : { headline: file.headline }),
     }
-    this.portal = new PortalView({
-      front,
-      host: this.props.host,
-      view: this.props.view,
-      onView: (view) => this.props.onView(view),
-      ...(this.props.onLoaded === undefined ? {} : { onLoaded: this.props.onLoaded }),
-      file,
-    })
+    const onLoaded = this.props.onLoaded === undefined ? {} : { onLoaded: this.props.onLoaded }
+    this.portal =
+      file.layout === 'cards' && front.group !== undefined
+        ? new GenomesView({ front, host: this.props.host, file, ...onLoaded })
+        : new PortalView({
+            front,
+            host: this.props.host,
+            view: this.props.view,
+            onView: (view) => this.props.onView(view),
+            ...onLoaded,
+            file,
+          })
     this.body.replaceChildren(this.portal.el)
     // A pasted shelf has no address, so there is nothing to put in the address
     // bar and nothing to remember: both of those are a URL, and the one this

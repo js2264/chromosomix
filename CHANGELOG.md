@@ -14,6 +14,91 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
+  IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
+  eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC
+  score, E1, and chromosight's borders and loops — and, where the suite wrote one, its 3D model in a
+  cell beside it; the fold holds the map and every track. A session `make_store.py` writes places a
+  model it is given the same way, as a structure row with `maps: 3d`, rather than dropping it. The store is not the Stores workflow's to write: `scripts/DBZ_store.py` builds it from
+  `hic-suite.sh`'s results and it lives beside its data on the lab's bucket, so until it is uploaded
+  the tile says that, not *run the workflow*. Its mark is drawn by the script that draws RSG's, over
+  a bacterial map — a circle whose far corners are warm, with the X of its zipped arms.
+
+- **A store can ask to be drawn as cards (§24.1, §24.2).** Three optional keys on a store file:
+  `group` names the field its rows belong to, `headline` the fields a group repeats, and
+  `"layout": "cards"` draws one card per group the way IGV's genomes are — the group's session as
+  the card's button, its headline fields and track count as chips, every other row under the
+  card's fold, named without the card's own name. A store read by URL was always a flat faceted
+  list, which is the wrong shape for a shelf of seventy organisms with nineteen files each.
+  Without `layout` a `group` folds the list under a heading per group. `make_store.py check`
+  refuses a layout the viewer does not know, cards with no group, and a group no row has.
+
+- **A star on each structure cell (§25.3).** The Aesthetics column holds one *3D structure* card and
+  a deck may hold several models, so the card follows a cell the reader names. It was whichever cell
+  was built first — which a reader with two models discovers by dragging a slider and watching the
+  *other* picture change, and which left the second model's settings unreachable altogether. The
+  same glyph and the same radio behaviour the maps' star has, and its own star rather than theirs: a
+  starred map is the file an analysis runs against, a starred cell is the picture this column's
+  settings are for. It appears only where there is a choice to make, follows the cells when the
+  starred one is closed, and is not taken by a cell that opens — a model arriving should not move a
+  control out from under the reader using it.
+
+- **One model in as many cells as you like, each a view of its own (§25.3).** A structure row could
+  be drawn in one cell and one only — the link dropped a second `3d`, and the eye and the drag both
+  refused a model already on screen — on the reasoning that two cells of one row are one picture
+  drawn twice. They are not: a cell has its **own camera, its own mirrors, its own planted axes and
+  its own height**, so two cells of one model are two views of it, which is the ordinary way anybody
+  looks at a fold. The eye still means *is this model on screen*; the **picker** and the row's
+  **grip dropped on the cell that is to hold it** are how a second view is asked for. What each cell
+  remembers is now remembered under its **seat** — its place among the structure cells — where every
+  cell used to write to one slot, so a deck of two views came back from a reload as the same view
+  twice.
+
+- **Turn together (§25.3).** A link on the *camera* row: every cell with it lit shares the camera's
+  two angles, so one drag turns them all. **Only the angles travel** — each cell keeps its own
+  centre, zoom and projection — which is what makes two synced cells two views rather than one view
+  drawn twice. Pressed on, a cell leads and the others come round to it.
+
+- **In the frame of (§25.5).** A select beside *compare with*, naming another model: this model is
+  turned into **that one's frame**, over the beads the two share and by the same superposition, and
+  **the other is not drawn**. The two are one question asked twice — *where do these differ* wants
+  both on screen, *is this the same fold* wants them in one frame — and one control doing both put a
+  second model in the picture of everybody who only wanted the first. Two cells each in the frame of
+  one row, turning together, are two models in one frame showing the same face of each.
+
+- **Mirrors on the frame row (§25.5).** A reconstruction from contacts is fixed **only up to
+  reflection**: a model and its mirror image explain the same counts equally well, so two models of
+  one map routinely come out in opposite hands and no rotation will ever bring one onto the other.
+  Two toggles reflect the model across the screen or up it. The reflection is applied to the **built
+  coordinates**, so picking, measuring, the labels and the vector export all follow it — a mirror at
+  the camera would flip the picture and leave the numbers under it describing a model nobody is
+  looking at — and it is applied **before** any fit, since mirroring is what makes the fit possible
+  and fitting first would reflect the answer instead of the question.
+
+- **Replant the axes (§25.5).** The centre's arms carry a frame the reader plants: *replant*, on the
+  *camera* row, lays them along **this view** — x across the screen, y up it, z out of it — so every
+  turn after that is read against the view they were planted in, which is the question anybody asks
+  of a gizmo. **Neither the model nor the centre moves**; only the frame they are read against.
+  ⌘-click replants as it re-centres, because a centre put somewhere new is a reader saying *read the
+  model from here*.
+
+- **A legend in the cell's corner (§25.4).** One row per control — the key on the left, what it does
+  on the right — with the live row lit: *drag* turn, *scroll* zoom, *⇧* move, *⌘* centre, *space*
+  fog, and a sticky mode at the top while it runs. It was one chip naming the current gesture, which
+  told a reader who already knew the keys which key they were holding and everybody else nothing:
+  that Shift moves the model, that ⌘ puts the centre somewhere and that Space and the wheel are the
+  fog were facts discoverable only by pressing things. **In a small cell it is the live row alone**,
+  the rest coming back while the pointer is on the picture: five rows of keys over a cell 330 pixels
+  wide is a caption taking the corner of the thing it captions, and the moment the keys are wanted
+  is the moment the hand is already there. Asked of the cell through a container query, since the
+  same cell is 330 pixels four across and thirteen hundred in the enlarged viewer.
+
+- **The structure cell is resized by a bar under it (§25.3).** Dragged, nudged with the arrow keys,
+  double-clicked to give the height back to the row, and remembered per seat. A model has no axis to
+  line up with the map's, so it is the one cell whose height is nobody's business but the reader's:
+  a deck one across put the model in a 16 rem band under a map that could be shrunk to a thumbnail,
+  and nothing done to either of them gave the model any more room.
+
 - **The analysis tasks are four cards, cut by dimension (§18.8).** *2D tasks*, *3D tasks*, *1D tasks*
   and *Metagenome*, each with the frame, mark and fold every other card in every other column has,
   where there was one flat list under three headings. The cut is **by the dimension the question is
@@ -761,7 +846,93 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   when they do, the genome wins* describes the parser rather than the reader's situation, and a name
   that collides never reaches that refusal.
 
+### Changed
+
+- **The centre of rotation is shown by default, and it is a gizmo rather than a cross (§25.5).** A
+  ball at the camera's target with three arms out of it — one per axis, a **head** on the positive
+  end and a short stub on the negative, in the colours every 3D tool uses. It is where every drag
+  turns about and where ⌘-click puts the next one, so a reader who cannot see it is turning the
+  model about a point they have to infer from the motion; and six half-lines crossing in a dot said
+  neither which way an axis went nor which end was the centre. A session stored before this opens
+  with it on, which is what the stored-style reader had to be taught: `axes` was read as *on only if
+  the file says so*, and the default arriving as its opposite for every reader who has been here
+  before is the one way a default change reaches nobody.
+
+- **The ghost opacity starts at 0.1 rather than 0.15 (§25.3).** What is outside the window should be
+  a trace of where the rest of the genome went, not a second picture competing with the one being
+  read.
+
 ### Fixed
+
+- **The mirror moves the model, not only its labels (§25.5).** A reflection was applied to the built
+  coordinates and the renderer never noticed: what it has built is keyed on the counts and the
+  drawing — how many beads, drawn as what, how wide — which was everything that could change back
+  when nothing ever moved a bead. A mirror hands over the same counts and the same style at new
+  coordinates, so the key matched, the buffers were left alone, and the fibre stayed exactly where
+  it was while the chain names, drawn from the model every frame, flipped. The geometry is now
+  rebuilt when the **model** changes as well as when its style does.
+
+- **A reconstruction no longer destroys the model before it (§25.6).** *Model from the map* landed on
+  the id of its task and removed the row that had it, which is right for boundaries or domains —
+  running insulation again with a wider window means the reader wants the *new* ones — and wrong for
+  a model: two models of one map are the comparison §25.3 is built for, and a model is not stored
+  anywhere else, so a second run left nothing to compare and no way back. **The same settings twice**
+  is exactly the run somebody makes to see what a solver's seed did. A run now takes the next free
+  id in the series and the label carries the same `(2)`, since two rows under one name are two rows
+  nobody can tell apart in the picker or in *compare with*.
+
+- **Every model that arrives opens a cell, not just the last one noticed (§25.3).** Two models can
+  land in one turn of the store — two files dropped together, a batch of runs — and only the last
+  got a picture; the others sat on the Structures card as rows with nothing drawn, which is the one
+  state a reader reads as *it did not work*.
+
+- **Every shared setting the model reads is reachable from the model (§26.3).** `legend`, `crosshair`
+  and `tooltip` are preferences about every picture in the app, and the structure cell borrowed them
+  into its enlarged dialog from a list written out by hand in the cell. Two things follow. Which
+  picture each preference is about is now declared once, in `ui/plotOptions.ts` beside the matrix's
+  list and the tracks' — a copy in the cell is a list that stops being the answer the day a fourth
+  preference is one the model honours. And the *shared* row now carries **whatever no other card in
+  the column offers**: all three in the enlarged viewer, where every card that owns one is behind
+  the dialog; none beside a map, whose Map card offers all three; and **the key alone beside the 1D
+  browser**, whose card offers the crosshair and the hover card but no legend — a browser has no key
+  of its own to hide. In a browser-led deck the model's own key could be turned off only by
+  enlarging the model.
+
+- **A mark outside the window is ghosted like the bead it sits on (§25.5).** Telomeres, the reader's
+  own marked places and the genomic ruler's ticks were drawn at full strength whatever the model was
+  doing, so a window of one chromosome was read against a constellation of solid yellow telomeres
+  nowhere near it — the brightest thing in a picture of somewhere else. The vector export had it
+  right from the start, so the screen and the exported PDF disagreed about the same model.
+
+- **A structure row dropped on a cell is drawn in that cell.** The grip on a Structures row could be
+  dragged onto an empty cell, and the drop opened *a* structure cell — not the one it was dropped on
+  — or did nothing at all when the cell already held a model. A drop says **where** as well as
+  **which**, which is the whole reason the grip exists.
+
+- **A model with a bin the solver could not place is a structure again (§25.2).** A solver writes
+  `nan` in all three coordinate columns for a bin it was given nothing to place — a repeat, a gap in
+  the assembly, a bin nothing mapped to — and the sniffer read the first such row as *this file is
+  not a structure* and gave up on the whole of it. A 1,683-bead pastis-NB model of a mycoplasma
+  genome has 33 of them and the first is thirty-one rows in, so **both** files it was written as
+  fell through to the BED family: the `.g3d` landed on the Structures card by name and then failed
+  with *all 1,683 lines failed the "contig, start, end" test that every BED-like format begins
+  with* — a refusal naming a format the reader never handed over — and the `.bed3d` beside it, whose
+  third column really is an integer end, was **drawn as a track**: a lane of 1,683 boxes whose name
+  is an x coordinate. A bead with no place is now passed over by the sniffer and dropped by the
+  parser, as a bead nowhere always was, and the model opens at the beads that have places. A file
+  where *every* bead is unplaced says that in those words, rather than in the sentence naming the
+  columns — its columns are fine. A coordinate that is neither a number nor one of the spellings of
+  *nowhere* (`nan`, `NA`, `inf`, `None`, `.`, empty) still says the file is not a structure, which
+  is what keeps a BED6 out.
+
+- **A file that names its format really is not sniffed (§25.2).** `.g3d`, `.3dg` and `.bed3d` were
+  spared the two content *questions* but not the shape tests underneath them, so a named file could
+  still be vetoed by one odd row — which is how the `nan` above reached the BED sniffer at all. The
+  name is now read first, before a single row, and it settles the format: a named file that turns
+  out not to be a structure is refused **as** a structure, in the format's own words and on the card
+  its name sent it to, rather than being quietly drawn as a lane. The name is also read the way the
+  drop routing reads it — past any directories, with a `?query` or `#fragment` cut off — so a model
+  published at a URL is as named as one on disk; `model.bed3d?token=1` used to be an unnamed file.
 
 - **`metacooler-run reconstruct3d` writes the model rather than an empty BED (§25.7).** A model is
   an interval set whose rows carry three coordinates each, and the shell wrote every interval set as

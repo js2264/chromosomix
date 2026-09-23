@@ -616,13 +616,13 @@ export function storeFailure(
 ): string {
   const notJson = result.reason === 'refused' && result.refusal.reason === 'not-json'
   if (ref.builtin && (result.reason === 'missing' || notJson)) {
-    return (
-      // `Nothing has been published for …`, not `${ref.label} is …`: a store's
-      // name is a noun phrase of either number, and half of them are plural —
-      // this read *IGV genome sessions is not generated yet*.
-      `Nothing has been published for ${ref.label} yet; the Stores workflow generates it. ` +
-      'Run it once (Actions → Stores → Run workflow) and this fills in.'
-    )
+    // `Nothing has been published for …`, not `${ref.label} is …`: a store's
+    // name is a noun phrase of either number, and half of them are plural —
+    // this read *IGV genome sessions is not generated yet*.
+    return ref.publishedBy !== undefined
+      ? `Nothing has been published for ${ref.label} yet; ${ref.publishedBy}.`
+      : `Nothing has been published for ${ref.label} yet; the Stores workflow generates it. ` +
+          'Run it once (Actions → Stores → Run workflow) and this fills in.'
   }
   // `refusalMessage` is the *workspace* reader's wording, and for the one
   // refusal both formats share it names the wrong kind of file: a store served

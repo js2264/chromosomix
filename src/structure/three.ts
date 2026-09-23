@@ -37,17 +37,15 @@
 import {
   AmbientLight,
   BufferAttribute,
-  BufferGeometry,
   CatmullRomCurve3,
   Color,
+  ConeGeometry,
   CylinderGeometry,
   DirectionalLight,
   Fog,
   FrontSide,
   InstancedBufferAttribute,
   InstancedMesh,
-  LineBasicMaterial,
-  LineSegments,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -124,6 +122,10 @@ export class StructureRenderer {
   private ticksFrom: ReadonlyArray<{ bead: number; label: string }> | null = null
   private marks: InstancedMesh | null = null
   private marksFrom: ReadonlyArray<{ bead: number; colour: string }> | null = null
+  /** Which bead each drawn mark sits on, so its ghosting can follow the bead's. */
+  private marksBeads: number[] = []
+  /** The same for the ruler's ticks. */
+  private ticksBeads: number[] = []
   /** The compared model, in this one's frame: its own group, rebuilt when it changes. */
   private readonly overlayRoot = new Object3D()
   private overlayFrom: Structure | null = null
@@ -136,12 +138,15 @@ export class StructureRenderer {
   /** The centre of rotation — a ball at the camera's target with the three axes through it. */
   private readonly centre = new Object3D()
   private centreBall: Mesh | null = null
-  private centreAxes: LineSegments | null = null
+  /** The three arms out of the ball, shaft, head and stub apiece. */
+  private centreArms: Mesh[] = []
   private readonly raycaster = new Raycaster()
   private width = 1
   private height = 1
   private view: StructureView | null = null
   private palette: RenderPalette
+  /** The model the geometry was built from, so a model that **moves** rebuilds it. */
+  private builtStructure: Structure | null = null
   /** What the geometry was last built for, so a change elsewhere does not rebuild it. */
   private built: string | null = null
   /** Bead index per pick instance, since hidden beads are not instanced. */
@@ -216,9 +221,20 @@ export class StructureRenderer {
     const previous = this.view
     this.view = view
     const key = buildKey(view)
-    if (key !== this.built) {
+    // **The model itself, as well as the key.** {@link buildKey} is counts and
+    // style: how many beads, how they are drawn, how wide. It says nothing
+    // about *where* the beads are, because until the mirrors (§25.5) nothing
+    // ever moved them — a model was built once from its file and stood still.
+    // A reflection and a turn into another model's frame both hand this a new
+    // `Structure` with the same counts and the same style, so the key matched,
+    // the geometry was never rebuilt, and the fibre on screen stayed exactly
+    // where it was while the chain **names** — drawn by the panel from the
+    // structure on every frame — flipped. The picture and its labels
+    // disagreed about which model was on screen.
+    if (key !== this.built || this.builtStructure !== view.structure) {
       this.rebuild(view)
       this.built = key
+      this.builtStructure = view.structure
     } else if (previous === null || previous.colours !== view.colours || previous.lit !== view.lit) {
       this.recolour()
     }
@@ -406,11 +422,24 @@ export class StructureRenderer {
   }
 
   /**
-   * The centre of rotation, when the style shows it: a ball at the camera's
-   * target and the three axes through it, sized to the view so they read the
-   * same at every zoom, drawn over the model since a centre inside a tube is
-   * still the centre. Rebuilt only when the size changes by more than a
+   * The centre of rotation, when the style shows it (§25.5): a ball at the
+   * camera's target with three arms out of it, sized to the view so it reads
+   * the same at every zoom, drawn over the model since a centre inside a tube
+   * is still the centre. Rebuilt only when the size changes by more than a
    * little.
+   *
+   * **Arms rather than lines through it, and a head on each.** The gizmo is on
+   * by default now, so it has to say what it is at a glance and to somebody
+   * who never read a word about it: a ball where the model turns, and one arm
+   * per axis pointing the way that axis *goes*. Six half-lines crossing in a
+   * dot said none of that — which way was +x, and which end was the centre,
+   * were both things a reader had to turn the model to find out. The dot is
+   * still drawn in ink and the arms in the axis colours every 3D tool uses
+   * (x red, y green, z blue), so the thing the reader already knows is the
+   * thing they see.
+   *
+   * The whole gizmo carries the model's **planted frame** (`axesFrame`): the
+   * identity is the model's own axes, and *replant* writes the view's there.
    */
   private placeCentre(view: StructureView): void {
     const show = view.style.axes
@@ -420,26 +449,51 @@ export class StructureRenderer {
     if (this.centreBall === null || Math.abs(this.centre.scale.x - size) / size > 0.01) {
       this.centre.clear()
       this.centreBall?.geometry.dispose()
-      this.centreAxes?.geometry.dispose()
+      for (const arm of this.centreArms) arm.geometry.dispose()
+      this.centreArms = []
       this.centreBall = new Mesh(
-        new SphereGeometry(0.06, 16, 12),
-        new MeshBasicMaterial({ color: hexOf(this.palette.ink), transparent: true, opacity: 0.7, depthTest: false }),
+        new SphereGeometry(0.075, 16, 12),
+        new MeshBasicMaterial({ color: hexOf(this.palette.ink), transparent: true, opacity: 0.8, depthTest: false }),
       )
-      const axes = new Float32Array([-1, 0, 0, 1, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, -1, 0, 0, 1])
-      const colours = new Float32Array([
-        0.85, 0.2, 0.2, 0.85, 0.2, 0.2, 0.2, 0.7, 0.2, 0.2, 0.7, 0.2, 0.2, 0.4, 0.9, 0.2, 0.4, 0.9,
-      ])
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(axes, 3))
-      geometry.setAttribute('color', new BufferAttribute(colours, 3))
-      this.centreAxes = new LineSegments(geometry, new LineBasicMaterial({ vertexColors: true, depthTest: false }))
       this.centreBall.renderOrder = 10
-      this.centreAxes.renderOrder = 10
-      this.centre.add(this.centreBall, this.centreAxes)
+      this.centre.add(this.centreBall)
+      // One arm per axis: a shaft from the ball and a head at its end, so the
+      // sign is read off the picture rather than inferred from it. The
+      // negative half is a thinner, shorter stub — enough to say the axis is
+      // a line and not a ray, and not enough to be mistaken for the head.
+      const axes: Array<{ dir: [number, number, number]; colour: number }> = [
+        { dir: [1, 0, 0], colour: 0xd8453c },
+        { dir: [0, 1, 0], colour: 0x2f9e44 },
+        { dir: [0, 0, 1], colour: 0x3b7ddd },
+      ]
+      for (const axis of axes) {
+        const material = new MeshBasicMaterial({ color: axis.colour, transparent: true, opacity: 0.95, depthTest: false })
+        const shaft = new Mesh(new CylinderGeometry(0.022, 0.022, 0.8, 10), material)
+        const head = new Mesh(new ConeGeometry(0.07, 0.22, 12), material)
+        const stub = new Mesh(new CylinderGeometry(0.012, 0.012, 0.45, 8), material)
+        // A cylinder stands up the y axis; turn it to the axis it draws.
+        const turn = new Quaternion().setFromUnitVectors(
+          new Vector3(0, 1, 0),
+          new Vector3(axis.dir[0], axis.dir[1], axis.dir[2]),
+        )
+        shaft.quaternion.copy(turn)
+        head.quaternion.copy(turn)
+        stub.quaternion.copy(turn)
+        shaft.position.set(axis.dir[0] * 0.4, axis.dir[1] * 0.4, axis.dir[2] * 0.4)
+        head.position.set(axis.dir[0] * 0.91, axis.dir[1] * 0.91, axis.dir[2] * 0.91)
+        stub.position.set(axis.dir[0] * -0.225, axis.dir[1] * -0.225, axis.dir[2] * -0.225)
+        for (const part of [shaft, head, stub]) {
+          part.renderOrder = 10
+          this.centre.add(part)
+          this.centreArms.push(part)
+        }
+      }
       this.centre.scale.setScalar(size)
     }
     const [x, y, z] = view.camera.target
     this.centre.position.set(x, y, z)
+    const [qx, qy, qz, qw] = view.style.axesFrame
+    this.centre.quaternion.set(qx, qy, qz, qw)
   }
 
   destroy(): void {
@@ -475,8 +529,10 @@ export class StructureRenderer {
     this.measures = null
     this.measuresFrom = null
     this.ticks = null
+    this.ticksBeads = []
     this.ticksFrom = null
     this.marks = null
+    this.marksBeads = []
     this.marksFrom = null
     this.beads = null
     this.picks = null
@@ -765,6 +821,7 @@ export class StructureRenderer {
       attribute.needsUpdate = true
       alpha.needsUpdate = true
     }
+    this.fadeMarks()
     if (this.halos !== null) {
       ;(this.halos.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
     }
@@ -859,7 +916,12 @@ export class StructureRenderer {
       const kept = view.ruler.filter((tick) => this.shown[tick.bead] === 1)
       if (kept.length > 0) {
         const r = Math.max(stickRadius * 1.6, structure.step * style.beadRadius * 0.8)
-        const mesh = new InstancedMesh(new SphereGeometry(1, 10, 8), inkMaterial(this.palette.ink, 1), kept.length)
+        const mesh = new InstancedMesh(
+          new SphereGeometry(1, 10, 8),
+          ghostable(inkMaterial(this.palette.ink, 1)),
+          kept.length,
+        )
+        mesh.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(kept.length, true))
         const matrix = new Matrix4()
         kept.forEach((tick, at) => {
           matrix.makeScale(r, r, r)
@@ -869,6 +931,7 @@ export class StructureRenderer {
         mesh.instanceMatrix.needsUpdate = true
         mesh.frustumCulled = false
         this.ticks = mesh
+        this.ticksBeads = kept.map((tick) => tick.bead)
         this.root.add(mesh)
       }
     }
@@ -898,7 +961,15 @@ export class StructureRenderer {
           // So a mark drawn in the colour the Manual annotations card gave it
           // came out black, while the same mark in an exported PDF came out
           // right, the 2D painter taking the colour as a colour.
-          new MeshStandardMaterial({ roughness: 0.55, metalness: 0 }),
+          //
+          // `ghostable`, though, because a mark **outside the window is
+          // ghosted** like the bead it sits on (§25.5). It was not, so a
+          // telomere — which rides this same channel — stayed a solid yellow
+          // ball in a model faded to a trace, and a genome's worth of them read
+          // as the brightest thing in a picture of one window. The 2D painter
+          // had it right from the start, so the screen and the exported PDF
+          // disagreed about the same model.
+          ghostable(new MeshStandardMaterial({ roughness: 0.55, metalness: 0 })),
           kept.length,
         )
         const matrix = new Matrix4()
@@ -911,10 +982,12 @@ export class StructureRenderer {
           colour.set(mark.colour)
           mesh.setColorAt(at, colour)
         })
+        mesh.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(kept.length, true))
         mesh.instanceMatrix.needsUpdate = true
         if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
         mesh.frustumCulled = false
         this.marks = mesh
+        this.marksBeads = kept.map((mark) => mark.bead)
         this.root.add(mesh)
       }
     }
@@ -941,6 +1014,40 @@ export class StructureRenderer {
       }
       this.chord = cylinders(segments, stickRadius * 0.8, inkMaterial(this.palette.ink, 1))
       this.root.add(this.chord)
+    }
+    // The marks and the ticks are built *here*, and `recolour` runs before
+    // `mark` — so a mesh made this frame would keep the opaque alpha it was
+    // filled with until the next time the window moved. That is a telomere
+    // drawn whole over a model faded to a trace, which is the thing this is
+    // for.
+    this.fadeMarks()
+  }
+
+  /**
+   * Fade every mark with the bead it sits on (§25.5).
+   *
+   * The reader's own marked places, the telomeres that ride the same channel,
+   * and the ruler's ticks. A place on the fibre is a fact about that bead, so
+   * a mark on a bead that is barely there is barely there — and a window of a
+   * genome used to be read against a constellation of solid yellow telomeres
+   * nowhere near it, the brightest thing in a picture of somewhere else.
+   *
+   * Called from both roads into the picture, because the two meshes are built
+   * in `mark` and the alphas are written in `recolour`, and neither runs after
+   * the other in every frame.
+   */
+  private fadeMarks(): void {
+    const view = this.view
+    if (view === null) return
+    const alphaOf = (i: number): number => (view.lit !== null && view.lit[i] === 0 ? view.style.opacity : 1)
+    for (const drawn of [
+      { mesh: this.marks, beads: this.marksBeads },
+      { mesh: this.ticks, beads: this.ticksBeads },
+    ]) {
+      const attribute = drawn.mesh?.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute | undefined
+      if (attribute === undefined) continue
+      for (let at = 0; at < drawn.beads.length; at++) attribute.setX(at, alphaOf(drawn.beads[at]))
+      attribute.needsUpdate = true
     }
   }
 

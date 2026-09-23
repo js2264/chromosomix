@@ -89,6 +89,9 @@ const LUCIDE = [
   'align-end-horizontal',
   'chevrons-up-down',
   'flip-vertical',
+  // The two mirrors on the structure cell's frame row (§25.5): a model from
+  // contacts is fixed only up to reflection, so this is how it is turned over.
+  'flip-horizontal',
   // The turn, as two shapes for one button: a map on its diagonal is a triangle
   // standing on a genomic axis and a map that is not is a square, and the toggle
   // shows **the shape it will give you** rather than the shape you have — a

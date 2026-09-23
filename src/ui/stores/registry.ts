@@ -38,6 +38,7 @@
  */
 
 import { demosStore } from '../examples'
+import { DBZ_MARK_IMAGE } from './dbz-mark.generated'
 import { RSG_MARK_IMAGE } from './rsg-mark.generated'
 import { STORE_LOGOS } from './logos.generated'
 import { rememberedStores } from '../../state/stores'
@@ -70,10 +71,11 @@ export interface StoreMark {
   /**
    * An image to draw over the letters.
    *
-   * Set for all four shipped stores, and from two places. RSG's is *drawn*,
-   * the lab's own mark being the lab's to draw: a Hi-C map whose diagonal
-   * spells it (`scripts/make-rsg-mark.mjs`). The other three are the projects'
-   * own published logos, carried here because this viewer was given them to
+   * Set for every shipped store, and from two places. The lab's two are
+   * *drawn*, the lab's own marks being the lab's to draw: a Hi-C map whose
+   * diagonal spells *RSG*, and a bacterial one — circular, its arms zipped into
+   * an X — whose diagonal spells *DBZ* (`scripts/make-rsg-mark.mjs`). The
+   * others are the projects' own published logos, carried here because this viewer was given them to
    * carry, and fitted to a square by `scripts/make-store-logos.mjs`. The icon
    * pipeline's rule holds over both — a brand mark is the published one or
    * nothing (`scripts/build-icons.mjs`) — and is why not one of the three is
@@ -168,6 +170,7 @@ export interface StoreFront {
  */
 const COLOURS = {
   rsg: '#c2652c',
+  dbz: '#9a5b1e',
   igv: '#2f6fb5',
   fourdn: '#1f8a70',
   encode: '#5a4fa2',
@@ -280,6 +283,20 @@ const ROADMAP: StoreFront = {
   home: 'https://egg2.wustl.edu/roadmap/web_portal/',
 }
 
+/**
+ * The DNA Bacterial Zoo: the lab's Hi-C maps of bacteria, one card a species
+ * (§24.3).
+ *
+ * The one shipped store the Stores workflow does not write. Its rows are the
+ * lab's own analyses — `hic-suite.sh` over each map, gathered by
+ * `scripts/DBZ_store.py` into a folder whose names are all relative — so the
+ * store lives **beside its data** on the lab's bucket, next to the demo files
+ * (`DEMO_BUCKET` in `ui/examples.ts`), and is read from there on the gesture
+ * that opens it. There is nothing for a workflow to regenerate: it changes when
+ * the lab reruns the suite and uploads the folder again.
+ */
+export const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+
 /** The stores this build ships, in the order the tiles offer them. */
 export function builtinStores(): StoreFront[] {
   const base = storesBase()
@@ -295,6 +312,30 @@ export function builtinStores(): StoreFront[] {
       // Inline: the one store that costs no request and is certainly there.
       rows: { id: 'rsg', label: 'RSG lab data', inline: demosStore(), builtin: true },
       group: 'assembly',
+      home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
+    },
+    {
+      id: 'dbz',
+      label: 'DNA Bacterial Zoo',
+      blurb: 'The lab’s Hi-C maps of bacteria, one card a species: its map, its tracks, and a session opening both.',
+      tagline: 'Bacterial Hi-C maps, one card a species.',
+      // IGV's cards, from one file rather than two: the sessions are rows of
+      // the store itself, so there is no `sessions` here, and that is what tells
+      // `GenomesView` which of its two roads to take.
+      kind: 'genomes',
+      mark: { text: 'DBZ', colour: COLOURS.dbz, image: DBZ_MARK_IMAGE },
+      builtin: true,
+      rows: {
+        id: 'dbz',
+        label: 'DNA Bacterial Zoo',
+        url: DBZ_STORE,
+        builtin: true,
+        publishedBy:
+          'scripts/DBZ_store.py builds it from the lab’s Hi-C results, and the folder it writes is uploaded to s3://rsglab-data/dbz/',
+      },
+      group: 'species',
+      // The sample a card is, and how many replicons its genome has.
+      headline: ['id', 'sequences'],
       home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
     },
     {

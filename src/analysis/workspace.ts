@@ -601,22 +601,37 @@ export class AnalysisWorkspace {
     // each `begin` replaced the row before it while `placeOnTarget` moved the
     // single survivor onto the next panel and off the last. The lead keeps the
     // bare id it has always had, so a restored session still resolves.
-    const id =
+    const base =
       map === LEAD_MAP
         ? `analysis:${task.id}:${output.id}`
         : `analysis:${map}:${task.id}:${output.id}`
+    // **A model accumulates; everything else replaces.**
+    //
+    // Running insulation a second time with a wider window means the reader
+    // wants the *new* boundaries, and a panel that grows a row per run is a
+    // panel nobody can read after four of them — so a called interval set
+    // lands on the id of its task and its output, and the row before it goes.
+    //
+    // A **reconstruction is not that**. Two models of one map, from two
+    // methods or two exponents or the same settings twice, are the comparison
+    // the whole of §25.3 is built for: `compare with`, `in the frame of`,
+    // turning them together, a cell each. A second run that destroyed the
+    // first left a reader with nothing to compare and no way back — the model
+    // is not stored anywhere else, and *the same settings* is exactly the run
+    // somebody makes to check a solver's seed. So a structure takes the first
+    // free id in the series and keeps every model that has been made.
+    const id = structure ? freshId(store, base) : base
+    const run = id === base ? 1 : Number(id.slice(base.length + 1))
     const colour = store.nextColour()
-    // Replacing rather than accumulating: running insulation a second time with
-    // a wider window means the reader wants the *new* boundaries, and a panel
-    // that grows a row per run is a panel nobody can read after four of them.
-    // The id is the task and the output, so a second run of the same task lands
-    // on the same row and a different task never does.
-    if (store.byId(id) !== undefined) store.remove(id)
+    if (!structure && store.byId(id) !== undefined) store.remove(id)
+    const label = map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`
     store.begin({
       card: structure ? 'structure' : 'overlay',
       kind,
       id,
-      label: map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`,
+      // Two models of one map under one name are two rows a reader cannot
+      // tell apart in the picker, in `compare with`, or on the card.
+      label: run > 1 ? `${label} (${run})` : label,
       source,
       placement: emptyPlacement(),
       style: defaultStyle(kind, colour),
@@ -1193,6 +1208,24 @@ export class AnalysisWorkspace {
  * payload's shape where it did not — the fallback is what a reader would say
  * about a set nobody has named, and it is never wrong, only general.
  */
+/**
+ * The first id in `base`, `base#2`, `base#3`… that no row holds.
+ *
+ * A series rather than a stamp or a counter on this object: an id has to be
+ * the same after a reload, and it has to be readable in a link and in the
+ * store's own listing. Numbering from what is *there* also means a reader who
+ * closes the second of three models gets `#2` back on their next run, which is
+ * the answer somebody counting rows on the card would give.
+ */
+export function freshId(store: AnnotationStore, base: string): string {
+  if (store.byId(base) === undefined) return base
+  for (let run = 2; run < 1000; run++) {
+    const id = `${base}#${run}`
+    if (store.byId(id) === undefined) return id
+  }
+  return `${base}#${Date.now()}`
+}
+
 function countedAs(output: IntervalsOutput): string {
   const payload = output.payload
   const total = payload.data.length

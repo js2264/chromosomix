@@ -251,6 +251,21 @@ describe('parsing a store', () => {
     expect(store.entries[0].tracks).toEqual([{ label: 'ok', url: 'x.bw' }])
     expect(store.entries[1].size).toBeUndefined()
   })
+
+  it('reads how the store asks to be drawn: its group, its headline and cards', () => {
+    const store = parsed(storeText({ layout: 'cards', group: 'species', headline: ['id', '', 3, 'sequences'] }))
+    expect(store.layout).toBe('cards')
+    expect(store.group).toBe('species')
+    // Only keys a field can be looked up by.
+    expect(store.headline).toEqual(['id', 'sequences'])
+  })
+
+  it('draws a layout it does not know as the default rather than refusing the store', () => {
+    const store = parsed(storeText({ layout: 'carousel', group: '', headline: 'id' }))
+    expect(store.layout).toBeUndefined()
+    expect(store.group).toBeUndefined()
+    expect(store.headline).toBeUndefined()
+  })
 })
 
 describe('kindOf', () => {

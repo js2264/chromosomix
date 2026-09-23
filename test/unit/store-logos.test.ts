@@ -21,6 +21,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { STORE_LOGOS } from '@/ui/stores/logos.generated'
+import { DBZ_MARK_IMAGE } from '@/ui/stores/dbz-mark.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
 import { builtinStores, customStore, hubStoreFront } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
@@ -62,6 +63,7 @@ describe('the store logos', () => {
     const shipped = builtinStores()
     expect(shipped.map((front) => front.id)).toEqual([
       'rsg',
+      'dbz',
       'igv',
       '4dn',
       'encode',
@@ -69,11 +71,12 @@ describe('the store logos', () => {
       'roadmap',
     ])
     const images = shipped.map((front) => front.mark.image)
-    // All six present, and six different pictures — a copy-paste that gave two
-    // stores the same logo would otherwise look plausible on the page.
+    // All seven present, and seven different pictures — a copy-paste that gave
+    // two stores the same logo would otherwise look plausible on the page.
     expect(images.every((image) => image !== undefined)).toBe(true)
-    expect(new Set(images).size).toBe(6)
+    expect(new Set(images).size).toBe(7)
     expect(images[0]).toBe(RSG_MARK_IMAGE)
+    expect(images[1]).toBe(DBZ_MARK_IMAGE)
   })
 
   it('draws the two doors with the marks of what they add', () => {

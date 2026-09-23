@@ -1447,6 +1447,23 @@ describe.skipIf(!havePython)('--check', () => {
     expect(run.stderr).toMatch(/declares no base/)
   })
 
+  it('refuses a store that asks to be drawn in a way the viewer would not draw it', () => {
+    const entries = [{ label: 'a', uri: 'a.mcool', kind: 'map', fields: { species: 'E_coli' } }]
+    const write = (name: string, extra: Record<string, unknown>): string => {
+      const target = join(out, name)
+      writeFileSync(target, JSON.stringify({ kind: 'metacooler.store', version: 1, name, columns: [], entries, ...extra }), 'utf8')
+      return target
+    }
+    const carousel = make('check', write('carousel.json', { layout: 'carousel' }))
+    expect(carousel.status).toBe(1)
+    expect(carousel.stderr).toMatch(/layout is 'carousel'/)
+    expect(make('check', write('ungrouped.json', { layout: 'cards' })).stderr).toMatch(/nothing to be a card of/)
+    expect(make('check', write('unmatched.json', { layout: 'cards', group: 'genus' })).stderr).toMatch(
+      /no entry has a value for it/,
+    )
+    expect(make('check', write('cards.json', { layout: 'cards', group: 'species', headline: ['id'] })).status).toBe(0)
+  })
+
   it('accepts an all-relative store with no base, which is the self-contained folder', () => {
     expect(make('check', join(out, 'igv-sessions.json')).status).toBe(0)
   })
@@ -1472,6 +1489,47 @@ describe.skipIf(!havePython)('--check', () => {
     expect(run.stderr).toMatch(/which is not absolute/)
     expect(run.stderr).toMatch(/kind 'nonsense', which draws nothing/)
     expect(run.stderr).toMatch(/no state\.uri/)
+  })
+})
+
+describe.skipIf(!havePython)('a session with a 3D model in it', () => {
+  it('places the model in a cell of its own beside the map, never as a lane', () => {
+    // `session_document` is what the generated and the lab's sessions are
+    // written by; driven here from Python, since that is the language it is in.
+    const program = [
+      'import json, sys',
+      `sys.path.insert(0, ${JSON.stringify(join(REPO, 'scripts'))})`,
+      'import make_store',
+      'print(json.dumps(make_store.session_document(name="E. coli", uri="ecoli.mcool", created="2026-09-23T00:00:00Z", tracks=[',
+      '    {"label": "Coverage", "url": "coverage.bw"},',
+      '    {"label": "Model", "url": "model3d/ecoli.reconstructed-model.bed3d"},',
+      '    {"label": "Model, gzipped", "url": "model3d/other.g3d.gz"}])))',
+    ].join('\n')
+    const run = spawnSync('python3', ['-c', program], { encoding: 'utf8' })
+    expect(run.stderr).toBe('')
+    const tab = (JSON.parse(run.stdout) as { tabs: Array<{ state: Record<string, string>; tracks: Array<Record<string, unknown>> }> }).tabs[0]
+    // The deck names a structure cell `3d`: a restored structure row opens no
+    // cell by itself, the deck being the link's to rebuild (SPECS §25.3).
+    expect(tab.state.maps).toBe('3d')
+    expect(tab.tracks.map((track) => [track.card, track.kind])).toEqual([
+      ['linear', 'track'],
+      ['structure', 'structure'],
+      // By name, gzipped or not, as `isStructureName` reads it.
+      ['structure', 'structure'],
+    ])
+    expect(tab.tracks[1].placement).toEqual({ bottom: false, right: false })
+    expect(tab.tracks[0].placement).toEqual({ bottom: true, right: false })
+  })
+
+  it('opens a session with no model on the map alone', () => {
+    const program = [
+      'import json, sys',
+      `sys.path.insert(0, ${JSON.stringify(join(REPO, 'scripts'))})`,
+      'import make_store',
+      'print(json.dumps(make_store.session_document(name="x", uri="x.mcool", created="2026-09-23T00:00:00Z", tracks=[{"label": "a", "url": "a.bw"}])))',
+    ].join('\n')
+    const run = spawnSync('python3', ['-c', program], { encoding: 'utf8' })
+    expect((JSON.parse(run.stdout) as { tabs: Array<{ state: Record<string, string> }> }).tabs[0].state.maps).toBeUndefined()
   })
 })
 

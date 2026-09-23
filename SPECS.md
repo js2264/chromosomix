@@ -7018,7 +7018,16 @@ Four rules carry most of the design:
   file belongs to (`set`) and the experiment an ENCODE file belongs to (`dataset`), and every
   pre-configured session names its group the same way (`dataset`), so a page can fold rows under
   the set they came from and put *open with its tracks* on the heading (§24.3). A store with no
-  such column is a flat list, which is what a lab's own shelf usually is.
+  such column is a flat list, which is what a lab's own shelf usually is — unless it names one.
+- **A store may say how it is drawn.** `group` names the field its rows belong to, `headline` the
+  fields a group's heading or card repeats, and `layout: "cards"` asks for the genome gallery's
+  cards (§24.2) instead of the faceted list: one card per value of `group`, the group's session its
+  button. A shelf of seventy organisms, each a map with a session and eighteen tracks, is IGV's
+  shelf of genomes in every way that matters to a reader, and a list of 1,400 rows is not how
+  anybody reads it; which shape a shelf reads best in is a fact about the shelf, so its author
+  says it. Only a store read by URL reads these three — a shipped store's page is fixed in
+  `ui/stores/registry.ts` — and all three are forgiving: a layout this build does not know, or
+  cards with no `group`, draws as the list.
 - **A page draws a window of a thousand rows**, and counts, facets and ticks over every row the
   store has. Six hundred rows is nothing to a list; the ENCODE shelves are 55,000 (§24.3), which
   is a quarter of a million elements and a tab that stops for seconds on every keystroke. A cap
@@ -7053,8 +7062,8 @@ and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place'
 **widths** are their labels' rather than equal, so that at the page's own width every label gets one
 line and the four read as the set they are; a narrower window or a wider font shrinks them together
 and wraps the longest first, which is the fallback and not the resting state. *Connect to a data store* is a **grid** of tiles — the lab's
-own figures, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every store the reader connected, and the
-two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
+own figures, the lab's DNA Bacterial Zoo, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every
+store the reader connected, and the two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
 wrap, which was right while there were five and the set was the page's whole offer: a fifth tile on a
 second line would have read as an afterthought. There are more than five now and a reader can connect
 as many again, so it is equal columns that fill the width and spill onto the next line, on
@@ -7121,8 +7130,8 @@ so a mark that cannot carry the name legibly carries the picture instead.
 reader is looking at is a catalogue this viewer translated — carrying none of the licence, the
 citation, the release notes or the caveats the people who made it wrote down. So the drawer's head
 carries an outbound link beside the download, an arrow leaving its corner, opening in a tab of its
-own with `noopener`: RSG's team page, IGV's genome documentation, 4DN's portal, ENCODE's matrix, DNA
-Zoo, Roadmap's WashU portal, and — on the hub door, which has no store behind it — UCSC's
+own with `noopener`: RSG's team page (for both of the lab's shelves), IGV's genome documentation,
+4DN's portal, ENCODE's matrix, DNA Zoo, Roadmap's WashU portal, and — on the hub door, which has no store behind it — UCSC's
 `hgHubConnect`, which is where a reader without a hub in hand goes to find one. It is drawn **as
 soon as the store is opened, read or not**, because whose shelf this is is a fact about the store
 rather than about this reading of it, and the reader whose catalogue just failed to load is exactly
@@ -7178,6 +7187,16 @@ why one table for all of them was the wrong shape and is gone:
 - **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure with a title, one
   line, the assembly and the provenance as chips, the paragraph behind a fold, and *open*; the data
   files under the figures as rows. Inline, so it costs no request.
+- **DNA Bacterial Zoo** — the genome gallery's cards over **one** file: a card a species, whose
+  button is the species' session, with its sample and its replicon count as chips and its map and
+  its tracks under the fold. A species whose model the suite wrote as a bed3d (§25.7) opens with it
+  in a structure cell beside the map — the session names the cell (`maps: 3d`), since a structure
+  row restored from a session opens none by itself (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
+  (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
+  `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
+  Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
+  that draws RSG's, over a map a bacterium would make: a circle, whose far corners are warm, with
+  the X its arms, zipped from the origin, draw across the diagonal *DBZ* stands on.
 - **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
   pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and
   whose files are under a fold; a filter over genome and assembly.
@@ -7191,6 +7210,18 @@ why one table for all of them was the wrong shape and is gone:
   over it and *remember this store*. A remembered store is a tile of its own, drawn the same way,
   with *forget this store* on its page. Kept in `localStorage` under `metacooler-viewer:stores`,
   named in the stored-data screen and swept by *forget everything*, exactly as a bucket entry is.
+  A store whose file asks for cards (§24.1) gets the **genome gallery's cards** instead of the
+  portal, from the file already read: one per value of its `group`, in the store's own order. The
+  card's button is the group's first workspace row, which is then not also a row under the fold;
+  a group with none takes the row that carries a shelf of tracks and opens it with them, the rule
+  the portal's group heading follows. The chips are the `headline` fields and the session's
+  `tracks` count, as IGV's are its assembly and its count. The rows under the fold are drawn
+  **without the card's own name** when they begin with it — *A_muris · Insulation boundaries*
+  under a card headed *A_muris* is the organism eighteen times down one fold — and keep it
+  everywhere else, since the whole label is the name the file takes when it opens, and on another
+  organism's map the organism is the point. The filter matches the card's name and its headline
+  fields. A row with no value for the group is kept, in a fold under the cards, as the lab
+  gallery keeps the files no figure names.
 
 **The facets follow two rules** (`state/facets.ts`): within a facet ticked values are OR, across
 facets AND; and a facet's counts are computed against every *other* facet's ticks, so the number
@@ -7401,6 +7432,17 @@ file carries the instant it was written, so byte equality between two runs is im
 shortcut was unreachable — every Monday pushed a hundred megabytes and asked for a deploy whether
 or not a portal had published anything. `fingerprint.json` is the map of each file's hash with its
 timestamps removed; a run whose fingerprint matches the published one stops there.
+
+**One shipped store is not generated here.** The DNA Bacterial Zoo is the lab's own analyses —
+`hic-suite.sh` over each map, gathered by `scripts/DBZ_store.py` into a folder of maps, tracks and
+one session a species whose names are all relative — so there is no portal for a workflow to ask
+and nothing for it to regenerate on a Monday: the store changes when the lab reruns the suite. It
+lives **beside its data**, on the lab's bucket next to the demo files
+(`https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`), published by `aws s3 sync` of
+that folder, and the tile reads it from there as Roadmap's reads WashU. Until it is uploaded the
+bucket answers 404, which a shipped store reads as *not published yet*; the sentence says what
+publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to the Stores
+workflow, which has nothing to do with it.
 
 Every generated store carries `generatedAt` and `source` — *both* of the places it came from, the
 store that decided which rows exist and the query that decided what is in their cells — because a
@@ -7773,14 +7815,33 @@ name, with the way out (`g3dtools` rewrites it).
 All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
 is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. An unnamed file is asked two questions, and each exists to tell a
-structure from a BED whose columns happen to be numbers: are the coordinates **fractional**, and do
-the beads walk like a **chain** rather than scatter. A named file has been told apart already, by
-the reader who named it — so a model whose beads *are* a scatter (a randomised control, a draw from
-a null, a fragment set nobody has folded) is read as a structure rather than falling through to BED.
-It used to be spared only the first question, which put such a file on the Structures card by name
-while parsing its payload as a track: the row and what it held disagreed about what had been
-loaded. The tests pin what a BED5, a BED6, a bedGraph and a narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
+the structure it says it is. The name is read **first**, before a single row, and read the way the
+drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
+published at a URL is as named as one on disk. A file whose name claims no format is asked two
+questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
+the coordinates **fractional**, and do the beads walk like a **chain** rather than scatter. A named
+file has been told apart already, by the reader who named it — so a model whose beads *are* a
+scatter (a randomised control, a draw from a null, a fragment set nobody has folded) is read as a
+structure rather than falling through to BED. A named file that turns out **not** to be one gets
+the parser's refusal, in the format's own words and on the card its name sent it to, rather than
+being quietly drawn as a lane. The tests pin what a BED5, a BED6, a bedGraph and a narrowPeak are
+not.
+
+**A bead the solver could not place is still a bead.** A solver writes `nan` — or `NA`, `inf`,
+`None`, `.`, or an empty field — in all three coordinate columns for a bin it was given nothing to
+place: a repeat, a gap in the assembly, a bin nothing mapped to. Such a row is **passed over** by
+the sniffer, which counts it neither for the file nor against it, and dropped by the parser, so a
+model of a real map opens at the beads that have places. It is not a disqualification, which it
+was: one `nan` row thirty-one rows into a 1,683-bead pastis-NB model answered *not a structure* for
+the whole file, so its `.g3d` was refused by the BED parser it fell through to — *all 1,683 lines
+failed the "contig, start, end" test* — and the `.bed3d` beside it, whose third column really is an
+integer end, was drawn as a lane of 1,683 boxes whose name is an x coordinate. A file where *every*
+bead is unplaced says **that** rather than the sentence naming the columns, because its columns are
+fine. A coordinate that is neither a number nor one of those spellings is a file that is not a
+structure at all, which is what still keeps a BED6 out: a name, a score and a strand are not three
+ways of saying *nowhere*.
+
+A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
 **The Structures card.** Every model the session holds — dropped, named by URL, or computed
@@ -7802,8 +7863,21 @@ recipe in the drawer, as the Synthetic card does (§18.5).
 
 **A structure cell** draws **one** structure row — the one the reader chose from the Structures
 card or from the cell's own **structure** picker, remembered per file, or the first of the list no
-*sibling cell* is already drawing; and **the deck holds one cell per model**. A model that arrives —
-dropped, computed, or **computed again onto the same row** — opens a cell beside whatever was there
+*sibling cell* is already drawing; and **the deck holds as many cells of a model as the reader asks
+for**. It was one cell per deck, then one per model, on the reasoning that two cells of one row are
+one picture drawn twice — which is only true while the two are the same picture, and they are not:
+each cell has its **own camera, its own mirror, its own planted axes and its own height**, so two
+cells of one model are two views of it, which is the ordinary way anybody looks at a fold. The eye
+on the row still means *is this model on screen*, so it opens one cell and closes every cell drawing
+it; the **picker** and the row's **grip, dropped on the cell that is to hold it**, are how a second
+view is asked for, and neither refuses a model a cell already draws. What each cell remembers — the
+model it draws, the camera it draws from, its height, whether it turns with the others — is
+remembered under its **seat**, its place among the structure cells counting from the left; they all
+used to write to one slot, so a deck of two views came back from a reload as the same view twice.
+**Every model that arrives opens a cell of its own and is on screen from that moment** — dropped,
+named by a URL, or computed, and *every* one of them where several land together, where only the
+last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
+which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
 model it was to be judged against — the commonest way to lose a picture in this application. The
@@ -7827,7 +7901,7 @@ as it was, a thin slab left every one of the few beads it kept already half diss
 describing the whole model while the slab was showing a slice of it. Lit, always; lit, always; **orthographic,
 always** — a model has no horizon, and perspective made the same distance read shorter at the back;
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
-the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
+the ghost opacity** — 0.1 by default, a trace — and that slider is the one opacity there is:
 everything else is drawn whole. It is a **real transparency**: a ghosted bead keeps its own hue and
 lets whatever is behind it through, and at **0 it is gone** — not drawn, and not in the way of the
 model behind it either. It used to be a colour mixed towards the page, which on a white page reads
@@ -7852,10 +7926,27 @@ that repeated the first. A slider that is the whole setting — bead radius, tub
 keeps a row of its own.
 
 The card's rows are in one order, choices before the things that modify them: structure,
-compare with (and its RMSD note), drawn as, overlays, colour by, colour scale, bead radius, tube
-radius, haplotype, outside the window (with its ghost opacity), loops as chords, fog (with its
-depth), depth slab, measurements, camera, frame, export. *Overlays* follows *drawn as* because the
-two are one question asked twice: what the model is drawn as, and what is drawn over it.
+compare with (and its RMSD note), in the frame of, drawn as, overlays, colour by, colour scale, bead
+radius, tube radius, haplotype, outside the window (with its ghost opacity), loops as chords, fog
+(with its depth), depth slab, measurements, camera, frame, export. *Overlays* follows *drawn as*
+because the two are one question asked twice: what the model is drawn as, and what is drawn over it.
+*In the frame of* follows *compare with* because the two are one question asked twice as well — the
+same superposition, drawn or not (§25.5).
+
+**A star on each cell says which one the card is about.** The column holds **one** *3D structure*
+card — a second copy of eighteen controls is a column nobody can read, and §26.3 wants a control
+offered once per column — and a deck may hold several models, so the card follows a cell the reader
+names. It was whichever cell was built first, which a reader with two models discovers by dragging
+a slider and watching the *other* picture change, and which left the second model's settings
+unreachable. The same glyph and the same radio behaviour the maps' star has, because it is the same
+idea: one of several pictures singled out for something that can only be about one of them. It is
+its **own** star and not the maps' — a starred map is the file an analysis runs against, a starred
+cell is the picture this column's settings are for, and one deck can want both at once. A filled
+star is a **dead button**, as the maps' is: the way to move it is to press another. It appears only
+where there is a choice, so a deck of one model has none; it follows the cells when the starred one
+is closed, so the card is never about a picture that is gone; and a cell that opens does **not**
+take it, because a model arriving should not move a control out from under the reader who was
+using it.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
@@ -7867,13 +7958,24 @@ since two corner-bracket glyphs side by side were told apart only by hovering th
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
 camera controls — and gives it back where it was.
 
-**And it borrows three settings that are not the row's own.** `legend`, `crosshair` and `tooltip`
-are preferences about every picture in the app (§26.3), kept in one store and offered on the *Map*
-card — which is in the column *behind* the dialog while the model is enlarged, so the one switch for
-the key the reader is looking at was the one they could not reach. They appear as a **shared** row at
-the foot of the sidebar for as long as the dialog is up, and nowhere else: §26.3 wants a control
-offered once per column, and the Map card offers them there. Exactly the three this picture reads; a
-fourth would be a control that does nothing to the thing it was pressed beside.
+**And it carries the settings that are not the row's own.** `legend`, `crosshair` and `tooltip` are
+preferences about every picture in the app (§26.3), kept in one store; which picture each of them is
+about is declared once, in `ui/plotOptions.ts`, beside the matrix's list and the tracks' —
+`STRUCTURE_OPTIONS` is the model's, and a list copied into the cell is a list that stops being the
+answer the day a fourth preference is one the model honours. They appear as a **shared** row on the
+card, and what is in it is **whatever no other card in the column offers**:
+
+- **Enlarged**, all three. The model is the window and every card that owns one of them is *behind*
+  the dialog, so the one switch for the key the reader is looking at is not the one they cannot
+  reach.
+- **Beside a map**, none: the *Map* card offers all three, and §26.3 wants a control offered once per
+  column — two copies ten lines apart read as two settings.
+- **Beside the 1D browser**, the key alone. That card offers the crosshair and the hover card but no
+  *legend*, a browser having no key of its own to hide, so the model's key was reachable only by
+  enlarging it.
+
+Exactly the three this picture reads; a fourth would be a control that does nothing to the thing it
+was pressed beside.
 
 The card also carries a **depth slab** (two clipping planes either side
 of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
@@ -7882,9 +7984,18 @@ own units, against the model's reach, rather than in the file's), a **genomic ru
 the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more than about forty
 ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
 at most eighty labels, and no zero tick: a chain's start is where its name is),
-**camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
-**frame** (the window, everything) — all of them **bordered buttons** like every other action in the
-column (§26.6), since a quiet word beside a bordered toggle reads as a caption for it. The cell's actions are **commands** in the palette with keys —
+**camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, **turn
+together** and **replant the axes** on the same row, and **frame** (the window, everything) with the
+two **mirrors** beside them — all of them **bordered buttons** like every other action in the
+column (§26.6), since a quiet word beside a bordered toggle reads as a caption for it.
+
+**Turn together** is a link between cells and not a setting of the model, so it is the cell's and
+not the row's: every cell with it lit shares the camera's two angles, so one drag turns them all,
+and **only the angles travel** — each cell keeps its own centre, zoom and projection, which is what
+makes two synced cells two views rather than one view drawn twice. Pressed on, a cell **leads**: the
+others come round to it, since any other reading depends on which cell is touched next. With
+*in the frame of* (§25.5) under it, this is how two models are compared without either being drawn
+over the other — each turned into one frame, side by side, turning as one. The cell's actions are **commands** in the palette with keys —
 `f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
 **bound only while the model is enlarged**, and listed in the palette either way; the three modes
 have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
@@ -7897,25 +8008,42 @@ bound**, through `withKey` (§26.4): the corner's *frame* and the card's *frame*
 retitled when the dialog opens and closes, because a card beside a deck reading `(f)` was offering a
 letter that folds a panel instead. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
-lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
+lanes together, and a model has no axis to line up — and a **bar under it sets the cell's height**,
+dragged, nudged with the arrow keys, and double-clicked to give the height back to the row;
+remembered per seat. A model has no axis to line up with the map's, so it is the one cell whose
+height is nobody's business but the reader's: a deck one across put the model in a 16 rem band under
+a map that could be shrunk to a thumbnail, and nothing done to either of them gave the model any
+more room. A button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
 them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
 what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
-back. A **badge in the top-left corner** says what the hand is about to do, and goes accent for a mode the
-reader is *in* rather than one the hand is passing through: *turn* (a drag orbits, **without limit** —
-neither angle stops, so the model turns over the top and keeps going rather than hitting a wall
-halfway through a drag; the clamp that used to hold the horizon level was a turntable's convention
-and a structure has no horizon),
-*move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
-elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
-the fog forward or pushes it back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the
-cell always had), or *mark*, *loop* or *measure* (§25.4). It is a **readout and not a control** —
-no border and no pill, the translucent backing the map's key has — because a bordered pill three
-pixels from five bordered buttons is a button a reader presses and nothing happens. A **tap** of the centre key alone shows or hides the **centre
-of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
-which the card's *overlays* row also does; the keys act only while the pointer is over the
-cell, its canvas is focused or its dialog is open. The three **sticky** modes — *mark*, *loop* and
+back. A **legend in the top-left corner** lists what the hand can do, **one row per control, the key
+on the left and what it does on the right**, and **the live row is lit**: *drag* to turn (a drag
+orbits, **without limit** — neither angle stops, so the model turns over the top and keeps going
+rather than hitting a wall halfway through a drag; the clamp that used to hold the horizon level was
+a turntable's convention and a structure has no horizon), *scroll* to zoom, *⇧* to move (a drag
+pans the whole model), the centre key — ⌘ on a Mac, Ctrl elsewhere — for *centre* (a click on a bead
+makes it the centre of rotation), and *space* for *fog* (the wheel brings it forward or pushes it
+back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the cell always had). A
+**sticky mode** — *mark*, *loop* or *measure* (§25.4) — takes a row at the top while it runs, lit in
+the accent, because it is a state the cell is *in* rather than a key being held, and a click will do
+that and not what the rows below describe. It was one chip naming the current gesture, which told a
+reader who already knew the keys which key they were holding and everybody else nothing: that Shift
+moves the model, that ⌘ puts the centre somewhere and that Space and the wheel are the fog were
+facts discoverable only by pressing things. It is a **readout and not a control** — no border and no
+pill, the translucent backing the map's key has — because a bordered pill three pixels from five
+bordered buttons is a button a reader presses and nothing happens; and the **readout of where the
+pointer is** sits under it in the same column, since the legend is five rows or six and a readout
+pinned below it by a number would sit on top of it half the time. **In a small cell it is the live
+row alone**, and the rest come back while the pointer is on the picture: five rows of keys over a
+cell 330 pixels wide is a caption taking the corner of the thing it captions, a reader four cells
+across is looking at shapes rather than learning keys, and the moment the keys *are* wanted is the
+moment the hand is already there. Asked of the **cell** through a container query and not of the
+window, for the settings card's reason (§25.3): the same cell is 330 pixels in a four-across deck
+and thirteen hundred in the enlarged viewer. A **tap** of the centre key alone
+shows or hides the **centre of rotation**, which the card's *overlays* row also does; the keys act
+only while the pointer is over the cell, its canvas is focused or its dialog is open. The three **sticky** modes — *mark*, *loop* and
 *measure* — stay on until pressed again, so each button is lit while its mode runs (§26.3) and the
 badge names it. It opens when a structure is dropped or named by URL while a map or
 the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, from a
@@ -8039,6 +8167,58 @@ a length the *file itself* declared, and neither for a sequence ticked **circula
 also useless in practice, and the reason is worth keeping: a model's own lengths are a lower bound,
 a lower bound cannot establish an end, and a whole yeast genome came out with five marks where a
 reader was looking for thirty-two. The mark is a **chain end** and claims no more than that.
+
+**A mark fades with the bead it is on.** Every mark — a telomere, a reader's own place, a tick of the
+genomic ruler — is drawn at the **ghost opacity** when the bead under it is outside the window or
+ghosted from the key, exactly as that bead is. A place is a fact about a bead, so a mark on a bead
+that is barely there is barely there. They used to be drawn at full strength whatever the model was
+doing, so a window of one chromosome was read against a constellation of solid yellow telomeres
+nowhere near it — the brightest thing in a picture of somewhere else. The vector export had it right
+from the start (`structure/painter.ts` reads the same `lit` array the beads do), so the screen and
+the exported PDF disagreed about the same model; this is the screen catching up.
+
+**The centre of rotation, and the frame it is read in.** *Overlays* shows a **ball at the camera's
+target with three arms out of it** — one per axis, each a shaft with a **head** on the positive end
+and a short stub on the negative, in the colours every 3D tool uses (x red, y green, z blue),
+sized to the view so it reads the same at every zoom and drawn over the model, since a centre inside
+a tube is still the centre. **On by default**: it is where every drag turns about and where ⌘-click
+puts the next one, and a reader who cannot see it is turning the model about a point they have to
+infer from the motion. It was six half-lines crossing in a dot, which said neither which way an axis
+went nor which end was the centre.
+
+The arms carry a **frame the reader plants**. The identity is the model's own axes, and **replant**
+(on the *camera* row) lays them along **this view** — x across the screen, y up it, z out of it — so
+every turn after that is read against the view they were planted in, which is the question anybody
+asks of a gizmo: *how far have I come from where I was looking*. **Neither the model nor the centre
+moves**; only the frame they are read against. ⌘-click **replants as it re-centres**, because a
+centre put somewhere new is a reader saying *read the model from here*, and arms left pointing along
+the frame the file happened to be written in answer a question nobody asked.
+
+**Mirrors.** Two toggles on the *frame* row reflect the model **across the screen** or **up it**. A
+reconstruction from contacts is determined **only up to reflection** — a model and its mirror image
+explain the same counts equally well, and which one a solver returns is an accident of where it
+started — so two models of one map routinely come out in opposite hands and no rotation will ever
+bring one onto the other. This is how one is brought into the other's hand. The reflection is
+applied to the **built coordinates**, not to the camera, so picking a bead, measuring between two,
+the labels and the vector export all follow it; a mirror at the camera would flip the picture and
+leave the numbers under it describing a model nobody is looking at. Which means the renderer has to
+**rebuild its geometry when a model moves**, and not only when its style changes: what is built is
+keyed on the counts and the drawing — how many beads, drawn as what, how wide — which is everything
+that could change back when nothing ever moved a bead. A reflection hands over the same counts and
+the same style at new coordinates, so the key matched, the buffers were left alone, and the fibre
+stayed exactly where it was while the chain **names**, drawn from the model every frame, flipped:
+the picture and its labels disagreed about which model was on screen. Both at once is a half turn
+rather than a reflection, which is the one combination that changes nothing about the fold; it is
+allowed because seeing a model the other way up is a reason on its own.
+
+**In the frame of.** A select beside *compare with*, naming another model: this model is turned into
+**that one's frame**, over the beads the two share and by the same superposition, and **the other is
+not drawn**. The two are one question asked twice — a reader asking *where do these differ* wants
+both on screen, and a reader asking *is this the same fold* wants them in one frame — and asking one
+control to do both put a second model in the picture of everybody who only wanted the first. The
+reflection is applied **first**, since mirroring is what makes the fit possible at all and fitting
+first would reflect the answer instead of the question. Two cells each *in the frame of* one row,
+*turning together* (§25.3), are two models in one frame showing the same face of each.
 
 **Contacts from the pin.** With a bead pinned, *colour by contacts with the pinned bead* puts the
 map's row through it onto the beads: each value through the map's own transform, clipped to its
@@ -8230,7 +8410,14 @@ well the model honours the map before believing it.
 `structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
 reconstructed-model` (per map on a deck, as every computed row is), labelled `3D model · chrIV`
 or `3D model · 16 sequences`, summarised as a loaded one is, carrying the task and the framing as
-provenance. It replaces the last run's row, is the model the cell draws the moment it lands, is
+provenance. **It never replaces the last run's row.** Every other computed row does — running
+insulation again with a wider window means the reader wants the *new* boundaries — and a model is
+the one thing an analysis makes that is not stored anywhere else and is made **to be compared**:
+two methods, two exponents, or the same settings twice to see what the seed did. So a run takes the
+next free id in the series `…reconstructed-model`, `…#2`, `…#3`, numbered from what is on the card
+so closing the second of three gives that number back, and the label carries the same `(2)` because
+two rows under one name are two rows nobody can tell apart in the picker, in *compare with* or in
+*in the frame of*. It is the model the cell draws the moment it lands, is
 what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
 Synthetic-card export road. The golden is the one a reconstruction can honestly have. For ShRec3D

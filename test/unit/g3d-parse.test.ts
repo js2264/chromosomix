@@ -210,6 +210,31 @@ describe('what a g3d is', () => {
     expect(set.model?.haplotypes).toEqual(['maternal', 'paternal'])
   })
 
+  it('is a model with bins the solver never placed, which say `nan` and no more', () => {
+    // What a solver writes for a bin it was given nothing to place — a repeat,
+    // a gap in the assembly, a bin nothing mapped to — and a real model of a
+    // real map arrives with a scattering of them. One such row used to answer
+    // *not a structure* for the whole file: the file that brought this test is
+    // 1,683 beads with 33 unplaced, and the first unplaced one is 31 rows in,
+    // so the g3d was refused as a BED and the bed3d beside it was drawn as one.
+    const gaps = rows([
+      'chrI 0 -0.34 0.33 -0.04',
+      'chrI 8000 -0.38 0.32 -0.01',
+      'chrI 16000 nan nan nan',
+      'chrI 24000 -0.41 0.30 0.06',
+      'chrI 32000 -0.38 0.30 0.09',
+      'chrI 40000 NA NA NA',
+      'chrI 48000 -0.35 0.29 0.12',
+    ])
+    expect(sniffG3d(gaps)).toBe(true)
+    expect(sniffG3d(gaps, 'myco.nb.g3d')).toBe(true)
+    // The beads with no place are dropped and the rest keep the spacing of the
+    // file they were written at, gaps and all.
+    const set = parseG3d(gaps)
+    expect(set.length).toBe(5)
+    expect(set.model?.width).toBe(8000)
+  })
+
   it('lands on the Structures card as its own kind', () => {
     expect(cardFor('structure')).toBe('structure')
     expect(kindFor('structure', 'structure')).toBe('structure')
@@ -313,6 +338,18 @@ describe('parsing', () => {
     expect(() => parseG3d('')).toThrow(/no rows/)
   })
 
+  it('says so in those words when every bead in the file is unplaced', () => {
+    // A solver's answer rather than the wrong file: every bin it was asked
+    // about, it was given nothing to place. The sentence naming the columns
+    // would send that reader to look at their columns, which are fine.
+    const none = rows(['chrI 0 nan nan nan', 'chrI 8000 nan nan nan'])
+    expect(() => parseG3d(none, 'empty.g3d')).toThrow(/No bead in this file has a place: all 2 rows/)
+    // …and by content alone it is not a structure: there is nothing in it that
+    // says so. Only the name can claim a file with no places in it.
+    expect(sniffG3d(none)).toBe(false)
+    expect(sniffG3d(none, 'empty.g3d')).toBe(true)
+  })
+
   it('says what it holds, spacing included, under the row', () => {
     expect(g3dSummary(parseG3d(EXAMPLE))).toBe('19 beads · 1.04 Mb · 2 haplotypes · 1 sequence')
     expect(g3dSummary(parseG3d(haploid()))).toBe('40 beads · 5 kb · 2 sequences')
@@ -320,6 +357,41 @@ describe('parsing', () => {
 })
 
 describe('the structure style', () => {
+  it('opens with the centre shown and the ghost a trace (§25.3)', () => {
+    const style = defaultStructureStyle()
+    // The centre of rotation is where every drag turns about and where ⌘-click
+    // puts the next one; a reader who cannot see it is turning the model about
+    // a point they have to infer from the motion.
+    expect(style.axes).toBe(true)
+    // Identity: the arms lie along the model's own axes until they are
+    // replanted along a view.
+    expect(style.axesFrame).toEqual([0, 0, 0, 1])
+    expect(style.opacity).toBe(0.1)
+    expect(style.mirrorX).toBe(false)
+    expect(style.mirrorY).toBe(false)
+    expect(style.align).toBe('')
+  })
+
+  it('reads a session stored before the centre was on as having it on', () => {
+    // `!== false`, not `=== true`: the default arriving as its opposite for
+    // every reader who has been here before is the one way a default change
+    // reaches nobody.
+    expect(structureStyleOf({ labels: true }).axes).toBe(true)
+    expect(structureStyleOf({ axes: false }).axes).toBe(false)
+  })
+
+  it('normalises a stored axes frame and refuses one that is not a rotation', () => {
+    // A quaternion of the wrong length is a rotation matrix that scales, and
+    // what it would scale is the gizmo drawn over every model.
+    const read = structureStyleOf({ axesFrame: [0, 0, 0, 4] })
+    expect(read.axesFrame).toEqual([0, 0, 0, 1])
+    const turned = structureStyleOf({ axesFrame: [0, 2, 0, 2] })
+    expect(Math.hypot(...turned.axesFrame)).toBeCloseTo(1, 12)
+    expect(structureStyleOf({ axesFrame: [0, 0, 0, 0] }).axesFrame).toEqual([0, 0, 0, 1])
+    expect(structureStyleOf({ axesFrame: 'sideways' }).axesFrame).toEqual([0, 0, 0, 1])
+    expect(structureStyleOf({ axesFrame: [1, 2, 3] }).axesFrame).toEqual([0, 0, 0, 1])
+  })
+
   it('is present on a fresh structure row and on no other kind', () => {
     expect(defaultStyle('structure', '#000').structure).toEqual(defaultStructureStyle())
     expect(defaultStyle('segments', '#000').structure).toBeUndefined()
@@ -441,6 +513,39 @@ describe('bed3d', () => {
     expect(isStructureName('model.bed3d.bw')).toBe(false)
     expect(cardFor('structure')).toBe('structure')
     expect(kindFor('structure', 'structure')).toBe('structure')
+    // The sniffer reads the same name the router did, so a published model is
+    // named over HTTP too: the suffix test is anchored, and a query string
+    // used to be enough to make a `.bed3d` an unnamed file again.
+    const lattice = rows(['chr1 0 5000 0 0 0', 'chr1 5000 10000 1 0 0'])
+    expect(sniffBed3d(lattice, 'https://x.org/dir/model.bed3d?token=1')).toBe(true)
+    expect(sniffBed3d(lattice, 'https://x.org/dir/model.bed3d.gz#index=y')).toBe(true)
+    expect(sniffBed3d(lattice, 'https://x.org/dir/peaks.bed?token=1')).toBe(false)
+  })
+
+  it('keeps its unplaced beads out of the way rather than refusing the file', () => {
+    // The reader's own file: a pastis-NB model written by numpy, `nan` in all
+    // three coordinate columns for a bin the map had nothing in. Read as a
+    // structure named or not, and the unplaced beads are dropped rather than
+    // taking the file down with them.
+    const lines = BED3D.split('\n')
+    lines[3] = 'chr1\t15000\t20000\tnan\tnan\tnan'
+    const gaps = lines.join('\n')
+    expect(sniffBed3d(gaps)).toBe(true)
+    expect(sniffBed3d(gaps, 'myco.nb.bed3d')).toBe(true)
+    const set = parseBed3d(gaps, 'myco.nb.bed3d')
+    expect(set.length).toBe(11)
+    expect(set.model?.width).toBe(5000)
+  })
+
+  it('is claimed by its name, and the parser says what is wrong with a file that is not one', () => {
+    // A name settles the format, so a BED6 called `.bed3d` is refused **as a
+    // bed3d** — in the format's own words, on the card its name sent it to.
+    // Falling through to the BED sniffer instead is how a misnamed file used to
+    // be drawn as a lane and never mentioned.
+    const bed6 = rows(['chrI 0 5000 peak1 900 +', 'chrI 5000 10000 peak2 850 -'])
+    expect(sniffBed3d(bed6)).toBe(false)
+    expect(sniffBed3d(bed6, 'muddle.bed3d')).toBe(true)
+    expect(() => parseBed3d(bed6, 'muddle.bed3d')).toThrow(/chromosome, start, end, x, y, z/)
   })
 
   it('cannot capture the sniffers asked before it', () => {

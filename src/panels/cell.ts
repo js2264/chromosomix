@@ -56,6 +56,16 @@ export interface DeckCell {
   shownModel?(): string | null
   /** The cell's settings as a card for the Aesthetics panel (§25.3). A structure cell only. */
   settings?(): HTMLElement
+  /**
+   * Fill or empty this cell's star (§25.3): whether the column's *3D
+   * structure* card is about it. A structure cell only.
+   */
+  setStarred?(on: boolean): void
+  /**
+   * Whether the star is offered at all — a deck with one model has nothing to
+   * choose between. A structure cell only.
+   */
+  showStar?(on: boolean): void
   /** What the cell can be told to do, with keys, for the palette (§25.3). */
   commands?(): Command[]
   /**

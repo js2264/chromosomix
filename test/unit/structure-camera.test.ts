@@ -24,6 +24,8 @@ import {
   project,
   toView,
   unitsPerPixel,
+  viewFrame,
+  frameAxes,
 } from '@/structure/camera'
 
 const BOX = { width: 400, height: 300 }
@@ -181,5 +183,38 @@ describe('the gestures', () => {
     expect(read.target).toEqual(defaultCamera().target)
     expect(read.projection).toBe('orthographic')
     expect(read.fov).toBe(10)
+  })
+})
+
+describe('the frame the axes are replanted into (§25.5)', () => {
+  /**
+   * *Replant* writes the camera's own frame into the model's style, and the
+   * gizmo is drawn in it — so what the three arms have to be, at the moment it
+   * is pressed, is the screen's own right, up and out-of-page. Held here
+   * against {@link basis}, which is where those three vectors come from.
+   */
+  it('is the camera\u2019s own right, up and out of the page', () => {
+    for (const camera of [
+      { ...defaultCamera(), azimuth: 0, elevation: 0 },
+      { ...defaultCamera(), azimuth: 0.7, elevation: -0.4 },
+      // Past the pole, which is where a quaternion built the naive way goes
+      // wrong and where a reader dragging a globule routinely ends up.
+      { ...defaultCamera(), azimuth: 2.9, elevation: 2.6 },
+      // Looking straight down, the case whose trace is smallest.
+      { ...defaultCamera(), azimuth: 0, elevation: Math.PI / 2 },
+    ]) {
+      const { forward, right, up } = basis(camera)
+      const axes = frameAxes(viewFrame(camera))
+      for (let k = 0; k < 3; k++) {
+        expect(axes.x[k]).toBeCloseTo(right[k], 9)
+        expect(axes.y[k]).toBeCloseTo(up[k], 9)
+        expect(axes.z[k]).toBeCloseTo(-forward[k], 9)
+      }
+    }
+  })
+
+  it('is a unit quaternion, so the arms are the length they are drawn at', () => {
+    const q = viewFrame({ ...defaultCamera(), azimuth: 1.1, elevation: 0.9 })
+    expect(Math.hypot(...q)).toBeCloseTo(1, 12)
   })
 })

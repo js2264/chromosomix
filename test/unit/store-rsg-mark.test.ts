@@ -19,12 +19,17 @@
  * The second is that the file is a 100-bin map with writing on it and not, say,
  * an empty one: a generator edit that damped the letters away would otherwise
  * ship a blank orange square, and the tile would still render.
+ *
+ * The same script draws the DNA Bacterial Zoo's mark, whose promises are the
+ * same two and one more: that it is a *bacterial* map — a circle, whose far
+ * corners are warm, with the X its zipped arms draw.
  */
 
 import { describe, expect, it } from 'vitest'
 import { inflateSync } from 'node:zlib'
 
 import { applyColormap, COLORMAP_SIZE } from '@/render/colormaps'
+import { DBZ_MARK_IMAGE } from '@/ui/stores/dbz-mark.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
 import { builtinStores } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
@@ -161,5 +166,53 @@ describe('the RSG store mark', () => {
       expect(image?.getAttribute('src')).toBe(RSG_MARK_IMAGE)
       expect(node.textContent).toBe('RSG')
     }
+  })
+})
+
+describe('the DNA Bacterial Zoo store mark', () => {
+  const dbz = Buffer.from(DBZ_MARK_IMAGE.slice(DBZ_MARK_IMAGE.indexOf(',') + 1), 'base64')
+  const dbzParts = chunks(dbz)
+  const px = indices(dbzParts.get('IDAT')!)
+  const at = (i: number, j: number): number => px[i * N + j]
+
+  it('is a 100-bin indexed PNG in the same ramp as RSG’s', () => {
+    const ihdr = dbzParts.get('IHDR')!
+    expect([ihdr.readUInt32BE(0), ihdr.readUInt32BE(4), ihdr[9]]).toEqual([N, N, 3])
+    // RSG's palette is checked against the viewer's ramp above; one script
+    // writes both, and they must not drift apart.
+    expect(dbzParts.get('PLTE')!.equals(parts.get('PLTE')!)).toBe(true)
+    expect(dbz.equals(png)).toBe(false)
+  })
+
+  it('has its letters on the diagonal', () => {
+    let hottest = 0
+    for (let i = 1; i < px.length; i++) if (px[i] > px[hottest]) hottest = i
+    const row = Math.floor(hottest / N)
+    const column = hottest % N
+    expect(px[hottest]).toBeGreaterThan(220)
+    expect([4, 37, 70].some((box) => row >= box && row < box + 26 && column >= box && column < box + 26)).toBe(true)
+    expect([...px].filter((v) => v > 200).length).toBeGreaterThan(400)
+  })
+
+  it('is a circle: the corners RSG leaves paper are warm, the first bin and the last being neighbours', () => {
+    // …and warmer than the bin half the genome away, which is as far round the
+    // circle as a bin can be.
+    for (const corner of [at(0, N - 1), at(N - 1, 0)]) {
+      expect(corner).toBeGreaterThan(80)
+      expect(corner).toBeGreaterThan(at(0, N / 2) + 40)
+    }
+  })
+
+  it('has the X: a locus meets its mirror across the origin more than a locus as far off it', () => {
+    // Both pairs are 30 bins apart and out of every letter's box; the first is
+    // symmetric about the origin (i + j = N - 1), the second is not.
+    expect(at(35, 64)).toBeGreaterThan(at(5, 34) + 20)
+    expect(at(64, 35)).toBe(at(35, 64))
+  })
+
+  it('is the mark the DNA Bacterial Zoo is drawn with, over its letters', () => {
+    const front = builtinStores().find((one) => one.id === 'dbz')!
+    expect(front.mark.image).toBe(DBZ_MARK_IMAGE)
+    expect(storeMark(front.mark, 26).textContent).toBe('DBZ')
   })
 })
