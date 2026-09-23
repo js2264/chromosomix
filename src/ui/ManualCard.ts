@@ -24,8 +24,9 @@ import {
   type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
-import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
-import { button, el, fmt } from './dom'
+import { formatMarks, marksFor, readMarks, type MarkFormat } from '../annotations/export'
+import { filesFrom } from './chooseFiles'
+import { button, dragHasFiles, el, fmt } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { exportRow, type ExportRow } from './exportRow'
 import { cardTitle, iconButton } from './icons'
@@ -99,6 +100,9 @@ export class ManualCard {
    */
   private readonly buttons: Array<(ready: boolean, surface: PickSurface) => void> = []
   private readonly exporter: ExportRow
+  /** The line under the import zone saying what the last file gave. */
+  private readonly importNote = el('p', { class: 'ann-note hidden' })
+  private importZone!: HTMLElement
 
   constructor(private readonly props: ManualCardProps) {
     this.exporter = exportRow({
@@ -124,8 +128,10 @@ export class ManualCard {
       this.arrowForm(),
       this.rectForm(),
       this.list,
+      this.importBlock(),
       this.exportBlock(),
     )
+    this.cardDrops(this.el, this.importZone)
     this.unsubscribe = props.store.subscribe(() => this.render())
     this.render()
   }
@@ -476,6 +482,113 @@ export class ManualCard {
       el('span', { class: 'manual-form-title', text: 'Export' }),
       this.exporter.body,
     )
+  }
+
+  /**
+   * Marks, in: the Export row's mirror, and the file it writes.
+   *
+   * A zone to drop on that is also a button to click, the Tracks card's
+   * `.ann-drop`, because both are how a file reaches a card in this app. It
+   * takes either file the export row writes — and any other BED or BEDPE, read
+   * the way `annotations/export.ts`'s {@link readMarks} says — so a figure's
+   * marks travel to a colleague's copy of the same map and come back as marks
+   * they can recolour and remove, rather than as a track they cannot.
+   *
+   * The whole card takes the drop, and the zone lights up as soon as a file
+   * crosses it, on the Tracks card's rule. The drop stops here: the same BED let
+   * go over the map is a *lane*, and this card is where a reader aims when they
+   * mean marks.
+   */
+  private importBlock(): HTMLElement {
+    const input = el('input', { class: 'hidden-input', type: 'file' })
+    input.accept = '.bed,.bedpe,.txt,.tsv'
+    input.multiple = true
+    input.addEventListener('change', () => {
+      const files = [...(input.files ?? [])]
+      // Cleared so choosing the same file twice fires `change` the second time.
+      input.value = ''
+      void this.readFiles(files)
+    })
+    const zone = el(
+      'div',
+      { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
+      // Worded like the Tracks card's zone, which is the same gesture: what it
+      // loads, what it takes, and the two ways in.
+      el('span', { class: 'ann-drop-label', text: 'Load marks' }),
+      el('span', {
+        class: 'ann-drop-hint',
+        text:
+          'A BED of lines, or a BEDPE of arrowheads and rectangles — what Export writes. ' +
+          'Drop one here, or click to choose.',
+      }),
+    )
+    zone.title =
+      'Read marks back from the files Export writes, or from any BED or BEDPE. ' +
+      'Marks already on the map are not added twice.'
+    zone.addEventListener('click', () => input.click())
+    zone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        input.click()
+      }
+    })
+    this.importZone = zone
+    return el(
+      'div',
+      { class: 'manual-form manual-import' },
+      el('span', { class: 'manual-form-title', text: 'Import' }),
+      zone,
+      input,
+      this.importNote,
+    )
+  }
+
+  /** The Tracks card's `cardDrops`: the card takes the file, the zone says so. */
+  private cardDrops(host: HTMLElement, zone: HTMLElement): void {
+    host.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event)) return
+      event.preventDefault()
+      zone.classList.add('over')
+    })
+    host.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget instanceof Node && host.contains(event.relatedTarget)) return
+      zone.classList.remove('over')
+    })
+    host.addEventListener('drop', (event) => {
+      const files = filesFrom(event.dataTransfer)
+      zone.classList.remove('over')
+      if (files.length === 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      void this.readFiles(files)
+    })
+  }
+
+  private async readFiles(files: readonly File[]): Promise<void> {
+    const said: string[] = []
+    for (const file of files) {
+      let text: string
+      try {
+        text = await file.text()
+      } catch {
+        said.push(`${file.name} could not be read.`)
+        continue
+      }
+      const { marks, skipped } = readMarks(text)
+      if (marks.length === 0) {
+        said.push(`No marks in ${file.name} — it should be a BED or a BEDPE.`)
+        continue
+      }
+      const added = this.props.store.addAll(marks)
+      const parts = [`${fmt.int(added)} of ${fmt.int(marks.length)} added`]
+      if (added < marks.length) parts.push('the rest were already there')
+      if (skipped > 0) parts.push(`${fmt.int(skipped)} ${skipped === 1 ? 'line' : 'lines'} skipped`)
+      said.push(`${file.name}: ${parts.join(', ')}.`)
+    }
+    // A line a file: two dropped at once are two answers, and run together
+    // they read as one sentence about neither.
+    this.importNote.replaceChildren(...said.map((text) => el('div', { text })))
+    this.importNote.classList.toggle('hidden', said.length === 0)
   }
 
   /** Nothing of this kind to write is a disabled button, not an empty file. */

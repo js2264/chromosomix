@@ -14,8 +14,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { formatMarks, marksFor } from '@/annotations/export'
-import type { ManualMark } from '@/annotations/manual'
+import { formatMarks, marksFor, readMarks } from '@/annotations/export'
+import { ManualStore, type ManualMark } from '@/annotations/manual'
 import { parseBed, parseBedpe, sniffFormat } from '@/annotations/parse'
 
 const MARKS: ManualMark[] = [
@@ -126,5 +126,37 @@ describe('the round trip', () => {
     // stretches it was drawn across rather than as the points a loop has.
     expect([pairs.start1[1], pairs.end1[1]]).toEqual([120_000, 180_000])
     expect([pairs.start2[1], pairs.end2[1]]).toEqual([340_000, 400_000])
+  })
+})
+
+describe('readMarks', () => {
+  const strip = (marks: readonly ManualMark[]): unknown[] =>
+    marks.map(({ id: _id, colour: _colour, ...rest }) => rest)
+
+  it('gives back every kind the export wrote, with each line on its own axis', () => {
+    const text = formatMarks(MARKS, 'bed') + formatMarks(MARKS, 'bedpe')
+    const { marks, skipped } = readMarks(text)
+    expect(skipped).toBe(0)
+    expect(marks).toEqual(strip(MARKS))
+  })
+
+  it('reads any BED as crosshairs at each start, and counts what it could not read', () => {
+    const { marks, skipped } = readMarks(
+      'track name=peaks\nchrI\t100\t500\tpeak_1\t12\t+\nchrII 7 9\nnonsense\n',
+    )
+    expect(marks).toEqual([
+      { kind: 'line', axis: 'both', at: { contig: 'chrI', bp: 100 } },
+      { kind: 'line', axis: 'both', at: { contig: 'chrII', bp: 7 } },
+    ])
+    expect(skipped).toBe(1)
+  })
+
+  it('does not add a mark twice when the same file comes in again', () => {
+    const store = new ManualStore(`import-${Math.random()}.cool`)
+    const { marks } = readMarks(formatMarks(MARKS, 'bed') + formatMarks(MARKS, 'bedpe'))
+    expect(store.addAll(marks)).toBe(4)
+    expect(store.addAll(marks)).toBe(0)
+    expect(store.marks).toHaveLength(4)
+    expect(new Set(store.marks.map((mark) => mark.id)).size).toBe(4)
   })
 })

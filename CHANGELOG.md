@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Manual annotations can be imported (§8.1).** The card had a way out and no way back in: an
+  *Import* section above *Export* now takes a BED or BEDPE — clicked, or dropped anywhere on the
+  card. A BED row is a line on the axis its name column says; a BEDPE row is an arrowhead when both
+  anchors are one base wide and a rectangle otherwise, so the card's own exports round-trip. Marks
+  already on the map are not added twice, and a line under the zone says what each file gave.
+
 - **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
   IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
   eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC

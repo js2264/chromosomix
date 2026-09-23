@@ -1912,6 +1912,19 @@ resolution and no clipboard, since a BED is not a picture, and its two options a
 marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
 *loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
+**They come back in by the same card.** An *Import* section above *Export* holds the Tracks card's
+load zone, worded *Load marks*: click it to choose files, or drop one anywhere on the card — the zone
+lights as soon as a file crosses it, and the drop stops at the card, since the same BED let go over
+the map is a lane (§8.6) and this card is where a reader aims when they mean marks. It reads what
+the export writes, and any other BED or BEDPE, row by row rather than by extension: a BED row is a
+**line** on the axis its name column says (`vertical`, `horizontal`, `both`), and a crosshair at the
+interval's start when the name is anything else; a BEDPE row is an **arrowhead** when both anchors
+are one base wide, as the export writes one, and a **rectangle** otherwise. Each mark takes the next
+colour of the palette, since neither file carries one, and a mark already at the same place is not
+added twice — re-importing what was just exported is the accident this rule is for. A line under
+the zone says, per file, how many were added, how many were already there and how many rows were
+skipped.
+
 The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
 third is two intervals rather than one interval and a shape, because the boxes people draw are not
 one shape: a domain is a square on the diagonal, a corner peak is a small square off it, and a locus

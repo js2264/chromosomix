@@ -277,3 +277,18 @@ describe('the list', () => {
     expect(card.store.marks).toHaveLength(0)
   })
 })
+
+describe('importing', () => {
+  it('takes a BEDPE dropped anywhere on the card and says what it added', async () => {
+    const card = mount()
+    const file = new File(['I\t1000\t1001\tIV\t2000\t2001\tm9\t0\t.\t.\n'], 'marks.bedpe')
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [file], items: [], types: ['Files'] } })
+    card.form('Rectangles').dispatchEvent(drop)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(card.store.arrowheads).toHaveLength(1)
+    expect(card.form('Import').querySelector('.ann-note')?.textContent).toBe(
+      'marks.bedpe: 1 of 1 added.',
+    )
+  })
+})
