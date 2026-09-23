@@ -870,6 +870,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The Manual card's save button sits inside the card.** Its export row kept the width of its
+  longest option plus the button, which pushed the button past the card's right edge in the sidebar;
+  the format select now shrinks instead.
+
 - **The mirror moves the model, not only its labels (§25.5).** A reflection was applied to the built
   coordinates and the renderer never noticed: what it has built is keyed on the counts and the
   drawing — how many beads, drawn as what, how wide — which was everything that could change back

@@ -4317,6 +4317,16 @@ canvas.is-frozen {
   gap: 0.3rem;
 }
 
+/* The Manual card is not a `.controls-card`, so its `.panel-controls` is the
+   plain wrapping row and the export row sat in it at its max-content width —
+   the widest option, `arrowheads & rectangles (BEDPE)`, plus the save button —
+   which in the sidebar put the button past the card's edge. A line of its own,
+   allowed to be narrower than its content, so the select is what gives. */
+.manual-export .export-row {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 /* In the panel header there is no column to divide, so the row is just a row. */
 .panel-head .export-row {
   display: flex;
