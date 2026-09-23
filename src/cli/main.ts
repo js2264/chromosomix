@@ -218,7 +218,10 @@ function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cell
  */
 function originsOf(items: readonly string[]): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const item of items.flatMap((entry) => entry.split(','))) {
+  // A comma separates two origins only where a name and its colon follow it:
+  // `LR657304.1:6,374,501` — the form the framing line prints — is one origin
+  // with its digits grouped, not three.
+  for (const item of items.flatMap((entry) => entry.split(/,(?=[^,]*:)/))) {
     const at = item.lastIndexOf(':')
     if (at <= 0) {
       if (item.trim() !== '') throw new Error(`--origin ${item} is not NAME:POSITION.`)
@@ -909,7 +912,15 @@ async function runTracksOnly(
     value: 'count',
     normalise: null,
     level: 'bin',
-    label: `${basename(named)} · loaded tracks, no contact map`,
+    label:
+      `${basename(named)} · loaded tracks, no contact map` +
+      `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
+      `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}`,
+    // A task on the sequence reads what the molecules are as surely as one on
+    // the map (§8.15): an origin call on a circle read as a line splits an
+    // origin at the first base between the two ends.
+    ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
+    ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
   }
   const notes: string[] = []
   const started = Date.now()

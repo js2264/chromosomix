@@ -77,6 +77,13 @@ export function armOffsets(frame: ArmFrame): Int32Array {
   return out
 }
 
+/** How far along its arm the farthest bin is — `max |u|`. */
+function longestArm(offsets: ArrayLike<number>): number {
+  let most = 0
+  for (let i = 0; i < offsets.length; i++) most = Math.max(most, Math.abs(offsets[i]))
+  return most
+}
+
 /**
  * The arm-frame expectation of every cell of a block of one sequence.
  *
@@ -103,8 +110,13 @@ export function armExpected(
   const offsets = armOffsets(frame)
   const nrows = rowBins.length
   const ncols = colBins.length
-  const maxDelta = Math.ceil(frame.n / 2) + 1
-  const maxSigma = frame.n + 1
+  // Sized by the longest arm there is. On a circle that is half the sequence,
+  // and on a line it is whichever side of the origin is longer — up to all of
+  // it, with the origin at an end — so a table sized for a circle dropped the
+  // far cells of a line and folded its largest Σ into the next Δ.
+  const maxArm = longestArm(offsets)
+  const maxDelta = maxArm + 1
+  const maxSigma = 2 * maxArm + 1
   const whole = !(window > 0)
   // Σ is bucketed a quarter-window at a time: a box filter `window` bins wide
   // does not need every bin of Σ, and the table is then small enough for any
@@ -202,7 +214,7 @@ export function interArmProfile(
   const offsets = armOffsets(frame)
   const reach = Math.max(0, Math.round(band))
   const apart = 2 * reach + 2
-  const half = Math.ceil(n / 2) + 1
+  const half = longestArm(offsets) + 1
   const distanceSum = new Float64Array(half)
   const distanceCount = new Float64Array(half)
   const binSum = new Float64Array(n)

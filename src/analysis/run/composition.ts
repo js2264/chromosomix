@@ -70,8 +70,11 @@ export const runComposition: TrackTaskRunner = async (job) => {
   }
 
   const windowBp = Math.max(0, Math.round(numParam(job.params, 'window', 0)))
-  // An odd number of bins, centred: the window asked for, rounded to the grid.
-  const span = Math.max(1, Math.round(windowBp / binsize))
+  // An odd number of bins, centred: the window asked for, rounded to the grid
+  // and then up to the next odd count — which is the width `windowCounts`
+  // reads, so it is the width the note and the lane's name say.
+  const rounded = Math.max(1, Math.round(windowBp / binsize))
+  const span = rounded % 2 === 1 ? rounded : rounded + 1
   const circular = new Set(job.framing.circular ?? [])
   const total = grid.reduce((sum, contig) => sum + Math.max(1, Math.ceil(contig.length / binsize)), 0)
   const values: Record<(typeof lanes)[number], Float32Array> = {

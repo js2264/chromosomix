@@ -57,6 +57,7 @@ import {
 } from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
 import { TASKS, tasksFor } from './registry'
+import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
 import { rememberParams } from './memory'
 import type {
@@ -459,24 +460,12 @@ export class AnalysisWorkspace {
       }
     }
 
-    // Also before it, for the same reason: the loci are an ordinary overlay
-    // below, and their `ori` rows are a declaration the session keeps as well.
+    // Also before it, for the same reason: the call is an ordinary table below,
+    // and its origins are a declaration the session keeps as well.
     if (task.id === 'oriter') {
-      const loci = result.outputs.find(
-        (output): output is IntervalsOutput =>
-          output.kind === 'intervals' && output.id === 'oriter-loci',
-      )
-      if (loci !== undefined && loci.payload.kind === 'features') {
-        const set = loci.payload.data
-        const found: Record<string, number> = {}
-        for (let i = 0; i < set.length; i++) {
-          if (set.name?.[i] !== 'ori') continue
-          const contig = set.contigs[set.contig[i]]
-          if (contig !== undefined) found[contig] = Math.floor((set.start[i] + set.end[i]) / 2)
-        }
-        if (Object.keys(found).length > 0) {
-          this.host.originsFound?.(result.provenance.framing.uri, found)
-        }
+      const found = declaredOrigins(result.outputs)
+      if (Object.keys(found).length > 0) {
+        this.host.originsFound?.(result.provenance.framing.uri, found)
       }
     }
 

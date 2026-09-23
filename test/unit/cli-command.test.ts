@@ -425,6 +425,24 @@ describe('a run with no contact map', () => {
     expect(command).toContain('--features peaks.bed')
   })
 
+  it('still says what the molecules are declared to be', () => {
+    // An origin call run from the Chromosomes table reads the circle; the line
+    // that repeats it has to, or it repeats a different call.
+    const oriter = taskById('oriter') as AnalysisTask
+    const built = cliCommandFor({
+      task: oriter,
+      provenance: provenance('oriter', defaultsOf(oriter), {
+        ...mapless,
+        circular: ['chr'],
+        origins: { chr: 999 },
+      }),
+      context: context(),
+    })
+    const command = commandOf(built.text)
+    expect(command).toContain('--circular chr')
+    expect(command).toContain('--origin chr:1000')
+  })
+
   it('still writes the file for the same task over a map', () => {
     const overlap = taskById('overlap') as AnalysisTask
     const built = cliCommandFor({

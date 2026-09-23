@@ -136,6 +136,25 @@ describe('buildConfig', () => {
   })
 
   /**
+   * *No circles* is an answer once the file has been measured (§8.15): written
+   * as an empty list, and read back as the junction test already done, so the
+   * importer's first open does not tick what the author unticked.
+   */
+  it('carries an empty circular list for a measured file, and marks the test done on import', () => {
+    const from = 's9|circles-from'
+    remember(from, 'map:circular', [])
+    remember(from, 'map:circular-evidence', { chr: 0.8 })
+    const config = buildConfig({ state: STATE, memoryKey: from, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect(config.circular).toEqual([])
+    const to = 's9|circles-to'
+    applyConfig(config, to)
+    expect(recall(to, 'map:circular-evidence')).not.toBeNull()
+    // A file nobody measured says nothing, as an older workspace does.
+    const quiet = buildConfig({ state: STATE, memoryKey: 's9|circles-quiet', plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect('circular' in quiet).toBe(false)
+  })
+
+  /**
    * Which build wrote it.
    *
    * Asserted against the **imported** constant and never against a literal like

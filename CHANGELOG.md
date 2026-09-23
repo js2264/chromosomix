@@ -1052,7 +1052,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and not the framing a run was given, so a sequence ticked on the Chromosomes table was measured as
   a line by every task run from the app — and by a track task run where no map is on screen, which
   read an origin at the first base as split between the two ends. The run's framing carries the
-  circles and the origins now, including the one made over the tracks.
+  circles and the origins now, including the one made over the tracks, and a cached result is reused
+  only under the same declarations.
 
 - **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
   and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in

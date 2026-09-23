@@ -486,7 +486,7 @@ export function buildConfig(options: {
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
     bookmarks: recall<Bookmark[]>(key, SCOPES.bookmarks) ?? [],
     sequences: recall<string[]>(key, SCOPES.sequences) ?? [],
-    ...circularOf(recall<string[]>(key, SCOPES.circular)),
+    ...circularOf(recall<string[]>(key, SCOPES.circular), recall<unknown>(key, SCOPES.circularEvidence)),
     ...originsOf(recall<unknown>(key, SCOPES.origins)),
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
@@ -518,9 +518,15 @@ export function buildConfig(options: {
  * Absent rather than empty, on the rule the fields around it follow: a config
  * that carries the key means *these and no others*, and one that does not means
  * *this build had nothing to say*, which is what an older workspace is.
+ *
+ * **Empty once the file has been measured** (§8.15), because *no circles* is an
+ * answer then: its author may have unticked every tick the first open made, and
+ * a workspace that said nothing let the importer's first open measure again and
+ * tick them back.
  */
-function circularOf(names: string[] | null): { circular?: string[] } {
-  return Array.isArray(names) && names.length > 0 ? { circular: names } : {}
+function circularOf(names: string[] | null, evidence: unknown): { circular?: string[] } {
+  if (Array.isArray(names) && names.length > 0) return { circular: names }
+  return evidence !== null && evidence !== undefined ? { circular: [] } : {}
 }
 
 /**

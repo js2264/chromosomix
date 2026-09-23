@@ -28,7 +28,7 @@
 
 import { compileMotif, isMotifRefusal } from '../../annotations/motif'
 import { tickedContigs } from '../context'
-import type { AnalysisTask, CostEstimate, Params, ParamSpec } from '../types'
+import type { AnalysisTask, CostEstimate, Params, ParamSpec, TableOutput, TaskOutput } from '../types'
 import { READY, waitingFor } from '../types'
 
 /** parS, the ParB binding site: the bacterial consensus of Livny, Yamaichi & Waldor (2007). */
@@ -187,4 +187,26 @@ export const ORITER_TASK: AnalysisTask = {
   params: PARAMS,
   outputs: ['intervals', 'table', 'profile'],
   estimate,
+}
+
+/**
+ * The origins a run placed, 0-based, by sequence — what the session declares.
+ *
+ * Read from the table's `ori`, which is where the call put it, and not from the
+ * `ori` locus: that is a window wide and cut at the sequence's ends, so near
+ * the first base — where most assemblies of a bacterial chromosome start — its
+ * middle is up to half a window from the origin it was drawn round.
+ */
+export function declaredOrigins(outputs: readonly TaskOutput[]): Record<string, number> {
+  const table = outputs.find(
+    (output): output is TableOutput => output.kind === 'table' && output.id === 'oriter-table',
+  )
+  const found: Record<string, number> = {}
+  for (const row of table?.rows ?? []) {
+    const at = Number(row.ori)
+    if (typeof row.sequence === 'string' && Number.isFinite(at) && at >= 1) {
+      found[row.sequence] = Math.floor(at) - 1
+    }
+  }
+  return found
 }

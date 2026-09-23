@@ -1750,10 +1750,13 @@ bins by default and the whole sequence at `0`. The window is what lets the
 expectation follow what changes slowly from origin to terminus — the arms are held
 tightest near the origin — and not what changes quickly, which is the plaid left
 behind for the eye and for the correlation. It replaces the decay wherever the O/E
-or the baseline would use it, turns the O/E on with it, and is named — `arm O/E`
-in the key, which is one line two numbers wide, and `O/E along the arms` in the
-caption. The score picker's correlation is then of that ratio, and it is the
-picture the compartment call of §18.8 makes along the arms. **It is weakest where
+or the baseline would use it and turns the O/E on with it. It is measured in the
+cells of the block on screen, whatever grid that was read on: a pooled read or
+one from a sibling rung is placed by base pairs, with the window carried over to
+its cells. It is named `arm O/E` in the key, which is one line two numbers wide,
+and `O/E along the arms` in the caption. The score picker's correlation is then
+of that ratio, and it is the picture the compartment call of §18.8 makes along
+the arms. **It is weakest where
 the two diagonals cross**, at the origin and at the terminus, where a pair close
 along the DNA is averaged with pairs that are not; that is stated rather than
 modelled, because the model would be of two small stretches of a chromosome.
@@ -3087,7 +3090,9 @@ assembled organisms, and a declaration is made about a molecule somebody knows
 the shape of.
 
 It is kept per file and carried in an exported workspace, beside the tracks
-somebody loaded and the marks they drew. **Not in the view state**: a bare
+somebody loaded and the marks they drew — as an empty list once the file has been
+measured, since *no circles* is then an answer an importer's first open must not
+measure its way past. **Not in the view state**: a bare
 `#`-hash link names a place and a colour scale (§5.5), and this is a fact about
 the assembly rather than about the window.
 
@@ -5927,8 +5932,8 @@ what a job that never met a form means — a stored session, or a `metacooler-ru
 because a binding site is a consensus and a genome carries variants of it: its sites carry how many
 they differ by, and its name says what it was asked. *Base composition* — GC content, GC skew
 `(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin of the open map and under its names,
-each a lane like any other and each written as a bigWig; windows wider than a bin are centred on it
-and wrap on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
+each a lane like any other and each written as a bigWig; a window wider than a bin is an odd number
+of them centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
 chromosome's folding, since the map is read *from* the origin: the two turning points of the
 cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is
 decided as Bacchus decides it (Lamy-Besnier et al. 2023) — the one nearer the matS cluster where ten
@@ -7181,9 +7186,10 @@ the result's, so they are read off the session and, with no session to ask, the 
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
 the sequences declared circular and the origins declared on them (§8.15), and the ticked cells of an
 `.scool` (§3.8). A line without them repeats a different run, so each is a reserved flag of the
-command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table prints it),
-`--cell` — written whenever it differs from the shell's default and refused before the run when the
-file cannot answer it. The window is *not* one of them: no runner reads the framing's
+command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table prints it,
+digits grouped or not), `--cell` — written whenever it differs from the shell's default and refused
+before the run when the file cannot answer it. The two about the molecules are written for a run with
+no map as well: an origin call from the Chromosomes table reads the circle, and so must its line. The window is *not* one of them: no runner reads the framing's
 extent, which decides only whether the block on screen can be reused, so `--window` is written for
 the record's label and the numbers are the same either way. An imported `.pairs` writes the
 `--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).

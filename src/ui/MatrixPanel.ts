@@ -677,7 +677,20 @@ export interface TurnPresentation {
 export interface ArmsPresentation {
   /** The window along the arms in bins while it is on; `undefined` while off. */
   window: number | undefined
-  frame: { startBin: number; n: number; origin: number; circular: boolean } | null
+  /**
+   * The sequence the arms are of, in the **open** map's bins: where it starts
+   * on the axis, how many bins it has and which holds the origin — with that
+   * grid's bin size and the sequence's length in base pairs, so a block read on
+   * another grid can be placed on it.
+   */
+  frame: {
+    startBin: number
+    n: number
+    origin: number
+    circular: boolean
+    binsize: number
+    length: number
+  } | null
   /** Why it cannot be offered on this view, or `null` when it can. */
   refusal: string | null
   /** Absent on a panel that applies it without owning the control. */
@@ -837,36 +850,45 @@ function armsKey(arms: ArmsPresentation | undefined): string {
 /**
  * The arm frame for this block, where the arms are on and there is one.
  *
- * Each row and column is placed by its first bin, taken modulo the sequence:
- * a block read round a circle carries **unwrapped** extents (`worker/wrap.ts`),
- * so the bin a row stands for is its position in that space folded back onto
- * the sequence — which is what reads a map rotated to put the origin in the
- * middle in the same frame as the plain one.
+ * **In the block's own cells**, which are not the open map's bins in general: a
+ * pooled read sums several of them, and a read from a sibling rung of an
+ * `.mcool` is on another grid altogether, with extents in that grid's bins.
+ * Each row is placed by where it is *in base pairs* — through the same axis
+ * runs the ticks are placed by, which is also what folds a block read round a
+ * circle (`worker/wrap.ts`) back onto the sequence — and the frame and its
+ * window are carried over to the block's resolution. A frame kept at the open
+ * rung placed a coarse block's rows as the first stretch of a longer sequence,
+ * all on one arm, and sized its tables for a resolution nobody was drawing.
  */
-function armsFor(
+export function armsFor(
   data: MatrixResult,
   arms: ArmsPresentation | undefined,
+  bpPerCell: number,
 ): Derivation['arms'] | undefined {
   if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
-  if (arms.refusal !== null) return undefined
-  const { startBin, n, origin, circular } = arms.frame
-  if (!(n > 0)) return undefined
-  const step = Math.max(1, data.binsPerCell ?? 1)
-  const place = (from: number, count: number): Int32Array => {
+  if (arms.refusal !== null || data.level !== 'bin') return undefined
+  const { n, origin, circular, binsize, length } = arms.frame
+  if (!(n > 0) || !(binsize > 0) || !(bpPerCell > 0) || !(length > 0)) return undefined
+  const cells = Math.max(1, Math.ceil(length / bpPerCell))
+  const originCell = Math.min(cells - 1, Math.floor(((origin + 0.5) * binsize) / bpPerCell))
+  const place = (runs: AxisGroup[], blockStart: number, count: number): Int32Array => {
+    const axis = locusAxisFrom({ runs, blockStart, level: 'bin', binsize: bpPerCell, contigLength: () => length })
     const out = new Int32Array(count)
-    for (let i = 0; i < count; i++) {
-      const at = from + i * step - startBin
-      out[i] = ((at % n) + n) % n
+    for (const segment of axis?.segments ?? []) {
+      for (let i = Math.max(0, segment.unitStart); i < Math.min(count, segment.unitEnd); i++) {
+        const bp = segment.bpStart + (i - segment.unitStart + 0.5) * segment.bpPerUnit
+        const cell = Math.floor(bp / bpPerCell)
+        out[i] = ((cell % cells) + cells) % cells
+      }
     }
     return out
   }
   return {
-    frame: { n, origin, circular },
-    rowBins: place(data.rowExtent[0], data.nrows),
-    colBins: place(data.colExtent[0], data.ncols),
-    // In the sequence's own bins, as the rows are placed: the kernel measures
-    // positions along the arms in those, however wide a pooled cell is.
-    window: arms.window,
+    frame: { n: cells, origin: originCell, circular },
+    rowBins: place(data.rowGroups, data.rowExtent[0], data.nrows),
+    colBins: place(data.colGroups, data.colExtent[0], data.ncols),
+    // The same stretch of the arms, counted in the block's cells.
+    window: arms.window > 0 ? Math.max(1, Math.round((arms.window * binsize) / bpPerCell)) : 0,
   }
 }
 
@@ -1212,6 +1234,8 @@ export class MatrixPanel {
   private expectedButton: HTMLElement | null = null
   /** The arm-frame toggle beside it, where the view is one sequence (§8.15). */
   private armsButton: HTMLButtonElement | null = null
+  /** The `ori` action beside it, shown where there is a circle and an origin. */
+  private centreButton: HTMLButtonElement | null = null
 
   /**
    * The despeckle picker, lit from {@link setDerive} for the O/E toggle's
@@ -2160,36 +2184,37 @@ export class MatrixPanel {
       // Beside the O/E it modifies, and only where there is one sequence for it
       // to be about. A word, like the O/E's: the thing it divides out has no
       // shape of its own to draw a mark from.
-      const arms = derive.arms
-      if (arms !== undefined && arms.onChange !== undefined) {
-        const onArms = arms.onChange
-        const armsButton = el('button', {
-          class: 'btn btn-icon btn-toggle btn-word',
-          title: ARMS_HINT,
-          attrs: { type: 'button', 'aria-label': ARMS_HINT },
-        })
-        armsButton.append(el('span', { class: 'btn-word-text', text: 'arms' }))
-        armsButton.addEventListener('click', () => {
-          const held = this.options.derive?.arms
-          onArms(held?.window === undefined ? DEFAULT_ARM_WINDOW : undefined)
-        })
-        this.armsButton = armsButton
-        this.paintArms(arms)
-        picture.push(armsButton)
-      }
+      //
+      // **Made with the O/E and shown by the presentation**, never decided once
+      // here: the row is built with the panel, and the origin a task places, or
+      // the circle the first open ticks, arrives after it — so a button built
+      // only if the answer was already in stayed missing until the view was
+      // rebuilt, and an `ori` that captured its origin centred on the old one
+      // after a second run moved it. Both read the live presentation instead.
+      const armsButton = el('button', {
+        class: 'btn btn-icon btn-toggle btn-word',
+        title: ARMS_HINT,
+        attrs: { type: 'button', 'aria-label': ARMS_HINT },
+      })
+      armsButton.append(el('span', { class: 'btn-word-text', text: 'arms' }))
+      armsButton.addEventListener('click', () => {
+        const held = this.options.derive?.arms
+        held?.onChange?.(held.window === undefined ? DEFAULT_ARM_WINDOW : undefined)
+      })
+      this.armsButton = armsButton
+      picture.push(armsButton)
       // An action rather than a toggle, like the diagonal's: it moves the view
       // to one place and there is no state to read off it afterwards.
-      if (arms?.onCentre !== undefined) {
-        const onCentre = arms.onCentre
-        const centre = el('button', {
-          class: 'btn btn-icon btn-word',
-          title: CENTRE_HINT,
-          attrs: { type: 'button', 'aria-label': CENTRE_HINT },
-        })
-        centre.append(el('span', { class: 'btn-word-text', text: 'ori' }))
-        centre.addEventListener('click', () => onCentre())
-        picture.push(centre)
-      }
+      const centre = el('button', {
+        class: 'btn btn-icon btn-word',
+        title: CENTRE_HINT,
+        attrs: { type: 'button', 'aria-label': CENTRE_HINT },
+      })
+      centre.append(el('span', { class: 'btn-word-text', text: 'ori' }))
+      centre.addEventListener('click', () => this.options.derive?.arms?.onCentre?.())
+      this.centreButton = centre
+      picture.push(centre)
+      this.paintArms(derive.arms)
     }
 
     if (picture.length > 0) {
@@ -2900,8 +2925,10 @@ export class MatrixPanel {
    * reader concludes is broken.
    */
   private paintArms(arms: ArmsPresentation | undefined): void {
+    this.centreButton?.classList.toggle('hidden', arms?.onCentre === undefined)
     const button = this.armsButton
     if (button === null) return
+    button.classList.toggle('hidden', arms?.onChange === undefined)
     const on = arms?.window !== undefined && arms.refusal === null
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
@@ -5794,7 +5821,9 @@ export class MatrixPanel {
       // (`render/smooth.ts`).
       smooth: this.options.derive?.smooth ?? '0',
     }
-    const arms = armsFor(data, this.options.derive?.arms)
+    // `options.binsize` is the block's own — the read's bin size times its
+    // pooling, set from the block before it is derived (`setResolution`).
+    const arms = armsFor(data, this.options.derive?.arms, this.options.binsize)
     if (arms !== undefined) derivation.arms = arms
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
     // A compared pair is never deferred: two blocks would need two jobs, and a

@@ -62,6 +62,20 @@ describe('the arm-frame expectation', () => {
     for (let at = 0; at < map.length; at++) expect(map[at] / expected[at]).toBeCloseTo(1, 9)
   })
 
+  // A line is two arms of unequal length, and with the origin at an end it is
+  // one arm the length of the sequence: every Δ and Σ it has must be in the
+  // table, with or without a window.
+  it('reproduces the model on a line whatever side of it the origin is on', () => {
+    for (const origin of [0, 10, 59]) {
+      const line: ArmFrame = { n: 60, origin, circular: false }
+      const map = build(line, (kind, delta) => model(kind, delta))
+      for (const window of [0, 8]) {
+        const expected = armExpected(map, all(line.n), all(line.n), line, window)
+        for (let at = 0; at < map.length; at++) expect(map[at] / expected[at]).toBeCloseTo(1, 9)
+      }
+    }
+  })
+
   it('follows a slow change along the arms when given a window, and not without one', () => {
     // Alignment strongest at the origin and fading towards the terminus.
     const fade = (sigma: number): number => 1 - sigma / (2 * frame.n)
@@ -144,6 +158,14 @@ describe('the secondary diagonal', () => {
     for (let d = 2; d <= 20; d++) byDistance[d] = 4
     byDistance[35] = 4
     expect(interArmSummary(byDistance).reach).toBe(20)
+  })
+
+  it('measures a line out to the end of its longer arm', () => {
+    // Origin at bin 10 of 80: one arm of 10 bins, one of 69.
+    const line: ArmFrame = { n: 80, origin: 10, circular: false }
+    const oe = build(line, (kind, delta) => (kind === 1 && delta <= 1 ? 4 : 1))
+    const { byDistance } = interArmProfile(oe, line, 1)
+    expect(byDistance.length).toBe(70)
   })
 
   it('scores a chromosome whose arms are not aligned at zero, with no reach', () => {

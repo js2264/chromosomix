@@ -812,6 +812,16 @@ describe('sameRecipe', () => {
     // spelled must not invalidate a cache.
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, label: 'reworded' } })).toBe(true)
   })
+
+  it('rejects a changed declaration of what the molecules are', () => {
+    // A circle ticked, or an origin placed, since the result was computed: its
+    // decay was measured along a line, or its arms from another place (§8.15).
+    const { params } = provenance
+    const round = { ...provenance, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } }
+    expect(sameRecipe(provenance, { params, framing: { ...FRAMING, circular: ['chrI'] } })).toBe(false)
+    expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 11 } } })).toBe(false)
+    expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } })).toBe(true)
+  })
 })
 
 describe('a view with no map', () => {

@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import type { SequenceReader, TrackJobContext } from '@/analysis/job'
 import { runComposition } from '@/analysis/run/composition'
 import { runOriTer } from '@/analysis/run/oriter'
+import { declaredOrigins } from '@/analysis/tasks/oriter'
 import type {
   AnalysisFraming,
   IntervalsOutput,
@@ -110,6 +111,14 @@ describe('base composition', () => {
     expect(values.indexOf(Math.max(...values))).toBe(9)
   })
 
+  it('names the window it read, which is an odd number of bins', async () => {
+    // 20 kb over 10 kb bins is two bins, and a centred window is an odd count:
+    // three were read, so three are what the note and the lane's name say.
+    const { outputs, notes } = await run(runComposition, { window: 20_000 })
+    expect(notes.some((note) => note.includes('over 3 bins (30,000 bp)'))).toBe(true)
+    expect(lane(outputs, 'composition-gc')?.label).toContain('30,000 bp window')
+  })
+
   it('makes only the lanes ticked', async () => {
     const { outputs } = await run(runComposition, { gc: false, atSkew: false, cumulative: false })
     expect(outputs.map((one) => one.id)).toEqual(['composition-gcskew'])
@@ -133,6 +142,9 @@ describe('the origin and terminus', () => {
 
     const table = outputs.find((one): one is TableOutput => one.kind === 'table')
     expect(table?.rows[0]).toMatchObject({ sequence: 'chr', parS: 2, parSCluster: 2, topology: 'circular' })
+    // The origin declared is the call's, not the middle of its locus: this one
+    // is within half a window of the first base, where the locus is cut short.
+    expect(declaredOrigins(outputs).chr).toBe(Number(table?.rows[0]?.ori) - 1)
     expect(String(table?.rows[0]?.rule)).toContain('parS')
     // Both planted parS sites, as their own set.
     const pars = outputs.find(

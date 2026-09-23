@@ -207,24 +207,27 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     )
   }
 
-  // The three facts of a framing a session sets from the picture and a shell
-  // has to be told — each an input to the arithmetic, so a line without it
-  // repeats a different run. The count column and no circular sequence are the
-  // shell's own defaults and go unsaid, as the defaults of the parameters do
-  // not: they are properties of the file rather than of a build.
+  // The facts of a framing a session sets from the picture and a shell has to
+  // be told — each an input to the arithmetic, so a line without it repeats a
+  // different run. The count column and no circular sequence are the shell's
+  // own defaults and go unsaid, as the defaults of the parameters do not: they
+  // are properties of the file rather than of a build.
+  //
+  // What the molecules are declared to be first, with a map or without one: a
+  // task on the sequence reads a circle as surely as one on the matrix (§8.15).
+  const circular = (framing.circular ?? []).filter((name) => name !== '')
+  if (circular.length > 0) args.push('--circular', quote(circular.join(',')))
+  // 1-based on the line, as a reader reads it off the Origin and terminus
+  // table; the framing keeps it 0-based, like every coordinate it holds.
+  const origins = Object.entries(framing.origins ?? {}).filter(
+    ([name, at]) => name !== '' && Number.isFinite(at),
+  )
+  if (origins.length > 0) {
+    args.push('--origin', quote(origins.map(([name, at]) => `${name}:${at + 1}`).join(',')))
+  }
   if (!mapless) {
     if (framing.value !== '' && framing.value !== COUNT_COLUMN) {
       args.push('--value', quote(framing.value))
-    }
-    const circular = (framing.circular ?? []).filter((name) => name !== '')
-    if (circular.length > 0) args.push('--circular', quote(circular.join(',')))
-    // 1-based on the line, as a reader reads it off the Origin and terminus
-    // table; the framing keeps it 0-based, like every coordinate it holds.
-    const origins = Object.entries(framing.origins ?? {}).filter(
-      ([name, at]) => name !== '' && Number.isFinite(at),
-    )
-    if (origins.length > 0) {
-      args.push('--origin', quote(origins.map(([name, at]) => `${name}:${at + 1}`).join(',')))
     }
     // The ticked cells of an `.scool` are the session's and not the record's
     // (§3.8), so they are read off the context, and a command written with no

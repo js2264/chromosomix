@@ -2478,9 +2478,6 @@ export class Session {
       this.paintSequences()
       this.setGeneral([this.infoPanel.el])
       this.host.activity(this)
-      // Not awaited: three small reads per sequence, on the file's first open
-      // only, and nothing on screen waits for them (§8.15).
-      void this.detectCircular(uri)
       // Destroyed, not merely dropped: a scan of the *previous* file may still
       // be running, and the reference going away is not what stops it.
       this.wholeFile?.view.destroy()
@@ -2527,6 +2524,13 @@ export class Session {
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
       named()
+      // Not awaited: three small reads per sequence, on the file's first open
+      // only, and nothing on screen waits for them (§8.15). After the
+      // navigation, because the declarations are kept under the key of the file
+      // the *state* names: asked before it, the store was the previous file's,
+      // so a file opened over one already measured was never measured, and one
+      // opened over a measurement still running had its ticks written there.
+      void this.detectCircular(uri)
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -5137,6 +5141,9 @@ export class Session {
   private async detectCircular(uri: string): Promise<void> {
     const file = this.file
     if (file === null || file.uri !== uri || file.info.hasGenomes) return
+    // The store is the file the state names; measuring one file into another's
+    // declarations is the one mistake here that outlives the tab.
+    if (this.sessionKey() !== this.memoryKey(uri)) return
     const store = this.circularStore()
     if (store === null || store.evidence() !== null) return
     const binsize = file.info.binsize ?? 0
@@ -5438,6 +5445,10 @@ export class Session {
     const names = this.contigNames()
     if (names === null || contigOf(state.region, names) !== name) return
     this.current?.setCircular?.(on)
+    // The arms are read round the circle or along the line (§8.15), and the
+    // `ori` framing exists only on a circle: the map's presentation of both is
+    // built from the declaration, so it is built again with it.
+    this.rederive()
   }
 
   /**
@@ -6754,10 +6765,12 @@ export class Session {
     if (name === null) return {}
     let startBin = 0
     let bins = 0
-    for (const [contig, length] of contigPairs(file.contigs)) {
-      const n = binsForLength(length, binsize)
+    let length = 0
+    for (const [contig, bp] of contigPairs(file.contigs)) {
+      const n = binsForLength(bp, binsize)
       if (contig === name) {
         bins = n
+        length = bp
         break
       }
       startBin += n
@@ -6779,6 +6792,8 @@ export class Session {
                 n: bins,
                 origin: Math.max(0, Math.min(bins - 1, Math.floor(origin.at / binsize))),
                 circular,
+                binsize,
+                length,
               },
         refusal:
           origin === undefined
@@ -6791,9 +6806,16 @@ export class Session {
           this.store.patch({ arms: window, ...(window === undefined ? {} : { oe: true }) })
           this.rederive()
         },
+        // The origin read when pressed, not when the view was built: a second
+        // run of the task moves it, and the button must follow.
         ...(origin === undefined || !circular
           ? {}
-          : { onCentre: () => this.centreOnOrigin(file.uri, name, origin.at) }),
+          : {
+              onCentre: () => {
+                const at = this.originStore()?.get(name)?.at
+                if (at !== undefined) this.centreOnOrigin(file.uri, name, at)
+              },
+            }),
       },
     }
   }

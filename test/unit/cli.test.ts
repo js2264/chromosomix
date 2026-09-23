@@ -663,16 +663,17 @@ describe('the framing flags', () => {
     expect(complained()).toMatch(/has no cells to choose from/)
   })
 
-  it('records an origin, 1-based as it was typed', async () => {
+  it('records an origin, 1-based as it was typed, digits grouped or not', async () => {
     reset()
     const where = join(directory, 'origin')
+    // Grouped as the framing line prints it, beside a second origin.
     expect(
-      await main(['interarm', sample, '--origin', 'chrII:1001', '--out', where, '--quiet']),
+      await main(['interarm', sample, '--origin', 'chrII:1,001,chrI:5', '--out', where, '--quiet']),
     ).toBe(0)
     const table = (await readdir(where)).find((name) => /interarm-table\.tsv$/.test(name))
     expect(table).toBeDefined()
     const text = await readFile(join(where, table as string), 'utf8')
-    expect(text).toMatch(/^# framing: .*origin chrII:1,001/m)
+    expect(text).toMatch(/^# framing: .*origin chrII:1,001, chrI:5/m)
   })
 
   it('refuses an origin on a sequence the file has not got, or past its end', async () => {
