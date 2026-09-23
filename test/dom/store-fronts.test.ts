@@ -188,6 +188,57 @@ describe('IGV’s genomes', () => {
   })
 })
 
+describe('the DNA Bacterial Zoo', () => {
+  it('reads its one file on the gesture and draws a card a species, its session the button', async () => {
+    const requested = serving({
+      'dbz/store.json': JSON.stringify({
+        kind: STORE_KIND,
+        version: STORE_VERSION,
+        name: 'DNA Bacterial Zoo',
+        columns: [{ key: 'species', label: 'Species' }],
+        entries: [
+          {
+            label: 'V_cholerae — map with 8 tracks',
+            uri: 'V/V.metacooler.json',
+            kind: 'workspace',
+            fields: { species: 'V_cholerae', id: 'CC340', sequences: '2 sequences', tracks: '8' },
+          },
+          { label: 'V_cholerae', uri: 'V/V.mcool', kind: 'map', fields: { species: 'V_cholerae', id: 'CC340' } },
+        ],
+      }),
+    })
+    const opened: StoreEntry[] = []
+    const front = frontById('dbz')
+    const view = new GenomesView({ front: front as NonNullable<typeof front>, host: host(opened) })
+    document.body.appendChild(view.el)
+    await vi.waitFor(() => expect(all(view.el, '.genomes-card').length).toBe(1))
+    // One request, for the rows: the sessions are among them, not beside them.
+    expect(requested).toEqual(['https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'])
+    const [card] = all(view.el, '.genomes-card')
+    expect(textsOf(card, '.gallery-card-title')).toEqual(['V_cholerae'])
+    expect(textsOf(card, '.gallery-card-chips .portal-chip')).toEqual(['CC340', '2 sequences', '8 tracks'])
+    ;(card.querySelector('.gallery-card-open') as HTMLButtonElement).click()
+    expect(opened[0]?.kind).toBe('workspace')
+    // The filter names the column the file calls the group, once the file is read.
+    expect((view.el.querySelector('.portal-search') as HTMLInputElement).placeholder).toBe('filter by species')
+    expect(view.fileNow()?.name).toBe('DNA Bacterial Zoo')
+  })
+
+  it('says what publishes it while it has not been uploaded — not the Stores workflow', async () => {
+    serving({})
+    const front = frontById('dbz')
+    const view = new GenomesView({ front: front as NonNullable<typeof front>, host: host([]) })
+    document.body.appendChild(view.el)
+    await vi.waitFor(() =>
+      expect(view.el.querySelector('.portal-status')?.textContent).toContain(
+        'Nothing has been published for DNA Bacterial Zoo yet; scripts/DBZ_store.py builds it',
+      ),
+    )
+    expect(view.el.querySelector('.portal-status')?.textContent).not.toContain('Stores workflow')
+    expect(view.el.querySelector('.portal-search')?.closest('.hidden')).not.toBeNull()
+  })
+})
+
 describe('a store by URL', () => {
   it('reads the typed URL into a portal, offers to remember it, and forgets it again', async () => {
     serving({
@@ -221,6 +272,136 @@ describe('a store by URL', () => {
     expect(changes).toBe(1)
     ;(buttonNamed(view.el, 'forget this store') as HTMLButtonElement).click()
     expect(readStoreRows()).toEqual([])
+  })
+
+  it('draws one card per group when the file asks for cards, its session the button', async () => {
+    serving({
+      'store.json': JSON.stringify({
+        kind: STORE_KIND,
+        version: STORE_VERSION,
+        name: 'Bacteria',
+        layout: 'cards',
+        group: 'species',
+        headline: ['id', 'sequences'],
+        columns: [
+          { key: 'species', label: 'Species' },
+          { key: 'id', label: 'Sample ID' },
+        ],
+        entries: [
+          {
+            label: 'B_subtilis — map with 2 tracks',
+            uri: 'bsub/bsub.metacooler.json',
+            kind: 'workspace',
+            note: 'Coverage, Insulation',
+            fields: { species: 'B_subtilis', id: 'CC339', sequences: '1 sequence', tracks: '2' },
+          },
+          {
+            label: 'B_subtilis',
+            uri: 'bsub/bsub.mcool',
+            kind: 'map',
+            fields: { species: 'B_subtilis', id: 'CC339', sequences: '1 sequence' },
+          },
+          {
+            label: 'B_subtilis · Insulation boundaries',
+            uri: 'bsub/insulation.bed',
+            kind: 'genome',
+            note: '112 called',
+            fields: { species: 'B_subtilis' },
+          },
+          // No session: the map carrying a shelf is the card's button instead.
+          {
+            label: 'V_cholerae',
+            uri: 'vcho/vcho.mcool',
+            kind: 'map',
+            fields: { species: 'V_cholerae', id: 'CC340', sequences: '2 sequences' },
+            tracks: [{ label: 'Coverage', url: 'vcho/coverage.bw' }],
+          },
+          { label: 'README', uri: 'notes.bed', kind: 'genome' },
+        ],
+      }),
+    })
+    const opened: StoreEntry[] = []
+    const view = new CustomView({ front: customStore(), host: host(opened), view: EMPTY_VIEW, onView: () => undefined })
+    document.body.appendChild(view.el)
+    const box = view.el.querySelector('.custom-url') as HTMLInputElement
+    box.value = 'https://lab.example/store.json'
+    ;(buttonNamed(view.el, 'open') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(all(view.el, '.genomes-card').length).toBe(2))
+    // Cards, not the portal: no facet rail and no flat rows over them.
+    expect(view.el.querySelector('.facet-rail')).toBeNull()
+    expect(view.fileNow()?.name).toBe('Bacteria')
+
+    const [bsub, vcho] = all(view.el, '.genomes-card')
+    expect(textsOf(bsub, '.gallery-card-title')).toEqual(['B_subtilis'])
+    expect(textsOf(bsub, '.gallery-card-chips .portal-chip')).toEqual(['CC339', '1 sequence', '2 tracks'])
+    // What the card is of, solid; its count, dim — as IGV's assembly and count are.
+    expect(textsOf(bsub, '.gallery-card-chips .portal-chip-dim')).toEqual(['2 tracks'])
+    // The session is the button and not also a row; the rows under the fold are
+    // named without the card's own name, which stays in the tooltip.
+    expect(bsub.querySelector('.gallery-card-more > summary')?.textContent).toBe('2 files')
+    expect(textsOf(bsub, '.portal-name')).toEqual(['B_subtilis', 'Insulation boundaries'])
+    expect(all(bsub, '.portal-name')[1].getAttribute('title')).toBe('B_subtilis · Insulation boundaries — 112 called')
+    ;(bsub.querySelector('.gallery-card-open') as HTMLButtonElement).click()
+    expect(opened.at(-1)?.kind).toBe('workspace')
+
+    const lead = vcho.querySelector('.gallery-card-open') as HTMLButtonElement
+    expect(lead.title).toContain('with its 1 track already on')
+    lead.click()
+    expect(opened.at(-1)?.label).toBe('V_cholerae')
+
+    // A row in no group is kept, under the cards.
+    expect(view.el.querySelector('.gallery-loose > summary')?.textContent).toBe('1 more file, in no species')
+
+    const filter = view.el.querySelector('.portal-search') as HTMLInputElement
+    expect(filter.placeholder).toBe('filter by species')
+    filter.value = 'cc340'
+    filter.dispatchEvent(new Event('input'))
+    expect(textsOf(view.el, '.genomes-card .gallery-card-title')).toEqual(['V_cholerae'])
+    expect(view.el.querySelector('.gallery-loose')).toBeNull()
+  })
+
+  it('draws a store that asks for cards with no group as the list', async () => {
+    serving({
+      'store.json': JSON.stringify({
+        kind: STORE_KIND,
+        version: STORE_VERSION,
+        name: 'No group',
+        layout: 'cards',
+        columns: [],
+        entries: [{ label: 'One', uri: 'one.mcool', kind: 'map' }],
+      }),
+    })
+    const view = new CustomView({ front: customStore(), host: host([]), view: EMPTY_VIEW, onView: () => undefined })
+    document.body.appendChild(view.el)
+    const box = view.el.querySelector('.custom-url') as HTMLInputElement
+    box.value = 'https://lab.example/store.json'
+    ;(buttonNamed(view.el, 'open') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(all(view.el, '.portal-row').length).toBe(1))
+    expect(all(view.el, '.genomes-card')).toHaveLength(0)
+  })
+
+  it('folds the list under a heading per group when the file names one and asks for no cards', async () => {
+    serving({
+      'store.json': JSON.stringify({
+        kind: STORE_KIND,
+        version: STORE_VERSION,
+        name: 'Grouped',
+        group: 'species',
+        columns: [{ key: 'species', label: 'Species' }],
+        entries: [
+          { label: 'One', uri: 'one.mcool', kind: 'map', fields: { species: 'E_coli' } },
+          { label: 'Two', uri: 'two.bw', kind: 'genome', fields: { species: 'E_coli' } },
+          { label: 'Three', uri: 'three.mcool', kind: 'map', fields: { species: 'V_cholerae' } },
+        ],
+      }),
+    })
+    const view = new CustomView({ front: customStore(), host: host([]), view: EMPTY_VIEW, onView: () => undefined })
+    document.body.appendChild(view.el)
+    const box = view.el.querySelector('.custom-url') as HTMLInputElement
+    box.value = 'https://lab.example/store.json'
+    ;(buttonNamed(view.el, 'open') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(all(view.el, '.portal-row').length).toBe(3))
+    expect(textsOf(view.el, '.portal-group .portal-group-key')).toEqual(['E_coli', 'V_cholerae'])
   })
 
   it('refuses an address that is not http(s) before fetching anything', () => {

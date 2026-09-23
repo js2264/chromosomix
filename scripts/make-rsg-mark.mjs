@@ -1,7 +1,11 @@
 /**
- * Generate `src/ui/stores/rsg-mark.generated.ts`: the RSG store's tile mark.
+ * Generate `src/ui/stores/rsg-mark.generated.ts` and `dbz-mark.generated.ts`:
+ * the tile marks of the lab's two stores, RSG's and the DNA Bacterial Zoo's.
  *
  *     npm run icons:rsg
+ *
+ * Both are drawn the one way described here, over two different maps — the
+ * second is at *The DNA Bacterial Zoo's map*, below.
  *
  * The mark is a Hi-C map 100 bins square whose diagonal spells *RSG*. That is
  * the whole idea: every other store's tile is a lettermark because its logo is
@@ -133,6 +137,27 @@ const G_SHAPE = [
   { kind: 'ring', cx: 13, cy: 13, rxO: 12, ryO: 13, rxI: 6.5, ryI: 8, a0: 60, a1: 359.9 },
   // The spur: what tells a G from a C, jutting in from the right at the waist.
   { kind: 'rect', x0: 12.5, y0: 10.5, x1: 25, y1: 15.5 },
+]
+
+const B_SHAPE = [
+  // The stem, and two bowls on it: the lower one wider, as a B's is, so the
+  // letter stands on its foot rather than on its head.
+  { kind: 'rect', x0: 0, y0: 0, x1: 6, y1: 26 },
+  { kind: 'ring', cx: 6, cy: 6.5, rxO: 13, ryO: 6.5, rxI: 7.5, ryI: 2.6, a0: 270, a1: 90 },
+  { kind: 'ring', cx: 6, cy: 19.5, rxO: 16, ryO: 6.5, rxI: 10, ryI: 2.6, a0: 270, a1: 90 },
+]
+
+const D_SHAPE = [
+  // The stem, and one bowl the full height of it.
+  { kind: 'rect', x0: 0, y0: 0, x1: 6, y1: 26 },
+  { kind: 'ring', cx: 6, cy: 13, rxO: 19, ryO: 13, rxI: 12.5, ryI: 7.5, a0: 270, a1: 90 },
+]
+
+const Z_SHAPE = [
+  // Two bars and the stroke between them, top right to bottom left.
+  { kind: 'rect', x0: 1, y0: 0, x1: 25, y1: 5.5 },
+  { kind: 'rect', x0: 1, y0: 20.5, x1: 25, y1: 26 },
+  { kind: 'seg', x0: 21.5, y0: 4, x1: 4.5, y1: 22, w: 6.5 },
 ]
 
 /** Is `a` (degrees, `[0, 360)`) inside the arc from `a0` to `a1`, which may wrap? */
@@ -302,14 +327,14 @@ function contacts(i, j) {
   return v ** 0.72 * (0.92 + 0.16 * grain(i, j))
 }
 
-/** The 100x100 matrix, as one palette index a bin. */
-function matrix() {
+/** The 100x100 matrix of one mark, as one palette index a bin. */
+function matrix(letters, contacts) {
   const out = new Uint8Array(N * N)
   for (let i = 0; i < N; i++) {
     for (let j = 0; j < N; j++) {
       const base = Math.max(0, Math.min(1, contacts(i, j)))
       let covered = 0
-      for (const { shape, at } of LETTERS) {
+      for (const { shape, at } of letters) {
         const x = j - at
         const y = i - at
         if (x >= 0 && x < LETTER && y >= 0 && y < LETTER) covered = ink(shape, x, y)
@@ -324,6 +349,63 @@ function matrix() {
     }
   }
   return out
+}
+
+// --- the DNA Bacterial Zoo's map ------------------------------------------------
+
+/**
+ * The same idea for the lab's other shelf, over a **bacterial** map — which a
+ * reader who knows one tells from RSG's at a glance, by two things no map of a
+ * eukaryote has:
+ *
+ * 1. **A circle.** A bacterial chromosome joins its own ends, so the first bin
+ *    and the last are neighbours and separation is measured round the circle:
+ *    the two corners that are paper on RSG's mark are warm on this one.
+ * 2. **The second diagonal.** Condensin loaded at the origin zips the two arms
+ *    together, so a locus meets its mirror across the origin — the
+ *    anti-diagonal that crosses the main one in an X, sharp near the origin and
+ *    fading towards the terminus. The origin is the middle bin, as the maps of
+ *    *B. subtilis* and *C. crescentus* are usually drawn, so the X crosses at
+ *    the waist of the *B*.
+ *
+ * Its domains are small ones, as chromosomal interaction domains are, and there
+ * is no plaid: a bacterium has no A/B compartments to make one.
+ */
+const DBZ_LETTERS = [
+  { shape: D_SHAPE, at: 4 },
+  { shape: B_SHAPE, at: 37 },
+  { shape: Z_SHAPE, at: 70 },
+]
+
+/** Chromosomal interaction domains, as `[first, last]` bins: many, small, and out of step with the letters. */
+const CIDS = [
+  [0, 9], [10, 21], [22, 29], [30, 43], [44, 55], [56, 62], [63, 76], [77, 88], [89, 99],
+]
+
+function cidOf(i) {
+  return CIDS.findIndex(([first, last]) => i >= first && i <= last)
+}
+
+/** Contact frequency at `(i, j)` on a circular chromosome whose origin is the middle bin. */
+function dbzContacts(i, j) {
+  const linear = Math.abs(i - j)
+  // Round the circle: bin 0 and bin 99 are one bin apart.
+  const d = Math.min(linear, N - linear)
+  let v = 0.5 / (1 + (d / 8) ** 1.4)
+  const a = cidOf(i)
+  const b = cidOf(j)
+  if (a === b) v += 0.16 / (1 + (d / 6) ** 1.3)
+  else v *= 0.85
+  // The arms, zipped: loci at the same distance either side of the origin.
+  // `k` is that distance in bins, and the band thins and fades as it grows.
+  const k = linear / 2
+  const off = i + j - (N - 1)
+  const width = 1.6 + k / 12
+  v += 0.34 * Math.exp(-k / 20) * Math.exp(-(off ** 2) / (2 * width ** 2))
+  // The letters' diagonal, damped as RSG's is — the true one only, since the
+  // corners a circle warms carry no letters.
+  v *= 1 - 0.55 * Math.exp(-((linear / 8) ** 2))
+  return v ** 0.72 * (0.92 + 0.16 * grain(i, j))
 }
 
 // --- the file --------------------------------------------------------------
@@ -406,13 +488,16 @@ function png(pixels, palette) {
 }
 
 const palette = rampFromStops(DEFAULT_STOPS, LEVELS)
-const bytes = png(matrix(), palette)
-const uri = `data:image/png;base64,${bytes.toString('base64')}`
 
-const out = `/**
- * The RSG store's tile mark: a Hi-C map ${N} bins square whose diagonal spells
- * *RSG*, as a data URI.
- *
+/** Write one mark's module: its PNG as a data URI, under the doc comment that says what it is. */
+function writeMark(file, name, pixels, doc) {
+  const bytes = png(pixels, palette)
+  const uri = `data:image/png;base64,${bytes.toString('base64')}`
+  writeFileSync(join(root, 'src/ui/stores', file), `/**\n${doc}\n */\nexport const ${name} =\n  '${uri}'\n`)
+  console.log(`src/ui/stores/${file}: ${N}x${N}, ${bytes.length} B PNG, ${uri.length} B data URI`)
+}
+
+const provenance = ` *
  * Generated — run \`npm run icons:rsg\` after editing
  * \`scripts/make-rsg-mark.mjs\`, which is where the letterforms, the contact
  * field and the reasoning behind both live. Committed so that the mark costs no
@@ -421,13 +506,22 @@ const out = `/**
  *
  * The palette is the viewer's own \`default\` ramp, all ${LEVELS} entries of it,
  * and each pixel is the index a bin's contact frequency lands on — the same two
- * things any map in the viewer is drawn from.
- */
-export const RSG_MARK_IMAGE =
-  '${uri}'
-`
+ * things any map in the viewer is drawn from.`
 
-writeFileSync(join(root, 'src/ui/stores/rsg-mark.generated.ts'), out)
-console.log(
-  `src/ui/stores/rsg-mark.generated.ts: ${N}x${N}, ${bytes.length} B PNG, ${uri.length} B data URI`,
+writeMark(
+  'rsg-mark.generated.ts',
+  'RSG_MARK_IMAGE',
+  matrix(LETTERS, contacts),
+  ` * The RSG store's tile mark: a Hi-C map ${N} bins square whose diagonal spells
+ * *RSG*, as a data URI.
+${provenance}`,
+)
+writeMark(
+  'dbz-mark.generated.ts',
+  'DBZ_MARK_IMAGE',
+  matrix(DBZ_LETTERS, dbzContacts),
+  ` * The DNA Bacterial Zoo store's tile mark: the Hi-C map of a circular
+ * chromosome ${N} bins square, its arms zipped into an X, whose diagonal spells
+ * *DBZ*, as a data URI.
+${provenance}`,
 )

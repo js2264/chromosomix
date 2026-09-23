@@ -7018,7 +7018,16 @@ Four rules carry most of the design:
   file belongs to (`set`) and the experiment an ENCODE file belongs to (`dataset`), and every
   pre-configured session names its group the same way (`dataset`), so a page can fold rows under
   the set they came from and put *open with its tracks* on the heading (§24.3). A store with no
-  such column is a flat list, which is what a lab's own shelf usually is.
+  such column is a flat list, which is what a lab's own shelf usually is — unless it names one.
+- **A store may say how it is drawn.** `group` names the field its rows belong to, `headline` the
+  fields a group's heading or card repeats, and `layout: "cards"` asks for the genome gallery's
+  cards (§24.2) instead of the faceted list: one card per value of `group`, the group's session its
+  button. A shelf of seventy organisms, each a map with a session and eighteen tracks, is IGV's
+  shelf of genomes in every way that matters to a reader, and a list of 1,400 rows is not how
+  anybody reads it; which shape a shelf reads best in is a fact about the shelf, so its author
+  says it. Only a store read by URL reads these three — a shipped store's page is fixed in
+  `ui/stores/registry.ts` — and all three are forgiving: a layout this build does not know, or
+  cards with no `group`, draws as the list.
 - **A page draws a window of a thousand rows**, and counts, facets and ticks over every row the
   store has. Six hundred rows is nothing to a list; the ENCODE shelves are 55,000 (§24.3), which
   is a quarter of a million elements and a tab that stops for seconds on every keystroke. A cap
@@ -7053,8 +7062,8 @@ and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place'
 **widths** are their labels' rather than equal, so that at the page's own width every label gets one
 line and the four read as the set they are; a narrower window or a wider font shrinks them together
 and wraps the longest first, which is the fallback and not the resting state. *Connect to a data store* is a **grid** of tiles — the lab's
-own figures, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every store the reader connected, and the
-two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
+own figures, the lab's DNA Bacterial Zoo, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every
+store the reader connected, and the two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
 wrap, which was right while there were five and the set was the page's whole offer: a fifth tile on a
 second line would have read as an afterthought. There are more than five now and a reader can connect
 as many again, so it is equal columns that fill the width and spill onto the next line, on
@@ -7121,8 +7130,8 @@ so a mark that cannot carry the name legibly carries the picture instead.
 reader is looking at is a catalogue this viewer translated — carrying none of the licence, the
 citation, the release notes or the caveats the people who made it wrote down. So the drawer's head
 carries an outbound link beside the download, an arrow leaving its corner, opening in a tab of its
-own with `noopener`: RSG's team page, IGV's genome documentation, 4DN's portal, ENCODE's matrix, DNA
-Zoo, Roadmap's WashU portal, and — on the hub door, which has no store behind it — UCSC's
+own with `noopener`: RSG's team page (for both of the lab's shelves), IGV's genome documentation,
+4DN's portal, ENCODE's matrix, DNA Zoo, Roadmap's WashU portal, and — on the hub door, which has no store behind it — UCSC's
 `hgHubConnect`, which is where a reader without a hub in hand goes to find one. It is drawn **as
 soon as the store is opened, read or not**, because whose shelf this is is a fact about the store
 rather than about this reading of it, and the reader whose catalogue just failed to load is exactly
@@ -7178,6 +7187,16 @@ why one table for all of them was the wrong shape and is gone:
 - **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure with a title, one
   line, the assembly and the provenance as chips, the paragraph behind a fold, and *open*; the data
   files under the figures as rows. Inline, so it costs no request.
+- **DNA Bacterial Zoo** — the genome gallery's cards over **one** file: a card a species, whose
+  button is the species' session, with its sample and its replicon count as chips and its map and
+  its tracks under the fold. A species whose model the suite wrote as a bed3d (§25.7) opens with it
+  in a structure cell beside the map — the session names the cell (`maps: 3d`), since a structure
+  row restored from a session opens none by itself (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
+  (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
+  `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
+  Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
+  that draws RSG's, over a map a bacterium would make: a circle, whose far corners are warm, with
+  the X its arms, zipped from the origin, draw across the diagonal *DBZ* stands on.
 - **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
   pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and
   whose files are under a fold; a filter over genome and assembly.
@@ -7191,6 +7210,18 @@ why one table for all of them was the wrong shape and is gone:
   over it and *remember this store*. A remembered store is a tile of its own, drawn the same way,
   with *forget this store* on its page. Kept in `localStorage` under `metacooler-viewer:stores`,
   named in the stored-data screen and swept by *forget everything*, exactly as a bucket entry is.
+  A store whose file asks for cards (§24.1) gets the **genome gallery's cards** instead of the
+  portal, from the file already read: one per value of its `group`, in the store's own order. The
+  card's button is the group's first workspace row, which is then not also a row under the fold;
+  a group with none takes the row that carries a shelf of tracks and opens it with them, the rule
+  the portal's group heading follows. The chips are the `headline` fields and the session's
+  `tracks` count, as IGV's are its assembly and its count. The rows under the fold are drawn
+  **without the card's own name** when they begin with it — *A_muris · Insulation boundaries*
+  under a card headed *A_muris* is the organism eighteen times down one fold — and keep it
+  everywhere else, since the whole label is the name the file takes when it opens, and on another
+  organism's map the organism is the point. The filter matches the card's name and its headline
+  fields. A row with no value for the group is kept, in a fold under the cards, as the lab
+  gallery keeps the files no figure names.
 
 **The facets follow two rules** (`state/facets.ts`): within a facet ticked values are OR, across
 facets AND; and a facet's counts are computed against every *other* facet's ticks, so the number
@@ -7401,6 +7432,17 @@ file carries the instant it was written, so byte equality between two runs is im
 shortcut was unreachable — every Monday pushed a hundred megabytes and asked for a deploy whether
 or not a portal had published anything. `fingerprint.json` is the map of each file's hash with its
 timestamps removed; a run whose fingerprint matches the published one stops there.
+
+**One shipped store is not generated here.** The DNA Bacterial Zoo is the lab's own analyses —
+`hic-suite.sh` over each map, gathered by `scripts/DBZ_store.py` into a folder of maps, tracks and
+one session a species whose names are all relative — so there is no portal for a workflow to ask
+and nothing for it to regenerate on a Monday: the store changes when the lab reruns the suite. It
+lives **beside its data**, on the lab's bucket next to the demo files
+(`https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`), published by `aws s3 sync` of
+that folder, and the tile reads it from there as Roadmap's reads WashU. Until it is uploaded the
+bucket answers 404, which a shipped store reads as *not published yet*; the sentence says what
+publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to the Stores
+workflow, which has nothing to do with it.
 
 Every generated store carries `generatedAt` and `source` — *both* of the places it came from, the
 store that decided which rows exist and the query that decided what is in their cells — because a

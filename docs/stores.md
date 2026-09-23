@@ -58,6 +58,28 @@ four public stores the app ships are kept fresh.
 - `fields` hold one value per column key; a missing key is an empty cell. `note` is free text and
   is searched by the name filter.
 - `tracks` are offered from the Tracks card once the row is open, the way the demo annotations are.
+- `group`, `headline` and `layout` say how the store is drawn. `group` names the field rows belong
+  to — a species, a dataset — and `headline` the fields repeated once per group. The default
+  `layout` is the faceted list, with a heading per group when there is a `group`; `"layout":
+  "cards"` draws one card per group instead, the way IGV's genomes are: the group's
+  `kind: "workspace"` row is the card's button (give it a `tracks` field, `"8"`, and the card says
+  *8 tracks*), and every other row of the group is under the card's fold.
+
+```json
+{
+  "kind": "metacooler.store", "version": 1, "name": "Bacteria",
+  "layout": "cards", "group": "species", "headline": ["strain"],
+  "columns": [{ "key": "species", "label": "Species" }, { "key": "strain", "label": "Strain" }],
+  "entries": [
+    { "label": "E. coli — map with tracks", "uri": "ecoli/ecoli.metacooler.json", "kind": "workspace",
+      "fields": { "species": "E. coli", "strain": "MG1655", "tracks": "8" } },
+    { "label": "E. coli", "uri": "ecoli/ecoli.mcool", "kind": "map",
+      "fields": { "species": "E. coli", "strain": "MG1655" } },
+    { "label": "E. coli · insulation", "uri": "ecoli/insulation.bw", "kind": "genome",
+      "fields": { "species": "E. coli" } }
+  ]
+}
+```
 
 Serve it from anywhere that answers a cross-origin `GET` — a bucket with the public CORS policy in
 [hosting.md](hosting.md), GitHub raw, a lab website. A store in a **private** prefix is read with the
@@ -204,7 +226,7 @@ bigWigs and peak files of the same set on it. One click and it is on screen, whi
 rows in a table is not — and the viewer needed no new code for it, because a workspace row is a
 road it already has.
 
-Three rules the generator follows:
+Four rules the generator follows:
 
 - **One session is one set of coordinates.** Sessions are grouped by dataset *and* assembly.
   ENCODE publishes one experiment against GRCh38 and hg19 both, and grouping on the dataset alone
@@ -214,6 +236,10 @@ Three rules the generator follows:
 - **A group with a map and no tracks is skipped**, because it would be a row that opens one file,
   which that file's own row already does. So is a group with tracks and no map: a session whose
   lead is a bigWig is a fine thing and is not what picking an experiment set means.
+- **A 3D model opens beside the map.** A `.g3d`, `.3dg` or `.bed3d`, gzipped or not, is placed as a
+  structure row and the session's deck names a structure cell for it (`maps: 3d`): a structure row
+  restored from a session opens no cell of its own, so without that the model would be a row on the
+  Structures card and nothing on screen.
 
 At most 24 tracks are placed per session — a 4DN set can carry two hundred processed files, and a
 session that opened all of them would be unreadable when it had finished drawing. The cap is on the
@@ -257,3 +283,23 @@ nothing when the four sources answered the same thing.
 
 A fork that would rather publish its stores elsewhere changes `storesBase()` in `src/ui/stores/registry.ts`
 and the branch name in the two workflows; nothing else knows where they live.
+
+### The DNA Bacterial Zoo, which no workflow writes
+
+One shipped store is the lab's own analyses rather than a portal's catalogue, so it is not on the
+`stores` branch. `scripts/DBZ_store.py` gathers `hic-suite.sh`'s results into a folder — one
+directory a sample with its `.mcool`, its bigWigs, BEDs and BEDPEs, and a session opening the map
+with eight of them — and writes `store.json` over it with every name relative. The folder is the
+store, and publishing it is uploading it beside the demo data:
+
+```bash
+python3 scripts/DBZ_store.py build ~/Downloads/Martial_DBZ          # writes store/ beside results/
+python3 scripts/DBZ_store.py serve ~/Downloads/Martial_DBZ/store    # look at it first, on :8765
+aws s3 sync ~/Downloads/Martial_DBZ/store/ s3://rsglab-data/dbz/ --delete
+```
+
+The *DNA Bacterial Zoo* tile reads `https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`
+(`DBZ_STORE` in `src/ui/stores/registry.ts`), whose bucket already answers the cross-origin ranged
+reads the demo needs. Until the sync has run it answers 404, and the tile says what publishes it.
+`--delete` keeps the prefix a mirror of the folder, so a sample dropped from the table leaves the
+bucket too; the prefix holds nothing else.

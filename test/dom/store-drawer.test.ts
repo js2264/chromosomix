@@ -136,6 +136,7 @@ describe('opening', () => {
     drawer.open('4dn')
     expect(textsOf(drawer.el, '.store-head-tiles .store-tile-name')).toEqual([
       'RSG lab data',
+      'DNA Bacterial Zoo',
       'IGV genomes',
       '4DN open data',
       'ENCODE',

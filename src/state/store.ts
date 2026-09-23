@@ -102,6 +102,12 @@ export interface StoreEntry {
   tracks?: Array<{ label: string; url: string }>
 }
 
+/**
+ * How a store read from a URL is drawn (§24.2): the faceted list every
+ * catalogue gets, or one card per group — the shape IGV's genomes have.
+ */
+export type StoreLayout = 'list' | 'cards'
+
 /** A whole store file. */
 export interface StoreFile {
   kind: typeof STORE_KIND
@@ -114,6 +120,15 @@ export interface StoreFile {
   source?: string
   /** Absolute URL prefix ending in `/`. Default: the directory of the store's own URL. */
   base?: string
+  /**
+   * The field rows belong to — a species, a dataset — by key. A list folds rows
+   * under one heading per value of it, and cards draw one card per value.
+   */
+  group?: string
+  /** The fields whose values a group's heading or card repeats, in order. */
+  headline?: string[]
+  /** Absent is `list`. `cards` without a `group` has nothing to be a card of, and is drawn as a list. */
+  layout?: StoreLayout
   columns: StoreColumn[]
   entries: StoreEntry[]
 }
@@ -141,6 +156,12 @@ export interface StoreRef {
   /** Or a URL to fetch on the reader's gesture. */
   url?: string
   builtin: boolean
+  /**
+   * What puts a shipped store's file where `url` says, for the one that is not
+   * the Stores workflow's to write — said when the file is not there yet, in
+   * place of the sentence that sends a maintainer to the workflow.
+   */
+  publishedBy?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +329,14 @@ export function parseStore(text_: string): StoreFile | ConfigRefusal {
   const generatedAt = text(row, 'generatedAt')
   const source = text(row, 'source')
   const base = text(row, 'base')
+  // How the store asks to be drawn. Forgiving like every other field: a layout
+  // this build does not know is the default rather than a refusal, so a store
+  // written for a later viewer still opens here as the list it always was.
+  const group = text(row, 'group')
+  const headline = Array.isArray(row['headline'])
+    ? (row['headline'] as unknown[]).filter((key): key is string => typeof key === 'string' && key !== '')
+    : []
+  const layout = row['layout'] === 'cards' || row['layout'] === 'list' ? row['layout'] : undefined
   return {
     kind: STORE_KIND,
     version,
@@ -319,6 +348,9 @@ export function parseStore(text_: string): StoreFile | ConfigRefusal {
     ...(generatedAt === undefined ? {} : { generatedAt }),
     ...(source === undefined ? {} : { source }),
     ...(base === undefined ? {} : { base }),
+    ...(group === undefined ? {} : { group }),
+    ...(headline.length === 0 ? {} : { headline }),
+    ...(layout === undefined ? {} : { layout }),
     columns: readColumns(row['columns']),
     entries,
   }

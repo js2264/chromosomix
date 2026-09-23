@@ -2316,7 +2316,15 @@ TRACK_SIZES = {
     "variants": 34,
     "alignments": 96,
     "pairs": 34,
+    # Never drawn as a lane — a model's picture is its cell (SPECS §25.2) — so
+    # this is only the size `defaultStyle` gives it, written down in full.
+    "structure": 24,
 }
+
+#: A 3D model, by name: WashU's g3d, Dip-C's 3dg and bed3d, gzipped or not —
+#: `isStructureName` in `src/annotations/g3d.ts`. Matched on the name rather
+#: than through `format_of`, which reads `model.bed3d.gz` as a `gz`.
+STRUCTURE_NAME = re.compile(r"\.(g3d|3dg|bed3d)(\.gz)?$", re.IGNORECASE)
 
 #: Okabe–Ito, in the order the demo sessions use it. Assigned by position rather
 #: than by content: a generator cannot know that the third track is the input
@@ -2349,7 +2357,7 @@ def track_entry(index: int, label: str, url: str, sidecar: str = "") -> Optional
     field the lane draws without.
     """
     name = url.split("?")[0].split("#")[0].rsplit("/", 1)[-1]
-    pair = TRACK_KINDS.get(format_of(name))
+    pair = ("structure", "structure") if STRUCTURE_NAME.search(name) else TRACK_KINDS.get(format_of(name))
     if pair is None:
         return None
     card, kind = pair
@@ -2366,7 +2374,9 @@ def track_entry(index: int, label: str, url: str, sidecar: str = "") -> Optional
             **({"index": sidecar} if sidecar else {}),
         },
         "visible": True,
-        "placement": {"bottom": True, "right": False},
+        # A model is never a lane: it is unplaced, and drawn in a cell of its
+        # own that the session's `maps` names (SPECS §25.2, `session_document`).
+        "placement": {"bottom": kind != "structure", "right": False},
         "style": {
             "colour": colour,
             "size": TRACK_SIZES.get(kind, 46),
@@ -2433,6 +2443,15 @@ def session_document(
                     "uri": uri,
                     "view": "genomes" if route_of(uri.rsplit("/", 1)[-1]) == "map" else "browser",
                     **({"locus": locus} if locus else {}),
+                    # A model opens in a structure cell beside the map, which
+                    # the deck names `3d` (`panels/deck.ts`): a structure row
+                    # restored from a session opens no cell of its own, the
+                    # deck being the link's to rebuild.
+                    **(
+                        {"maps": "3d"}
+                        if any(entry["kind"] == "structure" for entry in placed)
+                        else {}
+                    ),
                 },
                 "tracks": placed,
             }
@@ -2884,6 +2903,27 @@ def check_store(path: Path) -> list[str]:
                 "assembly then label."
             )
         previous = current
+
+    # How the store asks to be drawn (SPECS §24.1). The viewer draws anything it
+    # does not understand here as the default list, so each of these publishes
+    # and opens — as something other than what its author asked for.
+    layout = store.get("layout")
+    group = store.get("group")
+    if layout is not None and layout not in ("list", "cards"):
+        problems.append(f"layout is {layout!r}; the viewer knows 'list' and 'cards' and draws this as a list.")
+    if group is not None and not text(group):
+        problems.append(f"group is {group!r}, which is not a field key.")
+    elif layout == "cards" and group is None:
+        problems.append("layout is 'cards' with no group, so there is nothing to be a card of; it draws as a list.")
+    elif group is not None and not any(
+        isinstance(entry, dict) and text((entry.get("fields") or {}).get(group)) for entry in entries
+    ):
+        problems.append(f"group is {group!r}, and no entry has a value for it.")
+    headline = store.get("headline")
+    if headline is not None and (
+        not isinstance(headline, list) or not all(isinstance(key, str) and key for key in headline)
+    ):
+        problems.append(f"headline is {headline!r}, which is not a list of field keys.")
 
     # Relative names with no base are the self-contained-folder case
     # `resolveStore` documents and the sessions store uses: the store is published

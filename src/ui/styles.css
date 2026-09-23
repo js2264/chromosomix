@@ -6938,6 +6938,16 @@ canvas.is-frozen {
   font-size: var(--step--2);
 }
 
+/* A card is a quarter of the drawer, and a row under its fold is a name, a
+   size and two verbs in that quarter. Cut to one line, a store's *Coverage ·
+   total* and *Coverage · trans* were both *Coverage · t…*; so the name wraps
+   here, where a portal row, which has the drawer's whole width, need not. */
+.genomes-card .gallery-card-files .portal-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 /* --- a store by URL ------------------------------------------------------- */
 
 .custom {

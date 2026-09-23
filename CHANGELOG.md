@@ -14,6 +14,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
+  IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
+  eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC
+  score, E1, and chromosight's borders and loops — and, where the suite wrote one, its 3D model in a
+  cell beside it; the fold holds the map and every track. A session `make_store.py` writes places a
+  model it is given the same way, as a structure row with `maps: 3d`, rather than dropping it. The store is not the Stores workflow's to write: `scripts/DBZ_store.py` builds it from
+  `hic-suite.sh`'s results and it lives beside its data on the lab's bucket, so until it is uploaded
+  the tile says that, not *run the workflow*. Its mark is drawn by the script that draws RSG's, over
+  a bacterial map — a circle whose far corners are warm, with the X of its zipped arms.
+
+- **A store can ask to be drawn as cards (§24.1, §24.2).** Three optional keys on a store file:
+  `group` names the field its rows belong to, `headline` the fields a group repeats, and
+  `"layout": "cards"` draws one card per group the way IGV's genomes are — the group's session as
+  the card's button, its headline fields and track count as chips, every other row under the
+  card's fold, named without the card's own name. A store read by URL was always a flat faceted
+  list, which is the wrong shape for a shelf of seventy organisms with nineteen files each.
+  Without `layout` a `group` folds the list under a heading per group. `make_store.py check`
+  refuses a layout the viewer does not know, cards with no group, and a group no row has.
+
 - **A star on each structure cell (§25.3).** The Aesthetics column holds one *3D structure* card and
   a deck may hold several models, so the card follows a cell the reader names. It was whichever cell
   was built first — which a reader with two models discovers by dragging a slider and watching the
