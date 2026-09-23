@@ -517,14 +517,10 @@ export class ManualCard {
       el('span', { class: 'ann-drop-label', text: 'Load marks' }),
       el('span', {
         class: 'ann-drop-hint',
-        text:
-          'A BED of lines, or a BEDPE of arrowheads and rectangles — what Export writes. ' +
-          'Drop one here, or click to choose.',
+        text: 'BED or BEDPE. Drop here, or click to choose.',
       }),
     )
-    zone.title =
-      'Read marks back from the files Export writes, or from any BED or BEDPE. ' +
-      'Marks already on the map are not added twice.'
+    zone.title = 'BED → lines, BEDPE → arrowheads & rectangles. Duplicates are skipped.'
     zone.addEventListener('click', () => input.click())
     zone.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -571,18 +567,18 @@ export class ManualCard {
       try {
         text = await file.text()
       } catch {
-        said.push(`${file.name} could not be read.`)
+        said.push(`${file.name}: unreadable.`)
         continue
       }
       const { marks, skipped } = readMarks(text)
       if (marks.length === 0) {
-        said.push(`No marks in ${file.name} — it should be a BED or a BEDPE.`)
+        said.push(`${file.name}: no marks.`)
         continue
       }
       const added = this.props.store.addAll(marks)
-      const parts = [`${fmt.int(added)} of ${fmt.int(marks.length)} added`]
-      if (added < marks.length) parts.push('the rest were already there')
-      if (skipped > 0) parts.push(`${fmt.int(skipped)} ${skipped === 1 ? 'line' : 'lines'} skipped`)
+      const parts = [`${fmt.int(added)} added`]
+      if (added < marks.length) parts.push(`${fmt.int(marks.length - added)} already there`)
+      if (skipped > 0) parts.push(`${fmt.int(skipped)} skipped`)
       said.push(`${file.name}: ${parts.join(', ')}.`)
     }
     // A line a file: two dropped at once are two answers, and run together

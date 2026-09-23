@@ -1922,8 +1922,8 @@ interval's start when the name is anything else; a BEDPE row is an **arrowhead**
 are one base wide, as the export writes one, and a **rectangle** otherwise. Each mark takes the next
 colour of the palette, since neither file carries one, and a mark already at the same place is not
 added twice — re-importing what was just exported is the accident this rule is for. A line under
-the zone says, per file, how many were added, how many were already there and how many rows were
-skipped.
+the zone says, per file, how many were added, already there, or skipped — tersely, as
+`marks.bed: 2 added, 1 skipped.`
 
 The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
 third is two intervals rather than one interval and a shape, because the boxes people draw are not

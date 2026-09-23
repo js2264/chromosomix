@@ -288,7 +288,7 @@ describe('importing', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(card.store.arrowheads).toHaveLength(1)
     expect(card.form('Import').querySelector('.ann-note')?.textContent).toBe(
-      'marks.bedpe: 1 of 1 added.',
+      'marks.bedpe: 1 added.',
     )
   })
 })
