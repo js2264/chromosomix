@@ -14,6 +14,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **No map need be starred, and no structure (§16.5, §25.3).** A filled star is no longer a dead
+  button: pressed, it leaves none filled. With no map starred the Aesthetics column's *Map* card
+  sets **every map of the deck at once** — it says *every map — all N* under its title, in the warn
+  colour, and a change there is copied onto every companion one moved setting at a time, so picking a
+  ramp does not flatten each map's clip onto the first one's; *match all scales* and *match all
+  resolutions* are greyed, there being nothing to match to. With no structure cell starred the *3D
+  structure* card sets every structure cell at once, camera presses and the turntable included, and
+  leaves out the rows that are about one cell's own picture (which model, *compare with*, *in the
+  frame of*, the measurements, the export). *None* lasts as long as the deck; the next deck starts
+  starred on its first map.
+
+- **With no map starred, no task runs (§18.1).** The Analysis column says so once, above its cards —
+  *no map is starred, so no task can run* — greys every row with that sentence in its tooltip, and
+  the drawer's Run and *run on all* refuse with it. Starring a map puts them back.
+
+- **An empty cell takes a track or a structure as readily as a map (§16.9).** A cell drawn with a `+`
+  read *drop a map here*; it reads *drop a map, a track or a structure*, and does what it says: a row
+  dragged from the Tracks card opens a tracks cell there drawing it (and keeps it on the maps it was
+  on), a track file opens a tracks cell and is loaded onto it, a structure file or a row of the
+  Structures card opens its model, and a map opens as a map. A row out of the Files panel is routed
+  the same way, by the name of its file. The deck's count says `2 maps · 1 empty cell` rather than
+  `2 of 3 maps`, and the `+` edge's note names all three.
+
+- **`scripts/ui-stars.mjs`**, a gallery of the stars: the yeast deck with the first map starred, a
+  companion starred and recoloured from the card, no map starred, the Analysis column greyed, an
+  empty cell taking a track row, and two structure cells with none starred.
+
 - **A metagenome's General column lists its genomes, and a genome's contigs, with ticks (§5.8).**
   The Sequences card a cooler is steered from now has a metacool counterpart: over the whole
   metagenome, a pair or a selection it lists the **Genomes**, and ticking any number draws them
@@ -237,6 +264,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The Aesthetics column's *Map* card is the starred map's (§16.5).** Starring a companion puts
+  *its* card in the column, in the first map's place, and a setting changed there changes that map
+  and no other; starring the first map puts its own back. A line under the card's title names the
+  map it sets, with its star. The turn is the one row that still reaches every map, because the lock
+  needs every map drawn one way, and it is on every map's card for that reason.
+
+- **A companion's score, O/E and smoothing are its own (§16.2).** They were shared with the first
+  map, offered on its card alone, so *this replicate normalised, that one raw* had no control
+  anywhere. Each map now opens on the first map's and keeps its own from then on, remembered with
+  its clip in the session, the workspace and the durable record. The first map's are still the ones
+  in the link.
 
 - **The File card does not wrap.** Every row is one line and the card scrolls sideways, so a long
   URI no longer stacks a dozen characters at a time down the column.
@@ -833,6 +872,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The companion's corner menu (§16.5).** The button in a companion's bottom-left corner and the
+  menu of score, transform, ramp and clip it opened are gone: the map's *Map* card, shown in the
+  Aesthetics column while it is starred, holds those and the rest.
+
 - **The *size by* setting (§25.3).** A track whose value at each bead set the bead's size, as a
   second channel beside the colour. The channel is gone with the control: every bead is the bead
   radius.
@@ -884,6 +927,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A companion drew the normalisation its own score named (§16.2).** A companion reading `VC`, `ICE`
+  or the correlation took the normalisation from the *first* map's score, so it was labelled one
+  thing and drawn as another; it reads it off its own score now.
 
 - **The whole metagenome no longer dies with *Array buffer allocation failed* at bin level (§7.3).**
   The bin-level block was summed into a full-square `Float64` and copied to `Float32`, about 200 MB

@@ -151,6 +151,11 @@ let drawers = 0
 export interface AnalysisDrawerOptions {
   runner: AnalysisRunner
   context(): AnalysisContext | null
+  /**
+   * Why no task can run at all, or `null` — a deck with no map starred
+   * (§18.1). Run and *run on all* refuse with it, in the price's place.
+   */
+  blocked?(): string | null
   /** The framing a run started now would be a record of (§18.4). */
   framing(): AnalysisFraming | null
   /** The close button was pressed. The owner clears its own idea of what is open. */
@@ -907,6 +912,8 @@ export class AnalysisDrawer {
   private run(): void {
     const task = this.current
     if (task === null) return
+    // Whatever reached here — the button is greyed, but a key is not.
+    if ((this.options.blocked?.() ?? null) !== null) return
     this.setStatus('')
     // Back to the newest, because the one about to arrive *is* the newest and a
     // reader who pressed Run while reading run 3 would otherwise watch their
@@ -927,6 +934,7 @@ export class AnalysisDrawer {
   private runAll(): void {
     const task = this.current
     if (task === null) return
+    if ((this.options.blocked?.() ?? null) !== null) return
     this.setStatus('')
     this.chosenRun.delete(task.id)
     // **Awaited**, and this is the whole of the fix. A companion opens to draw a
@@ -962,12 +970,15 @@ export class AnalysisDrawer {
     const state = this.options.runner.stateOf(task.id)
     const busy = state.status === 'running' || state.status === 'queued'
     const estimate = context === null ? null : task.estimate(context, this.params)
+    const blocked = this.options.blocked?.() ?? null
     const refusal =
-      context === null
-        ? 'This view has no contact map to run against.'
-        : estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
-          ? estimate.refusal
-          : null
+      blocked !== null
+        ? blocked
+        : context === null
+          ? 'This view has no contact map to run against.'
+          : estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
+            ? estimate.refusal
+            : null
 
     this.runButton.disabled = busy || refusal !== null
     // The button appears only where there is more than one map to run on, and

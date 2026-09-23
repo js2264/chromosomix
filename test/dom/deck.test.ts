@@ -19,6 +19,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { recall } from '@/state/UiMemory'
 import { PanelDeck } from '@/panels/PanelDeck'
 import { MAX_PANELS } from '@/panels/deck'
 import type { AnnotationContext } from '@/ui/MatrixPanel'
@@ -93,10 +94,15 @@ function leadPanel(
     /** Which of the two scales the deck asked for, and how often. */
     askedShown: 0,
     askedSet: 0,
+    /** What the deck last told the first map's *Map* card it sets (§16.5). */
+    cardFor: undefined as unknown,
   }
   const panel = {
     setViewportListener: () => {},
     setDeckExport: () => {},
+    setCardFor: (target: unknown) => {
+      state.cardFor = target
+    },
     setLaneListener: (listener: (geometry: unknown) => void) => {
       state.lanes = listener
     },
@@ -417,7 +423,7 @@ describe('the deck’s bar', () => {
     expect(deck.el.querySelector('.deck-maps')?.textContent).toContain('2 maps')
     // A row of two grown beside is a row of three, one of them empty.
     deck.grow('beside')
-    expect(deck.el.querySelector('.deck-maps')?.textContent).toContain('2 of 3 maps')
+    expect(deck.el.querySelector('.deck-maps')?.textContent).toContain('2 maps · 1 empty cell')
   })
 
   it('puts its line after the view’s own summary rather than inside it', () => {
@@ -633,12 +639,86 @@ describe('adding a map by URL', () => {
 })
 
 describe('the star', () => {
-  it('starts on the lead, which is therefore the one dead star', () => {
+  it('starts on the lead, and no star is a dead button any more', () => {
     const { deck } = make()
     deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     const stars = all<HTMLButtonElement>(deck.el, '.deck-star')
-    expect(stars.map((node) => node.disabled)).toEqual([true, false])
+    // Filled is pressable too: pressing it is how a reader leaves no map
+    // starred (§16.5), so it is live like every other star.
+    expect(stars.map((node) => node.disabled)).toEqual([false, false])
+    expect(stars.map((node) => node.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
     expect(deck.starredMap).toBe('lead')
+  })
+
+  it('leaves no map starred when the filled one is pressed, and says so', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const before = made.stars
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[0].click()
+    expect(made.deck.starredMap).toBeNull()
+    expect(made.deck.starredPanel).toBeNull()
+    expect(
+      all<HTMLButtonElement>(made.deck.el, '.deck-star').map((node) => node.classList.contains('is-on')),
+    ).toEqual([false, false])
+    // The Analysis column is told, because it greys every task now (§18.1).
+    expect(made.stars).toBeGreaterThan(before)
+    // …and pressing an empty star puts one back.
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[1].click()
+    expect(made.deck.starredMap).not.toBeNull()
+    expect(made.deck.starredMap).not.toBe('lead')
+  })
+
+  it('keeps no star while the deck is up, and starts the next deck on the lead', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[0].click()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/c.cool' })
+    expect(made.deck.starredMap).toBeNull()
+    // A deck put down leaves the next one starting where every deck starts.
+    barButton(made.deck, 'close').click()
+    expect(made.deck.starredMap).toBe('lead')
+  })
+
+  it('gives the column a card naming a starred map that has not drawn yet', () => {
+    // The first map's card must not stand in for it: it would set a map other
+    // than the one the star is on.
+    const { deck } = make()
+    expect(deck.mapCard()).toBeNull()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    all<HTMLButtonElement>(deck.el, '.deck-star')[1].click()
+    const card = deck.mapCard()
+    expect(card?.classList.contains('map-card-waiting')).toBe(true)
+    expect(card?.querySelector('.map-card-for')?.textContent).toBe('b.cool')
+    all<HTMLButtonElement>(deck.el, '.deck-star')[0].click()
+    expect(deck.mapCard()).toBeNull()
+  })
+
+  it('greys the two presses while no map is starred, with the reason on them', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    all<HTMLButtonElement>(deck.el, '.deck-star')[0].click()
+    for (const kind of ['share', 'resolutions']) {
+      expect(barButton(deck, kind).disabled).toBe(true)
+      expect(barButton(deck, kind).title).toContain('No map is starred')
+    }
+    all<HTMLButtonElement>(deck.el, '.deck-star')[0].click()
+    expect(barButton(deck, 'share').disabled).toBe(false)
+  })
+
+  it('tells the first map’s card what it sets: itself, or every map', () => {
+    const made = make()
+    const lead = leadPanel()
+    made.deck.setLead(lead.panel)
+    // One map is not a choice, and the card says nothing about it.
+    expect(lead.state.cardFor).toBeNull()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(lead.state.cardFor).toEqual({ kind: 'starred', name: 'lead.cool' })
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[0].click()
+    expect(lead.state.cardFor).toEqual({ kind: 'every', maps: 2 })
+    // The star on the companion: its card is the column's now, and the first
+    // map's says nothing.
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[1].click()
+    expect(lead.state.cardFor).toBeNull()
   })
 
   it('moves to the companion whose star is pressed, and only that one', () => {
@@ -656,12 +736,13 @@ describe('the star', () => {
     expect(made.stars).toBeGreaterThan(0)
   })
 
-  it('says which map a task will run against, in the button’s own tooltip', () => {
+  it('says what it decides, and what pressing it does, in the button’s own tooltip', () => {
     const { deck } = make()
     deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     const stars = all<HTMLButtonElement>(deck.el, '.deck-star')
-    expect(stars[0].title).toContain('lead.cool is the map an analysis runs against')
-    expect(stars[1].title).toContain('Run analyses against b.cool instead')
+    expect(stars[0].title).toContain('lead.cool is starred: the Map card sets it and the analyses run on it')
+    expect(stars[0].title).toContain('Click to unstar')
+    expect(stars[1].title).toContain('Star b.cool')
   })
 
   /**
@@ -1277,5 +1358,36 @@ describe('how each companion was drawn', () => {
     chain(deck).click()
     expect(remembered()).toHaveLength(1)
     expect(remembered()[0].locked).toBe(false)
+  })
+})
+
+describe('the first map’s card, with no map starred (§16.5)', () => {
+  /** What the deck remembered about how each companion is drawn. */
+  function looks(): Array<Record<string, unknown>> {
+    return (recall<Array<Record<string, unknown>>>('deck-test', 'deck:looks') ?? []) as Array<
+      Record<string, unknown>
+    >
+  }
+
+  it('is copied onto every companion, one moved setting at a time', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.apply(view(made))
+    all<HTMLButtonElement>(made.deck.el, '.deck-star')[0].click()
+    made.deck.apply({ ...view(made), transform: 'log2', oe: true } as ViewState)
+    const look = looks().find((row) => row['uri'] === 'https://x.example.org/b.cool')
+    expect(look?.['transform']).toBe('log2')
+    expect(look?.['oe']).toBe(true)
+  })
+
+  it('reaches no companion while a map is starred', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.apply(view(made))
+    // The star is on the first map, so its card sets it alone.
+    made.deck.apply({ ...view(made), transform: 'log2', oe: true } as ViewState)
+    const look = looks().find((row) => row['uri'] === 'https://x.example.org/b.cool')
+    expect(look?.['transform']).toBeUndefined()
+    expect(look?.['oe']).not.toBe(true)
   })
 })

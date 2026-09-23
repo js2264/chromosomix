@@ -66,8 +66,8 @@ function notes(holds: DeckHolds | undefined): Record<GrowDirection, string> {
     return {
       beside:
         'Open a cell beside these maps. The maps stay where they are and a column of empty cards ' +
-        'appears next to them — drop a cooler on one, or drop a file here, to fill it. Every map ' +
-        'in a deck shows the same region and moves with the others.',
+        'appears next to them — drop a map, a track or a structure on one, or a file here, to fill ' +
+        'it. Every map in a deck shows the same region and moves with the others.',
       below:
         'Open a row of cells below these maps. Same navigation, same region, one row further ' +
         'down — which is the arrangement for a second condition rather than a second sample.',

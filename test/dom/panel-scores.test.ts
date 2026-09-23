@@ -1,19 +1,15 @@
 // @vitest-environment jsdom
 /**
- * The score picker on a panel that has no sidebar — a companion of a deck.
+ * The score picker on a companion of a deck.
  *
- * A companion carries its controls on the picture, in a menu that opens out of
- * its bottom-left corner (`MatrixPanel`'s `cornerControls`), and the score was
- * the one thing in that menu's remit that never reached it: the panel was built
- * without a picker on the argument that the score is something a deck *shares*.
- * That argument is right about the default and wrong about the choice — two
- * ordinary cases need one map read differently from the rest, and both ended at
- * a control that did not exist.
+ * A companion's settings are its *Map* card, which the Aesthetics column shows
+ * while that map is starred (§16.5). It used to carry the score, the transform,
+ * the ramp and the clip in a menu out of its picture's bottom-left corner; that
+ * menu is gone, and nothing is drawn on the picture any more.
  *
  * What is asserted here is where the picker lives, that it reports what was
  * picked, and that it can be told what is actually being drawn without
- * announcing it back — which is what keeps it honest while the panel is still
- * following the deck.
+ * announcing it back.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -39,7 +35,7 @@ function choices(): readonly ScoreChoice[] {
   return scoreChoices({ hasWeights: true, scoreColumns: ['expected'] })
 }
 
-function harness(options: { current?: string; corner?: boolean } = {}): {
+function harness(options: { current?: string } = {}): {
   panel: MatrixPanel
   picked: ScoreChoice[]
   select(): HTMLSelectElement
@@ -48,7 +44,6 @@ function harness(options: { current?: string; corner?: boolean } = {}): {
   const panel = new MatrixPanel({
     binsize: 1000,
     detachedControls: true,
-    cornerControls: options.corner ?? true,
     hideTitle: true,
     scores: {
       choices: choices(),
@@ -58,9 +53,8 @@ function harness(options: { current?: string; corner?: boolean } = {}): {
   })
   built.push(panel)
   document.body.append(panel.el)
-  // The card is *detached* — a companion never mounts one — so it is reached
-  // through the panel rather than through the tree, which is how the views that
-  // do mount it reach it too.
+  // The card is *detached* — the Aesthetics column mounts it, not the panel —
+  // so it is reached through the panel, which is how the session reaches it.
   document.body.append(panel.controlsEl)
   return {
     panel,
@@ -90,19 +84,21 @@ function fieldsIn(root: Element | null): string[] {
 }
 
 describe('a companion’s score picker', () => {
-  it('is in the menu on the picture, where a panel with no sidebar keeps its controls', () => {
+  it('is on the Map card, and nothing is drawn on the picture', () => {
     const fit = harness()
-    expect(fieldsIn(fit.panel.el.querySelector('.map-settings'))).toContain('score')
+    expect(fieldsIn(fit.panel.controlsEl)).toContain('score')
+    // No corner menu and no button to open one.
+    expect(fit.panel.el.querySelector('.map-settings')).toBeNull()
+    expect(fit.panel.el.querySelector('.map-settings-toggle')).toBeNull()
   })
 
-  it('is offered once, not once per container', () => {
-    // One set of widgets over one setting: a second copy is two controls that
-    // drift, and a node has one parent anyway — appending to both containers
-    // silently moves it into whichever was built last, which is how the corner
-    // menu once came up empty.
+  it('is offered once', () => {
     const fit = harness()
-    expect(scoreSelectIn(fit.panel.el.querySelector('.map-settings'))).toBe(fit.select())
-    expect(fieldsIn(fit.panel.controlsEl)).not.toContain('score')
+    const pickers = Array.from(fit.panel.controlsEl.querySelectorAll('.field')).filter(
+      (field) => field.querySelector('.field-label')?.textContent === 'score',
+    )
+    expect(pickers).toHaveLength(1)
+    expect(fit.panel.el.contains(fit.select())).toBe(false)
   })
 
   it('opens on whatever the deck resolved, not on the file’s own default', () => {
@@ -110,18 +106,11 @@ describe('a companion’s score picker', () => {
     expect(fit.select().value).toBe('balanced')
   })
 
-  it('leads the menu, in the order the Map card puts the same five fields', () => {
+  it('leads the value fields of the card', () => {
     // What the numbers *are*, before how they are transformed, ramped and
-    // clipped — the question the other three answer about. A corner menu that
-    // put it last was the same five fields in a different order on a companion.
-    const fit = harness()
-    expect(fieldsIn(fit.panel.el.querySelector('.map-settings'))[0]).toBe('score')
-    // Among the *value* fields of the card, which is what the menu holds all
-    // of: the card also opens with `picture`, the row of things that decide
-    // what kind of picture this is (§16.5), and that row is there whether or
-    // not the turn is offered now that the refit stands in it.
+    // clipped — the question the other three answer about.
     const VALUES = ['score', 'smooth', 'transform', 'colours', 'clip']
-    const card = fieldsIn(harness({ corner: false }).panel.controlsEl)
+    const card = fieldsIn(harness().panel.controlsEl)
     expect(card.filter((label) => VALUES.includes(label))[0]).toBe('score')
   })
 
@@ -142,10 +131,8 @@ describe('a companion’s score picker', () => {
   })
 
   it('can be told what is drawn without announcing it back', () => {
-    // The panel follows the deck until the reader picks here, and the deck's
-    // score moves from the lead's picker, a link or the back button. A dropdown
-    // left on the previous answer is a control lying about the map under it —
-    // and one that announced the correction would be a loop.
+    // A dropdown left on the previous answer is a control lying about the map
+    // under it — and one that announced the correction would be a loop.
     const fit = harness()
     fit.panel.syncScoreChoice('balanced')
     expect(fit.select().value).toBe('balanced')
@@ -157,13 +144,25 @@ describe('a companion’s score picker', () => {
     fit.panel.syncScoreChoice('nothing-of-the-sort')
     expect(fit.select().value).toBe('count')
   })
+})
 
-  it('is in the card instead where the panel has one', () => {
-    // The same one set of widgets, in the other place: a panel with a sidebar
-    // keeps its value fields in the Map card, and building a corner menu for it
-    // would be a second control over one scale.
-    const fit = harness({ corner: false })
-    expect(fit.panel.el.querySelector('.map-settings')).toBeNull()
-    expect(fieldsIn(fit.panel.controlsEl)).toContain('score')
+describe('the Map card’s line saying which map it sets (§16.5)', () => {
+  it('is hidden until a deck says what it sets', () => {
+    const fit = harness()
+    expect(fit.panel.controlsEl.querySelector('.map-card-for')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('names the starred map, or says every map while none is starred', () => {
+    const fit = harness()
+    const line = (): HTMLElement | null => fit.panel.controlsEl.querySelector<HTMLElement>('.map-card-for')
+    fit.panel.setCardFor({ kind: 'starred', name: 'rep2.cool' })
+    expect(line()?.classList.contains('hidden')).toBe(false)
+    expect(line()?.textContent).toBe('rep2.cool')
+    expect(line()?.classList.contains('is-every')).toBe(false)
+    fit.panel.setCardFor({ kind: 'every', maps: 3 })
+    expect(line()?.textContent).toBe('every map — all 3')
+    expect(line()?.classList.contains('is-every')).toBe(true)
+    fit.panel.setCardFor(null)
+    expect(line()?.classList.contains('hidden')).toBe(true)
   })
 })

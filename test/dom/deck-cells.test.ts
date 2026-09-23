@@ -116,6 +116,7 @@ function leadPanel() {
       state.viewport = listener
     },
     setDeckExport: () => {},
+    setCardFor: () => {},
     setLaneListener: () => {},
     setHoverListener: () => {},
     setLaneHoverListener: () => {},
@@ -500,9 +501,10 @@ describe('what the cell says', () => {
     deck.add({ kind: 'structure' })
     const stars = () => cells().map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
     expect(stars().every((star) => star?.classList.contains('hidden') === false)).toBe(true)
-    // Exactly one filled, and a filled star is a dead button.
+    // Exactly one filled — and a filled star is live, since pressing it is how
+    // a reader leaves no cell starred.
     expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
-    expect(stars()[0]?.disabled).toBe(true)
+    expect(stars()[0]?.disabled).toBe(false)
     const first = deck.structureSettings()
     stars()[1]?.click()
     expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
@@ -511,6 +513,36 @@ describe('what the cell says', () => {
     expect(cells()[1].contains(second as Node)).toBe(false)
     // The card is the second cell's: it is the element that cell hands over.
     expect(second).not.toBeNull()
+  })
+
+  it('sets every structure cell at once while none is starred (§25.3)', () => {
+    const second = { ...structureEntry(), id: 'a2', label: 'model2.g3d' } as AnnotationEntry
+    const store = fakeStore([structureEntry(), second])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'structure' })
+    const stars = () =>
+      structureCells(deck).map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    // The filled star, pressed: no cell is starred any more.
+    stars()[0]?.click()
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    const card = deck.structureSettings()
+    expect(card?.querySelector('.structure-card-for')?.textContent).toBe('every structure — all 2')
+    // Rows about one cell's own picture are not offered: a model compared
+    // with itself, or one file saved for two pictures.
+    expect(settingsRow(deck, 'structure')).toBeUndefined()
+    expect(settingsRow(deck, 'export')).toBeUndefined()
+    // A setting made on the card is made to both rows.
+    store.restyled.length = 0
+    const beads = card?.querySelector<HTMLButtonElement>('.structure-toggle[aria-label^="Beads"], .structure-toggle[title^="Beads"]')
+    expect(beads).not.toBeNull()
+    beads?.click()
+    expect(store.restyled.map((write) => write.id).sort()).toEqual(['a1', 'a2'])
+    // Starred again, the card is one cell's and writes to its row alone.
+    stars()[1]?.click()
+    store.restyled.length = 0
+    deck.structureSettings()?.querySelector<HTMLButtonElement>('.structure-toggle[title^="Beads"]')?.click()
+    expect(store.restyled.map((write) => write.id)).toEqual(['a2'])
   })
 
   it('moves the star off a cell that closes, so the card is never about a picture that is gone', () => {
@@ -1138,5 +1170,102 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     toggle?.click()
     expect(document.querySelector('.modal-structure .stage-side')?.classList.contains('hidden')).toBe(false)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// An empty cell takes what a deck can hold (§16.9)
+// ---------------------------------------------------------------------------
+
+describe('an empty cell', () => {
+  /** A deck whose session carries tracks, with a store that records placements. */
+  function withTracks() {
+    const placed: Array<{ id: string; map: string }> = []
+    const loaded: Array<{ uri: string; map: string }> = []
+    const tracks = tracksContext()
+    const store = {
+      byId: (id: string) => (id === 't1' ? { id } : undefined),
+      placeAt: (id: string, map: string) => placed.push({ id, map }),
+      keepMaps: () => {},
+      noteMapFiles: () => {},
+      adoptHome: () => {},
+    }
+    const deck = new PanelDeck({
+      onMapsChange: () => {},
+      memoryKey: () => 'deck-cells-empty',
+      leadName: () => 'lead.cool',
+      tracks: { context: () => tracks },
+      annotations: () => ({ store }) as never,
+      onTrackFile: (picked, map) => loaded.push({ uri: picked.uri, map }),
+    })
+    document.body.appendChild(deck.el)
+    const view = document.createElement('div')
+    view.appendChild(document.createElement('div')).className = 'view-head'
+    deck.frame(view)
+    return { deck, placed, loaded }
+  }
+
+  function dropOn(target: Element, data: Map<string, string>, files: File[] = []): void {
+    const transfer = {
+      getData: (type: string) => data.get(type) ?? '',
+      types: [...data.keys(), ...(files.length > 0 ? ['Files'] : [])],
+      files,
+      dropEffect: '',
+    }
+    const drop = new window.Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+    target.dispatchEvent(drop)
+  }
+
+  it('offers to take a map, a track or a structure, not a map alone', () => {
+    const { deck } = withTracks()
+    deck.grow('beside')
+    const label = deck.el.querySelector('.deck-vacant .ann-drop-label')?.textContent
+    expect(label).toBe('Drop a map, a track or a structure')
+    expect(label).not.toContain('Drop a map here')
+  })
+
+  it('does not promise a track where the session carries none', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.grow('beside')
+    expect(deck.el.querySelector('.deck-vacant .ann-drop-label')?.textContent).toBe(
+      'Drop a map or a structure',
+    )
+  })
+
+  it('becomes a tracks cell drawing a row dragged from the Tracks card', () => {
+    const { deck, placed } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map([['application/x-metacooler-track', 't1']]))
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
+    expect(all(deck.el, '.deck-vacant')).toHaveLength(0)
+    // Placed on the cell that opened there, which is the map id its lanes
+    // are drawn under.
+    const cell = deck.mapList.find((map) => map.label === 'tracks')
+    expect(placed).toEqual([{ id: 't1', map: cell?.id }])
+  })
+
+  it('becomes a tracks cell loading a track file dropped on it', () => {
+    const { deck, loaded } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map(), [new File(['chr1\t0\t10\n'], 'peaks.bed')])
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
+    const cell = deck.mapList.find((map) => map.label === 'tracks')
+    expect(loaded).toEqual([{ uri: 'peaks.bed', map: cell?.id }])
+  })
+
+  it('still opens a map dropped on it as a map', () => {
+    const { deck, loaded } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map(), [new File(['x'], 'rep2.cool')])
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(0)
+    expect(loaded).toEqual([])
+    expect(deck.mapList.map((map) => map.label).slice(1)).toEqual(['rep2.cool'])
   })
 })

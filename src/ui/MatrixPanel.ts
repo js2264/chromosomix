@@ -487,16 +487,6 @@ export interface MatrixPanelOptions {
    */
   detachedControls?: boolean
   /**
-   * Put the scale controls **on the picture** rather than in a card.
-   *
-   * For a panel with no sidebar to put a card in — a companion in a deck (§16).
-   * Deliberately not inferred from {@link detachedControls}, which every view
-   * in the app sets: those views detach their cards only to move them into the
-   * Aesthetics column, and a second copy of the same five fields in the corner
-   * of the map would be two controls over one scale.
-   */
-  cornerControls?: boolean
-  /**
    * Suppress the panel's own title line.
    *
    * Every view already names what it is showing in its `<h2>`, so the panel
@@ -1034,13 +1024,11 @@ export class MatrixPanel {
    */
   private scoreSelect: HTMLSelectElement | null = null
   /**
-   * The scale menu on the picture, for a panel with no card in a sidebar.
-   *
-   * `null` on the session's own map, which has the Aesthetics column: one
-   * control over one scale, or the two disagree about which of them the reader
-   * last touched.
+   * The line under the *Map* card's title saying which map of a deck the card
+   * sets (§16.5) — the starred one, or every map where none is starred.
+   * Hidden on a map with no deck around it, where there is nothing to choose.
    */
-  private readonly settingsEl: HTMLElement | null
+  private readonly cardFor = el('p', { class: 'map-card-for hidden' })
   /** Whether the window is too narrow for a key over the picture. */
   private narrow = false
   /** Whether the key is shown — the `legend` overlay; see `ui/plotOptions.ts`. */
@@ -1571,16 +1559,11 @@ export class MatrixPanel {
       unit: () => (this.comparisonLabel() !== null ? '' : this.scoreWord()),
     })
 
-    /**
-     * The fields that answer *what are these numbers, and how are they drawn* —
-     * the score, the baseline, the transform, the ramp and the clip.
-     *
-     * Collected apart from the rest because a panel with no card to put a card
-     * in carries exactly these and none of the others (see {@link settingsEl}).
-     * The same nodes, not copies: a second set of widgets over one scale is two
-     * controls that drift.
-     */
-    const valueFields: HTMLElement[] = []
+    // Every field lives in the *Map* card, a companion's included. A companion
+    // used to carry the score, the transform, the ramp and the clip in a menu
+    // in its picture's corner instead; that menu is gone, and the Aesthetics
+    // column shows the **starred** map's card (§16.5), so one card sets one map
+    // and there is never a second copy of a control over one scale.
     const controls: HTMLElement[] = [
       field(
         'transform',
@@ -1643,8 +1626,6 @@ export class MatrixPanel {
         ),
       )
     }
-
-    valueFields.push(...controls)
 
     /**
      * One overlay toggle. It *writes* to the shared store and *reads* from the
@@ -1899,13 +1880,9 @@ export class MatrixPanel {
         'What the cells are: the stored counts, cooler’s balanced matrix, or a reading ' +
           'computed here from the block on screen. Each of those has its own note on hover.',
       )
-      // **First in both**, and not merely first in the card. It leads the Map
-      // card because it is the question the other three answer *about* — what
-      // the numbers are, before how they are transformed, ramped and clipped —
-      // and a corner menu that put it last was the same five fields in a
-      // different order on a companion. `unshift` on each, so the two lists
-      // cannot drift the next time one of them gains a field.
-      valueFields.unshift(scoreField)
+      // First among the value fields: it is the question the other three answer
+      // *about* — what the numbers are, before how they are transformed,
+      // ramped and clipped.
       controls.unshift(scoreField)
     }
 
@@ -2146,43 +2123,15 @@ export class MatrixPanel {
       ),
     )
 
-    // A panel with no sidebar of its own carries its scale controls **on the
-    // picture**: a button in the bottom-left corner of the map, and a menu that
-    // opens up over it. What used to be there was a `colour and export` fold
-    // *under* the map, which pushed every panel of a deck down by the height of
-    // whatever was open in the one beside it and put a second export control on
-    // screen for a figure nobody had asked to save. The menu holds the five
-    // fields that say what the numbers are and how they are drawn, and nothing
-    // else — the overlay marks act on a picture the reader is pointing at, and
-    // reaching them through a menu is slower than the row they came from.
-    this.settingsEl =
-      options.cornerControls !== true
-        ? null
-        : el(
-            'div',
-            { class: 'map-settings hidden', attrs: { role: 'dialog' } },
-            ...valueFields,
-          )
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
       // "Map", not "View": the card beside it is about the tracks, and both of
       // them are views of something. This one is the matrix.
       cardTitle('Map', 'sliders-horizontal', 'controls-title'),
-      // The value fields are in the corner menu where there *is* one, and in
-      // this card where there is not — never in both, because a node has one
-      // parent. Appending the same five to each moved them into whichever
-      // container was built second, which is this one, so the corner menu
-      // opened empty and a companion's only scale controls were in a card it
-      // never mounts. One set of widgets is still the rule (see
-      // {@link settingsEl}); this decides where that one set lives.
-      el(
-        'div',
-        { class: 'panel-controls' },
-        ...(this.settingsEl === null
-          ? controls
-          : controls.filter((node) => !valueFields.includes(node))),
-      ),
+      // Which map of a deck this card sets, under the title; see {@link setCardFor}.
+      this.cardFor,
+      el('div', { class: 'panel-controls' }, ...controls),
     )
     // After *both* rows exist, not after the first. The Map card is built well
     // below the Tracks card, so painting where the Tracks card ends left every
@@ -2213,7 +2162,6 @@ export class MatrixPanel {
       this.grips.bottom,
       this.grips.left,
       this.grips.right,
-      ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     ))
     this.watchGrips()
@@ -3410,47 +3358,6 @@ export class MatrixPanel {
     // A double-click puts the default back, which is the way out of an edge
     // dragged somewhere useless.
     grip.addEventListener('dblclick', () => rule.reset())
-  }
-
-  /**
-   * The corner button and the menu it opens, as one box in the map's foot.
-   *
-   * Closed by a click anywhere else and by Escape, because it covers the
-   * picture: a menu left open over a map is a map the reader cannot read, and
-   * the gesture that dismisses it has to be the one they would try first.
-   */
-  private settingsCorner(menu: HTMLElement): HTMLElement {
-    const toggle = iconButton(
-      'sliders-horizontal',
-      'Colour and values: the score, the baseline, the transform, the ramp and the clip',
-      () => {
-        const open = menu.classList.toggle('hidden')
-        toggle.setAttribute('aria-expanded', String(!open))
-      },
-      { class: 'btn btn-icon map-settings-toggle', size: 15 },
-    )
-    toggle.setAttribute('aria-expanded', 'false')
-    const box = el('div', { class: 'map-settings-corner' }, menu, toggle)
-    const close = (): void => {
-      menu.classList.add('hidden')
-      toggle.setAttribute('aria-expanded', 'false')
-    }
-    // On the document, because the thing a reader clicks to dismiss a menu over
-    // a map is usually the map — and the map's own handlers stop nothing.
-    const onPointer = (event: PointerEvent): void => {
-      if (event.target instanceof Node && box.contains(event.target)) return
-      close()
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('pointerdown', onPointer)
-    window.addEventListener('keydown', onKey)
-    this.laneListeners.push(() => {
-      document.removeEventListener('pointerdown', onPointer)
-      window.removeEventListener('keydown', onKey)
-    })
-    return box
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -5609,6 +5516,32 @@ export class MatrixPanel {
     this.lastTitle = title
     this.exportName = title
     this.titleNode.textContent = title
+  }
+
+  /**
+   * Say, under the *Map* card's title, which map of a deck the card sets
+   * (§16.5), or put the line away with `null`.
+   *
+   * Told by the deck, which owns the star: `starred` names this map, the
+   * starred one, and `every` says nothing is starred and the card is setting
+   * every map at once — the one state in which a change here reaches beyond
+   * the picture the card was built for.
+   */
+  setCardFor(target: { kind: 'starred'; name: string } | { kind: 'every'; maps: number } | null): void {
+    this.cardFor.classList.toggle('hidden', target === null)
+    if (target === null) {
+      this.cardFor.replaceChildren()
+      return
+    }
+    const starred = target.kind === 'starred'
+    this.cardFor.classList.toggle('is-every', !starred)
+    this.cardFor.replaceChildren(
+      icon('star', { size: 12, class: starred ? 'map-card-star is-on' : 'map-card-star' }),
+      el('span', { text: starred ? target.name : `every map — all ${target.maps}` }),
+    )
+    this.cardFor.title = starred
+      ? `This card sets ${target.name}, the starred map. Star another map to set that one instead.`
+      : 'No map is starred, so a change here is made to every map of the deck. Star one to set it alone.'
   }
 
   /**

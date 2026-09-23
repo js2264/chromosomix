@@ -399,8 +399,10 @@ never report one back. In a link: a URI, `~`, `3d`, `tracks`.
 
 ### star
 
-Which panel the Analysis column reads (§18.2). It starts on the lead and says only which picture the
-tasks measure — not which map is "current" in any other sense.
+Which map of a deck the Analysis column reads (§18.2) and the Aesthetics column's *Map* card sets
+(§16.5). It starts on the lead; a filled star pressed leaves **no map starred**, in which state the
+card sets every map at once and no task can run (§18.1). A structure cell has a star of its own,
+saying which cell the *3D structure* card sets — or, with none filled, that it sets them all (§25.3).
 
 ### the second file, or compare
 

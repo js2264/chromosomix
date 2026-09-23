@@ -24,7 +24,7 @@
 
 import { ViewerError } from '../errors'
 import { describeTier, type NameContext, type NameMatch } from '../genome/naming'
-import { DECK_DRAG_TYPE, type DeckLook } from './deck'
+import { DECK_DRAG_TYPE, mapStarTitle, type DeckLook } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
@@ -60,9 +60,20 @@ import {
   type DerivePresentation,
   type TurnPresentation,
 } from '../ui/MatrixPanel'
-import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
+import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
+import { parseSmooth } from '../render/smooth'
 import type { ScaleState } from '../ui/GenomeView'
-import { STRUCTURE_DRAG_TYPE, dragHasFiles, dragHasStructure, el, fmt } from '../ui/dom'
+import {
+  STRUCTURE_DRAG_TYPE,
+  TRACK_DRAG_TYPE,
+  dragHasFiles,
+  dragHasStructure,
+  dragHasTrack,
+  el,
+  fmt,
+} from '../ui/dom'
+import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
+import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
@@ -177,13 +188,13 @@ export interface MapPanelProps {
    */
   initialLook(): ScaleState
   /**
-   * The derivation the deck is showing, as a thunk so it is never stale.
+   * The first map's derivation, as a thunk so it is never stale.
    *
-   * Shared, like the score and the level and for the same reason: a deck exists
-   * to put N files' pictures of one place side by side, and one panel drawing
-   * O/E beside four drawing raw counts is four wrong comparisons rather than a
-   * choice. No handler on it, so a companion applies it and offers no control
-   * over it (`ui/MatrixPanel.ts`'s `DerivePresentation`).
+   * What a companion **opens on** and what it borrows the machinery from — the
+   * workers a correlation and an adaptive smoothing run on — and no longer what
+   * it draws: the O/E, the smoothing and the score are each map's own, seeded
+   * from the first map's and set from the *Map* card while this map is starred
+   * (§16.2, §16.5). See {@link MapPanel.derivation}.
    */
   derive(): DerivePresentation | undefined
   /**
@@ -246,6 +257,10 @@ export interface MapPanelProps {
    * bar saying the score is one of the things a deck shares. Resolved against
    * this file's own columns all the same, so a name it has not got falls back
    * to counts rather than to a read it cannot answer.
+   *
+   * **A seed, not a rule.** A companion opens on this and from then on reads
+   * its own score (§16.2): the *Map* card sets the starred map alone, so the
+   * first map's score moving must not move the others with it.
    */
   score(): string | undefined
   /** Rewrite this panel's URI after it resolved a collection to one of its entries. */
@@ -303,6 +318,16 @@ export interface MapPanelProps {
    * know its key.
    */
   onRename?(name: string | null): void
+  /**
+   * This map's *Map* card was built, rebuilt or taken down — the element
+   * {@link MapPanel.card} answers with has changed.
+   *
+   * The deck's cue to tell the session, which is what places the **starred**
+   * map's card in the Aesthetics column (§16.5): a card that was rebuilt under
+   * a new annotation store would otherwise leave the column holding the old
+   * one, bound to a picture that no longer exists.
+   */
+  onCardChange?(): void
 }
 
 export class MapPanel {
@@ -389,6 +414,16 @@ export class MapPanel {
    * nobody has touched does.
    */
   private scoreOverride: string | null = null
+  /**
+   * Whether this map divides by its distance baseline, and how much it is
+   * smoothed — each map's own (§16.2), for {@link scoreOverride}'s reason.
+   *
+   * `null` until seeded from the first map's, which is what a companion
+   * nobody has touched draws; set from the *Map* card while this map is the
+   * starred one, and remembered with its scale ({@link reportLook}).
+   */
+  private expectedOwn: boolean | null = null
+  private smoothOwn: string | null = null
   /**
    * The annotation store the current panel draws its lanes from.
    *
@@ -494,7 +529,10 @@ export class MapPanel {
         ...(held.vmax === undefined ? {} : { vmax: held.vmax }),
       }
       if (held.score !== undefined) this.scoreOverride = held.score
+      if (held.oe !== undefined) this.expectedOwn = held.oe
+      if (held.smooth !== undefined) this.smoothOwn = held.smooth
     }
+    this.seed()
     this.el = el(
       'section',
       { class: 'deck-panel' },
@@ -769,13 +807,127 @@ export class MapPanel {
   setStarred(on: boolean): void {
     this.starButton.classList.toggle('is-on', on)
     this.starButton.setAttribute('aria-pressed', String(on))
-    this.starButton.disabled = on
     // `this.uri`, so a companion that descended into an entry names the rung it
     // is actually reading — which is the file a task would run against, and the
     // one thing this button is about.
-    this.starButton.title = on
-      ? `${fileLabel(this.uri)} is the map an analysis runs against`
-      : `Run analyses against ${fileLabel(this.uri)} instead`
+    this.starButton.title = mapStarTitle(this.props.label?.() ?? fileLabel(this.uri), on)
+  }
+
+  /**
+   * This map's *Map* card — the one the Aesthetics column shows while this map
+   * is starred (§16.5) — or `null` before the first block has built the map.
+   */
+  get card(): HTMLElement | null {
+    return this.panel?.controlsEl ?? null
+  }
+
+  /**
+   * Say on this map's card which map it sets; see `MatrixPanel.setCardFor`.
+   * Held as well as passed down, because the map is built at the first read
+   * and a line set before it existed would otherwise be lost.
+   */
+  setCardFor(target: Parameters<MatrixPanel['setCardFor']>[0]): void {
+    this.cardTarget = target
+    this.panel?.setCardFor(target)
+  }
+
+  private cardTarget: Parameters<MatrixPanel['setCardFor']>[0] = null
+
+  /**
+   * Read this map as `id` — the score picker on its card, or the first map's
+   * card setting every map (§16.5).
+   *
+   * The clip goes back to auto, and that is not tidiness: a clip is a pair of
+   * numbers in one score's units, and a balanced matrix is fractions where a
+   * count matrix is integers. Kept across the switch, a perfectly good map is
+   * drawn as a black rectangle from a control the reader never touched — which
+   * is the same argument {@link show} makes for not lending a companion the
+   * lead's clip when the two are drawing different quantities.
+   *
+   * Nothing is published. The hash carries the first map's score, and a
+   * companion's is in the position its clip is already in (§16.6): remembered
+   * in this session's memory, beside the look.
+   */
+  useScore(id: string): void {
+    if (this.scoreOverride === id) return
+    this.scoreOverride = id
+    this.panel?.applyScale({ ...this.look, vmin: undefined, vmax: undefined })
+    this.look = { ...this.look, vmin: undefined, vmax: undefined }
+    this.reportLook()
+    if (this.state !== null) void this.load(this.state)
+  }
+
+  /** Divide this map by its distance baseline, or stop (§7.5) — its own O/E. */
+  useExpected(on: boolean): void {
+    if (this.expectedOwn === on) return
+    this.expectedOwn = on
+    this.reportLook()
+    this.panel?.rederive(this.derivation(), undefined, this.props.turn())
+  }
+
+  /**
+   * Smooth this map by `token`, its own despeckle (§7.5). The adaptive window
+   * turns the O/E on, exactly as it does on the first map: it is sized on the
+   * counts and divided by a baseline averaged over that window.
+   */
+  useSmooth(token: string): void {
+    if (this.smoothOwn === token) return
+    this.smoothOwn = token
+    if (parseSmooth(token)?.kind === 'adaptive') this.expectedOwn = true
+    this.reportLook()
+    this.panel?.rederive(this.derivation(), undefined, this.props.turn())
+  }
+
+  /** Put part of a scale on this map and keep the rest of its own. */
+  mergeLook(look: ScaleState): void {
+    this.applyLook({ ...(this.panel?.baseScale() ?? this.look), ...look })
+  }
+
+  /**
+   * What this map draws: the first map's derivation machinery, with **its own**
+   * O/E, smoothing and score in it (§16.2).
+   *
+   * The normalisation, the correlation and the baseline are answers to *what
+   * are these cells*, which is the score, so they are read off this map's own
+   * choice — picking `VC` on a companion used to label it VC and draw it
+   * however the *first* map was normalised, because those three came from the
+   * first map's score. The handlers are this map's, so the O/E toggle and the
+   * smoothing on its card set this map alone.
+   */
+  private derivation(): DerivePresentation | undefined {
+    const shared = this.props.derive()
+    if (shared === undefined) return undefined
+    const { normalise: _first, ...rest } = shared
+    const choice = this.opened === null || this.state === null ? null : this.scoreOf(this.opened, this.state)
+    const normalise = choice === null ? shared.normalise : choice.normalise
+    return {
+      ...rest,
+      ...(normalise === undefined ? {} : { normalise }),
+      expected: this.expectedOwn ?? shared.expected,
+      smooth: this.smoothOwn ?? shared.smooth,
+      correlate: choice === null ? shared.correlate : choice.correlate === true,
+      baseline: choice === null ? shared.baseline : choice.baseline === true,
+      onExpectedChange: (on) => this.useExpected(on),
+      onSmoothChange: (token) => this.useSmooth(token),
+      // The one caller is a correlation that failed, and "off" can only mean
+      // the score it stood on: balanced counts, the nearest picture to it.
+      onCorrelateChange: (on) => {
+        if (!on) this.useScore(BALANCED_SCORE)
+      },
+    }
+  }
+
+  /**
+   * Take the first map's score, O/E and smoothing as this map's own, where it
+   * has none yet (§16.2). Asked at construction and again at every read, since
+   * a companion can be built before the first map has resolved a score.
+   */
+  private seed(): void {
+    if (this.scoreOverride === null) this.scoreOverride = this.props.score() ?? null
+    const shared = this.props.derive()
+    if (shared === undefined) return
+    this.expectedOwn ??= shared.expected
+    this.smoothOwn ??= shared.smooth
   }
 
   /**
@@ -823,7 +975,7 @@ export class MapPanel {
     // carries neither and a change to either would otherwise short-circuit
     // against an unchanged key — leaving this companion drawing counts beside a
     // lead drawing a ratio, or square beside a lead on its diagonal.
-    this.panel?.rederive(this.props.derive(), undefined, this.props.turn())
+    this.panel?.rederive(this.derivation(), undefined, this.props.turn())
     void this.load(state)
   }
 
@@ -1041,12 +1193,15 @@ export class MapPanel {
 
   private async load(state: ViewState): Promise<void> {
     this.state = state
+    this.seed()
     const plan = planFor(state)
     if (plan.kind === 'none') {
       this.read = null
       this.body.replaceChildren()
+      const had = this.panel !== null
       this.panel?.destroy()
       this.panel = null
+      if (had) this.props.onCardChange?.()
       this.say(plan.reason)
       // Cleared here and in the catch below, for the reason the selection
       // branch of `readBlock` gives: a rename note left standing over a panel
@@ -1155,35 +1310,12 @@ export class MapPanel {
   }
 
   /**
-   * The reader picked a score for *this* panel, in its corner menu.
-   *
-   * The clip goes back to auto, and that is not tidiness: a clip is a pair of
-   * numbers in one score's units, and a balanced matrix is fractions where a
-   * count matrix is integers. Kept across the switch, a perfectly good map is
-   * drawn as a black rectangle from a control the reader never touched — which
-   * is the same argument {@link show} makes for not lending a companion the
-   * lead's clip when the two are drawing different quantities.
-   *
-   * Nothing is published. The hash carries the deck's score, and a panel that
-   * has stepped off it is in the position a local companion is already in
-   * (§16.6): the link says what it can say honestly, which is where the deck as
-   * a whole was pointed.
-   */
-  private pickScore(id: string): void {
-    if (this.scoreOverride === id) return
-    this.scoreOverride = id
-    this.panel?.applyScale({ ...this.look, vmin: undefined, vmax: undefined })
-    this.look = { ...this.look, vmin: undefined, vmax: undefined }
-    this.reportLook()
-    if (this.state !== null) void this.load(this.state)
-  }
-
-  /**
    * Tell the deck how this map is drawn now, so it can be written down.
    *
-   * Every road that changes either half ends here — the corner menu's five
-   * fields, the score picker, and the deck's own "fix all scales" — because the
-   * memory is of *what this map looks like*, not of which control was touched.
+   * Every road that changes it ends here — this map's *Map* card, the first
+   * map's card while nothing is starred, and the deck's own "match all scales"
+   * — because the memory is of *what this map looks like*, not of which control
+   * was touched.
    */
   private reportLook(): void {
     // **Minus whatever a derivation borrowed**, which is the same distinction
@@ -1201,6 +1333,8 @@ export class MapPanel {
       ...(look.vmin === undefined ? {} : { vmin: look.vmin }),
       ...(look.vmax === undefined ? {} : { vmax: look.vmax }),
       ...(this.scoreOverride === null ? {} : { score: this.scoreOverride }),
+      ...(this.expectedOwn === null ? {} : { oe: this.expectedOwn }),
+      ...(this.smoothOwn === null ? {} : { smooth: this.smoothOwn }),
     })
   }
 
@@ -1301,7 +1435,7 @@ export class MapPanel {
     // turned O/E on, or flipped the deck, while this companion was fetching.
     // Recorded rather than applied — `rederive` would rebuild the picture from
     // the block that is about to be replaced.
-    this.panel?.setDerive(this.props.derive())
+    this.panel?.setDerive(this.derivation())
     this.panel?.setTurn(this.props.turn())
     // **The store the lanes are read from is captured at construction, and the
     // session builds a new one on every open.** A change of resolution is a
@@ -1347,15 +1481,15 @@ export class MapPanel {
         ...this.look,
       }
       const turn = this.props.turn()
+      const derive = this.derivation()
       this.panel = new MatrixPanel({
         binsize: info.binsize ?? 1,
         balance: this.scoreOf(info, state).balance,
         initial: this.look,
-        ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
+        ...(derive === undefined ? {} : { derive }),
         ...(turn === undefined ? {} : { turn }),
         ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
-        cornerControls: true,
         hideTitle: true,
         caption: { file: fileLabel(this.uri) },
         // Built from **this** file's columns, not from the lead's: what a
@@ -1365,7 +1499,7 @@ export class MapPanel {
         scores: {
           choices: this.scoreChoicesOf(info),
           current: this.scoreOf(info, state).id,
-          onChange: (choice) => this.pickScore(choice.id),
+          onChange: (choice) => this.useScore(choice.id),
         },
         // The clip a companion arrives at is its own — see {@link applyLook}.
         onScaleChange: (scale) => {
@@ -1373,18 +1507,20 @@ export class MapPanel {
           this.reportLook()
         },
       })
-      // Nothing under the picture. A companion's scale controls are on the map
-      // itself, in the corner menu a detached panel builds for exactly this
-      // case (`ui/MatrixPanel.ts`) — a fold under each panel pushed every other
-      // panel of the deck down by the height of whatever was open in it. Not
-      // the Tracks card and not Groups either: both are about annotations and a
-      // companion carries none.
+      // Nothing under the picture and nothing on it. A companion's settings
+      // are its *Map* card, which the Aesthetics column shows while this map
+      // is starred (§16.5) — the corner menu that used to hold them put a
+      // second place to set a map beside the column that sets every other
+      // picture. Not the Tracks card and not Groups either: both are about
+      // the annotations, which are the session's.
+      this.panel.setCardFor(this.cardTarget)
       // Reported for the deck's benefit, not this panel's: a companion lays
       // nothing out, but the room its stack takes is the deck's business.
       this.panel.setLaneListener(() => this.props.onLanes?.())
       // Whatever the deck reserved while this panel was still reading its file.
       this.panel.setLaneFloor(this.laneFloor)
       this.body.replaceChildren(this.panel.el)
+      this.props.onCardChange?.()
     }
     // After the panel exists, and on every block. `readBlock` runs *before* the
     // first one is built, so a score applied there is applied to nothing — which
@@ -1574,10 +1710,22 @@ export class VacantPanel {
      * light up as though it could.
      */
     onStructure?(id: string): void
+    /**
+     * A **track** dragged here from the Tracks card (§16.9): the cell becomes a
+     * tracks cell drawing it. Absent where the session carries no tracks
+     * (§8.5), and then the cell neither lights up for one nor promises it.
+     */
+    onTrack?(id: string): void
+    /**
+     * A row dragged here from the Files panel, once its file is in hand — the
+     * same routing a file dropped from the desktop takes.
+     */
+    onPicked?(picked: PickedFile): void
     onClose(): void
   }) {
     const drawn = props.origin === 'drawn'
     const remembered = props.origin === 'remembered' && props.name !== undefined
+    const tracks = props.onTrack !== undefined
     const input = el('input', { class: 'hidden-input', type: 'file' })
     input.addEventListener('change', () => {
       const file = input.files?.[0]
@@ -1594,18 +1742,31 @@ export class VacantPanel {
       { class: 'ann-drop deck-drop deck-vacant', attrs: { tabindex: '0', role: 'button' } },
       el('span', {
         class: 'ann-drop-label',
-        text: drawn ? 'Drop a map here' : remembered ? (props.name as string) : 'A map was here',
+        // **Any cell, not a map.** A drawn cell used to say *drop a map here*,
+        // which was true of the one thing it then took and hid the two other
+        // kinds a deck holds: a tracks cell had no road on screen but the
+        // bar's row, and a model only the Structures card's grip (§16.9).
+        text: drawn
+          ? tracks
+            ? 'Drop a map, a track or a structure'
+            : 'Drop a map or a structure'
+          : remembered
+            ? (props.name as string)
+            : 'A map was here',
       }),
       el('span', {
         class: 'ann-drop-hint',
         text: drawn
-          ? 'Drop a cooler here, or a model from the Structures card, or click to choose. ' +
-            'Leaving it empty is fine — the link keeps it.'
+          ? (tracks
+              ? 'A contact map opens here as a map; a track or a structure — a file, or a row ' +
+                'dragged from the Annotations panel — opens the cell that draws it. '
+              : 'A contact map opens here as a map; a structure — a file, or a row of the ' +
+                'Structures card — opens its model. ') + 'Click to choose a file; left empty, the link keeps the cell.'
           : remembered
             ? 'This cell held that file and it could not be re-opened. Drop it here again and the ' +
               'panel comes back where it was.'
-            : 'The link left this cell with no file a page can fetch by name. Drop one here, or ' +
-              'click to choose.',
+            : 'The link left this cell with no file a page can fetch by name. Drop a map, a track ' +
+              'or a structure here, or click to choose.',
       }),
       input,
     )
@@ -1617,8 +1778,10 @@ export class VacantPanel {
     })
     const takesStructure = (event: DragEvent): boolean =>
       props.onStructure !== undefined && dragHasStructure(event)
+    const takesTrack = (event: DragEvent): boolean => props.onTrack !== undefined && dragHasTrack(event)
+    const takesRow = (event: DragEvent): boolean => props.onPicked !== undefined && dragHasFileRow(event)
     zone.addEventListener('dragover', (event) => {
-      if (!dragHasFiles(event) && !takesStructure(event)) return
+      if (!dragHasFiles(event) && !takesStructure(event) && !takesTrack(event) && !takesRow(event)) return
       event.preventDefault()
       if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'copy'
       zone.classList.add('over')
@@ -1633,6 +1796,25 @@ export class VacantPanel {
       if (model !== '' && props.onStructure !== undefined) {
         event.stopPropagation()
         props.onStructure(model)
+        return
+      }
+      // A track row the same way: it carries an id and no file, and the
+      // content area's own importer would otherwise read the drop as nothing.
+      const track = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
+      if (track !== '' && props.onTrack !== undefined) {
+        event.stopPropagation()
+        props.onTrack(track)
+        return
+      }
+      // A Files-panel row names a file that still has to be fetched, which a
+      // drop handler cannot wait for; the payload is read now and the rest
+      // follows (`ui/fileDrag.ts`).
+      if (props.onPicked !== undefined && dragHasFileRow(event)) {
+        event.stopPropagation()
+        const onPicked = props.onPicked
+        void readFileDrag(event).then((picked) => {
+          if (picked !== null) onPicked(picked)
+        })
         return
       }
       const file = event.dataTransfer?.files?.[0]

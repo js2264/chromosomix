@@ -81,7 +81,7 @@ import {
 } from '../ui/export'
 import { VectorPage } from '../ui/vector'
 import { KEYS, withKey } from '../ui/commands'
-import { icon, iconButton, setPressed } from '../ui/icons'
+import { cardTitle, icon, iconButton, setPressed } from '../ui/icons'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
@@ -113,6 +113,7 @@ import {
   type DeckLook,
   type GrowDirection,
   type PanelRef,
+  mapStarTitle,
 } from './deck'
 import { ViewportLock, spansAgree, type LockUnit } from './lock'
 import type { PickHandlers } from '../ui/mapPick'
@@ -120,6 +121,8 @@ import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
 import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from '../ui/labels'
+import { routeFor } from '../browse/route'
+import { placementOn } from '../annotations/types'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
@@ -242,6 +245,20 @@ export interface PanelDeckProps {
    * because both are answers about one file and the file has changed.
    */
   onStarChange?(): void
+  /**
+   * The *Map* card the Aesthetics column should show has changed (§16.5): the
+   * star moved, or the starred companion's card was built or rebuilt. Only the
+   * session can put a card in that column, so it is told and asks
+   * {@link PanelDeck.mapCard} which one.
+   */
+  onMapCardChange?(): void
+  /**
+   * A **track** file dropped on an empty cell (§16.9): load it into the
+   * session's one list of tracks, drawn on the tracks cell `map` the deck has
+   * just opened there. Absent where the session carries no tracks (§8.5), in
+   * which case an empty cell takes maps and structures only.
+   */
+  onTrackFile?(picked: PickedFile, map: MapId): void
   /**
    * The **structure** star moved: the *3D structure* card in the Aesthetics
    * column is now a different cell's, and only the session can put it there.
@@ -481,7 +498,10 @@ export class PanelDeck {
   private readonly toolbar: HTMLElement
   private readonly grid: HTMLElement
   private readonly leadHead = el('header', { class: 'deck-head deck-head-lead hidden' })
-  /** The lead's half of the star; every companion carries its own. */
+  /**
+   * The lead's half of the star; every companion carries its own. Pressed
+   * filled, it leaves no map starred ({@link setStarred}).
+   */
   private readonly leadStar = iconButton('star', '', () => this.setStarred(LEAD_MAP), {
     class: 'btn btn-icon deck-star is-on',
     size: 13,
@@ -580,13 +600,23 @@ export class PanelDeck {
    * the one to measure — and answering it by changing which file the session is
    * of would rewrite the breadcrumb and the tables to run a P(s).
    *
-   * So the star says only which picture the tasks read, it starts on the lead,
-   * and it goes back to the lead the moment the map it named leaves. One
-   * starred map at a time, because a task runs against one file: this is a radio
-   * button drawn as five, which is the same shape the Annotations card's own
-   * star has for the same reason (`ui/AnnotationCard.ts`).
+   * So the star says which picture the tasks read and which map the *Map* card
+   * in the Aesthetics column sets (§16.5); it starts on the lead, and it goes
+   * back to the lead the moment the map it named leaves. One starred map at a
+   * time, because a task runs against one file and the column holds one card:
+   * a radio button drawn as five.
+   *
+   * **Or none**, `null`: the reader pressed the filled star. Then the card sets
+   * every map at once — the first map's card, its changes copied onto every
+   * companion ({@link mirrorLead}) — and no task can run, since there is no file
+   * for one to run against (§18.1).
    */
-  private starred: MapId = LEAD_MAP
+  private starred: MapId | null = LEAD_MAP
+  /**
+   * What the first map's card last said, for {@link mirrorLead} to tell which
+   * of its settings a render has just moved. `null` before the first render.
+   */
+  private leadSettings: LeadSettings | null = null
   /**
    * The structure cell the *3D structure* card is about (§25.3), by slot id.
    *
@@ -594,8 +624,12 @@ export class PanelDeck {
    * runs against* and a starred structure cell is *the picture this column's
    * settings are for*. One deck can want both at once, and a reader who
    * starred a model to tune it has said nothing about which map a task reads.
+   *
+   * `''` is *not chosen yet*, which falls to the first cell; `null` is *none*,
+   * the reader having pressed the filled star — the card then sets every
+   * structure cell at once (§25.3).
    */
-  private starredStructure = ''
+  private starredStructure: string | null = ''
 
   /**
    * How each companion was last drawn, by file (`panels/deck.ts`'s `DeckLook`).
@@ -667,9 +701,11 @@ export class PanelDeck {
     // name a slot this one has not built, and `keepStarPresent` puts it back on
     // the lead rather than leaving the Analysis column pointed at nothing.
     const star = recall<string>(props.memoryKey(), 'deck:starred')
-    if (typeof star === 'string' && star !== '') this.starred = star
+    if (star === NO_STAR) this.starred = null
+    else if (typeof star === 'string' && star !== '') this.starred = star
     const model = recall<string>(props.memoryKey(), STRUCTURE_STAR_SCOPE)
-    if (typeof model === 'string') this.starredStructure = model
+    if (model === NO_STAR) this.starredStructure = null
+    else if (typeof model === 'string') this.starredStructure = model
     this.looks = this.recallLooks()
 
     this.structureButton = button('add a 3D structure', () => this.add({ kind: 'structure' }), {
@@ -842,6 +878,8 @@ export class PanelDeck {
     }
     this.lead = panel
     this.lock.leave(LEAD)
+    // A new first map is a new card, which has to be told what it sets.
+    this.paintCardsFor()
     panel?.setDeckExport(this.deckExport)
     panel?.setLaneListener((budget) => this.align(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
@@ -981,8 +1019,54 @@ export class PanelDeck {
       // make the next render see a difference and reconcile the deck away.
       this.published = { value: state.maps }
     }
+    // Before the panels are handed the state, so a companion told a new score
+    // reads it once rather than reading the old one first.
+    this.mirrorLead(state)
     for (const slot of this.slots) (slot.panel ?? slot.cell)?.apply(state)
     this.paintBar()
+  }
+
+  /**
+   * With no map starred, make every change to the first map's card a change to
+   * every map (§16.5).
+   *
+   * The card in the column is the first map's then, and its settings live in
+   * the view state — so what moved is read off the state, against what it said
+   * last render, and only what moved is copied: a score picked there must not
+   * also flatten every companion's clip onto the first map's. Watched here
+   * rather than reported by the card, so every road to the first map's
+   * settings — the card, the palette, a link — reaches every map alike while
+   * nothing is starred, and none of them does while something is.
+   */
+  private mirrorLead(state: ViewState): void {
+    const now: LeadSettings = {
+      score: this.props.score?.(),
+      oe: state.oe === true,
+      smooth: state.smooth ?? '0',
+      transform: state.transform,
+      colormap: state.colormap,
+      vmin: state.vmin,
+      vmax: state.vmax,
+    }
+    const was = this.leadSettings
+    this.leadSettings = now
+    if (was === null || this.starred !== null) return
+    for (const slot of this.slots) {
+      const panel = slot.panel
+      if (panel === null) continue
+      if (now.score !== undefined && now.score !== was.score) panel.useScore(now.score)
+      if (now.smooth !== was.smooth) panel.useSmooth(now.smooth)
+      if (now.oe !== was.oe) panel.useExpected(now.oe)
+      const look: ScaleState = {}
+      if (now.transform !== was.transform && now.transform !== undefined) look.transform = now.transform
+      if (now.colormap !== was.colormap && now.colormap !== undefined) look.colormap = now.colormap
+      // The clip as a pair, and *auto* carried as auto: a clip taken back off
+      // the first map is a clip taken off every map.
+      const clip = now.vmin !== was.vmin || now.vmax !== was.vmax
+      if (Object.keys(look).length > 0 || clip) {
+        panel.mergeLook(clip ? { ...look, vmin: now.vmin, vmax: now.vmax } : look)
+      }
+    }
   }
 
   /**
@@ -999,6 +1083,7 @@ export class PanelDeck {
     // companion that has not drawn yet has no numbers, and answering with
     // somebody else's while the button says "the starred map" is worse than
     // answering with nothing.
+    if (this.starred === null) return null
     const panel = this.starred === LEAD_MAP ? this.lead : (this.starredPanel?.map ?? null)
     if (panel === null) return null
     // **What it is drawing with**, not what the reader has set on it. Those are
@@ -1040,6 +1125,7 @@ export class PanelDeck {
 
   /** The bin size the deck is being asked to put every panel on. */
   private starredBinsize(): number | undefined {
+    if (this.starred === null) return undefined
     const panel = this.starredPanel
     if (panel !== null) return panel.binsize()
     return this.props.binsize?.()
@@ -1201,6 +1287,8 @@ export class PanelDeck {
     // last panel put down would leave the first one padded out for ever.
     this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
     this.lead?.setDeckExport(null)
+    // A map on its own again, whose card has nothing to choose between.
+    this.lead?.setCardFor(null)
     this.lead = null
     this.leadAxis = null
   }
@@ -1487,6 +1575,8 @@ export class PanelDeck {
         onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
         onStructure: (id) => this.putStructure(slot, id),
+        ...(this.takesTracks() ? { onTrack: (id: string) => this.putTrack(slot, id) } : {}),
+        onPicked: (picked) => this.fill(slot, picked),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1534,6 +1624,12 @@ export class PanelDeck {
           : { sharedElsewhere: () => shared.sharedElsewhere?.() ?? [] }),
         memoryKey: () => this.props.memoryKey(),
         onStar: () => this.setStarredStructure(slot.id),
+        // How many cells the card writes to, and the road to all of them: every
+        // structure cell while none is starred (§25.3), and this one otherwise.
+        together: () => (this.starredStructure === null ? this.structureCells().length : 1),
+        forEachStructure: (act) => {
+          for (const held of this.structureCells()) act(held)
+        },
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),
         onDrop: (file) => shared?.onDrop(file),
@@ -1570,6 +1666,11 @@ export class PanelDeck {
         // one, which in a 2 × 2 with three gaps is not the one they aimed at.
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
         onStructure: (id) => this.putStructure(slot, id),
+        // A track row from the Tracks card, and a row out of the Files panel —
+        // the two roads an empty cell did not take, so that a cell drawn with
+        // a `+` takes whatever a deck can hold (§16.9).
+        ...(this.takesTracks() ? { onTrack: (id: string) => this.putTrack(slot, id) } : {}),
+        onPicked: (picked) => this.fill(slot, picked),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1629,6 +1730,13 @@ export class PanelDeck {
       label: () => (isMapRef(slot.ref) ? this.props.mapLabel?.(slot.ref.uri) : undefined),
       onRename: (name) => {
         if (isMapRef(slot.ref)) this.props.onRenameMap?.(slot.ref.uri, name)
+      },
+      // A card that was built or rebuilt is the column's business only while
+      // this map is the starred one; it becomes the column's card then (§16.5).
+      onCardChange: () => {
+        if (slot.id !== this.starred) return
+        this.paintCardsFor()
+        this.props.onMapCardChange?.()
       },
     })
     slot.panel.syncLock()
@@ -1995,10 +2103,45 @@ export class PanelDeck {
     return out
   }
 
-  /** The map an analysis runs against; the lead unless a companion is starred. */
-  get starredMap(): MapId {
+  /**
+   * The map an analysis runs against; the lead unless a companion is starred,
+   * and `null` where the reader has left no map starred — the state in which no
+   * task can run (§18.1).
+   */
+  get starredMap(): MapId | null {
     return this.starred
   }
+
+  /**
+   * The starred companion's *Map* card, for the Aesthetics column (§16.5), or
+   * `null` where the column should show the first map's own: the first map is
+   * starred, nothing is (the first map's card then sets every map), or the
+   * starred companion has not drawn its first block yet.
+   */
+  mapCard(): HTMLElement | null {
+    const panel = this.starredPanel
+    if (panel === null) return null
+    const card = panel.card
+    if (card !== null) return card
+    // Starred before its map is drawn — still opening, or refused. The first
+    // map's card must not stand in for it: it would set a map other than the
+    // one the star is on, under a heading that says nothing about which.
+    const name = this.props.mapLabel?.(panel.uri) ?? fileLabel(panel.uri)
+    this.waitingCard.replaceChildren(
+      cardTitle('Map', 'sliders-horizontal', 'controls-title'),
+      el(
+        'p',
+        { class: 'map-card-for' },
+        icon('star', { size: 12, class: 'map-card-star is-on' }),
+        el('span', { text: name }),
+      ),
+      el('p', { class: 'clip-note', text: 'Its settings are here once its map is drawn.' }),
+    )
+    return this.waitingCard
+  }
+
+  /** What the column shows for a starred map that has no card yet; see {@link mapCard}. */
+  private readonly waitingCard = el('div', { class: 'controls-card map-card-waiting' })
 
   /**
    * The starred **companion**, or `null` when the star is on the lead.
@@ -2008,22 +2151,26 @@ export class PanelDeck {
    * about the Analysis column changes while the star has not moved.
    */
   get starredPanel(): MapPanel | null {
-    if (this.starred === LEAD_MAP) return null
+    if (this.starred === null || this.starred === LEAD_MAP) return null
     return this.slots.find((slot) => slot.id === this.starred)?.panel ?? null
   }
 
   /**
-   * Move the star, or leave it where it is.
+   * Move the star — or, pressed where it already is, take it off every map.
+   *
+   * A filled star is **live** and not a dead button: pressing it leaves no map
+   * starred, which is the state in which the *Map* card sets every map at once
+   * and no task runs (§16.5, §18.1). `null` says so directly.
    *
    * Silent about a map that is not here: a starred slot that has been closed
    * comes back as the lead through {@link keepStarPresent}, and a caller asking
    * for one that never existed is asking about a deck it has stale knowledge of.
    */
-  setStarred(map: MapId): void {
-    if (map === this.starred) return
-    if (map !== LEAD_MAP && !this.slots.some((slot) => slot.id === map)) return
-    this.starred = map
-    remember(this.props.memoryKey(), 'deck:starred', map)
+  setStarred(map: MapId | null): void {
+    const next = map === this.starred ? null : map
+    if (next !== null && next !== LEAD_MAP && !this.slots.some((slot) => slot.id === next)) return
+    this.starred = next
+    remember(this.props.memoryKey(), 'deck:starred', next ?? NO_STAR)
     this.paintStars()
     // The bar's two switches say which map they read *from*, so moving the star
     // rewrites both of them — and applies them, because "fix all scales" over a
@@ -2036,6 +2183,8 @@ export class PanelDeck {
     const panel = this.starredPanel
     if (panel !== null) void panel.prepareAnalysis(() => this.props.onStarChange?.())
     this.props.onStarChange?.()
+    // The column's *Map* card is the starred map's, so it changes with the star.
+    this.props.onMapCardChange?.()
   }
 
   /**
@@ -2057,12 +2206,19 @@ export class PanelDeck {
    * on departure catches that.
    */
   private keepStarPresent(): void {
+    // No star is a choice the reader made about *this* deck, and it holds for
+    // as long as the deck does; a deck put down leaves the next one starting
+    // where every deck starts, on the first map — or a reader who unstarred,
+    // closed the deck and opened another a week later would meet a column of
+    // greyed tasks with nothing on screen having changed.
+    if (this.starred === null && this.slots.length > 0) return
     if (this.starred === LEAD_MAP) return
-    if (this.slots.some((slot) => slot.id === this.starred)) return
+    if (this.starred !== null && this.slots.some((slot) => slot.id === this.starred)) return
     this.starred = LEAD_MAP
     remember(this.props.memoryKey(), 'deck:starred', LEAD_MAP)
     this.paintBar()
     this.props.onStarChange?.()
+    this.props.onMapCardChange?.()
   }
 
   /**
@@ -2078,13 +2234,43 @@ export class PanelDeck {
     for (const slot of this.slots) (slot.panel ?? slot.cell)?.syncName()
   }
 
-  /** Repaint every star, so exactly one of them is filled. */
+  /** Repaint every star, so at most one of them is filled. */
   private paintStars(): void {
     this.leadStar.classList.toggle('is-on', this.starred === LEAD_MAP)
     this.leadStar.setAttribute('aria-pressed', String(this.starred === LEAD_MAP))
-    this.leadStar.disabled = this.starred === LEAD_MAP
-    this.leadStar.title = starTitle(this.props.leadName?.() ?? 'this map', this.starred === LEAD_MAP)
+    this.leadStar.title = mapStarTitle(this.props.leadName?.() ?? 'this map', this.starred === LEAD_MAP)
     for (const slot of this.slots) slot.panel?.setStarred(this.starred === slot.id)
+    this.paintCardsFor()
+  }
+
+  /**
+   * Tell every map's *Map* card which map it sets (§16.5): the starred one
+   * names itself, and with nothing starred the first map's card says it sets
+   * every map. Nothing at all on a deck with no companion map, where the one
+   * map there is is the only thing the card could be about.
+   */
+  private paintCardsFor(): void {
+    const companions = this.slots.filter((slot) => slot.panel !== null)
+    if (companions.length === 0) {
+      this.lead?.setCardFor(null)
+      return
+    }
+    const leadName = this.props.leadName?.() ?? 'the first map'
+    this.lead?.setCardFor(
+      this.starred === null
+        ? { kind: 'every', maps: companions.length + 1 }
+        : this.starred === LEAD_MAP
+          ? { kind: 'starred', name: leadName }
+          : null,
+    )
+    for (const slot of companions) {
+      const panel = slot.panel as MapPanel
+      panel.setCardFor(
+        slot.id === this.starred
+          ? { kind: 'starred', name: this.props.mapLabel?.(panel.uri) ?? fileLabel(panel.uri) }
+          : null,
+      )
+    }
   }
 
   private remove(slot: Slot): void {
@@ -2099,7 +2285,10 @@ export class PanelDeck {
     this.publish()
   }
 
-  /** Turn a vacancy into a map, in the position it was standing in. */
+  /**
+   * Fill a vacancy with whatever the file is, in the position it was standing
+   * in — a map, a structure or a track (§16.9).
+   */
   private fill(slot: Slot, picked: PickedFile): void {
     // The same routing {@link addPicked} does, into *this* cell: a g3d dropped
     // on an empty card is the reader saying where the structure goes.
@@ -2109,11 +2298,49 @@ export class PanelDeck {
       this.occupy(slot, { kind: 'structure' })
       return
     }
+    // A track: a tracks cell opens where it was dropped, and the file is
+    // loaded into the session's one list of tracks **drawn on that cell** —
+    // the road a file aimed at a map's edge takes, with the cell as the map.
+    // Asked by name, as the rest of the app routes a file; a name the router
+    // does not know is still offered to the map road below, whose refusal is
+    // the reader's file's own error, in the cell it was dropped on.
+    if (this.takesTracks() && routeFor(picked.uri, picked.name) === 'genome') {
+      const built = this.occupy(slot, { kind: 'tracks' })
+      if (built !== null) this.props.onTrackFile?.(picked, built.id)
+      return
+    }
     this.occupy(
       slot,
       { kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri },
       picked.source,
     )
+  }
+
+  /**
+   * Whether an empty cell here can take a track: the session carries tracks
+   * (§8.5), can load one onto a cell, and can build a tracks cell to draw it.
+   */
+  private takesTracks(): boolean {
+    return (
+      this.props.tracks !== undefined &&
+      this.props.onTrackFile !== undefined &&
+      this.props.annotations?.(LEAD_MAP) !== undefined
+    )
+  }
+
+  /**
+   * Turn **this** cell into a tracks cell drawing the track `id` — a row of the
+   * Tracks card dropped on an empty cell (§16.9).
+   *
+   * The track is *placed* on the cell and not moved there: the row stays on
+   * every map it was drawn on, because a cell somebody made room in is a place
+   * to look at it again rather than a reason to take it off the map beside.
+   */
+  private putTrack(slot: Slot, id: string): void {
+    const store = this.props.annotations?.(LEAD_MAP)?.store
+    if (store === undefined || store.byId(id) === undefined) return
+    const built = this.occupy(slot, { kind: 'tracks' })
+    if (built !== null) store.placeAt(id, built.id, placementOn('bottom'))
   }
 
   /** Put a file in a cell that had none, leaving every other cell alone. */
@@ -2254,8 +2481,9 @@ export class PanelDeck {
       const from = places[cell]
       if (from === null) {
         // Drawn, not left by a link, and that is all the difference amounts to:
-        // the card says "drop a map here" rather than telling the reader that a
-        // map they never had used to be there (`panels/MapPanel.ts`).
+        // the card offers to take a map, a track or a structure rather than
+        // telling the reader that a map they never had used to be there
+        // (`panels/MapPanel.ts`).
         if (opened < 0) opened = seated.length
         seated.push(this.build({ kind: 'vacant' }, undefined, 'drawn'))
       } else {
@@ -2512,20 +2740,31 @@ export class PanelDeck {
     // sentence each: the argument for a press rather than a setting is this
     // comment's job and the spec's, not the cursor's (§26.4).
     const starName = this.starredName()
+    // With no map starred there is nothing to match *to*, and both are greyed
+    // with that reason on them rather than quietly reading the first map: the
+    // card beside the deck is setting every map at once in that state anyway.
+    const unstarred =
+      'No map is starred, so there is nothing to match the others to. Star the map to match them to.'
     const share = button('match all scales', () => this.matchScales(), {
       class: 'btn deck-share',
       title:
-        `Draw every panel on ${starName}’s clip, so one colour is one number of contacts across ` +
-        'the deck. A press rather than a setting: nudge a panel’s clip afterwards and it is on ' +
-        'its own values again.',
+        this.starred === null
+          ? unstarred
+          : `Draw every panel on ${starName}’s clip, so one colour is one number of contacts ` +
+            'across the deck. A press rather than a setting: nudge a panel’s clip afterwards and ' +
+            'it is on its own values again.',
     })
+    share.disabled = this.starred === null
 
     const resolutions = button('match all resolutions', () => this.matchResolutions(), {
       class: 'btn deck-resolutions',
       title:
-        `Read every panel at ${starName}’s bin size; a file with no such level stays where it is ` +
-        'and says so under its own map.',
+        this.starred === null
+          ? unstarred
+          : `Read every panel at ${starName}’s bin size; a file with no such level stays where ` +
+            'it is and says so under its own map.',
     })
+    resolutions.disabled = this.starred === null
 
     // The preset row's honest replacement, and the only control here that is
     // about the deck's *shape*. Without it a deck that arrived in a link could
@@ -2597,12 +2836,11 @@ export class PanelDeck {
     // Singular where there is one, which is a state a reader does see: asking
     // for a map builds the deck and shows its bar *before* a file has been
     // chosen, and "1 maps" over one map is the deck's first sentence.
-    // `of` however many cells could hold a map, which is not every cell: a
-    // structure or a tracks cell is neither a map nor a vacancy (§16.11), and
-    // counting one in promised a third map to a deck with room for two.
-    const mapCells = filled + empty
-    const count =
-      empty === 0 ? `${filled} map${filled === 1 ? '' : 's'}` : `${filled} of ${mapCells} maps`
+    // The empty cells counted beside the maps and not *towards* them: it used
+    // to read `2 of 3 maps`, which was a promise of a third map from a cell
+    // that now takes a track or a structure as readily (§16.9).
+    const maps = `${filled} map${filled === 1 ? '' : 's'}`
+    const count = empty === 0 ? maps : `${maps} · ${empty} empty cell${empty === 1 ? '' : 's'}`
     this.deckNote.textContent = `${said === '' ? '' : ' · '}${count}`
     // Two sentences (§26.4). What the deck's own controls do is on them, and
     // what a chain does is on the chain — said once, at the control, rather
@@ -2920,16 +3158,26 @@ export class PanelDeck {
     return cell?.cell?.settings?.() ?? null
   }
 
+  /** The structure cells, in the order they stand in the grid. */
+  private structureCells(): StructurePanel[] {
+    return this.slots
+      .map((slot) => slot.cell)
+      .filter((cell): cell is StructurePanel => cell instanceof StructurePanel)
+  }
+
   /**
-   * Point the *3D structure* card at this cell, and fill its star alone.
+   * Point the *3D structure* card at this cell, and fill its star alone — or,
+   * pressed where the star already is, take it off every cell.
    *
    * A radio, like the maps' star, because the card is one card: two filled
-   * stars would be two cells claiming one column.
+   * stars would be two cells claiming one column. **With none filled** the
+   * card sets every structure cell at once (§25.3), which is the one way to
+   * draw a deck of models alike without setting each in turn.
    */
   private setStarredStructure(id: string): void {
-    if (this.starredStructure === id) return
-    this.starredStructure = id
-    remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, id)
+    const next = this.starredStructure === id ? null : id
+    this.starredStructure = next
+    remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, next ?? NO_STAR)
     this.paintStructureStars()
     // The card itself changes, so the column has to be rebuilt round it — the
     // session owns where it goes (§25.3) and is the only thing that can move
@@ -2950,8 +3198,15 @@ export class PanelDeck {
     const cells = this.slots.filter((slot) => slot.ref.kind === 'structure' && slot.cell !== null)
     // The star follows the cells: one closed while it held the star leaves the
     // card pointing at a cell that is gone, which is a column of controls for
-    // a picture nobody can see.
-    if (!cells.some((slot) => slot.id === this.starredStructure)) {
+    // a picture nobody can see. *None* holds while there are cells for it to
+    // be about, and goes with the last of them, so the next model to arrive
+    // is starred the way every first one is.
+    if (cells.length === 0) {
+      if (this.starredStructure !== '') {
+        this.starredStructure = ''
+        remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, '')
+      }
+    } else if (this.starredStructure !== null && !cells.some((slot) => slot.id === this.starredStructure)) {
       this.starredStructure = cells[0]?.id ?? ''
       remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, this.starredStructure)
     }
@@ -3080,6 +3335,7 @@ export class PanelDeck {
 
   /** What to call the starred map in a sentence about it. */
   private starredName(): string {
+    if (this.starred === null) return 'the starred map'
     if (this.starred === LEAD_MAP) return this.props.leadName?.() ?? 'the first map'
     const panel = this.starredPanel
     return panel === null ? 'the starred map' : fileLabel(panel.uri)
@@ -3170,6 +3426,25 @@ const LOOKS_SCOPE = 'deck:looks'
 const STRUCTURE_STAR_SCOPE = 'deck:starredStructure'
 
 /**
+ * How *no star* is written into this session's memory, for the maps' star and
+ * the structure cells' alike. A word no slot id can be — ids are minted as
+ * `p1`, `p2`… and the lead is `lead` — rather than `null`, which a recall
+ * cannot tell from nothing having been remembered at all.
+ */
+const NO_STAR = 'none'
+
+/** The first map's settings as its card sets them, for {@link PanelDeck.mirrorLead}. */
+interface LeadSettings {
+  score: string | undefined
+  oe: boolean
+  smooth: string
+  transform: ScaleState['transform']
+  colormap: string | undefined
+  vmin: number | undefined
+  vmax: number | undefined
+}
+
+/**
  * A panel's live scale as the thing another panel can be handed.
  *
  * `NaN` is how a `ColorScale` spells *auto* and `undefined` is how a
@@ -3188,13 +3463,6 @@ function scaleState(scale: {
     ...(Number.isFinite(scale.vmin) ? { vmin: scale.vmin } : {}),
     ...(Number.isFinite(scale.vmax) ? { vmax: scale.vmax } : {}),
   }
-}
-
-/** What a star says, filled or empty. */
-function starTitle(name: string, on: boolean): string {
-  return on
-    ? `${name} is the map an analysis runs against`
-    : `Run analyses against ${name} instead`
 }
 
 /** The file half of a `file::group` URI — what a byte source is pointed at. */

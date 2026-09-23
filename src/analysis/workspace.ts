@@ -110,6 +110,13 @@ export interface AnalysisWorkspaceHost {
    */
   targetMap?(): MapId
   /**
+   * Why no task can run at all right now, or `null` — a deck where the reader
+   * has left no map starred (§18.1). A task reads one file and there is none
+   * named, so every row is greyed under this sentence and Run refuses with it,
+   * rather than guessing a file on the reader's behalf.
+   */
+  blocked?(): string | null
+  /**
    * Per-cell numbers a run measured, on their way to the Cells table (§3.8).
    *
    * The one result in the catalogue whose natural home is not the drawer. Every
@@ -279,6 +286,7 @@ export class AnalysisWorkspace {
     this.panel = new AnalysisPanelCard({
       runner: this.runner,
       context: () => this.host.context(),
+      blocked: () => this.host.blocked?.() ?? null,
       onOpen: (task) => this.show(task),
       active: () => this.open?.id ?? null,
     })
@@ -287,6 +295,7 @@ export class AnalysisWorkspace {
     this.drawer = new AnalysisDrawer({
       runner: this.runner,
       context: () => this.host.context(),
+      blocked: () => this.host.blocked?.() ?? null,
       framing: () => this.host.framing(),
       onClose: () => this.show(null),
       // Read live rather than captured, because a session's store arrives with

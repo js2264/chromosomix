@@ -3985,78 +3985,6 @@ canvas.is-frozen {
   outline: none;
 }
 
-/* ---------------------------------------------------------------------------
-   The scale menu, in the bottom-left corner of the map.
-
-   For a panel with no sidebar of its own. What was there before was a fold
-   *under* the picture, which pushed every panel of a deck down by the height of
-   whatever was open in the one beside it — and a menu that opens upward over
-   the map costs the layout nothing at all.
-   --------------------------------------------------------------------------- */
-
-/* Above the band the column labels have claimed, not on top of it. At
-   `bottom: 0` this button sat exactly where the ruler draws its first
-   coordinate, so the one number that says which window a companion is showing
-   was the one number hidden behind a control. Twenty pixels is the renderer's
-   own corner band (`drawTicks`, which steps the last *row* label aside by the
-   same figure), so the two agree about where the corner is. */
-/* **Above the edge's drag handle**, which runs along the bottom of the picture
-   and straight over this button. At `z-index: 3` against the grip's 5 the
-   companion cell's *Colour and values* button could not be pressed at all — the
-   grip took every click on it — and the tour found it by waiting thirty seconds
-   for an element that was never going to be free. The grip loses a 38-pixel bite
-   at its left end and keeps the rest of the edge, which is the trade the right
-   way round: an edge can be dragged anywhere along it, and a button can only be
-   pressed where it is. */
-.map-settings-corner {
-  position: absolute;
-  left: 0;
-  bottom: 20px;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-start;
-  gap: 4px;
-  z-index: 6;
-}
-
-.map-settings-toggle {
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-}
-
-
-/* Over the picture, not beside it, and wide enough for the clip's two boxes.
-   `max-height` with a scroll, because a panel one sixth of a window tall is
-   shorter than five fields and a menu that runs off the bottom of its own map
-   is worse than one that scrolls. */
-.map-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem;
-  min-width: 13rem;
-  max-height: 22rem;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-2);
-  font-size: var(--step--1);
-}
-
-.map-settings .field {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  justify-content: space-between;
-}
-
-.map-settings .field-clip {
-  flex-direction: column;
-  align-items: stretch;
-}
-
 /* --- view controls ----------------------------------------------------- */
 
 .controls-card {
@@ -4072,6 +4000,41 @@ canvas.is-frozen {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
+}
+
+/* Which map of a deck the *Map* card sets (§16.5), under its title — the
+   starred one, with the star it was starred by, or every map while none is.
+   A readout rather than a control: the star in each cell's heading is how it
+   changes. The *every* line is the warn colour, because it is the one state in
+   which a change on this card reaches beyond the picture it is beside. The 3D
+   structure card says the same in the same words when no model is starred. */
+.map-card-for {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.15rem 0 0.45rem;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.map-card-for span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-for .map-card-star {
+  flex: none;
+}
+
+.map-card-for .map-card-star.is-on {
+  fill: currentColor;
+  color: var(--accent);
+}
+
+.map-card-for.is-every {
+  color: var(--warn);
 }
 
 /* Stacked one per row when the card lives in a sidebar; the panel header keeps
@@ -10427,10 +10390,15 @@ span.deck-name {
    in every other column, so *2D tasks* folds away exactly as *Tracks* does. The
    rows inside want no extra inset — `.card` already pads — and the cards want
    the gap a column of cards has, which `.panel-column` gives them. */
-.analysis-tasks {
+.analysis-tasks,
+.analysis-cards {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.analysis-tasks > .analysis-blocked {
+  margin: 0;
 }
 
 /* The shared waiting line sits between the card's heading and its first row and
@@ -11085,6 +11053,17 @@ span.deck-name {
   font-size: var(--step--2);
   line-height: 1.4;
   color: var(--text-faint);
+}
+
+/* Every task greyed at once, because the deck has no map starred (§18.1):
+   one sentence above the cards, in the warn colour rather than the danger one
+   — nothing has failed, the reader has only left no file for a task to read. */
+.analysis-blocked {
+  margin: 0 0 0.6rem;
+  color: var(--warn);
+  background: var(--warn-soft);
+  font-size: var(--step--2);
+  line-height: 1.4;
 }
 
 /* The line a whole group is waiting on, printed once under its heading.
