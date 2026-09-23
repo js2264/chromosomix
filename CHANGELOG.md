@@ -21,6 +21,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands. A
   map opened over a 1D browser is marked on the Sequences card too, which read the tracks' file.
 
+- **Signal by group, a 1D task (§18.8).** Any track compared between groups of the genome: a
+  feature set's intervals split by name, strand or score (A against B on a compartment call, with
+  the rest of the genome as a group), or a track's bins cut by sign or into quantiles. Per group a
+  summary and a violin; between groups Mann–Whitney and Kruskal–Wallis with effect sizes and
+  q-values; a row per feature on request. Runs with no map, and from `metacooler-run`.
+
 - **A 1D browser has a Chromosomes table (§5.8).** The trail's root picks between it and the
   whole genome. Circles are ticked and origins typed there with no map open, and a map opened over
   the browser takes them for its sequences of the same names.

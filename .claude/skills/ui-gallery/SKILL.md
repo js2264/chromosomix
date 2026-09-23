@@ -18,7 +18,7 @@ node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-comp
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
-node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b25
+node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b30
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
@@ -117,8 +117,10 @@ taken along the arms with `arms` and correlated at 8 kb, the inter-arm and compa
 *Base composition* again in a 1D browser holding the FASTA alone, at 10 kb (§8.15, §18.8) — and
 then that browser's own Chromosomes table: a circle ticked and an origin typed there (and one past
 the end refused), the map dropped over the browser taking both, and a fresh map's origin at its
-first base, `ori` centring on it (§5.8, §8.15). `GALLERY_ONLY=declarations` runs that last part
-alone, in about a minute. It reads the lab's bucket; where the browser cannot
+first base, `ori` centring on it (§5.8, §8.15); and *Signal by group* comparing GC content between
+the A and B the arms' compartments found, by the call's names and by E1's sign, with an origin typed
+into the table first. `GALLERY_ONLY=declarations` or `GALLERY_ONLY=groups` runs either part alone,
+in a minute or two. It reads the lab's bucket; where the browser cannot
 reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
 `PAK_MM142_500.coverage.coverage-total.bw` — with `python3 scripts/DBZ_store.py serve <folder>` and
 name the folder's address in `GALLERY_DATA`. Run it after any change to §8.15's declarations, to the

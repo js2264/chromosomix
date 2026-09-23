@@ -11,6 +11,7 @@
 
 import type { TrackTaskRunner } from '../job'
 import { runFrip } from './frip'
+import { runGroupSignal } from './groupsignal'
 import { runMetaplot } from './metaplot'
 import { runMotif } from './motif'
 import { runComposition } from './composition'
@@ -25,5 +26,6 @@ export const TRACK_RUNNERS: Record<string, TrackTaskRunner> = {
   metaplot: runMetaplot,
   trackcorr: runTrackCorrelation,
   frip: runFrip,
+  groupsignal: runGroupSignal,
   overlap: runOverlap,
 }

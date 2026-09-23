@@ -197,13 +197,20 @@ function plain(values: ArrayLike<number> | undefined): number[] | undefined {
 function xyOfCurve(output: CurveOutput): XyFigureSpec {
   const ids = keyed(output.series.map((series) => series.name))
   // The mark the *figure* opens on: a task that drew every series as points
-  // meant a scatter, one that drew all of them as bars meant a bar chart, and
-  // one that drew none of them meant lines. Unanimity rather than the first
+  // meant a scatter, one that drew all of them as bars meant a bar chart, one
+  // that made every series a sample meant violins, and one that drew none of
+  // them meant lines. Unanimity rather than the first
   // series' opinion, because a figure-wide mark is what the reader's control
   // sets and a mixed set has no single answer to open on.
   const every = (mark: MarkKind): boolean =>
     output.series.length > 0 && output.series.every((series) => series.mark === mark)
-  const opening: MarkKind = every('points') ? 'points' : every('bars') ? 'bars' : 'line'
+  const opening: MarkKind = every('points')
+    ? 'points'
+    : every('bars')
+      ? 'bars'
+      : every('violin')
+        ? 'violin'
+        : 'line'
   return {
     kind: 'xy',
     id: output.id,

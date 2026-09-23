@@ -404,6 +404,7 @@ describe('the cards', () => {
       'metaplot',
       'trackcorr',
       'frip',
+      'groupsignal',
       'overlap',
     ])
   })

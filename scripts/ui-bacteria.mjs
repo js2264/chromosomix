@@ -158,8 +158,9 @@ const originBox = () => page.evaluate(() => {
   return box === null ? null : { value: box.value, placeholder: box.placeholder, title: box.title }
 })
 
-// GALLERY_ONLY=declarations runs the last part alone: a 1D browser's
-// Chromosomes table, a map dropped over it, and a map's default origin.
+// GALLERY_ONLY runs one part alone: `groups` for Signal by group, and
+// `declarations` for a 1D browser's Chromosomes table, a map dropped over it,
+// and a map's default origin.
 const ONLY = process.env.GALLERY_ONLY ?? ''
 
 try {
@@ -307,6 +308,56 @@ try {
   await shot('b19-browser-lanes')
   }
 
+  if (ONLY === '' || ONLY === 'groups') {
+  // Signal by group (§18.8): GC content compared between the compartments the
+  // arms' reading found — by the A/B call's names, and by E1's sign. The origin
+  // is typed into the table rather than called, which is the other hand that
+  // writes it (§8.15).
+  page = await fresh()
+  await page.goto(`${BASE}/#uri=${encodeURIComponent(rung(8))}&view=contigs`)
+  await until('reads as circular')
+  await sleep(1500)
+  const origin = page.locator('input.tedit').first()
+  await origin.click()
+  await origin.fill('6,374,501')
+  await origin.press('Enter')
+  await sleep(500)
+  await fold('Show the Annotations panel')
+  await page.waitForSelector('.ann-drop', { timeout: 30000 })
+  await dropTrack(FASTA, 'PAK.fa')
+  await sleep(4000)
+  // The map of the chromosome, which is what the compartments are read from.
+  await page.evaluate((hash) => { location.hash = hash }, `#uri=${encodeURIComponent(rung(8))}&view=region&region=LR657304.1`)
+  await sleep(6000)
+  await fold('Show the Analysis panel')
+  await sleep(1200)
+  await openTask('Base composition')
+  await run('Cumulative GC skew')
+  await openTask('Compartments')
+  await choose('decay along both arms')
+  await choose('GC content')
+  await run('Components')
+  await openTask('Signal by group')
+  await page.locator('.analysis-drawer label.param-check', { hasText: 'GC content · PAK' }).locator('input').check()
+  await sleep(400)
+  await choose('A/B compartments')
+  await shot('b26-groups-form')
+  await run('Between groups')
+  console.log('signal by group:\n' + (await notes()))
+  await shot('b27-groups-violins')
+  await scrollDrawerTo('Groups ·')
+  await sleep(500)
+  await shot('b28-groups-table')
+  await scrollDrawerTo('Between groups')
+  await sleep(500)
+  await shot('b29-groups-tests')
+  await choose('a track')
+  await choose('E1 · LR657304.1')
+  await run('by sign')
+  await shot('b30-groups-by-sign')
+  }
+
+  if (ONLY === '' || ONLY === 'declarations') {
   // A 1D browser's Chromosomes table (§5.8): a circle ticked and an origin typed
   // with no map open, taken by the map dropped over the browser (§8.15).
   page = await fresh()
@@ -362,6 +413,7 @@ try {
   await sleep(8000)
   await ori('on the first base')
   await shot('b25-ori-on-first-base')
+  }
 } catch (error) {
   console.log('FAILED', error)
   await shot('99-failure')

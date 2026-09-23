@@ -732,8 +732,13 @@ export interface CurveSeries {
    * one value per sequence, per sample, per MAG — has nothing between its
    * samples at all, and the mark that says so is a bar standing on a baseline.
    * It goes with {@link CurveOutput.xTicks}, which is what names the list.
+   *
+   * `violin` is a series with no x at all: a sample of one quantity, drawn as
+   * its distribution beside the other series' (§18.13) — a group's values in
+   * *Signal by group*. A figure every series of which says so opens as violins,
+   * and the reader's mark control can turn them into boxes or a histogram.
    */
-  mark?: 'line' | 'points' | 'bars'
+  mark?: 'line' | 'points' | 'bars' | 'violin'
   /**
    * The stack this series shares, where the bars are parts of one whole.
    *
@@ -921,6 +926,12 @@ export interface TableColumn {
   kind: 'text' | 'number'
   /** Decimal places for a number column; integers when absent. */
   digits?: number
+  /**
+   * Written in scientific notation where the fixed digits would print it as
+   * zero — a P of 10⁻²¹ is not `0.000000`. For a column whose values span
+   * orders of magnitude below its digits and whose smallness is the point.
+   */
+  scientific?: boolean
   hint?: string
 }
 

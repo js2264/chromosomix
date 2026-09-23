@@ -43,6 +43,7 @@ import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
 import { COMPOSITION_TASK } from "./tasks/composition";
+import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
 import { DI_TASK } from "./tasks/di";
@@ -110,6 +111,9 @@ export const TASKS: readonly AnalysisTask[] = [
   METAPLOT_TASK,
   TRACK_CORRELATION_TASK,
   FRIP_TASK,
+  // Beside FRiP, which asks how much of a track sits inside one set: this asks
+  // how its values differ between the groups of one — A against B.
+  GROUP_SIGNAL_TASK,
   OVERLAP_TASK,
   // **Metagenome**, absent unless the file has genomes, so the card is there
   // for a metacool and nowhere else.

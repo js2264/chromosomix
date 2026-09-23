@@ -477,6 +477,30 @@ describe('the annotations venue', () => {
     expect(coarse[6]).toBe('chrII\t0\t20000\t0')
   })
 
+  it('compares a track between the groups of a set, with no map', async () => {
+    // §18.8's Signal by group, from a shell: the bigWig's bin index over chrI,
+    // split into A (its first 60 kb) and B (the rest of chrI) by a named BED.
+    reset()
+    const groups = join(directory, 'ab.bed')
+    await writeFile(groups, 'chrI\t0\t60000\tA\nchrI\t60000\t120000\tB\n')
+    const where = join(directory, 'groupsignal')
+    expect(
+      await main([
+        'groupsignal', '--tracks', bigwig, '--features', groups,
+        '--resolution', '10000', '--outside=false', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('signal.groupsignal.groupsignal-groups.tsv')
+    expect(files).toContain('signal.groupsignal.groupsignal-tests.tsv')
+    const summary = await readFile(join(where, 'signal.groupsignal.groupsignal-groups.tsv'), 'utf8')
+    // Six stretches of 10 kb each, their means 4.5 … 54.5 on A and 64.5 … 114.5 on B.
+    expect(summary).toMatch(/signal\.bw\tA\t6\t60000\t29\.5\b/)
+    expect(summary).toMatch(/signal\.bw\tB\t6\t60000\t89\.5\b/)
+    const tests = await readFile(join(where, 'signal.groupsignal.groupsignal-tests.tsv'), 'utf8')
+    expect(tests).toMatch(/Mann–Whitney U\tA\tB\t-60\t-1\b/)
+  })
+
   it('still needs a file for a task that reads the matrix', async () => {
     reset()
     expect(await main(['insulation', '--out', out])).toBe(2)

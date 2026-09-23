@@ -6095,6 +6095,24 @@ before they are measured, or a GTF with one row per transcript counts its shared
 and reports a fraction above one; the features are read finely and the assembly coarsely, because a
 span-weighted sum estimates the same area at any resolution *except at a boundary*, and a peak set is
 nothing but boundaries while a genome-wide total has almost none. Both resolutions are reported.
+*Signal by group* — one or more tracks compared between groups of the genome, which is the question
+behind *is compartment A GC-rich* and *is B transcribed less*. The groups come from **a feature
+set**, split by what is written on its features — the name (A and B on a compartment call), the
+strand, the score in quantiles, or nothing — with what the set does not cover as a group of its own;
+or from **a track**, its bins cut by sign (an eigenvector's two compartments, uncalled) or into
+quantiles, and a grouping made that way is written out as intervals named by group. What is compared
+is **stretches of at most one bin**: a group's merged intervals cut on the bin grid, a piece shorter
+than half a bin joined to its neighbour and a feature shorter than a bin kept whole, so a 30 kb
+compartment is three observations and a 300 bp peak one, each the track's mean over the bases it has
+a value for; the bin size is seeded as base composition's is (§18.2). Each group is summarised (count,
+bases, mean, SD, median, quartiles, and its mean less that of every other stretch) and drawn as a
+**violin**, and the groups are tested **by ranks** — Mann–Whitney pairwise, with the rank-biserial
+effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
+asymptotic forms SciPy uses and held to its numbers, with every test's q-value (Benjamini–Hochberg)
+adjusted together, and P and q written in scientific notation where four decimals would print a zero
+(`TableColumn.scientific`) — a P of 10⁻¹³ is not `0.0000`. A group with nothing in it — the rest of
+the genome, where a compartment call covers every base — is left out and named in a note. A row per
+feature, with its mean on every track, is one toggle away.
 *Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
 on a boundary" is the question that follows every domain call.
 
@@ -6622,7 +6640,9 @@ unless one is typed, Tukey's whiskers stopping at the furthest *observed* value 
 a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled
 by the same peak, because two violins each normalised to their own width say the two samples are
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
-one against another as a scatter.
+one against another as a scatter. A task whose every series is a sample rather than a function says
+so (`CurveSeries.mark = 'violin'`), and its figure opens as violins, one per series — *Signal by
+group*'s groups — which the mark control turns into boxes or a histogram like any other.
 
 **Bars stack where the series are parts of one whole.** A sequence's cis and trans fractions sum to
 one, and the reading is one bar split in two rather than two bars side by side whose sum the reader

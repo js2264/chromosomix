@@ -1417,16 +1417,16 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`. A task
-                           that reads tracks (metaplot, trackcorr, frip) takes
-                           them as --tracks <file.bw>, repeated or
-                           comma-separated: a bigWig, a bedGraph, a wig, or a
-                           FASTA read as GC content
+                           that reads tracks (metaplot, trackcorr, frip,
+                           groupsignal) takes them as --tracks <file.bw>,
+                           repeated or comma-separated: a bigWig, a bedGraph, a
+                           wig, or a FASTA read as GC content
 
   metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
-      A task that reads tracks and no matrix (metaplot, trackcorr, frip, overlap,
-      motif, composition, oriter), run with no contact map at all — what a 1D
-      browser session runs. The assembly is what the tracks and references
-      declare.
+      A task that reads tracks and no matrix (metaplot, trackcorr, frip,
+      groupsignal, overlap, motif, composition, oriter), run with no contact map
+      at all — what a 1D browser session runs. The assembly is what the tracks
+      and references declare.
 
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
