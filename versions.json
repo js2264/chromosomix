@@ -1,6 +1,13 @@
 {
-  "latest": "fdf4632",
+  "latest": "f3b1136",
   "versions": [
+    {
+      "commit": "f3b1136",
+      "version": "0.13.0",
+      "date": "2026-09-23T13:02:11+02:00",
+      "subject": "Read a bed3d whose solver left bins unplaced as the structure it is (§25.2) (#70)",
+      "tag": ""
+    },
     {
       "commit": "5573aed",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.12.0",
       "date": "2026-09-15T14:36:56+02:00",
       "subject": "Enable all analysis tasks to run from CLI by supporting tracks and peer maps (#55)",
-      "tag": ""
-    },
-    {
-      "commit": "8f23ade",
-      "version": "0.12.0",
-      "date": "2026-09-15T11:46:23+02:00",
-      "subject": "Open files from one door: Drive and Dropbox sign-ins, index-free BAMs, Drive by name and by range, and stores that list only what draws (#54)",
       "tag": ""
     },
     {
