@@ -43,7 +43,6 @@ import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { cardTitle } from './icons'
 import { MatrixPanel, blockSummary, type AnnotationContext } from './MatrixPanel'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 
@@ -105,53 +104,6 @@ export const WHOLE_FILE_LEVELS: ReadonlyArray<{
   },
 ]
 
-/**
- * The level picker, shared with the bin-level map.
- *
- * Built here and handed to whichever view is mounted rather than owned by each,
- * because it is one control over one choice: `bin × bin` is drawn by
- * `WholeView` and the other two by this class, and a reader who switched away
- * from contigs has to find the way back in the place they left it. Two pickers
- * that happened to agree would be two pickers to keep agreeing.
- *
- * The picker reports and does not decide, at every level: the choice is in the
- * URL like every other view's, so it goes out to the shell and comes back as a
- * view built for it. That is what makes it survive a shared link and a back
- * button, and it is the same round trip the transform and the colormap take.
- *
- * Which also throws the result on screen away, as it must: the three are
- * different accumulations of the same pass over the same pixels, and there is no
- * way to derive one from another without reading them again.
- */
-export function wholeFileLevelCard(
-  current: WholeFileLevel,
-  onChange: (level: WholeFileLevel) => void,
-): HTMLElement {
-  const select = el('select', { class: 'select' })
-  for (const choice of WHOLE_FILE_LEVELS) {
-    select.appendChild(el('option', { value: choice.value, text: choice.label }))
-  }
-  select.value = current
-  const hint = el('p', {
-    class: 'hint',
-    text: WHOLE_FILE_LEVELS.find((choice) => choice.value === current)?.hint ?? '',
-  })
-  select.addEventListener('change', () => onChange(select.value as WholeFileLevel))
-  // **`Level`, which is what the picker picks.** It was `Scan`, over a list
-  // whose default — `bin × bin` — §7.3 explicitly calls the pooled whole-file
-  // read rather than one of the scans, so the card's name contradicted its own
-  // first option. And the paragraph under the per-level hint stated the cost a
-  // third time: the view's summary line says it, and the gate beside it says it
-  // with the file's own figures in it.
-  return el(
-    'section',
-    { class: 'card' },
-    cardTitle('Level', 'scan'),
-    el('div', { class: 'field' }, el('span', { class: 'field-label', text: 'level' }), select),
-    hint,
-  )
-}
-
 export interface OverviewProps {
   client: ReaderClient
   binsize: number
@@ -181,16 +133,6 @@ export interface OverviewProps {
   level: 'genome' | 'contig'
   /** The colour scale from the view state; the panel starts there. */
   scale: ScaleState
-  /**
-   * A level was chosen — including `bin`, which this view cannot draw.
-   *
-   * It and the colour scale go back into the URL, exactly as they do from every
-   * other heatmap view, which is the whole of what "the overview is a view
-   * state" buys the reader. `bin` is reported through the same callback because
-   * the picker is one list over one choice ({@link wholeFileLevelCard}): the
-   * shell is what knows that one of the three answers is a different class.
-   */
-  onLevelChange(level: WholeFileLevel): void
   onScaleChange(scale: ScaleState): void
   onOpenPair(rowGenome: string, colGenome: string): void
   /**
@@ -362,7 +304,7 @@ export class Overview {
         el(
           'div',
           { class: 'title-bar' },
-          el('h2', { text: 'Whole genome' }),
+          el('h2', { text: 'Whole metagenome' }),
           // A metagenome's axis is thousands of MAGs, so the picture cannot be
           // aimed at: the cell for one genome of four thousand is a quarter of a
           // pixel. Naming it is the only way in, and this is the box `/` opens.
@@ -377,11 +319,10 @@ export class Overview {
       'aside',
       { class: 'side' },
       ...this.panel.cards,
-      wholeFileLevelCard(this.level, (next) => props.onLevelChange(next)),
     )
 
     this.summary.textContent =
-      'One pass over every non-zero pixel, at the level chosen on the right.'
+      'One pass over every non-zero pixel, at the level chosen in the Genomes card.'
     this.renderGate()
   }
 
@@ -530,13 +471,13 @@ export class Overview {
       el(
         'p',
         {},
-        el('strong', { text: 'The whole genome reads every stored pixel of the file' }),
+        el('strong', { text: 'The whole metagenome reads every stored pixel of the file' }),
         `${price} and sums them into one cell per ${cell} — ` +
           `${fmt.bytes(sourceBytes)} ${sourceKind === 'remote' ? 'downloaded' : 'read'}. ` +
           'Once per file; the picture is kept while it is open.',
       ),
     )
-    this.gate.appendChild(button('compute whole genome', () => void this.scan()))
+    this.gate.appendChild(button('compute whole metagenome', () => void this.scan()))
   }
 
   private cancel(): void {

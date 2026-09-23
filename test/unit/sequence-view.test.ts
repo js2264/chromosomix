@@ -15,7 +15,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { sequencesShown, viewForSequences } from '@/state/ViewState'
+import {
+  metaScopeOf,
+  metaShown,
+  sequencesShown,
+  viewForMeta,
+  viewForSequences,
+  type MetaScope,
+} from '@/state/ViewState'
 import type { ViewState } from '@/types'
 
 const URI = 'yeast.cool'
@@ -105,5 +112,55 @@ describe('the round trip', () => {
     for (const ticked of [[], ['I'], ['I', 'II'], ['I', 'II', 'III', 'IV']]) {
       expect(sequencesShown(viewForSequences(URI, ticked, 'whole'), NAMES)).toEqual(ticked)
     }
+  })
+})
+
+describe('a metagenome: genomes, or one genome’s contigs', () => {
+  const META = 'mock.metacool'
+  const CONTIGS = ['a1', 'a2', 'a3', 'b1', 'NODE_1:2']
+  const OWNER: Record<string, string> = { a1: 'A', a2: 'A', a3: 'A', b1: 'B', 'NODE_1:2': 'B' }
+  const genomeOf = (contig: string): string | undefined => OWNER[contig]
+  const scope = (state: Omit<ViewState, 'uri'>) =>
+    metaScopeOf({ uri: META, ...state } as ViewState, CONTIGS, genomeOf)
+
+  it('lists genomes over a picture of genomes, and a genome’s contigs inside one', () => {
+    expect(scope({ view: 'overview' })).toEqual({ kind: 'genomes' })
+    expect(scope({ view: 'pair', genome: 'A', genome2: 'B' })).toEqual({ kind: 'genomes' })
+    expect(scope({ view: 'selection', genomes: 'A' })).toEqual({ kind: 'genomes' })
+    expect(scope({ view: 'genome', genome: 'A' })).toEqual({ kind: 'contigs', genome: 'A' })
+    expect(scope({ view: 'region', region: 'a2:0-100', genome: 'A' })).toEqual({
+      kind: 'contigs',
+      genome: 'A',
+    })
+    expect(scope({ view: 'genomes' })).toBeNull()
+  })
+
+  it('places a contig view that did not say which genome it is in', () => {
+    expect(scope({ view: 'region', region: 'NODE_1:2' })).toEqual({ kind: 'contigs', genome: 'B' })
+    expect(scope({ view: 'selection', regions: 'a1,a3' })).toEqual({ kind: 'contigs', genome: 'A' })
+    // Across two genomes it is a picture inside neither.
+    expect(scope({ view: 'selection', regions: 'a1,b1' })).toBeNull()
+  })
+
+  it('round-trips every set of ticks through a view, in both lists', () => {
+    const lists: Array<[MetaScope, string[][]]> = [
+      [{ kind: 'genomes' }, [[], ['A'], ['A', 'B']]],
+      [{ kind: 'contigs', genome: 'A' }, [[], ['a2'], ['a1', 'a3']]],
+    ]
+    for (const [list, sets] of lists) {
+      for (const names of sets) {
+        const view = viewForMeta(META, list, names)
+        expect(metaScopeOf(view, CONTIGS, genomeOf)).toEqual(list)
+        expect(metaShown(view, list, CONTIGS)).toEqual(names)
+      }
+    }
+  })
+
+  it('keeps one ticked genome in the genomes list rather than opening it', () => {
+    expect(viewForMeta(META, { kind: 'genomes' }, ['A'])).toEqual({
+      uri: META,
+      view: 'selection',
+      genomes: 'A',
+    })
   })
 })

@@ -92,8 +92,8 @@ export interface WholeViewProps {
    * Four things follow from it, and they are one thing said four ways — *this
    * picture is of the whole metagenome*:
    *
-   * - the picker is in the sidebar, at every level, or there is no way back to
-   *   the other two;
+   * - the picker is in the General column's Genomes card, at every level, or
+   *   there is no way back to the other two (`Session.paintLevel`);
    * - the read is asked about first whatever the pixel count, because it is the
    *   landing level now and §7.3's rule is that a full pass is never automatic;
    * - the axis is labelled and divided by **genome**, which is what the other
@@ -104,8 +104,6 @@ export interface WholeViewProps {
    * levels it is, and the shell does.
    */
   wholeFileLevel?: {
-    /** The three-way level control, built by the shell (`ui/Overview.ts`). */
-    card: HTMLElement
     /** An axis label — a genome name here — was clicked. */
     onOpenGenome(genome: string): void
     /**
@@ -174,12 +172,6 @@ export interface WholeViewProps {
   scoreColumns?: readonly string[]
   /** The picker's current choice, by id; `count` when absent. */
   score?: string
-  /**
-   * Offer the bin ↔ contig roll-up. Off for a cooler: there the unit is a
-   * chromosome, one file often holds one of them, and "contig level" on a
-   * single-genome file is a picture of a single cell.
-   */
-  offerLevel: boolean
   /** What one axis unit is called here: a chromosome, or a contig. */
   noun: string
   /**
@@ -209,7 +201,6 @@ export interface WholeViewProps {
    * the thing that is not on screen. False for a plain cooler, which has none.
    */
   namesGenomes: boolean
-  onLevelChange(level: 'bin' | 'contig'): void
   onScoreChange(choice: ScoreChoice): void
   /**
    * The derived-values presentation (`render/derive.ts`), built by the session.
@@ -408,12 +399,6 @@ export class WholeView {
       ...(presentationOf(props.compare) === undefined
         ? {}
         : { compare: presentationOf(props.compare) }),
-      ...(props.offerLevel
-        ? {
-            levels: ['bin', 'contig'] as Array<'bin' | 'contig'>,
-            levelLabels: { contig: props.noun },
-          }
-        : {}),
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
@@ -431,7 +416,6 @@ export class WholeView {
       // out to the URL and the shell brings back a view built for the answer —
       // which is also what decides whether the new read is one to ask about
       // first. Loading here as well was the second of two reads for one click.
-      onLevelChange: (level) => props.onLevelChange(level),
       onCellClick: (_cell, groups, genomes) => {
         if (groups.row === undefined) return
         // **The whole-metagenome picture answers with a genome**, which is what
@@ -533,7 +517,6 @@ export class WholeView {
       'aside',
       { class: 'side' },
       ...this.panel.cards,
-      ...(props.wholeFileLevel === undefined ? [] : [props.wholeFileLevel.card]),
     )
 
     // There is no longer a size that defeats this view, so there are two
@@ -544,7 +527,7 @@ export class WholeView {
       // the button that starts it.
       if (props.wholeFileLevel !== undefined) {
         this.summary.textContent =
-          'One pass over every non-zero pixel, at the level chosen on the right.'
+          'One pass over every non-zero pixel, at the level chosen in the Genomes card.'
       }
       this.renderGate()
     } else void this.load()
@@ -667,7 +650,7 @@ export class WholeView {
           // construction (§26.2), and this sentence said `at 1.0 kb` under a
           // resolution chip saying `1 kb` and beside a File card saying
           // `1,000 bp` — three spellings of one number on one screen.
-          text: `Whole genome at ${resolutionLabel(this.props.binsize)} reads every stored pixel of the file`,
+          text: `${this.wholeName()} at ${resolutionLabel(this.props.binsize)} reads every stored pixel of the file`,
         }),
         `${counted} and sums them into ${this.resolutionPhrase()}${priced}. Once per file; the ` +
           'picture is kept while it is open.' +
@@ -716,11 +699,19 @@ export class WholeView {
                 class: 'btn btn-primary',
               }),
             ]),
-        button('compute whole genome', () => this.compute(), { class: 'btn' }),
+        button(`compute ${this.wholeName().toLowerCase()}`, () => this.compute(), { class: 'btn' }),
       ),
     )
     this.gate.classList.remove('hidden')
     this.panelHost.classList.add('hidden')
+  }
+
+  /**
+   * What the whole file is called: a metagenome's is the whole *meta*genome,
+   * which is what its crumb, its palette entry and its other two levels say.
+   */
+  private wholeName(): string {
+    return this.props.wholeFileLevel === undefined ? 'Whole genome' : 'Whole metagenome'
   }
 
   /** The gate was accepted. */
@@ -736,7 +727,7 @@ export class WholeView {
    */
   private heading(): string {
     const selection = this.props.selection
-    if (selection === undefined) return 'Whole genome'
+    if (selection === undefined) return this.wholeName()
     const noun = selection.kind === 'genome' ? 'genomes' : `${this.props.noun}s`
     return selection.names.length <= 3
       ? selection.names.join(' × ')
@@ -890,7 +881,7 @@ export class WholeView {
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
-      this.panel.setData(this.byGenome(result), 'Whole genome', second)
+      this.panel.setData(this.byGenome(result), this.wholeName(), second)
       this.summary.replaceChildren(...this.summarise(result))
       this.armRefine(rows, result, budget)
     } catch (err) {

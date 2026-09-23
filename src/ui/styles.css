@@ -5509,7 +5509,7 @@ canvas.is-frozen {
   }
 }
 
-/* The view's own sidebar: colour controls on top, contig list underneath. */
+/* The view's own sidebar: its map and colour controls. */
 .side {
   display: flex;
   flex-direction: column;
@@ -5523,58 +5523,6 @@ canvas.is-frozen {
 
 .side h3 {
   margin-top: 0;
-}
-
-.contig-box {
-  min-width: 0;
-  /* The last card takes the height the ones above it leave, and never more:
-     a genome with 300 contigs used to make this card longer than the screen and
-     push the whole column into a scroll. It scrolls inside itself instead. */
-  flex: 1 1 auto;
-  min-height: 7rem;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.contig-list {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
-.contig-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: var(--step--1);
-  padding: 0.2rem 0.25rem;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-}
-
-.contig-item:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.contig-name {
-  font-family: var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.contig-size {
-  color: var(--text-faint);
-  flex: 0 0 auto;
 }
 
 /* --- pair / region ----------------------------------------------------- */
@@ -7451,7 +7399,7 @@ canvas.is-frozen {
 
 /* A folded card is one line: the padding that held a body clear of the heading
    would otherwise read as a box with an empty lower half, and a card built to
-   fill the column it is last in (`.contig-box`) would fold into seven empty
+   fill the column it is last in would fold into seven empty
    rems of border. */
 .card.is-folded,
 :not(.panel-head) > .controls-card.is-folded {
@@ -7561,6 +7509,28 @@ canvas.is-frozen {
 
 .seq-filter {
   width: 100%;
+}
+
+/* The map's level, at the head of the list the map is picked from (§7.3): the
+   Map card's label column and select, so the one control that moved reads like
+   the ones it left. */
+.seq-level > .field {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.seq-level .select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Whose contigs these are, and the way back out to the genomes. */
+.seq-scope {
+  margin: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* Scrolls at about ten rows. Long enough that a yeast, a fly and a human are
@@ -8057,10 +8027,6 @@ canvas.is-frozen {
 
   .btn-icon {
     padding: 0.5rem;
-  }
-
-  .contig-item {
-    padding: 0.45rem 0.3rem;
   }
 
   /* The coordinate readout is a hover product and there is no hover here; the

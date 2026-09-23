@@ -80,7 +80,6 @@ export interface PairViewProps {
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
   onChangeGenomes(rowGenome: string, colGenome: string): void
-  onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   /**
@@ -161,7 +160,6 @@ export class PairView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
-      levels: ['bin', 'contig'],
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       // The same shape as the genome and region views: the heading names the
       // selection, the controls live in the sidebar, and the panel draws only
@@ -178,11 +176,6 @@ export class PairView {
         onChange: (choice) => props.onScoreChange(choice),
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
-      onLevelChange: (level) => {
-        this.level = level
-        props.onLevelChange(level)
-        void this.load()
-      },
       // The axes here are the two genomes' contigs, so a label names a contig
       // rather than either genome — the genomes are named in the heading, and
       // in the two buttons beside the plot.

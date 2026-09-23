@@ -737,7 +737,8 @@ from `/bins/chrom` transitions. Contig names labelled when ≤ 50, matching the 
 
 Zoom and pan operate on the in-memory matrix — no I/O. A zoom that settles past what the block can
 show reads the window again (§2), which for a MAG never happens: its block is already the file's own
-bins. Level toggle between bin and contig aggregation, both computed locally from the loaded data.
+bins. Level toggle between bin and contig aggregation, both computed locally from the loaded data —
+in the General column's Contigs card (§5.8), which also lists this genome's contigs.
 
 ### 5.3 Genome-pair view
 
@@ -1112,6 +1113,22 @@ dozen of them and the list is capped, because a `chrom.sizes` is as likely to be
 scaffolds as sixteen chromosomes. Under the list, what the ticks have done — `4 of 16 ticked` — and a
 button that undoes it, *show the whole genome*. The count is said of the ticks and not of the list,
 because a reader looking at nine rows of sixteen reads *showing 4 of 16* as a claim about the rows.
+
+**A metagenome's card lists its own two units.** Over a picture of genomes — the whole metagenome, a
+pair, several ticked — it is **Genomes**: every genome and its length, and ticking any number draws
+them against each other (a `selection` of `genomes=`), one included, so the list is not swapped out
+from under a reader halfway through ticking a second; none ticked is the whole metagenome. Inside one
+genome — the genome view, one of its contigs, several — it is **Contigs**, *of* that genome, with a
+`↑ genomes` link back out: ticking draws those contigs against each other (`regions=` with the
+`genome` riding along, so the crumb reads `Genomes › G › a × b`), and none ticked is the genome
+itself. A name's click goes one level in. Never the file's whole contig list, which is a hundred
+thousand pieces of four thousand assemblies and not a picker.
+
+**The map's level heads the card** (§7.3): `bin × bin` or `chromosome × chromosome` over a cooler's
+whole genome, all three over a metagenome's, and bins or contigs over a genome or a pair; absent where
+the view has only one. It is one question about the map — what one cell holds — and it was three
+controls in two places: the Map card's `level` on a genome and a pair, a `Level` card of its own over
+the whole metagenome.
 
 Under the Sequences card, the **Genome minimap**: the same sequences drawn end to end with the
 current view marked on them, and one line under it saying what a click and a drag do. It says the
@@ -1533,8 +1550,10 @@ overview.
 Opportunistic in exactly the same way as the mmetacool ladder: used when present, never required.
 
 **Three levels, one control.** The whole-file view offers `bin × bin`, `contig × contig` and
-`genome × genome` in a single picker; `level` in the hash selects between them and the shell mounts
-whichever view draws the answer. Only the last two are accumulations over unit pairs — `bin × bin`
+`genome × genome` in a single picker — at the head of the Genomes card in the General column (§5.8) —
+and `level` in the hash selects between them and the shell mounts whichever view draws the answer.
+The view is the **whole metagenome**, in its crumb, its heading and its gate's button: *whole
+genome* is a cooler's. Only the last two are accumulations over unit pairs — `bin × bin`
 is the pooled whole-file read (§9), and on a metagenome it is the same picture as selecting every
 row of the genomes table.
 
@@ -1554,7 +1573,7 @@ the cheapest thing to land on.
 mandatory rather than optional: the rule is not "warn when it looks expensive" but that a pass over
 every pixel never starts on its own, and a threshold would make it hold on large files and lapse on
 small ones. So the bin level is gated whatever the file declares `nnz` to be, behind the same
-sentence, the same two figures and the same button as the scans: `compute whole genome` over one
+sentence, the same two figures and the same button as the scans: `compute whole metagenome` over one
 sentence naming the stored pixels it will read, the cells it will sum them into, and the bytes it
 will read or download. Both figures on every gate, because the pixels are what a local read costs
 and the bytes are what a remote one costs, and a gate cannot know which of the two a reader is

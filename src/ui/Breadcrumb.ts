@@ -46,15 +46,16 @@ export type RootChoice = 'genomes' | 'cells' | 'contigs' | 'overview' | 'whole'
  *
  * `contigs` is *Chromosomes* on a cooler. The word is not cosmetic: a cooler
  * holds one genome's chromosomes, and calling them contigs asks the reader to
- * translate on every screen. `overview` and `whole` share a label because they
- * answer the same question — the whole file at once — by different means: a
- * pixel scan for a metagenome, one bounded read for a genome small enough.
+ * translate on every screen. `overview` and `whole` answer the same question —
+ * the whole file at once — by different means, and each is named for what that
+ * file holds: a metagenome's is the whole *meta*genome, which is what its
+ * palette entry and its headings say too.
  */
 const ROOT_LABEL: Record<RootChoice, string> = {
   genomes: 'Genomes',
   cells: 'Cells',
   contigs: 'Contigs',
-  overview: 'Whole genome',
+  overview: 'Whole metagenome',
   whole: 'Whole genome',
 }
 
@@ -181,8 +182,11 @@ export function rootTable(
   // can un-tick it. A `selection` naming nothing is not one, and falls through
   // to the file's default like the other whole-file views — the shell redirects
   // it to one of them anyway.
+  // Contigs ticked inside one genome carry it, and hang off that genome.
   const kind = state.view === 'selection' ? selectionOf(state)?.kind : undefined
-  if (kind !== undefined) return kind === 'genome' ? 'genomes' : 'contigs'
+  if (kind !== undefined) {
+    return kind === 'genome' || state.genome !== undefined ? 'genomes' : 'contigs'
+  }
   // A genome or a pair is by definition below the genomes table; `whole` and
   // `overview` are neither, and keep the file's own default.
   return state.genome === undefined ? fallback : 'genomes'
@@ -270,6 +274,11 @@ export class Breadcrumb {
     const selection = selectionOf(state)
     if (state.view === 'selection' && selection !== null) {
       const noun = selection.kind === 'genome' ? 'genomes' : (this.props.contigNoun ?? 'contigs')
+      // Contigs ticked inside one genome (the Contigs card, §5.8) sit under it.
+      if (selection.kind === 'contig' && state.genome !== undefined) {
+        const genome = state.genome
+        this.push(genome, () => this.props.onNavigate({ uri: state.uri, view: 'genome', genome }))
+      }
       this.push(
         selection.names.length <= 3
           ? selection.names.join(' × ')

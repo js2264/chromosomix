@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome's General column lists its genomes, and a genome's contigs, with ticks (§5.8).**
+  The Sequences card a cooler is steered from now has a metacool counterpart: over the whole
+  metagenome, a pair or a selection it lists the **Genomes**, and ticking any number draws them
+  together; inside a genome it lists that genome's **Contigs**, and ticking several draws them
+  against each other, with `↑ genomes` to step back out. The genome view's own contig list in the
+  Aesthetics column is gone, since this one does what it did and more.
+
+- **The map's level is in the General column (§7.3).** One `level` select at the head of the
+  Sequences / Genomes / Contigs card replaces the Map card's `level` (genome, pair, a cooler's whole
+  genome) and the metagenome's separate `Level` card.
+
 - **Manual annotations can be imported (§8.1).** The card had a way out and no way back in: an
   *Import* section above *Export* now takes a BED or BEDPE — clicked, or dropped anywhere on the
   card. A BED row is a line on the axis its name column says; a BEDPE row is an arrowhead when both
@@ -869,6 +880,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A metagenome's whole-file view is the *Whole metagenome*.** Its crumb, heading, gate and
+  compute button said *whole genome*, which is a cooler's view, while the command palette already
+  said *Whole metagenome*. The genomes table's button reads `whole metagenome →` too.
 
 - **The Manual card's save button sits inside the card.** Its export row kept the width of its
   longest option plus the button, which pushed the button past the card's right edge in the sidebar;

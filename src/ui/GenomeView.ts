@@ -3,15 +3,15 @@
  *
  * The matrix is loaded whole, in one bounded read, and held in memory — that is
  * the §2 assumption the whole architecture rests on. Everything after the load
- * is local: pan, zoom, the colour scale, and the bin ↔ contig level toggle,
- * which is a sum over data that is already here rather than a second query.
+ * is local: pan, zoom and the colour scale. The bin ↔ contig level is chosen
+ * in the General column's Contigs card (`Session.paintLevel`) and comes back as
+ * a view built at it; this genome's contigs are listed, and ticked, there too.
  */
 
 import type { ParsedRange, Transform } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
-import { el, fmt } from './dom'
-import { cardTitle } from './icons'
+import { el } from './dom'
 import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type AnnotationContext,
   type DerivePresentation,
@@ -77,7 +77,6 @@ export interface GenomeViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
-  onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
   /**
@@ -121,8 +120,6 @@ export class GenomeView {
   private readonly summary: HTMLElement
   /** Where a contig is typed; the `/` key puts the caret here. */
   private readonly search: SearchBox
-  private readonly contigList: HTMLElement
-  private readonly contigBox: HTMLElement
   private readonly note: HTMLElement
   private extent: [number, number] | null = null
   private level: 'bin' | 'contig'
@@ -146,12 +143,10 @@ export class GenomeView {
         if (text !== '') props.onOpenRegion(text)
       },
     })
-    this.contigList = el('div', { class: 'contig-list' })
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
-      levels: ['bin', 'contig'],
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       // The controls live in this view's sidebar, stacked above the contig list,
       // and the `<h2>` above already names the genome.
@@ -167,12 +162,6 @@ export class GenomeView {
         onChange: (choice) => props.onScoreChange(choice),
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
-      onLevelChange: (level) => {
-        this.level = level
-        this.contigBox?.classList.toggle('hidden', level === 'contig')
-        props.onLevelChange(level)
-        void this.load()
-      },
       onCellClick: (_cell, groups) => {
         if (groups.row === undefined) return
         // §5.5: an off-diagonal cell *is* the relationship between two contigs,
@@ -195,16 +184,6 @@ export class GenomeView {
           ? props.onOpenRegion(axisRegion(selection.rows))
           : props.onOpenContigPair(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
-
-    // At contig level every cell already *is* a contig, labelled on both axes,
-    // so the list underneath would repeat the picture rather than add to it.
-    this.contigBox = el(
-      'section',
-      { class: 'card contig-box' },
-      cardTitle('Contigs', 'list'),
-      this.contigList,
-    )
-    this.contigBox.classList.toggle('hidden', this.level === 'contig')
 
     this.el = el(
       'section',
@@ -231,7 +210,6 @@ export class GenomeView {
       'aside',
       { class: 'side' },
       ...this.panel.cards,
-      this.contigBox,
     )
 
     void this.load()
@@ -292,7 +270,6 @@ export class GenomeView {
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, this.props.genome)
       this.renderSummary(result)
-      this.renderContigs(result)
       this.armRefine([lo, hi], result)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the
@@ -336,10 +313,7 @@ export class GenomeView {
         })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },
-      onInstalled: (block) => {
-        this.renderSummary(block)
-        this.renderContigs(block)
-      },
+      onInstalled: (block) => this.renderSummary(block),
     })
     this.ladder.adopt(result)
   }
@@ -369,42 +343,6 @@ export class GenomeView {
 
 
 
-  private renderContigs(result: MatrixResult): void {
-    this.contigList.replaceChildren()
-    const binsize = Math.max(1, this.props.binsize)
-    for (const group of result.rowGroups) {
-      // Every sequence, not every cell. Where the small ones share a cell the
-      // axis is labelled with the first of them, and listing the labels listed
-      // one contig in two — so the list is built from what the cells *hold*.
-      const members =
-        group.merged ?? [{ label: group.label, unitLength: group.unitLength ?? 0 }]
-      for (const { label, unitLength } of members) {
-        // The sequence's own bins, from its own length — not `end - start`,
-        // which counts the *cells* it is drawn in and reads "1 bins" for a
-        // contig of two the moment two of them share a pixel.
-        const bins = unitLength > 0 ? Math.max(1, Math.ceil(unitLength / binsize)) : 0
-        const item = el(
-          'button',
-          {
-            class: members.length > 1 ? 'contig-item is-shared' : 'contig-item',
-            type: 'button',
-            title:
-              members.length > 1
-                ? `${label} — drawn in a cell it shares with ${fmt.int(members.length - 1)} other ` +
-                  `${members.length === 2 ? 'sequence' : 'sequences'}`
-                : label,
-          },
-          el('span', { class: 'contig-name', text: label }),
-          el('span', {
-            class: 'contig-size',
-            text: result.level === 'bin' && bins > 0 ? `${fmt.int(bins)} bins` : '',
-          }),
-        )
-        item.addEventListener('click', () => this.props.onOpenRegion(label))
-        this.contigList.appendChild(item)
-      }
-    }
-  }
 
 
 }
