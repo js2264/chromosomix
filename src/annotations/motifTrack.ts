@@ -58,6 +58,11 @@ export interface MotifHits {
   ends: Int32Array
   /** `1` forward, `-1` reverse, `0` for a palindrome searched on both. */
   strands: Int8Array
+  /**
+   * Positions of each site the pattern does not permit, where the search
+   * allowed any; absent for an exact search, whose every site has none.
+   */
+  mismatches?: Uint8Array
 }
 
 /**
@@ -97,10 +102,12 @@ function strandMark(strand: number): string {
  * is legible in an exported BED, where a column of empty fourth fields is a file
  * nobody can tell apart from the last one they exported.
  *
- * The `score` column is left `NaN` rather than filled with a 1. A score is a
- * measurement, and an exact match has none — writing a constant there would put
- * a meaningless column into every export and give the lane a numeric axis that
- * says nothing.
+ * The `score` column is left `NaN` rather than filled with a 1 for an exact
+ * search. A score is a measurement, and an exact match has none — writing a
+ * constant there would put a meaningless column into every export and give the
+ * lane a numeric axis that says nothing. A search that **allowed mismatches**
+ * has one, and it is the number of them: the column a reader filters on to keep
+ * the sites that match the consensus exactly, and the one a BED carries out.
  */
 export function motifFeatures(result: MotifScanResult, pattern: string): FeatureSet {
   const build = new FeatureBuilder()
@@ -108,9 +115,13 @@ export function motifFeatures(result: MotifScanResult, pattern: string): Feature
   for (const hit of result.hits) {
     for (let at = 0; at < hit.starts.length; at++) {
       const strand = hit.strands[at]
+      const wrong = hit.mismatches?.[at]
       build.add(hit.contig, hit.starts[at], hit.ends[at], {
         strand,
         name: `${label} ${strandMark(strand)}`,
+        ...(wrong === undefined
+          ? {}
+          : { score: wrong, detail: `${wrong} ${wrong === 1 ? 'mismatch' : 'mismatches'}` }),
       })
     }
   }
@@ -176,7 +187,11 @@ export function motifDensity(
  * and two lanes labelled identically is the state in which somebody draws the
  * wrong conclusion.
  */
-export function motifLabel(pattern: string, bothStrands: boolean): string {
+export function motifLabel(pattern: string, bothStrands: boolean, mismatches = 0): string {
   const clean = pattern.replace(/\s+/g, '').toUpperCase()
-  return bothStrands ? `${clean} (both strands)` : clean
+  const notes = [
+    ...(bothStrands ? ['both strands'] : []),
+    ...(mismatches > 0 ? [`≤ ${mismatches} ${mismatches === 1 ? 'mismatch' : 'mismatches'}`] : []),
+  ]
+  return notes.length === 0 ? clean : `${clean} (${notes.join(', ')})`
 }

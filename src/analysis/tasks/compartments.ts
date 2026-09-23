@@ -197,6 +197,53 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.contacts !== 'trans',
   },
   {
+    kind: 'choice',
+    key: 'expected',
+    label: 'expected',
+    /**
+     * What each cell is divided by before the correlation — **the distance
+     * decay by default**, which is every other tool's answer and the right one
+     * for a chromosome with one diagonal.
+     *
+     * A bacterial chromosome whose arms are held together has two: the ordinary
+     * one and a secondary diagonal through the origin. The decay curve averages
+     * each diagonal of the map and every one of them crosses the secondary
+     * diagonal, so the ratio is left with an X that the correlation then draws
+     * and the eigenvectors follow — the arms, and not the compartments.
+     * *Decay along both arms* is the expectation that removes both
+     * (`analysis/arms.ts`), read from the origin declared for the sequence —
+     * the one the Chromosomes table shows. Cis only, because the arms are a
+     * fact about one sequence.
+     */
+    default: 'distance',
+    options: [
+      {
+        value: 'distance',
+        label: 'distance decay',
+        hint: 'The mean of each diagonal: the ordinary observed/expected.',
+      },
+      {
+        value: 'arms',
+        label: 'decay along both arms',
+        hint:
+          'Also removes the secondary diagonal of a bacterial chromosome whose arms are aligned, ' +
+          'reading the arms from the origin the Origin and terminus task placed.',
+      },
+    ],
+    when: (params) => contactsOf(params) === 'cis',
+  },
+  {
+    kind: 'number',
+    key: 'armWindow',
+    label: 'window along the arms',
+    unit: 'bins',
+    hint: 'Each cell is compared within this far along the arms; 0 is the whole chromosome.',
+    default: 50,
+    min: 0,
+    integer: true,
+    when: (params) => contactsOf(params) === 'cis' && params.expected === 'arms',
+  },
+  {
     kind: 'number',
     key: 'components',
     label: 'components',
@@ -217,12 +264,48 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Phasing',
   },
   {
+    kind: 'track',
+    key: 'phaseTrack',
+    label: 'phase by a track',
+    optional: true,
+    noneLabel: 'Do not use a track',
+    // Chosen, never assumed: filled from the first bigWig, it would phase every
+    // map with a ChIP track loaded by that track rather than by GC content.
+    startsEmpty: true,
+    hint: 'Positive is made to follow this track, when no gene model is chosen.',
+    section: 'Phasing',
+  },
+  {
     kind: 'sequence',
     key: 'phaseSequence',
     label: 'phase by GC content',
     optional: true,
     noneLabel: 'Do not use a sequence',
-    hint: 'Used when no gene model is chosen.',
+    hint: 'Used when neither a gene model nor a track is chosen.',
+    section: 'Phasing',
+  },
+  {
+    kind: 'choice',
+    key: 'order',
+    label: 'order components',
+    /**
+     * **By variance by default**, which is what E1 means everywhere else. The
+     * alternative is cooltools' `sort_metric`: the components are ranked by how
+     * well they follow the phasing signal, so E1 is the one that tracks it best
+     * whichever of them the variance put first. That is the programmatic answer
+     * to *which component is the compartment one*, and the components table says
+     * what every one of them explained and how it correlated, so the choice is
+     * never hidden.
+     */
+    default: 'variance',
+    options: [
+      { value: 'variance', label: 'by variance explained' },
+      {
+        value: 'phasing',
+        label: 'by the phasing signal',
+        hint: 'E1 is the one of the first three that follows the phasing signal best.',
+      },
+    ],
     section: 'Phasing',
   },
   {
@@ -467,7 +550,10 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   blurb: 'Observed/expected, correlated, and its leading components.',
   group: '2d',
   venue: 'analysis',
-  version: 1,
+  // 2: a sequence declared circular is divided by its own decay measured the
+  // short way round (§8.15), where it used to be measured along a line — which
+  // changes every number the task produces on one.
+  version: 2,
   // Absent on a metacool, which is a scientific judgement rather than a
   // technical one: a bacterial MAG has domains and no compartments, and a row
   // offering an eigenvector of a thing that has none is an invitation to
@@ -482,6 +568,6 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
         ? READY
         : waitingFor(NEEDS_MAP),
   params: PARAMS,
-  outputs: ['profile', 'intervals', 'matrix'],
+  outputs: ['profile', 'intervals', 'matrix', 'table'],
   estimate,
 }

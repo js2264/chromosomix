@@ -37,6 +37,14 @@ import type {
 } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { OriginStore } from '../state/origins'
+import {
+  CIRCULAR_SCORE,
+  JUNCTION_BINS,
+  MIN_JUNCTION_SEQUENCE_BINS,
+  junctionScore,
+  type JunctionBlock,
+} from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
 import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
@@ -84,10 +92,12 @@ import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type {
+  ArmsPresentation,
   CircularPresentation,
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
   CellsResult,
@@ -145,7 +155,7 @@ import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
-import { ContigsTable, type CircularColumn } from '../ui/ContigsTable'
+import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
@@ -574,10 +584,30 @@ interface FileAnnotations {
 function withCircularNames(
   framing: AnalysisFraming | null,
   names: readonly string[],
+  origins: Readonly<Record<string, number>> = {},
 ): AnalysisFraming | null {
-  if (framing === null || names.length === 0) return framing
-  return { ...framing, circular: names }
+  if (framing === null) return framing
+  const hasOrigins = Object.keys(origins).length > 0
+  if (names.length === 0 && !hasOrigins) return framing
+  return {
+    ...framing,
+    ...(names.length === 0 ? {} : { circular: names }),
+    // The declared origins travel beside the circles they are on, for the same
+    // reason: facts about the molecule that change what an arm-reading task
+    // computes, so they belong in its provenance (§8.15).
+    ...(hasOrigins ? { origins: { ...origins } } : {}),
+  }
 }
+
+/**
+ * How many sequences the junction test measures on a first open, longest first.
+ *
+ * A declaration is about a chromosome or a plasmid, and those are the longest
+ * sequences of any assembly; a draft's ten-thousandth contig is not a molecule
+ * anybody declares round, and three reads for each would be a burst of range
+ * requests on every open of one.
+ */
+const CIRCULAR_DETECTION_LIMIT = 50
 
 let nextSessionId = 1
 
@@ -2448,6 +2478,9 @@ export class Session {
       this.paintSequences()
       this.setGeneral([this.infoPanel.el])
       this.host.activity(this)
+      // Not awaited: three small reads per sequence, on the file's first open
+      // only, and nothing on screen waits for them (§8.15).
+      void this.detectCircular(uri)
       // Destroyed, not merely dropped: a scan of the *previous* file may still
       // be running, and the reference going away is not what stops it.
       this.wholeFile?.view.destroy()
@@ -5049,6 +5082,131 @@ export class Session {
   }
 
   /**
+   * The declared replication origins for the file on screen, held and keyed
+   * exactly as the circular declarations are and for the same reason: a fact
+   * about the file's molecules, the same at every rung (§8.15).
+   */
+  private originsHeld: { key: string; store: OriginStore } | null = null
+
+  private originStore(): OriginStore | null {
+    const key = this.sessionKey()
+    if (key === null) return null
+    if (this.originsHeld?.key !== key) this.originsHeld = { key, store: new OriginStore(key) }
+    return this.originsHeld.store
+  }
+
+  /** The origins as the Chromosomes table draws them. */
+  private originColumn(): OriginColumn | null {
+    const store = this.originStore()
+    if (store === null) return null
+    return {
+      get: (name) => store.get(name),
+      subscribe: (listener) => store.subscribe(listener),
+    }
+  }
+
+  /**
+   * Where an Origin and terminus run put each origin, taken into the
+   * declarations for every sequence the reader has not set one on — and said,
+   * because it changes what every arm-reading task will read from next.
+   */
+  private adoptOrigins(uri: string, found: Readonly<Record<string, number>>): void {
+    const file = this.file
+    if (file === null || file.uri !== uri) return
+    const taken = this.originStore()?.fill(found) ?? []
+    if (taken.length === 0) return
+    this.host.notify(
+      `Origin set on ${taken.slice(0, 3).join(', ')}${taken.length > 3 ? ', …' : ''} — the arms ` +
+        'are read from it from now on. It is on the Chromosomes table.',
+    )
+    this.rederive()
+  }
+
+  /**
+   * Tick the sequences whose contacts say they are circles — once per file, on
+   * its first open (§8.15).
+   *
+   * Three small reads per sequence: the diagonal at each end and the corner that
+   * joins them, `junctionScore` over the three. Balanced where the file has
+   * weights, so the ends' own coverage does not decide it. Only the longest
+   * sequences are measured, and only those long enough for the test to mean
+   * anything; a sequence it could not decide is left as it was. What it measured
+   * is kept whatever it found, which is what stops it running a second time — so
+   * a box the reader unticks stays unticked.
+   */
+  private async detectCircular(uri: string): Promise<void> {
+    const file = this.file
+    if (file === null || file.uri !== uri || file.info.hasGenomes) return
+    const store = this.circularStore()
+    if (store === null || store.evidence() !== null) return
+    const binsize = file.info.binsize ?? 0
+    if (!(binsize > 0)) return
+    let contigs: ContigsResult
+    try {
+      contigs = await this.contigs()
+    } catch {
+      return
+    }
+    if (this.destroyed || this.file !== file) return
+    const pairs = contigPairs(contigs)
+    const k = JUNCTION_BINS
+    let startBin = 0
+    const candidates: Array<{ name: string; from: number; n: number }> = []
+    for (const [name, length] of pairs) {
+      const n = Math.ceil(length / binsize)
+      if (n >= MIN_JUNCTION_SEQUENCE_BINS) candidates.push({ name, from: startBin, n })
+      startBin += n
+    }
+    // A draft assembly is thousands of contigs; the ones a declaration is about
+    // are the chromosomes and plasmids, which are the longest.
+    candidates.sort((a, b) => b.n - a.n)
+    const tested = candidates.slice(0, CIRCULAR_DETECTION_LIMIT)
+    const balance = file.info.hasWeights
+    const scores: Record<string, number> = {}
+    const circular: string[] = []
+    const read = async (rows: [number, number], cols: [number, number]): Promise<JunctionBlock> => {
+      const block = await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })
+      return {
+        rows: [rows[0], rows[1]],
+        cols: [cols[0], cols[1]],
+        values: block.values,
+      }
+    }
+    try {
+      for (const { name, from, n } of tested) {
+        const local = (block: JunctionBlock): JunctionBlock => ({
+          ...block,
+          rows: [block.rows[0] - from, block.rows[1] - from],
+          cols: [block.cols[0] - from, block.cols[1] - from],
+        })
+        const head = local(await read([from, from + 2 * k], [from, from + 2 * k]))
+        const tail = local(await read([from + n - 2 * k, from + n], [from + n - 2 * k, from + n]))
+        const corner = local(await read([from, from + k], [from + n - k, from + n]))
+        if (this.destroyed || this.file !== file) return
+        const { score } = junctionScore(n, head, tail, corner, k)
+        if (!Number.isFinite(score)) continue
+        scores[name] = score
+        if (score >= CIRCULAR_SCORE) circular.push(name)
+      }
+    } catch {
+      // A read that failed is a file this test cannot be run on, which is no
+      // reason to disturb the one being looked at. Nothing is recorded, so the
+      // next open tries again.
+      return
+    }
+    store.detected(scores, circular)
+    const added = circular.filter((name) => store.has(name))
+    for (const name of added) this.adoptCircular(name, true)
+    if (added.length > 0) {
+      this.host.notify(
+        `${added.slice(0, 3).join(', ')}${added.length > 3 ? ', …' : ''} ` +
+          `${added.length === 1 ? 'reads' : 'read'} as circular — the contacts across the ` +
+          'junction are those of neighbours. Untick on the Chromosomes table if not.',
+      )
+    }
+  }
+
+  /**
    * Resolutions the reader has added to this file's ladder (§3.4).
    *
    * Held and keyed exactly as the circular declarations above are, and for the
@@ -5255,6 +5413,7 @@ export class Session {
         this.adoptCircular(name, on)
       },
       subscribe: (listener) => store.subscribe(listener),
+      evidence: (name) => store.evidence()?.[name],
     }
   }
 
@@ -5901,7 +6060,9 @@ export class Session {
       derive: () => {
         const state = this.store.state
         if (state === null) return undefined
-        const { onExpectedChange: _own, ...shared } = this.derivePresentation(state)
+        // Nor the arms: their frame is the lead file's bins, and a companion is
+        // another file with a layout of its own (§8.15).
+        const { onExpectedChange: _own, arms: _lead, ...shared } = this.derivePresentation(state)
         return shared
       },
       annotations: (map) => this.annotationContext(map),
@@ -6517,9 +6678,12 @@ export class Session {
       ...(normalise === undefined ? {} : { normalise }),
       expected: state.oe === true,
       onExpectedChange: (on) => {
-        this.store.patch({ oe: on ? true : undefined })
+        // Off takes the arms with it: they are which expectation the ratio is
+        // taken against, and with no ratio they are a setting about nothing.
+        this.store.patch({ oe: on ? true : undefined, ...(on ? {} : { arms: undefined }) })
         this.rederive()
       },
+      ...this.armsOf(state),
       // From the score rather than from a key of its own: the correlation *is*
       // one of the answers to "what are these numbers", and it carries the
       // balancing and the baseline it needs with it (`ui/scores.ts`).
@@ -6566,6 +6730,90 @@ export class Session {
         this.rederive()
       },
     }
+  }
+
+  /**
+   * The arm-frame O/E for a view that is a window on one sequence (§8.15).
+   *
+   * Nothing on any other view — a whole genome is several molecules, and a
+   * metagenome's contigs are pieces of thousands. On a sequence with no declared
+   * origin the control is offered greyed, saying where one comes from, rather
+   * than hidden: a reader looking at a bacterial chromosome should find out the
+   * reading exists.
+   */
+  private armsOf(state: ViewState): { arms?: ArmsPresentation } {
+    if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
+      return {}
+    }
+    const file = this.file
+    if (file === null || file.info.hasGenomes) return {}
+    const binsize = file.info.binsize ?? 0
+    const names = this.contigNames()
+    if (!(binsize > 0) || names === null) return {}
+    const name = contigOf(state.region, names)
+    if (name === null) return {}
+    let startBin = 0
+    let bins = 0
+    for (const [contig, length] of contigPairs(file.contigs)) {
+      const n = binsForLength(length, binsize)
+      if (contig === name) {
+        bins = n
+        break
+      }
+      startBin += n
+    }
+    if (bins === 0) return {}
+    const origin = this.originStore()?.get(name)
+    const circular = this.circularStore()?.has(name) === true
+    // Offered on what can have arms: a circle, or a sequence somebody placed an
+    // origin on. A yeast chromosome has neither and is not asked.
+    if (origin === undefined && !circular) return {}
+    return {
+      arms: {
+        window: state.arms,
+        frame:
+          origin === undefined
+            ? null
+            : {
+                startBin,
+                n: bins,
+                origin: Math.max(0, Math.min(bins - 1, Math.floor(origin.at / binsize))),
+                circular,
+              },
+        refusal:
+          origin === undefined
+            ? `No origin is set for ${name}. Run Origin and terminus, which sets it, and the arms ` +
+              'are read from it.'
+            : null,
+        onChange: (window) => {
+          // On turns the O/E on with it, for the reason the adaptive despeckle
+          // does: it is a reading of the ratio and nothing else.
+          this.store.patch({ arms: window, ...(window === undefined ? {} : { oe: true }) })
+          this.rederive()
+        },
+        ...(origin === undefined || !circular
+          ? {}
+          : { onCentre: () => this.centreOnOrigin(file.uri, name, origin.at) }),
+      },
+    }
+  }
+
+  /**
+   * Frame a circle with its origin in the middle (§8.15).
+   *
+   * A window across the junction, written the way the region box takes one —
+   * an end below the start — that runs from half a lap after the origin round to
+   * half a lap before it. One base short of a whole lap, because a window whose
+   * two ends meet *is* the whole sequence and is named as one, from its first
+   * base (`RegionView.zoomedRegion`), which would put the origin back at the
+   * edge.
+   */
+  private centreOnOrigin(uri: string, name: string, origin: number): void {
+    const length = contigPairs(this.file?.contigs ?? null).find(([contig]) => contig === name)?.[1]
+    if (length === undefined || !(length > 2)) return
+    const from = (origin + Math.ceil(length / 2)) % length
+    const to = (from - 1 + length) % length
+    this.navigate({ uri, view: 'region', region: `${name}:${from}-${to}` })
   }
 
   /**
@@ -7350,6 +7598,11 @@ export class Session {
       // knows the shape of.
       ...(cooler && this.circularColumn() !== null
         ? { circular: this.circularColumn() as CircularColumn }
+        : {}),
+      // Where each origin is, beside the circle it is on (§8.15). Cooler only,
+      // for the circular column's reason.
+      ...(cooler && this.originColumn() !== null
+        ? { origins: this.originColumn() as OriginColumn }
         : {}),
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
@@ -8218,13 +8471,21 @@ export class Session {
         if (starred !== null) {
           const facts = starred.analysisFacts()
           const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
-          return withCircularNames(framed, this.circularStore()?.list() ?? [])
+          return withCircularNames(
+            framed,
+            this.circularStore()?.list() ?? [],
+            this.originStore()?.record() ?? {},
+          )
         }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
-          : withCircularNames(panel.analysisFraming(file.uri), this.circularStore()?.list() ?? [])
+          : withCircularNames(
+              panel.analysisFraming(file.uri),
+              this.circularStore()?.list() ?? [],
+              this.originStore()?.record() ?? {},
+            )
       },
       block: () => {
         const starred = this.deck?.starredPanel ?? null
@@ -8238,6 +8499,8 @@ export class Session {
       groups: () => this.annotations?.groups ?? null,
       // The one result that goes to a table rather than to the drawer (§3.8).
       cellMeasurements: (uri, table) => this.adoptCellMeasurements(uri, table),
+      // The origins an Origin and terminus run placed, into the declarations.
+      originsFound: (uri, origins) => this.adoptOrigins(uri, origins),
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
       // A deck the reader has left with no map starred has no file for a task
@@ -8387,6 +8650,14 @@ export class Session {
     return out
   }
 
+  /** The file's circular declarations and origins, as a context carries them. */
+  private declarations(): { circular: readonly string[]; origins: Record<string, number> } {
+    return {
+      circular: this.circularStore()?.list() ?? [],
+      origins: this.originStore()?.record() ?? {},
+    }
+  }
+
   private analysisContext(): AnalysisContext | null {
     const file = this.file
     // **A session with no contact map still has a panel.** Three tasks run
@@ -8438,6 +8709,7 @@ export class Session {
         framing: null,
         blockLoaded: false,
         blockBytes: 0,
+        ...this.declarations(),
       })
     }
     // Every coordinate a *map* analysis produces is arithmetic on a fixed bin
@@ -8456,7 +8728,15 @@ export class Session {
     const binsize = info.binsize
     if (binsize === null || binsize <= 0) return null
     const panel = starred === null ? this.current?.panel : (starredPanel?.map ?? undefined)
-    const framing = panel === undefined || panel === null ? null : panel.analysisFraming(uri)
+    const declared = this.declarations()
+    // The framing a task is **run** on, and so the one that has to carry the
+    // declarations: the drawer's header was given them and the run was not, so
+    // a circle ticked on the table was still measured as a line (§8.15).
+    const framing = withCircularNames(
+      panel === undefined || panel === null ? null : panel.analysisFraming(uri),
+      declared.circular,
+      declared.origins,
+    )
     const block = panel === undefined || panel === null ? null : panel.analysisBlock()
     return buildAnalysisContext({
       uri,
@@ -8473,6 +8753,7 @@ export class Session {
       framing,
       blockLoaded: block !== null,
       blockBytes: block === null ? 0 : block.values.byteLength,
+      ...declared,
       // The cells of the map the star is on, not of the session's first file: a
       // deck can hold an `.scool` beside a `.cool`, and the per-cell task is
       // offered for whichever one an analysis would be measured against.

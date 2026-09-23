@@ -112,6 +112,26 @@ export interface ExpectedPlan {
    * Trans cells have no separation and are never affected.
    */
   ignoreDiags: number
+  /**
+   * Bins in each sequence that is **circular**, `0` for one that is not; one
+   * entry per group, absent for a square with no circular sequence in it.
+   *
+   * On a circle the separation between two bins is the shorter of the two ways
+   * round (§8.15), and the decay curve in {@link cis} was accumulated that way —
+   * so a cis cell must be looked up at the same separation, or its numerator
+   * would be a circle's and its denominator a line's. Each group's rows are the
+   * whole sequence in order, which is what makes `|col − row|` its separation
+   * one way and the lap minus that the other.
+   */
+  laps?: Int32Array
+}
+
+/**
+ * The separation a cis cell of the square is looked up at: the straight one, or
+ * the short way round where its sequence is circular.
+ */
+export function cisSeparation(offset: number, lap: number): number {
+  return lap > 0 ? Math.min(offset, lap - offset) : offset
 }
 
 /**
@@ -163,7 +183,9 @@ export function observedOverExpected(
         out[r * m + c] = Number.NaN
         continue
       }
-      const offset = Math.abs(col - row)
+      const offset = same
+        ? cisSeparation(Math.abs(col - row), plan.laps?.[rowGroup] ?? 0)
+        : Math.abs(col - row)
       // …and the near-diagonal goes the same way, for the same reason and on the
       // same rule cooltools uses. Only in cis: a trans cell has no separation
       // for a diagonal to be measured from.

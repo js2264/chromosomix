@@ -57,6 +57,9 @@ export interface ContextInput {
   peers?: Array<{ label: string; uri: string; binsize: number }>
   /** The resolution ladder in bp, finest first; absent or empty without one. */
   resolutions?: number[]
+  /** The sequences declared circular, and the declared origins (§8.15). */
+  circular?: readonly string[]
+  origins?: Readonly<Record<string, number>>
 }
 
 function strings(
@@ -126,6 +129,13 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     ...(input.resolutions === undefined || input.resolutions.length === 0
       ? {}
       : { resolutions: [...input.resolutions] }),
+    // Absent rather than empty where nothing is declared, as on a framing.
+    ...(input.circular === undefined || input.circular.length === 0
+      ? {}
+      : { circular: [...input.circular] }),
+    ...(input.origins === undefined || Object.keys(input.origins).length === 0
+      ? {}
+      : { origins: { ...input.origins } }),
     // Absent rather than zero on a file with no cells, so that a task asking
     // `(context.cells ?? 0) > 0` reads the same on an old stored context as on a
     // fresh one.

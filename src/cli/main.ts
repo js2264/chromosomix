@@ -106,7 +106,7 @@ import {
 } from '../annotations/parse'
 import { parseBarChart, sniffBarChart } from '../annotations/barchart'
 import { formatIntervals } from '../annotations/export'
-import { writeBed3d } from '../annotations/g3d'
+import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
 import type { StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
@@ -199,13 +199,46 @@ function pairsBinningOf(args: Args): PairsBinning | undefined {
  * `--value`, `--circular` and `--cell`: the framing a session sets from the
  * picture, spelled as flags (see `RESERVED`).
  */
-function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells'> {
+function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins'> {
   const value = one(args, 'value')
   return {
     ...(value === undefined || value === '' ? {} : { value }),
     circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     cells: all(args, 'cell').flatMap((item) => item.split(',')).filter((item) => item !== ''),
+    origins: originsOf(all(args, 'origin')),
   }
+}
+
+/**
+ * `--origin NAME:POS`, repeated or comma-separated: where each sequence's
+ * replication origin is (§8.15), in the **display** form — 1-based, the number
+ * the Origin and terminus table prints — and kept 0-based in the framing, like
+ * every coordinate a worker is handed (§26.1). Digit grouping is allowed, since
+ * the number is copied from a table that groups it.
+ */
+function originsOf(items: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const item of items.flatMap((entry) => entry.split(','))) {
+    const at = item.lastIndexOf(':')
+    if (at <= 0) {
+      if (item.trim() !== '') throw new Error(`--origin ${item} is not NAME:POSITION.`)
+      continue
+    }
+    const name = item.slice(0, at)
+    const position = Number(item.slice(at + 1).replace(/[,_]/g, ''))
+    if (!Number.isFinite(position) || position < 1) {
+      throw new Error(`--origin ${item}: the position is 1-based and at least 1.`)
+    }
+    out[name] = Math.floor(position) - 1
+  }
+  return out
+}
+
+/** `LR657304.1:6,374,501` — the origins as a reader would type them back. */
+function originLabel(origins: Readonly<Record<string, number>>): string {
+  return Object.entries(origins)
+    .map(([name, at]) => `${name}:${(at + 1).toLocaleString('en-US')}`)
+    .join(', ')
 }
 
 const flag = (args: Args, key: string): boolean => {
@@ -291,6 +324,9 @@ const RESERVED = new Set([
   // without them repeats a different run.
   'value',
   'circular',
+  // Where each sequence's replication origin is (§8.15), which the arm-frame
+  // expectation and the inter-arm alignment read their arms from.
+  'origin',
   'cell',
   'over',
   'quiet',
@@ -371,6 +407,8 @@ interface RunOptions {
   value?: string | undefined
   /** Sequences declared circular (§8.15), by this file's names. */
   circular: readonly string[]
+  /** Declared replication origins, 0-based base pairs by this file's names (§8.15). */
+  origins: Readonly<Record<string, number>>
   /** The cells of an `.scool` to sum; empty is every cell (§3.8). */
   cells: readonly string[]
   quiet: boolean
@@ -562,6 +600,21 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
           `${mc.scoreColumns.join(', ') || DEFAULT_COUNT_COLUMN}.`,
       )
     }
+    // An origin on a sequence the file has not got, or past its end, is a
+    // typing mistake — refused by name rather than read as *no origin*.
+    for (const [name, at] of Object.entries(options.origins)) {
+      const id = mc.chromnames.indexOf(name)
+      if (id < 0) {
+        throw new Error(`--origin ${name}: ${basename(parseUri(path).path)} has no sequence of that name.`)
+      }
+      const length = mc.coords.contigLengths[id]
+      if (at >= length) {
+        throw new Error(
+          `--origin ${name}:${(at + 1).toLocaleString('en-US')} is past its end, at ` +
+            `${length.toLocaleString('en-US')} bp.`,
+        )
+      }
+    }
     const extent =
       options.window === undefined
         ? ([0, mc.nBins] as [number, number])
@@ -581,8 +634,10 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
+        `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
         `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}`,
       ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
+      ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
     }
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -1133,6 +1188,13 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
     // the vector.
     if (sniffBarChart(text, path)) {
       inputs.features = { ...inputs.features, [id]: parseBarChart(text, path) }
+    } else if (sniffBed3d(text, path) || sniffG3d(text, path)) {
+      // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set
+      // whose rows carry coordinates, which is what the structure tasks read
+      // (§25). Read as a BED it kept its intervals and lost the model, and
+      // Spatial tracks said the row it had just been handed was not a structure.
+      const model = sniffBed3d(text, path) ? parseBed3d(text, path) : parseG3d(text, path)
+      inputs.features = { ...inputs.features, [id]: model }
     } else if (sniffFormat(text, path) === 'bedpe') {
       inputs.pairs = { ...inputs.pairs, [id]: parseBedpe(text) }
     } else {
@@ -1319,6 +1381,9 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            (hicrep). Repeat it for a third
       --value <column>     the score column to read, for a file that carries
                            more than the count (default: count)
+      --origin <name:pos>  where a sequence's replication origin is, 1-based,
+                           as the Origin and terminus task reports it; repeat
+                           or separate with commas
       --circular <name>    a sequence to read as a circle (a plasmid); repeat
                            or separate with commas
       --cell <name>        a cell of an .scool to sum into the map; repeat or
@@ -1336,8 +1401,9 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
 
   metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip, overlap,
-      motif), run with no contact map at all — what a 1D browser session runs.
-      The assembly is what the tracks and references declare.
+      motif, composition, oriter), run with no contact map at all — what a 1D
+      browser session runs. The assembly is what the tracks and references
+      declare.
 
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters

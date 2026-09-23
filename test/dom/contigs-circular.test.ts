@@ -13,7 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { ContigsTable, type CircularColumn } from '@/ui/ContigsTable'
+import { ContigsTable, type CircularColumn, type OriginColumn } from '@/ui/ContigsTable'
 import type { ContigsResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -163,6 +163,69 @@ describe('the circular column', () => {
     const first = view.el.querySelector('.tr')
     const cells = [...(first?.querySelectorAll('.td') ?? [])].map((cell) => cell.textContent)
     expect(cells.slice(0, 2)).toEqual(['chr', '4,000,000'])
+    view.destroy()
+  })
+})
+
+/**
+ * The origin each sequence's arms are read from, beside the circle it is on
+ * (§8.15) — and what the first open's junction test measured, on the box it
+ * ticked.
+ */
+describe('the origin column', () => {
+  function origins(): OriginColumn & { put(name: string, at: number): void } {
+    const held = new Map<string, { at: number; by: 'reader' | 'task' }>()
+    const listeners = new Set<() => void>()
+    return {
+      get: (name) => held.get(name),
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      put: (name, at) => {
+        held.set(name, { at, by: 'task' })
+        for (const listener of listeners) listener()
+      },
+    }
+  }
+
+  function withOrigins(held: OriginColumn): ContigsTable {
+    const view = new ContigsTable({ data: DATA, circular: store(), origins: held, onOpenContig: () => {} })
+    document.body.appendChild(view.el)
+    return view
+  }
+
+  const originCells = (view: ContigsTable): string[] =>
+    [...view.el.querySelectorAll('.tr')].map((row) => {
+      const cells = row.querySelectorAll('.td')
+      return cells[cells.length - 1]?.textContent ?? ''
+    })
+
+  it('comes after the circle, 1-based, and is blank where nothing is declared', () => {
+    const held = origins()
+    held.put('chr', 6_374_500)
+    const view = withOrigins(held)
+    const heads = [...view.el.querySelectorAll('.th')].map((cell) => cell.textContent)
+    expect(heads).toEqual(['name', 'length', 'circular', 'origin'])
+    expect(originCells(view)).toEqual(['6,374,501', '', ''])
+    view.destroy()
+  })
+
+  it('follows the store when a run places one', () => {
+    const held = origins()
+    const view = withOrigins(held)
+    held.put('plasmid_A', 999)
+    expect(originCells(view)[1]).toBe('1,000')
+    view.destroy()
+  })
+
+  it('says on the box what the junction test measured', () => {
+    const held = store()
+    const measured: CircularColumn = { ...held, evidence: (name) => (name === 'chr' ? 0.65 : undefined) }
+    held.set('chr', true)
+    const view = table(measured)
+    expect(boxes(view)[0].title).toContain('0.65×')
+    expect(boxes(view)[1].title).not.toContain('×')
     view.destroy()
   })
 })

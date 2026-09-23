@@ -130,6 +130,12 @@ export interface AnalysisWorkspaceHost {
    * shell turns it into columns.
    */
   cellMeasurements?(uri: string, table: TableOutput): void
+  /**
+   * The origins an *Origin and terminus* run placed, by sequence, in base
+   * pairs — for the session to take into its declarations (§8.15), which is
+   * what every task reading a chromosome's arms reads its origin from.
+   */
+  originsFound?(uri: string, origins: Readonly<Record<string, number>>): void
 
   /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
   allTargets?(): readonly RunTarget[]
@@ -450,6 +456,27 @@ export class AnalysisWorkspace {
       )
       if (measured !== undefined) {
         this.host.cellMeasurements?.(result.provenance.framing.uri, measured)
+      }
+    }
+
+    // Also before it, for the same reason: the loci are an ordinary overlay
+    // below, and their `ori` rows are a declaration the session keeps as well.
+    if (task.id === 'oriter') {
+      const loci = result.outputs.find(
+        (output): output is IntervalsOutput =>
+          output.kind === 'intervals' && output.id === 'oriter-loci',
+      )
+      if (loci !== undefined && loci.payload.kind === 'features') {
+        const set = loci.payload.data
+        const found: Record<string, number> = {}
+        for (let i = 0; i < set.length; i++) {
+          if (set.name?.[i] !== 'ori') continue
+          const contig = set.contigs[set.contig[i]]
+          if (contig !== undefined) found[contig] = Math.floor((set.start[i] + set.end[i]) / 2)
+        }
+        if (Object.keys(found).length > 0) {
+          this.host.originsFound?.(result.provenance.framing.uri, found)
+        }
       }
     }
 

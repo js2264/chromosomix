@@ -242,6 +242,15 @@ export interface EntryParam extends ParamBase {
   optional?: boolean
   /** Label for the empty choice. Only read when `optional`. */
   noneLabel?: string
+  /**
+   * Optional only: start on the empty choice rather than on the star.
+   *
+   * For an input that changes what a task computes by being there at all — a
+   * track the compartments are phased by, the coverage an origin call breaks a
+   * tie with. The first bigWig loaded is a guess at either that nobody made, and
+   * a ChIP track taken for coverage gives a ratio that looks like any other.
+   */
+  startsEmpty?: boolean
 }
 
 /**
@@ -435,7 +444,13 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
       case 'pairSet':
       case 'track':
       case 'sequence':
-        out[spec.key] = spec.multiple === true ? [] : null
+        // `''` is the empty choice already answered, which the form keeps.
+        out[spec.key] =
+          spec.multiple === true
+            ? []
+            : spec.optional === true && spec.startsEmpty === true
+              ? ''
+              : null
         break
       case 'column':
         out[spec.key] = null
@@ -538,6 +553,19 @@ export interface AnalysisFraming {
    * build restores as what it was: nothing circular.
    */
   circular?: readonly string[]
+  /**
+   * Where the reader has declared each sequence's replication **origin**, in
+   * base pairs, 0-based, by this file's own names. Absent where none is.
+   *
+   * The same kind of fact as {@link circular} and carried for the same reason:
+   * it is about the molecule rather than the window, and it changes the numbers
+   * of every task that reads a bacterial chromosome in the frame of its two arms
+   * — the arm-frame expectation of compartments and the inter-arm alignment
+   * (§8.15, §18.8) — so it belongs in the provenance of what they produce. Filled
+   * by the *Origin and terminus* task for every sequence the reader has not set
+   * one on, and shown in the Chromosomes table.
+   */
+  origins?: Readonly<Record<string, number>>
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,6 +1171,16 @@ export interface AnalysisContext {
    * stratified correlation is meaningless across two grids.
    */
   peers?: Array<{ label: string; uri: string; binsize: number }>
+  /**
+   * The file's circular declarations and origins (§8.15), as a framing carries
+   * them — here as well because a track task can run where there is **no**
+   * framing, from the Chromosomes table or a 1D browser, and the one the runner
+   * makes for it there must carry them too. An *Origin and terminus* run from the
+   * table read a declared circle as a line, and a line splits an origin near its
+   * first base between its two ends.
+   */
+  circular?: readonly string[]
+  origins?: Readonly<Record<string, number>>
 }
 
 // ---------------------------------------------------------------------------

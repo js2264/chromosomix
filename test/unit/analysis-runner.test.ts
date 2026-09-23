@@ -880,6 +880,29 @@ describe('a view with no map', () => {
     runner.destroy()
   })
 
+  it('says what the molecules are declared to be where there is no map to frame', async () => {
+    // An Origin and terminus run from the Chromosomes table: no panel, so no
+    // framing, and the one made over the tracks carried neither the circles
+    // nor the origins — a declared circle was read as a line, which splits an
+    // origin near its first base between the two ends (§8.15).
+    const sent: Array<{ framing?: AnalysisFraming }> = []
+    const tracks = {
+      request: (payload: { framing?: AnalysisFraming }) => {
+        sent.push(payload)
+        return Promise.resolve(trackResult('oriter'))
+      },
+    }
+    const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
+      context: () => ({ ...context(null), circular: ['chr'], origins: { chr: 1_000 } }),
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+    runner.run(task('oriter', { group: '1d', venue: 'annotations' }), {})
+    await settle()
+    expect(sent[0]?.framing?.circular).toEqual(['chr'])
+    expect(sent[0]?.framing?.origins).toEqual({ chr: 1_000 })
+    runner.destroy()
+  })
+
   it('refuses a map task that reaches a genome, in the task’s own terms', async () => {
     // `framing` non-null with nothing to mount is not a state the app can reach
     // — a framing comes from a panel and a panel comes from a file — so this is

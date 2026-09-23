@@ -218,6 +218,14 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     }
     const circular = (framing.circular ?? []).filter((name) => name !== '')
     if (circular.length > 0) args.push('--circular', quote(circular.join(',')))
+    // 1-based on the line, as a reader reads it off the Origin and terminus
+    // table; the framing keeps it 0-based, like every coordinate it holds.
+    const origins = Object.entries(framing.origins ?? {}).filter(
+      ([name, at]) => name !== '' && Number.isFinite(at),
+    )
+    if (origins.length > 0) {
+      args.push('--origin', quote(origins.map(([name, at]) => `${name}:${at + 1}`).join(',')))
+    }
     // The ticked cells of an `.scool` are the session's and not the record's
     // (§3.8), so they are read off the context, and a command written with no
     // context to ask is told what it cannot say.

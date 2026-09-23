@@ -45,7 +45,9 @@ import {
   type Params,
 } from '@/analysis/types'
 import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
-import { ParamForm } from '@/ui/ParamForm'
+import { ORITER_TASK } from '@/analysis/tasks/oriter'
+import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
+import { ParamForm, resolveEntryDefaults } from '@/ui/ParamForm'
 import { pickLocus, resetPick } from '@/ui/mapPick'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -283,8 +285,10 @@ describe('the units a form asks in', () => {
     // its three band edges are Nagano et al.'s published separations, are what
     // the phasing plot's own axes print, and are never turned into bins by
     // anything — the histogram measures a separation in base pairs and compares
-    // it there. The three 1D tasks are the stated exception.
-    const onTracks = new Set(['metaplot', 'frip', 'trackcorr', 'cellqc'])
+    // it there. The 1D tasks are the stated exception — the three that read
+    // tracks, and the two that read the reference, whose windows are lengths of
+    // sequence at every resolution.
+    const onTracks = new Set(['metaplot', 'frip', 'trackcorr', 'cellqc', 'composition', 'oriter'])
     const inBp = numbers().filter((param) => param.unit === 'bp' && !onTracks.has(param.task))
     expect(inBp).toEqual([])
   })
@@ -490,6 +494,57 @@ describe('ticking several sequences', () => {
  * eigenvector lives on one chromosome; that is wrong in a way that looks like
  * data, and it is the reason the modes are not interchangeable.
  */
+/**
+ * What an optional input starts on when nobody has chosen one.
+ *
+ * The star or the first *loaded* entry, and never another task's output: the
+ * two loci an Origin and terminus run leaves are the first interval set on the
+ * list, and the compartments were phased by their "gene density" by default.
+ * And an input that is a guess however it is filled — the track the
+ * compartments follow, the coverage an origin call reads — starts on none.
+ */
+describe('an optional input nobody has chosen', () => {
+  function entry(id: string, kind: AnnotationEntry['kind'], computed = false): AnnotationEntry {
+    return {
+      id,
+      card: computed ? 'synthetic' : kind === 'segments' ? 'overlay' : 'linear',
+      kind,
+      label: id,
+      source: computed
+        ? { kind: 'computed', name: id, task: 'oriter', recipe: {}, framing: 'PAK at 4 kb' }
+        : { kind: 'remote', url: `https://example.invalid/${id}`, name: id },
+      status: 'ready',
+      visible: true,
+      placement: { top: false, right: false, bottom: true, left: false },
+      style: defaultStyle(kind, '#0072b2'),
+    }
+  }
+  const phasing = (entries: AnnotationEntry[]): Record<string, unknown> =>
+    resolveEntryDefaults(COMPARTMENTS_TASK.params, { ...context(), entries }, defaultParams(COMPARTMENTS_TASK.params))
+
+  it('is not phased by a set a task made', () => {
+    const params = phasing([entry('loci', 'segments', true), entry('PAK.fa', 'sequence')])
+    expect(params.phaseFeatures).toBe('')
+    expect(params.phaseSequence).toBe('PAK.fa')
+  })
+
+  it('is still phased by a gene model the reader loaded, ahead of a computed set', () => {
+    const params = phasing([entry('loci', 'segments', true), entry('genes.gtf', 'gtf')])
+    expect(params.phaseFeatures).toBe('genes.gtf')
+  })
+
+  it('starts the phasing track and the origin call’s coverage on none', () => {
+    expect(phasing([entry('chip.bw', 'track')]).phaseTrack).toBe('')
+    const oriter = resolveEntryDefaults(
+      ORITER_TASK.params,
+      { ...context(), entries: [entry('PAK.fa', 'sequence'), entry('cov.bw', 'track')] },
+      defaultParams(ORITER_TASK.params),
+    )
+    expect(oriter.coverage).toBe('')
+    expect(oriter.sequence).toBe('PAK.fa')
+  })
+})
+
 describe('which contacts a compartment run reads', () => {
   /**
    * Cis is the default because it is the answer most readers want at a price

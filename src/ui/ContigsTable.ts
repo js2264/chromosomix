@@ -102,6 +102,8 @@ export interface ContigsTableOptions {
    * contigs off four thousand assemblies is not a list anybody declares against.
    */
   circular?: CircularColumn
+  /** The declared origins, drawn as a column after the circular one. */
+  origins?: OriginColumn
   /**
    * Open the whole file at once — see {@link GenomesTableOptions.onOpenWhole}.
    *
@@ -117,6 +119,22 @@ export interface CircularColumn {
   has(name: string): boolean
   set(name: string, on: boolean): void
   /** Tell the table when something else changed the set; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void
+  /**
+   * The junction score the first open measured for a sequence, or `undefined`
+   * where it was not measured — so a tick the test made can say why (§8.15).
+   */
+  evidence?(name: string): number | undefined
+}
+
+/**
+ * Where each sequence's replication origin is declared (§8.15), for a column
+ * that shows it. Read-only in the table: the *Origin and terminus* task is what
+ * fills it in, and a workspace or `--origin` carries a typed one.
+ */
+export interface OriginColumn {
+  /** 0-based base pairs and whose word it is, or `undefined`. */
+  get(name: string): { at: number; by: 'reader' | 'task' } | undefined
   subscribe(listener: () => void): () => void
 }
 
@@ -197,11 +215,44 @@ export class ContigsTable {
         toggle: {
           checked: (row) => circular.has(names[row]),
           onToggle: (row, on) => circular.set(names[row], on),
-          title: (row) =>
-            circular.has(names[row])
-              ? `${names[row]} is read as a circle. Untick to read it as a line.`
-              : `Read ${names[row]} as a circle: its last bin joins its first.`,
+          title: (row) => {
+            const name = names[row]
+            const score = circular.evidence?.(name)
+            // What the junction test measured, where it did: a tick the app made
+            // says why, and an empty box beside a high score says the reader
+            // chose otherwise.
+            const measured =
+              score === undefined || !Number.isFinite(score)
+                ? ''
+                : ` The contacts across its junction are ${score.toFixed(2)}× the diagonal’s at the ` +
+                  'same separation — about 1 on a circle, about 0 on a line.'
+            return circular.has(name)
+              ? `${name} is read as a circle. Untick to read it as a line.${measured}`
+              : `Read ${name} as a circle: its last bin joins its first.${measured}`
+          },
         },
+      })
+    }
+
+    // The origin the arms are read from, beside the circle it is on. Read-only:
+    // what fills it is the Origin and terminus task, whose own table says how
+    // the call was made, and a typed one arrives in a workspace or on --origin.
+    const origins = options.origins
+    if (origins !== undefined) {
+      columns.push({
+        key: 'origin',
+        label: 'origin',
+        kind: 'number',
+        align: 'right',
+        width: '7rem',
+        title:
+          'Where replication starts, 1-based — what the map’s arms are read from. Filled in by ' +
+          'the Origin and terminus task.',
+        value: (row) => {
+          const held = origins.get(names[row])
+          return held === undefined ? undefined : held.at + 1
+        },
+        format: (value) => (typeof value === 'number' ? fmt.int(value) : ''),
       })
     }
 
@@ -252,7 +303,15 @@ export class ContigsTable {
     // The same set is drawn in three places — this column, the General panel's
     // list and the map — so the boxes follow the store rather than their own
     // clicks: a declaration made on one surface has to show on the other two.
-    this.unwatch = circular === undefined ? null : circular.subscribe(() => this.table.repaint())
+    const unwatchCircular = circular === undefined ? null : circular.subscribe(() => this.table.repaint())
+    const unwatchOrigins = origins === undefined ? null : origins.subscribe(() => this.table.repaint())
+    this.unwatch =
+      unwatchCircular === null && unwatchOrigins === null
+        ? null
+        : () => {
+            unwatchCircular?.()
+            unwatchOrigins?.()
+          }
     if (chooser !== undefined) {
       this.table.addToolbarItem(none)
       this.table.addToolbarItem(show)

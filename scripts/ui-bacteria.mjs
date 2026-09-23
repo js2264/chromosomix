@@ -1,0 +1,210 @@
+/**
+ * Drive the bacterial chain in headless Chromium and write one screenshot a step.
+ *
+ * What `ui-gallery.mjs` cannot show, because the yeast demo has no circle and no
+ * origin: *P. aeruginosa* PAK from the DNA Bacterial Zoo, read as circular on
+ * its first open, its origin and terminus placed from its sequence, its
+ * composition drawn, the map framed on the origin, the O/E taken along both
+ * arms and correlated, and the two tasks that read the arms (§8.15, §18.8).
+ *
+ *   npm run dev -- --host 127.0.0.1 --port 5173 &
+ *   node scripts/ui-bacteria.mjs [out-dir]
+ *
+ * The map, reference and coverage are read from the lab's bucket unless
+ * GALLERY_DATA names a folder served with byte ranges and CORS
+ * (`python3 scripts/DBZ_store.py serve <folder>`) holding the same three names.
+ */
+
+import { createRequire } from 'node:module'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+const require = createRequire(import.meta.url)
+function playwright() {
+  try {
+    return require('playwright')
+  } catch {
+    const root = execSync('npm root -g').toString().trim()
+    return require(join(root, 'playwright'))
+  }
+}
+const { chromium } = playwright()
+
+const OUT = process.argv[2] ?? 'gallery-bacteria'
+const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
+const DATA = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
+const MAP = `${DATA}/PAK_MM142.mcool`
+const FASTA = `${DATA}/PAK.fa`
+const COVERAGE = process.env.GALLERY_DATA
+  ? `${DATA}/PAK_MM142_500.coverage.coverage-total.bw`
+  : `${DATA}/coverage/PAK_MM142_500.coverage.coverage-total.bw`
+mkdirSync(OUT, { recursive: true })
+const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
+const executablePath =
+  browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
+
+const browser = await chromium.launch({
+  ...(executablePath === undefined ? {} : { executablePath }),
+  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+})
+const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 } })).newPage()
+const errors = []
+page.on('pageerror', (e) => errors.push(String(e)))
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const shot = async (name) => { await page.screenshot({ path: `${OUT}/${name}.png` }); console.log('shot', name) }
+const until = (text, timeout = 180000) =>
+  page.waitForFunction((t) => (document.body.innerText ?? '').includes(t), text, { timeout })
+    .catch(() => console.log('never saw:', text))
+const fold = async (title) => {
+  for (const b of await page.$$(`button[title^="${title}"]`)) {
+    if (await b.isVisible()) { await b.click(); await sleep(600); return true }
+  }
+  return false
+}
+// No card has a box to paste a URL into, so a file gets in by being dropped:
+// fetched in the page, made a File, and handed over with a DataTransfer.
+const dropTrack = (url, name) => page.evaluate(async ({ url, name }) => {
+  const target = [...document.querySelectorAll('.ann-drop')].find((el) => /Load a track/.test(el.textContent ?? ''))
+  if (target === undefined) throw new Error('no track drop zone')
+  const file = new File([await (await fetch(url)).arrayBuffer()], name)
+  const transfer = new DataTransfer()
+  transfer.items.add(file)
+  for (const kind of ['dragenter', 'dragover', 'drop']) {
+    target.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
+  }
+}, { url, name })
+const openTask = async (title) => {
+  // The drawer covers the panel's rows while it is open.
+  const close = page.locator('.analysis-drawer-head button').last()
+  if (await close.isVisible().catch(() => false)) { await close.click(); await sleep(600) }
+  const row = page.locator('.analysis-row-title', { hasText: title }).first()
+  await row.scrollIntoViewIfNeeded()
+  await row.click()
+  await sleep(1200)
+}
+const choose = async (optionText) => {
+  const select = page.locator('.analysis-drawer select').filter({ has: page.locator('option', { hasText: optionText }) }).first()
+  if (!(await select.count())) { console.log('no select offers', optionText); return }
+  const label = await select.locator('option', { hasText: optionText }).first().textContent()
+  await select.selectOption({ label: label ?? optionText })
+  await sleep(600)
+}
+const computed = () =>
+  page.evaluate(() => document.querySelector('.analysis-drawer-body')?.innerText.match(/computed in [^\n]*/)?.[0] ?? '')
+// Run, and wait for *this* run's line: the drawer keeps the last result on
+// screen, so waiting for a result to exist returns at once.
+const run = async (marker) => {
+  const before = await computed()
+  await page.locator('.analysis-drawer button', { hasText: /^run$/i }).first().click()
+  await page.waitForFunction(({ before, marker }) => {
+    const text = document.querySelector('.analysis-drawer-body')?.innerText ?? ''
+    const now = text.match(/computed in [^\n]*/)?.[0] ?? ''
+    return now !== '' && now !== before && text.includes(marker)
+  }, { before, marker }, { timeout: 300000 }).catch(() => console.log('run did not finish:', marker))
+  await sleep(1500)
+}
+const scrollDrawerTo = (needle) => page.evaluate((needle) => {
+  const body = document.querySelector('.analysis-drawer-body')
+  const hit = [...(body?.querySelectorAll('*') ?? [])].find((el) => el.childElementCount === 0 && (el.textContent ?? '').includes(needle))
+  hit?.scrollIntoView({ block: 'start' })
+}, needle)
+const notes = () => page.evaluate(() => [...document.querySelectorAll('.analysis-drawer-body li')].map((li) => li.innerText).join('\n'))
+const word = (text) => page.locator('button').filter({ has: page.locator(`.btn-word-text:text-is("${text}")`) }).first()
+const rung = (kb) => `${MAP}::/resolutions/${kb * 1000}`
+
+try {
+  await page.goto(`${BASE}/#uri=${encodeURIComponent(rung(4))}&view=contigs`)
+  await until('reads as circular')
+  await sleep(1500)
+  await shot('b01-detected-circular')
+
+  await fold('Show the Annotations panel')
+  await page.waitForSelector('.ann-drop', { timeout: 30000 })
+  await dropTrack(FASTA, 'PAK.fa')
+  await sleep(4000)
+  await dropTrack(COVERAGE, 'PAK_coverage-total.bw')
+  await sleep(4000)
+
+  await fold('Show the Analysis panel')
+  await sleep(1200)
+  await openTask('Origin and terminus')
+  await choose('PAK_coverage-total')
+  await run('Origin and terminus per sequence')
+  await until('Origin set on')
+  console.log('origin and terminus:\n' + (await notes()))
+  await shot('b02-oriter-result')
+  await scrollDrawerTo('Origin and terminus per sequence')
+  await sleep(500)
+  await shot('b03-oriter-table')
+
+  await openTask('Base composition')
+  await run('Cumulative GC skew')
+  await shot('b04-composition')
+  const close = page.locator('.analysis-drawer-head button').last()
+  if (await close.isVisible().catch(() => false)) await close.click()
+  await sleep(800)
+  await shot('b05-origin-column')
+  await page.evaluate(() => {
+    const lane = [...document.querySelectorAll('input')].find((el) => /^GC skew · PAK/.test(el.value ?? ''))
+    lane?.scrollIntoView({ block: 'center' })
+  })
+  await sleep(600)
+  await shot('b05b-lane-exports')
+
+  // The chromosome's map, with room to see it.
+  await page.evaluate((hash) => { location.hash = hash }, `#uri=${encodeURIComponent(rung(4))}&view=region&region=LR657304.1`)
+  await sleep(6000)
+  for (const name of ['General', 'Annotations', 'Analysis']) await fold(`Fold the ${name} panel`)
+  await sleep(4000)
+  await shot('b06-map')
+  await word('ori').click()
+  await sleep(8000)
+  await shot('b07-ori-centred')
+  await word('O/E').click()
+  await sleep(5000)
+  await shot('b08-oe')
+  await word('arms').click()
+  await sleep(6000)
+  await shot('b09-oe-arms')
+
+  // The correlation, at the rung the map can draw one at.
+  await page.locator('label.res-stop', { hasText: /^8 kb$/ }).first().click()
+  await sleep(8000)
+  const score = page.locator('select').filter({ has: page.locator('option', { hasText: /^correlation$/ }) }).first()
+  await score.selectOption({ label: 'correlation' })
+  await sleep(10000)
+  await shot('b10-correlation-arms')
+  await word('arms').click()
+  await sleep(10000)
+  await shot('b11-correlation-plain')
+  await word('arms').click()
+  await sleep(6000)
+
+  await fold('Show the Analysis panel')
+  await sleep(1000)
+  await openTask('Inter-arm alignment')
+  await run('Inter-arm alignment per sequence')
+  await shot('b12-interarm')
+  await scrollDrawerTo('Inter-arm alignment per sequence')
+  await sleep(500)
+  await shot('b13-interarm-table')
+
+  await openTask('Compartments')
+  await choose('decay along both arms')
+  await choose('GC content')
+  await shot('b14-compartments-form')
+  await run('Components')
+  console.log('compartments:\n' + (await notes()))
+  await shot('b15-compartments')
+  await scrollDrawerTo('Components ·')
+  await sleep(500)
+  await shot('b16-components-table')
+} catch (error) {
+  console.log('FAILED', error)
+  await shot('99-failure')
+} finally {
+  console.log('page errors:', errors.length === 0 ? 'none' : errors.slice(0, 10))
+  await browser.close()
+}

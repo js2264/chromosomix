@@ -27,6 +27,11 @@
  * the pooling layer and the reader unaware that derived values exist.
  */
 
+// The one import from `analysis/`, and a pure one — arithmetic over arrays, no
+// worker and no wire format. It is shared rather than copied for the reason
+// `correlationField` is: the O/E a reader looks at and the one the compartment
+// chain correlates must be one implementation, or they agree until they do not.
+import { armExpected, type ArmFrame } from '../analysis/arms'
 import {
   adaptiveSmoothValues,
   parseSmooth,
@@ -717,6 +722,38 @@ export interface Derivation {
    * costs, which is right: the alternative is not doing it at all.
    */
   deferSmoothing?: boolean
+  /**
+   * Take the baseline against **both** of a bacterial chromosome's diagonals
+   * rather than the main one alone (`analysis/arms.ts`, §8.15).
+   *
+   * Replaces the distance-decay model wherever {@link expected} or
+   * {@link baseline} would use it, and nowhere else. `rowBins` and `colBins`
+   * say which bin of the sequence each row and column of the block is — which
+   * is what lets a block rotated to put the origin in the middle, or a window
+   * of one, be read in the one frame.
+   */
+  arms?: {
+    frame: ArmFrame
+    rowBins: Int32Array
+    colBins: Int32Array
+    /** Half-width along the arms, in bins; `0` for the whole sequence. */
+    window: number
+  }
+}
+
+/**
+ * The arm-frame expectation of every cell, masked exactly as
+ * {@link expectedValues} masks the distance decay: a cell with no value stays
+ * absent, and so does one whose expectation is not positive.
+ */
+function armValues(block: BlockValues, arms: NonNullable<Derivation['arms']>): Float32Array {
+  const expected = armExpected(block.values, arms.rowBins, arms.colBins, arms.frame, arms.window)
+  const out = new Float32Array(block.nrows * block.ncols)
+  for (let i = 0; i < out.length; i++) {
+    const e = expected[i]
+    out[i] = Number.isFinite(block.values[i]) && e > 0 ? e : Number.NaN
+  }
+  return out
 }
 
 /**
@@ -931,9 +968,10 @@ export function deriveBlock(
   // under it, so a reader who leaves the O/E toggle on and picks the baseline
   // gets the baseline rather than a field of ones.
   let smoothed: Smoothed
+  const arms = derivation.arms
   if (derivation.baseline === true) {
-    values = expectedValues({ ...block, values }, runs)
-    parts.push('expected')
+    values = arms === undefined ? expectedValues({ ...block, values }, runs) : armValues({ ...block, values }, arms)
+    parts.push(arms === undefined ? 'expected' : 'expected along the arms')
     // Last, and it barely matters: a distance curve is a mean over many cells
     // and is already smooth. Kept in the order for consistency rather than for
     // effect — there is no speckle in a baseline to remove.
@@ -968,7 +1006,19 @@ export function deriveBlock(
     // against. Estimating before and dividing after keeps the estimator honest
     // and still lets the filter do its work.
     const stepped = { ...block, values }
-    if (smoothing === null) {
+    if (arms !== undefined) {
+      // Both diagonals divided out: the same division as below, against the
+      // arm-frame model, which is estimated from the unsmoothed block and — once
+      // there is a despeckle — averaged over the same windows as the map, for
+      // exactly the reason the decay curve is.
+      const model = armValues(stepped, arms)
+      smoothed = smoothing === null ? despeckle(values) : despeckle(values, model)
+      values = ratioOf(
+        smoothing === null ? stepped.values : smoothed.values,
+        smoothing === null ? model : smoothed.over,
+        block.nrows * block.ncols,
+      )
+    } else if (smoothing === null) {
       smoothed = despeckle(values)
       values = observedOverExpected(stepped, runs)
     } else {
@@ -984,7 +1034,7 @@ export function deriveBlock(
       smoothed = despeckle(values, expectedValues(stepped, runs, model))
       values = ratioOf(smoothed.values, smoothed.over, block.nrows * block.ncols)
     }
-    parts.push('O/E')
+    parts.push(arms === undefined ? 'O/E' : 'O/E along the arms')
   } else {
     smoothed = despeckle(values)
     values = smoothed.values

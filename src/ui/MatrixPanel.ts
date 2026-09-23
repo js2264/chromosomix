@@ -665,6 +665,43 @@ export interface TurnPresentation {
   onAvailable?(possible: boolean): void
 }
 
+/**
+ * What the map needs to offer and apply the arm-frame O/E (§8.15).
+ *
+ * The frame is the sequence the view is a window on — where it starts in the
+ * file's bins, how many it has, where its origin is and whether it is round — so
+ * the panel can say which bin of it each row of whatever block arrives is, a
+ * rotated one included. `null` where there is no origin to read the arms from,
+ * with {@link refusal} saying so.
+ */
+export interface ArmsPresentation {
+  /** The window along the arms in bins while it is on; `undefined` while off. */
+  window: number | undefined
+  frame: { startBin: number; n: number; origin: number; circular: boolean } | null
+  /** Why it cannot be offered on this view, or `null` when it can. */
+  refusal: string | null
+  /** Absent on a panel that applies it without owning the control. */
+  onChange?(window: number | undefined): void
+  /**
+   * Frame the whole circle with its origin in the middle, where the sequence is
+   * circular and has one — the way every figure of a bacterial map is drawn,
+   * with the arms running out to the corners and meeting at the terminus.
+   */
+  onCentre?(): void
+}
+
+const CENTRE_HINT =
+  'Frame the whole circle with its origin in the middle: the arms run out to the corners and ' +
+  'meet at the terminus.'
+
+/** The window the arms control turns on at, in bins — the compartments task's default. */
+export const DEFAULT_ARM_WINDOW = 50
+
+const ARMS_HINT =
+  'Divide by the decay along both arms of a bacterial chromosome — its secondary diagonal ' +
+  'through the origin as well as the main one — so what is left is its compartments. Reads the ' +
+  'origin the Origin and terminus task placed, which the Chromosomes table shows.'
+
 export interface DerivePresentation {
   /** Normalisation to compute from the block; absent for none. */
   normalise?: Normalisation
@@ -680,6 +717,14 @@ export interface DerivePresentation {
    * control, and the values are still derived.
    */
   onExpectedChange?(on: boolean): void
+  /**
+   * The baseline against **both** diagonals of a bacterial chromosome (§8.15),
+   * offered where the view is one sequence.
+   *
+   * Absent on every view that is not a window on one sequence, and on a
+   * companion that draws it without owning the control.
+   */
+  arms?: ArmsPresentation
   /**
    * How much despeckling, as the picker's token; `0` for none
    * (`render/smooth.ts`).
@@ -781,6 +826,49 @@ export interface DerivePresentation {
  * flipped a switch on a map they were reading.
  */
 export const MAP_CORRELATION_BINS = 1500
+
+/** What identifies an arms setting, for the caches a derivation is keyed on. */
+function armsKey(arms: ArmsPresentation | undefined): string {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
+  const { startBin, n, origin, circular } = arms.frame
+  return `${arms.window}:${startBin}:${n}:${origin}:${circular ? 'o' : '-'}`
+}
+
+/**
+ * The arm frame for this block, where the arms are on and there is one.
+ *
+ * Each row and column is placed by its first bin, taken modulo the sequence:
+ * a block read round a circle carries **unwrapped** extents (`worker/wrap.ts`),
+ * so the bin a row stands for is its position in that space folded back onto
+ * the sequence — which is what reads a map rotated to put the origin in the
+ * middle in the same frame as the plain one.
+ */
+function armsFor(
+  data: MatrixResult,
+  arms: ArmsPresentation | undefined,
+): Derivation['arms'] | undefined {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
+  if (arms.refusal !== null) return undefined
+  const { startBin, n, origin, circular } = arms.frame
+  if (!(n > 0)) return undefined
+  const step = Math.max(1, data.binsPerCell ?? 1)
+  const place = (from: number, count: number): Int32Array => {
+    const out = new Int32Array(count)
+    for (let i = 0; i < count; i++) {
+      const at = from + i * step - startBin
+      out[i] = ((at % n) + n) % n
+    }
+    return out
+  }
+  return {
+    frame: { n, origin, circular },
+    rowBins: place(data.rowExtent[0], data.nrows),
+    colBins: place(data.colExtent[0], data.ncols),
+    // In the sequence's own bins, as the rows are placed: the kernel measures
+    // positions along the arms in those, however wide a pooled cell is.
+    window: arms.window,
+  }
+}
 
 const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
@@ -1122,6 +1210,8 @@ export class MatrixPanel {
   private stopRefineWatch: (() => void) | null = null
   /** The O/E control, lit from {@link setDerive} rather than from its own click. */
   private expectedButton: HTMLElement | null = null
+  /** The arm-frame toggle beside it, where the view is one sequence (§8.15). */
+  private armsButton: HTMLButtonElement | null = null
 
   /**
    * The despeckle picker, lit from {@link setDerive} for the O/E toggle's
@@ -2066,6 +2156,40 @@ export class MatrixPanel {
       this.paintExpected(derive.expected)
       this.gateExpected(derive.baseline)
       picture.push(button)
+
+      // Beside the O/E it modifies, and only where there is one sequence for it
+      // to be about. A word, like the O/E's: the thing it divides out has no
+      // shape of its own to draw a mark from.
+      const arms = derive.arms
+      if (arms !== undefined && arms.onChange !== undefined) {
+        const onArms = arms.onChange
+        const armsButton = el('button', {
+          class: 'btn btn-icon btn-toggle btn-word',
+          title: ARMS_HINT,
+          attrs: { type: 'button', 'aria-label': ARMS_HINT },
+        })
+        armsButton.append(el('span', { class: 'btn-word-text', text: 'arms' }))
+        armsButton.addEventListener('click', () => {
+          const held = this.options.derive?.arms
+          onArms(held?.window === undefined ? DEFAULT_ARM_WINDOW : undefined)
+        })
+        this.armsButton = armsButton
+        this.paintArms(arms)
+        picture.push(armsButton)
+      }
+      // An action rather than a toggle, like the diagonal's: it moves the view
+      // to one place and there is no state to read off it afterwards.
+      if (arms?.onCentre !== undefined) {
+        const onCentre = arms.onCentre
+        const centre = el('button', {
+          class: 'btn btn-icon btn-word',
+          title: CENTRE_HINT,
+          attrs: { type: 'button', 'aria-label': CENTRE_HINT },
+        })
+        centre.append(el('span', { class: 'btn-word-text', text: 'ori' }))
+        centre.addEventListener('click', () => onCentre())
+        picture.push(centre)
+      }
     }
 
     if (picture.length > 0) {
@@ -2770,6 +2894,24 @@ export class MatrixPanel {
     button.classList.toggle('is-on', on)
   }
 
+  /**
+   * Light the arms toggle, and grey it with the reason where there is no origin
+   * to read the arms from — a control that does nothing when pressed is one a
+   * reader concludes is broken.
+   */
+  private paintArms(arms: ArmsPresentation | undefined): void {
+    const button = this.armsButton
+    if (button === null) return
+    const on = arms?.window !== undefined && arms.refusal === null
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+    const refused = arms === undefined || arms.refusal !== null
+    button.disabled = refused
+    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : ARMS_HINT
+    button.title = hint
+    button.setAttribute('aria-label', hint)
+  }
+
   /** Light the O/E toggle. Its state lives in the presentation, not in the DOM. */
   private paintExpected(on: boolean): void {
     const button = this.expectedButton
@@ -2843,6 +2985,7 @@ export class MatrixPanel {
       derivation.normalise ?? '',
       String(derivation.expected === true),
       derivation.smooth ?? '0',
+      armsKey(this.options.derive?.arms),
     ].join('|')
   }
 
@@ -3030,6 +3173,7 @@ export class MatrixPanel {
       String(derivation.expected === true),
       String(derivation.baseline === true),
       derivation.smooth ?? '0',
+      armsKey(this.options.derive?.arms),
     ].join('|')
   }
 
@@ -5650,6 +5794,8 @@ export class MatrixPanel {
       // (`render/smooth.ts`).
       smooth: this.options.derive?.smooth ?? '0',
     }
+    const arms = armsFor(data, this.options.derive?.arms)
+    if (arms !== undefined) derivation.arms = arms
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
     // A compared pair is never deferred: two blocks would need two jobs, and a
     // half-finished pair would put a smoothed map over an unsmoothed one and call
@@ -6420,8 +6566,10 @@ export class MatrixPanel {
       (held?.expected === true) === (derive?.expected === true) &&
       (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
       (held?.correlate === true) === (derive?.correlate === true) &&
-      (held?.baseline === true) === (derive?.baseline === true)
+      (held?.baseline === true) === (derive?.baseline === true) &&
+      armsKey(held?.arms) === armsKey(derive?.arms)
     this.options.derive = derive
+    this.paintArms(derive?.arms)
     // The toggle holds no state of its own — the setting is the session's, and
     // it can move from the command palette or from a link as easily as from a
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
@@ -6695,7 +6843,14 @@ export class MatrixPanel {
    */
   private derivedLabel(): string | null {
     if (this.options.derive?.baseline === true) return this.comparisonLabel() ?? 'expected'
-    return this.comparisonLabel() ?? (this.options.derive?.expected === true ? 'O/E' : null)
+    // Which decay was divided out, where it was not the ordinary one: the two
+    // pictures differ by exactly the X a figure of a bacterial map is about.
+    // Two words, because the key is one line the width of its two numbers and
+    // `Balanced O/E along the arms (log2)` was cut off before the part that
+    // said so.
+    const held = this.options.derive?.arms
+    const arms = held?.refusal === null && armsKey(held) !== ''
+    return this.comparisonLabel() ?? (this.options.derive?.expected === true ? (arms ? 'arm O/E' : 'O/E') : null)
   }
 
   /** How the two open files are being combined, or `null` for one file or a split. */

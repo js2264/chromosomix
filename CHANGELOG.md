@@ -14,6 +14,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A file's first open proposes which sequences are circular (§8.15).** Each of the fifty longest
+  sequences is read at its two ends and its corner, and scored as the contacts across the junction
+  over the contacts along the diagonal at the same separation — about one on a circle, about zero on
+  a line. At 0.2 or above the Chromosomes table's box is ticked and a banner says so; the box's
+  tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands.
+
+- **Base composition, a 1D task (§18.8).** GC content, GC skew, AT skew and the cumulative GC skew
+  of a loaded FASTA, per bin of the open map, as lanes that export as bigWig, bedGraph and TSV.
+
+- **Origin and terminus, a 1D task (§18.8).** The turning points of the cumulative GC skew, the
+  terminus chosen as Bacchus chooses it — nearer the matS cluster, else farther from the parS
+  cluster, else lower in Hi-C coverage — with the sites found by the motif search. It leaves the
+  `ori` and `ter` loci and the parS and matS sites as BED-exportable sets, the coverage smoothed by
+  a cubic spline and the ori/ter ratio read off it, and declares the origin it found.
+
+- **Declared origins (§8.15).** A sequence's replication origin is kept per file like its circle,
+  shown 1-based in a column of the Chromosomes table, carried in a workspace and in a run's
+  framing, and written as `--origin NAME:POS` on a `metacooler-run` line. A task never overwrites
+  one a reader brought.
+
+- **`ori` and `arms` on the map (§7.5, §8.15).** On a circle with an origin, `ori` frames the whole
+  of it with the origin in the middle, so the secondary diagonal is the square's antidiagonal. `arms`
+  divides by the decay along both of a bacterial chromosome's arms rather than along the diagonal
+  alone — the X its aligned arms draw on an O/E map, and on its correlation, is divided out and its
+  compartments are left. The key reads `arm O/E`; a link carries it as `arms=`.
+
+- **Inter-arm alignment, a 2D task (§18.8).** How strongly a chromosome's two arms touch, as the
+  secondary diagonal's enrichment over the distance decay: a curve against distance from the origin,
+  a track along the chromosome, and a score, peak and reach per sequence. 1.6 on *P. aeruginosa*,
+  0.37 on *B. subtilis*, 0.07 on *E. coli*.
+
+- **Compartments along both arms, and which component is the compartment one (§18.8).** An
+  *expected* choice, *decay along both arms*; phasing by **a track** as well as by a gene model or
+  GC content; *order components by the phasing signal*, which draws as E1 whichever of the first
+  three follows it best; and a components table of what each explained and how it correlated.
+
+- **Find a motif allows mismatches (§18.8)**, up to four, and says so in the set's name.
+
+- **`metacooler-run` reads a model back in as a structure.** A bed3d or text g3d under `--features`
+  is the structure *Spatial tracks* and *Model versus map* read, so a model the shell wrote can be
+  read as tracks in the same batch; it was read as a BED and refused as *not a structure*.
+
 - **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
   heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
   where it will land; drop it anywhere in any open side panel. ⌥↑ / ⌥↓ on the heading's chevron move
@@ -312,6 +354,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **Compartments measure a circle's decay the short way round (§8.15).** A sequence declared circular
+  is divided by its decay measured the short way round; the task is version 2.
+
+- **An optional input is filled only from what the reader loaded (§18.2).** The two loci an origin
+  call leaves were the first interval set on the list and phased every compartment call after it; a
+  computed set is chosen now and never assumed. The compartments' phasing track and the origin
+  call's coverage start on none.
 
 - **The *3D structure* card names the starred cell, as the *Map* card names the starred map
   (§25.3).** `★ Yeast_structure` under its title, where the card had a *structure* dropdown; the
@@ -997,6 +1047,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A task reads a declared circle as a circle (§8.15).** The declarations reached the drawer's header
+  and not the framing a run was given, so a sequence ticked on the Chromosomes table was measured as
+  a line by every task run from the app — and by a track task run where no map is on screen, which
+  read an origin at the first base as split between the two ends. The run's framing carries the
+  circles and the origins now, including the one made over the tracks.
 
 - **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
   and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in

@@ -241,6 +241,24 @@ describe('running a task', () => {
     expect(moved).toBeGreaterThan(0)
   })
 
+  it('reads a model it wrote back in as a structure, for the tasks that read one', async () => {
+    reset()
+    // The chain a bacterial figure is: model the map, then read the model as
+    // tracks — radial position against the compartments. `--features` read the
+    // bed3d as a BED, keeping its intervals and dropping its coordinates, so
+    // Spatial tracks refused the row it had just been handed.
+    const where = join(directory, 'spatial')
+    expect(
+      await main(['reconstruct3d', sample, '--out', where, '--quiet', '--iterations', '5']),
+    ).toBe(0)
+    const model = join(where, 'sample.reconstruct3d.reconstructed-model.bed3d')
+    expect(
+      await main(['spatialtracks', sample, '--features', model, '--structure', model, '--out', where, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/not a structure/)
+    expect((await readdir(where)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
+  })
+
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {
     reset()
     // `detect.ts` refuses a multi-resolution container at its root with a
@@ -643,6 +661,29 @@ describe('the framing flags', () => {
     reset()
     expect(await main(['insulation', sample, '--cell', 'c1', '--out', out, '--quiet'])).toBe(1)
     expect(complained()).toMatch(/has no cells to choose from/)
+  })
+
+  it('records an origin, 1-based as it was typed', async () => {
+    reset()
+    const where = join(directory, 'origin')
+    expect(
+      await main(['interarm', sample, '--origin', 'chrII:1001', '--out', where, '--quiet']),
+    ).toBe(0)
+    const table = (await readdir(where)).find((name) => /interarm-table\.tsv$/.test(name))
+    expect(table).toBeDefined()
+    const text = await readFile(join(where, table as string), 'utf8')
+    expect(text).toMatch(/^# framing: .*origin chrII:1,001/m)
+  })
+
+  it('refuses an origin on a sequence the file has not got, or past its end', async () => {
+    reset()
+    expect(await main(['interarm', sample, '--origin', 'chrZ:10', '--out', out, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/--origin chrZ: .* has no sequence of that name/)
+    reset()
+    expect(
+      await main(['interarm', sample, '--origin', 'chrII:900000000', '--out', out, '--quiet']),
+    ).toBe(1)
+    expect(complained()).toMatch(/is past its end/)
   })
 })
 

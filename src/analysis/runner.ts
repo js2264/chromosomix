@@ -1481,5 +1481,9 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     // rest of the line off the drawer and off a console row. What the uri is
     // wanted for is `# file:`, which every provenance block already carries.
     label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
+    // What the file's molecules are declared to be, which a task on the
+    // sequence reads as surely as one on the map (§8.15).
+    ...(context.circular === undefined ? {} : { circular: [...context.circular] }),
+    ...(context.origins === undefined ? {} : { origins: { ...context.origins } }),
   }
 }

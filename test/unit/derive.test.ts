@@ -38,6 +38,7 @@ import {
   type AxisRun,
   type BlockValues,
 } from '@/render/derive'
+import { armOffsets } from '@/analysis/arms'
 import { autoSymmetricRange, transformValues } from '@/render/scale'
 import { poolDisplay } from '@/render/heatmap'
 import { combine, blendAcrossDiagonal } from '@/render/compare'
@@ -433,6 +434,48 @@ describe('the baseline, drawn instead of divided by', () => {
     // baseline measured after it says what is really there.
     expect(plain.values[0] / plain.values[1]).toBeCloseTo(8.5 / 4, 5)
     expect(corrected.values[0]).toBeCloseTo(corrected.values[1], 6)
+  })
+})
+
+/**
+ * The baseline along a bacterial chromosome's two arms (§7.5, §8.15).
+ *
+ * A circle of 40 bins with its origin at bin 0 and its two arms zipped: a locus
+ * touches its mirror image on the other arm half as often as a neighbour on
+ * its own arm the same distance from the origin. Divided by the distance decay
+ * the mirror cells stand out — the X a correlation then draws; divided along
+ * the arms they are 1 like every other cell.
+ */
+describe('the baseline along both arms', () => {
+  const N = 40
+  const frame = { n: N, origin: 0, circular: true }
+  const u = armOffsets(frame)
+  const decay = (s: number): number => 100 / (1 + s)
+  const cell = (r: number, c: number): number => {
+    const delta = Math.abs(Math.abs(u[r]) - Math.abs(u[c]))
+    const sameArm = u[r] >= 0 === u[c] >= 0
+    return sameArm ? decay(delta) : 0.5 * decay(delta)
+  }
+  const b = block(N, N, cell)
+  const axes = { rows: [{ label: 'chr', start: 0, end: N }], cols: [{ label: 'chr', start: 0, end: N }] }
+  const bins = Int32Array.from({ length: N }, (_, i) => i)
+  const arms = { frame, rowBins: bins, colBins: bins, window: 0 }
+  // Bin 10 and its mirror, bin 30: far apart round the circle, level with each
+  // other along the arms.
+  const mirror = 10 * N + 30
+
+  it('leaves the secondary diagonal standing when only the decay is divided out', () => {
+    const plain = deriveBlock(b, { expected: true }, axes)
+    expect(plain.values[mirror]).toBeGreaterThan(2)
+    expect(plain.label).toBe('O/E')
+  })
+
+  it('divides it out along the arms, and says so', () => {
+    const along = deriveBlock(b, { expected: true, arms }, axes)
+    expect(along.values[mirror]).toBeCloseTo(1, 5)
+    expect(along.values[3 * N + 7]).toBeCloseTo(1, 5)
+    expect(along.label).toBe('O/E along the arms')
+    expect(along.neutral).toBe(1)
   })
 })
 

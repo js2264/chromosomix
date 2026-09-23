@@ -34,6 +34,15 @@ import { recall, remember } from './UiMemory'
 export const CIRCULAR_SCOPE = 'map:circular'
 
 /**
+ * Where the junction scores the first open measured are kept (§8.15).
+ *
+ * Their presence is also the record that detection **has run** on this file,
+ * which is the whole of what stops it running again: a sequence the reader
+ * unticked stays unticked on every later open, because nothing re-measures it.
+ */
+export const CIRCULAR_EVIDENCE_SCOPE = 'map:circular-evidence'
+
+/**
  * The declared-circular sequences of one open file.
  *
  * One instance per file, held by the session, and it persists on every change —
@@ -42,6 +51,8 @@ export const CIRCULAR_SCOPE = 'map:circular'
  */
 export class CircularStore {
   private names: Set<string>
+  /** Junction scores by sequence, or `null` where detection has never run here. */
+  private scores: Record<string, number> | null
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly key: string) {
@@ -51,6 +62,44 @@ export class CircularStore {
     this.names = new Set(
       Array.isArray(stored) ? stored.filter((name): name is string => typeof name === 'string') : [],
     )
+    const evidence = recall<unknown>(key, CIRCULAR_EVIDENCE_SCOPE)
+    this.scores =
+      evidence !== null && typeof evidence === 'object' && !Array.isArray(evidence)
+        ? Object.fromEntries(
+            Object.entries(evidence as Record<string, unknown>).filter(
+              (pair): pair is [string, number] => typeof pair[1] === 'number',
+            ),
+          )
+        : null
+  }
+
+  /**
+   * What the first open measured, or `null` where nothing has been — which is
+   * what tells the session to measure it (§8.15).
+   */
+  evidence(): Readonly<Record<string, number>> | null {
+    return this.scores
+  }
+
+  /**
+   * Record what detection measured, and declare every sequence it found round.
+   *
+   * Adds and never removes: a sequence already declared stays declared whatever
+   * its score, because the declaration may be the reader's own, and one the
+   * test calls round is ticked exactly as a click would tick it — the reader
+   * unticks it the same way.
+   */
+  detected(scores: Readonly<Record<string, number>>, circular: readonly string[]): void {
+    this.scores = { ...scores }
+    remember(this.key, CIRCULAR_EVIDENCE_SCOPE, this.scores)
+    let changed = false
+    for (const name of circular) {
+      if (this.names.has(name)) continue
+      this.names.add(name)
+      changed = true
+    }
+    if (changed) this.persist()
+    else for (const listener of this.listeners) listener()
   }
 
   /** Tell every mounted surface the set changed; returns the unsubscribe. */
@@ -77,9 +126,19 @@ export class CircularStore {
     this.persist()
   }
 
-  /** Replace the whole set — how an imported workspace arrives. */
+  /**
+   * Replace the whole set — how an imported workspace arrives.
+   *
+   * Detection is marked as done, so the declarations a workspace carries are
+   * the file's from then on: measuring on top of them could re-tick a sequence
+   * its author had unticked.
+   */
   replace(names: readonly string[]): void {
     this.names = new Set(names)
+    if (this.scores === null) {
+      this.scores = {}
+      remember(this.key, CIRCULAR_EVIDENCE_SCOPE, this.scores)
+    }
     this.persist()
   }
 
