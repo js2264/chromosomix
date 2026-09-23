@@ -68,6 +68,7 @@
 import { sameRecipe, type AnalysisRunner, type JobState } from '../analysis/runner'
 import {
   defaultParams,
+  resolveSeeds,
   type AnalysisContext,
   type AnalysisFraming,
   type AnalysisTask,
@@ -919,8 +920,18 @@ export class AnalysisDrawer {
     // reader who pressed Run while reading run 3 would otherwise watch their
     // result finish somewhere they are not looking.
     this.chosenRun.delete(task.id)
-    this.options.runner.run(task, this.params)
+    this.options.runner.run(task, this.seeded(task))
     this.refresh()
+  }
+
+  /**
+   * The form's answers with every context-seeded number filled in, which is
+   * what a run is handed: the form keeps them unanswered so they follow the
+   * map, and the record of a run says which number it read.
+   */
+  private seeded(task: AnalysisTask): Params {
+    const context = this.options.context()
+    return context === null ? this.params : resolveSeeds(task.params, context, this.params)
   }
 
   /**
@@ -957,7 +968,7 @@ export class AnalysisDrawer {
         // — while the tables were read. Running what they have stopped looking
         // at is worse than not running it.
         if (this.current !== task) return
-        this.options.runner.runAll(task, this.params, targets)
+        this.options.runner.runAll(task, this.seeded(task), targets)
       })
       .finally(() => this.refresh())
   }

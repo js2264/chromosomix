@@ -4,8 +4,10 @@
  * What `ui-gallery.mjs` cannot show, because the yeast demo has no circle and no
  * origin: *P. aeruginosa* PAK from the DNA Bacterial Zoo, read as circular on
  * its first open, its origin and terminus placed from its sequence, its
- * composition drawn, the map framed on the origin, the O/E taken along both
- * arms and correlated, and the two tasks that read the arms (§8.15, §18.8).
+ * composition drawn, the map framed on the origin — `ori` lit while it is, and
+ * pressed again to frame the sequence from its first base — the O/E taken along
+ * both arms and correlated, the two tasks that read the arms (§8.15, §18.8), and
+ * the composition again in a 1D browser holding the FASTA alone (§5.8).
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-bacteria.mjs [out-dir]
@@ -48,10 +50,15 @@ const browser = await chromium.launch({
   ...(executablePath === undefined ? {} : { executablePath }),
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 })
-const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 } })).newPage()
 const errors = []
-page.on('pageerror', (e) => errors.push(String(e)))
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+// A fresh tab, for the part of the chain that starts from nothing open.
+const fresh = async () => {
+  const next = await (await browser.newContext({ viewport: { width: 1600, height: 1000 } })).newPage()
+  next.on('pageerror', (e) => errors.push(String(e)))
+  next.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+  return next
+}
+let page = await fresh()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const shot = async (name) => { await page.screenshot({ path: `${OUT}/${name}.png` }); console.log('shot', name) }
 const until = (text, timeout = 180000) =>
@@ -113,6 +120,25 @@ const scrollDrawerTo = (needle) => page.evaluate((needle) => {
 const notes = () => page.evaluate(() => [...document.querySelectorAll('.analysis-drawer-body li')].map((li) => li.innerText).join('\n'))
 const word = (text) => page.locator('button').filter({ has: page.locator(`.btn-word-text:text-is("${text}")`) }).first()
 const rung = (kb) => `${MAP}::/resolutions/${kb * 1000}`
+// Whether `ori` is lit, and where the view says it is.
+const ori = async (when) => {
+  const state = await word('ori').getAttribute('aria-pressed')
+  const region = await page.evaluate(() => decodeURIComponent(location.hash).match(/region=[^&]*/)?.[0] ?? '')
+  console.log(`ori ${when}: aria-pressed=${state} · ${region}`)
+}
+// The map's controls, close up, so a lit button can be told from an unlit one.
+const controls = async (name) => {
+  // Off the button first: a pointer left on it after a press draws its hover.
+  await page.mouse.move(5, 5)
+  await sleep(300)
+  const box = await word('ori').boundingBox()
+  if (box === null) return
+  await page.screenshot({
+    path: `${OUT}/${name}.png`,
+    clip: { x: Math.max(0, box.x - 420), y: Math.max(0, box.y - 14), width: 560, height: box.height + 28 },
+  })
+  console.log('shot', name)
+}
 
 try {
   await page.goto(`${BASE}/#uri=${encodeURIComponent(rung(4))}&view=contigs`)
@@ -140,6 +166,7 @@ try {
   await shot('b03-oriter-table')
 
   await openTask('Base composition')
+  console.log('bin size on the 4 kb map:', await page.locator('.analysis-drawer input[id$="-resolution"]').first().inputValue())
   await run('Cumulative GC skew')
   await shot('b04-composition')
   const close = page.locator('.analysis-drawer-head button').last()
@@ -161,7 +188,44 @@ try {
   await shot('b06-map')
   await word('ori').click()
   await sleep(8000)
+  await ori('after pressing it')
   await shot('b07-ori-centred')
+  await controls('b07a-ori-lit')
+  // A zoom about the middle keeps the origin there; a pan moves it off, and the
+  // address does not follow a pan, so pressing `ori` then has to rebuild.
+  const middle = async () => {
+    const box = await page.locator('.heatmap-canvas').first().boundingBox()
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  let at = await middle()
+  await page.mouse.move(at.x, at.y)
+  await page.mouse.wheel(0, -400)
+  await sleep(5000)
+  await ori('after a wheel zoom at the middle')
+  at = await middle()
+  await page.mouse.move(at.x, at.y)
+  await page.mouse.down()
+  await page.mouse.move(at.x + 160, at.y, { steps: 8 })
+  await page.mouse.up()
+  await sleep(5000)
+  await ori('after a pan')
+  await shot('b07b-ori-panned')
+  await word('ori').click()
+  await sleep(8000)
+  await ori('pressed after the pan')
+  await page.locator('button.btn-zoom').nth(2).click()
+  await sleep(8000)
+  await ori('after the bar’s 3× zoom')
+  await shot('b07c-ori-zoomed')
+  // Lit, it frames the sequence from its first base; unlit, it centres again.
+  await word('ori').click()
+  await sleep(8000)
+  await ori('pressed while lit')
+  await shot('b07d-ori-uncentred')
+  await controls('b07e-ori-unlit')
+  await word('ori').click()
+  await sleep(8000)
+  await ori('centred once more')
   await word('O/E').click()
   await sleep(5000)
   await shot('b08-oe')
@@ -201,6 +265,23 @@ try {
   await scrollDrawerTo('Components ·')
   await sleep(500)
   await shot('b16-components-table')
+
+  // A 1D browser on the reference alone: no map, so the bin size is 10 kb.
+  page = await fresh()
+  await page.goto(`${BASE}/#uri=${encodeURIComponent(FASTA)}`)
+  await until('the sequences')
+  await sleep(4000)
+  await fold('Show the Analysis panel')
+  await sleep(1200)
+  await openTask('Base composition')
+  console.log('bin size with no map:', await page.locator('.analysis-drawer input[id$="-resolution"]').first().inputValue())
+  await shot('b17-browser-composition-form')
+  await run('Cumulative GC skew')
+  await shot('b18-browser-composition')
+  const shut = page.locator('.analysis-drawer-head button').last()
+  if (await shut.isVisible().catch(() => false)) await shut.click()
+  await sleep(1500)
+  await shot('b19-browser-lanes')
 } catch (error) {
   console.log('FAILED', error)
   await shot('99-failure')

@@ -145,6 +145,18 @@ export interface NumberParam extends ParamBase {
   slider?: boolean
   /** Whole numbers only — a window in bins, a component count. */
   integer?: boolean
+  /**
+   * A default that is the context's to decide, for a number whose right answer
+   * moves with what is open — a bin size that is the open map's resolution, and
+   * some other length where no map is open.
+   *
+   * The value is then `null` until the reader types one, so it follows the
+   * context instead of freezing at whatever the form was first opened on: the
+   * form shows what `null` stands for, and a run is handed the number itself
+   * ({@link resolveSeeds}), so its record says what was read. {@link default} is
+   * what a caller with no context — a shell — falls back on.
+   */
+  seed?(context: AnalysisContext): number
 }
 
 /**
@@ -415,6 +427,9 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
   for (const spec of specs) {
     switch (spec.kind) {
       case 'number':
+        // Unanswered where the context decides it, so it keeps deciding it.
+        out[spec.key] = spec.seed === undefined ? spec.default : null
+        break
       case 'seed':
         out[spec.key] = spec.default
         break
@@ -456,6 +471,22 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
         out[spec.key] = null
         break
     }
+  }
+  return out
+}
+
+/**
+ * The parameters with every context-seeded number answered (see
+ * {@link NumberParam.seed}) — what a run is handed, so its record names the
+ * number that was read rather than the absence of one.
+ */
+export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisContext, params: Params): Params {
+  const out: Record<string, ParamValue> = { ...params }
+  for (const spec of specs) {
+    if (spec.kind !== 'number' || spec.seed === undefined) continue
+    const held = out[spec.key]
+    if (typeof held === 'number' && Number.isFinite(held)) continue
+    out[spec.key] = spec.seed(context)
   }
   return out
 }

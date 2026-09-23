@@ -3242,7 +3242,11 @@ a lap past the origin round to half a lap before it, one base short of a lap
 because a window whose ends meet is named as the whole sequence from its first
 base. The arms then run out to the corners and meet at the terminus, and the
 secondary diagonal is the antidiagonal of the square, which is the picture every
-figure of one is drawn as. **`arms`** takes the O/E along both arms instead of
+figure of one is drawn as. `ori` is **lit while the origin is in the middle of
+what is drawn**, to within two bins or a pixel — a zoom about the middle keeps it
+lit, a pan does not — and pressed while lit it frames the sequence from its first
+base again, as a view of it opens. Either press after a pan, which the address
+does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
 along the diagonal alone (§7.5): greyed, and saying why, until there is an origin
 to read them from.
 
@@ -5141,6 +5145,13 @@ other.
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
 
+**A number can take its default from the file.** Base composition's bin size is the open map's
+resolution until the reader types another, and 10 kb where no map is open (§18.8). The form shows what
+that comes to on the file in front of it and follows a change of resolution, because the answer is
+still *the map's*; the run is handed the number itself, and its record, its command line and a replay
+carry that number. A `metacooler-run` line with no such flag gets the same rule from the map it names,
+or 10 kb with none.
+
 **A locus parameter is in cooler's grammar** — 0-based half-open, ungrouped — because that is the one
 form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
 CLI button prints, and what a reader pastes from `metacooler show --range`. This is the one box in the
@@ -5931,9 +5942,12 @@ what a job that never met a form means — a stored session, or a `metacooler-ru
 **Over the sequence.** *Find a motif* allows **mismatches**, up to four and never the whole motif,
 because a binding site is a consensus and a genome carries variants of it: its sites carry how many
 they differ by, and its name says what it was asked. *Base composition* — GC content, GC skew
-`(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin of the open map and under its names,
-each a lane like any other and each written as a bigWig; a window wider than a bin is an odd number
-of them centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
+`(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin and under the map's names, each a lane
+like any other and each written as a bigWig. The **bin size** is the open map's resolution unless the
+reader asks for another, and 10 kb with no map open: a 1D browser (§5.8) with a FASTA in it is enough
+to run it. The lanes, and the files they leave as, are laid out over the same sequences cut at the bin
+size read, never over the map's grid at another; a window wider than a bin is an odd number of them
+centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
 chromosome's folding, since the map is read *from* the origin: the two turning points of the
 cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is
 decided as Bacchus decides it (Lamy-Besnier et al. 2023) — the one nearer the matS cluster where ten

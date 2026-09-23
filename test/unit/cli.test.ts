@@ -445,6 +445,38 @@ describe('the annotations venue', () => {
     expect(text).toMatch(/signal\.bw\t0\.\d+/)
   })
 
+  it('lays base composition out on bins of its own, with a map and without one', async () => {
+    // §18.8: the map's resolution unless asked, and 10 kb with no map. Each file
+    // is cut at the bin size the lanes were read at, so the second sequence
+    // starts at its own first base — not at the map's 1 kb offset for it.
+    reset()
+    const genome = join(directory, 'genome.fa')
+    await writeFile(genome, `>chrI\n${'GC'.repeat(60_000)}\n>chrII\n${'AT'.repeat(30_000)}\n`)
+    const rows = async (where: string, stem: string): Promise<string[]> =>
+      (await readFile(join(where, `${stem}.composition.composition-gc.bedGraph`), 'utf8'))
+        .split('\n')
+        .filter((line) => line !== '' && !line.startsWith('#'))
+
+    const mapless = join(directory, 'composition-mapless')
+    expect(await main(['composition', '--sequence', genome, '--out', mapless, '--quiet'])).toBe(0)
+    const alone = await rows(mapless, 'genome')
+    expect(alone).toHaveLength(12 + 6)
+    expect(alone[0]).toBe('chrI\t0\t10000\t1')
+    expect(alone[12]).toBe('chrII\t0\t10000\t0')
+
+    const onMap = join(directory, 'composition-map')
+    expect(await main(['composition', sample, '--sequence', genome, '--out', onMap, '--quiet'])).toBe(0)
+    expect(await rows(onMap, 'sample')).toHaveLength(120 + 60)
+
+    const asked = join(directory, 'composition-asked')
+    expect(
+      await main(['composition', sample, '--sequence', genome, '--resolution', '20000', '--out', asked, '--quiet']),
+    ).toBe(0)
+    const coarse = await rows(asked, 'sample')
+    expect(coarse).toHaveLength(6 + 3)
+    expect(coarse[6]).toBe('chrII\t0\t20000\t0')
+  })
+
   it('still needs a file for a task that reads the matrix', async () => {
     reset()
     expect(await main(['insulation', '--out', out])).toBe(2)

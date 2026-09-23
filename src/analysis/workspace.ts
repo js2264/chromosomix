@@ -56,6 +56,7 @@ import {
   type SyntheticFormat,
 } from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
+import { gridAt } from './context'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
@@ -320,11 +321,12 @@ export class AnalysisWorkspace {
       // The grid is passed rather than left to be looked up, because the two
       // callers of `writeProfile` do not agree about which one is right: the
       // drawer only ever holds what this workspace has just computed, so the
-      // assembly under it now *is* the grid those values are on, while a row on
-      // the card may have been carried from another resolution and must be
-      // written over the grid it was measured on.
+      // assembly under it now *is* the one those values are on — cut at the
+      // output's own bin size ({@link gridFor}) — while a row on the card may
+      // have been carried from another resolution and must be written over the
+      // grid it was measured on.
       writeProfile: (output, provenance, format) =>
-        this.writeProfile(output, provenance, format, this.grid()),
+        this.writeProfile(output, provenance, format, this.gridFor(output.binsize)),
     })
     this.drawerEl = this.drawer.el
 
@@ -492,7 +494,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.grid(),
+          grid: this.gridFor(output.binsize),
         })
       }
       this.synthetic?.refresh()
@@ -522,7 +524,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.grid(),
+          grid: this.gridFor(output.binsize),
         })
       }
       this.drawer.refresh()
@@ -565,7 +567,7 @@ export class AnalysisWorkspace {
         style: entry.style,
       })
       this.placeOnTarget(store, entry.id, entry.placement, map)
-      const grid = this.grid()
+      const grid = this.gridFor(output.binsize)
       this.profiles.set(entry.id, {
         output,
         provenance: result.provenance,
@@ -789,6 +791,21 @@ export class AnalysisWorkspace {
       bins: contig.bins,
       length: contig.length,
     }))
+  }
+
+  /**
+   * The assembly a vector on bins of `binsize` is laid out over.
+   *
+   * The session's own ({@link grid}) at the session's resolution, which is where
+   * every task but one puts its values. Base composition picks its bin size
+   * (§18.8) — 10 kb in a 1D browser, any size beside a map — and its runner
+   * lays the lanes out over the same sequences in the same order, each cut from
+   * its first base into bins of that size ({@link gridAt}). Registered over the
+   * session's grid instead, every sequence after the first would take its
+   * values from the one before it.
+   */
+  private gridFor(binsize: number): BinVectorContig[] {
+    return this.host.context()?.binsize === binsize ? this.grid() : gridAt(this.host.contigs(), binsize)
   }
 
   /**

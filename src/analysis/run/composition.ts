@@ -22,9 +22,19 @@ import {
   windowCounts,
 } from '../../annotations/composition'
 import { idParam, numParam, type TrackTaskRunner } from '../job'
-import { compositionLanes } from '../tasks/composition'
+import { COMPOSITION_BINSIZE, compositionLanes } from '../tasks/composition'
+import { coversNoMatrix } from '../cliCommand'
 import type { ProfileOutput, TaskOutput } from '../types'
 import { gridContigs } from './motif'
+
+/**
+ * Whether this run has no map behind it — a 1D browser, or a shell with no map
+ * named — whose framing's bin size is a browsing grid rather than a resolution
+ * anybody picked.
+ */
+function mapless(job: Parameters<TrackTaskRunner>[0]): boolean {
+  return coversNoMatrix(job.framing)
+}
 
 /** What each lane is called and how it draws. */
 const LANES = {
@@ -59,13 +69,15 @@ export const runComposition: TrackTaskRunner = async (job) => {
     return []
   }
 
-  const binsize = job.framing.binsize
+  // The bin size asked for; unanswered, the map's own resolution where there is
+  // a map, and 10 kb where there is not — which is what a shell run gets, the
+  // form having already answered it for a run from the drawer.
+  const asked = numParam(job.params, 'resolution', 0)
+  const binsize =
+    asked > 0 ? Math.round(asked) : job.framing.binsize > 0 && !mapless(job) ? job.framing.binsize : COMPOSITION_BINSIZE
   const grid = gridContigs(job)
-  if (!(binsize > 0) || grid.length === 0) {
-    job.note(
-      'These are per-bin tracks, and there is no bin grid without an open contact map. Open the ' +
-        'map and run it again.',
-    )
+  if (grid.length === 0) {
+    job.note('There are no sequences to lay the bins out on. Open a map, or load the FASTA itself.')
     return []
   }
 

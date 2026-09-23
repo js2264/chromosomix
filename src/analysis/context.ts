@@ -88,6 +88,31 @@ export function binsForLength(length: number, binsize: number): number {
   return Math.ceil(length / binsize)
 }
 
+/**
+ * The same sequences, in the same order, each cut from its first base into bins
+ * of `binsize` — the grid a vector at a bin size of its own is laid out over.
+ *
+ * Base composition is the task that makes one (§18.8): it reads at the map's
+ * resolution unless told otherwise, and at 10 kb with no map, and a lane or a
+ * file laid out over the map's grid at any other size gives every sequence after
+ * the first the values of the one before it. A sequence with no length has no
+ * bins, as on the session's own grid.
+ */
+export function gridAt(
+  contigs: ReadonlyArray<{ name: string; length: number }>,
+  binsize: number,
+): Array<{ name: string; startBin: number; bins: number; length: number }> {
+  const out: Array<{ name: string; startBin: number; bins: number; length: number }> = []
+  let startBin = 0
+  for (const contig of contigs) {
+    const bins = binsForLength(contig.length, binsize)
+    if (bins === 0) continue
+    out.push({ name: contig.name, startBin, bins, length: contig.length })
+    startBin += bins
+  }
+  return out
+}
+
 /** Assemble the context. Pure, so a test can build one without a worker. */
 export function buildAnalysisContext(input: ContextInput): AnalysisContext {
   const names = strings(input.contigs, 'name') ?? []

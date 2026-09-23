@@ -6794,6 +6794,7 @@ export class Session {
                 circular,
                 binsize,
                 length,
+                originBp: origin.at,
               },
         refusal:
           origin === undefined
@@ -6807,13 +6808,25 @@ export class Session {
           this.rederive()
         },
         // The origin read when pressed, not when the view was built: a second
-        // run of the task moves it, and the button must follow.
+        // run of the task moves it, and the button must follow. Pressed while
+        // lit — the origin already in the middle — it is undone: the sequence
+        // framed as it is anywhere else, from its first base (§8.15).
         ...(origin === undefined || !circular
           ? {}
           : {
-              onCentre: () => {
+              onCentre: (centred: boolean) => {
                 const at = this.originStore()?.get(name)?.at
-                if (at !== undefined) this.centreOnOrigin(file.uri, name, at)
+                if (!centred && at === undefined) return
+                // The hash does not follow a pan, so either answer can be the
+                // state already held — the centred window panned away from, or
+                // the whole sequence zoomed until the origin sat in the middle —
+                // and a navigation to it moves nothing. The view is rebuilt on
+                // its own region instead.
+                const moved =
+                  centred || at === undefined
+                    ? this.navigate({ uri: file.uri, view: 'region', region: name })
+                    : this.centreOnOrigin(file.uri, name, at)
+                if (!moved) this.remount()
               },
             }),
       },
@@ -6829,13 +6842,17 @@ export class Session {
    * two ends meet *is* the whole sequence and is named as one, from its first
    * base (`RegionView.zoomedRegion`), which would put the origin back at the
    * edge.
+   *
+   * @returns Whether the view state moved — `false` when it was already this
+   *   window, which a pan away from it leaves in place — and `true` where there
+   *   is no sequence length to frame by.
    */
-  private centreOnOrigin(uri: string, name: string, origin: number): void {
+  private centreOnOrigin(uri: string, name: string, origin: number): boolean {
     const length = contigPairs(this.file?.contigs ?? null).find(([contig]) => contig === name)?.[1]
-    if (length === undefined || !(length > 2)) return
+    if (length === undefined || !(length > 2)) return true
     const from = (origin + Math.ceil(length / 2)) % length
     const to = (from - 1 + length) % length
-    this.navigate({ uri, view: 'region', region: `${name}:${from}-${to}` })
+    return this.navigate({ uri, view: 'region', region: `${name}:${from}-${to}` })
   }
 
   /**

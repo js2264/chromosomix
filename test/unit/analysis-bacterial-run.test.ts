@@ -55,14 +55,14 @@ function reader(): SequenceReader {
   return { contigs: [{ name: 'chr', length: LENGTH }], bases: (name) => (name === 'chr' ? BASES : undefined) }
 }
 
-function framing(circular: boolean): AnalysisFraming {
+function framing(circular: boolean, map: { binsize: number; bins: number } = { binsize: 10_000, bins: 20 }): AnalysisFraming {
   return {
     uri: 'toy.cool',
     label: 'a toy bacterium',
-    binsize: 10_000,
+    binsize: map.binsize,
     binsPerCell: 1,
-    rows: [0, 20],
-    cols: [0, 20],
+    rows: [0, map.bins],
+    cols: [0, map.bins],
     balance: false,
     value: '',
     normalise: null,
@@ -75,11 +75,12 @@ async function run(
   runner: (job: TrackJobContext) => Promise<TaskOutput[]>,
   params: Params,
   circular = true,
+  map?: { binsize: number; bins: number },
 ): Promise<{ outputs: TaskOutput[]; notes: string[] }> {
   const notes: string[] = []
   const job: TrackJobContext = {
     params: { sequence: 'fa', ...params },
-    framing: framing(circular),
+    framing: framing(circular, map),
     inputs: { contigLengths: { chr: LENGTH } },
     cancelled: () => false,
     throwIfCancelled: () => {},
@@ -122,6 +123,25 @@ describe('base composition', () => {
   it('makes only the lanes ticked', async () => {
     const { outputs } = await run(runComposition, { gc: false, atSkew: false, cumulative: false })
     expect(outputs.map((one) => one.id)).toEqual(['composition-gcskew'])
+  })
+
+  it('reads at the bin size asked for, whatever the map’s', async () => {
+    const { outputs } = await run(runComposition, { resolution: 25_000 })
+    const gc = lane(outputs, 'composition-gc')
+    expect(gc?.binsize).toBe(25_000)
+    expect(gc?.values.length).toBe(8)
+    expect(gc?.extent).toEqual([0, 8])
+  })
+
+  it('reads at the map’s resolution unasked, and at 10 kb with no map', async () => {
+    // A map at 5 kb: its own bins. A 1D browser's framing has a browsing grid
+    // (here also 5 kb) and no matrix: that grid is nobody's choice, so 10 kb.
+    const onMap = await run(runComposition, {}, true, { binsize: 5_000, bins: 40 })
+    expect(lane(onMap.outputs, 'composition-gc')?.binsize).toBe(5_000)
+    expect(lane(onMap.outputs, 'composition-gc')?.values.length).toBe(40)
+    const mapless = await run(runComposition, {}, true, { binsize: 5_000, bins: 0 })
+    expect(lane(mapless.outputs, 'composition-gc')?.binsize).toBe(10_000)
+    expect(lane(mapless.outputs, 'composition-gc')?.values.length).toBe(20)
   })
 })
 

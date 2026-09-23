@@ -21,7 +21,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands.
 
 - **Base composition, a 1D task (§18.8).** GC content, GC skew, AT skew and the cumulative GC skew
-  of a loaded FASTA, per bin of the open map, as lanes that export as bigWig, bedGraph and TSV.
+  of a loaded FASTA, as lanes that export as bigWig, bedGraph and TSV. Its bin size is the open
+  map's resolution unless changed, and 10 kb in a 1D browser, where a FASTA alone is enough to run
+  it.
 
 - **Origin and terminus, a 1D task (§18.8).** The turning points of the cumulative GC skew, the
   terminus chosen as Bacchus chooses it — nearer the matS cluster, else farther from the parS
@@ -35,7 +37,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   one a reader brought.
 
 - **`ori` and `arms` on the map (§7.5, §8.15).** On a circle with an origin, `ori` frames the whole
-  of it with the origin in the middle, so the secondary diagonal is the square's antidiagonal. `arms`
+  of it with the origin in the middle, so the secondary diagonal is the square's antidiagonal; it
+  stays lit while the origin is in the middle of the view, and pressed again goes back to the
+  sequence from its first base. `arms`
   divides by the decay along both of a bacterial chromosome's arms rather than along the diagonal
   alone — the X its aligned arms draw on an O/E map, and on its correlation, is divided out and its
   compartments are left. The key reads `arm O/E`; a link carries it as `arms=`.

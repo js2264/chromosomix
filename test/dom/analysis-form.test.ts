@@ -36,9 +36,11 @@ import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
 import { METAPLOT_TASK } from '@/analysis/tasks/metaplot'
 import { FRIP_TASK } from '@/analysis/tasks/frip'
+import { COMPOSITION_TASK } from '@/analysis/tasks/composition'
 import { TASKS } from '@/analysis/registry'
 import {
   defaultParams,
+  resolveSeeds,
   type AnalysisContext,
   type AnalysisTask,
   type NumberParam,
@@ -542,6 +544,62 @@ describe('an optional input nobody has chosen', () => {
     )
     expect(oriter.coverage).toBe('')
     expect(oriter.sequence).toBe('PAK.fa')
+  })
+})
+
+/**
+ * A bin size the context answers until the reader does (§18.2, §18.8): base
+ * composition reads the open map's resolution, and 10 kb in a 1D browser with a
+ * FASTA and nothing else. Held unanswered, so it follows a change of resolution;
+ * answered for the run, so the run's record says which bin size it read.
+ */
+describe('a number the open map answers', () => {
+  const box = (view: ParamForm): HTMLInputElement | null =>
+    view.el.querySelector<HTMLInputElement>('input[id$="-resolution"]')
+  const fasta: AnnotationEntry = {
+    id: 'PAK.fa',
+    card: 'linear',
+    kind: 'sequence',
+    label: 'PAK.fa',
+    source: { kind: 'remote', url: 'https://example.invalid/PAK.fa', name: 'PAK.fa' },
+    status: 'ready',
+    visible: true,
+    placement: { top: false, right: false, bottom: true, left: false },
+    style: defaultStyle('sequence', '#0072b2'),
+  }
+  /** A 1D browser: the same sequences, a browsing grid, and no matrix. */
+  const browser = (): AnalysisContext => {
+    const base = context()
+    if (base.framing === null) throw new Error('the map context is framed')
+    return {
+      ...base,
+      hasMap: false,
+      nBins: 0,
+      entries: [fasta],
+      framing: { ...base.framing, rows: [0, 0], cols: [0, 0], label: 'yeast.fa' },
+    }
+  }
+
+  it('shows the map’s resolution, and 10 kb with no map open', () => {
+    const view = form(COMPOSITION_TASK)
+    expect(box(view)?.value).toBe('1000')
+    view.setContext(browser())
+    expect(box(view)?.value).toBe('10000')
+    view.destroy()
+  })
+
+  it('stays unanswered in the form and is answered for the run', () => {
+    const unanswered = defaultParams(COMPOSITION_TASK.params)
+    expect(unanswered.resolution).toBeNull()
+    expect(resolveSeeds(COMPOSITION_TASK.params, context(), unanswered).resolution).toBe(1000)
+    expect(resolveSeeds(COMPOSITION_TASK.params, browser(), unanswered).resolution).toBe(10_000)
+    const typed = { ...unanswered, resolution: 2_500 }
+    expect(resolveSeeds(COMPOSITION_TASK.params, browser(), typed).resolution).toBe(2_500)
+  })
+
+  it('is ready in a 1D browser with a FASTA loaded, and waits for one without', () => {
+    expect(COMPOSITION_TASK.availability(browser()).state).toBe('ready')
+    expect(COMPOSITION_TASK.availability({ ...browser(), entries: [] }).state).toBe('waiting')
   })
 })
 

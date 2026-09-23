@@ -95,6 +95,7 @@ import {
   type LoadedTrack,
 } from './tracks'
 import { outputToTsv } from '../analysis/write/tsv'
+import { gridAt } from '../analysis/context'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import {
@@ -269,6 +270,10 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
   const params: Record<string, Params[string]> = {}
   const known = new Map(task.params.map((param) => [param.key, param]))
   for (const param of task.params) {
+    // A number whose default is the context's (`NumberParam.seed`) is left
+    // unanswered, and the runner decides it from the framing — the map's own
+    // resolution where a map was named — as the form would have.
+    if (param.kind === 'number' && param.seed !== undefined) continue
     if ('default' in param && param.default !== undefined) {
       params[param.key] = param.default as Params[string]
     }
@@ -953,8 +958,9 @@ async function runTracksOnly(
   }
   const outputs = await runner(job)
   if (!options.quiet) process.stderr.write('\r')
-  // No grid, so no profile can come out of this — but a writer that is handed
-  // the assembly anyway writes a BED against the right names.
+  // No map, so no grid of its own: the one profile that can come out of this —
+  // base composition's, on bins it picked (§18.8) — is written over these
+  // sequences cut at its bin size, and a BED against the right names.
   const contigs: BedGraphContig[] = Object.entries(lengths).map(([name, length]) => ({
     name,
     startBin: 0,
@@ -1154,12 +1160,18 @@ async function writeOutputs(
       )
     }
     if (output.kind === 'profile') {
-      await put(`${stem}.bedGraph`, profileToBedGraph(output, contigs, result.provenance))
+      // Over the grid the values are on: the map's, for every task that reads at
+      // its resolution, and the same sequences cut at the output's own bin size
+      // for the one that picks its own (§18.8) — which is also the only grid
+      // there is with no map named.
+      const grid =
+        output.binsize === result.provenance.framing.binsize ? contigs : gridAt(contigs, output.binsize)
+      await put(`${stem}.bedGraph`, profileToBedGraph(output, grid, result.provenance))
       // The same three arguments the drawer's own bigWig button passes, so the
       // two writers cannot drift: one implementation, one byte layout, one set
       // of round-trip tests behind it.
       const blob = await writeBigWig({
-        contigs: contigs.map((contig) => ({ name: contig.name, length: contig.length })),
+        contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
         values: output.values,
         firstBin: output.extent[0],
         binsize: output.binsize,

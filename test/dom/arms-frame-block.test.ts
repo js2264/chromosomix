@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { armsFor, type ArmsPresentation } from '@/ui/MatrixPanel'
+import { armsFor, originInMiddle, type ArmsPresentation } from '@/ui/MatrixPanel'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
 const LENGTH = 400_000
@@ -22,7 +22,15 @@ const BINSIZE = 1_000
 /** The frame the session hands over: 400 bins of 1 kb, the origin at bin 100. */
 const ARMS: ArmsPresentation = {
   window: 40,
-  frame: { startBin: 0, n: 400, origin: 100, circular: true, binsize: BINSIZE, length: LENGTH },
+  frame: {
+    startBin: 0,
+    n: 400,
+    origin: 100,
+    circular: true,
+    binsize: BINSIZE,
+    length: LENGTH,
+    originBp: 100_500,
+  },
   refusal: null,
 }
 
@@ -79,5 +87,38 @@ describe('placing a block on the arms', () => {
     const plain = block([0, 400], [{ label: 'chr', start: 0, end: 400, unitStart: 0 }])
     expect(armsFor(plain, { ...ARMS, window: undefined }, BINSIZE)).toBeUndefined()
     expect(armsFor(plain, { ...ARMS, refusal: 'no origin' }, BINSIZE)).toBeUndefined()
+  })
+})
+
+/**
+ * When `ori` is lit (§8.15): the origin in the middle of the picture, to within
+ * a bin or a pixel. The middle is the locus at the centre of the visible domain;
+ * what the button leaves the view as, and what a zoom about the middle keeps.
+ */
+describe('whether the origin is in the middle', () => {
+  const circle = { circular: true, length: LENGTH, originBp: 100_500 }
+  const at = (bp: number): { contig: string; bp: number } => ({ contig: 'chr', bp })
+
+  it('is lit with the origin at the middle, to within the tolerance', () => {
+    expect(originInMiddle(at(100_000), circle, BINSIZE)).toBe(true)
+    expect(originInMiddle(at(101_500), circle, BINSIZE)).toBe(true)
+    expect(originInMiddle(at(102_000), circle, BINSIZE)).toBe(false)
+  })
+
+  it('goes out once a pan moves the origin off the middle', () => {
+    expect(originInMiddle(at(110_500), circle, BINSIZE)).toBe(false)
+    // …unless a pixel is wider than that, at a view of the whole circle.
+    expect(originInMiddle(at(110_500), circle, 12_000)).toBe(true)
+  })
+
+  it('measures the distance round the circle', () => {
+    // A middle at 399,800 is 700 bp from an origin at 500, the short way round.
+    expect(originInMiddle(at(399_800), { ...circle, originBp: 500 }, BINSIZE)).toBe(true)
+    expect(originInMiddle(at(200_500), circle, BINSIZE)).toBe(false)
+  })
+
+  it('is never lit on a line, or with no locus at the middle', () => {
+    expect(originInMiddle(at(100_500), { ...circle, circular: false }, BINSIZE)).toBe(false)
+    expect(originInMiddle(null, circle, BINSIZE)).toBe(false)
   })
 })

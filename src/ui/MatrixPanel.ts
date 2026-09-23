@@ -690,6 +690,8 @@ export interface ArmsPresentation {
     circular: boolean
     binsize: number
     length: number
+    /** The origin itself, in base pairs, 0-based — what `ori` centres on. */
+    originBp: number
   } | null
   /** Why it cannot be offered on this view, or `null` when it can. */
   refusal: string | null
@@ -699,13 +701,19 @@ export interface ArmsPresentation {
    * Frame the whole circle with its origin in the middle, where the sequence is
    * circular and has one — the way every figure of a bacterial map is drawn,
    * with the arms running out to the corners and meeting at the terminus.
+   *
+   * @param centred Whether the origin is in the middle of what is drawn now —
+   *   the button is lit then, and pressed it frames the sequence as usual again.
    */
-  onCentre?(): void
+  onCentre?(centred: boolean): void
 }
 
 const CENTRE_HINT =
   'Frame the whole circle with its origin in the middle: the arms run out to the corners and ' +
   'meet at the terminus.'
+
+const UNCENTRE_HINT =
+  'The origin is in the middle of the view. Press to frame the sequence from its first base again.'
 
 /** The window the arms control turns on at, in bins — the compartments task's default. */
 export const DEFAULT_ARM_WINDOW = 50
@@ -845,6 +853,27 @@ function armsKey(arms: ArmsPresentation | undefined): string {
   if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
   const { startBin, n, origin, circular } = arms.frame
   return `${arms.window}:${startBin}:${n}:${origin}:${circular ? 'o' : '-'}`
+}
+
+/**
+ * Whether a circle's origin is in the middle of the picture, to within
+ * `tolerance` base pairs — what lights `ori` (§8.15).
+ *
+ * `middle` is the locus at the centre of the visible domain, read off the scale
+ * rather than off the window the view note prints: that window is widened to
+ * whole bins at both ends, which moves its middle by up to a bin however exactly
+ * the picture is centred. Measured round the circle, so an origin a few
+ * kilobases before the sequence's first base is in the middle of a view that
+ * crosses the junction there.
+ */
+export function originInMiddle(
+  middle: { contig: string; bp: number } | null,
+  frame: { circular: boolean; length: number; originBp: number },
+  tolerance: number,
+): boolean {
+  if (middle === null || !frame.circular || !(frame.length > 0)) return false
+  const apart = Math.abs(middle.bp - frame.originBp) % frame.length
+  return Math.min(apart, frame.length - apart) <= tolerance
 }
 
 /**
@@ -2203,15 +2232,19 @@ export class MatrixPanel {
       })
       this.armsButton = armsButton
       picture.push(armsButton)
-      // An action rather than a toggle, like the diagonal's: it moves the view
-      // to one place and there is no state to read off it afterwards.
+      // A toggle, lit while the origin is in the middle of what is drawn:
+      // pressed then, it frames the sequence from its first base again (§8.15).
+      // Read off the window on screen rather than off the view's named region,
+      // which a pan does not move.
       const centre = el('button', {
-        class: 'btn btn-icon btn-word',
+        class: 'btn btn-icon btn-toggle btn-word',
         title: CENTRE_HINT,
-        attrs: { type: 'button', 'aria-label': CENTRE_HINT },
+        attrs: { type: 'button', 'aria-label': CENTRE_HINT, 'aria-pressed': 'false' },
       })
       centre.append(el('span', { class: 'btn-word-text', text: 'ori' }))
-      centre.addEventListener('click', () => this.options.derive?.arms?.onCentre?.())
+      centre.addEventListener('click', () =>
+        this.options.derive?.arms?.onCentre?.(this.centredOnOrigin()),
+      )
       this.centreButton = centre
       picture.push(centre)
       this.paintArms(derive.arms)
@@ -2926,6 +2959,7 @@ export class MatrixPanel {
    */
   private paintArms(arms: ArmsPresentation | undefined): void {
     this.centreButton?.classList.toggle('hidden', arms?.onCentre === undefined)
+    this.paintCentre()
     const button = this.armsButton
     if (button === null) return
     button.classList.toggle('hidden', arms?.onChange === undefined)
@@ -2937,6 +2971,47 @@ export class MatrixPanel {
     const hint = refused ? (arms?.refusal ?? ARMS_HINT) : ARMS_HINT
     button.title = hint
     button.setAttribute('aria-label', hint)
+  }
+
+  /** Light `ori` while the origin is in the middle of what is drawn. */
+  private paintCentre(): void {
+    const button = this.centreButton
+    if (button === null) return
+    const on = this.centredOnOrigin()
+    if (button.getAttribute('aria-pressed') === String(on)) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+    const hint = on ? UNCENTRE_HINT : CENTRE_HINT
+    button.title = hint
+    button.setAttribute('aria-label', hint)
+  }
+
+  /**
+   * Whether the origin is in the middle of the window on screen, to within a
+   * drawn cell — which is what `ori` leaves the view as, and what a zoom about
+   * the middle keeps.
+   */
+  private centredOnOrigin(): boolean {
+    const frame = this.options.derive?.arms?.frame
+    const axis = this.locusAxes.cols
+    if (frame === null || frame === undefined || this.data === null || axis === null) return false
+    // One sequence across the whole picture: a view over two has no one origin.
+    const scale = this.heatmap.scaleX
+    const windows = this.framedWindows(axis, scale)
+    if (windows.length === 0 || windows.some((window) => window.contig !== windows[0].contig)) {
+      return false
+    }
+    const [from, to] = scale.domain
+    const unit = (from + to) / 2
+    const perUnit = axis.segmentAt(unit)?.bpPerUnit ?? 0
+    // Two bins, or a pixel where a pixel is coarser. A bin is the grid the
+    // picture is drawn on, and the zoom buttons scale the window about its
+    // middle once its ends are rounded out to whole bins, which can move the
+    // middle by up to another one: a zoom about the origin keeps it lit, and a
+    // pan of any size a reader can see does not.
+    const bin = Math.max(frame.binsize, this.options.binsize)
+    const tolerance = Math.max(2 * bin, scale.unitsPerPixel * perUnit)
+    return originInMiddle(axis.unitToLocus(unit), frame, tolerance)
   }
 
   /** Light the O/E toggle. Its state lives in the presentation, not in the DOM. */
@@ -7054,6 +7129,8 @@ export class MatrixPanel {
       if (phrase !== this.framedAt) {
         this.framedAt = phrase
         this.options.onViewMoved?.()
+        // A pan moves the origin off the middle and a zoom about it does not.
+        this.paintCentre()
       }
       this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.

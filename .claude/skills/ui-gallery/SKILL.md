@@ -18,7 +18,7 @@ node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-comp
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
-node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b16
+node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b19
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
@@ -111,8 +111,10 @@ Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software 
 The fifth drives what the yeast demo cannot show, because it has no circle and no origin: *P.
 aeruginosa* PAK from the DNA Bacterial Zoo read as circular on its first open, *Origin and terminus*
 and *Base composition* run from the Chromosomes table, the origin in the table's column, the map
-framed on it with `ori`, the O/E taken along the arms with `arms` and correlated at 8 kb, and the
-inter-arm and compartment tasks (§8.15, §18.8). It reads the lab's bucket; where the browser cannot
+framed on it with `ori` — lit while the origin is in the middle, through a zoom and not a pan, and
+pressed again to go back to the sequence from its first base, each step printed to stdout — the O/E
+taken along the arms with `arms` and correlated at 8 kb, the inter-arm and compartment tasks, and
+*Base composition* again in a 1D browser holding the FASTA alone, at 10 kb (§8.15, §18.8). It reads the lab's bucket; where the browser cannot
 reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
 `PAK_MM142_500.coverage.coverage-total.bw` — with `python3 scripts/DBZ_store.py serve <folder>` and
 name the folder's address in `GALLERY_DATA`. Run it after any change to §8.15's declarations, to the
