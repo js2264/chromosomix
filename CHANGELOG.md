@@ -238,6 +238,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The File card does not wrap.** Every row is one line and the card scrolls sideways, so a long
+  URI no longer stacks a dozen characters at a time down the column.
+
+
 - **A structure setting is one row (§25.3).** A select sits on one line with its label wherever the
   card is wide enough to read the value, and drops the label above it only below about 15 rem —
   asked of the *card* through a container query rather than of the window, because this card is

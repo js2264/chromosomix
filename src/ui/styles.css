@@ -7337,6 +7337,23 @@ canvas.is-frozen {
   overflow-wrap: anywhere;
 }
 
+/* The File card: every row on one line, and the card scrolls sideways for a
+   long URI instead of stacking it a dozen characters at a time. */
+.file-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.kv-nowrap {
+  grid-template-columns: max-content max-content;
+}
+
+.kv-nowrap .k,
+.kv-nowrap .v {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 /* The bordered "card" treatment, now carrying the File block: that is the
    identity of what you are looking at, and it earns the emphasis more than a
    single QC number does. */

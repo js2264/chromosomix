@@ -328,7 +328,14 @@ export class InfoPanel {
       ],
       ['sum', info.info['sum'] === null || info.info['sum'] === undefined ? '—' : fmt.int(Number(info.info['sum']))],
     ]
-    return el('div', { class: 'kv' }, ...rows.flatMap(([key, value]) => keyValue(key, value)))
+    // One line a row, scrolled sideways rather than wrapped: a URI broken over
+    // eight lines, and `storage mode` over two, made the card three times as
+    // tall as its facts and split words a reader copies out of it.
+    return el(
+      'div',
+      { class: 'file-scroll' },
+      el('div', { class: 'kv kv-nowrap' }, ...rows.flatMap(([key, value]) => keyValue(key, value))),
+    )
   }
 
   /**
