@@ -7543,6 +7543,11 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* Why a level is greyed out, under the select that greys it. */
+.seq-level-note {
+  margin: 0.25rem 0 0;
+}
+
 /* Whose contigs these are, and the way back out to the genomes. */
 .seq-scope {
   margin: 0;

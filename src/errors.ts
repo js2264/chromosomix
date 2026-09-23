@@ -49,6 +49,21 @@ export class ViewerError extends Error {
   }
 }
 
+/**
+ * Whether an error is the browser refusing memory — a typed array it could not
+ * allocate — rather than anything about the file.
+ *
+ * Read off the name and the words, because that is all that crosses the worker
+ * boundary (`worker/protocol.ts` keeps both) and no engine gives it a code:
+ * Chrome says *Array buffer allocation failed*, Firefox *out of memory* or
+ * *invalid array length*, Safari *Out of memory*.
+ */
+export function isAllocationFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const words = /allocation failed|out of memory|invalid array length|array buffer/i
+  return (err.name === 'RangeError' || err.name === 'InternalError') && words.test(err.message)
+}
+
 /** Raised when a file does not conform to the metacooler format. */
 export class MetaCoolerFormatError extends ViewerError {
   constructor(message: string, detail: Record<string, unknown> = {}, code: ErrorCode = 'format') {

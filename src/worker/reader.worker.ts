@@ -795,7 +795,9 @@ async function pooledResult(
   return {
     nrows: pooled.nrows,
     ncols: pooled.ncols,
-    values: Float32Array.from(pooled.values),
+    // Already `Float32` when it was folded; copying it again would put a second
+    // copy of the largest array in the read beside the first.
+    values: pooled.values instanceof Float32Array ? pooled.values : Float32Array.from(pooled.values),
     rowExtent: rows,
     colExtent: cols,
     rowGroups: withMembers(mc, anchor(mc, runs(pooled.rowIds), rows, pooled.binsPerCell), pooled.rowMembers),

@@ -153,6 +153,11 @@ export interface OverviewProps {
   onOpenContig(rowContig: string, colContig?: string): void
   onError(err: unknown): void
   /**
+   * Start the scan at once, past the gate: the reader has already agreed to a
+   * pass over every pixel, at the bin level that just ran out of memory.
+   */
+  start?: boolean
+  /**
    * Annotations to draw beside the map (§8, §8.12).
    *
    * The whole-metagenome picture is the one this matters most in: its axis is
@@ -323,7 +328,8 @@ export class Overview {
 
     this.summary.textContent =
       'One pass over every non-zero pixel, at the level chosen in the Genomes card.'
-    this.renderGate()
+    if (props.start === true && props.edgeListUrl === undefined) void this.scan()
+    else this.renderGate()
   }
 
   /**

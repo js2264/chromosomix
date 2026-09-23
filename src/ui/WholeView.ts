@@ -37,7 +37,7 @@ import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../meta
 import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
-import { ViewerError } from '../errors'
+import { ViewerError, isAllocationFailure } from '../errors'
 import { typedLocusToRegion } from '../genome/assembly'
 import { button, el, fmt } from './dom'
 import { resolutionLabel } from '../units'
@@ -230,6 +230,20 @@ export interface WholeViewProps {
    */
   onOpenGenome?(genome: string): void
   onError(err: unknown): void
+  /**
+   * The bin-level read could not be given the memory it needs (§7.3).
+   *
+   * Handed to the shell rather than shown here, because the answer is another
+   * level — the shell's to route — and a level this machine has just refused is
+   * one the picker should stop offering. Absent, the failure is an ordinary
+   * error.
+   */
+  onOutOfMemory?(): void
+  /**
+   * Start the read at once, past the gate: the reader has already agreed to a
+   * pass over every pixel, at the level that just ran out of memory.
+   */
+  start?: boolean
   /**
    * Annotations to draw beside and on the map (spec §8).
    *
@@ -529,7 +543,8 @@ export class WholeView {
         this.summary.textContent =
           'One pass over every non-zero pixel, at the level chosen in the Genomes card.'
       }
-      this.renderGate()
+      if (props.start === true) void this.load(Number.POSITIVE_INFINITY)
+      else this.renderGate()
     } else void this.load()
   }
 
@@ -898,6 +913,18 @@ export class WholeView {
       if (err instanceof ViewerError && err.code === 'dense-too-large') {
         this.panel.setBusy(false)
         this.showRefusal(err)
+        return
+      }
+      // The browser refused the block's memory. A coarser level is the answer,
+      // and the shell is what routes levels (`Session.binRefused`).
+      if (
+        isAllocationFailure(err) &&
+        this.level === 'bin' &&
+        this.props.selection === undefined &&
+        this.props.onOutOfMemory !== undefined
+      ) {
+        this.panel.setBusy(false)
+        this.props.onOutOfMemory()
         return
       }
       this.props.onError(err)

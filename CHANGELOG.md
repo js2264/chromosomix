@@ -885,6 +885,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The whole metagenome no longer dies with *Array buffer allocation failed* at bin level (§7.3).**
+  The bin-level block was summed into a full-square `Float64` and copied to `Float32`, about 200 MB
+  at its peak against the contig level's 134 MB for the same raster, so on a tab short of memory the
+  default level failed where the others worked. It now sums the upper triangle and finishes straight
+  into `Float32`, which is what the other levels cost. And if the tab still cannot allocate it, the
+  view falls back to `contig × contig` (a cooler's `chromosome × chromosome`), starts that read
+  without asking again, and greys out `bin × bin` with a line saying why.
+
 - **A metagenome's whole-file view is the *Whole metagenome*.** Its crumb, heading, gate and
   compute button said *whole genome*, which is a cooler's view, while the command palette already
   said *Whole metagenome*. The genomes table's button reads `whole metagenome →` too.

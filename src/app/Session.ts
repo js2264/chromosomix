@@ -885,6 +885,16 @@ export class Session {
   private metaSelection: SequenceSelection | null = null
   /** The card's rows in their own order, which is the order ticks are drawn in. */
   private metaOrder: string[] = []
+  /**
+   * Files whose bin-level whole-file read this tab could not allocate (§7.3).
+   *
+   * Kept for the session rather than the view: the machine's memory did not
+   * change because the reader navigated, so the level stays greyed out and a
+   * link or the back button asking for it lands one level up instead.
+   */
+  private readonly binRefused = new Set<string>()
+  /** The file whose next whole-file view starts its read at once; see {@link refuseBinLevel}. */
+  private startNext: string | null = null
   /** Contig → genome, built once per contigs table; see {@link genomeOfContig}. */
   private contigOwners: { from: ContigsResult; owners: Map<string, string> } | null = null
   /**
@@ -3296,8 +3306,11 @@ export class Session {
     // The overview's own default, which an advertised edge list moves to the
     // genome level (see {@link mountOverview}); the select must name what is drawn.
     const landing = state.level === undefined && this.edgeListUrl() !== undefined ? 'genome' : undefined
+    const refused = this.binRefused.has(state.uri)
     const choices =
-      file === null ? null : levelChoices(state, file.info.hasGenomes, file.info.nContigs, landing)
+      file === null
+        ? null
+        : levelChoices(state, file.info.hasGenomes, file.info.nContigs, landing, refused)
     if (choices === null) {
       this.levelSlot.replaceChildren()
       this.levelSlot.classList.add('hidden')
@@ -3305,7 +3318,9 @@ export class Session {
     }
     const select = el('select', { class: 'select' })
     for (const choice of choices.options) {
-      select.appendChild(el('option', { value: choice.value, text: choice.label, title: choice.hint }))
+      const option = el('option', { value: choice.value, text: choice.label, title: choice.hint })
+      option.disabled = choice.disabled === true
+      select.appendChild(option)
     }
     select.value = choices.current
     const hint = (): string =>
@@ -3315,8 +3330,12 @@ export class Session {
       select.title = hint()
       this.store.patch({ level: select.value as 'bin' | 'contig' | 'genome' }, { replace: true })
     })
+    const binOffered = choices.options.some((choice) => choice.value === 'bin')
     this.levelSlot.replaceChildren(
       el('div', { class: 'field' }, el('span', { class: 'field-label', text: 'level' }), select),
+      ...(refused && binOffered
+        ? [el('p', { class: 'hint seq-level-note', text: BIN_REFUSED })]
+        : []),
     )
     this.levelSlot.classList.remove('hidden')
   }
@@ -7222,6 +7241,10 @@ export class Session {
     const file = this.file
     if (file === null) return
     const level = matrixLevel(state)
+    if (level === 'bin' && this.binRefused.has(state.uri)) {
+      this.navigate({ ...state, level: 'contig' }, { replace: true })
+      return
+    }
     const balance = this.balanceOf(state)
     // On a metagenome this view is one level of the whole-file picker rather
     // than a view of its own (see {@link mountOverview}), and is labelled and
@@ -7301,6 +7324,8 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
+          onOutOfMemory: () => this.refuseBinLevel(state),
+          start: this.takeStart(state.uri),
         })
       },
     )
@@ -7643,8 +7668,32 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
+          start: this.takeStart(state.uri),
         }),
     )
+  }
+
+  /**
+   * The bin-level whole-file read ran out of memory: go one level up, and stop
+   * offering the level that failed (§7.3).
+   *
+   * One level up is `contig × contig` on a metagenome and `chromosome ×
+   * chromosome` on a cooler — `level=contig` both — and it is started at once,
+   * because the reader pressed *compute* for a pass over every pixel and this is
+   * that pass, at the level the machine can hold. Its accumulator is budgeted
+   * (`worker/overview.ts`), which the bin level's fixed raster-sized block is not.
+   */
+  private refuseBinLevel(state: ViewState): void {
+    this.binRefused.add(state.uri)
+    this.startNext = state.uri
+    this.navigate({ ...state, level: 'contig' }, { replace: true })
+  }
+
+  /** Whether the whole-file view about to be built should skip its gate, once. */
+  private takeStart(uri: string): boolean {
+    if (this.startNext !== uri) return false
+    this.startNext = null
+    return true
   }
 
   /**
@@ -8907,7 +8956,11 @@ interface LevelChoice {
   value: 'bin' | 'contig' | 'genome'
   label: string
   hint: string
+  disabled?: boolean
 }
+
+/** Why `bin × bin` is greyed out, once this tab could not hold it. */
+const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
 
 /**
  * Which levels the view on screen can draw, or `null` for none (§7.3).
@@ -8922,9 +8975,18 @@ function levelChoices(
   hasGenomes: boolean,
   nContigs: number,
   landing?: 'genome',
+  binRefused = false,
 ): { options: LevelChoice[]; current: string } | null {
+  // Greyed out rather than removed: a level that vanished from the list would
+  // leave the reader wondering where the default went.
+  const refuse = (options: LevelChoice[]): LevelChoice[] =>
+    binRefused
+      ? options.map((choice) =>
+          choice.value === 'bin' ? { ...choice, disabled: true, hint: BIN_REFUSED } : choice,
+        )
+      : options
   if (hasGenomes && state.view === 'overview') {
-    return { options: [...WHOLE_FILE_LEVELS], current: landing ?? overviewLevel(state) }
+    return { options: refuse([...WHOLE_FILE_LEVELS]), current: landing ?? overviewLevel(state) }
   }
   const pair = (contig: string): LevelChoice[] => [
     { value: 'bin', label: 'bin × bin', hint: 'Equal-width bins: one colour scale fits the whole map.' },
@@ -8934,7 +8996,7 @@ function levelChoices(
     return { options: pair('contig'), current: matrixLevel(state) }
   }
   if (!hasGenomes && state.view === 'whole' && nContigs > 1) {
-    return { options: pair('chromosome'), current: matrixLevel(state) }
+    return { options: refuse(pair('chromosome')), current: matrixLevel(state) }
   }
   return null
 }

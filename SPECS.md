@@ -1569,6 +1569,19 @@ organism?" is a question only it answers. Where a sidecar edge list is advertise
 way to `genome × genome`: that one is a small download rather than a pass over the file, so it is
 the cheapest thing to land on.
 
+**The bin level costs what the other two cost, and gives way when it cannot be had.** Its block is
+the raster's size whatever the file — up to 4,096² cells — and it used to be summed into a full
+`Float64` square and copied to `Float32` for the wire: 12 B a cell, 200 MB at the peak, which is the
+allocation a browser refuses first. On the diagonal it now sums the upper triangle in `Float64` and
+finishes straight into the `Float32` square, 8 B a cell — the contig and genome levels' own cost. A
+tab that still cannot allocate it (Chrome's *Array buffer allocation failed*) is not shown an error
+screen: the view goes to `contig × contig` (`chromosome × chromosome` on a cooler) and starts that
+read at once, since *compute* was already pressed for a pass over every pixel, and `bin × bin` stays
+greyed out in the level select for the rest of the session with one line saying why. A link or the
+back button asking for it lands one level up. It is not predicted in advance: `navigator.deviceMemory`
+is coarse and capped, reports gigabytes the tab cannot necessarily have, and would refuse the level on
+machines that draw it fine.
+
 **All three ask first, and all three are read by genome.** Being the default makes the gate
 mandatory rather than optional: the rule is not "warn when it looks expensive" but that a pass over
 every pixel never starts on its own, and a threshold would make it hold on large files and lapse on
