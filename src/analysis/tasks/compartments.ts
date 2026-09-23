@@ -227,7 +227,7 @@ const PARAMS: readonly ParamSpec[] = [
         label: 'decay along both arms',
         hint:
           'Also removes the secondary diagonal of a bacterial chromosome whose arms are aligned, ' +
-          'reading the arms from the origin the Origin and terminus task placed.',
+          'reading the arms from the origin on the Chromosomes table — the first base unless set.',
       },
     ],
     when: (params) => contactsOf(params) === 'cis',

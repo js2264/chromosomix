@@ -97,8 +97,8 @@ export const runInterArm: TaskRunner = async (job) => {
     const origin = Math.max(0, Math.min(n - 1, Math.floor((declared ?? 0) / binsize)))
     if (declared === undefined) {
       job.note(
-        `${name}: no origin is declared, so the arms were read from the first base. Run Origin ` +
-          'and terminus first, which places it.',
+        `${name}: the arms were read from the first base, the origin every sequence has until ` +
+          'one is set — on the Chromosomes table, or by Origin and terminus.',
       )
     }
     const frame: ArmFrame = { n, origin, circular }

@@ -3233,6 +3233,29 @@ p {
   padding: 0;
 }
 
+/* A value typed against a row (the origin, §8.15): a box as tall as the row
+   allows, its number right-aligned like the numbers beside it. */
+.td-edit {
+  display: flex;
+  align-items: center;
+  padding: 0 0.3rem;
+}
+
+.input.tedit {
+  width: 100%;
+  padding: 0.1rem 0.35rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.input.tedit::placeholder {
+  color: var(--text-dim);
+}
+
+.input.tedit.is-refused {
+  border-color: var(--danger);
+}
+
 .tempty {
   padding: 2rem;
   color: var(--text-dim);

@@ -13,7 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { ContigsTable, type CircularColumn, type OriginColumn } from '@/ui/ContigsTable'
+import { ContigsTable, parseOrigin, type CircularColumn, type OriginColumn } from '@/ui/ContigsTable'
 import type { ContigsResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -201,13 +201,13 @@ describe('the origin column', () => {
       return cells[cells.length - 1]?.textContent ?? ''
     })
 
-  it('comes after the circle, 1-based, and is blank where nothing is declared', () => {
+  it('comes after the circle, 1-based, and is the first base where nothing is declared', () => {
     const held = origins()
     held.put('chr', 6_374_500)
     const view = withOrigins(held)
     const heads = [...view.el.querySelectorAll('.th')].map((cell) => cell.textContent)
     expect(heads).toEqual(['name', 'length', 'circular', 'origin'])
-    expect(originCells(view)).toEqual(['6,374,501', '', ''])
+    expect(originCells(view)).toEqual(['6,374,501', '1', '1'])
     view.destroy()
   })
 
@@ -227,5 +227,118 @@ describe('the origin column', () => {
     expect(boxes(view)[0].title).toContain('0.65×')
     expect(boxes(view)[1].title).not.toContain('×')
     view.destroy()
+  })
+})
+
+/**
+ * The origin typed into the column (§8.15): the reader's own, which a later run
+ * of Origin and terminus leaves alone — and, empty, the first base, which every
+ * sequence has until something else is set.
+ */
+describe('typing an origin', () => {
+  function writable(): OriginColumn & { sets: Array<[string, number | null]> } {
+    const held = new Map<string, { at: number; by: 'reader' | 'task' }>([['chr', { at: 6_374_500, by: 'task' }]])
+    const listeners = new Set<() => void>()
+    const sets: Array<[string, number | null]> = []
+    return {
+      sets,
+      get: (name) => held.get(name),
+      set: (name, at) => {
+        sets.push([name, at])
+        if (at === null) held.delete(name)
+        else held.set(name, { at, by: 'reader' })
+        for (const listener of listeners) listener()
+      },
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    }
+  }
+
+  function view(held: OriginColumn, onOpen: () => void = () => {}): ContigsTable {
+    const made = new ContigsTable({ data: DATA, circular: store(), origins: held, onOpenContig: onOpen })
+    document.body.appendChild(made.el)
+    return made
+  }
+
+  const boxesOf = (made: ContigsTable): HTMLInputElement[] =>
+    [...made.el.querySelectorAll<HTMLInputElement>('.tr .td-edit .tedit')]
+
+  const type = (box: HTMLInputElement, text: string): void => {
+    box.value = text
+    box.dispatchEvent(new Event('change'))
+  }
+
+  it('shows what is declared, and the first base greyed where nothing is', () => {
+    const made = view(writable())
+    const [chr, plasmid] = boxesOf(made)
+    expect(chr.value).toBe('6,374,501')
+    expect(plasmid.value).toBe('')
+    expect(plasmid.placeholder).toBe('1')
+    expect(plasmid.title).toContain('first base')
+    made.destroy()
+  })
+
+  it('takes a 1-based position, digits grouped or not', () => {
+    const held = writable()
+    const made = view(held)
+    type(boxesOf(made)[1], '2,000')
+    expect(held.sets).toEqual([['plasmid_A', 1_999]])
+    expect(boxesOf(made)[1].value).toBe('2,000')
+    type(boxesOf(made)[2], '4 500')
+    expect(held.sets[1]).toEqual(['plasmid_B', 4_499])
+    made.destroy()
+  })
+
+  it('goes back to the first base when emptied, or given 0', () => {
+    const held = writable()
+    const made = view(held)
+    type(boxesOf(made)[0], '')
+    expect(held.sets).toEqual([['chr', null]])
+    type(boxesOf(made)[1], '0')
+    expect(held.sets[1]).toEqual(['plasmid_A', null])
+    made.destroy()
+  })
+
+  it('refuses a base past the end, and puts back what it held', () => {
+    const held = writable()
+    const made = view(held)
+    const box = boxesOf(made)[1]
+    type(box, '95,000')
+    expect(held.sets).toEqual([])
+    expect(box.value).toBe('')
+    expect(box.classList.contains('is-refused')).toBe(true)
+    expect(box.title).toContain('90,000 bp long')
+    made.destroy()
+  })
+
+  it('does not open the sequence when the box is clicked', () => {
+    let opened = 0
+    const made = view(writable(), () => {
+      opened++
+    })
+    boxesOf(made)[0].click()
+    expect(opened).toBe(0)
+    made.destroy()
+  })
+})
+
+describe('reading a typed origin', () => {
+  it('reads 1-based positions, grouped or not', () => {
+    expect(parseOrigin('6,374,501', 'chr', 6_395_872)).toEqual({ at: 6_374_500 })
+    expect(parseOrigin(' 6 374 501 ', 'chr', 6_395_872)).toEqual({ at: 6_374_500 })
+    expect(parseOrigin('1', 'chr', 6_395_872)).toEqual({ at: 0 })
+  })
+
+  it('reads empty and 0 as the first base', () => {
+    expect(parseOrigin('', 'chr', 100)).toEqual({ at: null })
+    expect(parseOrigin('0', 'chr', 100)).toEqual({ at: null })
+  })
+
+  it('refuses what is not a position, and a base past the end', () => {
+    expect(parseOrigin('ori', 'chr', 100)).toHaveProperty('refused')
+    expect(parseOrigin('-5', 'chr', 100)).toHaveProperty('refused')
+    expect(parseOrigin('101', 'chr', 100)).toEqual({ refused: 'chr is 100 bp long, so it has no base 101.' })
   })
 })

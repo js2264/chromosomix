@@ -391,8 +391,8 @@ function armFrameOf(
   const binsize = job.mc.binsize
   if (declared === undefined) {
     job.note(
-      `${label}: no origin is declared, so the arms were read from the first base. Run Origin and ` +
-        'terminus first, which places it.',
+      `${label}: the arms were read from the first base, the origin every sequence has until one ` +
+        'is set — on the Chromosomes table, or by Origin and terminus.',
     )
   }
   const at = declared ?? 0

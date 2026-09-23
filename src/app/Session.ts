@@ -356,6 +356,8 @@ function genomeCard(
    * where in the column it sits.
    */
   minimap?: HTMLElement,
+  /** Which sequences are declared circular, for the mark beside each (§8.15). */
+  circular?: { has(name: string): boolean; subscribe(listener: () => void): () => void },
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -404,6 +406,7 @@ function genomeCard(
       contigs: assembly.contigs,
       selection,
       onGoTo,
+      ...(circular === undefined ? {} : { circular }),
       ...BROWSER_TICKS,
     }),
     // No card about contact maps here. There is one in the Annotations column,
@@ -2268,6 +2271,9 @@ export class Session {
     // An empty tab takes the file's name as its own, as {@link addRemote}'s
     // does. Read before anything below replaces what the tab holds.
     const wasEmpty = this.file === null && this.assembly === null
+    // …and a genome being browsed as tracks, whose declarations a map of it
+    // takes once it has opened (§8.15).
+    const browsed = this.file === null && this.assembly !== null ? this.sessionKey() : null
     // A Drive address ends in an id and says nothing else; where nobody gave a
     // name, Drive is asked for it first (§24.9) — one small request that names
     // the loading screen and the tab, and decides the door where the bytes
@@ -2524,6 +2530,14 @@ export class Session {
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
       named()
+      // A circle ticked and an origin set while the genome was browsed as
+      // tracks are about the molecules this map is of (§8.15).
+      if (browsed !== null) this.carryDeclarations(browsed)
+      // The Sequences card was painted before the navigation, while the state
+      // still named whatever this session held — a genome browsed as tracks,
+      // another map — so its circles were read under that file's key and would
+      // never show this one's. Again, under this map's.
+      if (this.sequencesKey !== this.sessionKey()) this.paintSequences()
       // Not awaited: three small reads per sequence, on the file's first open
       // only, and nothing on screen waits for them (§8.15). After the
       // navigation, because the declarations are kept under the key of the file
@@ -3171,10 +3185,14 @@ export class Session {
    * follow the view through the selection, so rebuilding would only throw away
    * the filter text and the scroll position of a list being read.
    */
+  /** The key the Sequences card's circles were read under; see {@link open}. */
+  private sequencesKey: string | null = null
+
   private paintSequences(): void {
     const file = this.file
     const panel = this.infoPanel
     if (file === null || panel === null) return
+    this.sequencesKey = this.sessionKey()
     if (file.info.hasGenomes) {
       this.paintMetaSequences(this.metaScope ?? { kind: 'genomes' })
       return
@@ -3489,6 +3507,51 @@ export class Session {
     } finally {
       this.echoingSequences = false
     }
+  }
+
+  /**
+   * A genome's own sequence list, as the Chromosomes table (§5.8).
+   *
+   * The table a cooler lands on, built from the assembly the browser was opened
+   * with rather than from a file's `/chroms`: each sequence's name and length,
+   * and the two columns that are declarations about the molecules rather than
+   * about any one map — the circle and the origin (§8.15). Declared here, with no
+   * map open, they are under this genome's key, and a map dropped in later takes
+   * them for its own sequences of the same names ({@link carryDeclarations}).
+   */
+  private mountAssemblyContigs(state: ViewState): void {
+    const assembly = this.assembly
+    if (assembly === null) return
+    const data: ContigsResult = {
+      table: {
+        length: assembly.contigs.length,
+        columns: ['name', 'length'],
+        data: {
+          name: assembly.contigs.map((contig) => contig.name),
+          length: Float64Array.from(assembly.contigs, (contig) => contig.length),
+        },
+      },
+    }
+    const circular = this.circularColumn()
+    const origins = this.originColumn()
+    const browse = (locus?: string): void => {
+      this.navigate({ uri: state.uri, view: 'browser', ...(locus === undefined ? {} : { locus }) })
+    }
+    const view = new ContigsTable({
+      data,
+      title: 'Chromosomes',
+      noun: 'chromosome',
+      hint: 'The sequences this genome was opened with. Pick one to browse its tracks.',
+      assembly,
+      ...(this.annotations === null ? {} : { store: this.annotations.store }),
+      ...(circular === null ? {} : { circular }),
+      ...(origins === null ? {} : { origins }),
+      persistence: this.tableMemory(state.uri, 'contigs'),
+      onOpenContig: (contig) => browse(contig),
+      onOpenRegion: (region) => browse(formatLocus(rangeOfRegion(region))),
+      onOpenWhole: () => browse(),
+    })
+    this.showContent(view.el, view)
   }
 
   private mountBrowser(state: ViewState): void {
@@ -4053,7 +4116,12 @@ export class Session {
   private browserBreadcrumb(assembly: Assembly): Breadcrumb {
     return new Breadcrumb({
       rootKind: 'contigs',
-      rootChoices: [],
+      // The genome's own sequence list as well as the browser (§5.8): the
+      // Chromosomes table is where a circle and an origin are declared, and a
+      // genome browsed as tracks has both to declare with no map open (§8.15).
+      rootChoices: ['contigs', 'whole'],
+      contigNoun: 'Chromosomes',
+      browser: true,
       fileLabel: assembly.name,
       entries: [],
       onNavigate: (state) => this.navigate(state),
@@ -4418,6 +4486,8 @@ export class Session {
       (locus) => this.goToLocus(locus),
       this.selectionFor(assembly),
       this.minimap?.el,
+      // Declared on the genome's own Chromosomes table (§5.8, §8.15).
+      this.circularColumn() ?? undefined,
     )
   }
 
@@ -5099,12 +5169,23 @@ export class Session {
     return this.originsHeld.store
   }
 
-  /** The origins as the Chromosomes table draws them. */
+  /**
+   * The origins as the Chromosomes table draws them, and takes a typed one.
+   *
+   * A typed origin is the reader's (`OriginStore.set`), which a later run of
+   * Origin and terminus leaves alone; cleared, the sequence goes back to its
+   * first base and the task may place one again.
+   */
   private originColumn(): OriginColumn | null {
     const store = this.originStore()
     if (store === null) return null
     return {
       get: (name) => store.get(name),
+      set: (name, at) => {
+        store.set(name, at)
+        // The arms on screen and `ori` are read from it.
+        this.rederive()
+      },
       subscribe: (listener) => store.subscribe(listener),
     }
   }
@@ -5124,6 +5205,46 @@ export class Session {
         'are read from it from now on. It is on the Chromosomes table.',
     )
     this.rederive()
+  }
+
+  /**
+   * Take a genome's declarations for a map of it (§8.15).
+   *
+   * A circle ticked and an origin set while the genome was browsed as tracks are
+   * facts about the molecules the map is of, so a map opened over the browser
+   * takes them — for its sequences of the same names, and only where it has no
+   * declaration of its own. The map's first open still measures its circles
+   * ({@link detectCircular}), which only ever adds a tick, and an origin already
+   * set on the map stands; a reader's origin stays the reader's, and a task's
+   * stays one the task may move.
+   */
+  private carryDeclarations(fromKey: string): void {
+    const toKey = this.sessionKey()
+    if (toKey === null || toKey === fromKey) return
+    const names = new Set(contigPairs(this.file?.contigs ?? null).map(([name]) => name))
+    const known = (name: string): boolean => names.size === 0 || names.has(name)
+    const circular = this.circularStore()
+    const added: string[] = []
+    if (circular !== null) {
+      for (const name of new CircularStore(fromKey).list()) {
+        if (!known(name) || circular.has(name)) continue
+        circular.set(name, true)
+        added.push(name)
+      }
+    }
+    const origins = this.originStore()
+    if (origins !== null) {
+      const from = new OriginStore(fromKey)
+      const found: Record<string, number> = {}
+      for (const name of Object.keys(from.record())) {
+        const held = from.get(name)
+        if (held === undefined || !known(name) || origins.get(name) !== undefined) continue
+        if (held.by === 'reader') origins.set(name, held.at)
+        else found[name] = held.at
+      }
+      origins.fill(found)
+    }
+    for (const name of added) this.adoptCircular(name, true)
   }
 
   /**
@@ -6776,31 +6897,27 @@ export class Session {
       startBin += n
     }
     if (bins === 0) return {}
-    const origin = this.originStore()?.get(name)
+    const declared = this.originStore()?.get(name)
     const circular = this.circularStore()?.has(name) === true
     // Offered on what can have arms: a circle, or a sequence somebody placed an
     // origin on. A yeast chromosome has neither and is not asked.
-    if (origin === undefined && !circular) return {}
+    if (declared === undefined && !circular) return {}
+    // Where nobody has set one, the first base (§8.15): what every task reads
+    // too, and where a complete bacterial assembly conventionally starts.
+    const at = declared?.at ?? 0
     return {
       arms: {
         window: state.arms,
-        frame:
-          origin === undefined
-            ? null
-            : {
-                startBin,
-                n: bins,
-                origin: Math.max(0, Math.min(bins - 1, Math.floor(origin.at / binsize))),
-                circular,
-                binsize,
-                length,
-                originBp: origin.at,
-              },
-        refusal:
-          origin === undefined
-            ? `No origin is set for ${name}. Run Origin and terminus, which sets it, and the arms ` +
-              'are read from it.'
-            : null,
+        frame: {
+          startBin,
+          n: bins,
+          origin: Math.max(0, Math.min(bins - 1, Math.floor(at / binsize))),
+          circular,
+          binsize,
+          length,
+          originBp: at,
+        },
+        refusal: null,
         onChange: (window) => {
           // On turns the O/E on with it, for the reason the adaptive despeckle
           // does: it is a reading of the ratio and nothing else.
@@ -6811,21 +6928,18 @@ export class Session {
         // run of the task moves it, and the button must follow. Pressed while
         // lit — the origin already in the middle — it is undone: the sequence
         // framed as it is anywhere else, from its first base (§8.15).
-        ...(origin === undefined || !circular
+        ...(!circular
           ? {}
           : {
               onCentre: (centred: boolean) => {
-                const at = this.originStore()?.get(name)?.at
-                if (!centred && at === undefined) return
                 // The hash does not follow a pan, so either answer can be the
                 // state already held — the centred window panned away from, or
                 // the whole sequence zoomed until the origin sat in the middle —
                 // and a navigation to it moves nothing. The view is rebuilt on
                 // its own region instead.
-                const moved =
-                  centred || at === undefined
-                    ? this.navigate({ uri: file.uri, view: 'region', region: name })
-                    : this.centreOnOrigin(file.uri, name, at)
+                const moved = centred
+                  ? this.navigate({ uri: file.uri, view: 'region', region: name })
+                  : this.centreOnOrigin(file.uri, name, this.originStore()?.get(name)?.at ?? 0)
                 if (!moved) this.remount()
               },
             }),
@@ -7045,6 +7159,18 @@ export class Session {
         return
       }
       await this.openGenome(state.uri, source, state.locus, true)
+      return
+    }
+
+    // A genome's own sequence list (§5.8): the Chromosomes table with no map
+    // behind it. Before the file check below, which would otherwise read a
+    // genome's address as a map to open.
+    if (state.view === 'contigs' && this.file === null && this.assembly?.uri === state.uri) {
+      this.breadcrumb?.render(state)
+      this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
+      this.mounted = state
+      this.mountAssemblyContigs(state)
+      this.host.activity(this)
       return
     }
 

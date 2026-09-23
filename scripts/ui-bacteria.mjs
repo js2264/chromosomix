@@ -140,7 +140,30 @@ const controls = async (name) => {
   console.log('shot', name)
 }
 
+// A map dropped on the Contact maps card, fetched in the page as a file.
+const dropMap = (url, name) => page.evaluate(async ({ url, name }) => {
+  const target = [...document.querySelectorAll('.ann-drop')].find((el) => /Load a contact map/.test(el.textContent ?? ''))
+  if (target === undefined) throw new Error('no map drop zone')
+  const file = new File([await (await fetch(url)).arrayBuffer()], name)
+  const transfer = new DataTransfer()
+  transfer.items.add(file)
+  for (const kind of ['dragenter', 'dragover', 'drop']) {
+    target.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
+  }
+}, { url, name })
+const circleTicked = () => page.evaluate(() =>
+  [...document.querySelectorAll('input.tcheck')].some((box) => box.checked && /is read as a circle/.test(box.title)))
+const originBox = () => page.evaluate(() => {
+  const box = document.querySelector('input.tedit')
+  return box === null ? null : { value: box.value, placeholder: box.placeholder, title: box.title }
+})
+
+// GALLERY_ONLY=declarations runs the last part alone: a 1D browser's
+// Chromosomes table, a map dropped over it, and a map's default origin.
+const ONLY = process.env.GALLERY_ONLY ?? ''
+
 try {
+  if (ONLY === '') {
   await page.goto(`${BASE}/#uri=${encodeURIComponent(rung(4))}&view=contigs`)
   await until('reads as circular')
   await sleep(1500)
@@ -282,6 +305,63 @@ try {
   if (await shut.isVisible().catch(() => false)) await shut.click()
   await sleep(1500)
   await shot('b19-browser-lanes')
+  }
+
+  // A 1D browser's Chromosomes table (§5.8): a circle ticked and an origin typed
+  // with no map open, taken by the map dropped over the browser (§8.15).
+  page = await fresh()
+  await page.goto(`${BASE}/#uri=${encodeURIComponent(FASTA)}`)
+  await until('the sequences')
+  await sleep(3000)
+  await page.locator('.crumb-arrow').first().click()
+  await sleep(300)
+  await page.locator('.crumb-menu-item', { hasText: 'Chromosomes' }).first().click()
+  await sleep(2500)
+  console.log('browser table, before:', JSON.stringify(await originBox()))
+  await shot('b20-browser-chromosomes')
+  await page.locator('.td-check input.tcheck').first().click()
+  const typed = page.locator('input.tedit').first()
+  await typed.click()
+  await typed.fill('6,374,501')
+  await typed.press('Enter')
+  await sleep(800)
+  console.log('browser table, after:', JSON.stringify(await originBox()), 'circle:', await circleTicked())
+  await shot('b21-browser-declared')
+  await page.locator('input.tedit').first().click()
+  await page.locator('input.tedit').first().fill('7,000,000')
+  await page.locator('input.tedit').first().press('Enter')
+  await sleep(500)
+  console.log('past the end:', JSON.stringify(await originBox()))
+  await page.mouse.move(5, 5)
+  await page.locator('input.tedit').first().hover()
+  await sleep(600)
+  await shot('b22-origin-refused')
+
+  await fold('Show the Annotations panel')
+  await page.waitForSelector('.ann-drop', { timeout: 30000 })
+  await dropMap(`${MAP}`, 'PAK_MM142.mcool')
+  await until('reads as circular', 60000)
+  await sleep(4000)
+  console.log('map table:', JSON.stringify(await originBox()), 'circle:', await circleTicked())
+  await shot('b23-map-took-declarations')
+
+  // A map with nothing declared: its origin is the first base, and the arms
+  // are read from it rather than refused.
+  page = await fresh()
+  await page.goto(`${BASE}/#uri=${encodeURIComponent(rung(4))}&view=contigs`)
+  await until('reads as circular')
+  await sleep(1500)
+  console.log('fresh map table:', JSON.stringify(await originBox()))
+  await shot('b24-default-origin')
+  await page.evaluate((hash) => { location.hash = hash }, `#uri=${encodeURIComponent(rung(4))}&view=region&region=LR657304.1`)
+  await sleep(6000)
+  for (const name of ['General', 'Annotations', 'Analysis']) await fold(`Fold the ${name} panel`)
+  await sleep(3000)
+  console.log('arms enabled:', await word('arms').isEnabled(), '·', await word('arms').getAttribute('title'))
+  await word('ori').click()
+  await sleep(8000)
+  await ori('on the first base')
+  await shot('b25-ori-on-first-base')
 } catch (error) {
   console.log('FAILED', error)
   await shot('99-failure')

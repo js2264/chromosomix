@@ -1006,6 +1006,14 @@ map, tracks and all; closing the map from the File card falls back to a browser 
 `/chroms`, with the same tracks still loaded. Neither is a new session: the tab, its id and its
 memory are the same throughout.
 
+**A genome has a Chromosomes table too.** The trail's root picks between it and *Whole genome*, the
+browser, as a map's picks between its table and its whole: the sequences the genome was opened with,
+their lengths, and the two columns that are declarations about the molecules rather than about any
+map — which are circles, and where each one's origin is (§8.15). A reader with a FASTA and no map
+declares them there, and the tasks that read a sequence read them. A row opens its sequence in the
+browser. **A map opened over the browser takes them**, for its sequences of the same names and only
+where it has declared nothing itself; its first open still measures its circles, which only adds.
+
 **One key walks the three pictures a file with tracks can be**: `v` goes from the map and its tracks,
 to the tracks alone, to the map alone, and home. Two of those swap what is mounted and the third does
 not, which is why it is a cycle written in one place rather than a toggle in each — a reader pressing
@@ -3226,18 +3234,25 @@ image on the other arm, and the map carries a **secondary diagonal** through the
 origin, perpendicular to the main one. The origin is declared the way the circle
 is and kept the same way: per file, carried in an exported workspace and in
 `AnalysisFraming.origins`, not in the view state, and shown **1-based in a column
-of the Chromosomes table** beside the tick. **Two hands write it and the
-difference is kept.** The *Origin and terminus* task (§18.8) fills it in for every
-sequence it places, and says so; a reader's own comes in with a workspace or on a
-`metacooler-run` line's `--origin`, and a task never overwrites it — a reader who
-has corrected a call knows something the skew did not — while a task's is replaced
-by the next run of the task, which is what running it again with other sites is
-for.
+of the Chromosomes table** beside the tick. **Every sequence has one: its first
+base, until another is set** — which is where a complete bacterial assembly
+conventionally starts, at *dnaA*, and what every task that reads the arms reads
+where nothing else has been said. The column shows it greyed, so there is no
+blank in it that means something, and the framing carries only the declared
+ones. **Two hands write it and the difference is kept.** The *Origin and
+terminus* task (§18.8) fills it in for every sequence it places, and says so; a
+reader's own is **typed into the column** — 1-based, digits grouped or not, and
+emptied (or `0`) to go back to the first base — or comes in with a workspace or on
+a `metacooler-run` line's `--origin`, and a task never overwrites it — a reader
+who has corrected a call knows something the skew did not — while a task's is
+replaced by the next run of the task, which is what running it again with other
+sites is for. A position past the sequence's end is refused in the box, which
+goes back to what it held and says why.
 
 **The map offers two things from it**, beside the O/E and only on a view of one
 sequence that is declared circular or has an origin — a yeast chromosome has
-neither and is not asked. **`ori`**, on a circle whose origin is known, frames the
-whole of it with the origin in the middle: a window across the junction, from half
+neither and is not asked. **`ori`**, on a circle, frames the whole of it with the
+origin in the middle: a window across the junction, from half
 a lap past the origin round to half a lap before it, one base short of a lap
 because a window whose ends meet is named as the whole sequence from its first
 base. The arms then run out to the corners and meet at the terminus, and the
@@ -3247,8 +3262,8 @@ what is drawn**, to within two bins or a pixel — a zoom about the middle keeps
 lit, a pan does not — and pressed while lit it frames the sequence from its first
 base again, as a view of it opens. Either press after a pan, which the address
 does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
-along the diagonal alone (§7.5): greyed, and saying why, until there is an origin
-to read them from.
+along the diagonal alone (§7.5), read from the origin in the column — the first
+base where none has been set.
 
 **The turn slides too, and it needed one gate widened.** `isTurnable` asked for
 *one run or none*, on the sound ground that a boundary between two sequences is a

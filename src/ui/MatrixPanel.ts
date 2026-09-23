@@ -721,7 +721,7 @@ export const DEFAULT_ARM_WINDOW = 50
 const ARMS_HINT =
   'Divide by the decay along both arms of a bacterial chromosome — its secondary diagonal ' +
   'through the origin as well as the main one — so what is left is its compartments. Reads the ' +
-  'origin the Origin and terminus task placed, which the Chromosomes table shows.'
+  'origin on the Chromosomes table: the first base unless one is set.'
 
 export interface DerivePresentation {
   /** Normalisation to compute from the block; absent for none. */

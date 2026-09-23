@@ -129,13 +129,45 @@ export interface CircularColumn {
 
 /**
  * Where each sequence's replication origin is declared (§8.15), for a column
- * that shows it. Read-only in the table: the *Origin and terminus* task is what
- * fills it in, and a workspace or `--origin` carries a typed one.
+ * that shows it and — given {@link set} — takes a typed one.
+ *
+ * The *Origin and terminus* task fills it in, a workspace or `--origin` carries
+ * it, and the reader types it; where none of the three has, the origin is the
+ * sequence's first base, which is what every task reads and what the box shows,
+ * greyed.
  */
 export interface OriginColumn {
   /** 0-based base pairs and whose word it is, or `undefined`. */
   get(name: string): { at: number; by: 'reader' | 'task' } | undefined
+  /** The reader's own, 0-based, or `null` to go back to the first base. */
+  set?(name: string, at: number | null): void
   subscribe(listener: () => void): () => void
+}
+
+/**
+ * A typed origin as a 0-based base, `null` for the first base, or why not.
+ *
+ * 1-based as the column shows it, with its digits grouped or not (`6,374,501`,
+ * `6 374 501`). Empty is the default, and so is `0`, the first base in 0-based
+ * terms — a reader who thinks of the default as position zero is not wrong.
+ */
+export function parseOrigin(
+  text: string,
+  name: string,
+  length: number,
+): { at: number | null } | { refused: string } {
+  const trimmed = text.trim()
+  if (trimmed === '') return { at: null }
+  const digits = trimmed.replace(/[\s,_'’]/g, '')
+  if (!/^\d+$/.test(digits)) {
+    return { refused: `“${trimmed}” is not a position. Type a base, 1-based, such as 1,204,000.` }
+  }
+  const base = Number(digits)
+  if (base === 0) return { at: null }
+  if (Number.isFinite(length) && length > 0 && base > length) {
+    return { refused: `${name} is ${fmt.int(length)} bp long, so it has no base ${fmt.int(base)}.` }
+  }
+  return { at: base - 1 }
 }
 
 export class ContigsTable {
@@ -234,25 +266,56 @@ export class ContigsTable {
       })
     }
 
-    // The origin the arms are read from, beside the circle it is on. Read-only:
-    // what fills it is the Origin and terminus task, whose own table says how
-    // the call was made, and a typed one arrives in a workspace or on --origin.
+    // The origin the arms are read from, beside the circle it is on: what the
+    // Origin and terminus task put there, what a workspace brought, or what the
+    // reader typed — and the first base where none of them has, which is what
+    // every task reads, so the column never has a blank that means something.
     const origins = options.origins
     if (origins !== undefined) {
+      const lengths = payload.data['length']
+      const lengthOf = (row: number): number =>
+        lengths instanceof Float64Array ? lengths[row] : Number.NaN
+      const set = origins.set
       columns.push({
         key: 'origin',
         label: 'origin',
         kind: 'number',
         align: 'right',
-        width: '7rem',
+        width: '7.5rem',
         title:
-          'Where replication starts, 1-based — what the map’s arms are read from. Filled in by ' +
-          'the Origin and terminus task.',
-        value: (row) => {
-          const held = origins.get(names[row])
-          return held === undefined ? undefined : held.at + 1
-        },
+          'Where replication starts, 1-based — what the map’s arms are read from. The first base ' +
+          'unless the Origin and terminus task, a workspace or you have set another.',
+        value: (row) => (origins.get(names[row])?.at ?? 0) + 1,
         format: (value) => (typeof value === 'number' ? fmt.int(value) : ''),
+        ...(set === undefined
+          ? {}
+          : {
+              edit: {
+                text: (row: number) => {
+                  const held = origins.get(names[row])
+                  return held === undefined ? '' : fmt.int(held.at + 1)
+                },
+                placeholder: () => '1',
+                commit: (row: number, text: string) => {
+                  const parsed = parseOrigin(text, names[row], lengthOf(row))
+                  if ('refused' in parsed) return parsed.refused
+                  set(names[row], parsed.at)
+                  return null
+                },
+                title: (row: number) => {
+                  const name = names[row]
+                  const held = origins.get(name)
+                  if (held === undefined) {
+                    return `No origin is set on ${name}, so its first base is read as one. Type a position, 1-based, to set it.`
+                  }
+                  const by =
+                    held.by === 'task'
+                      ? 'placed there by Origin and terminus'
+                      : 'set by hand, so Origin and terminus leaves it alone'
+                  return `${name}’s origin, ${by}. Type another to move it; empty goes back to the first base.`
+                },
+              },
+            }),
       })
     }
 

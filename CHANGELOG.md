@@ -18,7 +18,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sequences is read at its two ends and its corner, and scored as the contacts across the junction
   over the contacts along the diagonal at the same separation — about one on a circle, about zero on
   a line. At 0.2 or above the Chromosomes table's box is ticked and a banner says so; the box's
-  tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands.
+  tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands. A
+  map opened over a 1D browser is marked on the Sequences card too, which read the tracks' file.
+
+- **A 1D browser has a Chromosomes table (§5.8).** The trail's root picks between it and the
+  whole genome. Circles are ticked and origins typed there with no map open, and a map opened over
+  the browser takes them for its sequences of the same names.
 
 - **Base composition, a 1D task (§18.8).** GC content, GC skew, AT skew and the cumulative GC skew
   of a loaded FASTA, as lanes that export as bigWig, bedGraph and TSV. Its bin size is the open
@@ -33,8 +38,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Declared origins (§8.15).** A sequence's replication origin is kept per file like its circle,
   shown 1-based in a column of the Chromosomes table, carried in a workspace and in a run's
-  framing, and written as `--origin NAME:POS` on a `metacooler-run` line. A task never overwrites
-  one a reader brought.
+  framing, and written as `--origin NAME:POS` on a `metacooler-run` line. It is typed into the
+  column as well as set by the task, and a task never overwrites one a reader brought. Every
+  sequence has one: its first base, shown greyed, until another is set — so `arms` and every task
+  that reads the arms read from it rather than refusing.
 
 - **`ori` and `arms` on the map (§7.5, §8.15).** On a circle with an origin, `ori` frames the whole
   of it with the origin in the middle, so the secondary diagonal is the square's antidiagonal; it

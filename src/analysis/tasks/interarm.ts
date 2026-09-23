@@ -20,9 +20,9 @@
  * comparison across maps — the mean `log2` enrichment over the arms, and how far
  * from the origin it holds before falling below half its peak.
  *
- * The arms are read from the origin declared for each sequence — the Origin and
- * terminus task fills it in — and round the circle where the sequence is
- * declared circular (§8.15).
+ * The arms are read from each sequence's origin — the Origin and terminus task
+ * fills it in, a reader types it, and it is the first base until either has —
+ * and round the circle where the sequence is declared circular (§8.15).
  */
 
 import { tickedContigs } from '../context'
