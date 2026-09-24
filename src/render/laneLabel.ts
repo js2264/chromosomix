@@ -83,6 +83,45 @@ export interface LaneLabelStyle {
 export const NAME_CUT = '…'
 
 /**
+ * How who a lane is gets written in a saved figure, by both surfaces alike.
+ *
+ * Small, and fixed rather than put through the reader's text size. On screen a
+ * caption is read across a desk and edited in place, which is what the screen
+ * sizes — twelve pixels and semibold, at the size most readers keep — were
+ * chosen for; on a page it is a key, sitting on the data it names, and at the
+ * screen's size it was the loudest thing in the figure: `Pol II / input 0–5.21`
+ * in the type of a panel heading, over the signal it was only there to label.
+ * So a figure writes it at the size of a footnote, at a weight that does not
+ * shout, and does not grow when the reader enlarges the text on screen — that
+ * control is about their eyes, and the figure is for somebody else's.
+ *
+ * Nothing in it is a control, so there is no room kept for one: no autoscale
+ * slot, no bar for a read in flight. The grip tolerance stays because the
+ * placement rules measure against it, not because anything is dragged.
+ */
+export function figureLabelStyle(): LaneLabelStyle {
+  return {
+    nameFont: FIGURE_NAME_FONT,
+    rangeFont: FIGURE_RANGE_FONT,
+    progressWidth: 0,
+    progressThickness: 0,
+    swatch: 5,
+    nameTop: 5,
+    nameLine: 7,
+    detailDrop: 6.5,
+    inset: 3,
+    hitHeight: 7,
+    autoSlot: 0,
+    grip: 2,
+  }
+}
+
+/** A figure caption's name: two-thirds the screen's nine pixels, and not bold. */
+export const FIGURE_NAME_FONT = '500 6.5px system-ui, sans-serif'
+/** …and the range under it, a half-step smaller again. */
+export const FIGURE_RANGE_FONT = '6px system-ui, sans-serif'
+
+/**
  * Where the pointer is, at the precision the picture can actually resolve.
  *
  * One rule for both lane surfaces and for the 1D browser's own status line,

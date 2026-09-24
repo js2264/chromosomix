@@ -129,6 +129,7 @@ import {
 } from '../render/lane'
 import {
   drawLaneLabel,
+  figureLabelStyle,
   labelEndFor,
   positionLabel,
   type LaneLabelBoxes,
@@ -222,6 +223,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { getExportPrefs, trackCaptionsField } from './exportPrefs'
 import { setReadout } from './readout'
 
 /** Gap between two stacked lanes, in CSS pixels. Same as beside the map. */
@@ -513,6 +515,12 @@ export class BrowserView {
   private gripping: string | null = null
   /** Whether track text is drawn at all — the shared `text` plot option. */
   private text = true
+  /**
+   * How this paint writes each lane's caption: at the reader's size on screen,
+   * small in a saved figure, or not at all where the Export card says so. Set
+   * by {@link paint} from its `chrome` flag, for the pass it is making.
+   */
+  private captions: 'screen' | 'figure' | 'none' = 'screen'
   /** Whether the shaded areas are drawn — the shared `fills` plot option. */
   private fills = true
   /** Whether each track's line is drawn in ink — the shared `outline` option. */
@@ -1810,6 +1818,7 @@ export class BrowserView {
     // which is why it is read in both places rather than only in `draw`.
     const options = getPlotOptions()
     this.text = options.text
+    this.captions = chrome ? 'screen' : getExportPrefs().trackCaptions ? 'figure' : 'none'
     this.fills = options.fills
     this.outline = options.outline
     this.baseline = options.baseline
@@ -1860,7 +1869,9 @@ export class BrowserView {
     // What the labels just drawn would have needed. Used by the *next* frame,
     // which is the only order available: the width depends on the text and the
     // text is measured by drawing it.
-    this.wantGutter = Math.max(40, this.measuredGutter)
+    // Only from the screen's own pass: a figure's captions are smaller, and the
+    // column they would ask for is not the one the reader is looking at.
+    if (chrome) this.wantGutter = Math.max(40, this.measuredGutter)
     // The bar for each run of grouped lanes, at the left of the strip this view
     // keeps for its handles — the one place a mark about a lane can go without
     // being ink on somebody's data.
@@ -1976,6 +1987,10 @@ export class BrowserView {
       ctx.restore()
       this.paintSelectionMarks(ctx, this.drag.x0, this.drag.x, height, palette)
     }
+    // A figure's pass has just written its own boxes over the screen's — the
+    // hit lists are this view's, and are rebuilt by every paint — so the screen
+    // is drawn again, and what a pointer finds is where the screen put it.
+    if (!chrome) this.schedule()
   }
 
   /**
@@ -2416,7 +2431,7 @@ export class BrowserView {
       }
     }
     ctx.restore()
-    if (label !== null) {
+    if (label !== null && this.captions !== 'none') {
       this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
     }
   }
@@ -2487,7 +2502,7 @@ export class BrowserView {
         detail: index === 0 ? detail : null,
         labelAt: at,
         column,
-        style: browserLabelStyle(),
+        style: this.captions === 'figure' ? figureLabelStyle() : browserLabelStyle(),
         palette: { text: palette.labelColor, halo: palette.labelHaloColor },
       })
     const boxes = blockOf(0)
@@ -2830,6 +2845,8 @@ export class BrowserView {
       class: 'export-row-flex',
     })
     row.note.replaceWith(this.exportStatus)
+    // Under the row it qualifies: what the saved figure writes on each lane.
+    row.body.append(trackCaptionsField())
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.

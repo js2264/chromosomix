@@ -1549,6 +1549,20 @@ on one line. The clipboard button in the same row takes a PNG whatever the forma
 while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
 a raster rasterised at a number they could no longer see or change.
 
+**A track's caption in a figure is a key, written small — or not at all.** On screen each lane
+carries its caption, the colour chip, name and value range of §8.8, at the reader's text size,
+because there it is read across a desk and edited in place. A saved figure writes the same block at
+a footnote's size (a 6.5 px name at weight 500 and a 6 px range, where the screen's is 9 px at 600
+before the text size is applied), and **that size is fixed**: the reader's text size is about their
+screen, and at the screen's size the caption was the loudest thing in the figure, `Pol II / input
+0–5.21` in a panel heading's type over the signal it only labels. Nothing in it is a control, so no
+room is kept for the autoscale mark. Both Export cards carry a **track captions** switch under the
+save row, on by default, for the reader who keys their figure elsewhere. Off, the lanes are saved
+bare. The screen keeps its captions either way, and so do the names inside a lane (a gene's, a
+feature's), which are the picture's own text and answer to the Tracks card's text toggle alone. It
+is one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
+off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5).
+
 ### 7.3 Genome × genome overview — gated, not default
 
 Available, but never automatic, because it costs a full pixel scan (§4):

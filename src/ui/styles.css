@@ -4206,6 +4206,13 @@ canvas.is-frozen {
   justify-self: start;
 }
 
+/* A switch whose words are its whole meaning: the box, then what it turns on,
+   on one line — in the 4.6rem label column "track captions" broke in two. */
+.controls-card .field-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: start;
+}
+
 /* Full-width actions ("fit to view"), so a card reads as a column of rows
    rather than a column with one shrink-wrapped button in it. */
 .btn-wide {

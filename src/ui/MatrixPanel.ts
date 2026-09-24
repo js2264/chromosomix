@@ -228,6 +228,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { getExportPrefs, trackCaptionsField } from './exportPrefs'
 import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 import {
@@ -1681,6 +1682,8 @@ export class MatrixPanel {
     })
     this.exportStatus = row.note
     this.copyButton = row.parts.copy
+    // Under the row it qualifies: what the saved figure writes on each lane.
+    row.body.append(trackCaptionsField())
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every
@@ -4343,6 +4346,7 @@ export class MatrixPanel {
       guide: this.laneHover,
       border: this.laneBorder,
       handles: true,
+      captions: 'screen',
       grip: this.laneHandle,
       scaling: this.laneScaling,
       palette: {
@@ -4368,6 +4372,8 @@ export class MatrixPanel {
     return {
       ...live,
       handles: false,
+      // Small, as a key on the page, or not at all — the Export card's switch.
+      captions: getExportPrefs().trackCaptions ? 'figure' : 'none',
       grip: null,
       scaling: null,
     }
