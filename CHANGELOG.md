@@ -313,6 +313,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The *3D structure* card names the starred cell, as the *Map* card names the starred map
+  (§25.3).** `★ Yeast_structure` under its title, where the card had a *structure* dropdown; the
+  line reads *every structure — all N* while nothing is starred, and is absent on a deck of one
+  model. Which model a cell draws is chosen from the Structures card: its eye, or its row dropped on
+  the cell.
+
 - **The caption under a saved figure is quieter (§7.2).** The region was written at 15 px and
   semibold in the page's ink, the largest type on the figure; it is now 11 px, and the provenance
   under it 10 px, both in the axis labels' grey. The 1D browser's one-line caption matches.

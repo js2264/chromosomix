@@ -205,13 +205,13 @@ try {
   await sleep(400)
   await shot('12-structures-card')
   // Back to the loaded model from its row — the eye is the row's show/hide now
-  // that the *show in the deck* button beside it is gone — then the cell's own
-  // picker.
+  // that the *show in the deck* button beside it is gone — and the 3D card
+  // naming the starred cell under its title, where it had a model picker.
   const show = structures.locator('.ann-eye').first()
   if (await show.count()) { await show.click(); await sleep(3000) }
   await fold('Fold the Annotations panel')
   await sleep(600)
-  await shot('13-model-picker')
+  await shot('13-starred-structure')
 
   // The key as a control: colour by sequence, then a double-click on a name
   // shows that sequence alone. The card is in the Aesthetics panel, shown again.

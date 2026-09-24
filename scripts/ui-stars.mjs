@@ -220,11 +220,31 @@ try {
   await fold('Fold the Annotations panel')
   await page.waitForFunction(() => document.querySelectorAll('.deck-structure').length >= 2, null, { timeout: 60000 }).catch(() => {})
   await sleep(4000)
+  // The 3D card names the starred cell under its title, as the Map card names
+  // the starred map — first the first cell, then the second, starred by hand.
+  await fold('Show the Aesthetics panel')
+  await sleep(800)
+  const structureLine = () =>
+    page.evaluate(() => {
+      const line = document.querySelector('.structure-settings .structure-card-for')
+      return {
+        line: line?.textContent ?? '',
+        every: line?.classList.contains('is-every') ?? false,
+        pickers: Array.from(document.querySelectorAll('.structure-settings .field-label')).filter((n) => n.textContent === 'structure').length,
+        heads: Array.from(document.querySelectorAll('.deck-structure .deck-name, .deck-structure .deck-title')).map((n) => n.value ?? n.textContent),
+      }
+    })
+  console.log('first structure starred:', JSON.stringify(await structureLine()))
+  await page.locator('.structure-settings').first().scrollIntoViewIfNeeded()
+  await shot('s8a-structure-starred-first')
+  await page.locator('.deck-structure .structure-star').nth(1).click()
+  await sleep(1500)
+  console.log('second structure starred:', JSON.stringify(await structureLine()))
+  await page.locator('.structure-settings').first().scrollIntoViewIfNeeded()
+  await shot('s8b-structure-starred-second')
   const starred = page.locator('.deck-structure .structure-star[aria-pressed="true"]').first()
   if (await starred.count()) await starred.click()
   await sleep(1500)
-  await fold('Show the Aesthetics panel')
-  await sleep(800)
   const cells = await page.evaluate(() => ({
     cells: document.querySelectorAll('.deck-structure').length,
     starred: document.querySelectorAll('.deck-structure .structure-star[aria-pressed="true"]').length,

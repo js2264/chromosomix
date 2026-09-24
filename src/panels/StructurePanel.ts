@@ -1380,9 +1380,53 @@ export class StructurePanel implements DeckCell {
     if (this.turning !== on) this.toggleTurning()
   }
 
-  /** Whether this cell offers a star at all — a deck of one model does not. */
+  /**
+   * Whether this cell offers a star at all — a deck of one model does not.
+   *
+   * The card is repainted when that changes, since its line naming the starred
+   * cell is there exactly while the star is ({@link cardFor}).
+   */
   showStar(on: boolean): void {
+    const was = !this.starButton.classList.contains('hidden')
     this.starButton.classList.toggle('hidden', !on)
+    if (was !== on) this.paintSettings()
+  }
+
+  /**
+   * The line under the card's title that says which cell it sets (§25.3).
+   *
+   * `★ Yeast_structure` for the starred cell — the name its own heading
+   * wears, so the two are read as one — and `every structure — all 3` while
+   * none is starred. The *Map* card's line, in its classes and its words.
+   */
+  private cardFor(together: number): HTMLElement[] {
+    if (together > 1) {
+      return [
+        el(
+          'p',
+          {
+            class: 'map-card-for is-every structure-card-for',
+            title: 'No structure is starred, so a change here is made to every structure cell. Star one to set it alone.',
+          },
+          icon('star', { size: 12, class: 'map-card-star' }),
+          el('span', { text: `every structure — all ${together}` }),
+        ),
+      ]
+    }
+    const starred = !this.starButton.classList.contains('hidden') && this.starButton.classList.contains('is-on')
+    if (!starred) return []
+    const name = this.entry?.label ?? 'structure'
+    return [
+      el(
+        'p',
+        {
+          class: 'map-card-for structure-card-for',
+          title: `This card sets ${name}, the starred structure. Star another cell to set that one instead.`,
+        },
+        icon('star', { size: 12, class: 'map-card-star is-on' }),
+        el('span', { text: name }),
+      ),
+    ]
   }
 
   /** This seat's memory scope (§25.3), for whatever this cell remembers. */
@@ -2812,23 +2856,13 @@ export class StructurePanel implements DeckCell {
     const together = this.togetherCount()
     const alone = together === 1
 
-    // Which structure, where there is more than one to choose between — and
-    // *structure* rather than *model*, which is one set of coordinates inside
-    // one (§25.1): what this picker chooses is the row, and the row is a file.
-    //
-    // A block field, like the three selects under it: the option is a file's
-    // own name and the label column leaves a select about seven characters
-    // wide, which turned `Yeast_structure` into `Yeast_str`.
+    // No *structure* picker. Which cell this card sets is said under its
+    // title, as the Map card says it (see below); which model a cell draws is
+    // the Structures card's to decide — its eye opens a cell for a row, and a
+    // row dragged onto a cell swaps that cell's model in place. A dropdown
+    // here was a third way to say the second thing, in the place where a
+    // reader looks for the first.
     const models = (store?.entries ?? []).filter((held) => held.kind === 'structure')
-    if (models.length > 1 && alone) {
-      rows.push(
-        pickField(
-          'structure',
-          select(models.map((held) => ({ value: held.id, text: held.label })), this.entry?.id ?? '', (value) => this.showModel(value)),
-          'Which structure row this cell draws; the Structures card says the same from its side.',
-        ),
-      )
-    }
 
     // Compare: another model on this one. Second, beside the picker, because
     // these are the two selects that decide *which models are on screen* — and
@@ -3213,21 +3247,12 @@ export class StructurePanel implements DeckCell {
 
     this.settingsEl.replaceChildren(
       cardTitle('3D structure', 'box', 'controls-title'),
-      // The same line the *Map* card carries in the same state (§16.5): what a
-      // change here reaches, said where the change is made.
-      ...(alone
-        ? []
-        : [
-            el(
-              'p',
-              {
-                class: 'map-card-for is-every structure-card-for',
-                title: 'No structure is starred, so a change here is made to every structure cell. Star one to set it alone.',
-              },
-              icon('star', { size: 12, class: 'map-card-star' }),
-              el('span', { text: `every structure — all ${together}` }),
-            ),
-          ]),
+      // The same line the *Map* card carries (§16.5): which cell a change here
+      // reaches, said where the change is made — the starred one by name, with
+      // the star it was starred by, or every cell while none is. Nothing on a
+      // deck of one structure cell, where the star is not offered and the card
+      // can be about nothing else.
+      ...this.cardFor(together),
       el('div', { class: 'panel-controls' }, ...rows),
     )
   }

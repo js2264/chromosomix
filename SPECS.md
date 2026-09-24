@@ -8069,15 +8069,15 @@ recipe in the drawer, as the Synthetic card does (§18.5).
 ### 25.3 The deck of cells
 
 **A structure cell** draws **one** structure row — the one the reader chose from the Structures
-card or from the cell's own **structure** picker, remembered per file, or the first of the list no
+card, by its eye or by its row dropped on the cell, remembered per file, or the first of the list no
 *sibling cell* is already drawing; and **the deck holds as many cells of a model as the reader asks
 for**. It was one cell per deck, then one per model, on the reasoning that two cells of one row are
 one picture drawn twice — which is only true while the two are the same picture, and they are not:
 each cell has its **own camera, its own mirror, its own planted axes and its own height**, so two
 cells of one model are two views of it, which is the ordinary way anybody looks at a fold. The eye
 on the row still means *is this model on screen*, so it opens one cell and closes every cell drawing
-it; the **picker** and the row's **grip, dropped on the cell that is to hold it**, are how a second
-view is asked for, and neither refuses a model a cell already draws. What each cell remembers — the
+it; the row's **grip, dropped on the cell that is to hold it**, is how a second view is asked for,
+and it does not refuse a model a cell already draws. What each cell remembers — the
 model it draws, the camera it draws from, its height, whether it turns with the others — is
 remembered under its **seat**, its place among the structure cells counting from the left; they all
 used to write to one slot, so a deck of two views came back from a reload as the same view twice.
@@ -8087,9 +8087,11 @@ last of a batch used to get a picture and the others sat on the card as rows wit
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application. The
-cell's own picker still swaps a model **in place**, which is the other question: the eye is a model
-asking for a cell, the picker is a cell asking for a model. And **the row the cell is drawing, removed from the card, empties
+model it was to be judged against — the commonest way to lose a picture in this application. A
+row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
+eye is a model asking for a cell, the drop is a cell being given a model. The *3D structure* card
+has no picker for it: it said the second thing in the place a reader looks for which cell the card
+sets, which its title line says instead (below). And **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
 to be drawing it, whether the reader picked it, the session restored it, or it was simply the only
 one there was (a remembered choice whose row is already gone when a session opens falls back to the
@@ -8132,8 +8134,8 @@ depth and *outside the window* its opacity, where each was two rows and the seco
 that repeated the first. A slider that is the whole setting — bead radius, tube radius, depth slab —
 keeps a row of its own.
 
-The card's rows are in one order, choices before the things that modify them: structure,
-compare with (and its RMSD note), in the frame of, drawn as, overlays, colour by, colour scale, bead
+The card's rows are in one order, choices before the things that modify them: compare with (and
+its RMSD note), in the frame of, drawn as, overlays, colour by, colour scale, bead
 radius, tube radius, haplotype, outside the window (with its ghost opacity), loops as chords, fog
 (with its depth), depth slab, measurements, camera, frame, export. *Overlays* follows *drawn as*
 because the two are one question asked twice: what the model is drawn as, and what is drawn over it.
@@ -8153,10 +8155,13 @@ one deck can want both at once. A filled star is **live**, as the maps' is: pres
 cell starred**, and the card then sets **every structure cell at once** — the first cell's values
 shown, *every structure — all N* under its title in the warn colour, and each change written to
 every cell's row, camera presses and the turntable included. The rows that are about one cell's own
-picture are not offered then — which model it draws, *compare with*, *in the frame of*, the
-measurements and the export — since one model compared with itself, or one file saved for five
-pictures, is not a setting that can be made to all of them. It appears only where there is a
-choice, so a deck of one model has none; it follows the cells when the starred one is closed, so
+picture are not offered then — *compare with*, *in the frame of*, the measurements and the
+export — since one model compared with itself, or one file saved for five
+pictures, is not a setting that can be made to all of them. While a cell is starred, **the card says which under its title** — `★ Yeast_structure`, the
+filled star and the name the cell's own heading wears — which is the *Map* card's line for the
+starred map, in the same place, words and colours: a reader who has learned where to look for which
+map a card sets knows where to look for which model. It appears only where there is a choice, so a
+deck of one model has none, and neither star nor line; it follows the cells when the starred one is closed, so
 the card is never about a picture that is gone; *none* holds while there are cells for it to be
 about and goes with the last of them; and a cell that opens does **not** take it, because a model
 arriving should not move a control out from under the reader who was using it.
@@ -8644,7 +8649,7 @@ the one thing an analysis makes that is not stored anywhere else and is made **t
 two methods, two exponents, or the same settings twice to see what the seed did. So a run takes the
 next free id in the series `…reconstructed-model`, `…#2`, `…#3`, numbered from what is on the card
 so closing the second of three gives that number back, and the label carries the same `(2)` because
-two rows under one name are two rows nobody can tell apart in the picker, in *compare with* or in
+two rows under one name are two rows nobody can tell apart on the card, in *compare with* or in
 *in the frame of*. It is the model the cell draws the moment it lands, is
 what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the

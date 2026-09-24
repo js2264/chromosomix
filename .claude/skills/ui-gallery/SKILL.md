@@ -18,7 +18,7 @@ node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-comp
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
-node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8
+node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
@@ -51,7 +51,8 @@ yeast deck demo (a cooler beside a `.hic`): the Aesthetics column's *Map* card f
 onto a companion, a setting changed there reaching that map alone, the filled star pressed so that
 nothing is starred — the card then says *every map* and sets them all, and the Analysis column greys
 every task under one warning — an empty cell taking a row dragged from the Tracks card, and two
-structure cells with neither starred. It prints what the card said at each step, so a card that did
+structure cells — the 3D card naming the starred one under its title, then the other starred, then
+neither. It prints what the card said at each step, so a card that did
 not follow the star is a line in the log. Run it after any change to the stars, the Map card's
 placement or `VacantPanel`.
 
@@ -113,7 +114,7 @@ side panels folded for room, then: the demo structure dropped on the Structures 
 the cell framed on the maps' window, a hover on a bead (the status bar names it) and on the map
 (the chord), colour by the first track, a tracks cell with two tracks placed on it, the Analysis
 panel, the spatial-tracks task run, the reconstruction (*Model from the map*) run and landing
-in the cell, the Structures card with both models, and the cell's model picker. **Look at every screenshot** — a blank cell, a stale
+in the cell, the Structures card with both models, and the 3D card naming the starred cell. **Look at every screenshot** — a blank cell, a stale
 note or a squashed plot is a bug the tests did not see, and this is where it shows.
 
 ## Gotchas met

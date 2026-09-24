@@ -951,24 +951,36 @@ describe('which model each cell draws (§25.3, §25.6)', () => {
     expect(structureCells(deck)).toHaveLength(1)
   })
 
-  it('opens the cell when there is none, and offers a picker only with two rows', () => {
+  it('opens the cell when there is none, and offers no structure picker on its card', () => {
     const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
     const { deck } = make(fakeStore([structureEntry(), two]))
     expect(deck.hasStructure()).toBe(false)
     deck.showStructure('a2')
     expect(deck.hasStructure()).toBe(true)
     expect(deck.shownStructures()).toEqual(['a2'])
-    const picker = settingsRow(deck, 'structure')
-    expect(picker).toBeDefined()
-    const select = picker?.querySelector<HTMLSelectElement>('select')
-    expect(select?.value).toBe('a2')
-    expect(Array.from(select?.options ?? []).map((o) => o.textContent)).toEqual(['model.g3d', 'second.g3d'])
-    // The picker still swaps a cell **in place**: it is the cell asking which
-    // model to draw, where the eye is a model asking for a cell.
-    select!.value = 'a1'
-    select!.dispatchEvent(new Event('change'))
-    expect(deck.shownStructures()).toEqual(['a1'])
-    expect(structureCells(deck)).toHaveLength(1)
+    // Which model a cell draws is the Structures card's to say — its eye, or a
+    // row dropped on the cell — and not a dropdown on the settings card.
+    expect(settingsRow(deck, 'structure')).toBeUndefined()
+    // One cell: no star, so no line naming the starred one either.
+    expect(deck.structureSettings()?.querySelector('.structure-card-for')).toBeNull()
+  })
+
+  it('names the starred cell on its card, as the Map card names the starred map', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const { deck } = make(fakeStore([structureEntry(), two]))
+    deck.showStructure('a1')
+    deck.showStructure('a2')
+    const line = () => deck.structureSettings()?.querySelector('.structure-card-for')
+    // The first cell holds the star until another is pressed.
+    expect(line()?.textContent).toBe('model.g3d')
+    expect(line()?.classList.contains('is-every')).toBe(false)
+    expect(line()?.querySelector('.map-card-star')?.classList.contains('is-on')).toBe(true)
+    const stars = () => structureCells(deck).map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    stars()[1]?.click()
+    expect(line()?.textContent).toBe('second.g3d')
+    // …and a cell closed down to one takes the line away with the star.
+    deck.hideStructure('a1')
+    expect(line()).toBeNull()
   })
 
   it('hides one model\u2019s cell and leaves the others standing', () => {
