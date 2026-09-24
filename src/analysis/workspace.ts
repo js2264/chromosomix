@@ -45,7 +45,7 @@ import type { TrackSampleSet } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { GroupSettings } from '../annotations/groups'
 import { el, fmt } from '../ui/dom'
-import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { chooseSaveTarget, downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import {
@@ -985,13 +985,13 @@ export class AnalysisWorkspace {
       const structure = entry.kind === 'structure' && payload.kind === 'features'
       const text = structure ? writeBed3d(payload.data, context) : formatIntervals(payload, context)
       const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
-      downloadBlob(new Blob([text], { type: 'text/plain' }), `${base}-${stamp}.${suffix}`)
+      void downloadBlob(new Blob([text], { type: 'text/plain' }), `${base}-${stamp}.${suffix}`)
       return
     }
 
     const intervalHeld = this.intervals.get(entry.id)
     if (intervalHeld !== undefined && format === 'tsv') {
-      downloadBlob(
+      void downloadBlob(
         new Blob([outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
           type: 'text/tab-separated-values',
         }),
@@ -1014,7 +1014,7 @@ export class AnalysisWorkspace {
     if (held === undefined) return
 
     if (format === 'tsv') {
-      downloadBlob(
+      void downloadBlob(
         new Blob([outputToTsv(held.output, held.provenance)], { type: 'text/tab-separated-values' }),
         tsvName(base, held.output, stamp),
       )
@@ -1094,6 +1094,14 @@ export class AnalysisWorkspace {
     const recipe = entry.derivedFrom
     const context = this.host.context()
     if (recipe === undefined || context === null || format === 'bed') return
+    // Where it goes first, while the press is still the reader's: sampling two
+    // tracks over a genome can outlast the moment a browser will still open a
+    // save dialog for (`ui/export.ts`).
+    const target = await chooseSaveTarget(
+      `${base}-${stamp}.${format === 'tsv' ? 'tsv' : format === 'bedgraph' ? 'bedGraph' : 'bw'}`,
+      format === 'tsv' ? 'text/tab-separated-values' : format === 'bedgraph' ? 'text/plain' : 'application/octet-stream',
+    )
+    if (target === null) return
     const [a, b] = await Promise.all([
       this.exactSamples(recipe.a),
       this.exactSamples(recipe.b),
@@ -1114,26 +1122,22 @@ export class AnalysisWorkspace {
     const grid = this.host.contigs()
 
     if (format === 'tsv') {
-      downloadBlob(
+      await target.write(
         new Blob([spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
           type: 'text/tab-separated-values',
         }),
-        `${base}-${stamp}.tsv`,
       )
       return
     }
     if (format === 'bedgraph') {
-      downloadBlob(
-        new Blob([spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }),
-        `${base}-${stamp}.bedGraph`,
-      )
+      await target.write(new Blob([spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }))
       return
     }
     const blob = await writeBigWig({
       contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
       spans,
     })
-    downloadBlob(blob, `${base}-${stamp}.bw`)
+    await target.write(blob)
   }
 
   /**
@@ -1179,11 +1183,14 @@ export class AnalysisWorkspace {
     name = exportBaseName(output.label),
   ): Promise<void> {
     const stamp = fileStamp(new Date())
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(
+      `${name}-${stamp}.${format === 'bedgraph' ? 'bedGraph' : 'bw'}`,
+      format === 'bedgraph' ? 'text/plain' : 'application/octet-stream',
+    )
+    if (target === null) return
     if (format === 'bedgraph') {
-      downloadBlob(
-        new Blob([profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }),
-        `${name}-${stamp}.bedGraph`,
-      )
+      await target.write(new Blob([profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }))
       return
     }
 
@@ -1196,7 +1203,7 @@ export class AnalysisWorkspace {
       firstBin: output.extent[0],
       binsize: output.binsize,
     })
-    downloadBlob(blob, `${name}-${stamp}.bw`)
+    await target.write(blob)
   }
 
 }

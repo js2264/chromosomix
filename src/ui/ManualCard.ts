@@ -118,7 +118,7 @@ export class ManualCard {
       ],
       formatTitle: 'Which marks to write. The kinds are different objects, with one file each.',
       onFormat: () => this.paintSave(),
-      onSave: (format) => this.save(format as MarkFormat),
+      onSave: (format) => void this.save(format as MarkFormat),
     })
     this.el = el(
       'section',
@@ -599,18 +599,20 @@ export class ManualCard {
         : `Write ${fmt.int(count)} to a file this app — and bedtools — reads back`
   }
 
-  private save(format: MarkFormat): void {
+  private async save(format: MarkFormat): Promise<void> {
     const now = new Date()
     const text = formatMarks(this.props.store.marks, format, {
       file: this.props.fileLabel,
       created: fileStamp(now),
     })
     const name = `${exportBaseName(this.props.fileLabel)}-marks-${fileStamp(now)}.${format}`
-    downloadBlob(new Blob([text], { type: 'text/plain' }), name)
+    const saved = await downloadBlob(new Blob([text], { type: 'text/plain' }), name)
+    if (saved === null) return
     // The line under the row, where the Export card says what just happened: a
     // download that goes straight to a folder leaves nothing on screen saying
-    // it did, and *which* marks went is the question this row's select asks.
-    this.exporter.note.textContent = `${fmt.int(marksFor(this.props.store.marks, format).length)} · ${name}`
+    // it did, and *which* marks went is the question this row's select asks —
+    // under the name the reader gave it, where the save dialog let them.
+    this.exporter.note.textContent = `${fmt.int(marksFor(this.props.store.marks, format).length)} · ${saved}`
   }
 
   private render(): void {

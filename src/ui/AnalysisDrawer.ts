@@ -103,7 +103,7 @@ import { durationText, stopPromise } from './AnalysisPanelCard'
 import { runClock } from '../units'
 import { profileCurve, profileFigure, type PlotFigure } from './analysisPlots'
 import { button, el, fmt } from './dom'
-import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
+import { canvasToPng, chooseSaveTarget, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
 import { icon, iconButton } from './icons'
 import { ParamForm } from './ParamForm'
 import { resizeHandle } from './resizeHandle'
@@ -1525,7 +1525,7 @@ export class AnalysisDrawer {
         ? writeBed3d(payload.data, context)
         : formatIntervals(payload, context)
     const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
-    downloadBlob(
+    void downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),
     )
@@ -1553,7 +1553,7 @@ export class AnalysisDrawer {
     const blob = new Blob([outputToTsv(output, provenance)], {
       type: 'text/tab-separated-values',
     })
-    downloadBlob(blob, tsvName(provenance.task, output, stamp))
+    void downloadBlob(blob, tsvName(provenance.task, output, stamp))
   }
 
   /**
@@ -1574,6 +1574,8 @@ export class AnalysisDrawer {
    * from a filename anyway.
    */
   private async savePngPlain(figure: PlotFigure, label: string): Promise<void> {
+    const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(new Date())}.png`, 'image/png')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
       const scale = scaleForDpi(FIGURE_EXPORT_DPI)
@@ -1584,7 +1586,7 @@ export class AnalysisDrawer {
       if (ctx === null) throw new Error('The browser would not give this page a canvas.')
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       figure.draw(ctx, box)
-      downloadBlob(await canvasToPng(canvas), `${plainName(label)}-${fileStamp(new Date())}.png`)
+      await target.write(await canvasToPng(canvas))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1592,13 +1594,15 @@ export class AnalysisDrawer {
   }
 
   private async savePdfPlain(figure: PlotFigure, label: string): Promise<void> {
+    const now = new Date()
+    const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(now)}.pdf`, 'application/pdf')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
-      const now = new Date()
       const page = new VectorPage(box.width, box.height)
       figure.draw(page.ctx, box)
       const blob = await page.toBlob({ title: label, created: now })
-      downloadBlob(blob, `${plainName(label)}-${fileStamp(now)}.pdf`)
+      await target.write(blob)
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1610,6 +1614,8 @@ export class AnalysisDrawer {
     output: TaskOutput,
     provenance: Provenance,
   ): Promise<void> {
+    const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(new Date()), 'png'), 'image/png')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
       const scale = scaleForDpi(FIGURE_EXPORT_DPI)
@@ -1620,7 +1626,7 @@ export class AnalysisDrawer {
       if (ctx === null) throw new Error('The browser would not give this page a canvas.')
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       figure.draw(ctx, box)
-      downloadBlob(await canvasToPng(canvas), exportName(output, provenance, fileStamp(new Date()), 'png'))
+      await target.write(await canvasToPng(canvas))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1641,13 +1647,15 @@ export class AnalysisDrawer {
     output: TaskOutput,
     provenance: Provenance,
   ): Promise<void> {
+    const now = new Date()
+    const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(now), 'pdf'), 'application/pdf')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
-      const now = new Date()
       const page = new VectorPage(box.width, box.height)
       figure.draw(page.ctx, box)
       const blob = await page.toBlob({ title: output.label, created: now })
-      downloadBlob(blob, exportName(output, provenance, fileStamp(now), 'pdf'))
+      await target.write(blob)
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))

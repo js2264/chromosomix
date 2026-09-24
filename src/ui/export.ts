@@ -18,6 +18,7 @@
 import { PRODUCER } from '../version'
 import { logAction } from '../state/actions'
 import { fmt } from './dom'
+import { messageToast } from './toast'
 
 /** CSS pixels are defined as 1/96 inch, which is what makes DPI meaningful. */
 export const CSS_DPI = 96
@@ -99,27 +100,144 @@ function pdfDate(now: Date): string {
 }
 
 /**
- * Hand a blob to the browser as a download, then release the object URL.
+ * Where one file this app writes is going.
+ *
+ * Chosen before anything is made for it — see {@link chooseSaveTarget} — and
+ * written once the bytes exist. `name` is what it will be called, which is the
+ * reader's own where the save dialog let them type one, so the line a card
+ * writes under its button after a save names the file that is actually there.
+ */
+export interface SaveTarget {
+  readonly name: string
+  write(blob: Blob): Promise<void>
+}
+
+/** The part of the File System Access API this module calls, where a browser has it. */
+type SavePicker = (options: {
+  suggestedName: string
+  startIn?: 'downloads'
+  types?: Array<{ description: string; accept: Record<string, string[]> }>
+}) => Promise<{ name: string; createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }> }>
+
+/**
+ * Ask the reader where a file goes, with its name ready to change — the
+ * platform's own save dialog, opened in their Downloads folder.
+ *
+ * **Asked before the file is made, not after.** A browser opens that dialog
+ * only while the click that asked for it is still recent (a few seconds, in
+ * Chromium), and an `.mcool`, a bigWig of a whole genome or a deck at 300 dpi
+ * take longer than that to produce: asked afterwards, the dialog was refused
+ * and the file went wherever the browser puts downloads — the very behaviour
+ * this replaces. So every export asks first, from inside the click, and does
+ * its work only once there is somewhere to put it; a reader who cancels has
+ * not waited for a render nobody wanted.
  *
  * **Every file this app writes leaves through here**, and that is why the
  * console's record of one is written here too rather than at each of the
- * twenty-odd places that call it (§23). The same argument `AnnotationLoader`
- * makes about the hook it raises on a dropped file: a reader whose figure was
- * recorded because they exported it from the drawer, but not when they exported
- * the same figure from the map, would be looking at a difference nobody can see
- * the rule behind. One choke point, one line, no road around it.
+ * twenty-odd places that ask for one (§23): one choke point, one line, no road
+ * around it. What is knowable here is the name and the size, which is exactly
+ * what the console's line says; the provenance of what is inside the file is
+ * the caller's, and already in the file's own header (§18.4).
  *
- * What is knowable here is the name and the size, which is exactly what the
- * console's line says. The *provenance* of what is inside the file is the
- * caller's, and it is already in the file's own header (§18.4).
+ * `null` is that cancel. Where there is no such dialog — Firefox, Safari, a
+ * page not served over HTTPS — or the browser refused to open one, the target
+ * is the download this app always made, under the name it suggested: the file
+ * still arrives, in the one place that browser puts files.
  */
-export function downloadBlob(blob: Blob, filename: string): void {
+export async function chooseSaveTarget(filename: string, type = ''): Promise<SaveTarget | null> {
+  const picker = typeof window === 'undefined' ? undefined : (window as { showSaveFilePicker?: SavePicker }).showSaveFilePicker
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker.call(window, {
+        suggestedName: filename,
+        startIn: 'downloads',
+        ...acceptFor(filename, type),
+      })
+      return {
+        name: handle.name,
+        write: async (blob) => {
+          const out = await handle.createWritable()
+          await out.write(blob)
+          await out.close()
+          logWrite(handle.name, blob)
+        },
+      }
+    } catch (err) {
+      // The reader closed the dialog: nothing is written, and nothing is said.
+      if (err instanceof DOMException && err.name === 'AbortError') return null
+      // Anything else — the click too long ago, a sandboxed frame, a type the
+      // dialog would not take — is the dialog failing, not the reader
+      // declining, and the file is still owed to them.
+    }
+  }
+  return { name: filename, write: async (blob) => downloadTo(blob, filename) }
+}
+
+/**
+ * Save a blob the app already has: {@link chooseSaveTarget}, then its write.
+ *
+ * For the files that exist the moment the button is pressed — a BED of marks,
+ * the console's log, a table — where there is no work to put after the dialog.
+ * Resolves to the name it was written under, or `null` where the reader
+ * cancelled.
+ */
+export async function downloadBlob(blob: Blob, filename: string): Promise<string | null> {
+  const target = await chooseSaveTarget(filename, blob.type)
+  if (target === null) return null
+  try {
+    await target.write(blob)
+  } catch (err) {
+    // A folder that went read-only, a disk that filled: said where the reader
+    // is looking, since a save that silently wrote nothing is a file they will
+    // go looking for later.
+    messageToast(`Could not write ${target.name}: ${err instanceof Error ? err.message : String(err)}`)
+    return null
+  }
+  return target.name
+}
+
+/**
+ * The dialog's file-type filter: one entry, the kind this file is, so the
+ * dialog's own list says *PNG image* rather than *All files*. Left out where the
+ * name has no extension the dialog would accept, since a filter it refuses is a
+ * dialog that does not open.
+ */
+function acceptFor(filename: string, type: string): { types?: Array<{ description: string; accept: Record<string, string[]> }> } {
+  const extension = /\.[A-Za-z0-9]{1,15}$/.exec(filename)?.[0]
+  if (extension === undefined) return {}
+  const mime = /^[a-z]+\/[A-Za-z0-9.+-]+$/.test(type) ? type : 'application/octet-stream'
+  const kind = extension.slice(1).toLowerCase()
+  const description = KIND_NAMES[kind] ?? `${extension.slice(1)} file`
+  return { types: [{ description, accept: { [mime]: [extension] } }] }
+}
+
+/** What the save dialog's type list calls the files this app writes most. */
+const KIND_NAMES: Record<string, string> = {
+  png: 'PNG image',
+  pdf: 'PDF document',
+  tsv: 'Tab-separated table',
+  json: 'JSON',
+  bw: 'bigWig track',
+  bedgraph: 'bedGraph track',
+  bed: 'BED intervals',
+  bedpe: 'BEDPE pairs',
+  bed3d: 'bed3d structure',
+  mcool: 'Multi-resolution cooler',
+}
+
+/** The console's line for a written file (§23): its name and its size. */
+function logWrite(filename: string, blob: Blob): void {
   logAction({
     kind: 'write',
     line: `wrote ${filename}`,
     detail: [`# file: ${filename}`, `# size: ${fmt.bytes(blob.size)}`],
     where: filename,
   })
+}
+
+/** Hand a blob to the browser as a download, then release the object URL. */
+function downloadTo(blob: Blob, filename: string): void {
+  logWrite(filename, blob)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

@@ -202,7 +202,7 @@ import {
   captionStamp,
   copyPngToClipboard,
   copyTextToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
@@ -3803,14 +3803,17 @@ export class MatrixPanel {
     // same filename otherwise, and the second one silently becomes
     // `figure (1).png` in a downloads folder nobody can later put in order.
     const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}-${this.exportDpi}dpi.${format}`
-    this.exportStatus.textContent = `saving ${name}…`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(name, format === 'png' ? 'image/png' : 'application/pdf')
+    if (target === null) return
+    this.exportStatus.textContent = `saving ${target.name}…`
     try {
       const blob =
         format === 'png'
           ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
           : await this.vectorFigure(now)
-      downloadBlob(blob, name)
-      this.exportStatus.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportStatus.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       // Nothing here is worth an error screen: the view is intact and the user
       // can try a smaller size. Say what failed and stay put.

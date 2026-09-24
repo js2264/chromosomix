@@ -20,6 +20,7 @@ node scripts/ui-methods.mjs gallery          # Model from the map under each Met
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
+node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -59,6 +60,14 @@ change, the first map's title does not) and give it back; then the Contact maps 
 map, a row of it dropped on an empty cell, and a companion's eye closing its cell and opening it
 again. Run it after any change to a view's heading, the side columns, `MapPanel`'s window or the
 Contact maps card.
+
+The seventh presses export buttons with the **save dialog** stubbed (§26.6) — a headless browser
+cancels a real one the moment it opens — and prints what each asked it: the suggested name, the
+Downloads folder, the type filter, and the bytes then written, with each card's line naming the
+file under the name "the reader" typed; then, in a page with no dialog, the plain download. Run it
+after any change to `ui/export.ts` or to an export button. Any script that waits for a `download`
+event has to take the dialog away first (`window.showSaveFilePicker = undefined` in an init
+script), or the export is cancelled before it starts.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

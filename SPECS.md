@@ -3825,7 +3825,7 @@ and operations are the same in both targets.
 **"Write access" means the app never modifies a file it opened**, and §18 makes that worth spelling
 out rather than leaving to be inferred. The viewer has always *produced* files — a PNG, a PDF, a BED
 of hand-drawn marks, a saved session — and §18 adds a bigWig to that list. All of them are new bytes
-handed to the browser as a download; none of them touches the thing that was opened, and nothing about
+handed to the browser to save (§26.6); none of them touches the thing that was opened, and nothing about
 them needs a server. The distinction is between authoring an output and editing an input, and only the
 second is refused.
 
@@ -7023,7 +7023,8 @@ it already converges, which is the arrangement `AnnotationLoader.onFilesAdded` a
 - **A track loaded**, in `AnnotationLoader.addFiles` and `addUrl` — the two doors a *reader* drives.
   Not `restore`, `carry` or `reattach`, which are the app bringing back what it already had; a
   console that opened with nine lines after every reload is a console nobody reads.
-- **A file written**, in `downloadBlob`, through which every export in the application passes. A
+- **A file written**, in `chooseSaveTarget`'s write, through which every export in the application
+  passes, under the name it was written as. A
   reader whose figure was recorded because they exported it from the drawer but not when they
   exported the same figure from the map would be looking at a difference nobody can see the rule
   behind.
@@ -8822,6 +8823,16 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 - **An export row** is `[resolution] [format] [⭳] [⧉]` with a line under it, built by
   `ui/exportRow.ts`; a card with no resolution to offer omits it and one that writes a file rather
   than a picture omits the clipboard. Data leaves by a bordered button named for its format.
+- **A file leaves through the save dialog**, `chooseSaveTarget` in `ui/export.ts`, which every
+  export in the app passes through: the platform's own *Save as*, opened in **Downloads** with the
+  app's suggested name ready to change, so where a figure or a bigWig goes, and what it is called,
+  are the reader's. It is opened **before** the file is made, from the press itself: a browser opens
+  that dialog only while the click that asked for it is recent, and an `.mcool`, a genome's bigWig or
+  a deck at 300 dpi take longer than that to write — asked afterwards, it was refused and the file
+  went wherever the browser puts downloads, which is the behaviour this replaced. A cancel writes
+  nothing and says nothing, and saves the render too. Where a browser has no such dialog (Firefox,
+  Safari) or refuses to open it, the file is the plain download it always was, under the suggested
+  name. What a card writes under its button afterwards names the file under the reader's name.
 - **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
 - **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
   of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough

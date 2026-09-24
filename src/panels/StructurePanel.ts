@@ -128,7 +128,7 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
   copyPngToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   fileStamp,
   scaleForDpi,
   type ExportFormat,
@@ -3151,9 +3151,15 @@ export class StructurePanel implements DeckCell {
   // -------------------------------------------------------------------------
 
   private async savePng(dpi: number): Promise<void> {
+    if (this.view() === null) {
+      this.exportNote.textContent = 'nothing to save: no model is drawn'
+      return
+    }
     const now = new Date()
-    const name = `structure-${fileStamp(now)}-${dpi}dpi.png`
-    this.exportNote.textContent = `saving ${name}…`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(`structure-${fileStamp(now)}-${dpi}dpi.png`, 'image/png')
+    if (target === null) return
+    this.exportNote.textContent = `saving ${target.name}…`
     try {
       const out = this.exportCanvas(dpi, now)
       if (out === null) {
@@ -3161,8 +3167,8 @@ export class StructurePanel implements DeckCell {
         return
       }
       const blob = await canvasToPng(out)
-      downloadBlob(blob, name)
-      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       this.exportNote.textContent =
         err instanceof Error ? `export failed: ${err.message}` : 'export failed'
@@ -3209,8 +3215,9 @@ export class StructurePanel implements DeckCell {
       return
     }
     const now = new Date()
-    const name = `structure-${fileStamp(now)}.pdf`
-    this.exportNote.textContent = `saving ${name}…`
+    const target = await chooseSaveTarget(`structure-${fileStamp(now)}.pdf`, 'application/pdf')
+    if (target === null) return
+    this.exportNote.textContent = `saving ${target.name}…`
     try {
       const width = Math.max(1, this.wrap.clientWidth)
       const height = Math.max(1, this.wrap.clientHeight)
@@ -3229,8 +3236,8 @@ export class StructurePanel implements DeckCell {
         drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
       }
       const blob = await page.toBlob({ title: 'structure', created: now })
-      downloadBlob(blob, name)
-      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       this.exportNote.textContent =
         err instanceof Error ? `export failed: ${err.message}` : 'export failed'

@@ -483,7 +483,7 @@ export class StoreDrawer {
     const current = this.current
     const file = current?.page.fileNow() ?? null
     if (current === null || file === null) return
-    downloadBlob(
+    void downloadBlob(
       new Blob([`${JSON.stringify(file, null, 2)}\n`], { type: 'application/json' }),
       storeFileName(current.front, current.target),
     )

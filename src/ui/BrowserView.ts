@@ -188,7 +188,7 @@ import {
   captionStamp,
   copyPngToClipboard,
   copyTextToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
@@ -2985,6 +2985,12 @@ export class BrowserView {
     const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
     const ink = readCanvasPalette(this.canvas).labelColor
     const base = `${exportBaseName(this.props.assembly.name)}-${fileStamp(now)}`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(
+      `${base}.${this.exportFormat}`,
+      this.exportFormat === 'pdf' ? 'application/pdf' : 'image/png',
+    )
+    if (target === null) return
 
     let blob: Blob
     try {
@@ -2997,8 +3003,12 @@ export class BrowserView {
       return
     }
     if (blob.size === 0) return
-    downloadBlob(blob, `${base}.${this.exportFormat}`)
-    this.exportStatus.textContent = ''
+    try {
+      await target.write(blob)
+      this.exportStatus.textContent = ''
+    } catch (err) {
+      this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
+    }
   }
 
   /** Room under the figure for the caption, at the size it is written in. */

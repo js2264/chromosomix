@@ -260,7 +260,7 @@ export class StructureCard {
       label: entry.label,
       ...(entry.source.kind === 'computed' ? { file: entry.source.framing } : {}),
     })
-    downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.bed3d`)
+    void downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.bed3d`)
   }
 
   private swatch(entry: AnnotationEntry): HTMLElement {

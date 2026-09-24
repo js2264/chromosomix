@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every export asks where to save, in a dialog opened in Downloads (§26.6).** Figures, decks,
+  structures, bigWigs, bedGraphs, tables, marks, the console's script, a workspace and an `.mcool`
+  used to land straight in the browser's downloads folder under the app's name; the platform's *Save
+  as* now opens first, in Downloads with that name ready to change, and the card says the name it was
+  saved under. The dialog opens before the file is made, so a long export (an `.mcool`, a genome's
+  bigWig) still gets one, and a cancel skips the work. Browsers without the dialog (Firefox, Safari)
+  keep the plain download.
+
 - **⌘ + two-finger scroll slides a map up and down (§7.2).** Sideways already slid it and up and
   down zoomed, so moving the map up the screen needed a drag with the button held; with ⌘ held the
   wheel slides on both axes. A pinch (Ctrl-wheel) stays the zoom, and ⌘-scroll over a lane still

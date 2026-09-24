@@ -136,7 +136,8 @@ import { MAX_PANELS, parseMaps, type DeckLocal, type GrowDirection } from '../pa
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
-import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { chooseSaveTarget, downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { mcoolNameFor } from '../pairs/mcoolName'
 import { MetadataCard } from '../ui/MetadataCard'
 import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
@@ -1255,7 +1256,7 @@ export class Session {
     if (held?.metadata === undefined || source.kind !== 'metadata') return
     const text = held.metadata.exportTsv(source.table, source.column, this.file?.uri ?? '')
     if (text === null) return
-    downloadBlob(
+    void downloadBlob(
       new Blob([text], { type: 'text/tab-separated-values' }),
       `${exportBaseName(fileLabel(this.file?.uri ?? 'map'))}-${source.table}-${source.column}-${fileStamp(new Date())}.tsv`,
     )
@@ -2611,6 +2612,15 @@ export class Session {
    * take the session down with it.
    */
   private async exportImportedMcool(): Promise<void> {
+    // Where it goes first, from the press: writing every rung of a ladder takes
+    // far longer than a browser will still open a save dialog for once the
+    // press is over (`ui/export.ts`), and a reader who cancels here has not
+    // waited for a file nobody wanted.
+    const target = await chooseSaveTarget(
+      mcoolNameFor(splitUri(this.file?.uri ?? 'pairs').path),
+      'application/x-hdf5',
+    )
+    if (target === null) return
     // The job has to exist before the note can offer to cancel it, and the note
     // has to exist before the job can report into it. Declared first and
     // assigned below, which is the smallest way out of that.
@@ -2626,8 +2636,8 @@ export class Session {
         note.dismiss()
         return
       }
-      downloadBlob(new Blob([result.bytes as BlobPart], { type: 'application/x-hdf5' }), result.filename)
-      note.finish(`${result.filename} — ${result.rungs.length} resolutions`)
+      await target.write(new Blob([result.bytes as BlobPart], { type: 'application/x-hdf5' }))
+      note.finish(`${target.name} — ${result.rungs.length} resolutions`)
     } catch (err) {
       if (isCancellation(err)) {
         note.dismiss()

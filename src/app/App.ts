@@ -1762,7 +1762,7 @@ export class App implements SessionHost {
       return
     }
     const now = new Date()
-    downloadBlob(
+    void downloadBlob(
       new Blob([JSON.stringify(buildWorkspaceFile(tabs, active, now), null, 2)], {
         type: 'application/json',
       }),

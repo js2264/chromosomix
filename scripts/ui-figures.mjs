@@ -49,6 +49,10 @@ const context = await browser.newContext({
   deviceScaleFactor: 1,
   acceptDownloads: true,
 })
+// No save dialog: a headless browser cancels one the moment it opens, and every
+// export asks it first (`ui/export.ts`). Without it the export is the plain
+// download this script waits for, which is what a browser with no dialog does.
+await context.addInitScript(() => { window.showSaveFilePicker = undefined })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -122,7 +126,9 @@ try {
   await field('mark').locator('select').selectOption('area')
   await sleep(1500)
   const smooth = page.locator('.modal-stage .figure-check', { hasText: 'smooth' }).first()
-  if (await smooth.count()) await smooth.locator('input').check()
+  // An on/off button now, pressed only while it says off (`figures/settings.ts`).
+  const smoothButton = smooth.locator('button[aria-pressed="false"]')
+  if (await smoothButton.count()) await smoothButton.click()
   await sleep(1500)
   await shot('04-curve-area-smooth')
 

@@ -74,7 +74,7 @@ import { resolutionLabel } from '../units'
 import {
   canvasToPng,
   copyPngToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   fileStamp,
   readPageBackground,
   scaleForDpi,
@@ -3170,6 +3170,14 @@ export class PanelDeck {
    */
   private async saveDeck(format: ExportFormat = 'png', dpi = DECK_EXPORT_DPI): Promise<void> {
     const now = new Date()
+    // Where it goes first, while the press is still the reader's: composing six
+    // panels at 300 dpi can outlast the moment a browser will still open a save
+    // dialog for (`ui/export.ts`).
+    const target = await chooseSaveTarget(
+      `deck-${fileStamp(now)}-${dpi}dpi.${format}`,
+      format === 'pdf' ? 'application/pdf' : 'image/png',
+    )
+    if (target === null) return
     const out = this.composeDeck(now, dpi)
     if (out === null) return
     if (format === 'pdf') {
@@ -3180,12 +3188,12 @@ export class PanelDeck {
       const page = new VectorPage(out.width / scale, out.height / scale)
       page.ctx.drawImage(out, 0, 0, out.width / scale, out.height / scale)
       const blob = await page.toBlob({ title: 'deck', created: now })
-      downloadBlob(blob, `deck-${fileStamp(now)}-${dpi}dpi.pdf`)
+      await target.write(blob)
       return
     }
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (blob === null) return
-    downloadBlob(blob, `deck-${fileStamp(now)}-${dpi}dpi.png`)
+    await target.write(blob)
   }
 
   /**

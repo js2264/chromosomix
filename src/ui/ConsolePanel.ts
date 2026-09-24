@@ -682,7 +682,7 @@ export class ConsolePanel {
     const head =
       `#!/bin/sh\n# metacooler.js console, saved ${new Date().toISOString()}\n` +
       '# Commands are bare; everything else is a comment.\n\n'
-    downloadBlob(
+    void downloadBlob(
       new Blob([head, text], { type: 'text/x-shellscript' }),
       `metacooler-console-${fileStamp(new Date())}.sh`,
     )
