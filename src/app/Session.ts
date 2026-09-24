@@ -67,6 +67,7 @@ import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { MATRIX_OPTIONS, TRACK_OPTIONS, getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
+import { afterHome, homeParent, hostHolds, removeCard, swapCard } from '../ui/cardLayout'
 import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
@@ -8546,10 +8547,12 @@ export class Session {
     const card = this.deck?.structureSettings() ?? null
     // A card the enlarged dialog has borrowed stays where it is: the dialog
     // gives it back when it closes.
-    const borrowed = card !== null && card.isConnected && !this.aestheticsHost.contains(card)
+    // Held by the host where the reader has moved it to another column, too:
+    // its builder's spot is still here (`ui/cardLayout.ts`).
+    const borrowed = card !== null && card.isConnected && !hostHolds(this.aestheticsHost, card)
     // The card placed last time, taken out where the deck no longer has it.
     const placed = this.placedStructureCard
-    if (placed !== null && placed !== card && this.aestheticsHost.contains(placed)) placed.remove()
+    if (placed !== null && placed !== card && hostHolds(this.aestheticsHost, placed)) removeCard(placed)
     this.placedStructureCard = null
     if (side === undefined) {
       this.setAesthetics(card === null || borrowed ? [] : [card])
@@ -8561,7 +8564,7 @@ export class Session {
       // thing the map is, so its card stands with the map's. A view without
       // a map card takes it last.
       const map = this.placedMapCard?.card ?? this.current?.panel?.controlsEl
-      if (map !== undefined && map.parentElement === side) map.after(card)
+      if (map !== undefined && homeParent(map) === side) afterHome(map, card)
       else side.append(card)
       this.placedStructureCard = card
     }
@@ -8583,17 +8586,20 @@ export class Session {
     const lead = this.current?.panel?.controlsEl
     const wanted = this.deck?.mapCard() ?? null
     const held = this.placedMapCard
-    if (held !== null && (held.card !== wanted || held.lead !== lead || held.card.parentElement !== side)) {
+    // Where each card's builder put it, rather than where it stands: a reader
+    // may have moved the Map card to another column, and the swap is still
+    // this aside's (`ui/cardLayout.ts`).
+    if (held !== null && (held.card !== wanted || held.lead !== lead || homeParent(held.card) !== side)) {
       // The first map's card back where the companion's stood. Into a view
       // that has since been rebuilt, too: that aside is gone, and putting its
       // own card back in it costs nothing and leaves the companion's free.
-      if (held.card.parentElement !== null) held.card.replaceWith(held.lead)
+      swapCard(held.card, held.lead)
       this.placedMapCard = null
     }
     if (wanted === null || lead === undefined || side === undefined) return
     if (this.placedMapCard !== null) return
-    if (lead.parentElement !== side) return
-    lead.replaceWith(wanted)
+    if (homeParent(lead) !== side) return
+    swapCard(lead, wanted)
     this.placedMapCard = { card: wanted, lead }
   }
 

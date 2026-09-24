@@ -4068,7 +4068,8 @@ canvas.is-frozen {
    contents past its own border and put a horizontal scrollbar under the app.
    The card is 15rem by construction; its rows say so. */
 .controls-card .panel-controls > *,
-.side .pair-controls > * {
+.side .pair-controls > *,
+.card-zone .pair-controls > * {
   min-width: 0;
 }
 
@@ -5626,7 +5627,8 @@ canvas.is-frozen {
 
 /* In the sidebar card the pair controls stack, like every other control group
    there; the flex row below is what the region bar still wants. */
-.side .pair-controls {
+.side .pair-controls,
+.card-zone .pair-controls {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -5634,14 +5636,16 @@ canvas.is-frozen {
   margin: 0;
 }
 
-.side .pair-controls .field {
+.side .pair-controls .field,
+.card-zone .pair-controls .field {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.4rem;
 }
 
-.side .pair-controls .select-wide {
+.side .pair-controls .select-wide,
+.card-zone .pair-controls .select-wide {
   width: 100%;
   min-width: 0;
 }
@@ -7527,6 +7531,70 @@ canvas.is-frozen {
 .card > .card-head:hover,
 .controls-card > .card-head:hover {
   color: var(--text);
+}
+
+/* --- moving a card by its heading (`ui/cardLayout.ts`) ------------------
+
+   The same strip that folds a card carries it: a press folds, a press that
+   travels lifts the card and moves it, within its column or into another. A
+   touch that starts on a heading is the drag's, not the column's scroll —
+   everywhere else in the column a swipe still scrolls. */
+.panel-column-body .card > .card-head,
+.panel-column-body .controls-card > .card-head {
+  touch-action: none;
+}
+
+/* Where the cards a reader arranged stand: laid out as the body's own cards
+   are, with the column's gap between them. */
+.card-zone {
+  display: contents;
+}
+
+.card-zone > .card,
+.card-zone > .controls-card {
+  flex: 0 0 auto;
+}
+
+.card-zone h3 {
+  margin-top: 0;
+}
+
+/* A column the reader has rearranged holds every card in its zone, so the
+   wrappers its builder put them in are empty boxes with gaps and heights of
+   their own — the General column's is as tall as the column. Laid out as though
+   they were not there, which leaves only what else they hold (the Analysis
+   column's "no map is starred" line) standing above the cards. */
+.panel-column-body.is-arranged :is(.info-panel, .file-host, .sequence-host, .minimap-host, .record-host, .side, .analysis-tasks, .analysis-cards) {
+  display: contents;
+}
+
+/* The card in the air: fixed to the pointer at the width it had, and lifted
+   off the page so it reads as carried rather than as one more card. */
+.card.is-lifted,
+.controls-card.is-lifted {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.94;
+  box-shadow: var(--shadow-2);
+  max-height: 60vh;
+  overflow: hidden;
+}
+
+/* …and where it will land: the height it takes, dashed, in the accent. */
+.card-drop {
+  flex: 0 0 auto;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  max-height: 60vh;
+}
+
+body.is-carrying-card,
+body.is-carrying-card * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 /* The mark, and the reason it is not a `<details>` marker.

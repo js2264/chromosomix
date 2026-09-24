@@ -40,6 +40,7 @@ import {
   type PanelLayout,
   type SidePanelSpec,
 } from '../ui/SidePanel'
+import { CardArranger } from '../ui/cardLayout'
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { connectedFolders, hydrateFolders, subscribeFolders } from '../browse/connected'
@@ -235,6 +236,12 @@ export class App implements SessionHost {
    * exactly as it does for the content area.
    */
   private readonly analysisPanel: SidePanel
+  /**
+   * The cards a reader has moved by their headings, within a column and across
+   * them (`ui/cardLayout.ts`): put back after every rebuild of every column, and
+   * remembered with the columns' widths.
+   */
+  private readonly cards: CardArranger
   private readonly tabs: TabStrip
   /**
    * The console (§23), or `null` in an embed.
@@ -365,6 +372,16 @@ export class App implements SessionHost {
     })
     this.filesPanel.setContent([this.files.el])
     this.refreshFilesPanel()
+    this.cards = new CardArranger({
+      columns: () => this.columns().map(([, column]) => column),
+      remembers,
+      // A column the reader has carried a card into stays on screen for it,
+      // even on a view that gives that column nothing of its own.
+      onChange: () => {
+        const session = this.current
+        if (session !== undefined) this.applyPanels(session)
+      },
+    })
     // The list this column is of can change from four other screens, and two of
     // them — the landing page's *choose a folder…* and the Connect dialog — are
     // how it comes into existence in the first place.
@@ -1368,10 +1385,13 @@ export class App implements SessionHost {
 
   private applyPanels(session: Session): void {
     const panels = session.panels
-    this.generalPanel.setAvailable(panels.general)
-    this.annotationsPanel.setAvailable(panels.annotations)
-    this.aestheticsPanel.setAvailable(panels.aesthetics)
-    this.analysisPanel.setAvailable(panels.analysis)
+    // `cards` is not there yet on the first mount, which happens while the
+    // shell is still being built; nothing has been moved by then either.
+    const holds = (panel: SidePanel): boolean => this.cards?.holdsForeign(panel.id) === true
+    this.generalPanel.setAvailable(panels.general || holds(this.generalPanel))
+    this.annotationsPanel.setAvailable(panels.annotations || holds(this.annotationsPanel))
+    this.aestheticsPanel.setAvailable(panels.aesthetics || holds(this.aestheticsPanel))
+    this.analysisPanel.setAvailable(panels.analysis || holds(this.analysisPanel))
   }
 
   /**
@@ -2251,6 +2271,16 @@ export class App implements SessionHost {
         title: 'Keyboard shortcuts',
         keys: KEYS.shortcuts,
         run: () => this.openShortcutsDialog(),
+      },
+      {
+        id: 'reset-cards',
+        group: 'View',
+        title: 'Put every card back in its own panel',
+        hint: this.cards.arranged
+          ? 'Undo every card you have moved by its heading, in every panel.'
+          : 'No card has been moved — drag one by its heading to move it.',
+        enabled: this.cards.arranged,
+        run: () => this.cards.reset(),
       },
       {
         id: 'share',

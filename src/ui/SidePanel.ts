@@ -362,6 +362,15 @@ export class SidePanel {
   readonly toggle: HTMLButtonElement
 
   private readonly body = el('div', { class: 'panel-column-body' })
+  /**
+   * Where the cards a reader has arranged in this column stand (`ui/cardLayout.ts`).
+   *
+   * The column's own, not the session's, and kept through {@link setContent}:
+   * a tab switch replaces what the session mounted here and must not take the
+   * arrangement with it. `display: contents`, so what is in it lays out as the
+   * body's own cards do.
+   */
+  readonly zone = el('div', { class: 'card-zone' })
   /** What a folded column shows instead of itself; see the file header. */
   private readonly tab: HTMLButtonElement
   private collapsed: boolean
@@ -536,7 +545,22 @@ export class SidePanel {
 
   /** Fill the column, or empty it. */
   setContent(nodes: readonly HTMLElement[]): void {
-    this.body.replaceChildren(...nodes)
+    this.body.replaceChildren(...nodes, this.zone)
+  }
+
+  /** The column's scrolling body, which is what a card is dragged over. */
+  get bodyEl(): HTMLElement {
+    return this.body
+  }
+
+  /** The column's name, lower-cased: what an arranged card records it by. */
+  get id(): string {
+    return this.spec.title.toLowerCase()
+  }
+
+  /** `true` while the column is on screen and open, so a card can be dropped in it. */
+  get isOpen(): boolean {
+    return this.available && !this.collapsed
   }
 
   /**

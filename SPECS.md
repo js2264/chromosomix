@@ -8896,6 +8896,23 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   column, not the row.
 - **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
   other four do.
+- **A card is moved by its heading.** The strip that folds a card on a press carries it on a drag
+  (five pixels of travel, so a press is still a press): the card lifts off the column at its width, a
+  dashed slot of its height marks where it will land among the cards of whichever open column is under
+  the pointer, the column scrolls while the pointer is held at its edge, and the drop puts it there.
+  Escape puts it back; ⌥↑ / ⌥↓ on a heading's chevron move a card one place without a pointer. Any
+  card with a heading moves, into any column: the Export card beside the Tracks card it exports,
+  Bookmarks beside the map. The arrangement is the **reader's**, not a view's: every column rebuilds
+  its cards on its own schedule — Aesthetics on every navigation, Annotations on every mount, a tab
+  switch all four — so it is put back after each of those rather than handed to the builders
+  (`ui/cardLayout.ts`). A card is known by the column it was built in and its heading
+  (`aesthetics/Export`), a column the reader has touched keeps its whole order, and a card that
+  appears there later lands after the one it follows at home. A moved card's builder keeps its spot:
+  a card rebuilt is the new one in the reader's place, a card its builder lets go leaves the column it
+  was carried to, and another tab's cards stay in their tab. A column holding a card carried into it
+  stays on screen for it on a view that gives the column nothing of its own. Remembered per browser
+  (`localStorage`), never in an embed, and undone by the palette's *Put every card back in its own
+  panel*. A column nobody has rearranged is exactly as its builder made it.
 - **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**
   A head carrying something out of a file (the enlarged cell's structure, the `.pairs` file being
   binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been

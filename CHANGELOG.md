@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
+  heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
+  where it will land; drop it anywhere in any open side panel. ⌥↑ / ⌥↓ on the heading's chevron move
+  it a place without the pointer. The arrangement is kept through every navigation, tab switch and
+  reload, and the command palette's *Put every card back in its own panel* undoes it.
+
 - **A *caption* switch on the Export card (§7.2).** On by default. Off, a saved figure carries no
   caption under it (the region, file, bins, score, colour range and date) and ends at its lowest
   track. Shared by the map's card and the 1D browser's, remembered, and followed by the deck's

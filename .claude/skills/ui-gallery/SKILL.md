@@ -23,6 +23,7 @@ node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows,
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
+node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -84,6 +85,15 @@ map's figure both ways, a deck with a tracks cell both ways (the deck's figure t
 caption), and the 1D browser demo's figure both ways, whose one-line caption is its own. It prints
 each figure's height, which must drop by the caption's room when the switch is off. Run it after any
 change to a figure's caption or to a figure pass.
+
+The tenth moves **cards by their headings** (§26.6) and then makes every column rebuild under them:
+a card carried within Aesthetics (shot in the air, with its landing slot) and one carried into it
+from Annotations, a zoom, a reload, the General column rearranged across its nested hosts, a press on
+a heading (which must still fold it), ⌥↓, a second tab and back, a deck arriving (its 3D card must
+land after the Map card), the palette's reset, and on the two-map deck the Map card carried to
+General with the companion then starred (the card there must become the companion's). It prints
+every column's cards after each step, so a card that did not come back is a line in the log. Run it
+after any change to `ui/cardLayout.ts`, to a column's builder or to a card's heading.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
