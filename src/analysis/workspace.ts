@@ -546,6 +546,9 @@ export class AnalysisWorkspace {
         framing: result.provenance.framing.label,
       }
       const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
+      // Before `begin`, which replaces the row: a run under an id already here
+      // is new numbers for an old lane, and the caches have to be told.
+      const previous = store.byId(entry.id)?.revision ?? 0
       // How the set reads, for a set that has an opinion (§18.11) — and only for
       // a group nobody has decided about, so a reader who stacked it and ran the
       // task again gets it back stacked.
@@ -578,6 +581,7 @@ export class AnalysisWorkspace {
       store.update(entry.id, {
         status: 'ready',
         ...(entry.fileExtent === undefined ? {} : { fileExtent: entry.fileExtent }),
+        revision: previous + 1,
       })
     }
     this.synthetic?.refresh()

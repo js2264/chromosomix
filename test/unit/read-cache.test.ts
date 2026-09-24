@@ -496,3 +496,68 @@ describe('the coverage beside it', () => {
     expect(sent[0].kind === 'sample' ? 'reads' in sent[0] : true).toBe(false)
   })
 })
+
+/**
+ * A computed track run again (§18.5): new numbers under the row's own id, so
+ * that the second run replaces its lane rather than adding one. The window and
+ * the resolution are unchanged, so without the row's revision nothing here would
+ * ask again — and a compartment track switched to another method and run again
+ * went on drawing the first method's values under the second one's name.
+ */
+describe('a row given new values under its own id', () => {
+  function samplesOn(): { worker: FakeWorker; cache: SampleCache } {
+    const worker = new FakeWorker()
+    const cache = new SampleCache(
+      new AnnotationClient(() => worker as unknown as Worker),
+      () => undefined,
+    )
+    return { worker, cache }
+  }
+  const options = { entry: 'synthetic:compartment-e1', scope: 'rows', axis, domain, pixels: 100 }
+  const sampled = (worker: FakeWorker): number => worker.sent.filter((m) => m.kind === 'sample').length
+
+  it('asks again, and draws the old values until the new ones land', async () => {
+    const { worker, cache } = samplesOn()
+    cache.revise([{ id: options.entry, revision: 1 }])
+    cache.samplesFor(options)
+    worker.settle(EMPTY_SAMPLES)
+    await flush()
+    cache.revise([{ id: options.entry, revision: 1 }])
+    cache.samplesFor(options)
+    expect(sampled(worker)).toBe(1)
+
+    cache.revise([{ id: options.entry, revision: 2 }])
+    expect(cache.samplesFor(options)).toEqual(EMPTY_SAMPLES)
+    expect(sampled(worker)).toBe(2)
+    // Once, not once a frame: the revision is noted when it is first seen.
+    for (let frame = 0; frame < 10; frame++) {
+      cache.revise([{ id: options.entry, revision: 2 }])
+      cache.samplesFor(options)
+    }
+    expect(sampled(worker)).toBe(2)
+  })
+
+  it('calls off a read that was asked of the old values', () => {
+    const { worker, cache } = samplesOn()
+    cache.revise([{ id: options.entry, revision: 1 }])
+    cache.samplesFor(options)
+    const first = worker.sent[0].id
+    cache.revise([{ id: options.entry, revision: 2 }])
+    expect(worker.cancels).toEqual([first])
+    cache.samplesFor(options)
+    expect(sampled(worker)).toBe(2)
+  })
+
+  it('leaves the other rows, and a row with no revision, as they were', async () => {
+    const { worker, cache } = samplesOn()
+    const other = { ...options, entry: 'coverage.bw' }
+    cache.revise([{ id: options.entry, revision: 1 }, { id: other.entry }])
+    cache.samplesFor(options)
+    cache.samplesFor(other)
+    worker.settle(EMPTY_SAMPLES)
+    await flush()
+    cache.revise([{ id: options.entry, revision: 2 }, { id: other.entry }])
+    cache.samplesFor(other)
+    expect(sampled(worker)).toBe(2)
+  })
+})

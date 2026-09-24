@@ -65,3 +65,21 @@ describe('the compartments estimate at a resolution finer than the task wants', 
     expect(estimate.note).not.toContain('far finer')
   })
 })
+
+/**
+ * The warning is about the correlation's minutes, and cooltools' road has no
+ * correlation: three eigenvectors of the same 4,642 bins take seconds (§18.8).
+ */
+describe('the compartments estimate under cooltools’ method', () => {
+  it('prices a decomposition, and gives no warning that belongs to the correlation', () => {
+    const estimate = COMPARTMENTS_TASK.estimate(context(1000, 4_641_652, [1000, 5000]), {
+      ...PARAMS,
+      method: 'cooltools',
+    })
+    expect(estimate.refusal).toBeUndefined()
+    expect(estimate.class).toBe('bounded')
+    expect(estimate.note).not.toContain('far finer')
+    expect(estimate.note).toContain('one decomposition each')
+    expect(estimate.note).not.toContain('correlation')
+  })
+})

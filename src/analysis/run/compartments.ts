@@ -1,6 +1,6 @@
 /**
- * Compartments, run: expected → observed/expected → correlation → eigenvectors,
- * then phasing, then the saddle.
+ * Compartments, run: expected → observed/expected → its correlation, or itself as
+ * cooltools prepares it → eigenvectors, then phasing, then the saddle.
  *
  * Everything mathematical is in `analysis/compartments.ts` and
  * `analysis/linalg.ts`. What is here is the chain, the places it can refuse, and
@@ -34,8 +34,10 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import { armExpected, type ArmFrame } from '../arms'
 import {
+  COOLTOOLS_CLIP_PERCENTILE,
   cisSeparation,
   compartmentSegments,
+  cooltoolsMatrix,
   correlationMatrix,
   observedOverExpected,
   phaseComponent,
@@ -59,8 +61,7 @@ import {
   type TaskRunner,
 } from '../job'
 import type { Params } from '../types'
-import { leadingEigenpairs, type Eigenpair } from '../linalg'
-import { pearson } from '../stats'
+import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TableOutput, TaskOutput } from '../types'
 import { displayableContigs, usableBlock, type Span } from './blocks'
@@ -445,8 +446,12 @@ async function runSquare(
      * a square of one sequence; absent is the ordinary observed/expected.
      */
     arms?: { window: number }
-    /** Rank the components by how well they follow the phasing signal (§18.8). */
-    orderByPhasing: boolean
+    /**
+     * What is decomposed: the Pearson correlation of observed/expected's rows
+     * (Lieberman-Aiden et al. 2009), or observed/expected itself as cooltools
+     * prepares it (`cooltoolsMatrix`).
+     */
+    method: 'correlation' | 'cooltools'
     /** One row per component, for the components table. */
     rows: Array<Record<string, string | number>>
   },
@@ -510,78 +515,65 @@ async function runSquare(
     return null
   }
 
-  // Cubic in the bin count, and the one step of the chain that is — so it
-  // reports where it has got to and can be stopped from inside its own loop.
-  const correlation = await correlationMatrix(oe, index.length, async (row) => {
-    // Every sixty-fourth row rather than every row: a `breathe` is a
-    // `MessageChannel` round trip, and this is the loop that most needs to be
-    // stoppable *and* the one that would most notice paying for it `m` times.
-    // Between breaths the flag cannot have changed, so the synchronous check is
-    // the one that matters in between and the yield is what makes it able to.
-    if (row % 64 !== 0) {
-      job.throwIfCancelled()
-      return
-    }
-    await job.breathe()
-    job.progress(options.step.at, options.step.of, `correlating ${label}`)
-  })
-
-  const signal = phasingSignal(job, selection, index)
-  // Ranking by the phasing signal chooses among the first three whatever the
-  // number drawn, so the one that follows the signal can come from behind a
-  // component the variance put first.
-  const ranked = options.orderByPhasing && signal !== null
-  if (options.orderByPhasing && signal === null) {
-    job.note(`${label}: nothing was chosen to phase against, so the components keep their order by variance.`)
-  }
-
-  // The correlation matrix is consumed in place by the deflation, so the saddle
-  // below uses `oe` — which is the matrix it wants anyway.
-  const computed = leadingEigenpairs(
-    correlation,
-    index.length,
-    ranked ? Math.max(3, options.wanted) : options.wanted,
-  )
-  if (computed.length === 0) {
-    job.note(`${label}: the correlation matrix has no leading component; it may be too sparse.`)
-    return null
-  }
-  // What each component explained and how it followed the signal, before any
-  // reordering, so the table can say which was chosen and why.
-  const described = computed.map((pair, rank) => ({
-    pair,
-    rank,
-    // A correlation matrix has ones on its diagonal, so its trace is the number
-    // of rows and an eigenvalue over that is the share of the variance.
-    explained: pair.value / index.length,
-    r: signal === null ? Number.NaN : pearson(pair.vector, signal.values),
-  }))
-  const order = ranked
-    ? [...described].sort((a, b) => Math.abs(b.r) - Math.abs(a.r) || a.rank - b.rank)
-    : described
-  const pairs: Eigenpair[] = order.slice(0, options.wanted).map((entry) => entry.pair)
-  for (let k = 0; k < order.length; k++) {
-    options.rows.push({
-      sequence: label,
-      component: `E${order[k].rank + 1}`,
-      drawn: k < options.wanted ? `E${k + 1}` : '',
-      explained: order[k].explained,
-      r: order[k].r,
+  // What is decomposed. The correlation of the rows, as Lieberman-Aiden et al.
+  // (2009) did — cubic in the bin count, and the one step of the chain that is,
+  // so it reports where it has got to and can be stopped from inside its own
+  // loop; or observed/expected itself, clipped, less one and with its gaps read
+  // as expected, as cooltools does. Either is consumed in place by the
+  // deflation, so the saddle below uses `oe` — which is the matrix it wants.
+  const cooltools = options.method === 'cooltools'
+  let decomposed: Float64Array
+  // What an eigenvalue is a share of: a correlation matrix's trace, which is its
+  // rows; the prepared observed/expected's sum of squares, which is the sum of
+  // its eigenvalues squared.
+  let whole = index.length
+  if (cooltools) {
+    job.progress(options.step.at, options.step.of, `decomposing ${label}`)
+    decomposed = cooltoolsMatrix(oe, index.length)
+    whole = 0
+    for (const value of decomposed) whole += value * value
+  } else {
+    decomposed = await correlationMatrix(oe, index.length, async (row) => {
+      // Every sixty-fourth row rather than every row: a `breathe` is a
+      // `MessageChannel` round trip, and this is the loop that most needs to be
+      // stoppable *and* the one that would most notice paying for it `m` times.
+      // Between breaths the flag cannot have changed, so the synchronous check is
+      // the one that matters in between and the yield is what makes it able to.
+      if (row % 64 !== 0) {
+        job.throwIfCancelled()
+        return
+      }
+      await job.breathe()
+      job.progress(options.step.at, options.step.of, `correlating ${label}`)
     })
   }
-  if (ranked && order[0].rank !== 0) {
-    job.note(
-      `${label}: the component that follows ${signal.name} best is the one the variance ranked ` +
-        `E${order[0].rank + 1} (r = ${fmt(order[0].r)}), so it is drawn as E1.`,
-    )
+
+  // **Ranked by eigenvalue, and by nothing else.** The phasing signal signs each
+  // component below and never chooses among them: a component picked for
+  // following GC content would make any later comparison of GC content between
+  // the compartments it calls a comparison with itself.
+  const pairs = leadingEigenpairs(decomposed, index.length, options.wanted)
+  if (pairs.length === 0) {
+    job.note(`${label}: the ${cooltools ? 'matrix' : 'correlation matrix'} has no leading component; it may be too sparse.`)
+    return null
   }
 
+  const signal = phasingSignal(job, selection, index)
   let phased: Phasing | null = null
 
   for (let component = 0; component < pairs.length && component < options.tracks.length; component++) {
-    const vector = pairs[component].vector
+    const { value, vector } = pairs[component]
+    // cooltools' scale: each unit eigenvector times the square root of its
+    // eigenvalue's size, so a track made this way is the track cooltools writes.
+    if (cooltools) {
+      const scale = Math.sqrt(Math.abs(value))
+      for (let i = 0; i < vector.length; i++) vector[i] *= scale
+    }
+    let r = Number.NaN
     if (signal !== null) {
       const result = phaseComponent(vector, signal, numParam(job.params, 'minR', 0.1))
+      // As drawn: the sign the phasing fixed is the sign the table reports.
+      r = result.flipped ? -result.r : result.r
       if (component === 0) {
         phased = result
         job.note(
@@ -595,6 +587,13 @@ async function runSquare(
     } else if (component === 0) {
       job.note('Nothing was chosen to phase against, so the sign of each component is arbitrary.')
     }
+    options.rows.push({
+      sequence: label,
+      component: `E${component + 1}`,
+      eigenvalue: value,
+      explained: cooltools ? (value * value) / whole : value / whole,
+      r,
+    })
 
     // Back over the full bin grid, with every bin that took no part restored as
     // a gap — which is the whole reason the chain worked over an index (§18.8).
@@ -731,7 +730,20 @@ export const runCompartments: TaskRunner = async (job) => {
             `(${(arms.window * job.mc.binsize).toLocaleString()} bp) of each cell along them.`,
     )
   }
-  const orderByPhasing = strParam(job.params, 'order', 'variance') === 'phasing'
+  // Refused rather than read as the default: the two methods give different
+  // numbers, and a misspelt one in a batch script would otherwise run the other
+  // without a word.
+  const method = strParam(job.params, 'method', 'correlation')
+  if (method !== 'correlation' && method !== 'cooltools') {
+    throw new Error(`There is no method “${method}”. It is correlation (Lieberman-Aiden 2009) or cooltools.`)
+  }
+  if (method === 'cooltools') {
+    job.note(
+      'Observed/expected decomposed itself, as cooltools does: clipped at its ' +
+        `${COOLTOOLS_CLIP_PERCENTILE}th percentile, one subtracted, every gap read as expected, and ` +
+        'each eigenvector scaled by the square root of its eigenvalue.',
+    )
+  }
   let ran = 0
 
   for (let s = 0; s < squares.length; s++) {
@@ -761,7 +773,7 @@ export const runCompartments: TaskRunner = async (job) => {
       label,
       step: { at: s, of: squares.length },
       ...(arms === undefined ? {} : { arms }),
-      orderByPhasing,
+      method,
       rows,
     })
     if (done === null) continue
@@ -776,31 +788,40 @@ export const runCompartments: TaskRunner = async (job) => {
 
   // The tracks first, then the calls, then the pictures: a reader scanning the
   // drawer meets the thing they will keep before the thing they will look at.
-  const label = `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}${arms === undefined ? '' : ' · arms'}`
-  // What every component explained and how it followed the phasing signal —
-  // the table that says which one is the compartment track, and why E1 is the
-  // one drawn as E1.
+  const label =
+    `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}${arms === undefined ? '' : ' · arms'}` +
+    `${method === 'cooltools' ? ' · cooltools' : ''}`
+  // What every component explained, and how it follows the phasing signal that
+  // fixed its sign — reported, never used to choose one.
   outputs.push({
     kind: 'table',
     id: 'compartment-components',
     label: `Components · ${label}`,
     columns: [
       { key: 'sequence', label: 'sequence', kind: 'text' },
-      { key: 'component', label: 'component', kind: 'text', hint: 'By variance explained.' },
-      { key: 'drawn', label: 'drawn as', kind: 'text' },
-      {
-        key: 'explained',
-        label: 'variance',
-        kind: 'number',
-        digits: 3,
-        hint: 'Share of the correlation matrix’s variance: its eigenvalue over its rows.',
-      },
+      { key: 'component', label: 'component', kind: 'text', hint: 'By eigenvalue, largest first.' },
+      { key: 'eigenvalue', label: 'eigenvalue', kind: 'number', digits: 3 },
+      method === 'cooltools'
+        ? {
+            key: 'explained',
+            label: 'share',
+            kind: 'number',
+            digits: 3,
+            hint: 'Share of the decomposed matrix: its eigenvalue squared over the sum of its cells squared.',
+          }
+        : {
+            key: 'explained',
+            label: 'variance',
+            kind: 'number',
+            digits: 3,
+            hint: 'Share of the correlation matrix’s variance: its eigenvalue over its rows.',
+          },
       {
         key: 'r',
         label: 'r with phasing',
         kind: 'number',
         digits: 3,
-        hint: 'Pearson’s r with the phasing signal, before the sign was fixed.',
+        hint: 'Pearson’s r with the phasing signal, as drawn: positive once the sign is fixed.',
       },
     ],
     rows,

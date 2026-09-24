@@ -116,6 +116,11 @@ CIRCULAR=${CIRCULAR:-auto}
 # in bins at RES_PATTERNS; 0 is the whole chromosome.
 ARM_WINDOW=${ARM_WINDOW:-50}
 
+# What both compartment runs take their eigenvectors of: the correlation of
+# observed/expected's rows, as Lieberman-Aiden et al. (2009) did, or
+# observed/expected itself as cooltools' eigs_cis prepares it (SPECS §18.8).
+COMPARTMENTS_METHOD=${COMPARTMENTS_METHOD:-correlation}
+
 # Only these steps, where given: the others keep what an earlier run wrote, and
 # the index lists it. The framing (the junction test, the reference) is always
 # made, since every step reads it — so after changing CIRCULAR, run them all:
@@ -137,12 +142,21 @@ usage: scripts/dbz-store.sh [<sample> ...]
   STEPS="<step> ..." only these steps; the others keep what is there
   CIRCULAR=auto|all|none  which sequences are circles (default: auto, the junction test)
   ARM_WINDOW=<bins>  compartments-arms' reach along the arms (default: 50)
+  COMPARTMENTS_METHOD=correlation|cooltools
+                     what the eigenvectors are taken of (default: correlation,
+                     Lieberman-Aiden 2009)
   MR=<command>       metacooler-run (default: this checkout's dist-cli build)
   RES_COVERAGE, RES_CISTRANS, RES_PS, RES_DOMAINS, RES_PATTERNS, RES_COMPOSITION, RES_MODEL
 TEXT
 }
 
 case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+
+# Before any map is read, rather than as a failed step in every sample's log.
+case "$COMPARTMENTS_METHOD" in
+  correlation|cooltools) ;;
+  *) printf 'COMPARTMENTS_METHOD is correlation or cooltools, not %s\n' "$COMPARTMENTS_METHOD" >&2; exit 2 ;;
+esac
 [ -d "$DATA" ] || { printf '%s: no such folder. Set DATA to where the maps are.\n' "$DATA" >&2; exit 2; }
 [ -f "$SPECIES" ] || { printf '%s: no such table. Set SPECIES.\n' "$SPECIES" >&2; exit 2; }
 command -v "${MR%% *}" > /dev/null 2>&1 || {
@@ -534,29 +548,30 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
       hicscore "$file::/resolutions/$RES_PATTERNS" \
       --balance ${frame[@]+"${frame[@]}"} --diagonals 3 --ignoreDiags 0 --minValid 0.5
 
+    # GC content signs each component and chooses none of them: E1 is the
+    # largest eigenvalue's, so comparing GC content between the compartments it
+    # calls is not comparing GC content with itself.
     phase=()
-    order=()
     [ -n "$reference" ] && phase=(--sequence "$reference" --phaseSequence "$reference")
-    [ -n "$reference" ] && order=(--order phasing)
     run_step compartments "$dir/compartments" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
       --balance ${frame[@]+"${frame[@]}"} ${phase[@]+"${phase[@]}"} \
-      --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false
+      --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
+      --method "$COMPARTMENTS_METHOD"
 
     # -----------------------------------------------------------------------
     # The same, over the decay along both arms. A chromosome whose arms are
     # held together from the origin has a second diagonal through it, which
     # the distance decay leaves in the ratio as an X that the eigenvectors
     # then follow: the arms, and not the compartments. This expectation
-    # removes both diagonals, reading the arms from the origins called above,
-    # and E1 is the one of the first three components that follows GC content
-    # best — the eigenvector the session opens with.
+    # removes both diagonals, reading the arms from the origins called above;
+    # its E1 is the eigenvector the session opens with.
     # -----------------------------------------------------------------------
     run_step compartments-arms "$dir/compartments-arms" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
       --balance ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"} ${phase[@]+"${phase[@]}"} \
       --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
-      --expected arms --armWindow "$ARM_WINDOW" ${order[@]+"${order[@]}"}
+      --expected arms --armWindow "$ARM_WINDOW" --method "$COMPARTMENTS_METHOD"
 
     # -----------------------------------------------------------------------
     # How strongly the two arms are aligned, and how far from the origin: the

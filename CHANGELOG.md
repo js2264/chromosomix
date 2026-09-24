@@ -64,10 +64,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a track along the chromosome, and a score, peak and reach per sequence. 1.6 on *P. aeruginosa*,
   0.37 on *B. subtilis*, 0.07 on *E. coli*.
 
-- **Compartments along both arms, and which component is the compartment one (§18.8).** An
-  *expected* choice, *decay along both arms*; phasing by **a track** as well as by a gene model or
-  GC content; *order components by the phasing signal*, which draws as E1 whichever of the first
-  three follows it best; and a components table of what each explained and how it correlated.
+- **Compartments along both arms, and a table of their components (§18.8).** An *expected*
+  choice, *decay along both arms*; phasing by **a track** as well as by a gene model or GC content;
+  and a components table of each one's eigenvalue, what it explained, and its r with the phasing
+  signal as drawn. E1 is the largest eigenvalue's component, always: the phasing signal signs each
+  component and chooses none, so the GC content of the compartments E1 calls can be compared without
+  comparing GC content with itself.
+
+- **Compartments by cooltools' method as well as Lieberman-Aiden's (§18.8).** A *method* dropdown,
+  **Lieberman-Aiden 2009** by default — the correlation of observed/expected, decomposed — or
+  **cooltools**: observed/expected itself, clipped at its 99.9th percentile, less one, its gaps read
+  as expected, and each eigenvector scaled by √|λ|. It agrees with `cooltools.eigs_cis` to
+  |r| = 1.000 on the zoo's maps, and skips the correlation, so a fine map takes seconds rather than
+  minutes. `metacooler-run compartments --method cooltools`; `scripts/dbz-store.sh` takes
+  `COMPARTMENTS_METHOD`, the DBZ notebook `METHOD`.
 
 - **Find a motif allows mismatches (§18.8)**, up to four, and says so in the set's name.
 
@@ -1074,6 +1084,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A task run again draws its new values at once (§18.5).** A re-run replaces its own tracks under
+  the same ids, and every lane beside the map, in the 1D browser and on a model went on drawing the
+  previous run's numbers, under the new run's name, until a pan or a zoom refetched them — so
+  compartments run again by the other method looked unchanged. The row now carries a revision the run
+  bumps, and each lane asks again when that changes.
 
 - **A workspace brings its circles, origins and added resolutions back in (§3.4, §8.15).** Saving one
   wrote all three and opening it dropped them: the tab reader walked past the fields, so an origin

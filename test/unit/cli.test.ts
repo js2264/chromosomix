@@ -696,6 +696,103 @@ describe('inputs the session used to fill and the shell did not', () => {
 })
 
 /**
+ * Two ways to the eigenvectors, and one way only to choose among them (§18.8):
+ * by eigenvalue. The phasing signal signs each component and is no longer asked
+ * which of them to draw — so `--order`, which asked it, is a parameter the task
+ * does not have, and a script still passing it is told so rather than ignored.
+ */
+describe('compartments by either method', () => {
+  // A map with compartments to find — blocks of five bins alternating, each
+  // twice as likely to touch its own kind — and a reference that is GC-rich in
+  // one kind and AT-rich in the other, so the phasing has something to sign by.
+  // The shared `sample` will not do: each of its diagonals is one value, so its
+  // observed/expected is exactly one wherever it is defined, and cooltools'
+  // matrix of it is zero throughout.
+  const kind = (bin: number): number => Math.floor(bin / 5) % 2
+  let checkered = ''
+  let reference = ''
+  beforeAll(async () => {
+    const bins = 60
+    const list: HicRecord[] = []
+    for (let x = 0; x < bins; x++) {
+      for (let y = x; y < bins; y++) {
+        list.push({ x, y, value: Math.round((1000 * (kind(x) === kind(y) ? 2 : 1)) / (1 + y - x)) })
+      }
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'chrI', length: bins * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': list },
+      blockBinCount: 32,
+    })
+    checkered = join(directory, 'checkered.hic')
+    await writeFile(checkered, fixture.bytes)
+    reference = join(directory, 'checkered.fa')
+    let bases = ''
+    for (let bin = 0; bin < bins; bin++) bases += (kind(bin) === 0 ? 'GC' : 'AT').repeat(500)
+    await writeFile(reference, `>chrI\n${bases}\n`)
+  })
+
+  const components = async (where: string): Promise<{ text: string; rows: string[][] }> => {
+    const text = await readFile(join(where, 'checkered.compartments.compartment-components.tsv'), 'utf8')
+    const body = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+    expect(body[0]).toBe('sequence\tcomponent\teigenvalue\texplained\tr')
+    return { text, rows: body.slice(1).map((line) => line.split('\t')) }
+  }
+
+  it('decomposes observed/expected itself under --method cooltools, and says so in its table', async () => {
+    reset()
+    const where = join(directory, 'by-cooltools')
+    expect(
+      await main([
+        'compartments', checkered, '--method', 'cooltools', '--components', '3',
+        '--sequence', reference, '--phaseSequence', reference, '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/failed:/)
+    const { text, rows } = await components(where)
+    expect(text).toMatch(/^# param method: cooltools$/m)
+    expect(text).toMatch(/^# output: Components · .*· cooltools$/m)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, share, r with phasing$/m)
+    expect(rows.map((row) => row[1])).toEqual(['E1', 'E2', 'E3'])
+    // By eigenvalue, largest first, whatever the sign.
+    const sizes = rows.map((row) => Math.abs(Number(row[2])))
+    for (let i = 1; i < sizes.length; i++) expect(sizes[i]).toBeLessThanOrEqual(sizes[i - 1])
+    // The first is the compartments, signed so that it rises with GC content.
+    expect(Number(rows[0][4])).toBeGreaterThan(0.9)
+  })
+
+  it('correlates by default, as Lieberman-Aiden et al. did, and signs the same way', async () => {
+    reset()
+    const where = join(directory, 'by-correlation')
+    expect(
+      await main([
+        'compartments', checkered, '--sequence', reference, '--phaseSequence', reference,
+        '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const { text, rows } = await components(where)
+    expect(text).toMatch(/^# param method: correlation$/m)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, variance, r with phasing$/m)
+    expect(Number(rows[0][4])).toBeGreaterThan(0.9)
+  })
+
+  it('refuses the ordering it no longer offers, and a method it does not have', async () => {
+    reset()
+    expect(
+      await main(['compartments', checkered, '--order', 'phasing', '--out', out, '--quiet']),
+    ).toBe(2)
+    expect(complained()).toMatch(/has no parameter --order/)
+    reset()
+    expect(
+      await main(['compartments', checkered, '--method', 'cooltool', '--out', out, '--quiet']),
+    ).toBe(1)
+    expect(complained()).toMatch(/There is no method “cooltool”/)
+  })
+})
+
+/**
  * The one task whose unit is a pair of files. The deck supplies the second
  * map in the app; a shell has one file and one mount, and `--against` is the
  * flag that stands in for the deck — mounted through the same `peer` the

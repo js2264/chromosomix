@@ -113,7 +113,8 @@ aeruginosa* PAK from the DNA Bacterial Zoo read as circular on its first open, *
 and *Base composition* run from the Chromosomes table, the origin in the table's column, the map
 framed on it with `ori` — lit while the origin is in the middle, through a zoom and not a pan, and
 pressed again to go back to the sequence from its first base, each step printed to stdout — the O/E
-taken along the arms with `arms` and correlated at 8 kb, the inter-arm and compartment tasks,
+taken along the arms with `arms` and correlated at 8 kb, the inter-arm and compartment tasks —
+compartments by each *method*, the cooltools run's own lane and components table after the first's —
 *Base composition* again in a 1D browser holding the FASTA alone, at 10 kb (§8.15, §18.8) — and
 then that browser's own Chromosomes table: a circle ticked and an origin typed there (and one past
 the end refused), the map dropped over the browser taking both, and a fresh map's origin at its

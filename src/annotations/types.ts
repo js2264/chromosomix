@@ -1582,6 +1582,19 @@ export interface AnnotationEntry {
   /** Value extent over the whole bigWig, from its header. Seeds a manual clip. */
   fileExtent?: { min: number; max: number }
   /**
+   * How many times this row's values have been replaced under the same id.
+   *
+   * A computed track run again is the case (§18.5): the new numbers take the
+   * old row's id, so that a second run replaces its own lane rather than adding
+   * one, and every sample cache holds a lane's values by id and window. Without
+   * a mark that they changed, each lane went on drawing the last run's numbers,
+   * under the new run's name, until the view moved far enough to refetch — a
+   * compartment track switched to another method and run again read, beside the
+   * map, exactly as it had before. Absent on every row whose values are fixed
+   * once read, which is every file.
+   */
+  revision?: number
+  /**
    * The feature set the browser's search reads.
    *
    * Several gene models can be *drawn* — comparing two annotations of one genome

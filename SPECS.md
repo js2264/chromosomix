@@ -5319,6 +5319,14 @@ Mechanically, a finished vector is **registered with the annotations worker as a
 and the lane then asks for samples over a window exactly as it does of a bigWig. One new request kind,
 and no renderer changes anywhere.
 
+**A task run again gives its rows new values, and every lane is told.** The second run replaces its
+own rows rather than adding copies — the same id, so the same lane in the same place in the reader's
+arrangement — and a lane's samples are held by id and window, which that does not change. So the row
+carries a *revision* the run bumps and each sample cache compares once a frame, as it prunes: what it
+holds for a revised row is fetched again, and drawn meanwhile rather than blanked. Without it the lane
+went on drawing the previous run's values under the new run's name until a pan or a zoom happened to
+refetch, so that compartments run again under another *method* (§18.8) read exactly as before.
+
 **A gap and a measured zero are not the same thing, and the difference is the
 file's to declare.** `NaN` means *no value here* throughout, and the temptation
 is to call every bin nothing landed in a gap. That is wrong for a cooler: it
@@ -5810,8 +5818,9 @@ settles both keys itself on such a file rather than trusting a value a stored se
 in on a cooler left behind: always trans, never over expected. The arithmetic of both switches is
 untouched and still goldened (`run/fourc.ts`); what varies by file is which of it is *offered*, which
 is the same stated rule §18.2 already bends by for options that need a `/genomes` table.
-*Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
-behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
+*Compartments* — expected → observed/expected → its Pearson correlation, or itself as cooltools
+prepares it (*method*, below) → eigenvectors by power iteration, behind the bin-count gate — with
+**phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
 correlation is too weak to decide a sign. It is over **several ticked sequences, every one of them by
 default**, and by default the square it correlates holds their **cis and trans blocks together**: two
@@ -5839,14 +5848,38 @@ arms are a fact about one sequence. Divided by the decay alone, a chromosome who
 together correlates to the X its two diagonals draw, and its leading eigenvector is the arms rather
 than its compartments: on the *P. aeruginosa* PAK map at 8 kb it follows the distance from the
 origin (Spearman 0.78) and nothing in the sequence (r = 0.00 with GC content), where along the arms
-the first component explains 22% of the variance and follows GC content (r = 0.33). **Which
-component is the compartment one is a question with an answer, given two ways.** A *components*
-table lists what each component explained and how it correlated with the phasing signal before its
-sign was fixed, and *order components by the phasing signal* — cooltools' `sort_metric` — computes
-the first three and draws as E1 whichever follows the signal best, saying so when that is not the one
-the variance put first. The phasing signal is a gene model, else **a track** — any loaded or computed
-lane, chosen and never assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by
-their decay measured the short way round, which is version 2 of the task.
+the first component explains 22% of the variance and follows GC content (r = 0.33). **The
+components are ranked by their eigenvalues and by nothing else**: E1 is the component with the
+largest, E2 the next. The phasing signal *signs* each one — positive where it rises with the signal,
+once their correlation reaches `minR` — and never chooses among them, because a component chosen for
+following GC content would make any later comparison of GC content between the compartments it
+calls a comparison of GC content with itself. A *components* table says what each one is: its
+eigenvalue, the share of the whole it explains, and its Pearson r with the phasing signal as drawn. The
+phasing signal is a gene model, else **a track** — any loaded or computed lane, chosen and never
+assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
+the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone and
+reports r as drawn.
+
+**What the eigenvectors are taken of is a choice** — *method*, **Lieberman-Aiden 2009 by default**:
+the Pearson correlation of observed/expected's rows, as above. The other is **cooltools'**
+(`eigs_cis`): observed/expected itself, clipped at 0 and at its 99.9th percentile (NumPy's, linear
+between ranks, of the cells that have a value), one subtracted so that each cell is its departure
+from expected, and every gap — a cell with no value, and the `ignore_diags` near-diagonal — zero,
+which after the subtraction reads *as expected*; each eigenvector is then scaled by √|λ|, as
+cooltools writes it. Everything before the decomposition is shared — the usable bins, the
+expectation chosen (the distance decay, both arms, the short way round a circle), the contacts mode
+and its gate, the phasing. On the zoo's *P. aeruginosa* PAK, *C. necator* and *E. coli* maps at
+8 kb, each read as a line over its distance decay, all three components agree with
+`cooltools.eigs_cis` on the same balanced matrix to |r| = 1.000, with eigenvalues within 0.03% and no
+bin more than 0.03 apart on a track reaching ±0.74. What remains is cooltools' own expectation, which
+averages the diagonals past about the thirtieth in logarithmic groups, and its percentile, which also
+counts the dropped rows' zeros and the ignored diagonals' ones. The two methods agree where a
+chromosome has compartments to find and part where it has none: E1 against E1, r = 0.94 on PAK and
+0.58 on *E. coli*. Under cooltools the table's share is the eigenvalue squared over the sum of every
+cell squared, which is what a matrix that is not a correlation's has in place of a variance. It
+skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
+about minutes — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds. A method the
+task does not have is refused rather than read as the default.
 
 *Inter-arm alignment* — how strongly a bacterial chromosome's two arms are held together, as a number
 rather than an impression of a picture: the secondary diagonal is the mark SMC leaves when it is loaded
