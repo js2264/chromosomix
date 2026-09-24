@@ -14,10 +14,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **A *track captions* switch on the Export card (§7.2).** On by default. Off, a saved figure's
-  lanes carry no caption (the chip, name and range each track is labelled with on screen), for a
-  figure keyed elsewhere; the screen keeps its captions either way. Shared by the map's card and the
-  1D browser's, remembered, and read by every cell of the deck's figure.
+- **A *caption* switch on the Export card (§7.2).** On by default. Off, a saved figure carries no
+  caption under it (the region, file, bins, score, colour range and date) and ends at its lowest
+  track. Shared by the map's card and the 1D browser's, remembered, and followed by the deck's
+  figure.
 
 - **A key for *colour by manual annotations* (§25.5).** A row per mark, named as the Manual
   annotations card names it: its swatch recolours the mark itself — on the card and every map too —
@@ -307,9 +307,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **Track captions in a saved figure are small (§7.2).** A figure wrote each lane's name and range at
-  the screen's size and the reader's text size, 12 px and semibold by default — the loudest type on
-  the page. It now writes them as a key: a 6.5 px name, a 6 px range, at a fixed size.
+- **The caption under a saved figure is quieter (§7.2).** The region was written at 15 px and
+  semibold in the page's ink, the largest type on the figure; it is now 11 px, and the provenance
+  under it 10 px, both in the axis labels' grey. The 1D browser's one-line caption matches.
 
 - **Closing a contact map in the deck hides it (§16.9, §16.5).** The × on a map's own cell, and
   *close deck*, used to drop the map from the session; it now stays on the Contact maps card with its

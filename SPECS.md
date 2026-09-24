@@ -1549,19 +1549,18 @@ on one line. The clipboard button in the same row takes a PNG whatever the forma
 while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
 a raster rasterised at a number they could no longer see or change.
 
-**A track's caption in a figure is a key, written small — or not at all.** On screen each lane
-carries its caption, the colour chip, name and value range of §8.8, at the reader's text size,
-because there it is read across a desk and edited in place. A saved figure writes the same block at
-a footnote's size (a 6.5 px name at weight 500 and a 6 px range, where the screen's is 9 px at 600
-before the text size is applied), and **that size is fixed**: the reader's text size is about their
-screen, and at the screen's size the caption was the loudest thing in the figure, `Pol II / input
-0–5.21` in a panel heading's type over the signal it only labels. Nothing in it is a control, so no
-room is kept for the autoscale mark. Both Export cards carry a **track captions** switch under the
-save row, on by default, for the reader who keys their figure elsewhere. Off, the lanes are saved
-bare. The screen keeps its captions either way, and so do the names inside a lane (a gene's, a
-feature's), which are the picture's own text and answer to the Tracks card's text toggle alone. It
-is one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
-off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5).
+**The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
+what it shows: the region on the first line, then the file, the bins, the score, the colour range
+and when it was made; a 1D browser figure names its genome, its window and the date on one line.
+Both are set in the axis labels' grey — the region at 11 px and weight 600, the rest at 10 px,
+before the text size is applied — because at 15 px and semibold in the page's ink the region was the
+largest type on the page and drew the eye away from the picture it names. Both Export cards carry a
+**caption** switch under the save row, on by default, for the reader who lays figures out with a
+legend of their own; off, the figure ends at its lowest track and keeps no room for the line. It is
+one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
+off in the 1D browser, and in the deck's figure, which takes the first map's (§16.5). The tracks'
+own names and ranges are the picture's and are saved as they are on screen, whatever the switch
+says.
 
 ### 7.3 Genome × genome overview — gated, not default
 

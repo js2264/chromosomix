@@ -22,7 +22,7 @@ node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells:
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
-node scripts/ui-captions.mjs gallery         # figures saved with track captions on and off: t1 … t7
+node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -78,13 +78,12 @@ annotations* and its key, a mark hidden from the key, one recoloured from it —
 checked to have taken the same colour — and one moved by typing over its row. Run it after any
 change to the marks, the Manual annotations card or the structure's key.
 
-The ninth saves **figures** with the Export card's *track captions* switch on and off (§7.2) and
-writes the saved PNGs themselves next to the shots, through a stand-in dialog that keeps the bytes:
-the map's figure both ways, then a deck with a tracks cell both ways — that cell is drawn by the 1D
-browser's own figure pass, not the map's — and the screen after them, which must still carry its
-own, larger captions. Run it after any change to how a lane is captioned or to a figure pass.
-Crop the 300 dpi PNGs to look at the captions: at the size they are written they are a few pixels
-in a whole-figure thumbnail.
+The ninth saves **figures** with the Export card's *caption* switch on and off (§7.2) and writes
+the saved PNGs themselves next to the shots, through a stand-in dialog that keeps the bytes: the
+map's figure both ways, a deck with a tracks cell both ways (the deck's figure takes the first map's
+caption), and the 1D browser demo's figure both ways, whose one-line caption is its own. It prints
+each figure's height, which must drop by the caption's room when the switch is off. Run it after any
+change to a figure's caption or to a figure pass.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

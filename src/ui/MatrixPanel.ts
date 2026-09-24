@@ -228,7 +228,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
-import { getExportPrefs, trackCaptionsField } from './exportPrefs'
+import { captionField, getExportPrefs } from './exportPrefs'
 import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 import {
@@ -1682,8 +1682,8 @@ export class MatrixPanel {
     })
     this.exportStatus = row.note
     this.copyButton = row.parts.copy
-    // Under the row it qualifies: what the saved figure writes on each lane.
-    row.body.append(trackCaptionsField())
+    // Under the row it qualifies: whether the saved figure says what it is.
+    row.body.append(captionField())
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every
@@ -3427,8 +3427,11 @@ export class MatrixPanel {
     // and a caption flush with the canvas edge hangs off the left of the
     // picture it belongs to.
     const left = origin.x + this.heatmap.dataRect.x
-    const caption = this.figureCaption(now)
-    const lines = captionLines(ctx, caption, Math.max(120, width - left))
+    // None at all where the Export card's *caption* is off: the figure then
+    // ends at the foot of its lowest lane.
+    const lines = getExportPrefs().caption
+      ? captionLines(ctx, this.figureCaption(now), Math.max(120, width - left))
+      : []
     const captionHeight = captionHeightOf(lines)
 
     // Pre-flight, because the failure mode is silent: past a browser's canvas
@@ -3469,7 +3472,7 @@ export class MatrixPanel {
       for (const line of lines) {
         const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
         ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
+        ctx.fillStyle = palette.labelColor
         // Baseline a little above the line's foot, so the two lines read as one
         // block rather than as two evenly spaced rows.
         ctx.fillText(line.text, left, y + height - 4)
@@ -3517,7 +3520,7 @@ export class MatrixPanel {
     if (measure === null) throw new Error('Could not measure the caption.')
     const left = origin.x + this.heatmap.dataRect.x
     const caption = this.figureCaption(now)
-    const lines = captionLines(measure, caption, Math.max(120, width - left))
+    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, width - left)) : []
     const height = body + captionHeightOf(lines)
 
     const page = new VectorPage(width, height)
@@ -3541,7 +3544,7 @@ export class MatrixPanel {
       for (const line of lines) {
         const step = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
         ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
+        ctx.fillStyle = palette.labelColor
         ctx.fillText(line.text, left, y + step - 4)
         y += step
       }
@@ -4346,7 +4349,6 @@ export class MatrixPanel {
       guide: this.laneHover,
       border: this.laneBorder,
       handles: true,
-      captions: 'screen',
       grip: this.laneHandle,
       scaling: this.laneScaling,
       palette: {
@@ -4372,8 +4374,6 @@ export class MatrixPanel {
     return {
       ...live,
       handles: false,
-      // Small, as a key on the page, or not at all — the Export card's switch.
-      captions: getExportPrefs().trackCaptions ? 'figure' : 'none',
       grip: null,
       scaling: null,
     }
@@ -8789,23 +8789,32 @@ export function readCanvasPalette(from: Element): {
 }
 
 /**
- * Body text for the exported caption's first line.
+ * Body text for what is written onto a figure.
  *
- * From the plot's own box, not the page's: the caption is drawn onto the figure,
- * which is light, so page text in a dark theme would have written it in pale
- * grey on white.
+ * From the plot's own box, not the page's: it is drawn onto the figure, which
+ * is light, so page text in a dark theme would have written it in pale grey on
+ * white.
  */
 function readPageText(from: Element): string {
   const value = getComputedStyle(from).getPropertyValue('--text').trim()
   return value === '' ? '#16181d' : value
 }
 
-/** Caption geometry, in CSS pixels. */
-const CAPTION_TOP = 14
-const CAPTION_TITLE_LINE = 19
-const CAPTION_DETAIL_LINE = 16
-const CAPTION_TITLE_FONT = '600 15px system-ui, sans-serif'
-const CAPTION_DETAIL_FONT = '12px system-ui, sans-serif'
+/**
+ * Caption geometry, in CSS pixels.
+ *
+ * Quiet on purpose: the caption says what the figure is and where it came from,
+ * and it is read once, after the picture. At fifteen pixels and semibold in the
+ * page's own ink the region was the largest type on the page — larger than the
+ * axis it names — so the eye went to the words under the map before the map.
+ * Now it is set just under the axis labels and in their grey, the subject a
+ * little heavier than the provenance under it; still read without leaning in.
+ */
+const CAPTION_TOP = 10
+const CAPTION_TITLE_LINE = 15
+const CAPTION_DETAIL_LINE = 13
+const CAPTION_TITLE_FONT = '600 11px system-ui, sans-serif'
+const CAPTION_DETAIL_FONT = '10px system-ui, sans-serif'
 
 /** One drawn caption line; `strong` is the subject, the rest is provenance. */
 interface CaptionLine {

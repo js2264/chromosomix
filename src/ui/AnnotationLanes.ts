@@ -64,7 +64,6 @@ import {
 } from '../render/lane'
 import {
   drawLaneLabel,
-  figureLabelStyle,
   labelEndFor,
   positionLabel,
   type LaneLabelSpec,
@@ -205,16 +204,6 @@ export interface LaneGeometry {
    * reading it.
    */
   handles: boolean
-  /**
-   * How each lane's caption — its name, chip and range — is written.
-   *
-   * `screen` at the reader's text size, as a thing to read and edit; `figure`
-   * small and fixed, as a key on a saved page (`figureLabelStyle`); `none` not
-   * at all, for the reader who turned captions off on the Export card. Only the
-   * caption: the names inside a lane — a gene's, a feature's — are the
-   * picture's own text and answer to the `text` option alone.
-   */
-  captions: 'screen' | 'figure' | 'none'
   /** The id of the lane under the pointer, whose handle is drawn full strength. */
   grip: string | null
   /**
@@ -1418,9 +1407,7 @@ export class AnnotationLanes {
         }
       }
       ctx.restore()
-      if (label !== null && geometry.captions !== 'none') {
-        this.labelLane(ctx, lane, geometry, label, state, labelBands)
-      }
+      if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1627,7 +1614,6 @@ export class AnnotationLanes {
     const runs = stacked
       ? label.entries.map((entry) => [entry])
       : [label.entries]
-    const style = geometry.captions === 'figure' ? figureLabelStyle() : laneLabelStyle()
     const boxes = drawLaneLabel(ctx, frames[0], {
       names: runs[0].map((entry) => ({
         id: entry.id,
@@ -1638,7 +1624,7 @@ export class AnnotationLanes {
       labelAt: label.at,
       column: null,
       ...(label.beside === true ? { detailBeside: true } : {}),
-      style,
+      style: laneLabelStyle(),
       palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
     })
     for (let at = 1; at < frames.length; at++) {
@@ -1652,7 +1638,7 @@ export class AnnotationLanes {
         detail: null,
         labelAt: label.at,
         column: null,
-        style,
+        style: laneLabelStyle(),
         palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
       })
       boxes.names.push(...more.names)

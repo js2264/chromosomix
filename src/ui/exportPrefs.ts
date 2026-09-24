@@ -3,14 +3,13 @@
  *
  * A sibling of `ui/plotOptions.ts`, and deliberately not a field in it. Those
  * are the overlays on screen, and a figure inherits them because a figure is
- * what was on screen; this is the one question a reader asks of the *figure*
- * alone — whether each track is captioned in it — and a caption that went off
- * on screen when it was turned off for the paper would take away the thing a
- * reader looks at to know which lane is which.
+ * what was on screen; this is a question a reader asks of the *figure* alone —
+ * whether it says under itself what it is — and the screen has no such line
+ * to turn off.
  *
  * One store for every Export card, because it is one preference: the map's
  * card and the 1D browser's both offer it, and the deck's figure is composed of
- * cells that each read it (§25.3).
+ * cells that each read it (§16.5).
  *
  * `localStorage`, not the URL hash, for §5.5's reason: how a reader likes their
  * figures captioned is not *what is being looked at*.
@@ -22,19 +21,17 @@ const KEY = 'metacooler-viewer:export'
 
 export interface ExportPrefs {
   /**
-   * Whether an exported figure writes each track's caption — its name, the
-   * colour chip before it and the range its values span — on its lane.
+   * Whether a saved figure writes its caption under itself: the region it
+   * shows, then the file, the bins, the score and the colour range, and when.
    *
-   * On by default: a figure whose lanes are unlabelled is a picture of four
-   * signals with no way to tell them apart, and the reader who wants that has a
-   * legend of their own to put beside it. When on, it is written small (see
-   * `figureLabelStyle` in `render/laneLabel.ts`), since on paper a caption is a
-   * key, not a control to be read across a desk.
+   * On by default, because a figure that says what it is survives being
+   * forwarded without the email it came in. Off for the reader laying figures
+   * out in a panel of their own, with a legend they wrote.
    */
-  trackCaptions: boolean
+  caption: boolean
 }
 
-export const DEFAULT_EXPORT_PREFS: ExportPrefs = { trackCaptions: true }
+export const DEFAULT_EXPORT_PREFS: ExportPrefs = { caption: true }
 
 let current: ExportPrefs | null = null
 const listeners = new Set<(prefs: ExportPrefs) => void>()
@@ -48,8 +45,7 @@ function read(): ExportPrefs {
     if (typeof parsed !== 'object' || parsed === null) return { ...DEFAULT_EXPORT_PREFS }
     const record = parsed as Record<string, unknown>
     return {
-      trackCaptions:
-        typeof record.trackCaptions === 'boolean' ? record.trackCaptions : DEFAULT_EXPORT_PREFS.trackCaptions,
+      caption: typeof record.caption === 'boolean' ? record.caption : DEFAULT_EXPORT_PREFS.caption,
     }
   } catch {
     return { ...DEFAULT_EXPORT_PREFS }
@@ -81,28 +77,28 @@ export function subscribeExportPrefs(listener: (prefs: ExportPrefs) => void): ()
 }
 
 /**
- * The Export card's switch for {@link ExportPrefs.trackCaptions}.
+ * The Export card's switch for {@link ExportPrefs.caption}.
  *
  * A factory mounted on both Export cards, like `textScaleField`: one preference,
  * offered where a reader is standing when they want it. The box follows the
  * store, so turning it off beside the map finds it off in the browser too.
  */
-export function trackCaptionsField(): HTMLElement {
+export function captionField(): HTMLElement {
   const box = el('input', { class: 'checkbox', type: 'checkbox' })
-  box.checked = getExportPrefs().trackCaptions
-  box.addEventListener('change', () => setExportPref('trackCaptions', box.checked))
-  // The box before its words, unlike the card's other rows: the words are the
-  // whole of what it says, and in the label column they broke over two lines.
+  box.checked = getExportPrefs().caption
+  box.addEventListener('change', () => setExportPref('caption', box.checked))
+  // The box before its word, unlike the card's other rows: the word is the
+  // whole of what it says.
   const row = el(
     'label',
     {
       class: 'field field-check',
       title:
-        'Write each track’s name, colour and range on its lane in the saved figure — small, as a ' +
-        'key. Off, the lanes are saved bare; the screen keeps its captions either way.',
+        'Write under the saved figure what it shows — the region, then the file, bins, score, ' +
+        'colour range and date. Off, the figure ends at its lowest track.',
     },
     box,
-    el('span', { class: 'field-label', text: 'track captions' }),
+    el('span', { class: 'field-label', text: 'caption' }),
   )
   // The store outlives this control — a card is rebuilt on every navigation and
   // nothing hands the outgoing one a teardown — so the listener retires itself
@@ -112,7 +108,7 @@ export function trackCaptionsField(): HTMLElement {
       off()
       return
     }
-    box.checked = prefs.trackCaptions
+    box.checked = prefs.caption
   })
   return row
 }

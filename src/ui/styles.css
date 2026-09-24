@@ -4206,8 +4206,8 @@ canvas.is-frozen {
   justify-self: start;
 }
 
-/* A switch whose words are its whole meaning: the box, then what it turns on,
-   on one line — in the 4.6rem label column "track captions" broke in two. */
+/* A switch whose word is its whole meaning: the box, then what it turns on,
+   on one line, rather than a label column with one word in it. */
 .controls-card .field-check {
   grid-template-columns: auto minmax(0, 1fr);
   justify-content: start;

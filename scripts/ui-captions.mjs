@@ -1,15 +1,16 @@
 /**
- * Save figures in headless Chromium with the Export card's *track captions*
- * switch on and off, and write the figures themselves next to the shots (§7.2).
+ * Save figures in headless Chromium with the Export card's *caption* switch on
+ * and off, and write the figures themselves next to the shots (§7.2).
  *
  * The save dialog is stubbed, as `ui-saves.mjs` does it, but this stand-in
  * keeps the bytes: what is being checked is the saved picture, not the dialog.
  * Saves the map's figure captioned and bare, then makes a deck — the demo
  * structure dropped, a tracks cell added with two tracks placed on it — and
- * saves the deck's figure both ways, since its tracks cell is drawn by the 1D
- * browser's own figure pass and not the map's. Shoots the Export card with the
- * switch, and prints the switch's state before and after each save, so a save
- * that ignored it is a line here as well as a picture.
+ * saves the deck's figure both ways, then opens the 1D browser demo and saves
+ * its figure both ways too, since its one-line caption is its own. Shoots the
+ * Export card with the switch, and prints the switch's state at each save and
+ * each figure's height, so a save that ignored it is a line here as well as a
+ * picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-captions.mjs [out-dir]
@@ -58,7 +59,7 @@ await context.addInitScript(() => {
     }),
   })
 })
-const page = await context.newPage()
+let page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
@@ -71,14 +72,17 @@ const fold = async (title) => {
 }
 const exportCard = () => page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Export$/ }) }).first()
 const captions = () => exportCard().locator('.field-check input[type="checkbox"]')
+/** A saved PNG's height in pixels, read from its header. */
+const heightOf = (bytes) => bytes.readUInt32BE(20)
 /** Press the Export card's save and write the figure it saved to `<name>.png`. */
 const saveAs = async (name) => {
   const before = await page.evaluate(() => window.__files.length)
   await exportCard().locator('.export-acts button').first().click()
   await page.waitForFunction((n) => window.__files.length > n, before, { timeout: 120000 })
   const file = await page.evaluate(() => window.__files.at(-1))
-  writeFileSync(`${OUT}/${name}.png`, Buffer.from(file.b64, 'base64'))
-  console.log('saved', name, `(${file.name}, captions ${(await captions().isChecked()) ? 'on' : 'off'})`)
+  const bytes = Buffer.from(file.b64, 'base64')
+  writeFileSync(`${OUT}/${name}.png`, bytes)
+  console.log('saved', name, `(${file.name}, caption ${(await captions().isChecked()) ? 'on' : 'off'}, ${heightOf(bytes)} px tall)`)
 }
 
 try {
@@ -132,9 +136,23 @@ try {
   await captions().uncheck()
   await saveAs('t6-deck-figure-bare')
   await captions().check()
-  await sleep(800)
-  // The screen after two figure passes: its captions where they were.
-  await shot('t7-deck-on-screen-after')
+
+  // The 1D browser's own figure, whose caption is one line of its own.
+  // In a page of its own: a config opened over a tab that has a file asks where
+  // it goes rather than going.
+  await page.close()
+  page = await context.newPage()
+  page.on('pageerror', (e) => errors.push(String(e)))
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.waitForFunction(() => document.querySelector('.browser-canvas') !== null, null, { timeout: 120000 })
+  await sleep(5000)
+  await fold('Show the Aesthetics panel')
+  await exportCard().locator('select.select-format').selectOption('png')
+  await shot('t7-browser-on-screen')
+  await saveAs('t8-browser-figure-captioned')
+  await captions().uncheck()
+  await saveAs('t9-browser-figure-bare')
+  await captions().check()
 
   console.log(errors.length === 0 ? 'no page errors' : `page errors:\n${errors.join('\n')}`)
 } finally {

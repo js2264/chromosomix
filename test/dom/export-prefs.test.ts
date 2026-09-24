@@ -1,38 +1,38 @@
 // @vitest-environment jsdom
 /**
- * The Export card's *track captions* switch (§7.2), and the style a caption
- * is written in when it is on.
+ * The Export card's *caption* switch (§7.2): whether a saved figure writes
+ * under itself what it shows.
  *
- * Two properties are asserted, both silent when wrong. The switch is one
- * preference, remembered and shared: turned off beside the map, it is off in
- * the 1D browser's card too, and still off tomorrow. And a figure's caption is
- * small and *fixed* — the reader's text size is about their screen, and a
- * caption that grew with it put the type of a panel heading over the signal it
- * only labels.
+ * One preference, remembered and shared — turned off beside the map, it is off
+ * in the 1D browser's card too, and still off tomorrow — and one the figure
+ * obeys: off, the figure ends at its lowest track, with no room kept for a line
+ * that is not written.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { FIGURE_NAME_FONT, FIGURE_RANGE_FONT, figureLabelStyle } from '@/render/laneLabel'
 import {
   DEFAULT_EXPORT_PREFS,
+  captionField,
   getExportPrefs,
   resetExportPrefsForTests,
   setExportPref,
-  trackCaptionsField,
 } from '@/ui/exportPrefs'
-import { setTextScale, TEXT_SCALE_STEPS } from '@/ui/textScale'
+import { MatrixPanel } from '@/ui/MatrixPanel'
+import { setUpDom, type DomTeardown } from '../support/dom'
 
 const KEY = 'metacooler-viewer:export'
 
+let teardown: DomTeardown
+
 beforeEach(() => {
+  teardown = setUpDom({ canvas: 'stub' })
   window.localStorage.clear()
   resetExportPrefsForTests()
 })
 
 afterEach(() => {
-  setTextScale(1)
-  document.body.replaceChildren()
+  teardown()
 })
 
 /** The box a field row carries, and the row's label. */
@@ -42,70 +42,61 @@ function parts(row: HTMLElement): { box: HTMLInputElement; label: string } {
   return { box, label: row.querySelector('.field-label')?.textContent ?? '' }
 }
 
-describe('the track captions switch', () => {
+describe('the caption switch', () => {
   it('is on until a reader turns it off', () => {
-    expect(DEFAULT_EXPORT_PREFS.trackCaptions).toBe(true)
-    expect(getExportPrefs().trackCaptions).toBe(true)
-    const row = trackCaptionsField()
+    expect(DEFAULT_EXPORT_PREFS.caption).toBe(true)
+    expect(getExportPrefs().caption).toBe(true)
+    const row = captionField()
     document.body.append(row)
-    expect(parts(row)).toMatchObject({ label: 'track captions' })
+    expect(parts(row).label).toBe('caption')
     expect(parts(row).box.checked).toBe(true)
   })
 
   it('remembers the choice across a reload', () => {
-    const row = trackCaptionsField()
+    const row = captionField()
     document.body.append(row)
     const { box } = parts(row)
     box.checked = false
     box.dispatchEvent(new Event('change'))
-    expect(getExportPrefs().trackCaptions).toBe(false)
-    expect(JSON.parse(window.localStorage.getItem(KEY) ?? '{}')).toEqual({ trackCaptions: false })
+    expect(getExportPrefs().caption).toBe(false)
+    expect(JSON.parse(window.localStorage.getItem(KEY) ?? '{}')).toEqual({ caption: false })
     // A fresh page: the cache forgotten, the stored value read back.
     resetExportPrefsForTests()
-    expect(getExportPrefs().trackCaptions).toBe(false)
+    expect(getExportPrefs().caption).toBe(false)
   })
 
   it('keeps both Export cards in step', () => {
-    const beside = trackCaptionsField()
-    const browser = trackCaptionsField()
+    const beside = captionField()
+    const browser = captionField()
     document.body.append(beside, browser)
-    setExportPref('trackCaptions', false)
+    setExportPref('caption', false)
     expect(parts(beside).box.checked).toBe(false)
     expect(parts(browser).box.checked).toBe(false)
   })
 
   it('reads a stored value it does not understand as the default', () => {
-    window.localStorage.setItem(KEY, JSON.stringify({ trackCaptions: 'yes' }))
-    expect(getExportPrefs().trackCaptions).toBe(true)
+    window.localStorage.setItem(KEY, JSON.stringify({ caption: 'yes' }))
+    expect(getExportPrefs().caption).toBe(true)
     window.localStorage.setItem(KEY, 'not json')
     resetExportPrefsForTests()
-    expect(getExportPrefs().trackCaptions).toBe(true)
+    expect(getExportPrefs().caption).toBe(true)
   })
 })
 
-describe('a caption in a saved figure', () => {
-  it('is written smaller than on screen, and not in bold', () => {
-    const style = figureLabelStyle()
-    expect(style.nameFont).toBe(FIGURE_NAME_FONT)
-    expect(style.rangeFont).toBe(FIGURE_RANGE_FONT)
-    const px = (font: string): number => Number(/([\d.]+)px/.exec(font)?.[1])
-    // The screen's smallest caption is nine pixels, beside a map, at 600.
-    expect(px(style.nameFont)).toBeLessThan(9 * 0.75)
-    expect(px(style.rangeFont)).toBeLessThanOrEqual(px(style.nameFont))
-    expect(style.nameFont).not.toMatch(/\b(600|700|bold)\b/)
-  })
-
-  it('does not grow with the reader’s text size', () => {
-    const at = TEXT_SCALE_STEPS.map((step) => {
-      setTextScale(step)
-      return figureLabelStyle()
-    })
-    for (const style of at) expect(style).toEqual(at[0])
-  })
-
-  it('keeps no room for controls a page does not have', () => {
-    const style = figureLabelStyle()
-    expect(style.autoSlot).toBe(0)
-    expect(style.progressWidth).toBe(0)
+describe('a saved map figure', () => {
+  it('keeps room for its caption only while the switch is on', () => {
+    const panel = new MatrixPanel({ binsize: 1000, detachedControls: true, hideTitle: true })
+    document.body.append(panel.el)
+    try {
+      const captioned = panel.exportCanvas(96, new Date(2026, 8, 24))
+      setExportPref('caption', false)
+      const bare = panel.exportCanvas(96, new Date(2026, 8, 24))
+      // At 96 dpi a CSS pixel is a pixel: the difference is the caption block,
+      // a subject line and at least one line of provenance under it.
+      expect(captioned.height - bare.height).toBeGreaterThanOrEqual(10 + 15)
+      expect(bare.width).toBe(captioned.width)
+    } finally {
+      panel.destroy()
+    }
   })
 })
