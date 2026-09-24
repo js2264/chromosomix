@@ -1095,6 +1095,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An exported P value is written as the drawer shows it, not as 0 (§18.7).** A table column that
+  says its values may be very small — *Signal by group*'s P and q — was written to a TSV at its fixed
+  places, so a P of 6.5 × 10⁻²² came out `0`, a claim the test never made and one a script could not
+  tell from a P that was. It is written `6.5319e-22` now, as the drawer draws it.
+
 - **A task run again draws its new values at once (§18.5).** A re-run replaces its own tracks under
   the same ids, and every lane beside the map, in the 1D browser and on a model went on drawing the
   previous run's numbers, under the new run's name, until a pan or a zoom refetched them — so

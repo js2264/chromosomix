@@ -128,7 +128,7 @@ def mr(*args, out=None):
     for note in notes:
         print('    note:', note)
     print(f'    {seconds:.1f} s')
-    sample = next((part for part in Path(str(argv[1]).split('::')[0]).parts if part in SECONDS), None)
+    sample = next((part for arg in argv[1:] for part in Path(arg.split('::')[0]).parts if part in SECONDS), None)
     if sample is not None:
         SECONDS[sample] += seconds
     return done.stdout
@@ -426,6 +426,13 @@ def analyse(card):
     step(d / f'compartments-distance-{METHOD}', 'compartments', at, *common, '--expected', 'distance')
     step(d / f'compartments-arms-{METHOD}', 'compartments', at, *common, '--expected', 'arms',
          '--armWindow', ARM_WINDOW)
+    # GC content of A against B, by Signal by group — the task the app runs, so the test and its P
+    # are the tool's own rather than recomputed here.
+    if fasta is not None:
+        step(d / f'groups-{METHOD}', 'groupsignal',
+             '--tracks', one(d / 'composition', '*composition-gc.bw'),
+             '--features', one(d / f'compartments-arms-{METHOD}', '*compartment-ab.bed'),
+             '--outside', 'false', '--resolution', RES, *frame)
     step(d / 'model', 'reconstruct3d', at, '--region', chrom, '--method', 'nb', '--alpha', 3,
          '--iterations', MODEL_ITERATIONS, *frame)
     model = one(d / 'model', '*reconstructed-model.bed3d')
@@ -449,7 +456,10 @@ def analyse(card):
         model=beads(model, chrom, n),
     )
     r['gc'] = r['cumulative'] = np.full(n, np.nan)
+    r['groups'], r['group tests'] = [], []
     if fasta is not None:
+        r['groups'] = rows_of(one(d / f'groups-{METHOD}', '*groupsignal-groups.tsv').read_text())
+        r['group tests'] = rows_of(one(d / f'groups-{METHOD}', '*groupsignal-tests.tsv').read_text())
         r['gc'] = profile(one(d / 'composition', '*composition-gc.bedGraph'), chrom, n)
         r['cumulative'] = profile(one(d / 'composition', '*composition-cumulative.bedGraph'), chrom, n)
     # The maps are the CLI's own inputs only if the matrix METHOD decomposes has the CLI's E1 first.
@@ -671,7 +681,8 @@ for species, r in results.items():
 
 Per species, each with the test behind it. **Distance from the origin** is in bins, the short way
 round a circle; its Spearman |ρ| with E1 is how far an eigenvector follows the ori–ter axis rather
-than compartments. **The secondary diagonal** is read as the inter-arm task reads it — the cells within
+than compartments. **GC content of A against B** is *Signal by group*'s — its group means and its
+Mann–Whitney test, as the app reports them. **The secondary diagonal** is read as the inter-arm task reads it — the cells within
 `BAND` bins of a bin's mirror across the origin, on opposite arms and more than `2·BAND + 2` bins
 from the main diagonal — as its mean log2 O/E by distance (which is the task's score, recomputed
 here) and along both arms: what the detrending leaves of it. **A** is where E1 (arms) is positive once GC content has signed it, **B** where it is
@@ -722,11 +733,18 @@ def quoted(r):
     both = np.isfinite(e1) & np.isfinite(gc)
     if both.sum() > 2:
         rr, rp = stats.pearsonr(e1[both], gc[both])
-        a, b = gc[both & (e1 > 0)] * 100, gc[both & (e1 < 0)] * 100
         low = both & (gc <= np.nanpercentile(gc[both], 5))
-        out.update({'r(E1, GC)': rr, 'P(r)': rp, 'GC A %': a.mean(), 'GC B %': b.mean(),
-                    'P(A vs B)': stats.mannwhitneyu(a, b, alternative='two-sided')[1],
-                    'A share of bins': (e1[both] > 0).mean(), 'AT-richest 5% in B': (e1[low] < 0).mean()})
+        in_b, total_b = int((e1[low] < 0).sum()), int((e1[both] < 0).sum())
+        out.update({'r(E1, GC)': rr, 'P(r)': rp, 'A share of bins': (e1[both] > 0).mean(),
+                    'AT-richest 5% in B': in_b / low.sum(),
+                    # One-sided hypergeometric: that many of the AT-richest bins in B, or more.
+                    'P(AT-richest in B)': stats.hypergeom.sf(in_b - 1, int(both.sum()), total_b, int(low.sum()))})
+        # Signal by group's own numbers: each group's mean GC, and its Mann–Whitney test.
+        means = {row['group']: num(row['mean']) * 100 for row in r['groups']}
+        test = next((row for row in r['group tests'] if {row['a'], row['b']} == {'A', 'B'}), None)
+        out.update({'GC A %': means.get('A', np.nan), 'GC B %': means.get('B', np.nan)})
+        if test is not None:
+            out.update({'P(A vs B)': num(test['p']), 'effect (rank-biserial)': num(test['effect'])})
     ok = np.isfinite(e1) & np.isfinite(radial)
     if ok.sum() > 2:
         rho, rho_p = stats.spearmanr(e1[ok], radial[ok])

@@ -16,6 +16,7 @@ import type {
   MatrixOutput,
   ProfileOutput,
   Provenance,
+  TableOutput,
   TaskOutput,
 } from '@/analysis/types'
 
@@ -238,6 +239,40 @@ describe('outputToTsv, matrix', () => {
       ['0', '1', '2', '3'],
       ['1', '4', '', '6'],
     ])
+  })
+})
+
+/**
+ * A column that says its values may be very small (a P, a q) keeps them: the
+ * drawer writes `6.53e-23`, and so must the file, where a `0` would be a claim
+ * the test never made and a script could not tell from a P that really was.
+ */
+describe('outputToTsv, table', () => {
+  const tests: TableOutput = {
+    kind: 'table',
+    id: 'groupsignal-tests',
+    label: 'Between groups',
+    columns: [
+      { key: 'test', label: 'Test', kind: 'text' },
+      { key: 'effect', label: 'Effect', kind: 'number', digits: 3 },
+      { key: 'p', label: 'P', kind: 'number', digits: 4, scientific: true },
+    ],
+    rows: [
+      { test: 'Mann–Whitney U', effect: 0.4449, p: 6.5312345e-23 },
+      { test: 'Mann–Whitney U', effect: 0.1, p: 0.0123 },
+      { test: 'Mann–Whitney U', effect: 0.00001, p: 0 },
+    ],
+  }
+
+  it('writes a value too small for its digits with an exponent, where the column allows it', () => {
+    const rows = body(outputToTsv(tests, PROVENANCE))
+    expect(rows[0]).toEqual(['test', 'effect', 'p'])
+    expect(rows[1]).toEqual(['Mann–Whitney U', '0.445', '6.53123e-23'])
+    expect(Number(rows[1][2])).toBeCloseTo(6.53123e-23, 28)
+    // A value its digits can hold is written as they say.
+    expect(rows[2][2]).toBe('0.0123')
+    // Zero is zero, and a column that did not ask keeps its places.
+    expect(rows[3]).toEqual(['Mann–Whitney U', '0', '0'])
   })
 })
 

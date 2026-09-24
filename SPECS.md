@@ -6153,7 +6153,8 @@ bases, mean, SD, median, quartiles, and its mean less that of every other stretc
 effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
 asymptotic forms SciPy uses and held to its numbers, with every test's q-value (Benjamini–Hochberg)
 adjusted together, and P and q written in scientific notation where four decimals would print a zero
-(`TableColumn.scientific`) — a P of 10⁻¹³ is not `0.0000`. A group with nothing in it — the rest of
+(`TableColumn.scientific`) — a P of 10⁻¹³ is not `0.0000` — in the drawer and in the exported TSV
+alike, where the TSV keeps six significant digits (`6.5319e-22`). A group with nothing in it — the rest of
 the genome, where a compartment call covers every base — is left out and named in a note. A row per
 feature, with its mean on every track, is one toggle away.
 *Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
