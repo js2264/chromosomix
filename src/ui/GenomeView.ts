@@ -11,7 +11,7 @@
 import type { ParsedRange, Transform } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
-import { el } from './dom'
+import { el, titleWhenCut } from './dom'
 import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type AnnotationContext,
   type DerivePresentation,
@@ -135,6 +135,8 @@ export class GenomeView {
   constructor(private readonly props: GenomeViewProps) {
     this.level = props.level
     this.summary = el('p', { class: 'summary' })
+    // One line under the title, with the whole of it in a tooltip where it is cut.
+    titleWhenCut(this.summary)
     this.note = el('p', { class: 'note hidden' })
     this.search = new SearchBox({
       placeholder: 'contig, or contig:start-end',

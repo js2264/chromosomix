@@ -32,7 +32,7 @@
  * `PanelDeck` on the way.
  */
 
-import { el } from '../ui/dom'
+import { dragHasMapRow, el, readMapRow, type MapRow } from '../ui/dom'
 import { icon } from '../ui/icons'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
@@ -41,6 +41,11 @@ import type { GrowDirection } from './deck'
 export interface DeckFrameProps {
   /** `+` was pressed, or a file was dropped on an edge with nothing to fill. */
   onGrow(direction: GrowDirection, picked?: PickedFile): void
+  /**
+   * A row of the Contact maps card dropped on an edge (§16.9): open the cells
+   * that edge names and put that map in the first of them.
+   */
+  onGrowWithMap?(direction: GrowDirection, row: MapRow): void
 }
 
 /** What the cells an edge opens may hold, which is what its note is worded from. */
@@ -233,6 +238,14 @@ export class DeckFrame {
         void readFileDrag(event).then((picked) => {
           if (picked !== null) this.props.onGrow(direction, picked)
         })
+        return
+      }
+      // A map off the Contact maps card, which carries no file: it names one
+      // the session already holds.
+      if (dragHasMapRow(event)) {
+        event.preventDefault()
+        const row = readMapRow(event)
+        if (row !== null) this.props.onGrowWithMap?.(direction, row)
         return
       }
       const file = event.dataTransfer?.files?.[0]

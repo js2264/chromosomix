@@ -56,10 +56,14 @@ import type { LaneEdge } from '../annotations/types'
 import type { PickHandlers } from '../ui/mapPick'
 import {
   MatrixPanel,
+  axisRegion,
   type AnnotationContext,
   type DerivePresentation,
+  type SelectedRegion,
   type TurnPresentation,
 } from '../ui/MatrixPanel'
+import { zoomedRegion } from '../ui/RegionView'
+import { regionLabel } from '../genome/assembly'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import { parseSmooth } from '../render/smooth'
 import type { ScaleState } from '../ui/GenomeView'
@@ -67,10 +71,13 @@ import {
   STRUCTURE_DRAG_TYPE,
   TRACK_DRAG_TYPE,
   dragHasFiles,
+  dragHasMapRow,
   dragHasStructure,
   dragHasTrack,
   el,
   fmt,
+  readMapRow,
+  type MapRow,
 } from '../ui/dom'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
@@ -328,6 +335,30 @@ export interface MapPanelProps {
    * one, bound to a picture that no longer exists.
    */
   onCardChange?(): void
+  /**
+   * A box was drawn on this map — the Option-Shift drag that, on the first
+   * map, re-reads the window it frames (§16.3).
+   *
+   * The deck decides what it means, because the answer depends on the chain:
+   * a map following the deck moves the deck there, and one moving on its own
+   * reads that window for itself ({@link MapPanel.readOwn}). Absent, the box
+   * zooms the picture this map already holds, which is what it always did.
+   */
+  onSelectRegion?(selection: SelectedRegion): void
+  /**
+   * This map's own window was widened, narrowed or given back (§16.3) — the
+   * deck's cue to re-ask the lock and the echoes, which read it.
+   */
+  onOwnPlace?(): void
+}
+
+/**
+ * A window a companion reads **for itself** rather than the deck's (§16.3), in
+ * the grammar a region box takes: a region on the diagonal, or a pair of them.
+ */
+export interface OwnPlace {
+  rows: string
+  cols?: string
 }
 
 export class MapPanel {
@@ -424,6 +455,20 @@ export class MapPanel {
    */
   private expectedOwn: boolean | null = null
   private smoothOwn: string | null = null
+  /**
+   * The window this map reads for itself, or `null` for the deck's (§16.3).
+   *
+   * Set by a box drawn on it while its chain is open, which is the one gesture
+   * that on the first map re-reads the window it frames — and on a companion
+   * used only to magnify the block it already held, so a 10 kb rung reading a
+   * whole mouse chromosome could never be drawn at 10 kb: the block was pooled
+   * to fit the budget, and zooming into it drew the pooled cells larger.
+   * Reading the window itself is what makes each map's resolution its own.
+   * Taken off by the pill in the heading and by closing the chain again.
+   */
+  private ownPlace: OwnPlace | null = null
+  /** The pill in the heading naming {@link ownPlace}, hidden while there is none. */
+  private readonly placeEl = el('span', { class: 'deck-place hidden' })
   /**
    * The annotation store the current panel draws its lanes from.
    *
@@ -531,6 +576,10 @@ export class MapPanel {
       if (held.score !== undefined) this.scoreOverride = held.score
       if (held.oe !== undefined) this.expectedOwn = held.oe
       if (held.smooth !== undefined) this.smoothOwn = held.smooth
+      // Only on a map that is still off the deck: a window of its own is what
+      // an open chain is for, and one restored under a closed chain would be a
+      // map the lock follows reading somewhere the others are not.
+      if (held.place !== undefined && held.locked === false) this.ownPlace = held.place
     }
     this.seed()
     this.el = el(
@@ -542,6 +591,7 @@ export class MapPanel {
         this.grip(),
         this.nameEl,
         this.entryPicker,
+        this.placeEl,
         this.starButton,
         this.lockButton,
         iconButton('x', `Close ${fileLabel(props.uri)}`, () => props.onClose(), {
@@ -556,6 +606,7 @@ export class MapPanel {
       this.body,
     )
     this.say('opening…')
+    this.paintPlace()
   }
 
   /**
@@ -660,6 +711,11 @@ export class MapPanel {
   /** What this panel is actually reading — the entry, where it descended into one. */
   get uri(): string {
     return this.resolved ?? this.props.uri
+  }
+
+  /** Where this panel's bytes come from, so the map can be opened again elsewhere. */
+  get sourceSpec(): SourceSpec {
+    return this.props.source
   }
 
   /** The map, for the deck's lock; `null` until this panel has read a block. */
@@ -930,6 +986,118 @@ export class MapPanel {
     this.smoothOwn ??= shared.smooth
   }
 
+  // -------------------------------------------------------------------------
+  // A window of its own (§16.3)
+  // -------------------------------------------------------------------------
+
+  /** The block this map reads: the deck's, or its own window where it has one. */
+  private planOf(state: ViewState): BlockPlan {
+    const shared = planFor(state)
+    // A view of the file rather than of a place has nothing for a window to be
+    // a window *of*, and the deck is not framed over one anyway.
+    if (shared.kind === 'none' || this.ownPlace === null) return shared
+    return {
+      kind: 'names',
+      rows: this.ownPlace.rows,
+      ...(this.ownPlace.cols === undefined ? {} : { cols: this.ownPlace.cols }),
+    }
+  }
+
+  /**
+   * The level this map reads at: the deck's, or bins in a window of its own —
+   * a window is a stretch of sequence, and a whole chromosome drawn as one
+   * contig-level cell would be a window of nothing.
+   */
+  private levelOf(state: ViewState): ReturnType<typeof matrixLevel> {
+    return this.ownPlace === null ? matrixLevel(state) : 'bin'
+  }
+
+  /** Whether this map is reading a window of its own rather than the deck's. */
+  get hasOwnPlace(): boolean {
+    return this.ownPlace !== null
+  }
+
+  /** What this map's block is of, for telling two maps' blocks apart; `''` for the deck's. */
+  get placeKey(): string {
+    return this.ownPlace === null ? '' : JSON.stringify(this.ownPlace)
+  }
+
+  /**
+   * Read the window a box drawn on this map frames, **for this map alone**
+   * (§16.3) — at its own rung, pooled only as far as its share of the budget
+   * needs, exactly as the first map re-reads the window a box frames on it.
+   */
+  readOwn(selection: SelectedRegion): void {
+    this.setOwnPlace({
+      rows: axisRegion(selection.rows),
+      ...(selection.diagonal ? {} : { cols: axisRegion(selection.cols) }),
+    })
+  }
+
+  /** Read the deck's window again — the pill's ×, and the chain being closed. */
+  clearOwnPlace(): void {
+    this.setOwnPlace(null)
+  }
+
+  private setOwnPlace(place: OwnPlace | null): void {
+    if (this.placeKey === (place === null ? '' : JSON.stringify(place))) return
+    this.ownPlace = place
+    this.paintPlace()
+    this.reportLook()
+    this.props.onOwnPlace?.()
+    // `read` is keyed on the plan, which has just changed, so this reads.
+    if (this.state !== null) void this.load(this.state)
+  }
+
+  /**
+   * Widen this map's own window threefold about what is on screen — the first
+   * map's `⊖3×`, for the one map a box has narrowed and nothing else can
+   * widen: a scroll stops at the edge of what was read, and a second box can
+   * only narrow it. One press from the whole sequence is the whole sequence.
+   */
+  private widenOwn(): void {
+    const framed = this.panel?.framedRegion() ?? null
+    const own = this.ownPlace
+    if (framed === null || own === null || own.cols !== undefined) return
+    const wider = zoomedRegion(framed, 3, { floor: this.binsize() ?? 1 })
+    if (wider !== null) this.setOwnPlace({ rows: wider })
+  }
+
+  /**
+   * The pill in the heading: the window this map reads for itself, a `⊖3×` to
+   * widen it, and a `×` to read the deck's again. A bordered pill so the `×`
+   * inside it reads as closing *the window* and not the cell, whose own `×` is
+   * at the far end of the heading.
+   */
+  private paintPlace(): void {
+    const own = this.ownPlace
+    this.placeEl.classList.toggle('hidden', own === null)
+    if (own === null) {
+      this.placeEl.replaceChildren()
+      return
+    }
+    const label =
+      own.cols === undefined ? regionLabel(own.rows) : `${regionLabel(own.rows)} × ${regionLabel(own.cols)}`
+    this.placeEl.title =
+      `This map is reading ${label} for itself, at its own resolution, and not the window the ` +
+      'others are showing. Draw another box on it to narrow it again.'
+    const widen = iconButton('zoom-out', 'Widen this map’s own window 3× about what is on screen', () => this.widenOwn(), {
+      class: 'btn btn-icon deck-place-widen',
+      size: 12,
+    })
+    // Only a window on the diagonal has one range to widen; a pair is two.
+    widen.disabled = own.cols !== undefined
+    this.placeEl.replaceChildren(
+      icon('scan', { size: 12 }),
+      el('span', { class: 'deck-place-label', text: label }),
+      widen,
+      iconButton('x', 'Back to the deck’s window: read the region the other maps are showing', () => this.clearOwnPlace(), {
+        class: 'btn btn-icon deck-place-clear',
+        size: 12,
+      }),
+    )
+  }
+
   /**
    * Draw and name this map's chain from the state it is in.
    *
@@ -1194,7 +1362,7 @@ export class MapPanel {
   private async load(state: ViewState): Promise<void> {
     this.state = state
     this.seed()
-    const plan = planFor(state)
+    const plan = this.planOf(state)
     if (plan.kind === 'none') {
       this.read = null
       this.body.replaceChildren()
@@ -1280,7 +1448,7 @@ export class MapPanel {
     // pin a panel to the reading it made while it was still guessing.
     return JSON.stringify([
       plan,
-      matrixLevel(state),
+      this.levelOf(state),
       this.scoreOf(info, state).id,
       this.props.naming?.() ?? null,
     ])
@@ -1335,6 +1503,7 @@ export class MapPanel {
       ...(this.scoreOverride === null ? {} : { score: this.scoreOverride }),
       ...(this.expectedOwn === null ? {} : { oe: this.expectedOwn }),
       ...(this.smoothOwn === null ? {} : { smooth: this.smoothOwn }),
+      ...(this.ownPlace === null ? {} : { place: this.ownPlace }),
     })
   }
 
@@ -1344,7 +1513,7 @@ export class MapPanel {
     info: OpenResult,
   ): Promise<MatrixResult> {
     const choice = this.scoreOf(info, state)
-    const level = matrixLevel(state)
+    const level = this.levelOf(state)
     // Resolved against *this* file's columns rather than carried over from the
     // lead: a hash naming `expected` is naming a column, and the file beside it
     // may not have one. Falling back to counts is the same rule `scoreFor`
@@ -1501,6 +1670,13 @@ export class MapPanel {
           current: this.scoreOf(info, state).id,
           onChange: (choice) => this.useScore(choice.id),
         },
+        // A box drawn on this map is the deck's to answer (§16.3): it moves the
+        // deck while this map follows it, and reads a window for this map alone
+        // while it does not. Without the handler the renderer would only
+        // magnify the block already here, which is what a companion used to do.
+        ...(this.props.onSelectRegion === undefined
+          ? {}
+          : { onSelectRegion: (selection: SelectedRegion) => this.props.onSelectRegion?.(selection) }),
         // The clip a companion arrives at is its own — see {@link applyLook}.
         onScaleChange: (scale) => {
           this.look = scale
@@ -1721,6 +1897,12 @@ export class VacantPanel {
      * same routing a file dropped from the desktop takes.
      */
     onPicked?(picked: PickedFile): void
+    /**
+     * A row of the Contact maps card dropped here (§16.9): that map in this
+     * cell — a companion moved here, or the first map or its compared file
+     * opened here as a picture of its own.
+     */
+    onMapRow?(row: MapRow): void
     onClose(): void
   }) {
     const drawn = props.origin === 'drawn'
@@ -1780,8 +1962,11 @@ export class VacantPanel {
       props.onStructure !== undefined && dragHasStructure(event)
     const takesTrack = (event: DragEvent): boolean => props.onTrack !== undefined && dragHasTrack(event)
     const takesRow = (event: DragEvent): boolean => props.onPicked !== undefined && dragHasFileRow(event)
+    const takesMap = (event: DragEvent): boolean => props.onMapRow !== undefined && dragHasMapRow(event)
     zone.addEventListener('dragover', (event) => {
-      if (!dragHasFiles(event) && !takesStructure(event) && !takesTrack(event) && !takesRow(event)) return
+      if (!dragHasFiles(event) && !takesStructure(event) && !takesTrack(event) && !takesRow(event) && !takesMap(event)) {
+        return
+      }
       event.preventDefault()
       if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'copy'
       zone.classList.add('over')
@@ -1796,6 +1981,13 @@ export class VacantPanel {
       if (model !== '' && props.onStructure !== undefined) {
         event.stopPropagation()
         props.onStructure(model)
+        return
+      }
+      // A map off the Contact maps card: this cell is where it goes.
+      const map = props.onMapRow === undefined ? null : readMapRow(event)
+      if (map !== null && props.onMapRow !== undefined) {
+        event.stopPropagation()
+        props.onMapRow(map)
         return
       }
       // A track row the same way: it carries an id and no file, and the

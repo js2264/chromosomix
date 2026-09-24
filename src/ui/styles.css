@@ -860,6 +860,12 @@ p {
   color: var(--text-dim);
 }
 
+/* A map the eye took out of the deck (§16.9): still listed, and dimmed, as a
+   name with no picture behind it. */
+.compare-deck-row.is-parked .ann-name {
+  color: var(--text-dim);
+}
+
 /* A map's row is a track's row — `.ann-row` from the Tracks card, so the two
    lists are packed the same way and every rule that takes the borders off a
    ready row's controls reaches these too. Nothing is left to say about the row
@@ -1542,20 +1548,22 @@ p {
  * drawn picture.
  */
 .content {
-  /* `auto`, not `0`, and that is a decision about which surface wins. A basis of
-     zero would ask only for the room the columns leave — so a column would keep
-     its width until the window itself ran out — but on a 1366-wide laptop with
-     four columns open that leaves the map its floor and nothing more, 288
-     pixels instead of 446. `auto` lets the picture pull the columns down to
-     their own minimum widths first, which is the right order: the map is what
-     the file was opened for.
+  /* **`0`, so a column keeps the width it was given.** The centre takes the room
+     the columns leave, and the columns give way only when the window itself runs
+     out — down to their floors, never because of what the centre holds.
 
-     The cost is that a *wide* surface pulls on them too — the Genomes table is
-     eleven columns, so opening it narrows General from 288 to its floor of 240.
-     That is a width a reader did not ask for, and it is the price of the laptop
-     behaviour above; at 240 the column's own cards still read, which is what the
-     floor is for. */
-  flex: 1 1 auto;
+     It was `auto`, on the argument that the picture should pull the columns down
+     to their minimums before it was itself squeezed. What `auto` measures is the
+     centre's *content*, though, and the content moves: the heading's summary is
+     a line whose length changes with every zoom (`… · IX:276,001-439,888 +
+     X:1-672,000 · 835.9 kb × …`), the Genomes table is eleven columns, and each
+     of them re-divided the row — so a column the reader had set at 288 pixels
+     came back at 250 after a zoom, and every map in a deck was redrawn a size
+     smaller for a sentence that had grown by a chromosome name. A width is the
+     reader's to set with the handle; nothing in the centre should set it for
+     them. The laptop case this used to buy (a map of 446 pixels rather than 288
+     with four columns open) is a fold of one column away. */
+  flex: 1 1 0;
   /* **The picture's floor.** It was `0`, which made the centre the only thing in
      the row that could be squeezed to nothing: the columns are what a reader
      opens, but the map is what they opened the file for, and a column has a
@@ -2966,6 +2974,13 @@ p {
 
 .view-head {
   margin-bottom: 0.75rem;
+  /* The heading's **width** decides its shape, and nothing else does: the rules
+     under `.title-bar` below ask this box, not the text inside it, whether the
+     toolbar fits beside the title. Asked of the text, the answer changed with
+     every zoom — `IV` and `IV:1,000,001-1,400,000` are different widths — so
+     the locus box jumped between the title's line and a line of its own under
+     it while the reader was zooming, and the map below moved with it. */
+  container: view-head / inline-size;
 }
 
 /* A head that is the bar and nothing else. The bar carries its own top margin
@@ -5214,6 +5229,92 @@ canvas.is-frozen {
   margin: 0;
 }
 
+/* **A view's heading keeps its shape while its text changes.** One line — the
+   title, its stepper, then the toolbar held against the right-hand edge — for
+   as long as the heading is wide enough for the toolbar and a readable title;
+   the toolbar on a line of its own under the title below that; and the zoom
+   steps under the box below that again. Three shapes, each decided by the
+   heading's width alone (the container queries after these rules), so a zoom
+   that lengthens the title ellipsises it rather than pushing the box onto the
+   next line, and a zoom that shortens it does not pull the box back up.
+
+   The box is a fixed width on the one-line shape, for the same reason: grown
+   into whatever the title left, it was a different width after every zoom. */
+.view-head > .title-bar {
+  flex-wrap: nowrap;
+}
+
+.view-head > .title-bar > h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-head > .title-bar > .stepper {
+  flex: none;
+}
+
+.view-head > .title-bar > .title-tools {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.view-head > .title-bar > .title-tools > .search-box,
+.view-head > .title-bar > .search-box {
+  flex: 0 0 18rem;
+  width: 18rem;
+  min-width: 0;
+}
+
+/* The toolbar on a line of its own, under the title. Held right, as it is on one
+   line, so the box does not jump across the heading at the width this changes.
+   62rem because the toolbar is 42rem of it: below that, a one-line heading had
+   less than a locus's width left for the title and cut `IV:970,001-1,430,000`
+   to `IV:970,001-1,430,…` — measured on the deck, three maps across. */
+@container view-head (max-width: 62rem) {
+  .view-head > .title-bar.region-bar {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar.region-bar > .title-tools {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .view-head > .title-bar.region-bar > .title-tools > .search-box {
+    flex: 1 1 13rem;
+    width: auto;
+    max-width: 24rem;
+  }
+}
+
+/* A title and one box are the whole of the other views' bar, so they part only
+   where the box would otherwise crowd the title below a readable width. */
+@container view-head (max-width: 34rem) {
+  .view-head > .title-bar:not(.region-bar) {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar:not(.region-bar) > .search-box {
+    flex: 1 1 100%;
+    width: auto;
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
+/* …and, narrower again, the zoom steps and the bookmark under the box: the box
+   keeps a width a locus can be read in, and the steps stay together as one row. */
+@container view-head (max-width: 34rem) {
+  .view-head > .title-bar.region-bar > .title-tools {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar.region-bar > .title-tools > .search-box {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+}
+
 /* In a view's heading the box goes to the right-hand end of the line: what you
    are looking at leads, and the way to look at something else is where the eye
    finishes. It takes the buttons that belong to it — `go`, `← back` — along
@@ -5432,6 +5533,19 @@ canvas.is-frozen {
   color: var(--text-dim);
   font-size: var(--step--1);
   font-variant-numeric: tabular-nums;
+}
+
+/* **One line, always, under a view's title.** What the block is, and the window
+   of it on screen, and it is the line that changes on every pan and zoom — two
+   loci of two sequences each make it longer than any column, and wrapped, it was
+   one line after one zoom and three after the next, moving the map under it by
+   two lines each time. It ends in an ellipsis where it runs out of room, and
+   the whole of it is in its tooltip then (`ui/dom.ts`'s `titleWhenCut`). */
+.view-head > .summary,
+.view-head > .match-kind {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- genome view ------------------------------------------------------- */
@@ -9343,11 +9457,37 @@ canvas.is-frozen {
   margin-bottom: 0;
 }
 
-/* The summary goes inline inside a deck, so the deck's own note reads as the
-   end of that sentence rather than as a line under it. */
-.deck-lead-head .summary,
-.deck-lead-head .match-kind {
-  display: inline;
+/* The summary and the deck's own note share one line inside a deck, so the
+   note reads as the end of that sentence rather than as a line under it — and
+   it is the *summary* that gives way when the line is short, since the count of
+   maps is the deck's and is short. A grid rather than two inline runs, because
+   an inline run cannot end in an ellipsis and keep its neighbour whole. */
+.deck-lead-head > .view-head {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.deck-lead-head > .view-head > * {
+  grid-column: 1 / -1;
+}
+
+.deck-lead-head > .view-head > .summary,
+.deck-lead-head > .view-head > .match-kind {
+  grid-column: 1;
+}
+
+.deck-lead-head > .view-head > .deck-maps {
+  grid-column: 2;
+  padding-left: 0.3em;
+}
+
+/* The separator follows the summary's own state, so a count written before the
+   first block landed still gets its bullet once the summary has words
+   (`PanelDeck`'s bar). */
+.view-head > .summary:not(:empty) + .deck-maps::before,
+.view-head > .match-kind:not(:empty) + .deck-maps::before {
+  content: '· ';
 }
 
 .deck-maps {
@@ -9561,6 +9701,45 @@ span.deck-name {
    `flex: 0 0 auto` so it survives the name's ellipsis: the file name is the part
    that can afford to be cut, and cutting the resolution instead would leave a
    control the reader cannot read the value of. */
+/* The window a companion reads for itself (§16.3), as a pill in its heading:
+   the window, a widen, and the `×` that gives it back to the deck. Bordered so
+   that `×` reads as closing the window and not the cell, whose own `×` is at
+   the end of the heading. It gives way first when the heading is short — the
+   name beside it is the one thing a cell's heading must keep. */
+.deck-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 0.1rem 0 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-place.hidden {
+  display: none;
+}
+
+.deck-place-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-place .btn-icon {
+  flex: none;
+  padding: 0.05rem;
+  border-color: transparent;
+  background: none;
+  color: inherit;
+}
+
 .deck-entry {
   flex: 0 0 auto;
   padding: 0.05rem 0.15rem;

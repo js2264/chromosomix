@@ -19,6 +19,7 @@ node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.p
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8
+node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -49,6 +50,15 @@ every task under one warning — an empty cell taking a row dragged from the Tra
 structure cells with neither starred. It prints what the card said at each step, so a card that did
 not follow the star is a line in the log. Run it after any change to the stars, the Map card's
 placement or `VacantPanel`.
+
+The sixth drives what happens *between* two pictures of a deck (§5.4, §16.3, §16.9), at a
+laptop's 1600 × 1000 with every column open: three zooms, printing the heading's height and every
+side column's width before and after — they must come out exactly as they went in — then a
+companion taken off the chain with a box drawn on it, which must read its own window (its cells
+change, the first map's title does not) and give it back; then the Contact maps card listing every
+map, a row of it dropped on an empty cell, and a companion's eye closing its cell and opening it
+again. Run it after any change to a view's heading, the side columns, `MapPanel`'s window or the
+Contact maps card.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

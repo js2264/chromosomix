@@ -4071,7 +4071,7 @@ export class MatrixPanel {
    * that missed. The arithmetic is `render/rotate.ts`'s, beside the rotation it
    * inverts.
    */
-  private locusOf(cell: Cell): { rows: ManualPoint; cols: ManualPoint } | null {
+  private locusOf(cell: { row: number; col: number }): { rows: ManualPoint; cols: ManualPoint } | null {
     const at = cellLoci(this.squareAxes, this.turned, cell)
     if (at === null) return null
     return {
@@ -7122,6 +7122,41 @@ export class MatrixPanel {
    * sequence panned across its junction is on the axis twice, and one mark is
    * what a place gets.
    */
+  /**
+   * Answer a box drawn on *another* map as though it had been drawn on this
+   * one — a deck's companion that is following the deck, whose box moves the
+   * whole deck there by the road a box on this map takes (§16.3). A selection
+   * is names and base pairs, so it means the same place on both.
+   */
+  selectRegion(selection: SelectedRegion): void {
+    this.options.onSelectRegion?.(selection)
+  }
+
+  /**
+   * The contact under one of this block's cells, as two loci, or `null`.
+   *
+   * For a deck carrying a pointer between two maps whose blocks are **not one
+   * place** (§16.3) — a companion reading a window of its own — where the cell
+   * arithmetic the lock uses would put the mark as far off as the two blocks'
+   * starts are apart.
+   */
+  contactAt(cell: { row: number; col: number }): { rows: ManualPoint; cols: ManualPoint } | null {
+    return this.data === null ? null : this.locusOf(cell)
+  }
+
+  /**
+   * The cell of this block a contact falls in, or `null` where it falls in none
+   * — {@link contactAt}'s other half. Not on a turned map, whose rows are
+   * separation rather than a position a locus can land on.
+   */
+  cellOfContact(contact: { rows: ManualPoint; cols: ManualPoint }): { row: number; col: number } | null {
+    if (this.data === null || this.turned !== null) return null
+    const rows = this.locusAxes.rows?.locusToUnits(contact.rows.contig, contact.rows.bp) ?? []
+    const cols = this.locusAxes.cols?.locusToUnits(contact.cols.contig, contact.cols.bp) ?? []
+    if (rows.length === 0 || cols.length === 0) return null
+    return { row: Math.floor(rows[0]), col: Math.floor(cols[0]) }
+  }
+
   showLocusEcho(locus: { contig: string; bp: number } | null): void {
     if (locus === null) {
       this.showLaneEcho(null)

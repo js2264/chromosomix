@@ -776,6 +776,16 @@ export class Session {
    * map's {@link parkedMap} makes, and the same one a track's `visible` makes.
    */
   private compareHidden = false
+  /**
+   * The maps the eye on a Contact maps row took out of the deck (§16.9): still
+   * this session's, still listed, drawn in no cell until the eye or a drop puts
+   * them back. Held here and not by the deck, because a deck left with nothing
+   * beside the first map puts itself down — and the maps hidden from it are
+   * exactly the ones it no longer has a cell for. The ids are the session's
+   * own, in a namespace the deck's `p1`, `p2`… cannot reach.
+   */
+  private hiddenMaps: Array<{ id: string; picked: PickedFile }> = []
+  private hiddenMapCount = 0
   private compareCard: CompareCard | null = null
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
@@ -813,6 +823,11 @@ export class Session {
    */
   private readonly deckEdges = new DeckFrame({
     onGrow: (direction, picked) => this.growDeck(direction, picked),
+    // The map's own row off the Contact maps card, dropped on an edge before
+    // there is a deck: the deck, with a second picture of it in the new cell.
+    onGrowWithMap: (direction, row) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithMap(direction, row)
+    },
   })
   /**
    * The genome this session is browsing, when there is no contact map.
@@ -4264,7 +4279,52 @@ export class Session {
       },
       isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
       onSwap: () => void this.swapCompare(),
+      // Every map this session is holding is a row here (§16.9): the deck's
+      // other cells after the square's one or two, each with the grip that
+      // drags it into another cell.
+      deckMaps: () => [
+        ...(this.deck?.companionMaps() ?? []),
+        ...this.hiddenMaps.map(({ id, picked }) => ({
+          id,
+          uri: picked.uri,
+          label: this.mapLabel(picked.uri),
+          shown: false,
+        })),
+      ],
+      onToggleDeckMap: (id) => this.toggleDeckMap(id),
+      deckMapsShowable: () => this.deckIsPossible,
+      onCloseDeckMap: (id) => {
+        if (this.takeHiddenMap(id) !== null) this.syncCompareCard()
+        else this.deck?.closeCell(id)
+      },
+      onRenameDeckMap: (target, name) => this.renameMap(target, name),
+      onDragMap: (dragging) => this.deck?.showTiling(dragging),
     })
+  }
+
+  /**
+   * The eye on a deck map's row (§16.9). A map in a cell leaves it and is held
+   * hidden; a hidden one opens in the deck again — the first empty cell, or a
+   * new one — as a Structures row's eye opens its model's cell (§25.3).
+   */
+  private toggleDeckMap(id: string): void {
+    if (this.hiddenMaps.some((held) => held.id === id)) {
+      if (!this.deckIsPossible) return
+      const picked = this.takeHiddenMap(id)
+      if (picked !== null) this.ensureDeck().showMap(picked)
+    } else {
+      const picked = this.deck?.takeMap(id) ?? null
+      if (picked !== null) this.hiddenMaps.push({ id: `hidden-${++this.hiddenMapCount}`, picked })
+    }
+    this.syncCompareCard()
+  }
+
+  /** Stop holding a hidden map, and hand back what opens it. */
+  private takeHiddenMap(id: string): PickedFile | null {
+    const at = this.hiddenMaps.findIndex((held) => held.id === id)
+    if (at < 0) return null
+    const [held] = this.hiddenMaps.splice(at, 1)
+    return held?.picked ?? null
   }
 
   /** Redraw the Contact maps card's eyes from what this session is showing. */
@@ -5717,6 +5777,10 @@ export class Session {
     if (this.destroyed) return
     const deck = this.ensureDeck()
     deck.apply(state, locals)
+    // A deck read back from the address does not publish — it *is* what the
+    // address says — so the Contact maps card, which lists its maps (§16.9),
+    // is told here rather than by `onMapsChange`.
+    this.syncCompareCard()
     if (!deck.isEmpty) return
     deck.destroy()
     this.deck = null
@@ -5784,6 +5848,8 @@ export class Session {
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => {
         this.store.patch({ maps }, { replace: true })
+        // The Contact maps card lists the deck's maps, so it follows the list.
+        this.syncCompareCard()
         // A structure cell can arrive or go after the view was mounted — a g3d
         // dropped, a reconstruction landing, the cell's heading closed — and
         // its card in the Aesthetics column (§25.3) follows the cell, not the
@@ -5832,6 +5898,11 @@ export class Session {
       onTrackFile: (picked, map) => {
         void this.addPicked(picked, placementOn('bottom'), map)
       },
+      // The two maps of the session's own square, as files a cell can open: a
+      // row of the Contact maps card dropped on a cell names one of them.
+      leadPicked: () => (this.file === null ? null : { uri: this.file.uri, source: this.file.source }),
+      comparePicked: () => (this.compare === null ? null : { uri: this.compare.uri, source: this.compare.source }),
+      hiddenPicked: (id) => this.takeHiddenMap(id),
       // The *3D structure* card is the starred cell's (§25.3), so the star
       // moving is the column's card changing under it — and the session is
       // what puts a card in that column.
@@ -6604,9 +6675,11 @@ export class Session {
       this.compareCard = null
       // …and every companion panel, each of which is another worker on another
       // file of the same shape. A deck is a picture *beside* this session's
-      // file, and there is no longer one for it to be beside.
+      // file, and there is no longer one for it to be beside — nor for a map
+      // hidden from it.
       this.deck?.destroy()
       this.deck = null
+      this.hiddenMaps = []
       // For the same reason, and it is the one view the session holds: a cached
       // whole-file matrix is a picture of a file nobody can now navigate to,
       // and the scan that produced it may still be running.

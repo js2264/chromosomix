@@ -296,6 +296,12 @@ export interface DeckLook {
   oe?: boolean
   smooth?: string
   /**
+   * The window this map reads for itself rather than the deck's
+   * (`MapPanel.ownPlace`, §16.3) — kept only beside `locked: false`, since a
+   * window of its own is what an open chain is for.
+   */
+  place?: { rows: string; cols?: string }
+  /**
    * Whether the chain on this panel's heading was closed.
    *
    * `false` is the interesting value and the only one that is written: a panel
@@ -343,7 +349,19 @@ export function readDeckLook(value: unknown): DeckLook | null {
     ...(typeof score === 'string' && score !== '' ? { score } : {}),
     ...(typeof row['oe'] === 'boolean' ? { oe: row['oe'] } : {}),
     ...(typeof row['smooth'] === 'string' && row['smooth'] !== '' ? { smooth: row['smooth'] as string } : {}),
+    ...(placeOf(row['place']) === null ? {} : { place: placeOf(row['place']) as { rows: string; cols?: string } }),
     ...(typeof row['locked'] === 'boolean' ? { locked: row['locked'] } : {}),
+  }
+}
+
+/** A stored own window, field by field, or `null` where it is not one. */
+function placeOf(value: unknown): { rows: string; cols?: string } | null {
+  if (typeof value !== 'object' || value === null) return null
+  const row = value as Record<string, unknown>
+  if (typeof row['rows'] !== 'string' || row['rows'] === '') return null
+  return {
+    rows: row['rows'],
+    ...(typeof row['cols'] === 'string' && row['cols'] !== '' ? { cols: row['cols'] } : {}),
   }
 }
 

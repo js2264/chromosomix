@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A companion off the lead reads its own window (§16.3).** A box drawn on it with Option held
+  re-reads that window for that map — as finely as its rung and its share of the budget allow —
+  rather than magnifying the block it already held, so one file in three cells can be a whole
+  chromosome, a 35 Mb stretch and 6 Mb at three real resolutions. The window is a pill in the cell's
+  heading with *widen 3×* and an ×; it is remembered with the map's looks and dropped when the chain
+  is relinked. On a companion still on the lead the box navigates the whole deck, as it does on the
+  first map.
+
+- **The Contact maps card lists every map, each with an eye and a grip (§16.9).** The first map, the
+  compared one, then every companion under its cell's name. A companion's eye closes its cell and
+  keeps the map on the card, dimmed; pressed again it opens the map in a cell — the Structures card's
+  eye, for maps — and its × lets it go. Every row has a grip: dragged onto a cell it exchanges a
+  companion with that cell, and a hidden map's, the first map's or the compared map's row dropped on
+  an empty cell or a `+` edge opens that file there.
+
 - **No map need be starred, and no structure (§16.5, §25.3).** A filled star is no longer a dead
   button: pressed, it leaves none filled. With no map starred the Aesthetics column's *Map* card
   sets **every map of the deck at once** — it says *every map — all N* under its title, in the warn
@@ -927,6 +942,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A view's heading no longer changes shape as it zooms (§5.4, §26.6).** The title bar wrapped or
+  unwrapped whenever a press lengthened or shortened its title, and the summary under it could run to
+  three lines on a pair of loci — so the map jumped a line up or down under a zoom, and the side
+  columns narrowed and widened with the summary's length. The heading's shape is now decided by its
+  width alone (one line, the toolbar under the title, the steps under the box); the title and the
+  summary are one line each, ellipsised with their whole text as a tooltip; and the columns keep the
+  width they were given.
+
+- **The deck's `· N maps` lost its bullet** whenever the count was written before the first block
+  had filled the summary in front of it; the separator follows the summary now.
 
 - **A companion drew the normalisation its own score named (§16.2).** A companion reading `VC`, `ICE`
   or the correlation took the normalisation from the *first* map's score, so it was labelled one

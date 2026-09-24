@@ -96,12 +96,17 @@ function leadPanel(
     askedSet: 0,
     /** What the deck last told the first map's *Map* card it sets (§16.5). */
     cardFor: undefined as unknown,
+    /** Boxes a companion following the deck handed to this map (§16.3). */
+    selected: [] as unknown[],
   }
   const panel = {
     setViewportListener: () => {},
     setDeckExport: () => {},
     setCardFor: (target: unknown) => {
       state.cardFor = target
+    },
+    selectRegion: (selection: unknown) => {
+      state.selected.push(selection)
     },
     setLaneListener: (listener: (geometry: unknown) => void) => {
       state.lanes = listener
@@ -180,7 +185,9 @@ interface Made {
   scales: unknown[]
 }
 
-function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
+function make(
+  props: { leadName?: string; withStore?: boolean; extra?: Partial<ConstructorParameters<typeof PanelDeck>[0]> } = {},
+): Made {
   const made: Made = {
     deck: null as unknown as PanelDeck,
     published: [],
@@ -225,6 +232,7 @@ function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
     ...(props.withStore === false
       ? {}
       : { annotations: () => ({ store }) as unknown as AnnotationContext }),
+    ...(props.extra ?? {}),
   })
   document.body.appendChild(made.deck.el)
   // A deck only paints its lead's heading — and therefore the lead's star —
@@ -430,8 +438,10 @@ describe('the deck’s bar', () => {
     const { deck } = make()
     const note = deck.el.querySelector('.deck-maps')
     expect(note?.previousElementSibling?.className).toBe('summary')
-    // …with a separator, because there is something in front of it to separate.
-    expect(note?.textContent?.startsWith(' · ')).toBe(true)
+    // The count alone: the separator is the stylesheet's, drawn only while the
+    // summary in front of it has words, since that line is rewritten on every
+    // pan and this one is not.
+    expect(note?.textContent?.startsWith('1 map')).toBe(true)
   })
 
   it('refuses a map past the backstop in its own bar rather than on an error screen', () => {
@@ -1389,5 +1399,181 @@ describe('the first map’s card, with no map starred (§16.5)', () => {
     const look = looks().find((row) => row['uri'] === 'https://x.example.org/b.cool')
     expect(look?.['transform']).toBeUndefined()
     expect(look?.['oe']).not.toBe(true)
+  })
+})
+
+describe('a box drawn on a companion (§16.3)', () => {
+  /** The deck's own slot for its first companion, and the hook a box on it reaches. */
+  function companion(deck: PanelDeck): { slot: { id: string; locked: boolean }; box(selection: unknown): void } {
+    const inner = deck as unknown as {
+      slots: Array<{ id: string; locked: boolean }>
+      boxDrawn(slot: unknown, selection: unknown): void
+    }
+    const slot = inner.slots[0]
+    return { slot, box: (selection) => inner.boxDrawn(slot, selection) }
+  }
+
+  const BOX = {
+    rows: { label: 'chr1', range: [40_000_000, 70_000_000] },
+    cols: { label: 'chr1', range: [40_000_000, 70_000_000] },
+    diagonal: true,
+    level: 'bin',
+    anchor: { row: 0, col: 0 },
+  }
+
+  function pill(deck: PanelDeck): HTMLElement | null {
+    return deck.el.querySelector<HTMLElement>('.deck-panel:not(.is-lead) .deck-place')
+  }
+
+  it('moves the whole deck there while the companion follows it', () => {
+    const made = make()
+    const lead = leadPanel()
+    made.deck.setLead(lead.panel)
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    companion(made.deck).box(BOX)
+    // Handed to the first map, whose own road re-reads the window for every map.
+    expect(lead.state.selected).toEqual([BOX])
+    expect(pill(made.deck)?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('reads that window for the companion alone while its chain is open', () => {
+    const made = make()
+    const lead = leadPanel()
+    made.deck.setLead(lead.panel)
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.el.querySelector<HTMLButtonElement>('.deck-panel:not(.is-lead) .deck-lock')?.click()
+    companion(made.deck).box(BOX)
+    expect(lead.state.selected).toEqual([])
+    expect(pill(made.deck)?.classList.contains('hidden')).toBe(false)
+    expect(pill(made.deck)?.querySelector('.deck-place-label')?.textContent).toBe('chr1:40,000,001-70,000,000')
+    // Remembered with the rest of how this map is drawn, beside its open chain.
+    const looks = recall<Array<Record<string, unknown>>>('deck-test', 'deck:looks') ?? []
+    const look = looks.find((row) => row['uri'] === 'https://x.example.org/b.cool')
+    expect(look?.['place']).toEqual({ rows: 'chr1:40000000-70000000' })
+    expect(look?.['locked']).toBe(false)
+  })
+
+  it('gives the window back when the pill’s × is pressed', () => {
+    const made = make()
+    made.deck.setLead(leadPanel().panel)
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.el.querySelector<HTMLButtonElement>('.deck-panel:not(.is-lead) .deck-lock')?.click()
+    companion(made.deck).box(BOX)
+    pill(made.deck)?.querySelector<HTMLButtonElement>('.deck-place-clear')?.click()
+    expect(pill(made.deck)?.classList.contains('hidden')).toBe(true)
+    const looks = recall<Array<Record<string, unknown>>>('deck-test', 'deck:looks') ?? []
+    expect(looks.find((row) => row['uri'] === 'https://x.example.org/b.cool')?.['place']).toBeUndefined()
+  })
+
+  it('gives the window back when the chain is closed again', () => {
+    const made = make()
+    made.deck.setLead(leadPanel().panel)
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const chain = () => made.deck.el.querySelector<HTMLButtonElement>('.deck-panel:not(.is-lead) .deck-lock')
+    chain()?.click()
+    companion(made.deck).box(BOX)
+    chain()?.click()
+    expect(companion(made.deck).slot.locked).toBe(true)
+    expect(pill(made.deck)?.classList.contains('hidden')).toBe(true)
+  })
+})
+
+describe('a row of the Contact maps card dropped on a cell (§16.9)', () => {
+  function dropRow(target: Element, row: unknown): void {
+    const data = new Map([['application/x-metacooler-map', JSON.stringify(row)]])
+    const transfer = { getData: (type: string) => data.get(type) ?? '', types: [...data.keys()], files: [], dropEffect: '' }
+    const drop = new window.Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+    target.dispatchEvent(drop)
+  }
+
+  it('lists the companions it can be dragged from', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/c.cool' })
+    expect(deck.companionMaps().map((map) => map.label)).toEqual(['b.cool', 'c.cool'])
+  })
+
+  it('moves a companion into the empty cell it is dropped on', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    deck.grow('beside')
+    expect(cellNames(deck)).toEqual(['lead.cool', 'b.cool', 'empty'])
+    const id = deck.companionMaps()[0]?.id
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null || id === undefined) throw new Error('no empty cell')
+    dropRow(zone, { kind: 'companion', id })
+    expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'b.cool'])
+  })
+
+  it('opens the first map a second time in the empty cell it is dropped on', () => {
+    const { deck } = make({
+      extra: { leadPicked: () => ({ uri: 'https://x.example.org/lead.cool', source: { kind: 'remote', url: 'https://x.example.org/lead.cool' } }) },
+    })
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropRow(zone, { kind: 'lead' })
+    expect(deck.companionMaps().map((map) => map.uri)).toEqual(['https://x.example.org/lead.cool'])
+  })
+
+  it('opens the cells an edge names with the first map in them', () => {
+    const { deck } = make({
+      extra: { leadPicked: () => ({ uri: 'https://x.example.org/lead.cool', source: { kind: 'remote', url: 'https://x.example.org/lead.cool' } }) },
+    })
+    deck.growWithMap('beside', { kind: 'lead' })
+    expect(deck.companionMaps()).toHaveLength(1)
+  })
+
+  it('opens a hidden map in the empty cell its row is dropped on, taking it off the hidden list', () => {
+    const asked: string[] = []
+    const { deck } = make({
+      extra: {
+        hiddenPicked: (id) => {
+          asked.push(id)
+          return { uri: 'https://x.example.org/c.cool', source: { kind: 'remote', url: 'https://x.example.org/c.cool' } }
+        },
+      },
+    })
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropRow(zone, { kind: 'hidden', id: 'hidden-1' })
+    expect(asked).toEqual(['hidden-1'])
+    expect(cellNames(deck)).toEqual(['lead.cool', 'c.cool'])
+  })
+})
+
+describe('the eye on a map’s row of the Contact maps card (§16.9)', () => {
+  it('takes a companion out of its cell and hands back what opens it again', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/c.cool' })
+    const id = deck.companionMaps()[0]?.id ?? ''
+    const picked = deck.takeMap(id)
+    expect(picked?.uri).toBe('https://x.example.org/b.cool')
+    expect(cellNames(deck)).toEqual(['lead.cool', 'c.cool'])
+    // …and the eye again puts it back, in a cell of its own.
+    if (picked === null) throw new Error('nothing taken')
+    deck.showMap(picked)
+    expect(cellNames(deck)).toEqual(['lead.cool', 'c.cool', 'b.cool'])
+  })
+
+  it('reopens a hidden map in the first empty cell before growing the deck', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    deck.grow('beside')
+    const picked = deck.takeMap(deck.companionMaps()[0]?.id ?? '')
+    if (picked === null) throw new Error('nothing taken')
+    expect(cellNames(deck)).toEqual(['lead.cool', 'empty'])
+    deck.showMap(picked)
+    expect(cellNames(deck)).toEqual(['lead.cool', 'b.cool'])
+  })
+
+  it('takes nothing that is not a map', () => {
+    const { deck } = make()
+    deck.grow('beside')
+    expect(deck.takeMap('lead')).toBeNull()
+    expect(deck.takeMap('nope')).toBeNull()
   })
 })

@@ -65,10 +65,11 @@ import {
   type DerivePresentation,
   type MatrixPanel,
   type PanelGeometry,
+  type SelectedRegion,
   type TurnPresentation,
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
-import { button, el, fmt } from '../ui/dom'
+import { button, dragHasMapRow, el, fmt, readMapRow, type MapRow } from '../ui/dom'
 import { resolutionLabel } from '../units'
 import {
   canvasToPng,
@@ -259,6 +260,19 @@ export interface PanelDeckProps {
    * which case an empty cell takes maps and structures only.
    */
   onTrackFile?(picked: PickedFile, map: MapId): void
+  /**
+   * The session's own map, and the file in its lower triangle, as files a cell
+   * can open (§16.9) — what a row of the Contact maps card dragged onto a cell
+   * names. `null` where there is no such map.
+   */
+  leadPicked?(): PickedFile | null
+  comparePicked?(): PickedFile | null
+  /**
+   * A map the Contact maps card holds hidden (§16.9), whose row was dropped on
+   * a cell: the file to open there — handed over, so the session stops holding
+   * it hidden, since from now on a cell holds it.
+   */
+  hiddenPicked?(id: string): PickedFile | null
   /**
    * The **structure** star moved: the *3D structure* card in the Aesthetics
    * column is now a different cell's, and only the session can put it there.
@@ -759,7 +773,10 @@ export class PanelDeck {
     // The same edges the session was showing a moment ago, now round the grid
     // instead of round one map — which is the whole reason they are a component
     // and not a pair of buttons in each place (`panels/DeckFrame.ts`).
-    this.edges = new DeckFrame({ onGrow: (direction, picked) => this.grow(direction, picked) })
+    this.edges = new DeckFrame({
+      onGrow: (direction, picked) => this.grow(direction, picked),
+      onGrowWithMap: (direction, row) => this.growWithMap(direction, row),
+    })
     this.el = el(
       'div',
       { class: 'deck' },
@@ -1320,8 +1337,17 @@ export class PanelDeck {
     source: MatrixPanel,
     cell: { row: number; col: number } | null,
   ): void {
+    const fromPlace = this.placeOf(from)
     const show = (id: string, panel: MatrixPanel | null): void => {
       if (panel === null || id === from) return
+      // Two blocks that are not one place — a companion reading a window of its
+      // own (§16.3) — share no cell origin, so the pointer is carried as the
+      // contact it is over rather than as a cell index.
+      if (this.placeOf(id) !== fromPlace) {
+        const contact = cell === null ? null : source.contactAt(cell)
+        panel.showHoverEcho(contact === null ? null : panel.cellOfContact(contact))
+        return
+      }
       const carry = cell === null ? null : carryBetween(source, panel)
       if (cell === null || carry === null) {
         panel.showHoverEcho(null)
@@ -1367,8 +1393,15 @@ export class PanelDeck {
     source: MatrixPanel,
     at: { axis: 'rows' | 'cols'; unit: number } | null,
   ): void {
+    const fromPlace = this.placeOf(from)
     const show = (id: string, panel: MatrixPanel | null): void => {
       if (panel === null || id === from) return
+      // Not one place, so no unit to carry: nothing here, rather than a mark as
+      // far off as the two blocks' starts are apart (§16.3).
+      if (this.placeOf(id) !== fromPlace) {
+        panel.showLaneEcho(null)
+        return
+      }
       // The same currency the cell echo uses, and above bin level the same
       // refusal: a cell there is a whole sequence, so the index is carried
       // untouched and a panel drawing a different level gets nothing rather
@@ -1390,6 +1423,12 @@ export class PanelDeck {
     }
     show(LEAD, this.lead)
     for (const slot of this.slots) show(slot.id, slot.panel?.map ?? null)
+  }
+
+  /** Which window a map's block is of, `''` for the deck's; see `MapPanel.placeKey`. */
+  private placeOf(id: string): string {
+    if (id === LEAD) return ''
+    return this.slots.find((slot) => slot.id === id)?.panel?.placeKey ?? ''
   }
 
   /**
@@ -1577,6 +1616,7 @@ export class PanelDeck {
         onStructure: (id) => this.putStructure(slot, id),
         ...(this.takesTracks() ? { onTrack: (id: string) => this.putTrack(slot, id) } : {}),
         onPicked: (picked) => this.fill(slot, picked),
+        onMapRow: (row) => this.putMapRow(slot, row),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1671,6 +1711,7 @@ export class PanelDeck {
         // a `+` takes whatever a deck can hold (§16.9).
         ...(this.takesTracks() ? { onTrack: (id: string) => this.putTrack(slot, id) } : {}),
         onPicked: (picked) => this.fill(slot, picked),
+        onMapRow: (row) => this.putMapRow(slot, row),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1738,6 +1779,10 @@ export class PanelDeck {
         this.paintCardsFor()
         this.props.onMapCardChange?.()
       },
+      onSelectRegion: (selection) => this.boxDrawn(slot, selection),
+      // A map reading a window of its own is not one place with the others, so
+      // the chain's line and the pointer echoes have to be asked again.
+      onOwnPlace: () => slot.panel?.syncLock(),
     })
     slot.panel.syncLock()
     return slot
@@ -1969,8 +2014,28 @@ export class PanelDeck {
     )
   }
 
+  /**
+   * A box drawn on a companion (§16.3). Following the deck, it moves the deck —
+   * the first map re-reads that window by its own road and every map follows,
+   * each re-reading it from its own file at its own resolution. Moving on its
+   * own, it reads that window for this map alone, which is what lets three
+   * cells of one file be read at 640 kb, 80 kb and 10 kb over three nested
+   * windows rather than three magnifications of one block.
+   */
+  private boxDrawn(slot: Slot, selection: SelectedRegion): void {
+    if (slot.panel === null) return
+    if (slot.locked) {
+      this.lead?.selectRegion(selection)
+      return
+    }
+    slot.panel.readOwn(selection)
+  }
+
   private toggleLock(slot: Slot): void {
     slot.locked = !slot.locked
+    // Back on the deck means back on the deck's window: a map the lock follows
+    // reading somewhere the others are not is two places under one chain.
+    if (slot.locked) slot.panel?.clearOwnPlace()
     slot.panel?.syncLock()
     // Recorded beside the scale, because to a reader it is the same kind of
     // decision about the same map: *this one is not like the others*. Only a
@@ -2006,14 +2071,27 @@ export class PanelDeck {
     this.grid.addEventListener('dragover', (event) => {
       // Only a map. A *file* dropped on a cell is a different gesture with a
       // different answer, and it is the cell's own (`MapPanel.VacantPanel`).
-      if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true) return
+      // A row of the Contact maps card is a map too, and over a cell that
+      // holds one it is the same exchange a cell's own grip makes.
+      const card = dragHasMapRow(event)
+      if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true && !card) return
       const cell = cellAt(event.target)
       if (cell === null) return
       event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = card ? 'copy' : 'move'
       for (const other of this.grid.children) other.classList.toggle('is-target', other === cell)
     })
     this.grid.addEventListener('drop', (event) => {
+      if (dragHasMapRow(event)) {
+        const row = readMapRow(event)
+        const cell = cellAt(event.target)
+        this.setArranging(false)
+        if (row === null || cell === null) return
+        event.preventDefault()
+        const target = this.slots[indexOf(cell)]
+        if (target !== undefined) this.putMapRow(target, row)
+        return
+      }
       if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true) return
       const cell = cellAt(event.target)
       this.setArranging(false)
@@ -2456,6 +2534,11 @@ export class PanelDeck {
    * of a deck has aimed at the right edge of it.
    */
   grow(direction: GrowDirection, picked?: PickedFile): void {
+    this.growing(direction, picked)
+  }
+
+  /** {@link grow}, answering with the first cell the press opened, if it opened any. */
+  private growing(direction: GrowDirection, picked?: PickedFile): Slot | undefined {
     const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
     const next = grownDeck(shape, direction)
     if (next.cells > MAX_PANELS) {
@@ -2465,7 +2548,7 @@ export class PanelDeck {
       // opening it where the deck has space.
       if (picked !== undefined) this.addPicked(picked)
       else this.warn(NO_ROOM)
-      return
+      return undefined
     }
     this.warn('')
 
@@ -2507,6 +2590,101 @@ export class PanelDeck {
       this.fill(first, picked)
     }
     this.paintBar()
+    return picked === undefined ? first : undefined
+  }
+
+  /**
+   * A row of the Contact maps card dropped on a `+` edge (§16.9): the cells that
+   * edge names, with that map in the first of them.
+   */
+  growWithMap(direction: GrowDirection, row: MapRow): void {
+    const picked = this.mapRowPicked(row)
+    if (row.kind !== 'companion') {
+      if (picked !== null) this.grow(direction, picked)
+      return
+    }
+    const opened = this.growing(direction)
+    if (opened !== undefined) this.putMapRow(opened, row)
+  }
+
+  /**
+   * Put the map a row of the Contact maps card names into **this** cell
+   * (§16.9).
+   *
+   * A companion is *moved* — exchanged with whatever was here, as its cell's own
+   * grip does, so nothing is closed by a drop. The first map, or the one in its
+   * lower triangle, is *opened* here, and only in an empty cell: it is the
+   * session's own file, which stays where it is, and a second picture of it is
+   * the plainest way to read one map at two windows or two colour scales.
+   */
+  putMapRow(slot: Slot, row: MapRow): void {
+    const at = this.slots.indexOf(slot)
+    if (at < 0) return
+    if (row.kind === 'companion') {
+      const from = this.slots.findIndex((held) => held.id === row.id)
+      if (from >= 0) this.swap(from, at)
+      return
+    }
+    if (slot.ref.kind !== 'vacant') return
+    const picked = this.mapRowPicked(row)
+    if (picked !== null) this.fill(slot, picked)
+  }
+
+  /** The file a card row names, where it is one a cell can open. */
+  private mapRowPicked(row: MapRow): PickedFile | null {
+    if (row.kind === 'lead') return this.props.leadPicked?.() ?? null
+    if (row.kind === 'compare') return this.props.comparePicked?.() ?? null
+    if (row.kind === 'hidden') return this.props.hiddenPicked?.(row.id) ?? null
+    return null
+  }
+
+  /**
+   * Take one companion out of its cell and hand back what opens it again — the
+   * eye on its row of the Contact maps card (§16.9), as the eye on a
+   * Structures row closes that model's cell (§25.3). The cell goes exactly as
+   * its × would take it; the map is the session's to hold, hidden, until
+   * {@link showMap} puts it back. Its looks stay remembered by its file, so it
+   * comes back drawn as it was.
+   */
+  takeMap(id: string): PickedFile | null {
+    const slot = this.slots.find((held) => held.id === id)
+    if (slot === undefined || slot.panel === null || !isMapRef(slot.ref)) return null
+    const picked: PickedFile = { uri: slot.ref.uri, source: slot.panel.sourceSpec }
+    this.remove(slot)
+    return picked
+  }
+
+  /**
+   * A hidden map's eye pressed: it opens in the first empty cell, or in a new
+   * one — {@link add}'s road, the one every map that names no position takes.
+   */
+  showMap(picked: PickedFile): void {
+    this.add({ kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri }, picked.source)
+  }
+
+  /**
+   * The maps in the deck's other cells, in grid order, as the Contact maps card
+   * lists them (§16.9) — named as they are named everywhere else.
+   */
+  companionMaps(): Array<{ id: string; label: string; uri: string }> {
+    const out: Array<{ id: string; label: string; uri: string }> = []
+    for (const slot of this.slots) {
+      if (slot.panel === null) continue
+      const uri = slot.panel.uri
+      out.push({ id: slot.id, uri, label: this.props.mapLabel?.(uri) ?? fileLabel(uri) })
+    }
+    return out
+  }
+
+  /** Close one cell by the deck's id for it — the × on the card's row. */
+  closeCell(id: string): void {
+    const slot = this.slots.find((held) => held.id === id)
+    if (slot !== undefined) this.remove(slot)
+  }
+
+  /** Show the tiling while a map is dragged towards a cell from outside the grid. */
+  showTiling(on: boolean): void {
+    this.setArranging(on)
   }
 
   /**
@@ -2829,10 +3007,13 @@ export class PanelDeck {
     // empty cells are counted apart rather than folded in, because "4 maps"
     // over a 2 × 2 grid with two rectangles in it is the deck telling the reader
     // something they can see is untrue.
-    // The separator only where there is something in front of it: the summary is
-    // empty until the first block lands, and a line opening with a bullet is a
-    // sentence with its first clause missing.
-    const said = this.deckNote.previousElementSibling?.textContent ?? ''
+    // The separator only where there is something in front of it — the summary
+    // is empty until the first block lands, and a line opening with a bullet is
+    // a sentence with its first clause missing. Drawn by the stylesheet
+    // (`.summary:not(:empty) + .deck-maps::before`) rather than written here,
+    // because the summary is rewritten on every pan and this line is not: a
+    // separator decided when the count was written was missing whenever the
+    // count landed before the first block did, and stayed missing.
     // Singular where there is one, which is a state a reader does see: asking
     // for a map builds the deck and shows its bar *before* a file has been
     // chosen, and "1 maps" over one map is the deck's first sentence.
@@ -2841,7 +3022,7 @@ export class PanelDeck {
     // that now takes a track or a structure as readily (§16.9).
     const maps = `${filled} map${filled === 1 ? '' : 's'}`
     const count = empty === 0 ? maps : `${maps} · ${empty} empty cell${empty === 1 ? '' : 's'}`
-    this.deckNote.textContent = `${said === '' ? '' : ' · '}${count}`
+    this.deckNote.textContent = count
     // Two sentences (§26.4). What the deck's own controls do is on them, and
     // what a chain does is on the chain — said once, at the control, rather
     // than a third time in a paragraph hanging off a count.

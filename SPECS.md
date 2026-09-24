@@ -822,6 +822,19 @@ a time, by the control that names it. A second way to do a thing is not a conven
 first way is a row the reader is already looking at; it is a control to learn, in the bar that has
 to stay readable at a glance.
 
+**The heading keeps its shape while its text changes.** Three shapes, and the heading's **width**
+alone picks one — a container query on `.view-head`, never what the title or the summary say: the
+title, `‹ ›` and the toolbar (box, `go`, the four steps, the bookmark) on one line from 62rem up;
+the toolbar on a line of its own under the title, held right, below that; and below 34rem the
+steps under the box. The title and the summary are rewritten on every zoom, and a heading whose
+shape followed them wrapped when a press lengthened its text and unwrapped at the next — moving the
+map a line down and back up under a reader who had only asked for a different range. So on the
+one-line shape a long title is ellipsised, with its whole text as its tooltip; the box keeps a fixed
+18rem there rather than growing into whatever the title left; and the block summary under it is
+**one line always** — `4,033 × 4,033 bins · effective resolution: 3 kb · IX:276,001-439,888 + X:…`
+ends in an ellipsis where the heading does, the whole line in its tooltip while it is cut and no
+tooltip while it is not.
+
 **Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
 its own body class, and each used to set its own padding — a rule spelled a dozen times, and the way
 that shape fails is not subtle: a dialog written without the declaration comes out with its text
@@ -4092,6 +4105,25 @@ Without (3) a two-resolution deck drifts one coarse cell per frame until it hits
 
 Any panel may be taken off the lead individually, the lead included.
 
+**A companion off the lead reads its own window.** A box drawn on it with Option held (§5.4's
+marquee, Option+Shift to hold it square on the diagonal) is a read of **that window, for that map**,
+as finely as the rung it is open at (§16.2) and its share of the budget (§16.7) allow — not a
+magnification of the block it already held. The same file open in three cells can then be a whole
+196 Mb chromosome at 640 kb, a 35 Mb stretch of it at 80 kb and 6 Mb at 10 kb — before, the third
+cell's box only enlarged a block read over the whole chromosome, which that budget capped at 50 kb,
+and scrolling out gave back the chromosome it had never stopped holding. The window is shown as a
+pill in the cell's heading, the locus it read, with **widen 3×** — the zoom step's own factor —
+and **×**, which gives the map back to the deck's window. It is held by name, like the deck's own
+selection (§16.2), resolved through the map's own reader, and remembered with its looks
+(`deck:looks`); relinking the chain drops it, since a chained map shows the lead's window by
+definition.
+
+On a companion **still on the lead**, the same box navigates the deck — it is forwarded to the first
+map's own marquee, so every chained map moves to it, which is what drawing a box on one of several
+maps locked together can only mean. The pointer's echo between two maps that are not showing the
+same window goes through the locus under it rather than through their cells, and the lanes'
+echo is not drawn at all there: a lane position on one map is a different place on the other.
+
 ### 16.4 The compatibility gate, and why it is weaker
 
 `compareRefusal` (§5.7) refuses a genome layer, a different bin size and a different chromosome list.
@@ -4380,6 +4412,28 @@ first empty cell in the deck: the two differ only when the deck already had a ho
 there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
 chooser, the command palette — takes the first empty cell instead, because those name no position
 and the empty cells are the reader's own instruction about where the next map goes.
+
+**Every map the session holds is a row of the Contact maps card**, in the order the grid holds
+them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
+cell's heading gives it. The card used to list the first two only, so a deck of four maps showed a
+card of one and the other three were named nowhere in the column.
+
+Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
+eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it closes that cell
+and keeps the map on the card, dimmed, with its eye dark; pressed again, the map opens in the first
+empty cell, or in a new one at the end of the grid — the road every map that names no position takes
+— drawn as it was, its looks being remembered by its file. A hidden map is held by the session
+rather than by the deck, since a deck left with only the first map puts itself down, and it is let
+go by its × or when the session's own file closes; it is not in the link, which carries cells. Its
+eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The first map's eye and
+the compared map's keep their meanings: the 1D browser, and the lower triangle taken away (§5.7).
+
+Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
+there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip
+would; a hidden map's row onto an empty cell, or onto a `+` edge, opens it there; the first map's or
+the compared map's row, the same way, opens that file there as a new companion — the first map being
+the session's own view, which is re-parented into cell 0 and never moved (§16.5). Taking hold of a
+row shows the tiling, as a cell's grip does.
 
 ### 16.10 Naming the maps
 
@@ -8770,6 +8824,12 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   map used to be left 140 of them, with the reader's own locus cut to `IV:1,00`. A column has a
   folded tab to come back from; a map that thin has nothing. Below about 1,170 pixels the outermost
   column leans off the right edge, which is the one shape this trade cannot avoid.
+- **A column's width is the reader's, not the content's.** The side columns keep the width they
+  were given, by their default or by a drag, and the picture takes what they leave: `.content` is
+  flex `1 1 0`. At `1 1 auto` its basis was its max-content width — the length of the summary line
+  under the title, for one — so a zoom that lengthened the summary narrowed every open column by the
+  difference and the next zoom widened them back, the whole window reflowing under a press that was
+  about the map.
 - **A column's minimum width is a promise its cards still work at it.** Aesthetics' was 200 pixels,
   at which its two clip limits read `-4.1` and its selects cut `log10`; General's was 200, at which
   the File card's values had forty pixels — so both went up to 240 rather than the cards being made

@@ -107,6 +107,72 @@ export function dragHasStructure(event: DragEvent): boolean {
   return Array.from(event.dataTransfer?.types ?? []).includes(STRUCTURE_DRAG_TYPE)
 }
 
+/**
+ * Give a one-line element its whole text as a tooltip, whenever the line is cut.
+ *
+ * For a line that ends in an ellipsis rather than wrapping — a view's summary
+ * under its title, which changes on every pan and zoom and moved the map by a
+ * line each time it wrapped (`ui/styles.css`). What the ellipsis hides has to
+ * be somewhere, and the tooltip is where a reader pointing at the cut looks.
+ * Only when it *is* cut: a tooltip repeating the line it sits on is noise.
+ *
+ * Watched rather than set by the views, because five of them write this line
+ * from a dozen places, and one of those places is a child element another
+ * object rewrites on every frame of a pan (`MatrixPanel.viewNote`).
+ */
+export function titleWhenCut(node: HTMLElement): void {
+  const sync = (): void => {
+    const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
+    const cut = node.scrollWidth > node.clientWidth + 1
+    const title = cut ? text : ''
+    if (node.title !== title) node.title = title
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(sync).observe(node, { childList: true, characterData: true, subtree: true })
+  }
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(node)
+  sync()
+}
+
+/**
+ * A **map** dragged by its grip on the Contact maps card, towards a cell of the
+ * deck (§16.9). Its own type, beside the track's and the structure's, for their
+ * reason: a cell has to tell what it is being offered while the drag is still
+ * in the air, and only `types` can be read then.
+ *
+ * The payload says which map: the session's own (`lead`), the one in its lower
+ * triangle (`compare`), a companion already in a cell, by the deck's id, or one
+ * the reader's eye took out of the deck (`hidden`), by the session's id for it.
+ */
+export const MAP_ROW_DRAG_TYPE = 'application/x-metacooler-map'
+
+export type MapRow =
+  | { kind: 'lead' }
+  | { kind: 'compare' }
+  | { kind: 'companion'; id: string }
+  | { kind: 'hidden'; id: string }
+
+/** Whether a drag is carrying a row of the Contact maps card. */
+export function dragHasMapRow(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes(MAP_ROW_DRAG_TYPE)
+}
+
+/** The map a drop is carrying, or `null` where it carries none this build reads. */
+export function readMapRow(event: DragEvent): MapRow | null {
+  const raw = event.dataTransfer?.getData(MAP_ROW_DRAG_TYPE) ?? ''
+  if (raw === '') return null
+  try {
+    const row = JSON.parse(raw) as Record<string, unknown>
+    if (row['kind'] === 'lead' || row['kind'] === 'compare') return { kind: row['kind'] }
+    if ((row['kind'] === 'companion' || row['kind'] === 'hidden') && typeof row['id'] === 'string' && row['id'] !== '') {
+      return { kind: row['kind'], id: row['id'] }
+    }
+  } catch {
+    // A payload this build did not write is a drop of nothing.
+  }
+  return null
+}
+
 /** Remove every child of a node. */
 export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild)

@@ -17,7 +17,7 @@
 
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
-import { button, el, field } from './dom'
+import { button, el, field, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary,
@@ -133,6 +133,8 @@ export class PairView {
   constructor(private readonly props: PairViewProps) {
     this.level = props.level
     this.summary = el('p', { class: 'summary' })
+    // One line under the title, with the whole of it in a tooltip where it is cut.
+    titleWhenCut(this.summary)
     this.search = new SearchBox({
       // The shared builder and the shared `go` (§26.6): this box asked for the
       // same thing as the five others in its own phrasing, and had no button.
