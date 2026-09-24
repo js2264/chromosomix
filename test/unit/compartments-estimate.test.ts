@@ -37,7 +37,9 @@ function context(binsize: number, length: number, resolutions: number[]): Analys
   })
 }
 
-const PARAMS = { sequences: ['NC_000913.3'], contacts: 'cis', balance: true }
+// The correlation's, since the warning is about the correlation's minutes;
+// cooltools' method, the default, is priced below.
+const PARAMS = { sequences: ['NC_000913.3'], contacts: 'cis', balance: true, method: 'correlation' }
 
 describe('the compartments estimate at a resolution finer than the task wants', () => {
   it('warns, colours the line as a scan, and names the rung that would fit', () => {
@@ -70,12 +72,12 @@ describe('the compartments estimate at a resolution finer than the task wants', 
  * The warning is about the correlation's minutes, and cooltools' road has no
  * correlation: three eigenvectors of the same 4,642 bins take seconds (§18.8).
  */
-describe('the compartments estimate under cooltools’ method', () => {
+describe('the compartments estimate under cooltools’ method, the default', () => {
   it('prices a decomposition, and gives no warning that belongs to the correlation', () => {
-    const estimate = COMPARTMENTS_TASK.estimate(context(1000, 4_641_652, [1000, 5000]), {
-      ...PARAMS,
-      method: 'cooltools',
-    })
+    // The default: no method named at all.
+    const { method: _correlation, ...defaults } = PARAMS
+    void _correlation
+    const estimate = COMPARTMENTS_TASK.estimate(context(1000, 4_641_652, [1000, 5000]), defaults)
     expect(estimate.refusal).toBeUndefined()
     expect(estimate.class).toBe('bounded')
     expect(estimate.note).not.toContain('far finer')

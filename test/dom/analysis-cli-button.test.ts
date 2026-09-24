@@ -274,7 +274,9 @@ describe('the button', () => {
     // sequences to run on with the same tick boxes as compartments, and a list
     // is written comma-separated for a shell.
     expect(command).toContain('--sequences chrIV')
-    expect(command).toContain('--balance')
+    // Balanced, which a shell reads by default wherever the file carries weights
+    // and so goes unsaid; only an unbalanced run writes `--no-balance` (§23.1).
+    expect(command).not.toContain('balance')
     view.destroy()
   })
 

@@ -269,10 +269,10 @@ export const COOLTOOLS_CLIP_PERCENTILE = 99.9
  * The matrix cooltools decomposes (`cooltools.api.eigdecomp.cis_eig`), made from
  * the same observed/expected the correlation is made from.
  *
- * The other road to the eigenvectors: observed/expected decomposed **as it is**,
- * where Lieberman-Aiden et al. (2009) decomposed the Pearson correlation of its
- * rows. The correlation did three things of its own, and each is done here the
- * way cooltools does it:
+ * The default road to the eigenvectors (§18.8): observed/expected decomposed
+ * **as it is**, where Lieberman-Aiden et al. (2009) decomposed the Pearson
+ * correlation of its rows. The correlation did three things of its own, and
+ * each is done here the way cooltools does it:
  *
  * - **clipped** — at 0 and at its 99.9th percentile, NumPy's linear one — so a
  *   handful of very bright cells cannot carry the leading component;

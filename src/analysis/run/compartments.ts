@@ -733,17 +733,19 @@ export const runCompartments: TaskRunner = async (job) => {
   // Refused rather than read as the default: the two methods give different
   // numbers, and a misspelt one in a batch script would otherwise run the other
   // without a word.
-  const method = strParam(job.params, 'method', 'correlation')
+  const method = strParam(job.params, 'method', 'cooltools')
   if (method !== 'correlation' && method !== 'cooltools') {
-    throw new Error(`There is no method “${method}”. It is correlation (Lieberman-Aiden 2009) or cooltools.`)
+    throw new Error(`There is no method “${method}”. It is cooltools or correlation (Lieberman-Aiden 2009).`)
   }
-  if (method === 'cooltools') {
-    job.note(
-      'Observed/expected decomposed itself, as cooltools does: clipped at its ' +
-        `${COOLTOOLS_CLIP_PERCENTILE}th percentile, one subtracted, every gap read as expected, and ` +
-        'each eigenvector scaled by the square root of its eigenvalue.',
-    )
-  }
+  // Said either way, since either can be what a reader did not choose.
+  job.note(
+    method === 'cooltools'
+      ? 'Observed/expected decomposed itself, as cooltools does: clipped at its ' +
+          `${COOLTOOLS_CLIP_PERCENTILE}th percentile, one subtracted, every gap read as expected, and ` +
+          'each eigenvector scaled by the square root of its eigenvalue.'
+      : 'The correlation of observed/expected’s rows decomposed, as Lieberman-Aiden et al. (2009) ' +
+          'did it.',
+  )
   let ran = 0
 
   for (let s = 0; s < squares.length; s++) {
@@ -790,7 +792,7 @@ export const runCompartments: TaskRunner = async (job) => {
   // drawer meets the thing they will keep before the thing they will look at.
   const label =
     `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}${arms === undefined ? '' : ' · arms'}` +
-    `${method === 'cooltools' ? ' · cooltools' : ''}`
+    `${method === 'correlation' ? ' · correlation' : ''}`
   // What every component explained, and how it follows the phasing signal that
   // fixed its sign — reported, never used to choose one.
   outputs.push({

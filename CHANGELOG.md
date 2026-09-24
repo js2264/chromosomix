@@ -71,13 +71,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   component and chooses none, so the GC content of the compartments E1 calls can be compared without
   comparing GC content with itself.
 
-- **Compartments by cooltools' method as well as Lieberman-Aiden's (§18.8).** A *method* dropdown,
-  **Lieberman-Aiden 2009** by default — the correlation of observed/expected, decomposed — or
-  **cooltools**: observed/expected itself, clipped at its 99.9th percentile, less one, its gaps read
-  as expected, and each eigenvector scaled by √|λ|. It agrees with `cooltools.eigs_cis` to
-  |r| = 1.000 on the zoo's maps, and skips the correlation, so a fine map takes seconds rather than
-  minutes. `metacooler-run compartments --method cooltools`; `scripts/dbz-store.sh` takes
-  `COMPARTMENTS_METHOD`, the DBZ notebook `METHOD`.
+- **Compartments by cooltools' method, by default, as well as Lieberman-Aiden's (§18.8).** A
+  *method* dropdown, **cooltools** by default — observed/expected itself, clipped at its 99.9th
+  percentile, less one, its gaps read as expected, and each eigenvector scaled by √|λ| — or
+  **Lieberman-Aiden 2009**, the correlation of observed/expected decomposed, which is what every
+  earlier version computed. cooltools' agrees with `cooltools.eigs_cis` to |r| = 1.000 on the zoo's
+  maps, and skips the correlation, so a fine map takes seconds rather than minutes. A run by the
+  correlation says so in its label. `metacooler-run compartments --method correlation`;
+  `scripts/dbz-store.sh` takes `COMPARTMENTS_METHOD`, the DBZ notebook `METHOD`.
 
 - **Find a motif allows mismatches (§18.8)**, up to four, and says so in the set's name.
 
@@ -190,7 +191,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   dropping it. The store is not the Stores workflow's to write: `scripts/dbz-store.sh` runs the
   suite over every map straight into the folder that is published — framing each first by the
   junction test and, where a reference is found beside it, by its base composition and its origin —
-  and `scripts/DBZ_store.py index` lists that folder in place. It lives beside its data on the lab's
+  and `scripts/DBZ_store.py index` lists that folder in place; `notebooks/dbz-chromosome-figures.qmd`,
+  rendered with Quarto, draws one figure per species from the same `metacooler-run` commands and
+  tabulates the numbers behind them, each with its test. It lives beside its data on the lab's
   bucket, so until it is uploaded the tile says that, not *run the workflow*. Its mark is drawn by the
   script that draws RSG's, over a bacterial map — a circle whose far corners are warm, with the X of
   its zipped arms.
@@ -391,6 +394,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **`metacooler-run` reads a map balanced by default (§23.1).** Wherever the file carries weights,
+  as the app does — the framing and every task's *use balancing weights* alike — and `--no-balance`
+  reads the raw counts. `--balance` is refused with a pointer, since it asked for the default and a
+  command that forgot it ran on raw counts under a framing line that said *balanced*; coverage keeps
+  its own `--balance`, off by default. A copied command says `--no-balance` for an unbalanced run and
+  nothing for a balanced one, and `scripts/dbz-store.sh` and the DBZ notebook no longer pass it.
 
 - **Compartments measure a circle's decay the short way round (§8.15).** A sequence declared circular
   is divided by its decay measured the short way round; the task is version 2.

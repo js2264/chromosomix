@@ -661,7 +661,10 @@ describe('inputs the session used to fill and the shell did not', () => {
     expect(
       await main([
         'compartments', sample, '--sequence', reference, '--phaseSequence', reference,
-        '--sequences', 'chrI', '--out', where, '--quiet',
+        // The correlation: each of this map's diagonals is one value, so its
+        // observed/expected is one throughout and cooltools' matrix of it zero —
+        // no component to phase (see "compartments by either method").
+        '--sequences', 'chrI', '--method', 'correlation', '--out', where, '--quiet',
       ]),
     ).toBe(0)
     expect(complained()).not.toMatch(/could not be read/)
@@ -692,6 +695,91 @@ describe('inputs the session used to fill and the shell did not', () => {
     expect(complained()).not.toMatch(/not an address this can fetch/)
     const files = await readdir(where)
     expect(files).toContain('sample.expected.ps-orientation.tsv')
+  })
+})
+
+/**
+ * Balanced wherever the file carries weights, as the app reads it (§18.9). The
+ * flag that used to ask for it was forgotten often enough — the command then
+ * ran on raw counts under a framing line that said *balanced* — that the
+ * default is now the answer and `--no-balance` the exception. `--balance` itself
+ * is refused by name rather than read as a no-op, except as coverage's own
+ * parameter, which is off because raw coverage is the point of it.
+ */
+describe('balancing by default', () => {
+  let weighted = ''
+  beforeAll(async () => {
+    const bins = 40
+    const list: HicRecord[] = []
+    for (let x = 0; x < bins; x++) {
+      for (let y = x; y < bins; y++) list.push({ x, y, value: Math.max(1, Math.round(400 / (1 + y - x))) })
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'chrI', length: bins * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': list },
+      blockBinCount: 16,
+      norms: { 'SCALE/1/1000': new Float64Array(bins).fill(2) },
+    })
+    weighted = join(directory, 'weighted.hic')
+    await writeFile(weighted, fixture.bytes)
+  })
+
+  const header = async (where: string): Promise<string> => {
+    const tsv = (await readdir(where)).find((name) => name.endsWith('.tsv'))
+    expect(tsv).toBeDefined()
+    return readFile(join(where, tsv as string), 'utf8')
+  }
+
+  it('reads a map with weights balanced, and says so twice', async () => {
+    reset()
+    const where = join(directory, 'balanced-default')
+    expect(await main(['hicscore', weighted, '--out', where, '--quiet'])).toBe(0)
+    const text = await header(where)
+    expect(text).toMatch(/^# framing: .*, balanced, count$/m)
+    expect(text).toMatch(/^# param balance: true$/m)
+  })
+
+  it('reads the raw counts under --no-balance, framing and parameter alike', async () => {
+    reset()
+    const where = join(directory, 'balanced-off')
+    expect(await main(['hicscore', weighted, '--no-balance', '--out', where, '--quiet'])).toBe(0)
+    const text = await header(where)
+    expect(text).not.toMatch(/^# framing: .*balanced/m)
+    expect(text).toMatch(/^# param balance: false$/m)
+  })
+
+  it('refuses --balance, and says what to write instead', async () => {
+    reset()
+    expect(await main(['hicscore', weighted, '--balance', '--out', out, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--balance is the default now/)
+    expect(complained()).toMatch(/--no-balance/)
+    reset()
+    expect(await main(['circular', weighted, '--balance'])).toBe(2)
+  })
+
+  it('keeps coverage’s own --balance, which is off by default', async () => {
+    reset()
+    const where = join(directory, 'coverage-balanced')
+    expect(await main(['coverage', weighted, '--balance', '--out', where, '--quiet'])).toBe(0)
+    expect(await header(where)).toMatch(/^# param balance: true$/m)
+    reset()
+    const raw = join(directory, 'coverage-raw')
+    expect(await main(['coverage', weighted, '--out', raw, '--quiet'])).toBe(0)
+    expect(await header(raw)).toMatch(/^# param balance: false$/m)
+  })
+
+  it('lists the flag that turns it off, not the one that is gone', async () => {
+    reset()
+    expect(await main(['tasks'])).toBe(0)
+    // A task whose balancing the file decides lists the way out of it…
+    const hicscore = said().split('\n\n').find((block) => block.startsWith('hicscore\n')) ?? ''
+    expect(hicscore).toMatch(/--no-balance {2}read the raw counts/)
+    expect(hicscore).not.toMatch(/--balance /)
+    // …and coverage, whose own toggle it is, lists that.
+    const coverage = said().split('\n\n').find((block) => block.startsWith('coverage\n')) ?? ''
+    expect(coverage).toMatch(/--balance \(default false\)/)
   })
 })
 
@@ -741,19 +829,20 @@ describe('compartments by either method', () => {
     return { text, rows: body.slice(1).map((line) => line.split('\t')) }
   }
 
-  it('decomposes observed/expected itself under --method cooltools, and says so in its table', async () => {
+  it('decomposes observed/expected itself by default, as cooltools does, and says so', async () => {
     reset()
     const where = join(directory, 'by-cooltools')
     expect(
       await main([
-        'compartments', checkered, '--method', 'cooltools', '--components', '3',
+        'compartments', checkered, '--components', '3',
         '--sequence', reference, '--phaseSequence', reference, '--out', where, '--quiet',
       ]),
     ).toBe(0)
     expect(complained()).not.toMatch(/failed:/)
     const { text, rows } = await components(where)
     expect(text).toMatch(/^# param method: cooltools$/m)
-    expect(text).toMatch(/^# output: Components · .*· cooltools$/m)
+    // The default goes unnamed in the label, as the ordinary expectation does.
+    expect(text).toMatch(/^# output: Components · .*· cis$/m)
     expect(text).toMatch(/^# columns: sequence, component, eigenvalue, share, r with phasing$/m)
     expect(rows.map((row) => row[1])).toEqual(['E1', 'E2', 'E3'])
     // By eigenvalue, largest first, whatever the sign.
@@ -763,17 +852,18 @@ describe('compartments by either method', () => {
     expect(Number(rows[0][4])).toBeGreaterThan(0.9)
   })
 
-  it('correlates by default, as Lieberman-Aiden et al. did, and signs the same way', async () => {
+  it('correlates under --method correlation, as Lieberman-Aiden et al. did, and signs the same way', async () => {
     reset()
     const where = join(directory, 'by-correlation')
     expect(
       await main([
-        'compartments', checkered, '--sequence', reference, '--phaseSequence', reference,
-        '--out', where, '--quiet',
+        'compartments', checkered, '--method', 'correlation', '--sequence', reference,
+        '--phaseSequence', reference, '--out', where, '--quiet',
       ]),
     ).toBe(0)
     const { text, rows } = await components(where)
     expect(text).toMatch(/^# param method: correlation$/m)
+    expect(text).toMatch(/^# output: Components · .*· correlation$/m)
     expect(text).toMatch(/^# columns: sequence, component, eigenvalue, variance, r with phasing$/m)
     expect(Number(rows[0][4])).toBeGreaterThan(0.9)
   })

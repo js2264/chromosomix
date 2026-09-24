@@ -294,19 +294,19 @@ try {
   await sleep(500)
   await shot('b16-components-table')
 
-  // The same run by cooltools' method (§18.8): observed/expected itself,
-  // clipped and less one, rather than the correlation of its rows — E1 still
-  // the largest eigenvalue's, GC content still only its sign.
-  await choose('cooltools')
+  // The same run by the correlation of observed/expected's rows, as
+  // Lieberman-Aiden et al. (2009) did, rather than by cooltools' default
+  // (§18.8) — E1 still the largest eigenvalue's, GC content still only its sign.
+  await choose('Lieberman-Aiden 2009')
   await scrollDrawerTo('method')
   await sleep(500)
-  await shot('b16b-compartments-cooltools-form')
-  await run('arms · cooltools')
-  console.log('compartments by cooltools:\n' + (await notes()))
-  await shot('b16c-compartments-cooltools')
+  await shot('b16b-compartments-correlation-form')
+  await run('arms · correlation')
+  console.log('compartments by the correlation:\n' + (await notes()))
+  await shot('b16c-compartments-correlation')
   await scrollDrawerTo('Components ·')
   await sleep(500)
-  await shot('b16d-components-cooltools')
+  await shot('b16d-components-correlation')
 
   // A 1D browser on the reference alone: no map, so the bin size is 10 kb.
   page = await fresh()

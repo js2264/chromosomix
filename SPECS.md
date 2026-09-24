@@ -5818,8 +5818,9 @@ settles both keys itself on such a file rather than trusting a value a stored se
 in on a cooler left behind: always trans, never over expected. The arithmetic of both switches is
 untouched and still goldened (`run/fourc.ts`); what varies by file is which of it is *offered*, which
 is the same stated rule §18.2 already bends by for options that need a `/genomes` table.
-*Compartments* — expected → observed/expected → its Pearson correlation, or itself as cooltools
-prepares it (*method*, below) → eigenvectors by power iteration, behind the bin-count gate — with
+*Compartments* — expected → observed/expected, as cooltools prepares it or as the Pearson
+correlation of its rows (*method*, below) → eigenvectors by power iteration, behind the bin-count
+gate — with
 **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
 correlation is too weak to decide a sign. It is over **several ticked sequences, every one of them by
@@ -5846,9 +5847,11 @@ arms*, the map's own reading of §7.5, within a window along them (50 bins by de
 sequence at 0), read from the origin declared for the sequence (§8.15), and cis only, because the
 arms are a fact about one sequence. Divided by the decay alone, a chromosome whose arms are held
 together correlates to the X its two diagonals draw, and its leading eigenvector is the arms rather
-than its compartments: on the *P. aeruginosa* PAK map at 8 kb it follows the distance from the
-origin (Spearman 0.78) and nothing in the sequence (r = 0.00 with GC content), where along the arms
-the first component explains 22% of the variance and follows GC content (r = 0.33). **The
+than its compartments: on the *P. aeruginosa* PAK map at 8 kb, by the default method, it follows
+the distance from the origin (Spearman 0.74) and nothing in the sequence (|r| = 0.04 with GC
+content), where along the arms the first component carries 28% of the matrix, no longer follows the
+origin (0.05) and follows GC content (r = 0.35; 22% of the variance and r = 0.33 by the
+correlation). **The
 components are ranked by their eigenvalues and by nothing else**: E1 is the component with the
 largest, E2 the next. The phasing signal *signs* each one — positive where it rises with the signal,
 once their correlation reaches `minR` — and never chooses among them, because a component chosen for
@@ -5860,9 +5863,11 @@ assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided b
 the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone and
 reports r as drawn.
 
-**What the eigenvectors are taken of is a choice** — *method*, **Lieberman-Aiden 2009 by default**:
-the Pearson correlation of observed/expected's rows, as above. The other is **cooltools'**
-(`eigs_cis`): observed/expected itself, clipped at 0 and at its 99.9th percentile (NumPy's, linear
+**What the eigenvectors are taken of is a choice** — *method*, **cooltools' by default**
+(`eigs_cis`), which is what the field computes today; the other is the Pearson correlation of
+observed/expected's rows, as Lieberman-Aiden et al. (2009) did it and as every version of this task
+before the third did. cooltools' matrix is observed/expected itself, clipped at 0 and at its 99.9th
+percentile (NumPy's, linear
 between ranks, of the cells that have a value), one subtracted so that each cell is its departure
 from expected, and every gap — a cell with no value, and the `ignore_diags` near-diagonal — zero,
 which after the subtraction reads *as expected*; each eigenvector is then scaled by √|λ|, as
@@ -7275,7 +7280,17 @@ the sequences declared circular and the origins declared on them (§8.15), and t
 `.scool` (§3.8). A line without them repeats a different run, so each is a reserved flag of the
 command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table prints it,
 digits grouped or not), `--cell` — written whenever it differs from the shell's default and refused
-before the run when the file cannot answer it. The two about the molecules are written for a run with
+before the run when the file cannot answer it.
+
+**Balanced is the shell's default, as it is the form's.** *Use balancing weights* is answered from
+the file and never shown in a form (`paramDerived`), and a shell answers it the same way: a map is
+read balanced wherever the file carries weights — the framing and every such parameter alike — and
+`--no-balance` reads the raw counts. So a balanced run's line says nothing about it and an
+unbalanced one says `--no-balance`. `--balance` itself is refused by name rather than taken as a
+no-op: it asked for what is now the default, and a command that forgot it ran on raw counts under a
+framing line that said *balanced*, which is the failure the default exists to prevent. It survives
+only as coverage's own parameter, which is not the file's to answer and is off, since raw coverage
+is the point of it. The two about the molecules are written for a run with
 no map as well: an origin call from the Chromosomes table reads the circle, and so must its line. The window is *not* one of them: no runner reads the framing's
 extent, which decides only whether the block on screen can be reused, so `--window` is written for
 the record's label and the numbers are the same either way. An imported `.pairs` writes the

@@ -74,6 +74,7 @@ import type {
 } from './types'
 import type { AnnotationEntry } from '../annotations/types'
 import type { Extent } from '../types'
+import { paramDerived } from './types'
 
 /** The command the drawer copies. */
 export interface CliCommand {
@@ -179,21 +180,23 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     if (window.note !== null) notes.push(window.note)
   }
 
-  // Balancing, once, because `--balance` sets both the framing and a `balance`
-  // parameter where the task declares one. A declared one is what the
-  // arithmetic actually read, so it wins — but only when the record carries it.
-  // A provenance written without it (an older session, a task that gained the
-  // parameter since) would otherwise be read as *unbalanced*, turning a missing
-  // field into a positive claim about the numbers; the framing is the better
-  // answer there and is never absent. A run with no matrix has nothing to
-  // balance, and says nothing.
+  // Balancing, once, and only when it was off. A shell reads a map balanced
+  // wherever the file carries weights, as the app does, and `--no-balance`
+  // turns off both the framing and a `balance` parameter the task's form
+  // answers from the file. Such a parameter is what the arithmetic actually
+  // read, so it wins — but only when the record carries it. A provenance
+  // written without it (an older session, a task that gained the parameter
+  // since) would otherwise be read as *unbalanced*, turning a missing field
+  // into a positive claim about the numbers; the framing is the better answer
+  // there and is never absent. A `balance` of a task's own that is not the
+  // file's to answer (coverage's) is that task's parameter, and is written with
+  // the rest below. A run with no matrix has nothing to balance, and says
+  // nothing.
   const declared = input.task.params.find((param) => param.key === 'balance')
-  const balance =
-    declared === undefined || typeof params.balance !== 'boolean'
-      ? framing.balance
-      : params.balance
-  if (!mapless) args.push(balance ? '--balance' : '--balance=false')
-  if (!mapless && declared !== undefined && balance !== framing.balance) {
+  const derived = declared !== undefined && paramDerived(declared)
+  const balance = derived && typeof params.balance === 'boolean' ? params.balance : framing.balance
+  if (!mapless && !balance) args.push('--no-balance')
+  if (!mapless && derived && balance !== framing.balance) {
     // Worth a line, and worth being exact about what it costs. The two are one
     // flag in a shell, so the command cannot say that the *map* was drawn one
     // way while the *task* read it the other — but only the first of those is
@@ -202,7 +205,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     // view to borrow a block from, `run/blocks.ts` never consults it.
     notes.push(
       `The map was drawn ${framing.balance ? 'balanced' : 'unbalanced'} while the task read it ` +
-        `${balance ? 'balanced' : 'unbalanced'}, and --balance sets both together. This follows ` +
+        `${balance ? 'balanced' : 'unbalanced'}, and --no-balance sets both together. This follows ` +
         'the task, so the numbers match; only the framing line the run records will differ.',
     )
   }
@@ -318,7 +321,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   for (const load of loads) args.push(...load.split(' '))
 
   for (const spec of input.task.params) {
-    if (spec.key === 'balance') continue
+    if (spec.key === 'balance' && paramDerived(spec)) continue
     // The load already wrote this one, and wrote it the way the CLI reads a
     // list: one flag per file. The parameter loop writes a *comma-joined* value,
     // which `coerce` splits for a multiple parameter and `readFile` does not —

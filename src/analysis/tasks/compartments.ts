@@ -248,29 +248,30 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'method',
     label: 'method',
     /**
-     * What the eigenvectors are taken of — **the correlation by default**, as
-     * Lieberman-Aiden et al. (2009) did it and as this task always has.
+     * What the eigenvectors are taken of — **cooltools' way by default**
+     * (`eigs_cis`): observed/expected itself, clipped at its 99.9th percentile,
+     * less one so the matrix is each cell's departure from expected, and every
+     * gap read as expected (`cooltoolsMatrix`). What the field computes today,
+     * and a track made this way compares with one cooltools wrote, on its scale,
+     * √|λ| — |r| = 1.000 with `eigs_cis` on the zoo's maps, the rest being
+     * cooltools' expectation (SPECS §18.8). It skips the correlation, the one
+     * cubic step, so a fine map takes seconds.
      *
-     * cooltools takes them of observed/expected itself (`eigs_cis`): clipped at
-     * its 99.9th percentile, less one so the matrix is each cell's departure
-     * from expected, and every gap read as expected (`cooltoolsMatrix`). The two
-     * agree where a chromosome has compartments to find and part where it has
-     * none, which is itself worth seeing; and a track made this way compares
-     * with one cooltools wrote, on cooltools' scale, √|λ| — |r| = 1.000 with
-     * `eigs_cis` on the zoo's maps, the rest being cooltools' expectation
-     * (SPECS §18.8).
+     * The other is the correlation of the rows, as Lieberman-Aiden et al. (2009)
+     * did it. The two agree where a chromosome has compartments to find and part
+     * where it has none, which is itself worth seeing.
      */
-    default: 'correlation',
+    default: 'cooltools',
     options: [
-      {
-        value: 'correlation',
-        label: 'Lieberman-Aiden 2009',
-        hint: 'The Pearson correlation of observed/expected’s rows, decomposed.',
-      },
       {
         value: 'cooltools',
         label: 'cooltools',
         hint: 'Observed/expected itself, clipped at its 99.9th percentile and less one, decomposed.',
+      },
+      {
+        value: 'correlation',
+        label: 'Lieberman-Aiden 2009',
+        hint: 'The Pearson correlation of observed/expected’s rows, decomposed.',
       },
     ],
   },
@@ -491,7 +492,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // eight seconds for three of them over the 4,642 bins of *E. coli* at 1 kb,
   // where the correlation takes minutes. So the warning about a resolution too
   // fine, which is a warning about minutes, is the correlation's to give.
-  const cooltools = params.method === 'cooltools'
+  // Absent is the default, which is cooltools'.
+  const cooltools = params.method !== 'correlation'
   // Cis-only is a different shape of run, not a narrower one — see `estimateCis`
   // and the `contacts` parameter.
   if (contacts === 'cis') return estimateCis(context, chosen, balance, cooltools)
@@ -572,8 +574,10 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   // short way round (§8.15), where it used to be measured along a line — which
   // changes every number the task produces on one.
   // 3: the components are ranked by their eigenvalues alone — the phasing signal
-  // signs each and no longer chooses among them — and the components table
-  // gives each one's eigenvalue, and its r with the signal as it is drawn.
+  // signs each and no longer chooses among them — the components table gives
+  // each one's eigenvalue, and its r with the signal as it is drawn, and what is
+  // decomposed is a choice: observed/expected as cooltools prepares it by
+  // default, where every earlier version took the correlation of its rows.
   version: 3,
   // Absent on a metacool, which is a scientific judgement rather than a
   // technical one: a bacterial MAG has domains and no compartments, and a row

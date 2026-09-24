@@ -125,6 +125,7 @@ import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
 import {
   defaultParams,
+  paramDerived,
   type AnalysisFraming,
   type AnalysisTask,
   type Params,
@@ -280,6 +281,9 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
     // unanswered, and the runner decides it from the framing — the map's own
     // resolution where a map was named — as the form would have.
     if (param.kind === 'number' && param.seed !== undefined) continue
+    // Nor a parameter the form answers from the file (`paramDerived`) — *use
+    // balancing weights* — which `runOne` answers from the file it opens.
+    if (paramDerived(param)) continue
     if ('default' in param && param.default !== undefined) {
       params[param.key] = param.default as Params[string]
     }
@@ -287,10 +291,10 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
   for (const [key, values] of args.flags) {
     const param = known.get(key)
     // The task's own parameters win over the CLI's flags where the names
-    // collide, and `--balance` is the collision that matters: six tasks declare
-    // it. Skipping a reserved name first would have set the framing and left the
-    // task at its default, which is precisely the silent-default failure the
-    // unknown-key error below exists to prevent.
+    // collide: coverage's own `--balance`, which is off by default, is that
+    // task's and not the framing's. Skipping a reserved name first would have
+    // set the framing and left the task at its default, which is precisely the
+    // silent-default failure the unknown-key error below exists to prevent.
     if (param === undefined && RESERVED.has(key)) continue
     if (param === undefined) {
       throw new Error(
@@ -300,15 +304,55 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
     }
     params[key] = coerce(param, values)
   }
+  // `--no-balance` answers the parameter the file otherwise would: off, as the
+  // framing then is.
+  if (flag(args, 'no-balance')) {
+    for (const param of task.params) if (paramDerived(param)) params[param.key] = false
+  }
   return params
+}
+
+/**
+ * A task's parameters with the ones the file answers filled in.
+ *
+ * *Use balancing weights* is the one there is (`BALANCE_PARAM`). A form never
+ * shows it and sets it from the file (`ParamForm`), and a shell now does the
+ * same: on wherever the file carries weights, as the framing is — so a command
+ * that says nothing about balancing reads what the app would have read. Only
+ * where the command left it open: `--no-balance` has already answered it.
+ */
+function withDerived(task: AnalysisTask, params: Params, balance: boolean): Params {
+  if (!task.params.some((spec) => paramDerived(spec) && params[spec.key] === undefined)) return params
+  const out: Record<string, Params[string]> = { ...params }
+  for (const spec of task.params) {
+    if (paramDerived(spec) && out[spec.key] === undefined) out[spec.key] = balance
+  }
+  return out
+}
+
+/**
+ * Whether `--balance` means something to this command.
+ *
+ * Balanced counts are the default wherever the file carries weights, so the
+ * flag that used to ask for them asks for nothing — and a flag that asks for the
+ * default reads as though the default were the other one, which is how a run
+ * came out unbalanced three times over for want of it. It survives only as a
+ * task's own parameter where one is declared and is *not* the file's to answer:
+ * coverage's, which is off because raw coverage is the point of it.
+ */
+function takesBalance(command: string): boolean {
+  return (
+    taskById(command)?.params.some((spec) => spec.key === 'balance' && !paramDerived(spec)) ?? false
+  )
 }
 
 /**
  * Flags that belong to the CLI rather than to a task.
  *
- * Consulted only for a name the task does *not* declare. `--balance` is on both
- * lists deliberately: it sets the framing, and where a task also has a `balance`
- * parameter it sets that too, because a reader typing it once means both.
+ * Consulted only for a name the task does *not* declare. `--no-balance` reads
+ * the raw counts: it sets the framing, and the `balance` parameter of every task
+ * whose form answers it from the file, because a reader typing it once means
+ * both (`paramsFor`, `withDerived`).
  *
  * `--window` rather than `--region`: the reconstruction and the model
  * comparison both take a parameter called `region`, meaning *which sequences*,
@@ -319,7 +363,7 @@ const RESERVED = new Set([
   'out',
   'o',
   'window',
-  'balance',
+  'no-balance',
   'features',
   'pairs',
   'sequence',
@@ -596,7 +640,7 @@ async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'qui
  * loops and a promise that never resolves would hang.
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
-  const { task, params, path } = options
+  const { task, path } = options
   const opened = await openLocal(resolve(path), options)
   const { mc } = opened
   try {
@@ -638,6 +682,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         ? ([0, mc.nBins] as [number, number])
         : mc.extent(options.window)
     const balance = options.balance ?? mc.hasWeights
+    const params = withDerived(task, options.params, balance)
     const framing: AnalysisFraming = {
       uri: mc.uri,
       rows: extent,
@@ -876,7 +921,17 @@ async function runChain(
       if (required === undefined) {
         throw new Error(`${node.id} requires the task ${id}, which this build does not have`)
       }
-      const requiredParams = defaultParams(required.params)
+      // Its own defaults, and balancing as the framing reads the file — which a
+      // required step's form would have set from the file too.
+      const requiredParams = withDerived(
+        required,
+        Object.fromEntries(
+          Object.entries(defaultParams(required.params)).filter(
+            ([key]) => !required.params.some((spec) => spec.key === key && paramDerived(spec)),
+          ),
+        ),
+        framing.balance,
+      )
       const started = Date.now()
       const outputs = await walk(required, requiredParams)
       upstream[id] = {
@@ -1419,7 +1474,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
 
       --out <dir>          where to write (default: .)
       --window <chr:a-b>   a window rather than the whole file
-      --balance            force balancing on; --balance=false forces it off
+      --no-balance         read the raw counts. A map is read balanced wherever
+                           the file carries weights, as the app reads it
       --features <file>    a BED/narrowPeak/loop table a task needs
       --sequence <ref.fa>  a reference, for a task that reads residues (motif)
                            or phases by GC content (compartments). Gzipped or not
@@ -1484,6 +1540,12 @@ function listTasks(): void {
       process.stdout.write('      --against <file>  The other maps to compare with; repeat per map\n')
     }
     for (const param of task.params) {
+      if (paramDerived(param) && param.key === 'balance') {
+        process.stdout.write(
+          '      --no-balance  read the raw counts (balanced by default where the file carries weights)\n',
+        )
+        continue
+      }
       const fallback = (param as { default?: unknown }).default
       process.stdout.write(
         `      --${param.key}` +
@@ -1584,7 +1646,7 @@ async function runCommand(args: Args): Promise<number> {
         window: task.params.some((param) => param.key === 'window')
           ? undefined
           : one(args, 'window'),
-        balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
+        balance: flag(args, 'no-balance') ? false : undefined,
         inputs,
         sequences,
         tracks,
@@ -1748,7 +1810,7 @@ async function circularCommand(args: Args): Promise<number> {
     try {
       const { mc } = await openLocal(resolve(path), { binning: pairsBinningOf(args), quiet })
       try {
-        const balance = args.flags.has('balance') ? flag(args, 'balance') : mc.hasWeights
+        const balance = flag(args, 'no-balance') ? false : mc.hasWeights
         const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
         const measured = await measureJunctions(
           junctionCandidates(pairs, mc.binsize),
@@ -1830,6 +1892,13 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (args.command === 'tasks') {
     listTasks()
     return 0
+  }
+  if (args.flags.has('balance') && !takesBalance(args.command)) {
+    process.stderr.write(
+      '--balance is the default now: a map is read balanced wherever the file carries weights. ' +
+        'Drop it, or use --no-balance for the raw counts.\n',
+    )
+    return 2
   }
   if (args.command === 'replay') return replayCommand(args)
   if (args.command === 'circular') return circularCommand(args)

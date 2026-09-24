@@ -459,7 +459,8 @@ describe('ticking several sequences', () => {
     const view = form(COMPARTMENTS_TASK)
     const cost = COMPARTMENTS_TASK.estimate(context(), { ...view.value, contacts: 'both' })
     // 230 + 813 + 1531 bins, correlated together.
-    expect(cost.note).toContain('2,574 bin correlation matrix')
+    // cooltools' method by default (§18.8), so the matrix priced is observed/expected.
+    expect(cost.note).toContain('2,574 bin observed/expected matrix')
     expect(cost.note).toContain('cis and trans')
     view.destroy()
   })
@@ -646,7 +647,7 @@ describe('which contacts a compartment run reads', () => {
 
     const cis = COMPARTMENTS_TASK.estimate(fine, { ...view.value, contacts: 'cis' })
     expect(cis.refusal).toBeUndefined()
-    expect(cis.note).toContain('2 sequences, one correlation each')
+    expect(cis.note).toContain('2 sequences, one decomposition each')
     expect(cis.note).toContain('5,000 bins')
     view.destroy()
   })

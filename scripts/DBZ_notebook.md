@@ -29,8 +29,15 @@ aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delet
 
 ## Figures
 
-`notebooks/dbz-chromosome-figures.ipynb` draws one figure per species of the store — the longest
+`notebooks/dbz-chromosome-figures.qmd` draws one figure per species of the store — the longest
 chromosome from its origin to its compartments, with the inter-arm alignment of every species beside
-it — running `metacooler-run` over each map and parsing what it writes. It reads the published store
-by default; set `STORE` in its first cell to `~/Downloads/metacooler/data/dbz/store` to read the
+it — running `metacooler-run` over each map and parsing what it writes, and writes the numbers the
+text quotes, each with its test, to `notebooks/figures/numbers.tsv`. It reads the published store by
+default; set `STORE` in its settings chunk to `~/Downloads/metacooler/data/dbz/store` to read the
 folder the suite wrote instead.
+
+```sh
+# Quarto, and a Python with numpy, scipy, matplotlib, h5py and jupyter
+# (QUARTO_PYTHON=/path/to/python where that is not the one on the PATH).
+quarto render notebooks/dbz-chromosome-figures.qmd   # → notebooks/dbz-chromosome-figures.html
+```

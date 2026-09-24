@@ -116,10 +116,10 @@ CIRCULAR=${CIRCULAR:-auto}
 # in bins at RES_PATTERNS; 0 is the whole chromosome.
 ARM_WINDOW=${ARM_WINDOW:-50}
 
-# What both compartment runs take their eigenvectors of: the correlation of
-# observed/expected's rows, as Lieberman-Aiden et al. (2009) did, or
-# observed/expected itself as cooltools' eigs_cis prepares it (SPECS §18.8).
-COMPARTMENTS_METHOD=${COMPARTMENTS_METHOD:-correlation}
+# What both compartment runs take their eigenvectors of: observed/expected
+# itself as cooltools' eigs_cis prepares it, the app's default, or the
+# correlation of its rows, as Lieberman-Aiden et al. (2009) did (SPECS §18.8).
+COMPARTMENTS_METHOD=${COMPARTMENTS_METHOD:-cooltools}
 
 # Only these steps, where given: the others keep what an earlier run wrote, and
 # the index lists it. The framing (the junction test, the reference) is always
@@ -142,9 +142,9 @@ usage: scripts/dbz-store.sh [<sample> ...]
   STEPS="<step> ..." only these steps; the others keep what is there
   CIRCULAR=auto|all|none  which sequences are circles (default: auto, the junction test)
   ARM_WINDOW=<bins>  compartments-arms' reach along the arms (default: 50)
-  COMPARTMENTS_METHOD=correlation|cooltools
-                     what the eigenvectors are taken of (default: correlation,
-                     Lieberman-Aiden 2009)
+  COMPARTMENTS_METHOD=cooltools|correlation
+                     what the eigenvectors are taken of (default: cooltools;
+                     correlation is Lieberman-Aiden 2009's)
   MR=<command>       metacooler-run (default: this checkout's dist-cli build)
   RES_COVERAGE, RES_CISTRANS, RES_PS, RES_DOMAINS, RES_PATTERNS, RES_COMPOSITION, RES_MODEL
 TEXT
@@ -154,8 +154,8 @@ case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 
 # Before any map is read, rather than as a failed step in every sample's log.
 case "$COMPARTMENTS_METHOD" in
-  correlation|cooltools) ;;
-  *) printf 'COMPARTMENTS_METHOD is correlation or cooltools, not %s\n' "$COMPARTMENTS_METHOD" >&2; exit 2 ;;
+  cooltools|correlation) ;;
+  *) printf 'COMPARTMENTS_METHOD is cooltools or correlation, not %s\n' "$COMPARTMENTS_METHOD" >&2; exit 2 ;;
 esac
 [ -d "$DATA" ] || { printf '%s: no such folder. Set DATA to where the maps are.\n' "$DATA" >&2; exit 2; }
 [ -f "$SPECIES" ] || { printf '%s: no such table. Set SPECIES.\n' "$SPECIES" >&2; exit 2; }
@@ -392,7 +392,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   if have "$RES_COVERAGE"; then
     run_step coverage "$dir/coverage" \
       coverage "$file::/resolutions/$RES_COVERAGE" \
-      --balance=false --total --fraction --cis --trans
+      --no-balance --total --fraction --cis --trans
   else
     skip coverage "$RES_COVERAGE"
   fi
@@ -498,7 +498,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   if have "$RES_CISTRANS"; then
     run_step cistrans "$dir/cistrans" \
       cistrans "$file::/resolutions/$RES_CISTRANS" \
-      --balance ${frame[@]+"${frame[@]}"} --bars both --normalise enrichment \
+      ${frame[@]+"${frame[@]}"} --bars both --normalise enrichment \
       --minContacts 10 --maxEdges 500 --matrix=false
   else
     skip cistrans "$RES_CISTRANS"
@@ -510,7 +510,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   if have "$RES_PS"; then
     run_step ps "$dir/ps" \
       expected "$file::/resolutions/$RES_PS" \
-      --balance ${frame[@]+"${frame[@]}"} --scope contig --quantity density \
+      ${frame[@]+"${frame[@]}"} --scope contig --quantity density \
       --factor 1.1 --minSeparation 0 --derivative --stranded=false
   else
     skip ps "$RES_PS"
@@ -523,12 +523,12 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   if have "$RES_DOMAINS"; then
     run_step insulation "$dir/insulation" \
       insulation "$file::/resolutions/$RES_DOMAINS" \
-      --balance ${frame[@]+"${frame[@]}"} --window 10 --scales 1 \
+      ${frame[@]+"${frame[@]}"} --window 10 --scales 1 \
       --ignoreDiags 2 --minValid 0.5 --call --prominence 0.2 --spacing 0 --domains
 
     run_step di "$dir/di" \
       di "$file::/resolutions/$RES_DOMAINS" \
-      --balance ${frame[@]+"${frame[@]}"} --window 10 \
+      ${frame[@]+"${frame[@]}"} --window 10 \
       --ignoreDiags 0 --minValid 0.5 --call --prominence 10 --spacing 0 --domains
   else
     skip insulation "$RES_DOMAINS"
@@ -546,7 +546,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     # -----------------------------------------------------------------------
     run_step hicscore "$dir/hicscore" \
       hicscore "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} --diagonals 3 --ignoreDiags 0 --minValid 0.5
+      ${frame[@]+"${frame[@]}"} --diagonals 3 --ignoreDiags 0 --minValid 0.5
 
     # GC content signs each component and chooses none of them: E1 is the
     # largest eigenvalue's, so comparing GC content between the compartments it
@@ -555,7 +555,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     [ -n "$reference" ] && phase=(--sequence "$reference" --phaseSequence "$reference")
     run_step compartments "$dir/compartments" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} ${phase[@]+"${phase[@]}"} \
+      ${frame[@]+"${frame[@]}"} ${phase[@]+"${phase[@]}"} \
       --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
       --method "$COMPARTMENTS_METHOD"
 
@@ -569,7 +569,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     # -----------------------------------------------------------------------
     run_step compartments-arms "$dir/compartments-arms" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"} ${phase[@]+"${phase[@]}"} \
+      ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"} ${phase[@]+"${phase[@]}"} \
       --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
       --expected arms --armWindow "$ARM_WINDOW" --method "$COMPARTMENTS_METHOD"
 
@@ -579,20 +579,20 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     # -----------------------------------------------------------------------
     run_step interarm "$dir/interarm" \
       interarm "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"}
+      ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"}
 
     # -----------------------------------------------------------------------
     # Loops and borders: two runs of one task, so two directories.
     # -----------------------------------------------------------------------
     run_step loops "$dir/loops" \
       chromosight "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} --pattern loops --thresholds preset --pearson 0.3 \
+      ${frame[@]+"${frame[@]}"} --pattern loops --thresholds preset --pearson 0.3 \
       --minDist 10 --maxDist 1000 --minSeparation 3 --iterations 1 \
       --maxPercUndetected 50 --maxPercZero 10 --nMads 5 --maxQvalue 1
 
     run_step borders "$dir/borders" \
       chromosight "$file::/resolutions/$RES_PATTERNS" \
-      --balance ${frame[@]+"${frame[@]}"} --pattern borders --thresholds preset --pearson 0.3 \
+      ${frame[@]+"${frame[@]}"} --pattern borders --thresholds preset --pearson 0.3 \
       --minDist 10 --maxDist 1000 --minSeparation 3 --iterations 1 \
       --maxPercUndetected 50 --maxPercZero 10 --nMads 5 --maxQvalue 1
 
@@ -611,7 +611,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
       if [ -n "$calls" ] && [ "$(grep -vc '^#' "$calls")" -gt 0 ]; then
         run_step apa-loops "$dir/apa-loops" \
           apa "$file::/resolutions/$RES_PATTERNS" \
-          --balance ${frame[@]+"${frame[@]}"} --pairs "$calls" --anchors pairs \
+          ${frame[@]+"${frame[@]}"} --pairs "$calls" --anchors pairs \
           --norm chromosight --csPattern loops
       else
         printf '  %-17s skipped: no loop was called\n' apa-loops | tee -a "$log"
@@ -623,7 +623,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
       if [ -n "$calls" ] && [ "$(grep -vc '^#' "$calls")" -gt 0 ]; then
         run_step apa-borders "$dir/apa-borders" \
           apa "$file::/resolutions/$RES_PATTERNS" \
-          --balance ${frame[@]+"${frame[@]}"} --features "$calls" --anchors features --at centre \
+          ${frame[@]+"${frame[@]}"} --features "$calls" --anchors features --at centre \
           --norm chromosight --csPattern borders
       else
         printf '  %-17s skipped: no border was called\n' apa-borders | tee -a "$log"
@@ -637,7 +637,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   if have "$RES_MODEL"; then
     run_step model3d "$dir/model3d" \
       reconstruct3d "$file::/resolutions/$RES_MODEL" \
-      --balance ${frame[@]+"${frame[@]}"} --method nb --alpha 3 --iterations 150
+      ${frame[@]+"${frame[@]}"} --method nb --alpha 3 --iterations 150
   else
     skip model3d "$RES_MODEL"
   fi
