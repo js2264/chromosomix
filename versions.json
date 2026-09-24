@@ -207,6 +207,13 @@
   ],
   "pulls": [
     {
+      "number": 73,
+      "commit": "4d30c0d",
+      "title": "The Map card follows the star, and no map or structure need be starred (§16.5, §25.3)",
+      "branch": "claude/contact-map-starring-qsqqun",
+      "date": "2026-09-24T19:35:18Z"
+    },
+    {
       "number": 72,
       "commit": "8352a9b",
       "title": "Add bacterial chromosome analysis: origins, arms, and group signal",
