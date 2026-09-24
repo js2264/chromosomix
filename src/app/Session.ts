@@ -67,6 +67,7 @@ import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { MATRIX_OPTIONS, TRACK_OPTIONS, getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
+import { afterHome, homeParent, hostHolds, removeCard, swapCard } from '../ui/cardLayout'
 import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
@@ -136,7 +137,8 @@ import { MAX_PANELS, parseMaps, type DeckLocal, type GrowDirection } from '../pa
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
-import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { chooseSaveTarget, downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { mcoolNameFor } from '../pairs/mcoolName'
 import { MetadataCard } from '../ui/MetadataCard'
 import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
@@ -403,6 +405,14 @@ function genomeCard(
 }
 
 /**
+ * What the Analysis column says while a deck has no map starred (§18.1): one
+ * sentence, above every greyed row and in Run's refusal.
+ */
+const NO_STAR_TASKS =
+  'No map is starred, so no task can run: a task reads one map, and the star is how it is named. ' +
+  'Star a map in its heading to run tasks on it.'
+
+/**
  * A `contig:start-end` region as the range the minimap draws, or `null`.
  *
  * The region grammar is the map's — 0-based, half-open, and either coordinate
@@ -588,6 +598,12 @@ export class Session {
   readonly aestheticsHost = el('div', { class: 'panel-host' })
   /** The structure cell's card as {@link refreshAesthetics} last placed it, so it can be taken out again. */
   private placedStructureCard: HTMLElement | null = null
+  /**
+   * The starred companion's *Map* card as {@link refreshAesthetics} last put it
+   * in the first map's place (§16.5), with the first map's card it stood in
+   * for, so the two can be swapped back when the star moves on.
+   */
+  private placedMapCard: { card: HTMLElement; lead: HTMLElement } | null = null
   /** The Analysis column's body: the list of tasks this file can be asked. */
   readonly analysisHost = el('div', { class: 'panel-host' })
   /**
@@ -762,6 +778,16 @@ export class Session {
    * map's {@link parkedMap} makes, and the same one a track's `visible` makes.
    */
   private compareHidden = false
+  /**
+   * The maps the eye on a Contact maps row took out of the deck (§16.9): still
+   * this session's, still listed, drawn in no cell until the eye or a drop puts
+   * them back. Held here and not by the deck, because a deck left with nothing
+   * beside the first map puts itself down — and the maps hidden from it are
+   * exactly the ones it no longer has a cell for. The ids are the session's
+   * own, in a namespace the deck's `p1`, `p2`… cannot reach.
+   */
+  private hiddenMaps: Array<{ id: string; picked: PickedFile }> = []
+  private hiddenMapCount = 0
   private compareCard: CompareCard | null = null
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
@@ -799,6 +825,11 @@ export class Session {
    */
   private readonly deckEdges = new DeckFrame({
     onGrow: (direction, picked) => this.growDeck(direction, picked),
+    // The map's own row off the Contact maps card, dropped on an edge before
+    // there is a deck: the deck, with a second picture of it in the new cell.
+    onGrowWithMap: (direction, row) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithMap(direction, row)
+    },
   })
   /**
    * The genome this session is browsing, when there is no contact map.
@@ -1226,7 +1257,7 @@ export class Session {
     if (held?.metadata === undefined || source.kind !== 'metadata') return
     const text = held.metadata.exportTsv(source.table, source.column, this.file?.uri ?? '')
     if (text === null) return
-    downloadBlob(
+    void downloadBlob(
       new Blob([text], { type: 'text/tab-separated-values' }),
       `${exportBaseName(fileLabel(this.file?.uri ?? 'map'))}-${source.table}-${source.column}-${fileStamp(new Date())}.tsv`,
     )
@@ -2582,6 +2613,15 @@ export class Session {
    * take the session down with it.
    */
   private async exportImportedMcool(): Promise<void> {
+    // Where it goes first, from the press: writing every rung of a ladder takes
+    // far longer than a browser will still open a save dialog for once the
+    // press is over (`ui/export.ts`), and a reader who cancels here has not
+    // waited for a file nobody wanted.
+    const target = await chooseSaveTarget(
+      mcoolNameFor(splitUri(this.file?.uri ?? 'pairs').path),
+      'application/x-hdf5',
+    )
+    if (target === null) return
     // The job has to exist before the note can offer to cancel it, and the note
     // has to exist before the job can report into it. Declared first and
     // assigned below, which is the smallest way out of that.
@@ -2597,8 +2637,8 @@ export class Session {
         note.dismiss()
         return
       }
-      downloadBlob(new Blob([result.bytes as BlobPart], { type: 'application/x-hdf5' }), result.filename)
-      note.finish(`${result.filename} — ${result.rungs.length} resolutions`)
+      await target.write(new Blob([result.bytes as BlobPart], { type: 'application/x-hdf5' }))
+      note.finish(`${target.name} — ${result.rungs.length} resolutions`)
     } catch (err) {
       if (isCancellation(err)) {
         note.dismiss()
@@ -4250,7 +4290,71 @@ export class Session {
       },
       isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
       onSwap: () => void this.swapCompare(),
+      // Every map this session is holding is a row here (§16.9): the deck's
+      // other cells after the square's one or two, each with the grip that
+      // drags it into another cell.
+      deckMaps: () => [
+        ...(this.deck?.companionMaps() ?? []),
+        ...this.hiddenMaps.map(({ id, picked }) => ({
+          id,
+          uri: picked.uri,
+          label: this.mapLabel(picked.uri),
+          shown: false,
+        })),
+      ],
+      onToggleDeckMap: (id) => this.toggleDeckMap(id),
+      deckMapsShowable: () => this.deckIsPossible,
+      onCloseDeckMap: (id) => {
+        if (this.takeHiddenMap(id) !== null) this.syncCompareCard()
+        else this.deck?.closeCell(id)
+      },
+      onRenameDeckMap: (target, name) => this.renameMap(target, name),
+      onDragMap: (dragging) => this.deck?.showTiling(dragging),
     })
+  }
+
+  /**
+   * The eye on a deck map's row (§16.9). A map in a cell leaves it and is held
+   * hidden; a hidden one opens in the deck again — the first empty cell, or a
+   * new one — as a Structures row's eye opens its model's cell (§25.3).
+   */
+  private toggleDeckMap(id: string): void {
+    if (this.hiddenMaps.some((held) => held.id === id)) {
+      if (!this.deckIsPossible) return
+      const picked = this.takeHiddenMap(id)
+      if (picked !== null) this.ensureDeck().showMap(picked)
+    } else {
+      const picked = this.deck?.takeMap(id) ?? null
+      if (picked !== null) this.holdHidden(picked)
+    }
+    this.syncCompareCard()
+  }
+
+  /**
+   * Keep a map the reader put down in the deck, hidden, on the Contact maps
+   * card (§16.9) — from the eye, or from the × on its cell's own heading.
+   *
+   * Once per file: a map already held hidden is not listed twice, and one still
+   * on screen — in another cell, as the first map, or in its lower triangle —
+   * is not listed as hidden at all, since the card already lists it as shown
+   * and nothing about it has been lost.
+   */
+  private holdHidden(picked: PickedFile): void {
+    const uri = picked.uri
+    const shown =
+      this.file?.uri === uri ||
+      this.compare?.uri === uri ||
+      (this.deck?.companionMaps() ?? []).some((map) => map.uri === uri)
+    if (shown || this.hiddenMaps.some((held) => held.picked.uri === uri)) return
+    this.hiddenMaps.push({ id: `hidden-${++this.hiddenMapCount}`, picked })
+  }
+
+  /** Stop holding a hidden map, and hand back what opens it. */
+  private takeHiddenMap(id: string): PickedFile | null {
+    const at = this.hiddenMaps.findIndex((held) => held.id === id)
+    if (at < 0) return null
+    const [held] = this.hiddenMaps.splice(at, 1)
+    return held?.picked ?? null
   }
 
   /** Redraw the Contact maps card's eyes from what this session is showing. */
@@ -5703,6 +5807,10 @@ export class Session {
     if (this.destroyed) return
     const deck = this.ensureDeck()
     deck.apply(state, locals)
+    // A deck read back from the address does not publish — it *is* what the
+    // address says — so the Contact maps card, which lists its maps (§16.9),
+    // is told here rather than by `onMapsChange`.
+    this.syncCompareCard()
     if (!deck.isEmpty) return
     deck.destroy()
     this.deck = null
@@ -5770,6 +5878,8 @@ export class Session {
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => {
         this.store.patch({ maps }, { replace: true })
+        // The Contact maps card lists the deck's maps, so it follows the list.
+        this.syncCompareCard()
         // A structure cell can arrive or go after the view was mounted — a g3d
         // dropped, a reconstruction landing, the cell's heading closed — and
         // its card in the Aesthetics column (§25.3) follows the cell, not the
@@ -5806,6 +5916,27 @@ export class Session {
       onStarChange: () => {
         this.analysis?.refresh()
       },
+      // The column's *Map* card is the starred map's (§16.5), so the star
+      // moving, or the starred companion's card being built, changes the card
+      // that column holds — and the session is what puts cards in it.
+      onMapCardChange: () => {
+        this.refreshAesthetics()
+      },
+      // A track dropped on an empty cell, loaded onto the tracks cell the deck
+      // opened there: the same road a file aimed at a map's edge takes, with
+      // the cell's own id as the map (§16.9).
+      onTrackFile: (picked, map) => {
+        void this.addPicked(picked, placementOn('bottom'), map)
+      },
+      // The two maps of the session's own square, as files a cell can open: a
+      // row of the Contact maps card dropped on a cell names one of them.
+      leadPicked: () => (this.file === null ? null : { uri: this.file.uri, source: this.file.source }),
+      comparePicked: () => (this.compare === null ? null : { uri: this.compare.uri, source: this.compare.source }),
+      hiddenPicked: (id) => this.takeHiddenMap(id),
+      onMapHidden: (picked) => {
+        this.holdHidden(picked)
+        this.syncCompareCard()
+      },
       // The *3D structure* card is the starred cell's (§25.3), so the star
       // moving is the column's card changing under it — and the session is
       // what puts a card in that column.
@@ -5829,15 +5960,18 @@ export class Session {
         const uri = this.file?.uri
         if (uri !== undefined) this.renameMap(uri, name)
       },
-      // Stripped the same way and for the same two reasons. `onChange` would be
-      // a sixth copy of a control over something the deck shares; `onAvailable`
-      // would let a companion whose block has no diagonal un-turn the whole
-      // deck, which is a fact about that one file deciding what every other one
-      // is drawn as.
+      // With its `onChange`, since the column's *Map* card is a companion's
+      // own while that companion is starred (§16.5) and the turn has to be on
+      // it: the turn is the one setting there that is the deck's rather than
+      // the map's, because the lock's rows are separation on a band and
+      // position on a square. Still one control on screen — the column holds
+      // one card. Without `onAvailable`, which would let a companion whose
+      // block has no diagonal un-turn the whole deck: a fact about that one
+      // file deciding what every other one is drawn as.
       turn: () => {
         const state = this.store.state
         if (state === null) return undefined
-        const { onChange: _own, onAvailable: _grey, ...shared } = this.turnPresentation(state)
+        const { onAvailable: _grey, ...shared } = this.turnPresentation(state)
         return shared
       },
       binsize: () => this.file?.info.binsize ?? undefined,
@@ -6575,9 +6709,11 @@ export class Session {
       this.compareCard = null
       // …and every companion panel, each of which is another worker on another
       // file of the same shape. A deck is a picture *beside* this session's
-      // file, and there is no longer one for it to be beside.
+      // file, and there is no longer one for it to be beside — nor for a map
+      // hidden from it.
       this.deck?.destroy()
       this.deck = null
+      this.hiddenMaps = []
       // For the same reason, and it is the one view the session holds: a cached
       // whole-file matrix is a picture of a file nobody can now navigate to,
       // and the scan that produced it may still be running.
@@ -8104,6 +8240,9 @@ export class Session {
       cellMeasurements: (uri, table) => this.adoptCellMeasurements(uri, table),
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
+      // A deck the reader has left with no map starred has no file for a task
+      // to run against, and none is guessed for them (§18.1).
+      blocked: () => (this.deck !== null && this.deck.starredMap === null ? NO_STAR_TASKS : null),
       // The same list the Tracks card is given, and deliberately not
       // `allTargets` below: that one leaves out a companion whose two tables
       // have not been read, which is right for *running* against it and wrong
@@ -8404,13 +8543,16 @@ export class Session {
    */
   private refreshAesthetics(): void {
     const side = this.current?.sideEl
+    this.placeMapCard(side)
     const card = this.deck?.structureSettings() ?? null
     // A card the enlarged dialog has borrowed stays where it is: the dialog
     // gives it back when it closes.
-    const borrowed = card !== null && card.isConnected && !this.aestheticsHost.contains(card)
+    // Held by the host where the reader has moved it to another column, too:
+    // its builder's spot is still here (`ui/cardLayout.ts`).
+    const borrowed = card !== null && card.isConnected && !hostHolds(this.aestheticsHost, card)
     // The card placed last time, taken out where the deck no longer has it.
     const placed = this.placedStructureCard
-    if (placed !== null && placed !== card && this.aestheticsHost.contains(placed)) placed.remove()
+    if (placed !== null && placed !== card && hostHolds(this.aestheticsHost, placed)) removeCard(placed)
     this.placedStructureCard = null
     if (side === undefined) {
       this.setAesthetics(card === null || borrowed ? [] : [card])
@@ -8421,12 +8563,44 @@ export class Session {
       // the tracks and the groups (§25.3): the model is a view of the same
       // thing the map is, so its card stands with the map's. A view without
       // a map card takes it last.
-      const map = this.current?.panel?.controlsEl
-      if (map !== undefined && map.parentElement === side) map.after(card)
+      const map = this.placedMapCard?.card ?? this.current?.panel?.controlsEl
+      if (map !== undefined && homeParent(map) === side) afterHome(map, card)
       else side.append(card)
       this.placedStructureCard = card
     }
     this.setAesthetics([side])
+  }
+
+  /**
+   * Put the **starred** map's *Map* card where the first map's stands (§16.5).
+   *
+   * The column holds one Map card, and it is the starred map's: the first
+   * map's own while it is starred — and while nothing is, when that card sets
+   * every map — and a companion's while the star is on it. Swapped in place in
+   * the view's aside, so the cards around it (Export, Tracks, the 3D
+   * structure) stay where they were, and swapped back the moment the star
+   * moves off, the companion closes, or the view is rebuilt with a card of its
+   * own.
+   */
+  private placeMapCard(side: HTMLElement | undefined): void {
+    const lead = this.current?.panel?.controlsEl
+    const wanted = this.deck?.mapCard() ?? null
+    const held = this.placedMapCard
+    // Where each card's builder put it, rather than where it stands: a reader
+    // may have moved the Map card to another column, and the swap is still
+    // this aside's (`ui/cardLayout.ts`).
+    if (held !== null && (held.card !== wanted || held.lead !== lead || homeParent(held.card) !== side)) {
+      // The first map's card back where the companion's stood. Into a view
+      // that has since been rebuilt, too: that aside is gone, and putting its
+      // own card back in it costs nothing and leaves the companion's free.
+      swapCard(held.card, held.lead)
+      this.placedMapCard = null
+    }
+    if (wanted === null || lead === undefined || side === undefined) return
+    if (this.placedMapCard !== null) return
+    if (homeParent(lead) !== side) return
+    swapCard(lead, wanted)
+    this.placedMapCard = { card: wanted, lead }
   }
 
   private setAesthetics(nodes: readonly HTMLElement[]): void {

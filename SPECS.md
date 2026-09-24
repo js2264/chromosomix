@@ -822,6 +822,19 @@ a time, by the control that names it. A second way to do a thing is not a conven
 first way is a row the reader is already looking at; it is a control to learn, in the bar that has
 to stay readable at a glance.
 
+**The heading keeps its shape while its text changes.** Three shapes, and the heading's **width**
+alone picks one — a container query on `.view-head`, never what the title or the summary say: the
+title, `‹ ›` and the toolbar (box, `go`, the four steps, the bookmark) on one line from 62rem up;
+the toolbar on a line of its own under the title, held right, below that; and below 34rem the
+steps under the box. The title and the summary are rewritten on every zoom, and a heading whose
+shape followed them wrapped when a press lengthened its text and unwrapped at the next — moving the
+map a line down and back up under a reader who had only asked for a different range. So on the
+one-line shape a long title is ellipsised, with its whole text as its tooltip; the box keeps a fixed
+18rem there rather than growing into whatever the title left; and the block summary under it is
+**one line always** — `4,033 × 4,033 bins · effective resolution: 3 kb · IX:276,001-439,888 + X:…`
+ends in an ellipsis where the heading does, the whole line in its tooltip while it is cut and no
+tooltip while it is not.
+
 **Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
 its own body class, and each used to set its own padding — a rule spelled a dozen times, and the way
 that shape fails is not subtle: a dialog written without the declaration comes out with its text
@@ -1456,6 +1469,14 @@ everywhere outside the picture. Over a lane stack it means the same thing as ove
 stack is drawn on the map's own axis — the map moving under the pointer while the profile above it
 stayed put would read as the two coming apart.
 
+**With ⌘ held, up and down slide too.** Two fingers on a trackpad slide a map sideways and zoom it
+vertically, so moving it *up or down the screen* took a drag with the button held — the one
+direction of the picture the fingers already on the pad could not reach. ⌘ turns the vertical axis
+into a slide as well, both axes at once, so with it held a two-finger drag moves the map wherever the
+fingers go and the zoom waits until it is let go. ⌘ and never Ctrl: a trackpad pinch arrives as a
+wheel with `ctrlKey` set, and it stays the zoom it is. Over a lane stack ⌘-scroll keeps its own
+meaning, that lane's ceiling (§5.8), since the gesture is aimed at the lane under it.
+
 **Touch is a first-class input**, not a fallback: one finger pans, two pinch, a tap opens what it
 lands on and a double tap refits. Below 34rem the app is one column — the plot as wide as the screen,
 the legend on its side beneath it. Every control revealed by *pointing* — a tab's ×, a track's colour
@@ -1527,6 +1548,19 @@ one is chosen rather than greyed out — which is also what puts the format's fu
 on one line. The clipboard button in the same row takes a PNG whatever the format beside it says, so
 while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
 a raster rasterised at a number they could no longer see or change.
+
+**The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
+what it shows: the region on the first line, then the file, the bins, the score, the colour range
+and when it was made; a 1D browser figure names its genome, its window and the date on one line.
+Both are set in the axis labels' grey — the region at 11 px and weight 600, the rest at 10 px,
+before the text size is applied — because at 15 px and semibold in the page's ink the region was the
+largest type on the page and drew the eye away from the picture it names. Both Export cards carry a
+**caption** switch under the save row, on by default, for the reader who lays figures out with a
+legend of their own; off, the figure ends at its lowest track and keeps no room for the line. It is
+one preference, kept with the overlays' kind (`localStorage`), and shared: off beside the map is
+off in the 1D browser, and in the deck's figure, which takes the first map's (§16.5). The tracks'
+own names and ranges are the picture's and are saved as they are on screen, whatever the switch
+says.
 
 ### 7.3 Genome × genome overview — gated, not default
 
@@ -1944,6 +1978,15 @@ resolution and no clipboard, since a BED is not a picture, and its two options a
 marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
 *loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
+**A mark is moved where it is listed.** Its row reads as the mark's place, grouped (§26.1), and a
+press on it turns that text into the boxes the adding forms use — one for a line, with its axis
+select beside it; rows and columns for an arrowhead or a rectangle, the second left empty meaning the
+same place on both — taking what those forms take. Enter, or a click away, moves the mark **in place**:
+its id, its colour and its position in the list are kept, so everything that names it — a map, the
+3D key, a chord — follows. Escape leaves it where it was, and a box that does not read stays open with
+a red edge rather than dropping what was typed. It used to be removed and drawn again, which lost its
+colour and sent it to the end of the list.
+
 **They come back in by the same card.** An *Import* section above *Export* holds the Tracks card's
 load zone, worded *Load marks*: click it to choose files, or drop one anywhere on the card — the zone
 lights as soon as a file crosses it, and the drop stops at the card, since the same BED let go over
@@ -1967,7 +2010,7 @@ is on a turned map, since that is what it is.
 glyph is — a mark stood off a cell along its 45° axis — and it can be put at any off-diagonal point
 rather than only at a loop. So the map's right-click menu offers *Arrowhead*, with *a loop at r × c*
 as its hint, where it used to offer *Loop* and send a reader looking for their mark under a heading
-called Arrowheads; the structure card's chord source is *your marks* for the same reason (§25.5).
+called Arrowheads; the structure card's chord source is *manual annotations* for the same reason (§25.5).
 
 **Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
 and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
@@ -3804,7 +3847,7 @@ and operations are the same in both targets.
 **"Write access" means the app never modifies a file it opened**, and §18 makes that worth spelling
 out rather than leaving to be inferred. The viewer has always *produced* files — a PNG, a PDF, a BED
 of hand-drawn marks, a saved session — and §18 adds a bigWig to that list. All of them are new bytes
-handed to the browser as a download; none of them touches the thing that was opened, and nothing about
+handed to the browser to save (§26.6); none of them touches the thing that was opened, and nothing about
 them needs a server. The distinction is between authoring an output and editing an input, and only the
 second is refused.
 
@@ -3960,14 +4003,17 @@ session with companions costs the session it would have been, plus the companion
 |---|---|---|
 | Which region, genome, pair or selection | yes | |
 | Aggregation level (`bin` / `contig`) | yes | |
-| Score column and balancing | yes | |
-| Derived values and the 45° turn (§7.5) | yes | |
+| The 45° turn (§17) | yes | |
 | Pan and zoom | yes (§16.3) | opt out |
 | Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
+| Score column and balancing | seeded from the lead | yes |
+| Derived values — O/E and the smoothing (§7.5) | seeded from the lead | yes |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | one press (§16.5) | yes |
 
-The rule is: **what is being looked at** is shared, **how it is drawn** is not.
+The rule is: **what is being looked at** is shared, **how it is drawn** is not — and every row of
+the second kind is set on the *Map* card of the **starred** map, or on every map at once while none
+is starred (§16.5).
 
 A rung is now *also* what a zoom reads from (§2), which does not change the row above but sharpens
 it: the picker still names the map a panel is **addressed** as, the link still carries it, and a
@@ -3989,13 +4035,23 @@ written into that panel's own address rather than held beside it. That is what m
 map reopens at the rung the reader chose after every navigation, every change of chromosome, and
 through the link.
 
-The derivations sit on the shared side of it and the turn sits beside them, which is the rule read
-carefully rather than an exception to it. A normalisation, an O/E baseline and a 45° rotation each
-change what the numbers *are* or what shape they are in, so one panel drawing O/E beside four
-drawing raw counts is four wrong comparisons rather than a choice, and a lead drawn as a band along
-its diagonal beside four squares is five pictures in two coordinate systems under a bar claiming one
-navigation. Each is applied by every panel and offered by exactly one: a companion is handed the
-setting without the handler, so it draws the same thing and carries no second copy of the control.
+**The turn sits on the shared side, and it is the one setting of the Map card that does.** A lead
+drawn as a band along its diagonal beside four squares is five pictures in two coordinate systems
+under a bar claiming one navigation: the lock's rows are separation on a band and position on a
+square (§16.3), so there is no per-map turn to offer. The turn on a companion's card is the deck's
+turn, and pressing it turns every map.
+
+**The score and the derivations moved to the other side.** They used to be shared — one panel
+drawing O/E beside four drawing raw counts was argued to be four wrong comparisons rather than a
+choice — and each was applied by every panel and offered by the lead alone. What that cost was the
+reader's own comparison: *this replicate normalised, that one raw* had no control anywhere, and the
+Map card said *every map* about half its rows and *the first map* about the other half without
+saying which were which. Each map now **opens on the lead's** score, O/E and smoothing, so a deck
+nobody has touched is exactly the deck it was, and from then on each is **that map's own** — set on
+its card while it is starred, remembered with its clip (`deck:looks`), and read by every picture,
+export and analysis of it. A normalisation, a correlation and the baseline are answers to *what are
+these cells*, which is the score, so a companion draws them off **its own** score: picking `VC` on a
+companion used to label it VC and draw it however the lead was normalised.
 
 The selection has to be shared, or a deck showing four files at four regions is four unrelated
 pictures that happen to be adjacent. It is shared **by name** — `chrI:20,000-80,000`, `MAG_7`, a list
@@ -4004,18 +4060,17 @@ the feature affordable, and it is also what makes its failures well worded: a fi
 refused by `parse_metacooler_range`'s own error, listing its own sequences (§5.4). No gate had to be
 written for that case and none could have phrased it better.
 
-The score is shared as a **resolved choice**, not as the hash key that named it. The resolution runs
-through the *file's* default as every view's own picker does — read straight from the state it said
-`count` for a map whose picker said `balanced`, which cost nothing while the only callers wanted a
-column and a normalisation and cost a whole quantity the moment a deck asked what to share. A
-companion is told the answer *and* whether it is balanced: under `log10` a balanced cell is
-negative, and the automatic range keeps negatives only when it is told the matrix is balanced — a
-companion that was not drew a blank rectangle over perfectly good data. A file somebody
-balanced opens balanced and that default is nowhere in the URL, so two panels each applying their
-own default disagreed silently — a balanced lead beside a companion drawing raw counts, under a bar
-saying the score is one of the things a deck shares. Each panel still resolves the id against its
-*own* columns, so a file that cannot serve it falls back to counts rather than to a read it has no
-answer for.
+The score a companion is **seeded with** is the lead's **resolved choice**, not the hash key that
+named it. The resolution runs through the *file's* default as every view's own picker does — read
+straight from the state it said `count` for a map whose picker said `balanced`. A companion is told
+whether its score is balanced as well as which it is: under `log10` a balanced cell is negative, and
+the automatic range keeps negatives only when it is told the matrix is balanced — a companion that
+was not drew a blank rectangle over perfectly good data. A file somebody balanced opens balanced
+and that default is nowhere in the URL, so two panels each applying their own default would
+disagree silently; the seed is what stops that. Each panel still resolves the id against its *own*
+columns, so a file that cannot serve it falls back to counts rather than to a read it has no answer
+for. A companion's score, O/E and smoothing are not in the hash — the hash carries the lead's —
+and travel as its clip does, in the session's memory, the workspace and the durable record.
 
 A companion **opens on the lead's scale, clip included**: a map put beside another is put there to
 be compared with it. The exception is that fallback — a panel drawing counts because it has no
@@ -4080,6 +4135,25 @@ Without (3) a two-resolution deck drifts one coarse cell per frame until it hits
 
 Any panel may be taken off the lead individually, the lead included.
 
+**A companion off the lead reads its own window.** A box drawn on it with Option held (§5.4's
+marquee, Option+Shift to hold it square on the diagonal) is a read of **that window, for that map**,
+as finely as the rung it is open at (§16.2) and its share of the budget (§16.7) allow — not a
+magnification of the block it already held. The same file open in three cells can then be a whole
+196 Mb chromosome at 640 kb, a 35 Mb stretch of it at 80 kb and 6 Mb at 10 kb — before, the third
+cell's box only enlarged a block read over the whole chromosome, which that budget capped at 50 kb,
+and scrolling out gave back the chromosome it had never stopped holding. The window is shown as a
+pill in the cell's heading, the locus it read, with **widen 3×** — the zoom step's own factor —
+and **×**, which gives the map back to the deck's window. It is held by name, like the deck's own
+selection (§16.2), resolved through the map's own reader, and remembered with its looks
+(`deck:looks`); relinking the chain drops it, since a chained map shows the lead's window by
+definition.
+
+On a companion **still on the lead**, the same box navigates the deck — it is forwarded to the first
+map's own marquee, so every chained map moves to it, which is what drawing a box on one of several
+maps locked together can only mean. The pointer's echo between two maps that are not showing the
+same window goes through the locus under it rather than through their cells, and the lanes'
+echo is not drawn at all there: a lane position on one map is a different place on the other.
+
 ### 16.4 The compatibility gate, and why it is weaker
 
 `compareRefusal` (§5.7) refuses a genome layer, a different bin size and a different chromosome list.
@@ -4120,7 +4194,8 @@ others and the first map was drawn smaller than the maps it is there to be compa
 element is **moved**, not rebuilt, so the box keeps its caret and the summary keeps the numbers the
 last read wrote into it; it goes back when the deck is put down.
 
-The deck's own count rides on the end of that summary — `113 × 113 bins · … · 3 maps` — because how
+The deck's own count rides on the end of that summary — `113 × 113 bins · … · 3 maps`, and
+`2 maps · 1 empty cell` while a cell stands empty — because how
 many maps is a fact about what is being looked at, and the line that already says that is where a
 reader is looking. Not in the bar, which is controls.
 
@@ -4130,6 +4205,15 @@ picture is pushed to the foot of its cell — the cells being equal, the plots a
 at the same height whatever heading sits above them. Without it a map inset by a stack of tracks
 stood beside a map that was not, which is a comparison the eye has to correct for before it can
 begin, in the one widget whose entire purpose is that adjacent pictures are comparable.
+
+**And a cell's lanes stay in its cell.** Three or four across, the first map's stacks — spatial
+tracks down its left edge, genes and a signal or two down its right — can be wider than the cell
+before the map has had a pixel, and the grid used to spill them over the next cell's heading and
+locus box: a picture drawn across another picture. Inside a deck the map's column gives way down to
+10rem, the floor the map's own size has, rather than the 20rem a whole column affords; what still
+does not fit **scrolls sideways inside the cell** instead of being painted over its neighbour or cut
+off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
+a cell with a stack down its left edge showed that stack and no map at all.
 
 **Rearranging is a drag, not a pair of arrows.** Every panel has a grip before its name; taking hold
 of one shows the tiling, and dropping a map on a cell **exchanges** the two. `◀` `▶` could only say
@@ -4148,8 +4232,15 @@ application: lit while the cell is following, plain while it is not, and dimmed 
 The deck's bar holds what is shared, in the order the work is done: **add a cell…**, which opens the
 row that takes a file, a published URL, the session's 3D structure or a stack of tracks (§16.11);
 **match all scales** and **match all resolutions**, two presses that each copy the starred map's
-clip or bin size onto every panel once; how many across; and the whole deck as one figure — saved,
-or copied to the clipboard, which is what `⌘C` reaches while a deck is on.
+clip or bin size onto every panel once — greyed, with that reason on them, while no map is starred,
+there being nothing to match *to*; how many across; and the whole deck as one figure — saved, or
+copied to the clipboard, which is what `⌘C` reaches while a deck is on.
+
+The Aesthetics column's **Export** card saves and copies that same figure whenever any cell beside
+the first map has a picture of its own — a map, a structure, a stack of tracks — and the first map's
+own figure, vector PDF and all, only while every other cell is empty. It used to ask for another
+*map*, so a deck of a map beside its 3D model exported the map alone from the card, while the bar's
+button beside it wrote both: two exports of one screen disagreeing about what was on it.
 
 Rearranging is the grip and is not a button here. **Adding is**, and that is the one thing the bar
 repeats: a `+` on an edge draws an *empty* cell for something to be dropped on, and a published
@@ -4169,19 +4260,36 @@ bigWig dropped on a companion's edge is an import into the session's one track l
 so closing the maps it was drawn on would otherwise leave it loaded, invisible, and holding a row
 that says it is drawn nowhere. A track that is also on the first map is being read against a
 picture that is staying, so it keeps its lane there and loses only the companions'. The first map is
-untouched throughout: closing the deck leaves exactly what closing the last companion one at a time
-would.
+untouched throughout, and the companions are **put away, not let go**: each is held on the Contact
+maps card, hidden, as the × on its own cell holds it (§16.9) — the card's × is where a map is let
+go, and the eye there opens a cell for it again.
 
-A companion's scale controls ride **on its picture**: a button in the bottom-left corner of the map,
-**above the band the ruler's labels sit in** — the same twenty pixels the renderer keeps for that
-corner, because at the very bottom the button covered the first coordinate on the axis, which is the
-one number a reader uses to check that two pictures are of the same window — opening a menu upward
-over it, holding the five fields that say what the numbers are and how they are drawn — the score,
-the baseline, the transform, the ramp and the clip. Not the overlay marks,
-which act on a picture the reader is already pointing at and are slower to reach through a menu than
-through the row they came from; and not an export, which the deck's bar now offers for all of them
-at once. A fold *under* each panel — what this replaces — pushed every other panel of the deck down
-by the height of whatever was open in it.
+**The Aesthetics column's *Map* card is the starred map's**, as its *3D structure* card is the
+starred structure cell's (§25.3). Every map of a deck has a card — the score, the smoothing, the
+picture row with its O/E, the transform, the ramp, the clip, the overlays — and the column shows
+**one**: the first map's while it is starred, a companion's while the star is on that companion,
+swapped in the first map's place so the cards around it stay where they were. Moving the star
+moves the card; a setting changed on it changes **that map and no other**. A line under the card's
+title names the map it sets, with the star it was starred by, so a reader never has to infer from
+the numbers which picture the card is about — and a companion starred before its map is drawn, or
+one that could not open, gets a card that names it and says its settings arrive with the map,
+never the first map's card standing in for it. The one row on it that reaches further is the turn,
+which is the deck's (§16.2) and is on every map's card for that reason; the overlays are preferences
+about every picture in the app, as they always were.
+
+**The star can be on no map.** A filled star is live — pressed, it leaves none filled — and then the
+column shows the first map's card with *every map — all N* under its title, in the warn colour: a
+setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
+picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
+which no task can run (§18.1). *None* holds for as long as the deck does, and a deck put down leaves
+the next one starred on its first map, which is where every deck starts.
+
+A companion's settings used to ride **on its picture**: a button in the bottom-left corner of the map
+opening a menu upward over it, with the score, the transform, the ramp and the clip, while the Map
+card in the column set the first map — so a deck had two places that set a map, a card that said
+nothing about which map it set, and half its rows (the turn, the O/E, the smoothing) reaching every
+map from a card that looked like the first map's. The menu is gone; nothing is drawn on a
+companion's picture but the picture.
 
 **A card that cannot act is absent** (§8.5). The Map, Tracks and Export cards arrive with the block
 and not before: behind the whole-genome gate — a heading, what the read would cost, and the button
@@ -4191,13 +4299,12 @@ row holds only the marks that light: the refit, which is an action, stands with 
 recentre in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
 read as an overlay that was off, and turned on by a press that threw the reader's pan away.
 
-The deck's controls ride **above the grid**, and each panel's scale controls ride **inside that panel**.
-They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
-furniture and each describes the one file the session is of; and one of them — Annotations — does not
-exist at all on a file with a genome layer (§8.5), which is exactly the kind of file a deck is most
-useful for, so a deck control living there would be missing precisely where it is wanted. The chosen
-placement is also the plainest statement of §16.2's split: shared controls above the grid, per-panel
-controls on the picture they control.
+The deck's controls ride **above the grid**, and are deliberately not a fourth card in the three side
+columns. Those columns are the *session's* furniture; and one of them — Annotations — does not exist
+at all on a file with a genome layer (§8.5), which is exactly the kind of file a deck is most useful
+for, so a deck control living there would be missing precisely where it is wanted. A **map's**
+settings are in the Aesthetics column all the same, because that column is present on every file a
+map can be drawn from, and it is where the first map's always were: the star says which map's.
 
 The grid is inside `.content`, which pins the light palette **while it holds a picture** — a deck's
 grid, a map's heatmap or a browser's stage — so the maps do not change colour in the dark theme and
@@ -4287,6 +4394,16 @@ A `+` down the right-hand edge of the map, and another along the bottom. Pressin
 the first of it and every other cell standing empty as a drop target. The empty cells are filled in
 any order, from a drop, a file chooser or a URL, or never.
 
+**An empty cell takes anything a deck can hold**, not a map alone. It reads *drop a map, a track or a
+structure*: a contact map dropped on it opens there as a map; a **track** — a file, or a row dragged
+from the Tracks card — opens a *tracks cell* there drawing it, the file loaded into the session's one
+list of tracks and placed on that cell, the row placed on it while staying on every map it was
+already drawn on; and a **structure** — a file, or a row of the Structures card — opens its model.
+A row dragged out of the Files panel is routed the same way, by the name of the file it names. It
+used to say *drop a map here*, which was true of the one kind it then took and hid the other two:
+a tracks cell had no road on screen but the bar's row. Where the session carries no tracks (§8.5)
+it does not promise one.
+
 This is the first entry point a reader can *find*, and until there is a deck it is the only one —
 once there is, its bar offers *add a cell…* beside it (§16.5). Before either, the first companion was
 reachable only through the command palette, so nothing on screen said several maps side by side was
@@ -4323,9 +4440,9 @@ rectangles.
 The `~` it is written with is the same one §16.6 introduced for a local companion, and the two are
 deliberately not told apart in the hash: to the recipient they are the same thing, a position with
 no file in it and a rectangle where the map goes. Within the session that drew them they are told
-apart in words only — a cell a reader drew says *drop a map here*, and one a link left says a map
-was here — because telling somebody a map used to be in a cell they drew empty a moment ago is a
-small lie about their own deck.
+apart in words only — a cell a reader drew offers to take a map, a track or a structure, and one a
+link left says a map was here — because telling somebody a map used to be in a cell they drew
+empty a moment ago is a small lie about their own deck.
 
 A **collection** dropped into a cell opens one of its maps rather than refusing. An `.mcool` is a
 ladder of complete coolers and is not a map at its root (§3.4), so opening one by name is an error
@@ -4341,6 +4458,39 @@ first empty cell in the deck: the two differ only when the deck already had a ho
 there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
 chooser, the command palette — takes the first empty cell instead, because those name no position
 and the empty cells are the reader's own instruction about where the next map goes.
+
+**Every map the session holds is a row of the Contact maps card**, in the order the grid holds
+them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
+cell's heading gives it. The card used to list the first two only, so a deck of four maps showed a
+card of one and the other three were named nowhere in the column.
+
+Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
+eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
+and keeps it on the card, dimmed, with its eye dark; pressed again, the map opens in the first
+empty cell, or in a new one at the end of the grid — the road every map that names no position takes
+— drawn as it was, its looks being remembered by its file.
+
+**The × on a map's own cell is that eye, not a let-go.** Closing a contact map in the deck hides
+it: the map is kept on the card, eye dark, exactly as the eye would keep it — it used to be dropped
+from the session altogether, so a map closed to make room was a file to be found and opened again.
+The **cell** goes only where the map was all it held. A track dropped on a companion's edge is
+drawn in that cell and nowhere else, so a cell with tracks in it stays, as the tracks cell those
+tracks make, under the same id they are placed by — rather than closing and parking them on the
+first map, where the reader had not put them. The star cannot stand on a cell that is no longer a
+map, and goes back to the first map. The card's own × is the one that **lets go**, with the same
+rule for the cell; a map still on screen elsewhere — another cell of the same file, the first map,
+the lower triangle — is not listed twice, and one already hidden is not listed again. A hidden map is held by the session
+rather than by the deck, since a deck left with only the first map puts itself down, and it is let
+go by its × or when the session's own file closes; it is not in the link, which carries cells. Its
+eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The first map's eye and
+the compared map's keep their meanings: the 1D browser, and the lower triangle taken away (§5.7).
+
+Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
+there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip
+would; a hidden map's row onto an empty cell, or onto a `+` edge, opens it there; the first map's or
+the compared map's row, the same way, opens that file there as a new companion — the first map being
+the session's own view, which is re-parented into cell 0 and never moved (§16.5). Taking hold of a
+row shows the tiling, as a cell's grip does.
 
 ### 16.10 Naming the maps
 
@@ -4795,6 +4945,17 @@ it.
 
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
+
+**Every task is greyed while a deck has no map starred.** A task reads one map and the star is how
+that map is named (§16.5), so a deck the reader has left with no star filled has no file for any
+task to run against — and none is guessed for them, the first map least of all, which would be the
+star's old default passed off as a choice. The column says so once, above its cards, in the warn
+colour: *no map is starred, so no task can run*; every row is greyed with that sentence in its
+tooltip and without the per-group and per-row lines, which would print it twenty times; and the
+drawer's Run and *run on all* refuse with it in the price's place. It is every task, the three
+that read only tracks included, because the rule a reader is given is *a task runs on the starred
+map* and a column in which some run and some do not under no star is a rule with exceptions to
+learn. Starring any map puts every task back.
 
 **The panel exists without a contact map.** Three tasks — metaplot, track correlation and interval
 overlap — read only the loaded tracks, and a 1D browser session (§5.8) is exactly where a reader has
@@ -6896,7 +7057,8 @@ it already converges, which is the arrangement `AnnotationLoader.onFilesAdded` a
 - **A track loaded**, in `AnnotationLoader.addFiles` and `addUrl` — the two doors a *reader* drives.
   Not `restore`, `carry` or `reattach`, which are the app bringing back what it already had; a
   console that opened with nine lines after every reload is a console nobody reads.
-- **A file written**, in `downloadBlob`, through which every export in the application passes. A
+- **A file written**, in `chooseSaveTarget`'s write, through which every export in the application
+  passes, under the name it was written as. A
   reader whose figure was recorded because they exported it from the drawer but not when they
   exported the same figure from the map would be looking at a difference nobody can see the rule
   behind.
@@ -7907,15 +8069,15 @@ recipe in the drawer, as the Synthetic card does (§18.5).
 ### 25.3 The deck of cells
 
 **A structure cell** draws **one** structure row — the one the reader chose from the Structures
-card or from the cell's own **structure** picker, remembered per file, or the first of the list no
+card, by its eye or by its row dropped on the cell, remembered per file, or the first of the list no
 *sibling cell* is already drawing; and **the deck holds as many cells of a model as the reader asks
 for**. It was one cell per deck, then one per model, on the reasoning that two cells of one row are
 one picture drawn twice — which is only true while the two are the same picture, and they are not:
 each cell has its **own camera, its own mirror, its own planted axes and its own height**, so two
 cells of one model are two views of it, which is the ordinary way anybody looks at a fold. The eye
 on the row still means *is this model on screen*, so it opens one cell and closes every cell drawing
-it; the **picker** and the row's **grip, dropped on the cell that is to hold it**, are how a second
-view is asked for, and neither refuses a model a cell already draws. What each cell remembers — the
+it; the row's **grip, dropped on the cell that is to hold it**, is how a second view is asked for,
+and it does not refuse a model a cell already draws. What each cell remembers — the
 model it draws, the camera it draws from, its height, whether it turns with the others — is
 remembered under its **seat**, its place among the structure cells counting from the left; they all
 used to write to one slot, so a deck of two views came back from a reload as the same view twice.
@@ -7925,9 +8087,11 @@ last of a batch used to get a picture and the others sat on the card as rows wit
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application. The
-cell's own picker still swaps a model **in place**, which is the other question: the eye is a model
-asking for a cell, the picker is a cell asking for a model. And **the row the cell is drawing, removed from the card, empties
+model it was to be judged against — the commonest way to lose a picture in this application. A
+row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
+eye is a model asking for a cell, the drop is a cell being given a model. The *3D structure* card
+has no picker for it: it said the second thing in the place a reader looks for which cell the card
+sets, which its title line says instead (below). And **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
 to be drawing it, whether the reader picked it, the session restored it, or it was simply the only
 one there was (a remembered choice whose row is already gone when a session opens falls back to the
@@ -7970,8 +8134,8 @@ depth and *outside the window* its opacity, where each was two rows and the seco
 that repeated the first. A slider that is the whole setting — bead radius, tube radius, depth slab —
 keeps a row of its own.
 
-The card's rows are in one order, choices before the things that modify them: structure,
-compare with (and its RMSD note), in the frame of, drawn as, overlays, colour by, colour scale, bead
+The card's rows are in one order, choices before the things that modify them: compare with (and
+its RMSD note), in the frame of, drawn as, overlays, colour by, colour scale, bead
 radius, tube radius, haplotype, outside the window (with its ghost opacity), loops as chords, fog
 (with its depth), depth slab, measurements, camera, frame, export. *Overlays* follows *drawn as*
 because the two are one question asked twice: what the model is drawn as, and what is drawn over it.
@@ -7985,13 +8149,22 @@ names. It was whichever cell was built first, which a reader with two models dis
 a slider and watching the *other* picture change, and which left the second model's settings
 unreachable. The same glyph and the same radio behaviour the maps' star has, because it is the same
 idea: one of several pictures singled out for something that can only be about one of them. It is
-its **own** star and not the maps' — a starred map is the file an analysis runs against, a starred
-cell is the picture this column's settings are for, and one deck can want both at once. A filled
-star is a **dead button**, as the maps' is: the way to move it is to press another. It appears only
-where there is a choice, so a deck of one model has none; it follows the cells when the starred one
-is closed, so the card is never about a picture that is gone; and a cell that opens does **not**
-take it, because a model arriving should not move a control out from under the reader who was
-using it.
+its **own** star and not the maps' — a starred map is the file an analysis runs against and the
+map the *Map* card sets, a starred cell is the picture this column's *3D structure* card is for, and
+one deck can want both at once. A filled star is **live**, as the maps' is: pressed, it leaves **no
+cell starred**, and the card then sets **every structure cell at once** — the first cell's values
+shown, *every structure — all N* under its title in the warn colour, and each change written to
+every cell's row, camera presses and the turntable included. The rows that are about one cell's own
+picture are not offered then — *compare with*, *in the frame of*, the measurements and the
+export — since one model compared with itself, or one file saved for five
+pictures, is not a setting that can be made to all of them. While a cell is starred, **the card says which under its title** — `★ Yeast_structure`, the
+filled star and the name the cell's own heading wears — which is the *Map* card's line for the
+starred map, in the same place, words and colours: a reader who has learned where to look for which
+map a card sets knows where to look for which model. It appears only where there is a choice, so a
+deck of one model has none, and neither star nor line; it follows the cells when the starred one is closed, so
+the card is never about a picture that is gone; *none* holds while there are cells for it to be
+about and goes with the last of them; and a cell that opens does **not** take it, because a model
+arriving should not move a control out from under the reader who was using it.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
@@ -8142,7 +8315,7 @@ map, lane and tracks cell. On the model it is the bead again, **twice the radius
 colour** — a place is a thing on the model, so it is drawn as a bigger bead rather than as one more
 line over one. **Mark a loop** holds the first bead clicked, names it in the status bar and closes
 an **arrowhead** — the map's loop mark — on the second; Esc lets the held bead go. An arrowhead made
-here is a chord on the model, since *loops as chords* switches to *your marks* when nothing else is
+here is a chord on the model, since *loops as chords* switches to *manual annotations* when nothing else is
 chosen. **Measure** is a **drag**: press on one bead, travel to another, let go, and the
 measurement is made — the line follows the pointer on the way, so what is about to be measured is
 what is drawn. The model does not turn under a measuring drag, because the hand is pointing rather
@@ -8188,8 +8361,18 @@ colour picker — click it to choose the sequence's colour, kept with the row by
 palette's — and its name as a button: a **click ghosts** that sequence (drawn as the beads outside
 the window are, and hidden with them under *outside the window: hide*), a **double-click shows it
 alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
-window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
-**arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
+window's: a ghosted sequence stays ghosted whatever the maps look at.
+
+**And under *colour by manual annotations* the key lists the marks**, a row each, named as the
+Manual annotations card names them (`│ IV:1,200,000`, `▭ IV:1,100,000-1,150,000`), with the same
+three gestures: the swatch is **the mark's own colour**, written to the marks' store, so a colour
+picked on the model is the colour on the card and on every map; a **click** takes that mark off the
+model's colouring, and a **double-click shows it alone** (a second brings all back). What is hidden is
+held in the model's style by the mark's id and hides the colouring only — the mark stays drawn
+wherever it was put, since a key that removed it would be a second ×. With no marks yet the key
+says where they are made. This colouring used to have no key at all, so a model coloured by six
+marks was six colours nobody could name. The reader's own
+**arrowhead marks** are offered under *loops as chords* as *manual annotations*, beside the loaded loop
 sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
 set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
 was a *show the chords* that could not show one, and a reader pressing it could not tell which of
@@ -8265,7 +8448,7 @@ reflection is applied **first**, since mirroring is what makes the fit possible 
 first would reflect the answer instead of the question. Two cells each *in the frame of* one row,
 *turning together* (§25.3), are two models in one frame showing the same face of each.
 
-**Contacts from the pin.** With a bead pinned, *colour by contacts with the pinned bead* puts the
+**Contacts from the pin.** With a bead pinned, *colour by contacts with pinned bin* puts the
 map's row through it onto the beads: each value through the map's own transform, clipped to its
 `vmin`–`vmax`, in its colormap — the virtual 4C of the pin, read in space and agreeing with the
 picture beside it cell for cell. **A pair the map never counted is the bottom of that scale**, not
@@ -8297,15 +8480,20 @@ by sequence or haplotype is levels and has no scale to change, and a control tha
 the default colouring is one a reader tries and then distrusts. The key follows the choice, because
 a legend naming one ramp over a model drawn on another is a legend that lies.
 
-One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
-own **score** and any column it carries; and, from the session, **a track's values** at each
-bead, read through the same sample cache the lanes use at one bucket per bead and on the lane's
-own limits, so a bead coloured by a bigWig agrees with the lane at every value; **a feature
-set's** colour where a bead overlaps one; **the reader's marks**; **the distance to the pinned
-bead** in the model's units; and **contacts with the pinned bead** — the lead map's own row
-through it, read out of the block in hand on the map's own transform, range and colormap, the
-virtual 4C drawn in space. A colouring the list no longer has stays named in the picker rather
-than silently becoming the first option. Two rules carried from the modules reused: fit the
+One picker, on the picture, and the model's own five lead it in the order a reader goes through
+them: **sequence**; **linear position along the sequence**; **manual annotations** — the reader's
+marks, a line colouring its bead and a rectangle its run; **spatial distance to pinned bin**, in the
+model's units; and **contacts with pinned bin** — the lead map's own row through it, read out of the
+block in hand on the map's own transform, range and colormap, the virtual 4C drawn in space. *Linear*
+and *spatial* because the picture beside the model measures a distance too, in base pairs, and the
+two words say which one each colouring is. After them, **haplotype** where there are homologues,
+any column the file carries, and from the session **a track's values** at each bead — read
+through the same sample cache the lanes use at one bucket per bead and on the lane's own limits, so
+a bead coloured by a bigWig agrees with the lane at every value — and **a feature set's** colour
+where a bead overlaps one. The file's **score column** was a colouring and is not now: a g3d carries
+none worth a ramp, so the row was a column of nothing, and a session stored coloured by it opens by
+sequence. Any other colouring the list no longer has stays named in the picker rather than silently
+becoming the first option. Two rules carried from the modules reused: fit the
 colouring to the file, not to the window, so turning the model never changes what a colour means;
 and use the lane's scale.
 
@@ -8461,7 +8649,7 @@ the one thing an analysis makes that is not stored anywhere else and is made **t
 two methods, two exponents, or the same settings twice to see what the seed did. So a run takes the
 next free id in the series `…reconstructed-model`, `…#2`, `…#3`, numbered from what is on the card
 so closing the second of three gives that number back, and the label carries the same `(2)` because
-two rows under one name are two rows nobody can tell apart in the picker, in *compare with* or in
+two rows under one name are two rows nobody can tell apart on the card, in *compare with* or in
 *in the frame of*. It is the model the cell draws the moment it lands, is
 what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
@@ -8689,6 +8877,16 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 - **An export row** is `[resolution] [format] [⭳] [⧉]` with a line under it, built by
   `ui/exportRow.ts`; a card with no resolution to offer omits it and one that writes a file rather
   than a picture omits the clipboard. Data leaves by a bordered button named for its format.
+- **A file leaves through the save dialog**, `chooseSaveTarget` in `ui/export.ts`, which every
+  export in the app passes through: the platform's own *Save as*, opened in **Downloads** with the
+  app's suggested name ready to change, so where a figure or a bigWig goes, and what it is called,
+  are the reader's. It is opened **before** the file is made, from the press itself: a browser opens
+  that dialog only while the click that asked for it is recent, and an `.mcool`, a genome's bigWig or
+  a deck at 300 dpi take longer than that to write — asked afterwards, it was refused and the file
+  went wherever the browser puts downloads, which is the behaviour this replaced. A cancel writes
+  nothing and says nothing, and saves the render too. Where a browser has no such dialog (Firefox,
+  Safari) or refuses to open it, the file is the plain download it always was, under the suggested
+  name. What a card writes under its button afterwards names the file under the reader's name.
 - **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
 - **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
   of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough
@@ -8703,6 +8901,23 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   column, not the row.
 - **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
   other four do.
+- **A card is moved by its heading.** The strip that folds a card on a press carries it on a drag
+  (five pixels of travel, so a press is still a press): the card lifts off the column at its width, a
+  dashed slot of its height marks where it will land among the cards of whichever open column is under
+  the pointer, the column scrolls while the pointer is held at its edge, and the drop puts it there.
+  Escape puts it back; ⌥↑ / ⌥↓ on a heading's chevron move a card one place without a pointer. Any
+  card with a heading moves, into any column: the Export card beside the Tracks card it exports,
+  Bookmarks beside the map. The arrangement is the **reader's**, not a view's: every column rebuilds
+  its cards on its own schedule — Aesthetics on every navigation, Annotations on every mount, a tab
+  switch all four — so it is put back after each of those rather than handed to the builders
+  (`ui/cardLayout.ts`). A card is known by the column it was built in and its heading
+  (`aesthetics/Export`), a column the reader has touched keeps its whole order, and a card that
+  appears there later lands after the one it follows at home. A moved card's builder keeps its spot:
+  a card rebuilt is the new one in the reader's place, a card its builder lets go leaves the column it
+  was carried to, and another tab's cards stay in their tab. A column holding a card carried into it
+  stays on screen for it on a view that gives the column nothing of its own. Remembered per browser
+  (`localStorage`), never in an embed, and undone by the palette's *Put every card back in its own
+  panel*. A column nobody has rearranged is exactly as its builder made it.
 - **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**
   A head carrying something out of a file (the enlarged cell's structure, the `.pairs` file being
   binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been
@@ -8714,6 +8929,12 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   map used to be left 140 of them, with the reader's own locus cut to `IV:1,00`. A column has a
   folded tab to come back from; a map that thin has nothing. Below about 1,170 pixels the outermost
   column leans off the right edge, which is the one shape this trade cannot avoid.
+- **A column's width is the reader's, not the content's.** The side columns keep the width they
+  were given, by their default or by a drag, and the picture takes what they leave: `.content` is
+  flex `1 1 0`. At `1 1 auto` its basis was its max-content width — the length of the summary line
+  under the title, for one — so a zoom that lengthened the summary narrowed every open column by the
+  difference and the next zoom widened them back, the whole window reflowing under a press that was
+  about the map.
 - **A column's minimum width is a promise its cards still work at it.** Aesthetics' was 200 pixels,
   at which its two clip limits read `-4.1` and its selects cut `log10`; General's was 200, at which
   the File card's values had forty pixels — so both went up to 240 rather than the cards being made

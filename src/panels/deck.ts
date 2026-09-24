@@ -289,6 +289,19 @@ export interface DeckLook {
    */
   score?: string
   /**
+   * Whether this map divides by its distance baseline, and its smoothing token
+   * (`MapPanel.expectedOwn`, `smoothOwn`) — each map's own since the *Map* card
+   * sets the starred map alone (§16.2), and remembered for the score's reason.
+   */
+  oe?: boolean
+  smooth?: string
+  /**
+   * The window this map reads for itself rather than the deck's
+   * (`MapPanel.ownPlace`, §16.3) — kept only beside `locked: false`, since a
+   * window of its own is what an open chain is for.
+   */
+  place?: { rows: string; cols?: string }
+  /**
    * Whether the chain on this panel's heading was closed.
    *
    * `false` is the interesting value and the only one that is written: a panel
@@ -334,8 +347,37 @@ export function readDeckLook(value: unknown): DeckLook | null {
     ...(vmin === undefined ? {} : { vmin }),
     ...(vmax === undefined ? {} : { vmax }),
     ...(typeof score === 'string' && score !== '' ? { score } : {}),
+    ...(typeof row['oe'] === 'boolean' ? { oe: row['oe'] } : {}),
+    ...(typeof row['smooth'] === 'string' && row['smooth'] !== '' ? { smooth: row['smooth'] as string } : {}),
+    ...(placeOf(row['place']) === null ? {} : { place: placeOf(row['place']) as { rows: string; cols?: string } }),
     ...(typeof row['locked'] === 'boolean' ? { locked: row['locked'] } : {}),
   }
+}
+
+/** A stored own window, field by field, or `null` where it is not one. */
+function placeOf(value: unknown): { rows: string; cols?: string } | null {
+  if (typeof value !== 'object' || value === null) return null
+  const row = value as Record<string, unknown>
+  if (typeof row['rows'] !== 'string' || row['rows'] === '') return null
+  return {
+    rows: row['rows'],
+    ...(typeof row['cols'] === 'string' && row['cols'] !== '' ? { cols: row['cols'] } : {}),
+  }
+}
+
+/**
+ * What a map's star says, filled or empty (§16.5, §18.2).
+ *
+ * One function for the first map's star and every companion's, because they
+ * are one radio drawn as several. A filled star is **live**: pressing it
+ * leaves no map starred, which is the state in which the *Map* card sets every
+ * map and no task runs — so the sentence on it says both.
+ */
+export function mapStarTitle(name: string, on: boolean): string {
+  return on
+    ? `${name} is starred: the Map card sets it and the analyses run on it. ` +
+        'Click to unstar — the card then sets every map, and no task can run.'
+    : `Star ${name}: the Map card then sets it, and the analyses run on it.`
 }
 
 /**

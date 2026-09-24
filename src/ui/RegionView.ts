@@ -38,7 +38,7 @@ import { parseRegion } from '../annotations/bookmarks'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
-import { button, el } from './dom'
+import { button, el, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import {
   MatrixPanel,
@@ -424,6 +424,8 @@ export class RegionView {
     // nobody finds. The mark says which way and the number says how far.
     this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.stepZoom(step.factor)))
     this.matched = el('span', { class: 'match-kind' })
+    // One line under the title, with the whole of it in a tooltip where it is cut.
+    titleWhenCut(this.matched)
     this.problem = el('p', { class: 'inline-error hidden' })
 
     this.panel = new MatrixPanel({
@@ -478,6 +480,9 @@ export class RegionView {
     // a literal "Region" above a box that already says which one was a line
     // spent on the obvious.
     this.title = el('h2', { class: 'region-title', text: regionLabel(props.region) })
+    // Ellipsised on the one-line heading rather than allowed to push the
+    // toolbar down (`ui/styles.css`), so the locus it cut is in its tooltip.
+    titleWhenCut(this.title)
     this.panel.setWindowNamedAbove(true)
 
     this.el = el(

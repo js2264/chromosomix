@@ -860,6 +860,12 @@ p {
   color: var(--text-dim);
 }
 
+/* A map the eye took out of the deck (§16.9): still listed, and dimmed, as a
+   name with no picture behind it. */
+.compare-deck-row.is-parked .ann-name {
+  color: var(--text-dim);
+}
+
 /* A map's row is a track's row — `.ann-row` from the Tracks card, so the two
    lists are packed the same way and every rule that takes the borders off a
    ready row's controls reaches these too. Nothing is left to say about the row
@@ -1542,20 +1548,22 @@ p {
  * drawn picture.
  */
 .content {
-  /* `auto`, not `0`, and that is a decision about which surface wins. A basis of
-     zero would ask only for the room the columns leave — so a column would keep
-     its width until the window itself ran out — but on a 1366-wide laptop with
-     four columns open that leaves the map its floor and nothing more, 288
-     pixels instead of 446. `auto` lets the picture pull the columns down to
-     their own minimum widths first, which is the right order: the map is what
-     the file was opened for.
+  /* **`0`, so a column keeps the width it was given.** The centre takes the room
+     the columns leave, and the columns give way only when the window itself runs
+     out — down to their floors, never because of what the centre holds.
 
-     The cost is that a *wide* surface pulls on them too — the Genomes table is
-     eleven columns, so opening it narrows General from 288 to its floor of 240.
-     That is a width a reader did not ask for, and it is the price of the laptop
-     behaviour above; at 240 the column's own cards still read, which is what the
-     floor is for. */
-  flex: 1 1 auto;
+     It was `auto`, on the argument that the picture should pull the columns down
+     to their minimums before it was itself squeezed. What `auto` measures is the
+     centre's *content*, though, and the content moves: the heading's summary is
+     a line whose length changes with every zoom (`… · IX:276,001-439,888 +
+     X:1-672,000 · 835.9 kb × …`), the Genomes table is eleven columns, and each
+     of them re-divided the row — so a column the reader had set at 288 pixels
+     came back at 250 after a zoom, and every map in a deck was redrawn a size
+     smaller for a sentence that had grown by a chromosome name. A width is the
+     reader's to set with the handle; nothing in the centre should set it for
+     them. The laptop case this used to buy (a map of 446 pixels rather than 288
+     with four columns open) is a fold of one column away. */
+  flex: 1 1 0;
   /* **The picture's floor.** It was `0`, which made the centre the only thing in
      the row that could be squeezed to nothing: the columns are what a reader
      opens, but the map is what they opened the file for, and a column has a
@@ -2966,6 +2974,13 @@ p {
 
 .view-head {
   margin-bottom: 0.75rem;
+  /* The heading's **width** decides its shape, and nothing else does: the rules
+     under `.title-bar` below ask this box, not the text inside it, whether the
+     toolbar fits beside the title. Asked of the text, the answer changed with
+     every zoom — `IV` and `IV:1,000,001-1,400,000` are different widths — so
+     the locus box jumped between the title's line and a line of its own under
+     it while the reader was zooming, and the map below moved with it. */
+  container: view-head / inline-size;
 }
 
 /* A head that is the bar and nothing else. The bar carries its own top margin
@@ -3985,78 +4000,6 @@ canvas.is-frozen {
   outline: none;
 }
 
-/* ---------------------------------------------------------------------------
-   The scale menu, in the bottom-left corner of the map.
-
-   For a panel with no sidebar of its own. What was there before was a fold
-   *under* the picture, which pushed every panel of a deck down by the height of
-   whatever was open in the one beside it — and a menu that opens upward over
-   the map costs the layout nothing at all.
-   --------------------------------------------------------------------------- */
-
-/* Above the band the column labels have claimed, not on top of it. At
-   `bottom: 0` this button sat exactly where the ruler draws its first
-   coordinate, so the one number that says which window a companion is showing
-   was the one number hidden behind a control. Twenty pixels is the renderer's
-   own corner band (`drawTicks`, which steps the last *row* label aside by the
-   same figure), so the two agree about where the corner is. */
-/* **Above the edge's drag handle**, which runs along the bottom of the picture
-   and straight over this button. At `z-index: 3` against the grip's 5 the
-   companion cell's *Colour and values* button could not be pressed at all — the
-   grip took every click on it — and the tour found it by waiting thirty seconds
-   for an element that was never going to be free. The grip loses a 38-pixel bite
-   at its left end and keeps the rest of the edge, which is the trade the right
-   way round: an edge can be dragged anywhere along it, and a button can only be
-   pressed where it is. */
-.map-settings-corner {
-  position: absolute;
-  left: 0;
-  bottom: 20px;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-start;
-  gap: 4px;
-  z-index: 6;
-}
-
-.map-settings-toggle {
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-}
-
-
-/* Over the picture, not beside it, and wide enough for the clip's two boxes.
-   `max-height` with a scroll, because a panel one sixth of a window tall is
-   shorter than five fields and a menu that runs off the bottom of its own map
-   is worse than one that scrolls. */
-.map-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem;
-  min-width: 13rem;
-  max-height: 22rem;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-2);
-  font-size: var(--step--1);
-}
-
-.map-settings .field {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  justify-content: space-between;
-}
-
-.map-settings .field-clip {
-  flex-direction: column;
-  align-items: stretch;
-}
-
 /* --- view controls ----------------------------------------------------- */
 
 .controls-card {
@@ -4072,6 +4015,41 @@ canvas.is-frozen {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
+}
+
+/* Which map of a deck the *Map* card sets (§16.5), under its title — the
+   starred one, with the star it was starred by, or every map while none is.
+   A readout rather than a control: the star in each cell's heading is how it
+   changes. The *every* line is the warn colour, because it is the one state in
+   which a change on this card reaches beyond the picture it is beside. The 3D
+   structure card says the same in the same words when no model is starred. */
+.map-card-for {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.15rem 0 0.45rem;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.map-card-for span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-for .map-card-star {
+  flex: none;
+}
+
+.map-card-for .map-card-star.is-on {
+  fill: currentColor;
+  color: var(--accent);
+}
+
+.map-card-for.is-every {
+  color: var(--warn);
 }
 
 /* Stacked one per row when the card lives in a sidebar; the panel header keeps
@@ -4090,7 +4068,8 @@ canvas.is-frozen {
    contents past its own border and put a horizontal scrollbar under the app.
    The card is 15rem by construction; its rows say so. */
 .controls-card .panel-controls > *,
-.side .pair-controls > * {
+.side .pair-controls > *,
+.card-zone .pair-controls > * {
   min-width: 0;
 }
 
@@ -4226,6 +4205,13 @@ canvas.is-frozen {
   height: 1rem;
   margin: 0;
   justify-self: start;
+}
+
+/* A switch whose word is its whole meaning: the box, then what it turns on,
+   on one line, rather than a label column with one word in it. */
+.controls-card .field-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: start;
 }
 
 /* Full-width actions ("fit to view"), so a card reads as a column of rows
@@ -5251,6 +5237,92 @@ canvas.is-frozen {
   margin: 0;
 }
 
+/* **A view's heading keeps its shape while its text changes.** One line — the
+   title, its stepper, then the toolbar held against the right-hand edge — for
+   as long as the heading is wide enough for the toolbar and a readable title;
+   the toolbar on a line of its own under the title below that; and the zoom
+   steps under the box below that again. Three shapes, each decided by the
+   heading's width alone (the container queries after these rules), so a zoom
+   that lengthens the title ellipsises it rather than pushing the box onto the
+   next line, and a zoom that shortens it does not pull the box back up.
+
+   The box is a fixed width on the one-line shape, for the same reason: grown
+   into whatever the title left, it was a different width after every zoom. */
+.view-head > .title-bar {
+  flex-wrap: nowrap;
+}
+
+.view-head > .title-bar > h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-head > .title-bar > .stepper {
+  flex: none;
+}
+
+.view-head > .title-bar > .title-tools {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.view-head > .title-bar > .title-tools > .search-box,
+.view-head > .title-bar > .search-box {
+  flex: 0 0 18rem;
+  width: 18rem;
+  min-width: 0;
+}
+
+/* The toolbar on a line of its own, under the title. Held right, as it is on one
+   line, so the box does not jump across the heading at the width this changes.
+   62rem because the toolbar is 42rem of it: below that, a one-line heading had
+   less than a locus's width left for the title and cut `IV:970,001-1,430,000`
+   to `IV:970,001-1,430,…` — measured on the deck, three maps across. */
+@container view-head (max-width: 62rem) {
+  .view-head > .title-bar.region-bar {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar.region-bar > .title-tools {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .view-head > .title-bar.region-bar > .title-tools > .search-box {
+    flex: 1 1 13rem;
+    width: auto;
+    max-width: 24rem;
+  }
+}
+
+/* A title and one box are the whole of the other views' bar, so they part only
+   where the box would otherwise crowd the title below a readable width. */
+@container view-head (max-width: 34rem) {
+  .view-head > .title-bar:not(.region-bar) {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar:not(.region-bar) > .search-box {
+    flex: 1 1 100%;
+    width: auto;
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
+/* …and, narrower again, the zoom steps and the bookmark under the box: the box
+   keeps a width a locus can be read in, and the steps stay together as one row. */
+@container view-head (max-width: 34rem) {
+  .view-head > .title-bar.region-bar > .title-tools {
+    flex-wrap: wrap;
+  }
+  .view-head > .title-bar.region-bar > .title-tools > .search-box {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+}
+
 /* In a view's heading the box goes to the right-hand end of the line: what you
    are looking at leads, and the way to look at something else is where the eye
    finishes. It takes the buttons that belong to it — `go`, `← back` — along
@@ -5471,6 +5543,19 @@ canvas.is-frozen {
   font-variant-numeric: tabular-nums;
 }
 
+/* **One line, always, under a view's title.** What the block is, and the window
+   of it on screen, and it is the line that changes on every pan and zoom — two
+   loci of two sequences each make it longer than any column, and wrapped, it was
+   one line after one zoom and three after the next, moving the map under it by
+   two lines each time. It ends in an ellipsis where it runs out of room, and
+   the whole of it is in its tooltip then (`ui/dom.ts`'s `titleWhenCut`). */
+.view-head > .summary,
+.view-head > .match-kind {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* --- genome view ------------------------------------------------------- */
 
 /* Narrow: the columns stop being columns and stack under the plot with a
@@ -5542,7 +5627,8 @@ canvas.is-frozen {
 
 /* In the sidebar card the pair controls stack, like every other control group
    there; the flex row below is what the region bar still wants. */
-.side .pair-controls {
+.side .pair-controls,
+.card-zone .pair-controls {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -5550,14 +5636,16 @@ canvas.is-frozen {
   margin: 0;
 }
 
-.side .pair-controls .field {
+.side .pair-controls .field,
+.card-zone .pair-controls .field {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.4rem;
 }
 
-.side .pair-controls .select-wide {
+.side .pair-controls .select-wide,
+.card-zone .pair-controls .select-wide {
   width: 100%;
   min-width: 0;
 }
@@ -7445,6 +7533,70 @@ canvas.is-frozen {
   color: var(--text);
 }
 
+/* --- moving a card by its heading (`ui/cardLayout.ts`) ------------------
+
+   The same strip that folds a card carries it: a press folds, a press that
+   travels lifts the card and moves it, within its column or into another. A
+   touch that starts on a heading is the drag's, not the column's scroll —
+   everywhere else in the column a swipe still scrolls. */
+.panel-column-body .card > .card-head,
+.panel-column-body .controls-card > .card-head {
+  touch-action: none;
+}
+
+/* Where the cards a reader arranged stand: laid out as the body's own cards
+   are, with the column's gap between them. */
+.card-zone {
+  display: contents;
+}
+
+.card-zone > .card,
+.card-zone > .controls-card {
+  flex: 0 0 auto;
+}
+
+.card-zone h3 {
+  margin-top: 0;
+}
+
+/* A column the reader has rearranged holds every card in its zone, so the
+   wrappers its builder put them in are empty boxes with gaps and heights of
+   their own — the General column's is as tall as the column. Laid out as though
+   they were not there, which leaves only what else they hold (the Analysis
+   column's "no map is starred" line) standing above the cards. */
+.panel-column-body.is-arranged :is(.info-panel, .file-host, .sequence-host, .minimap-host, .record-host, .side, .analysis-tasks, .analysis-cards) {
+  display: contents;
+}
+
+/* The card in the air: fixed to the pointer at the width it had, and lifted
+   off the page so it reads as carried rather than as one more card. */
+.card.is-lifted,
+.controls-card.is-lifted {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.94;
+  box-shadow: var(--shadow-2);
+  max-height: 60vh;
+  overflow: hidden;
+}
+
+/* …and where it will land: the height it takes, dashed, in the accent. */
+.card-drop {
+  flex: 0 0 auto;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  max-height: 60vh;
+}
+
+body.is-carrying-card,
+body.is-carrying-card * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
 /* The mark, and the reason it is not a `<details>` marker.
 
    A UA triangle sits at the *start* of the line, in a size and colour the page
@@ -8796,6 +8948,39 @@ canvas.is-frozen {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A button, since a press edits the mark, drawn as the text it is — the
+     Tracks card's name box, which looks like a label until it has the caret. */
+  padding: 1px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.manual-where:hover {
+  border-color: var(--border);
+}
+
+/* The mark's coordinates as boxes, in the row they replace (§8.1). */
+.manual-edit {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manual-edit-box {
+  flex: 1 1 8rem;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+}
+
+.manual-edit-axis {
+  flex: none;
 }
 
 /* --- bookmarks --------------------------------------------------------- */
@@ -9380,11 +9565,37 @@ canvas.is-frozen {
   margin-bottom: 0;
 }
 
-/* The summary goes inline inside a deck, so the deck's own note reads as the
-   end of that sentence rather than as a line under it. */
-.deck-lead-head .summary,
-.deck-lead-head .match-kind {
-  display: inline;
+/* The summary and the deck's own note share one line inside a deck, so the
+   note reads as the end of that sentence rather than as a line under it — and
+   it is the *summary* that gives way when the line is short, since the count of
+   maps is the deck's and is short. A grid rather than two inline runs, because
+   an inline run cannot end in an ellipsis and keep its neighbour whole. */
+.deck-lead-head > .view-head {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.deck-lead-head > .view-head > * {
+  grid-column: 1 / -1;
+}
+
+.deck-lead-head > .view-head > .summary,
+.deck-lead-head > .view-head > .match-kind {
+  grid-column: 1;
+}
+
+.deck-lead-head > .view-head > .deck-maps {
+  grid-column: 2;
+  padding-left: 0.3em;
+}
+
+/* The separator follows the summary's own state, so a count written before the
+   first block landed still gets its bullet once the summary has words
+   (`PanelDeck`'s bar). */
+.view-head > .summary:not(:empty) + .deck-maps::before,
+.view-head > .match-kind:not(:empty) + .deck-maps::before {
+  content: '· ';
 }
 
 .deck-maps {
@@ -9509,6 +9720,28 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* **A cell's lanes stay in its cell.** Three or four across, the first map's
+   stacks — spatial tracks down its left edge, genes and a signal or two down
+   its right — are wider than the cell before the map has had a pixel, and the
+   grid used to spill them over the next cell's heading and locus box: a
+   picture drawn across another picture. So inside a deck the map's column
+   gives way down to the 10rem the map's own size has as its floor
+   (`ui/mapSize.ts`), not the 20rem a whole column affords; and what still does
+   not fit scrolls sideways inside the cell's body rather than being painted
+   over its neighbour or cut off unreachable. `safe`, because a centred row
+   that overflows spills equally both ways and a scroll box cannot reach the
+   half that went left. Only sideways: the tooltip flips to stay inside the
+   grid, so nothing needs the other axis. */
+.deck-panel .panel-body {
+  justify-content: safe center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.deck-panel .panel-grid {
+  grid-template-columns: auto minmax(min(10rem, 100%), auto) auto;
+}
+
 /* The plot fills its column instead of claiming the window's height:
    `.heatmap-wrap`'s own `clamp` has a 20rem floor, which four side by side
    overflow, and the cap stops a wide window from producing four plots taller
@@ -9598,6 +9831,45 @@ span.deck-name {
    `flex: 0 0 auto` so it survives the name's ellipsis: the file name is the part
    that can afford to be cut, and cutting the resolution instead would leave a
    control the reader cannot read the value of. */
+/* The window a companion reads for itself (§16.3), as a pill in its heading:
+   the window, a widen, and the `×` that gives it back to the deck. Bordered so
+   that `×` reads as closing the window and not the cell, whose own `×` is at
+   the end of the heading. It gives way first when the heading is short — the
+   name beside it is the one thing a cell's heading must keep. */
+.deck-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 0.1rem 0 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-place.hidden {
+  display: none;
+}
+
+.deck-place-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-place .btn-icon {
+  flex: none;
+  padding: 0.05rem;
+  border-color: transparent;
+  background: none;
+  color: inherit;
+}
+
 .deck-entry {
   flex: 0 0 auto;
   padding: 0.05rem 0.15rem;
@@ -9837,6 +10109,23 @@ span.deck-name {
   grid-template-columns: repeat(2, auto);
   column-gap: 8px;
   max-width: 75%;
+}
+
+/* …except the marks (§25.5): each is a locus or two, `▭ IV:1,100,000-1,150,000`,
+   which two to a row cuts in half. One column, scrolling past its height as the
+   key always did — a reader with forty marks is reading a list anyway. */
+.structure-key:has(> .structure-key-level.structure-key-mark) {
+  display: flex;
+  max-width: 60%;
+}
+
+.structure-key-mark > .structure-key-name {
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.structure-key-empty {
+  color: var(--text-dim);
 }
 
 /* The title, the ramp and its two ends are about the whole key, so they span
@@ -10427,10 +10716,15 @@ span.deck-name {
    in every other column, so *2D tasks* folds away exactly as *Tracks* does. The
    rows inside want no extra inset — `.card` already pads — and the cards want
    the gap a column of cards has, which `.panel-column` gives them. */
-.analysis-tasks {
+.analysis-tasks,
+.analysis-cards {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.analysis-tasks > .analysis-blocked {
+  margin: 0;
 }
 
 /* The shared waiting line sits between the card's heading and its first row and
@@ -11085,6 +11379,17 @@ span.deck-name {
   font-size: var(--step--2);
   line-height: 1.4;
   color: var(--text-faint);
+}
+
+/* Every task greyed at once, because the deck has no map starred (§18.1):
+   one sentence above the cards, in the warn colour rather than the danger one
+   — nothing has failed, the reader has only left no file for a task to read. */
+.analysis-blocked {
+  margin: 0 0 0.6rem;
+  color: var(--warn);
+  background: var(--warn-soft);
+  font-size: var(--step--2);
+  line-height: 1.4;
 }
 
 /* The line a whole group is waiting on, printed once under its heading.

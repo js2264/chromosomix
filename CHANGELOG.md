@@ -14,6 +14,81 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
+  heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
+  where it will land; drop it anywhere in any open side panel. ⌥↑ / ⌥↓ on the heading's chevron move
+  it a place without the pointer. The arrangement is kept through every navigation, tab switch and
+  reload, and the command palette's *Put every card back in its own panel* undoes it.
+
+- **A *caption* switch on the Export card (§7.2).** On by default. Off, a saved figure carries no
+  caption under it (the region, file, bins, score, colour range and date) and ends at its lowest
+  track. Shared by the map's card and the 1D browser's, remembered, and followed by the deck's
+  figure.
+
+- **A key for *colour by manual annotations* (§25.5).** A row per mark, named as the Manual
+  annotations card names it: its swatch recolours the mark itself — on the card and every map too —
+  a click takes it off the model's colouring and a double-click shows it alone.
+
+- **A mark is edited in its row (§8.1).** A press on a mark's place on the Manual annotations card
+  turns it into the adding form's boxes (and a line's axis); Enter moves the mark in place, keeping
+  its colour and its position in the list, and Escape leaves it.
+
+- **Every export asks where to save, in a dialog opened in Downloads (§26.6).** Figures, decks,
+  structures, bigWigs, bedGraphs, tables, marks, the console's script, a workspace and an `.mcool`
+  used to land straight in the browser's downloads folder under the app's name; the platform's *Save
+  as* now opens first, in Downloads with that name ready to change, and the card says the name it was
+  saved under. The dialog opens before the file is made, so a long export (an `.mcool`, a genome's
+  bigWig) still gets one, and a cancel skips the work. Browsers without the dialog (Firefox, Safari)
+  keep the plain download.
+
+- **⌘ + two-finger scroll slides a map up and down (§7.2).** Sideways already slid it and up and
+  down zoomed, so moving the map up the screen needed a drag with the button held; with ⌘ held the
+  wheel slides on both axes. A pinch (Ctrl-wheel) stays the zoom, and ⌘-scroll over a lane still
+  sets that lane's ceiling. The shortcuts dialog says so, and no longer claims a sideways swipe over
+  the map goes back a page.
+
+- **A companion off the lead reads its own window (§16.3).** A box drawn on it with Option held
+  re-reads that window for that map — as finely as its rung and its share of the budget allow —
+  rather than magnifying the block it already held, so one file in three cells can be a whole
+  chromosome, a 35 Mb stretch and 6 Mb at three real resolutions. The window is a pill in the cell's
+  heading with *widen 3×* and an ×; it is remembered with the map's looks and dropped when the chain
+  is relinked. On a companion still on the lead the box navigates the whole deck, as it does on the
+  first map.
+
+- **The Contact maps card lists every map, each with an eye and a grip (§16.9).** The first map, the
+  compared one, then every companion under its cell's name. A companion's eye closes its cell and
+  keeps the map on the card, dimmed; pressed again it opens the map in a cell — the Structures card's
+  eye, for maps — and its × lets it go. Every row has a grip: dragged onto a cell it exchanges a
+  companion with that cell, and a hidden map's, the first map's or the compared map's row dropped on
+  an empty cell or a `+` edge opens that file there.
+
+- **No map need be starred, and no structure (§16.5, §25.3).** A filled star is no longer a dead
+  button: pressed, it leaves none filled. With no map starred the Aesthetics column's *Map* card
+  sets **every map of the deck at once** — it says *every map — all N* under its title, in the warn
+  colour, and a change there is copied onto every companion one moved setting at a time, so picking a
+  ramp does not flatten each map's clip onto the first one's; *match all scales* and *match all
+  resolutions* are greyed, there being nothing to match to. With no structure cell starred the *3D
+  structure* card sets every structure cell at once, camera presses and the turntable included, and
+  leaves out the rows that are about one cell's own picture (which model, *compare with*, *in the
+  frame of*, the measurements, the export). *None* lasts as long as the deck; the next deck starts
+  starred on its first map.
+
+- **With no map starred, no task runs (§18.1).** The Analysis column says so once, above its cards —
+  *no map is starred, so no task can run* — greys every row with that sentence in its tooltip, and
+  the drawer's Run and *run on all* refuse with it. Starring a map puts them back.
+
+- **An empty cell takes a track or a structure as readily as a map (§16.9).** A cell drawn with a `+`
+  read *drop a map here*; it reads *drop a map, a track or a structure*, and does what it says: a row
+  dragged from the Tracks card opens a tracks cell there drawing it (and keeps it on the maps it was
+  on), a track file opens a tracks cell and is loaded onto it, a structure file or a row of the
+  Structures card opens its model, and a map opens as a map. A row out of the Files panel is routed
+  the same way, by the name of its file. The deck's count says `2 maps · 1 empty cell` rather than
+  `2 of 3 maps`, and the `+` edge's note names all three.
+
+- **`scripts/ui-stars.mjs`**, a gallery of the stars: the yeast deck with the first map starred, a
+  companion starred and recoloured from the card, no map starred, the Analysis column greyed, an
+  empty cell taking a track row, and two structure cells with none starred.
+
 - **A metagenome's General column lists its genomes, and a genome's contigs, with ticks (§5.8).**
   The Sequences card a cooler is steered from now has a metacool counterpart: over the whole
   metagenome, a pair or a selection it lists the **Genomes**, and ticking any number draws them
@@ -237,6 +312,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The *3D structure* card names the starred cell, as the *Map* card names the starred map
+  (§25.3).** `★ Yeast_structure` under its title, where the card had a *structure* dropdown; the
+  line reads *every structure — all N* while nothing is starred, and is absent on a deck of one
+  model. Which model a cell draws is chosen from the Structures card: its eye, or its row dropped on
+  the cell.
+
+- **The caption under a saved figure is quieter (§7.2).** The region was written at 15 px and
+  semibold in the page's ink, the largest type on the figure; it is now 11 px, and the provenance
+  under it 10 px, both in the axis labels' grey. The 1D browser's one-line caption matches.
+
+- **Closing a contact map in the deck hides it (§16.9, §16.5).** The × on a map's own cell, and
+  *close deck*, used to drop the map from the session; it now stays on the Contact maps card with its
+  eye dark, and the eye opens it in a cell again — the card's × is where a map is let go. The cell
+  closes only where the map was all it held: one with tracks drawn in it stays as a tracks cell
+  showing them, instead of parking them on the first map.
+
+- **The 3D colourings are named for what they measure, and the model's own five lead the list
+  (§25.5).** *sequence*, *linear position along the sequence*, *manual annotations* (was *your
+  marks*, also under *loops as chords*), *spatial distance to pinned bin* and *contacts with pinned
+  bin*, then haplotype, the file's columns, tracks and feature sets. The *score column* colouring is
+  gone; a session stored with it opens coloured by sequence.
+
+- **The Aesthetics column's *Map* card is the starred map's (§16.5).** Starring a companion puts
+  *its* card in the column, in the first map's place, and a setting changed there changes that map
+  and no other; starring the first map puts its own back. A line under the card's title names the
+  map it sets, with its star. The turn is the one row that still reaches every map, because the lock
+  needs every map drawn one way, and it is on every map's card for that reason.
+
+- **A companion's score, O/E and smoothing are its own (§16.2).** They were shared with the first
+  map, offered on its card alone, so *this replicate normalised, that one raw* had no control
+  anywhere. Each map now opens on the first map's and keeps its own from then on, remembered with
+  its clip in the session, the workspace and the durable record. The first map's are still the ones
+  in the link.
 
 - **The File card does not wrap.** Every row is one line and the card scrolls sideways, so a long
   URI no longer stacks a dozen characters at a time down the column.
@@ -833,6 +942,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The companion's corner menu (§16.5).** The button in a companion's bottom-left corner and the
+  menu of score, transform, ramp and clip it opened are gone: the map's *Map* card, shown in the
+  Aesthetics column while it is starred, holds those and the rest.
+
 - **The *size by* setting (§25.3).** A track whose value at each bead set the bead's size, as a
   second channel beside the colour. The channel is gone with the control: every bead is the bead
   radius.
@@ -884,6 +997,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
+  and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in
+  the card.
+
+- **A narrow deck cell's lanes no longer paint over the next cell (§16.5).** Three or four across,
+  the first map's side stacks were wider than its cell and were drawn over the neighbouring cell's
+  heading and locus box. The map now gives way down to 10rem inside a deck, the rest of the cell
+  scrolls sideways, and the scroll opens with the map in the middle.
+
+- **The Export card's save and copy include a deck's structure and tracks cells (§16.5).** With the
+  first map beside a 3D model and no second map, the card wrote the map alone; it writes the deck's
+  whole figure whenever any other cell has a picture, as the bar's own save does.
+
+- **A view's heading no longer changes shape as it zooms (§5.4, §26.6).** The title bar wrapped or
+  unwrapped whenever a press lengthened or shortened its title, and the summary under it could run to
+  three lines on a pair of loci — so the map jumped a line up or down under a zoom, and the side
+  columns narrowed and widened with the summary's length. The heading's shape is now decided by its
+  width alone (one line, the toolbar under the title, the steps under the box); the title and the
+  summary are one line each, ellipsised with their whole text as a tooltip; and the columns keep the
+  width they were given.
+
+- **The deck's `· N maps` lost its bullet** whenever the count was written before the first block
+  had filled the summary in front of it; the separator follows the summary now.
+
+- **A companion drew the normalisation its own score named (§16.2).** A companion reading `VC`, `ICE`
+  or the correlation took the normalisation from the *first* map's score, so it was labelled one
+  thing and drawn as another; it reads it off its own score now.
 
 - **The whole metagenome no longer dies with *Array buffer allocation failed* at bin level (§7.3).**
   The bin-level block was summed into a full-square `Float64` and copied to `Float32`, about 200 MB

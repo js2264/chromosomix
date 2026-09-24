@@ -41,7 +41,7 @@
 import type { AxisGroup, MatrixResult, OverviewResult } from '../worker/protocol'
 import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
-import { button, el, fmt } from './dom'
+import { button, el, fmt, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, blockSummary, type AnnotationContext } from './MatrixPanel'
 import { SearchBox, locusPlaceholder } from './SearchBox'
@@ -242,6 +242,8 @@ export class Overview {
     )
     this.panelHost = el('div', { class: 'overview-host hidden' })
     this.summary = el('p', { class: 'summary' })
+    // One line under the title, with the whole of it in a tooltip where it is cut.
+    titleWhenCut(this.summary)
     this.search = new SearchBox({
       // The shared builder (§26.6). This box takes a genome or a sequence and
       // nothing else, so that is what it lists — in the order and the grammar

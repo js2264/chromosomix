@@ -15,7 +15,10 @@
 
 import {
   MANUAL_PALETTE,
+  describeMark,
   mintMarkId,
+  pointLabel,
+  spanLabel,
   parsePoint,
   parseSpan,
   type LineAxis,
@@ -118,7 +121,7 @@ export class ManualCard {
       ],
       formatTitle: 'Which marks to write. The kinds are different objects, with one file each.',
       onFormat: () => this.paintSave(),
-      onSave: (format) => this.save(format as MarkFormat),
+      onSave: (format) => void this.save(format as MarkFormat),
     })
     this.el = el(
       'section',
@@ -599,18 +602,20 @@ export class ManualCard {
         : `Write ${fmt.int(count)} to a file this app — and bedtools — reads back`
   }
 
-  private save(format: MarkFormat): void {
+  private async save(format: MarkFormat): Promise<void> {
     const now = new Date()
     const text = formatMarks(this.props.store.marks, format, {
       file: this.props.fileLabel,
       created: fileStamp(now),
     })
     const name = `${exportBaseName(this.props.fileLabel)}-marks-${fileStamp(now)}.${format}`
-    downloadBlob(new Blob([text], { type: 'text/plain' }), name)
+    const saved = await downloadBlob(new Blob([text], { type: 'text/plain' }), name)
+    if (saved === null) return
     // The line under the row, where the Export card says what just happened: a
     // download that goes straight to a folder leaves nothing on screen saying
-    // it did, and *which* marks went is the question this row's select asks.
-    this.exporter.note.textContent = `${fmt.int(marksFor(this.props.store.marks, format).length)} · ${name}`
+    // it did, and *which* marks went is the question this row's select asks —
+    // under the name the reader gave it, where the save dialog let them.
+    this.exporter.note.textContent = `${fmt.int(marksFor(this.props.store.marks, format).length)} · ${saved}`
   }
 
   private render(): void {
@@ -636,20 +641,115 @@ export class ManualCard {
     // A colour, where it is, and a way to remove it. A mark says *look here*;
     // what to look at is the map, and a caption box under every one of them was
     // a text field to fill in for a sentence the figure already makes.
-    return el(
-      'div',
-      { class: 'ann-row manual-mark' },
-      el(
-        'div',
-        { class: 'ann-head' },
-        colour,
-        el('span', { class: 'manual-where', text: describe(mark), title: describe(mark) }),
-        iconButton('x', 'Remove this mark', () => this.props.store.remove(mark.id), {
-          class: 'btn-close',
-          size: 14,
-        }),
-      ),
+    //
+    // **Where it is, pressed, is where it is typed.** A mark put down a bin off
+    // used to be removed and drawn again, which lost its colour and moved it
+    // to the end of the list; the row's text is the mark's own form now, in the
+    // boxes the forms above use, for the mark to be moved in place.
+    const head = el('div', { class: 'ann-head' })
+    const where = el('button', {
+      class: 'manual-where',
+      type: 'button',
+      text: describeMark(mark),
+      title: `${describeMark(mark)} — click to edit`,
+    })
+    where.addEventListener('click', () => this.editRow(where, mark))
+    head.append(
+      colour,
+      where,
+      iconButton('x', 'Remove this mark', () => this.props.store.remove(mark.id), {
+        class: 'btn-close',
+        size: 14,
+      }),
     )
+    return el('div', { class: 'ann-row manual-mark' }, head)
+  }
+
+  /**
+   * The row's coordinates as boxes, over the text they replace: Enter or a
+   * click elsewhere moves the mark, Escape leaves it where it was.
+   *
+   * The boxes the adding forms use, taking what they take — grouped digits,
+   * `kb`, an en dash — and one box for the second axis left empty means the
+   * same place on both, as it does there. A line keeps its axis select, since
+   * which rule is drawn is part of where it is.
+   */
+  private editRow(where: HTMLElement, mark: ManualMark): void {
+    const boxes: HTMLInputElement[] = []
+    let axis: HTMLSelectElement | null = null
+    if (mark.kind === 'line') {
+      axis = el('select', { class: 'select select-tiny manual-edit-axis', title: 'Which rule' })
+      for (const value of ['vertical', 'horizontal', 'both'] as const) {
+        axis.appendChild(el('option', { value, text: value }))
+      }
+      axis.value = mark.axis
+      boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: pointLabel(mark.at), attrs: { 'aria-label': 'where' } }))
+    } else if (mark.kind === 'arrowhead') {
+      boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: pointLabel(mark.a), attrs: { 'aria-label': 'rows' }, title: 'rows' }))
+      boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: pointLabel(mark.b), attrs: { 'aria-label': 'columns' }, title: 'columns' }))
+    } else {
+      boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: spanLabel(mark.a), attrs: { 'aria-label': 'rows' }, title: 'rows' }))
+      boxes.push(el('input', { class: 'input manual-edit-box', type: 'text', value: spanLabel(mark.b), attrs: { 'aria-label': 'columns' }, title: 'columns' }))
+    }
+    const editor = el('div', { class: 'manual-edit' }, ...(axis === null ? [] : [axis]), ...boxes)
+    where.replaceWith(editor)
+    boxes[0]?.focus()
+    boxes[0]?.select()
+
+    let done = false
+    const close = (): void => {
+      done = true
+      editor.replaceWith(where)
+    }
+    const commit = (): void => {
+      if (done) return
+      const next = this.typedMark(mark, boxes, axis)
+      boxes.forEach((box, i) => box.classList.toggle('is-bad', next === null && this.badBox(mark, boxes, i)))
+      if (next === null) return
+      done = true
+      // The store's change repaints the list; the row this editor stands in
+      // goes with it, so nothing needs putting back.
+      this.props.store.reshape(next)
+    }
+    editor.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commit()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        close()
+      }
+    })
+    // A click anywhere outside the boxes is the reader finished with them.
+    editor.addEventListener('focusout', (event) => {
+      if (event.relatedTarget instanceof Node && editor.contains(event.relatedTarget)) return
+      if (!done) commit()
+      if (!done) close()
+    })
+  }
+
+  /** The mark the boxes describe, or `null` where one of them does not read. */
+  private typedMark(mark: ManualMark, boxes: HTMLInputElement[], axis: HTMLSelectElement | null): ManualMark | null {
+    const [first, second] = boxes.map((box) => box.value.trim())
+    if (mark.kind === 'line') {
+      const at = parsePoint(first ?? '')
+      return at === null ? null : { ...mark, at, axis: (axis?.value ?? mark.axis) as LineAxis }
+    }
+    if (mark.kind === 'arrowhead') {
+      const a = parsePoint(first ?? '')
+      const b = (second ?? '') === '' ? a : parsePoint(second ?? '')
+      return a === null || b === null ? null : { ...mark, a, b }
+    }
+    const a = parseSpan(first ?? '')
+    const b = (second ?? '') === '' ? a : parseSpan(second ?? '')
+    return a === null || b === null ? null : { ...mark, a, b }
+  }
+
+  /** Whether box `i` is one that does not read, for its red edge. */
+  private badBox(mark: ManualMark, boxes: HTMLInputElement[], i: number): boolean {
+    const text = boxes[i]?.value.trim() ?? ''
+    if (i === 1 && text === '') return false
+    return mark.kind === 'rect' ? parseSpan(text) === null : parsePoint(text) === null
   }
 }
 
@@ -683,40 +783,6 @@ function axisBox(axis: 'rows' | 'columns', placeholder: string): HTMLInputElemen
   // arrowhead form's shorter pair still fits across.
   box.style.flexBasis = `calc(${placeholder.length}ch + 1.2rem)`
   return box
-}
-
-/**
- * A mark, as the reader reads it — grouped digits, which is what every other
- * coordinate on screen wears (§26.1).
- *
- * `formatPoint` and `formatSpan` write the ungrouped form their own boxes take
- * back, and that is what a *copy* wants (§26.1's last rule) — but this row is
- * read rather than pasted, and `I:120000` in a card whose placeholders say
- * `rows I:120,000` was the fifth spelling of a locus on one screen. The boxes
- * take the grouped form too, so nothing about the round trip is lost.
- */
-function describe(mark: ManualMark): string {
-  if (mark.kind === 'line') {
-    const glyph = mark.axis === 'vertical' ? '│' : mark.axis === 'horizontal' ? '─' : '┼'
-    return `${glyph} ${pointText(mark.at)}`
-  }
-  if (mark.kind === 'rect') {
-    const a = spanText(mark.a)
-    const b = spanText(mark.b)
-    // One extent for a box on the diagonal, which is what its form takes back.
-    return a === b ? `▭ ${a}` : `▭ ${a} × ${b}`
-  }
-  const a = pointText(mark.a)
-  const b = pointText(mark.b)
-  return a === b ? `◤ ${a}` : `◤ ${a} × ${b}`
-}
-
-function pointText(point: ManualPoint): string {
-  return `${point.contig}:${fmt.pos(point.bp)}`
-}
-
-function spanText(span: ManualSpan): string {
-  return `${span.contig}:${fmt.pos(span.from)}-${fmt.pos(span.to)}`
 }
 
 /** Re-exported so a caller needs one import to seed a colour. */

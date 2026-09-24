@@ -55,6 +55,12 @@ export interface AnalysisPanelOptions {
   onOpen(task: AnalysisTask): void
   /** The id of the task whose drawer is up, so one row can be marked. */
   active(): string | null
+  /**
+   * Why no task can run at all, or `null` (§18.1) — a deck with no map
+   * starred. Every row is greyed with it and the sentence stands once, above
+   * the cards, rather than under each of twenty rows.
+   */
+  blocked?(): string | null
 }
 
 /** What the chip says, and how loudly. */
@@ -199,6 +205,10 @@ export class AnalysisPanelCard {
   readonly el: HTMLElement
 
   private readonly unsubscribe: () => void
+  /** The sentence above the cards while every task is greyed; see {@link AnalysisPanelOptions.blocked}. */
+  private readonly blockedEl = el('p', { class: 'inline-error analysis-blocked hidden', attrs: { role: 'status' } })
+  /** The cards, under {@link blockedEl}. */
+  private readonly cardsEl = el('div', { class: 'analysis-cards' })
   private readonly rows: Row[] = []
   private readonly groupNotes: Group[] = []
   /**
@@ -219,7 +229,7 @@ export class AnalysisPanelCard {
     // they are cards — the same frame, mark and fold every other card in every
     // other column has, so *2D tasks* folds away exactly as *Tracks* does. The
     // panel's own name is not repeated on any of them.
-    this.el = el('div', { class: 'analysis-tasks' })
+    this.el = el('div', { class: 'analysis-tasks' }, this.blockedEl, this.cardsEl)
     this.unsubscribe = options.runner.subscribe(() => this.refresh())
     this.refresh()
   }
@@ -272,7 +282,7 @@ export class AnalysisPanelCard {
     this.rows.length = 0
     this.groupNotes.length = 0
     if (tasks.length === 0) {
-      this.el.replaceChildren(
+      this.cardsEl.replaceChildren(
         el('p', {
           class: 'analysis-empty',
           text:
@@ -308,7 +318,7 @@ export class AnalysisPanelCard {
         ),
       )
     }
-    this.el.replaceChildren(...cards)
+    this.cardsEl.replaceChildren(...cards)
   }
 
   /**
@@ -399,6 +409,12 @@ export class AnalysisPanelCard {
   private paint(): void {
     const active = this.options.active()
     const context = this.options.context()
+    // Nothing starred, so nothing to run against: said once, above the cards,
+    // and every row greyed with it in its tooltip — the per-row and per-group
+    // lines would print the same sentence twenty times.
+    const blocked = this.options.blocked?.() ?? null
+    this.blockedEl.textContent = blocked ?? ''
+    this.blockedEl.classList.toggle('hidden', blocked === null)
 
     // **Availability first, for every row, and kept.** The group's line is a
     // fact about the rows under it, so it cannot be painted until they have all
@@ -406,9 +422,11 @@ export class AnalysisPanelCard {
     // asking each task twice would be asking sixteen predicates thirty-two
     // times a second for one column.
     const answers = this.rows.map((row) =>
-      context === null
-        ? { state: 'waiting' as const, needs: 'Open a file.' }
-        : row.task.availability(context),
+      blocked !== null
+        ? { state: 'waiting' as const, needs: blocked }
+        : context === null
+          ? { state: 'waiting' as const, needs: 'Open a file.' }
+          : row.task.availability(context),
     )
     const waitingIn = new Map<TaskGroup, string[]>()
     this.rows.forEach((row, at) => {
@@ -421,7 +439,7 @@ export class AnalysisPanelCard {
     const shared = new Map<TaskGroup, string>()
     for (const [group, needs] of waitingIn) shared.set(group, this.sharedNeeds(needs))
     for (const note of this.groupNotes) {
-      const text = shared.get(note.group) ?? ''
+      const text = blocked !== null ? '' : (shared.get(note.group) ?? '')
       note.needs.textContent = text
       note.needs.classList.toggle('hidden', text === '')
     }
@@ -436,7 +454,8 @@ export class AnalysisPanelCard {
       else row.el.removeAttribute('aria-disabled')
       row.el.tabIndex = waiting ? -1 : 0
       // Nothing under the row where the heading above it already says it.
-      const own = waiting && available.needs !== shared.get(row.group) ? available.needs : ''
+      const own =
+        waiting && blocked === null && available.needs !== shared.get(row.group) ? available.needs : ''
       row.needs.textContent = own
       row.needs.classList.toggle('hidden', own === '')
 

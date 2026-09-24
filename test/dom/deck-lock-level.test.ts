@@ -231,6 +231,7 @@ function leadRollUp() {
   const panel = {
     setViewportListener: () => {},
     setDeckExport: () => {},
+    setCardFor: () => {},
     setLaneListener: () => {},
     setHoverListener: (listener: (cell: { row: number; col: number } | null) => void) => {
       state.hover = listener

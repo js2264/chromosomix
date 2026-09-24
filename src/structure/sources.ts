@@ -128,10 +128,17 @@ export function featureSource(
  * The reader's marks on the model: a line colours the beads at its place, a
  * rectangle the beads of its two spans. Later marks paint over earlier ones.
  */
-export function marksSource(structure: Structure, marks: readonly ManualMark[]): ColourSource {
+export function marksSource(
+  structure: Structure,
+  marks: readonly ManualMark[],
+  hidden: ReadonlySet<string> = new Set(),
+): ColourSource {
   const n = structure.set.length
   const colours = new Array<string | null>(n).fill(null)
   for (const mark of marks) {
+    // Taken off the colouring from its key (§25.5), and nothing else: its
+    // beads are drawn as unmarked, and the mark stays where it was made.
+    if (hidden.has(mark.id)) continue
     if (mark.kind === 'line') {
       for (const bead of beadsAt(structure, mark.at.contig, mark.at.bp)) colours[bead] = mark.colour
     } else if (mark.kind === 'arrowhead') {
@@ -144,7 +151,7 @@ export function marksSource(structure: Structure, marks: readonly ManualMark[]):
       }
     }
   }
-  return { label: 'your marks', colours }
+  return { label: 'manual annotations', colours }
 }
 
 /** Distance in the model's own units from one bead to every other. */
@@ -154,7 +161,7 @@ export function distanceSource(structure: Structure, from: number): ColourSource
   if (from >= 0 && from < n) {
     for (let i = 0; i < n; i++) values[i] = distanceBetween(structure, from, i)
   }
-  return { label: from < 0 ? 'distance to the pinned bead — pin one' : 'distance to the pinned bead', values }
+  return { label: from < 0 ? 'spatial distance to pinned bin — pin one' : 'spatial distance to pinned bin', values }
 }
 
 /**
@@ -185,8 +192,8 @@ export function contactsSource(
   }
   const label =
     contacts === null
-      ? 'contacts with the pinned bead — pin one on a map’s sequences'
-      : 'contacts with the pinned bead'
+      ? 'contacts with pinned bin — pin one on a map’s sequences'
+      : 'contacts with pinned bin'
   return {
     label,
     values,

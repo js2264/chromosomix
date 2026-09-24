@@ -103,7 +103,7 @@ import { durationText, stopPromise } from './AnalysisPanelCard'
 import { runClock } from '../units'
 import { profileCurve, profileFigure, type PlotFigure } from './analysisPlots'
 import { button, el, fmt } from './dom'
-import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
+import { canvasToPng, chooseSaveTarget, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
 import { icon, iconButton } from './icons'
 import { ParamForm } from './ParamForm'
 import { resizeHandle } from './resizeHandle'
@@ -151,6 +151,11 @@ let drawers = 0
 export interface AnalysisDrawerOptions {
   runner: AnalysisRunner
   context(): AnalysisContext | null
+  /**
+   * Why no task can run at all, or `null` — a deck with no map starred
+   * (§18.1). Run and *run on all* refuse with it, in the price's place.
+   */
+  blocked?(): string | null
   /** The framing a run started now would be a record of (§18.4). */
   framing(): AnalysisFraming | null
   /** The close button was pressed. The owner clears its own idea of what is open. */
@@ -907,6 +912,8 @@ export class AnalysisDrawer {
   private run(): void {
     const task = this.current
     if (task === null) return
+    // Whatever reached here — the button is greyed, but a key is not.
+    if ((this.options.blocked?.() ?? null) !== null) return
     this.setStatus('')
     // Back to the newest, because the one about to arrive *is* the newest and a
     // reader who pressed Run while reading run 3 would otherwise watch their
@@ -927,6 +934,7 @@ export class AnalysisDrawer {
   private runAll(): void {
     const task = this.current
     if (task === null) return
+    if ((this.options.blocked?.() ?? null) !== null) return
     this.setStatus('')
     this.chosenRun.delete(task.id)
     // **Awaited**, and this is the whole of the fix. A companion opens to draw a
@@ -962,12 +970,15 @@ export class AnalysisDrawer {
     const state = this.options.runner.stateOf(task.id)
     const busy = state.status === 'running' || state.status === 'queued'
     const estimate = context === null ? null : task.estimate(context, this.params)
+    const blocked = this.options.blocked?.() ?? null
     const refusal =
-      context === null
-        ? 'This view has no contact map to run against.'
-        : estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
-          ? estimate.refusal
-          : null
+      blocked !== null
+        ? blocked
+        : context === null
+          ? 'This view has no contact map to run against.'
+          : estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
+            ? estimate.refusal
+            : null
 
     this.runButton.disabled = busy || refusal !== null
     // The button appears only where there is more than one map to run on, and
@@ -1514,7 +1525,7 @@ export class AnalysisDrawer {
         ? writeBed3d(payload.data, context)
         : formatIntervals(payload, context)
     const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
-    downloadBlob(
+    void downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),
     )
@@ -1542,7 +1553,7 @@ export class AnalysisDrawer {
     const blob = new Blob([outputToTsv(output, provenance)], {
       type: 'text/tab-separated-values',
     })
-    downloadBlob(blob, tsvName(provenance.task, output, stamp))
+    void downloadBlob(blob, tsvName(provenance.task, output, stamp))
   }
 
   /**
@@ -1563,6 +1574,8 @@ export class AnalysisDrawer {
    * from a filename anyway.
    */
   private async savePngPlain(figure: PlotFigure, label: string): Promise<void> {
+    const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(new Date())}.png`, 'image/png')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
       const scale = scaleForDpi(FIGURE_EXPORT_DPI)
@@ -1573,7 +1586,7 @@ export class AnalysisDrawer {
       if (ctx === null) throw new Error('The browser would not give this page a canvas.')
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       figure.draw(ctx, box)
-      downloadBlob(await canvasToPng(canvas), `${plainName(label)}-${fileStamp(new Date())}.png`)
+      await target.write(await canvasToPng(canvas))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1581,13 +1594,15 @@ export class AnalysisDrawer {
   }
 
   private async savePdfPlain(figure: PlotFigure, label: string): Promise<void> {
+    const now = new Date()
+    const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(now)}.pdf`, 'application/pdf')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
-      const now = new Date()
       const page = new VectorPage(box.width, box.height)
       figure.draw(page.ctx, box)
       const blob = await page.toBlob({ title: label, created: now })
-      downloadBlob(blob, `${plainName(label)}-${fileStamp(now)}.pdf`)
+      await target.write(blob)
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1599,6 +1614,8 @@ export class AnalysisDrawer {
     output: TaskOutput,
     provenance: Provenance,
   ): Promise<void> {
+    const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(new Date()), 'png'), 'image/png')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
       const scale = scaleForDpi(FIGURE_EXPORT_DPI)
@@ -1609,7 +1626,7 @@ export class AnalysisDrawer {
       if (ctx === null) throw new Error('The browser would not give this page a canvas.')
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       figure.draw(ctx, box)
-      downloadBlob(await canvasToPng(canvas), exportName(output, provenance, fileStamp(new Date()), 'png'))
+      await target.write(await canvasToPng(canvas))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1630,13 +1647,15 @@ export class AnalysisDrawer {
     output: TaskOutput,
     provenance: Provenance,
   ): Promise<void> {
+    const now = new Date()
+    const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(now), 'pdf'), 'application/pdf')
+    if (target === null) return
     try {
       const box = figureBox(figure.el)
-      const now = new Date()
       const page = new VectorPage(box.width, box.height)
       figure.draw(page.ctx, box)
       const blob = await page.toBlob({ title: output.label, created: now })
-      downloadBlob(blob, exportName(output, provenance, fileStamp(now), 'pdf'))
+      await target.write(blob)
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))

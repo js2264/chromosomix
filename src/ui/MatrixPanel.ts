@@ -202,7 +202,7 @@ import {
   captionStamp,
   copyPngToClipboard,
   copyTextToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
@@ -228,6 +228,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { captionField, getExportPrefs } from './exportPrefs'
 import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 import {
@@ -486,16 +487,6 @@ export interface MatrixPanelOptions {
    * the contig list. The panel still owns them; only their mount point moves.
    */
   detachedControls?: boolean
-  /**
-   * Put the scale controls **on the picture** rather than in a card.
-   *
-   * For a panel with no sidebar to put a card in — a companion in a deck (§16).
-   * Deliberately not inferred from {@link detachedControls}, which every view
-   * in the app sets: those views detach their cards only to move them into the
-   * Aesthetics column, and a second copy of the same five fields in the corner
-   * of the map would be two controls over one scale.
-   */
-  cornerControls?: boolean
   /**
    * Suppress the panel's own title line.
    *
@@ -1034,13 +1025,11 @@ export class MatrixPanel {
    */
   private scoreSelect: HTMLSelectElement | null = null
   /**
-   * The scale menu on the picture, for a panel with no card in a sidebar.
-   *
-   * `null` on the session's own map, which has the Aesthetics column: one
-   * control over one scale, or the two disagree about which of them the reader
-   * last touched.
+   * The line under the *Map* card's title saying which map of a deck the card
+   * sets (§16.5) — the starred one, or every map where none is starred.
+   * Hidden on a map with no deck around it, where there is nothing to choose.
    */
-  private readonly settingsEl: HTMLElement | null
+  private readonly cardFor = el('p', { class: 'map-card-for hidden' })
   /** Whether the window is too narrow for a key over the picture. */
   private narrow = false
   /** Whether the key is shown — the `legend` overlay; see `ui/plotOptions.ts`. */
@@ -1571,16 +1560,11 @@ export class MatrixPanel {
       unit: () => (this.comparisonLabel() !== null ? '' : this.scoreWord()),
     })
 
-    /**
-     * The fields that answer *what are these numbers, and how are they drawn* —
-     * the score, the baseline, the transform, the ramp and the clip.
-     *
-     * Collected apart from the rest because a panel with no card to put a card
-     * in carries exactly these and none of the others (see {@link settingsEl}).
-     * The same nodes, not copies: a second set of widgets over one scale is two
-     * controls that drift.
-     */
-    const valueFields: HTMLElement[] = []
+    // Every field lives in the *Map* card, a companion's included. A companion
+    // used to carry the score, the transform, the ramp and the clip in a menu
+    // in its picture's corner instead; that menu is gone, and the Aesthetics
+    // column shows the **starred** map's card (§16.5), so one card sets one map
+    // and there is never a second copy of a control over one scale.
     const controls: HTMLElement[] = [
       field(
         'transform',
@@ -1644,8 +1628,6 @@ export class MatrixPanel {
       )
     }
 
-    valueFields.push(...controls)
-
     /**
      * One overlay toggle. It *writes* to the shared store and *reads* from the
      * subscription below, so a toggle flipped from the command palette lights
@@ -1700,6 +1682,8 @@ export class MatrixPanel {
     })
     this.exportStatus = row.note
     this.copyButton = row.parts.copy
+    // Under the row it qualifies: whether the saved figure says what it is.
+    row.body.append(captionField())
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every
@@ -1899,13 +1883,9 @@ export class MatrixPanel {
         'What the cells are: the stored counts, cooler’s balanced matrix, or a reading ' +
           'computed here from the block on screen. Each of those has its own note on hover.',
       )
-      // **First in both**, and not merely first in the card. It leads the Map
-      // card because it is the question the other three answer *about* — what
-      // the numbers are, before how they are transformed, ramped and clipped —
-      // and a corner menu that put it last was the same five fields in a
-      // different order on a companion. `unshift` on each, so the two lists
-      // cannot drift the next time one of them gains a field.
-      valueFields.unshift(scoreField)
+      // First among the value fields: it is the question the other three answer
+      // *about* — what the numbers are, before how they are transformed,
+      // ramped and clipped.
       controls.unshift(scoreField)
     }
 
@@ -2146,43 +2126,15 @@ export class MatrixPanel {
       ),
     )
 
-    // A panel with no sidebar of its own carries its scale controls **on the
-    // picture**: a button in the bottom-left corner of the map, and a menu that
-    // opens up over it. What used to be there was a `colour and export` fold
-    // *under* the map, which pushed every panel of a deck down by the height of
-    // whatever was open in the one beside it and put a second export control on
-    // screen for a figure nobody had asked to save. The menu holds the five
-    // fields that say what the numbers are and how they are drawn, and nothing
-    // else — the overlay marks act on a picture the reader is pointing at, and
-    // reaching them through a menu is slower than the row they came from.
-    this.settingsEl =
-      options.cornerControls !== true
-        ? null
-        : el(
-            'div',
-            { class: 'map-settings hidden', attrs: { role: 'dialog' } },
-            ...valueFields,
-          )
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
       // "Map", not "View": the card beside it is about the tracks, and both of
       // them are views of something. This one is the matrix.
       cardTitle('Map', 'sliders-horizontal', 'controls-title'),
-      // The value fields are in the corner menu where there *is* one, and in
-      // this card where there is not — never in both, because a node has one
-      // parent. Appending the same five to each moved them into whichever
-      // container was built second, which is this one, so the corner menu
-      // opened empty and a companion's only scale controls were in a card it
-      // never mounts. One set of widgets is still the rule (see
-      // {@link settingsEl}); this decides where that one set lives.
-      el(
-        'div',
-        { class: 'panel-controls' },
-        ...(this.settingsEl === null
-          ? controls
-          : controls.filter((node) => !valueFields.includes(node))),
-      ),
+      // Which map of a deck this card sets, under the title; see {@link setCardFor}.
+      this.cardFor,
+      el('div', { class: 'panel-controls' }, ...controls),
     )
     // After *both* rows exist, not after the first. The Map card is built well
     // below the Tracks card, so painting where the Tracks card ends left every
@@ -2213,7 +2165,6 @@ export class MatrixPanel {
       this.grips.bottom,
       this.grips.left,
       this.grips.right,
-      ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     ))
     this.watchGrips()
@@ -2368,6 +2319,7 @@ export class MatrixPanel {
             this.refit()
             this.heatmap.resize()
             this.placeKey()
+            this.centrePlot(body)
             this.schedule()
           })
     this.observer?.observe(this.grid)
@@ -2385,8 +2337,27 @@ export class MatrixPanel {
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
       this.placeKey()
+      this.centrePlot(body)
       this.schedule()
     })
+  }
+
+  /**
+   * Bring the map into the middle of a body too narrow for it and its lanes.
+   *
+   * A deck cell three or four across is that body (§16.5): its lanes are wider
+   * than it before the map has had a pixel, and it scrolls sideways rather than
+   * painting them over the next cell. Left at the start of that scroll, the
+   * cell showed its left-hand stack and no map at all — the one thing the cell
+   * is of. So the map is centred, and the stacks either side of it are what the
+   * reader scrolls to. A no-op anywhere the body is not a scroll box, or fits.
+   */
+  private centrePlot(body: HTMLElement): void {
+    if (body.scrollWidth <= body.clientWidth + 1) return
+    const box = body.getBoundingClientRect()
+    const plot = this.wrap.getBoundingClientRect()
+    const centre = plot.left - box.left + body.scrollLeft + plot.width / 2
+    body.scrollLeft = Math.max(0, Math.round(centre - body.clientWidth / 2))
   }
 
   /**
@@ -3412,47 +3383,6 @@ export class MatrixPanel {
     grip.addEventListener('dblclick', () => rule.reset())
   }
 
-  /**
-   * The corner button and the menu it opens, as one box in the map's foot.
-   *
-   * Closed by a click anywhere else and by Escape, because it covers the
-   * picture: a menu left open over a map is a map the reader cannot read, and
-   * the gesture that dismisses it has to be the one they would try first.
-   */
-  private settingsCorner(menu: HTMLElement): HTMLElement {
-    const toggle = iconButton(
-      'sliders-horizontal',
-      'Colour and values: the score, the baseline, the transform, the ramp and the clip',
-      () => {
-        const open = menu.classList.toggle('hidden')
-        toggle.setAttribute('aria-expanded', String(!open))
-      },
-      { class: 'btn btn-icon map-settings-toggle', size: 15 },
-    )
-    toggle.setAttribute('aria-expanded', 'false')
-    const box = el('div', { class: 'map-settings-corner' }, menu, toggle)
-    const close = (): void => {
-      menu.classList.add('hidden')
-      toggle.setAttribute('aria-expanded', 'false')
-    }
-    // On the document, because the thing a reader clicks to dismiss a menu over
-    // a map is usually the map — and the map's own handlers stop nothing.
-    const onPointer = (event: PointerEvent): void => {
-      if (event.target instanceof Node && box.contains(event.target)) return
-      close()
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('pointerdown', onPointer)
-    window.addEventListener('keydown', onKey)
-    this.laneListeners.push(() => {
-      document.removeEventListener('pointerdown', onPointer)
-      window.removeEventListener('keydown', onKey)
-    })
-    return box
-  }
-
   /** Refit the block to the canvas, undoing every pan and zoom. */
   fit(): void {
     this.heatmap.fit()
@@ -3497,8 +3427,11 @@ export class MatrixPanel {
     // and a caption flush with the canvas edge hangs off the left of the
     // picture it belongs to.
     const left = origin.x + this.heatmap.dataRect.x
-    const caption = this.figureCaption(now)
-    const lines = captionLines(ctx, caption, Math.max(120, width - left))
+    // None at all where the Export card's *caption* is off: the figure then
+    // ends at the foot of its lowest lane.
+    const lines = getExportPrefs().caption
+      ? captionLines(ctx, this.figureCaption(now), Math.max(120, width - left))
+      : []
     const captionHeight = captionHeightOf(lines)
 
     // Pre-flight, because the failure mode is silent: past a browser's canvas
@@ -3539,7 +3472,7 @@ export class MatrixPanel {
       for (const line of lines) {
         const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
         ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
+        ctx.fillStyle = palette.labelColor
         // Baseline a little above the line's foot, so the two lines read as one
         // block rather than as two evenly spaced rows.
         ctx.fillText(line.text, left, y + height - 4)
@@ -3587,7 +3520,7 @@ export class MatrixPanel {
     if (measure === null) throw new Error('Could not measure the caption.')
     const left = origin.x + this.heatmap.dataRect.x
     const caption = this.figureCaption(now)
-    const lines = captionLines(measure, caption, Math.max(120, width - left))
+    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, width - left)) : []
     const height = body + captionHeightOf(lines)
 
     const page = new VectorPage(width, height)
@@ -3611,7 +3544,7 @@ export class MatrixPanel {
       for (const line of lines) {
         const step = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
         ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
+        ctx.fillStyle = palette.labelColor
         ctx.fillText(line.text, left, y + step - 4)
         y += step
       }
@@ -3876,14 +3809,17 @@ export class MatrixPanel {
     // same filename otherwise, and the second one silently becomes
     // `figure (1).png` in a downloads folder nobody can later put in order.
     const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}-${this.exportDpi}dpi.${format}`
-    this.exportStatus.textContent = `saving ${name}…`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(name, format === 'png' ? 'image/png' : 'application/pdf')
+    if (target === null) return
+    this.exportStatus.textContent = `saving ${target.name}…`
     try {
       const blob =
         format === 'png'
           ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
           : await this.vectorFigure(now)
-      downloadBlob(blob, name)
-      this.exportStatus.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportStatus.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       // Nothing here is worth an error screen: the view is intact and the user
       // can try a smaller size. Say what failed and stay put.
@@ -4164,7 +4100,7 @@ export class MatrixPanel {
    * that missed. The arithmetic is `render/rotate.ts`'s, beside the rotation it
    * inverts.
    */
-  private locusOf(cell: Cell): { rows: ManualPoint; cols: ManualPoint } | null {
+  private locusOf(cell: { row: number; col: number }): { rows: ManualPoint; cols: ManualPoint } | null {
     const at = cellLoci(this.squareAxes, this.turned, cell)
     if (at === null) return null
     return {
@@ -5609,6 +5545,32 @@ export class MatrixPanel {
     this.lastTitle = title
     this.exportName = title
     this.titleNode.textContent = title
+  }
+
+  /**
+   * Say, under the *Map* card's title, which map of a deck the card sets
+   * (§16.5), or put the line away with `null`.
+   *
+   * Told by the deck, which owns the star: `starred` names this map, the
+   * starred one, and `every` says nothing is starred and the card is setting
+   * every map at once — the one state in which a change here reaches beyond
+   * the picture the card was built for.
+   */
+  setCardFor(target: { kind: 'starred'; name: string } | { kind: 'every'; maps: number } | null): void {
+    this.cardFor.classList.toggle('hidden', target === null)
+    if (target === null) {
+      this.cardFor.replaceChildren()
+      return
+    }
+    const starred = target.kind === 'starred'
+    this.cardFor.classList.toggle('is-every', !starred)
+    this.cardFor.replaceChildren(
+      icon('star', { size: 12, class: starred ? 'map-card-star is-on' : 'map-card-star' }),
+      el('span', { text: starred ? target.name : `every map — all ${target.maps}` }),
+    )
+    this.cardFor.title = starred
+      ? `This card sets ${target.name}, the starred map. Star another map to set that one instead.`
+      : 'No map is starred, so a change here is made to every map of the deck. Star one to set it alone.'
   }
 
   /**
@@ -7189,6 +7151,41 @@ export class MatrixPanel {
    * sequence panned across its junction is on the axis twice, and one mark is
    * what a place gets.
    */
+  /**
+   * Answer a box drawn on *another* map as though it had been drawn on this
+   * one — a deck's companion that is following the deck, whose box moves the
+   * whole deck there by the road a box on this map takes (§16.3). A selection
+   * is names and base pairs, so it means the same place on both.
+   */
+  selectRegion(selection: SelectedRegion): void {
+    this.options.onSelectRegion?.(selection)
+  }
+
+  /**
+   * The contact under one of this block's cells, as two loci, or `null`.
+   *
+   * For a deck carrying a pointer between two maps whose blocks are **not one
+   * place** (§16.3) — a companion reading a window of its own — where the cell
+   * arithmetic the lock uses would put the mark as far off as the two blocks'
+   * starts are apart.
+   */
+  contactAt(cell: { row: number; col: number }): { rows: ManualPoint; cols: ManualPoint } | null {
+    return this.data === null ? null : this.locusOf(cell)
+  }
+
+  /**
+   * The cell of this block a contact falls in, or `null` where it falls in none
+   * — {@link contactAt}'s other half. Not on a turned map, whose rows are
+   * separation rather than a position a locus can land on.
+   */
+  cellOfContact(contact: { rows: ManualPoint; cols: ManualPoint }): { row: number; col: number } | null {
+    if (this.data === null || this.turned !== null) return null
+    const rows = this.locusAxes.rows?.locusToUnits(contact.rows.contig, contact.rows.bp) ?? []
+    const cols = this.locusAxes.cols?.locusToUnits(contact.cols.contig, contact.cols.bp) ?? []
+    if (rows.length === 0 || cols.length === 0) return null
+    return { row: Math.floor(rows[0]), col: Math.floor(cols[0]) }
+  }
+
   showLocusEcho(locus: { contig: string; bp: number } | null): void {
     if (locus === null) {
       this.showLaneEcho(null)
@@ -8792,23 +8789,32 @@ export function readCanvasPalette(from: Element): {
 }
 
 /**
- * Body text for the exported caption's first line.
+ * Body text for what is written onto a figure.
  *
- * From the plot's own box, not the page's: the caption is drawn onto the figure,
- * which is light, so page text in a dark theme would have written it in pale
- * grey on white.
+ * From the plot's own box, not the page's: it is drawn onto the figure, which
+ * is light, so page text in a dark theme would have written it in pale grey on
+ * white.
  */
 function readPageText(from: Element): string {
   const value = getComputedStyle(from).getPropertyValue('--text').trim()
   return value === '' ? '#16181d' : value
 }
 
-/** Caption geometry, in CSS pixels. */
-const CAPTION_TOP = 14
-const CAPTION_TITLE_LINE = 19
-const CAPTION_DETAIL_LINE = 16
-const CAPTION_TITLE_FONT = '600 15px system-ui, sans-serif'
-const CAPTION_DETAIL_FONT = '12px system-ui, sans-serif'
+/**
+ * Caption geometry, in CSS pixels.
+ *
+ * Quiet on purpose: the caption says what the figure is and where it came from,
+ * and it is read once, after the picture. At fifteen pixels and semibold in the
+ * page's own ink the region was the largest type on the page — larger than the
+ * axis it names — so the eye went to the words under the map before the map.
+ * Now it is set just under the axis labels and in their grey, the subject a
+ * little heavier than the provenance under it; still read without leaning in.
+ */
+const CAPTION_TOP = 10
+const CAPTION_TITLE_LINE = 15
+const CAPTION_DETAIL_LINE = 13
+const CAPTION_TITLE_FONT = '600 11px system-ui, sans-serif'
+const CAPTION_DETAIL_FONT = '10px system-ui, sans-serif'
 
 /** One drawn caption line; `strong` is the subject, the rest is provenance. */
 interface CaptionLine {

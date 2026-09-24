@@ -98,6 +98,12 @@ function structureEntry(text = G3D): AnnotationEntry {
   } as unknown as AnnotationEntry
 }
 
+/** The deck's answer to the lead's Export card, as far as these tests read it. */
+interface DeckExportLike {
+  save(format: string, dpi: number): Promise<boolean>
+  copy(dpi: number): Promise<boolean>
+}
+
 /** A lead the deck can drive, with the two calls a structure cell reaches it by. */
 function leadPanel() {
   const state = {
@@ -106,6 +112,8 @@ function leadPanel() {
     framed: 0,
     /** Every stretch a tracks cell asked the lead to put on its column axis. */
     followed: [] as Array<{ contig: string; start: number; end: number }>,
+    /** What the lead's Export card is answered by, once the deck has said. */
+    exporter: null as DeckExportLike | null,
   }
   const windows: { rows: LocusWindow[]; cols: LocusWindow[] } = {
     rows: [{ contig: 'chr1', start: 10000, end: 30000, unitFrom: 10, unitTo: 30 } as LocusWindow],
@@ -115,7 +123,10 @@ function leadPanel() {
     setViewportListener: (listener: typeof state.viewport) => {
       state.viewport = listener
     },
-    setDeckExport: () => {},
+    setDeckExport: (exporter: DeckExportLike | null) => {
+      state.exporter = exporter
+    },
+    setCardFor: () => {},
     setLaneListener: () => {},
     setHoverListener: () => {},
     setLaneHoverListener: () => {},
@@ -202,7 +213,7 @@ function make(
   const view = document.createElement('div')
   view.appendChild(document.createElement('div')).className = 'view-head'
   deck.frame(view)
-  return { deck, published, went, dropped }
+  return { deck, published, went, dropped, manual }
 }
 
 function state(maps: string | undefined): ViewState {
@@ -328,6 +339,18 @@ describe('a structure cell in the deck', () => {
     close?.click()
     expect(structureCells(deck)).toHaveLength(0)
     expect(published.at(-1)).toBeUndefined()
+  })
+
+  it('is part of the figure the lead’s Export card saves and copies', async () => {
+    const lead = leadPanel()
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.setLead(lead.panel)
+    // Nothing beside the first map yet: the card exports the map's own figure.
+    expect(await lead.state.exporter?.save('png', 300)).toBe(false)
+    deck.add({ kind: 'structure' })
+    // A model beside it: the card is asked for the arrangement, model and all.
+    expect(await lead.state.exporter?.save('png', 300)).toBe(true)
+    expect(await lead.state.exporter?.copy(300)).toBe(true)
   })
 
   it('is handed what the maps are looking at when it is built, and on every pan after', () => {
@@ -500,9 +523,10 @@ describe('what the cell says', () => {
     deck.add({ kind: 'structure' })
     const stars = () => cells().map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
     expect(stars().every((star) => star?.classList.contains('hidden') === false)).toBe(true)
-    // Exactly one filled, and a filled star is a dead button.
+    // Exactly one filled — and a filled star is live, since pressing it is how
+    // a reader leaves no cell starred.
     expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
-    expect(stars()[0]?.disabled).toBe(true)
+    expect(stars()[0]?.disabled).toBe(false)
     const first = deck.structureSettings()
     stars()[1]?.click()
     expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
@@ -511,6 +535,36 @@ describe('what the cell says', () => {
     expect(cells()[1].contains(second as Node)).toBe(false)
     // The card is the second cell's: it is the element that cell hands over.
     expect(second).not.toBeNull()
+  })
+
+  it('sets every structure cell at once while none is starred (§25.3)', () => {
+    const second = { ...structureEntry(), id: 'a2', label: 'model2.g3d' } as AnnotationEntry
+    const store = fakeStore([structureEntry(), second])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'structure' })
+    const stars = () =>
+      structureCells(deck).map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    // The filled star, pressed: no cell is starred any more.
+    stars()[0]?.click()
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    const card = deck.structureSettings()
+    expect(card?.querySelector('.structure-card-for')?.textContent).toBe('every structure — all 2')
+    // Rows about one cell's own picture are not offered: a model compared
+    // with itself, or one file saved for two pictures.
+    expect(settingsRow(deck, 'structure')).toBeUndefined()
+    expect(settingsRow(deck, 'export')).toBeUndefined()
+    // A setting made on the card is made to both rows.
+    store.restyled.length = 0
+    const beads = card?.querySelector<HTMLButtonElement>('.structure-toggle[aria-label^="Beads"], .structure-toggle[title^="Beads"]')
+    expect(beads).not.toBeNull()
+    beads?.click()
+    expect(store.restyled.map((write) => write.id).sort()).toEqual(['a1', 'a2'])
+    // Starred again, the card is one cell's and writes to its row alone.
+    stars()[1]?.click()
+    store.restyled.length = 0
+    deck.structureSettings()?.querySelector<HTMLButtonElement>('.structure-toggle[title^="Beads"]')?.click()
+    expect(store.restyled.map((write) => write.id)).toEqual(['a2'])
   })
 
   it('moves the star off a cell that closes, so the card is never about a picture that is gone', () => {
@@ -757,6 +811,21 @@ describe('what the model can be coloured by', () => {
     expect(values).not.toContain('track:f1')
   })
 
+  it('opens on the model’s own five, by what each measures, and offers no score column', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const select = settingsRow(deck, 'colour by')?.querySelector<HTMLSelectElement>('select')
+    const texts = Array.from(select?.options ?? []).map((option) => option.textContent)
+    expect(texts.slice(0, 5)).toEqual([
+      'sequence',
+      'linear position along the sequence',
+      'manual annotations',
+      'spatial distance to pinned bin',
+      'contacts with pinned bin',
+    ])
+    expect(Array.from(select?.options ?? []).map((option) => option.value)).not.toContain('score')
+  })
+
   it('offers a loops row as chords only where the list has one, beside the reader\'s own marks', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
@@ -882,24 +951,36 @@ describe('which model each cell draws (§25.3, §25.6)', () => {
     expect(structureCells(deck)).toHaveLength(1)
   })
 
-  it('opens the cell when there is none, and offers a picker only with two rows', () => {
+  it('opens the cell when there is none, and offers no structure picker on its card', () => {
     const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
     const { deck } = make(fakeStore([structureEntry(), two]))
     expect(deck.hasStructure()).toBe(false)
     deck.showStructure('a2')
     expect(deck.hasStructure()).toBe(true)
     expect(deck.shownStructures()).toEqual(['a2'])
-    const picker = settingsRow(deck, 'structure')
-    expect(picker).toBeDefined()
-    const select = picker?.querySelector<HTMLSelectElement>('select')
-    expect(select?.value).toBe('a2')
-    expect(Array.from(select?.options ?? []).map((o) => o.textContent)).toEqual(['model.g3d', 'second.g3d'])
-    // The picker still swaps a cell **in place**: it is the cell asking which
-    // model to draw, where the eye is a model asking for a cell.
-    select!.value = 'a1'
-    select!.dispatchEvent(new Event('change'))
-    expect(deck.shownStructures()).toEqual(['a1'])
-    expect(structureCells(deck)).toHaveLength(1)
+    // Which model a cell draws is the Structures card's to say — its eye, or a
+    // row dropped on the cell — and not a dropdown on the settings card.
+    expect(settingsRow(deck, 'structure')).toBeUndefined()
+    // One cell: no star, so no line naming the starred one either.
+    expect(deck.structureSettings()?.querySelector('.structure-card-for')).toBeNull()
+  })
+
+  it('names the starred cell on its card, as the Map card names the starred map', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const { deck } = make(fakeStore([structureEntry(), two]))
+    deck.showStructure('a1')
+    deck.showStructure('a2')
+    const line = () => deck.structureSettings()?.querySelector('.structure-card-for')
+    // The first cell holds the star until another is pressed.
+    expect(line()?.textContent).toBe('model.g3d')
+    expect(line()?.classList.contains('is-every')).toBe(false)
+    expect(line()?.querySelector('.map-card-star')?.classList.contains('is-on')).toBe(true)
+    const stars = () => structureCells(deck).map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    stars()[1]?.click()
+    expect(line()?.textContent).toBe('second.g3d')
+    // …and a cell closed down to one takes the line away with the star.
+    deck.hideStructure('a1')
+    expect(line()).toBeNull()
   })
 
   it('hides one model\u2019s cell and leaves the others standing', () => {
@@ -1003,6 +1084,49 @@ describe('the key (§25.5)', () => {
     swatch!.value = '#112233'
     swatch!.dispatchEvent(new Event('input'))
     expect(store.restyled.at(-1)?.patch.structure?.sequenceColours).toEqual({ chr1: '#112233' })
+  })
+})
+
+describe('the key of colour by manual annotations (§25.5)', () => {
+  it('lists every mark, hides one on a click, shows one alone on a double-click, and recolours the mark itself', async () => {
+    const entry = structureEntry()
+    const byMarks = {
+      ...entry,
+      style: { ...entry.style, structure: { ...entry.style.structure!, colourBy: 'marks' } },
+    } as AnnotationEntry
+    const store = fakeStore([byMarks])
+    const { deck, manual } = make(store)
+    manual.add({ id: 'k1', kind: 'line', axis: 'vertical', at: { contig: 'chr1', bp: 12000 }, colour: '#111318' })
+    manual.add({ id: 'k2', kind: 'rect', a: { contig: 'chr1', from: 10000, to: 20000 }, b: { contig: 'chr1', from: 10000, to: 20000 }, colour: '#c0392b' })
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    await new Promise((r) => setTimeout(r, 60))
+    expect(cell.querySelector('.structure-key-title')?.textContent).toBe('manual annotations')
+    const names = all<HTMLButtonElement>(cell, '.structure-key-mark .structure-key-name')
+    // Named as the Manual annotations card names them.
+    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,000', '▭ chr1:10,000-20,000'])
+    names[0].click()
+    await new Promise((r) => setTimeout(r, 260))
+    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    names[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    // The swatch writes the mark, which is what the card and every map draw.
+    const swatch = cell.querySelector<HTMLInputElement>('.structure-key-mark .structure-key-swatch')
+    swatch!.value = '#112233'
+    swatch!.dispatchEvent(new Event('input'))
+    expect(manual.marks.find((mark) => mark.id === 'k1')?.colour).toBe('#112233')
+  })
+
+  it('says where marks come from while there are none', async () => {
+    const entry = structureEntry()
+    const byMarks = {
+      ...entry,
+      style: { ...entry.style, structure: { ...entry.style.structure!, colourBy: 'marks' } },
+    } as AnnotationEntry
+    const { deck } = make(fakeStore([byMarks]))
+    deck.add({ kind: 'structure' })
+    await new Promise((r) => setTimeout(r, 60))
+    expect(structureCells(deck)[0].querySelector('.structure-key-empty')?.textContent).toMatch(/Manual annotations card/)
   })
 })
 
@@ -1138,5 +1262,102 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     toggle?.click()
     expect(document.querySelector('.modal-structure .stage-side')?.classList.contains('hidden')).toBe(false)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// An empty cell takes what a deck can hold (§16.9)
+// ---------------------------------------------------------------------------
+
+describe('an empty cell', () => {
+  /** A deck whose session carries tracks, with a store that records placements. */
+  function withTracks() {
+    const placed: Array<{ id: string; map: string }> = []
+    const loaded: Array<{ uri: string; map: string }> = []
+    const tracks = tracksContext()
+    const store = {
+      byId: (id: string) => (id === 't1' ? { id } : undefined),
+      placeAt: (id: string, map: string) => placed.push({ id, map }),
+      keepMaps: () => {},
+      noteMapFiles: () => {},
+      adoptHome: () => {},
+    }
+    const deck = new PanelDeck({
+      onMapsChange: () => {},
+      memoryKey: () => 'deck-cells-empty',
+      leadName: () => 'lead.cool',
+      tracks: { context: () => tracks },
+      annotations: () => ({ store }) as never,
+      onTrackFile: (picked, map) => loaded.push({ uri: picked.uri, map }),
+    })
+    document.body.appendChild(deck.el)
+    const view = document.createElement('div')
+    view.appendChild(document.createElement('div')).className = 'view-head'
+    deck.frame(view)
+    return { deck, placed, loaded }
+  }
+
+  function dropOn(target: Element, data: Map<string, string>, files: File[] = []): void {
+    const transfer = {
+      getData: (type: string) => data.get(type) ?? '',
+      types: [...data.keys(), ...(files.length > 0 ? ['Files'] : [])],
+      files,
+      dropEffect: '',
+    }
+    const drop = new window.Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+    target.dispatchEvent(drop)
+  }
+
+  it('offers to take a map, a track or a structure, not a map alone', () => {
+    const { deck } = withTracks()
+    deck.grow('beside')
+    const label = deck.el.querySelector('.deck-vacant .ann-drop-label')?.textContent
+    expect(label).toBe('Drop a map, a track or a structure')
+    expect(label).not.toContain('Drop a map here')
+  })
+
+  it('does not promise a track where the session carries none', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.grow('beside')
+    expect(deck.el.querySelector('.deck-vacant .ann-drop-label')?.textContent).toBe(
+      'Drop a map or a structure',
+    )
+  })
+
+  it('becomes a tracks cell drawing a row dragged from the Tracks card', () => {
+    const { deck, placed } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map([['application/x-metacooler-track', 't1']]))
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
+    expect(all(deck.el, '.deck-vacant')).toHaveLength(0)
+    // Placed on the cell that opened there, which is the map id its lanes
+    // are drawn under.
+    const cell = deck.mapList.find((map) => map.label === 'tracks')
+    expect(placed).toEqual([{ id: 't1', map: cell?.id }])
+  })
+
+  it('becomes a tracks cell loading a track file dropped on it', () => {
+    const { deck, loaded } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map(), [new File(['chr1\t0\t10\n'], 'peaks.bed')])
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
+    const cell = deck.mapList.find((map) => map.label === 'tracks')
+    expect(loaded).toEqual([{ uri: 'peaks.bed', map: cell?.id }])
+  })
+
+  it('still opens a map dropped on it as a map', () => {
+    const { deck, loaded } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    dropOn(zone, new Map(), [new File(['x'], 'rep2.cool')])
+    expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(0)
+    expect(loaded).toEqual([])
+    expect(deck.mapList.map((map) => map.label).slice(1)).toEqual(['rep2.cool'])
   })
 })

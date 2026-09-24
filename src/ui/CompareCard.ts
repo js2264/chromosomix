@@ -20,8 +20,8 @@
 
 import { alignNames, type Alignment, type NamedSequence } from '../genome/naming'
 
-import { button, el, fmt } from './dom'
-import { cardTitle, iconButton } from './icons'
+import { MAP_ROW_DRAG_TYPE, button, el, fmt, type MapRow } from './dom'
+import { cardTitle, icon, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
 import { fileLabel } from './labels'
 
@@ -31,6 +31,19 @@ export type CompareState =
   | { kind: 'loading'; label: string }
   | { kind: 'error'; label: string; message: string }
   | { kind: 'open'; label: string; info: OpenResult }
+
+/**
+ * A map of the deck's other cells as its row lists it (§16.9) — or one the
+ * reader's eye took out of the deck, which the session holds hidden until the
+ * eye opens it again (`shown: false`).
+ */
+export interface DeckMapRow {
+  id: string
+  label: string
+  uri: string
+  /** Absent is shown: a map in a cell. */
+  shown?: boolean
+}
 
 export interface CompareCardProps {
   /** A file was dropped or a URL typed. */
@@ -83,6 +96,32 @@ export interface CompareCardProps {
    * is drawn over this genome is where a reader goes to add something to it.
    */
   hasPrimary(): boolean
+  /**
+   * The maps in the deck's other cells, in grid order (§16.9) — every map the
+   * session is holding is a row here, not only the one it is of and the one in
+   * its lower triangle. Absent, or empty, where there is no deck.
+   */
+  deckMaps?(): ReadonlyArray<DeckMapRow>
+  /**
+   * The eye on a deck map's row, as the eye on a Structures row: a map in a
+   * cell is taken out of the deck and held here, hidden; a hidden one is
+   * opened in a cell again.
+   */
+  onToggleDeckMap?(id: string): void
+  /**
+   * Whether a hidden map could be opened in a cell now — `false` in a view no
+   * deck frames (§16.8), where the eye would have nowhere to put it.
+   */
+  deckMapsShowable?(): boolean
+  /** The × on a deck map's row: take that cell out of the deck, or let a hidden map go. */
+  onCloseDeckMap?(id: string): void
+  /** A name typed into a deck map's row, or the box emptied. */
+  onRenameDeckMap?(uri: string, name: string | null): void
+  /**
+   * A row's grip was taken hold of, or let go — the deck shows its tiling while
+   * a map is looking for a cell, as it does for a cell's own grip.
+   */
+  onDragMap?(dragging: boolean): void
 }
 
 export class CompareCard {
@@ -174,7 +213,106 @@ export class CompareCard {
             : first
               ? this.slots[1].zone
               : null
-    this.body.replaceChildren(...(bottom === null ? [top] : [top, bottom]))
+    // Every other map the session holds, one row each, in the order the deck
+    // shows them — after the first map and the one it is compared with, which
+    // are the one square, and before the rectangle that asks for a second file,
+    // which is about that square too and reads as its last line.
+    const deck = first ? (this.props.deckMaps?.() ?? []).map((map) => this.deckRow(map)) : []
+    const open = this.state.kind !== 'empty' || !first
+    this.body.replaceChildren(
+      top,
+      ...(open && bottom !== null ? [bottom] : []),
+      ...deck,
+      ...(!open && bottom !== null ? [bottom] : []),
+    )
+  }
+
+  /**
+   * The handle a map is dragged into a cell of the deck by (§16.9).
+   *
+   * Every row has one, the first map's included: dropped on an empty cell, the
+   * first map or the compared file opens a second picture of itself there — the
+   * plainest way to read one file at two windows or two colour scales — and a
+   * companion's own row moves that companion, as the grip on its cell does.
+   */
+  private grip(row: MapRow, label: string): HTMLElement {
+    const node = el('span', {
+      class: 'ann-grip compare-grip',
+      title:
+        row.kind === 'companion'
+          ? `Drag ${label} to another cell of the deck`
+          : row.kind === 'hidden'
+            ? `Drag ${label} onto an empty cell, or a + beside the map, to open it there`
+            : `Drag ${label} onto an empty cell, or a + beside the map, to open it there too`,
+      attrs: { draggable: 'true', role: 'button', 'aria-label': `Move ${label} to a cell` },
+    })
+    node.append(icon('grip-vertical', { size: 12 }))
+    node.addEventListener('dragstart', (event) => {
+      if (event.dataTransfer !== null) {
+        // Both, whichever the row is: each target names its own effect — the
+        // grid a move, an empty cell and an edge a copy — and a drag whose
+        // allowed effects do not include the one its target names is a drop
+        // the browser refuses without a word.
+        event.dataTransfer.effectAllowed = 'copyMove'
+        event.dataTransfer.setData('text/plain', label)
+        event.dataTransfer.setData(MAP_ROW_DRAG_TYPE, JSON.stringify(row))
+        const whole = node.closest('.ann-row')
+        if (whole instanceof HTMLElement) event.dataTransfer.setDragImage(whole, 12, 12)
+      }
+      this.props.onDragMap?.(true)
+    })
+    node.addEventListener('dragend', () => this.props.onDragMap?.(false))
+    return node
+  }
+
+  /**
+   * One map in another cell of the deck: its grip, its name, its eye and its ×.
+   *
+   * The eye means what it means on a Structures row (§25.3): lit, the map is in
+   * a cell, and pressing it closes that cell and keeps the map here; dark, the
+   * map is held here and pressing it opens a cell for it again. The × lets go —
+   * of the cell, or of the hidden map — so the two acts a track's row separates
+   * are separate here as well.
+   */
+  private deckRow(map: DeckMapRow): HTMLElement {
+    const shown = map.shown !== false
+    const rename = this.props.onRenameDeckMap
+    const name =
+      rename === undefined
+        ? el('span', { class: 'ann-name ann-name-static', text: map.label, title: map.uri })
+        : this.nameBox(map.label, `${map.uri} — click to rename`, (typed) => rename(map.uri, typed))
+    const showable = shown || (this.props.deckMapsShowable?.() ?? true)
+    const eye = iconButton(
+      shown ? 'eye' : 'eye-off',
+      shown
+        ? `Close ${map.label}'s cell, keeping the map here — the eye opens it again`
+        : showable
+          ? `Open ${map.label} in a cell of the deck again`
+          : `${map.label} opens in a cell of a deck, and this view has none`,
+      () => this.props.onToggleDeckMap?.(map.id),
+      { class: 'btn btn-icon ann-eye', size: 14 },
+    )
+    eye.setAttribute('aria-pressed', String(shown))
+    if (!showable) eye.disabled = true
+    return el(
+      'div',
+      { class: `ann-row ann-ready compare-row compare-deck-row${shown ? '' : ' is-parked'}` },
+      el(
+        'div',
+        { class: 'ann-head' },
+        this.grip(shown ? { kind: 'companion', id: map.id } : { kind: 'hidden', id: map.id }, map.label),
+        name,
+        ...(this.props.onToggleDeckMap === undefined ? [] : [eye]),
+        iconButton(
+          'x',
+          // The card's × is the one that lets go: the × on the map's own cell
+          // only hides it, back onto this list (§16.9).
+          shown ? `Let go of ${map.label}: its cell closes and it leaves this list` : `Let go of ${map.label}`,
+          () => this.props.onCloseDeckMap?.(map.id),
+          { class: 'btn-close', size: 14 },
+        ),
+      ),
+    )
   }
 
   /**
@@ -210,6 +348,7 @@ export class CompareCard {
       el(
         'div',
         { class: 'ann-head' },
+        this.grip({ kind: which === 1 ? 'lead' : 'compare' }, label),
         ...(paired
           ? [
               el('span', {
@@ -275,11 +414,16 @@ export class CompareCard {
     if (rename === undefined) {
       return el('span', { class: 'ann-name ann-name-static', text: label, title: where })
     }
+    return this.nameBox(label, `${where} — click to rename`, (typed) => rename(which, typed))
+  }
+
+  /** The Tracks card's rename box, for a map's row. */
+  private nameBox(label: string, title: string, onRename: (name: string | null) => void): HTMLInputElement {
     const input = el('input', {
       class: 'input ann-name',
       type: 'text',
       value: label,
-      title: `${where} — click to rename`,
+      title,
     })
     input.addEventListener('change', () => {
       const typed = input.value.trim()
@@ -287,7 +431,7 @@ export class CompareCard {
         input.value = label
         return
       }
-      rename(which, typed === '' ? null : typed)
+      onRename(typed === '' ? null : typed)
     })
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {

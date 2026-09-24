@@ -395,6 +395,9 @@ describe('taking it away', () => {
     const panel = mount()
     panel.toggle.click()
     findButton(panel, 'save').click()
+    // The save asks where the file goes before writing it (`ui/export.ts`),
+    // which is a turn of the event loop even where there is no dialog to ask.
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(saved).toHaveLength(1)
     expect(saved[0].name).toMatch(/^metacooler-console-.*\.sh$/)

@@ -209,7 +209,7 @@ try {
   await shot('t1-telomeres-on')
 
   // The colour scale only exists for a ramp, so a ramp is chosen first.
-  console.log('colour by position:', await setSelect('colour by', 'position along the sequence'))
+  console.log('colour by position:', await setSelect('colour by', 'linear position along the sequence'))
   await sleep(1000)
   await shot('t2-ramp-own-scale')
   console.log('colour scale row present:', await page.evaluate(() =>

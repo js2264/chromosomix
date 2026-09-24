@@ -49,6 +49,10 @@ const context = await browser.newContext({
   deviceScaleFactor: 1,
   acceptDownloads: true,
 })
+// No save dialog: a headless browser cancels one the moment it opens, and every
+// export asks it first (`ui/export.ts`). Without it the export is the plain
+// download this script waits for, which is what a browser with no dialog does.
+await context.addInitScript(() => { window.showSaveFilePicker = undefined })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -68,6 +72,18 @@ const fold = async (title) => {
       return
     }
   }
+}
+/**
+ * Scroll the drawer to a figure, its head at the top.
+ *
+ * The task's form stands above its results in the drawer, and on most tasks it
+ * is tall enough that a shot taken where the drawer opens is a shot of the form
+ * with the figure's first gridline under it.
+ */
+const toFigure = async (block = page.locator('.figure-block').first()) => {
+  if ((await block.count()) === 0) return
+  await block.evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await sleep(600)
 }
 /** Run the named task and wait for a figure to land. */
 const run = async (title, wait) => {
@@ -97,12 +113,14 @@ try {
 
   // ---- a curve -----------------------------------------------------------
   await run('Contact probability P(s)', () => document.querySelector('.figure-chart svg') !== null)
+  await toFigure()
   await shot('01-curve')
 
   // The slim strip: the mark, and the picture it makes.
   const strip = page.locator('.figure-strip').first()
   await strip.locator('select').first().selectOption('points')
   await sleep(1800)
+  await toFigure()
   await shot('02-curve-points')
   await strip.locator('select').first().selectOption('line')
   await sleep(1500)
@@ -122,7 +140,9 @@ try {
   await field('mark').locator('select').selectOption('area')
   await sleep(1500)
   const smooth = page.locator('.modal-stage .figure-check', { hasText: 'smooth' }).first()
-  if (await smooth.count()) await smooth.locator('input').check()
+  // An on/off button now, pressed only while it says off (`figures/settings.ts`).
+  const smoothButton = smooth.locator('button[aria-pressed="false"]')
+  if (await smoothButton.count()) await smoothButton.click()
   await sleep(1500)
   await shot('04-curve-area-smooth')
 
@@ -140,12 +160,14 @@ try {
   }
   await shot('06-curve-series')
 
-  // And back to the task's own figure.
-  await page.locator('.modal-stage button', { hasText: /^Reset$/ }).first().click()
+  // And back to the task's own figure: `reset`, in the lowercase every verb
+  // on a button wears (`figures/settings.ts`).
+  await page.locator('.modal-stage button', { hasText: /^reset$/i }).first().click()
   await sleep(1800)
   await shot('07-curve-reset')
   await page.keyboard.press('Escape')
   await sleep(1200)
+  await toFigure()
   await shot('08-curve-back-in-drawer')
 
   // The two marks that summarise a sample rather than plot it.
@@ -287,7 +309,10 @@ try {
   const pick = async (label, wanted) => {
     const control = page
       .locator('.analysis-form .field')
-      .filter({ has: page.locator('.field-label', { hasText: new RegExp(`^${label}$`) }) })
+      // Case-blind: the form's labels are lowercase now (`anchors`,
+      // `normalisation`), and an exact match on `Anchors` set nothing at all —
+      // silently, so the APA ran with every default this script meant to change.
+      .filter({ has: page.locator('.field-label', { hasText: new RegExp(`^${label}$`, 'i') }) })
       .first()
     if ((await control.count()) === 0) return false
     const select = control.locator('select').first()
@@ -346,7 +371,7 @@ try {
   await pick('Normalisation', 'none')
   const controls = page
     .locator('.analysis-form .field')
-    .filter({ has: page.locator('.field-label', { hasText: /^Controls per pair$/ }) })
+    .filter({ has: page.locator('.field-label', { hasText: /^controls per pair$/i }) })
     .first()
   if (await controls.count()) {
     await controls.locator('input[type="number"], input').first().fill('0')
@@ -383,15 +408,20 @@ try {
   await sleep(1200)
   await pick('Features', 'ATAC peaks')
   await pick('Tracks', 'ATAC')
-  const heatmap = page.locator('.analysis-form .figure-check, .analysis-form label', {
-    hasText: /heatmap/i,
-  }).first()
-  if (await heatmap.count()) await heatmap.locator('input[type="checkbox"]').check()
+  // An on/off button, like every switch in a task's form (`ui/ParamForm.ts`),
+  // pressed only while it says off.
+  const heatmap = page
+    .locator('.analysis-form .field')
+    .filter({ has: page.locator('.field-label', { hasText: /heatmap/i }) })
+    .first()
+    .locator('button[aria-pressed="false"]')
+  if (await heatmap.count()) await heatmap.click()
   await sleep(500)
   await shot('22-metaplot-form')
   const beforeMeta = await shown()
   await page.locator('button', { hasText: /^run$/i }).first().click()
   await ran('metaplot', beforeMeta)
+  await toFigure()
   await shot('23-metaplot')
   const heat = page
     .locator('.figure-block')

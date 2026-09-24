@@ -62,6 +62,7 @@ import {
 } from './protocol'
 import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
+import { mcoolNameFor } from '../pairs/mcoolName'
 import { writeMcool } from '../pairs/write'
 import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
@@ -364,13 +365,6 @@ async function handleExportMcool(id: number): Promise<McoolExport> {
   const bytes = await writeMcool(active.pairs, scanHooks(id))
   if (bytes === null) throw abortError()
   return { bytes, filename: mcoolNameFor(active.mc.uri), rungs: active.pairs.rungs }
-}
-
-/** `Hum53.pairs.gz` → `Hum53.mcool`, which is what the download is called. */
-function mcoolNameFor(uri: string): string {
-  const leaf = uri.split(/[\\/]/).pop() ?? 'pairs'
-  const stem = leaf.replace(/\.px2$/i, '').replace(/\.gz$/i, '').replace(/\.pairs$/i, '')
-  return `${stem || 'pairs'}.mcool`
 }
 
 /** The import and rung this URI reuses, when it reuses one — see `rungInImport`. */

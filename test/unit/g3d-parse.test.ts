@@ -380,6 +380,11 @@ describe('the structure style', () => {
     expect(structureStyleOf({ axes: false }).axes).toBe(false)
   })
 
+  it('opens a session stored coloured by the score column by sequence, the colouring it no longer offers', () => {
+    expect(structureStyleOf({ colourBy: 'score' }).colourBy).toBe('sequence')
+    expect(structureStyleOf({ colourBy: 'marks' }).colourBy).toBe('marks')
+  })
+
   it('normalises a stored axes frame and refuses one that is not a rotation', () => {
     // A quaternion of the wrong length is a rotation matrix that scales, and
     // what it would scale is the gizmo drawn over every model.

@@ -188,7 +188,7 @@ import {
   captionStamp,
   copyPngToClipboard,
   copyTextToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
@@ -222,6 +222,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { captionField, getExportPrefs } from './exportPrefs'
 import { setReadout } from './readout'
 
 /** Gap between two stacked lanes, in CSS pixels. Same as beside the map. */
@@ -2830,6 +2831,8 @@ export class BrowserView {
       class: 'export-row-flex',
     })
     row.note.replaceWith(this.exportStatus)
+    // Under the row it qualifies: whether the saved figure says what it is.
+    row.body.append(captionField())
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.
@@ -2985,6 +2988,12 @@ export class BrowserView {
     const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
     const ink = readCanvasPalette(this.canvas).labelColor
     const base = `${exportBaseName(this.props.assembly.name)}-${fileStamp(now)}`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(
+      `${base}.${this.exportFormat}`,
+      this.exportFormat === 'pdf' ? 'application/pdf' : 'image/png',
+    )
+    if (target === null) return
 
     let blob: Blob
     try {
@@ -2997,13 +3006,21 @@ export class BrowserView {
       return
     }
     if (blob.size === 0) return
-    downloadBlob(blob, `${base}.${this.exportFormat}`)
-    this.exportStatus.textContent = ''
+    try {
+      await target.write(blob)
+      this.exportStatus.textContent = ''
+    } catch (err) {
+      this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
+    }
   }
 
-  /** Room under the figure for the caption, at the size it is written in. */
+  /**
+   * Room under the figure for the caption, at the size it is written in — and
+   * none where the Export card's *caption* is off, which is the whole of what
+   * turning it off does here: the line is written into room that is not there.
+   */
   private get captionHeight(): number {
-    return scaleLength(CAPTION_HEIGHT)
+    return getExportPrefs().caption ? scaleLength(CAPTION_HEIGHT) : 0
   }
 
   /** The figure as paths and text, at no resolution at all. */
@@ -3021,12 +3038,14 @@ export class BrowserView {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, width, height + this.captionHeight)
     this.paint(ctx, width, height, false)
-    ctx.font = scaleFont('11px Helvetica, sans-serif')
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = ink
-    ctx.globalAlpha = 1
-    ctx.fillText(caption, 2, height + this.captionHeight - 5)
+    if (this.captionHeight > 0) {
+      ctx.font = scaleFont(CAPTION_FONT_PDF)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+      ctx.fillStyle = ink
+      ctx.globalAlpha = 1
+      ctx.fillText(caption, 2, height + this.captionHeight - 5)
+    }
     return page.toBlob({ title: this.props.assembly.name })
   }
 
@@ -3051,12 +3070,14 @@ export class BrowserView {
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     this.paint(ctx, width, height, false)
 
-    ctx.setTransform(scale, 0, 0, scale, 0, 0)
-    ctx.font = scaleFont('11px system-ui, sans-serif')
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = ink
-    ctx.fillText(caption, 2, height + this.captionHeight - 5)
+    if (this.captionHeight > 0) {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      ctx.font = scaleFont(CAPTION_FONT)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+      ctx.fillStyle = ink
+      ctx.fillText(caption, 2, height + this.captionHeight - 5)
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'destination-over'
     ctx.fillStyle = '#ffffff'
@@ -4280,7 +4301,15 @@ interface NameHit {
 }
 
 /** Room under the figure for the one-line caption the export adds. */
-const CAPTION_HEIGHT = 18
+const CAPTION_HEIGHT = 16
+/**
+ * The caption's type: the provenance line of the map's figure, in the same size
+ * and grey (`MatrixPanel`'s `CAPTION_DETAIL_FONT`), since the two are one kind of
+ * line on two kinds of figure. Helvetica in the PDF, one of the fourteen fonts
+ * every reader has.
+ */
+const CAPTION_FONT = '10px system-ui, sans-serif'
+const CAPTION_FONT_PDF = '10px Helvetica, sans-serif'
 
 /**
  * What this view saves as.

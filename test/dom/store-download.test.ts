@@ -136,6 +136,8 @@ describe('downloading a store’s catalogue', () => {
     drawer.open('4dn')
     await settle()
     downloadButton(drawer)?.click()
+    // The save asks where the file goes before writing it (`ui/export.ts`).
+    await settle()
     expect(saved).toHaveLength(1)
     const parsed = parseStore(await saved[0].blob.text())
     expect('reason' in parsed, 'the file it wrote is not a store').toBe(false)
@@ -148,6 +150,8 @@ describe('downloading a store’s catalogue', () => {
     drawer.open('4dn')
     await settle()
     downloadButton(drawer)?.click()
+    // The save asks where the file goes before writing it (`ui/export.ts`).
+    await settle()
     const parsed = parseStore(await saved[0].blob.text()) as StoreFile
     // `one.mcool` was relative to the store's own URL; a copy of the bytes
     // would still say `one.mcool` and resolve against wherever it was saved.
@@ -158,6 +162,8 @@ describe('downloading a store’s catalogue', () => {
     const drawer = build()
     drawer.open('rsg')
     downloadButton(drawer)?.click()
+    // The save asks where the file goes before writing it (`ui/export.ts`).
+    await settle()
     expect(saved[0].name).toBe('rsg.json')
     expect(saved[0].blob.type).toBe('application/json')
   })

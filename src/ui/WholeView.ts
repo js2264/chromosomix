@@ -39,7 +39,7 @@ import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError, isAllocationFailure } from '../errors'
 import { typedLocusToRegion } from '../genome/assembly'
-import { button, el, fmt } from './dom'
+import { button, el, fmt, titleWhenCut } from './dom'
 import { resolutionLabel } from '../units'
 import type { ScaleState } from './GenomeView'
 import {
@@ -361,6 +361,8 @@ export class WholeView {
         ? fitted
         : { ...fitted, binsPerCell: Math.max(fitted.binsPerCell, props.binsPerCell ?? 1) }
     this.summary = el('p', { class: 'summary' })
+    // One line under the title, with the whole of it in a tooltip where it is cut.
+    titleWhenCut(this.summary)
     this.problem = el('p', { class: 'inline-error hidden' })
     const store = props.annotations?.store
     this.search = new SearchBox({

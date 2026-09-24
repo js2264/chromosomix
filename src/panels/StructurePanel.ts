@@ -36,14 +36,13 @@ export { STRUCTURE_COLOUR_DISPLACEMENT }
 import {
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
-  STRUCTURE_COLOUR_SCORE,
   STRUCTURE_COLOUR_SEQUENCE,
   STRUCTURE_OTHERS,
   structureOf,
 } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { ManualStore } from '../annotations/manual'
-import { mintMarkId } from '../annotations/manual'
+import { describeMark, mintMarkId, type ManualMark } from '../annotations/manual'
 import type { BookmarkStore } from '../annotations/bookmarks'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { SampleCache } from '../annotations/samples'
@@ -128,7 +127,7 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
   copyPngToClipboard,
-  downloadBlob,
+  chooseSaveTarget,
   fileStamp,
   scaleForDpi,
   type ExportFormat,
@@ -210,6 +209,14 @@ export interface StructurePanelProps {
    * not a choice.
    */
   onStar?(): void
+  /**
+   * How many structure cells a change on this cell's card is made to: every
+   * one of them while none is starred (§25.3), and this one otherwise. Absent
+   * is one, which is a cell with no deck around it.
+   */
+  together?(): number
+  /** Every structure cell of the deck, this one included, for a card that sets them all. */
+  forEachStructure?(act: (cell: StructurePanel) => void): void
 }
 
 /**
@@ -219,7 +226,7 @@ export interface StructurePanelProps {
  */
 export type StructureCellProps = Omit<
   StructurePanelProps,
-  'id' | 'memoryKey' | 'seat' | 'onClose' | 'onDragChange' | 'onStar'
+  'id' | 'memoryKey' | 'seat' | 'onClose' | 'onDragChange' | 'onStar' | 'together' | 'forEachStructure'
 >
 
 /** Where a cell's camera is remembered in the session's memory. */
@@ -529,7 +536,7 @@ export class StructurePanel implements DeckCell {
     // Hidden where there is nothing to choose between: a deck with one model
     // has one card and one cell, and a radio with one option is a button that
     // does nothing. The deck shows it again when a second cell opens.
-    this.setStarred(false)
+    this.paintStar(false)
     this.starButton.classList.toggle('hidden', props.onStar === undefined)
     this.measureButton = iconButton(
       'ruler',
@@ -1329,22 +1336,97 @@ export class StructurePanel implements DeckCell {
   /**
    * Fill or empty this cell's star (§25.3).
    *
-   * A filled star is a **dead button**, as the maps' is: the way to move it is
-   * to press another one, and a press that does nothing is a control a reader
-   * has to try in order to understand.
+   * A filled star is **live**, as the maps' is: pressing it leaves no cell
+   * starred, and the card then sets every structure cell at once. The card is
+   * repainted either way, since whether it says so is decided here.
    */
   setStarred(on: boolean): void {
-    this.starButton.classList.toggle('is-on', on)
-    this.starButton.setAttribute('aria-pressed', String(on))
-    this.starButton.disabled = on
-    this.starButton.title = on
-      ? 'The 3D structure card in the Aesthetics column is about this cell'
-      : 'Point the 3D structure card at this cell instead'
+    this.paintStar(on)
+    this.paintSettings()
   }
 
-  /** Whether this cell offers a star at all — a deck of one model does not. */
+  private paintStar(on: boolean): void {
+    this.starButton.classList.toggle('is-on', on)
+    this.starButton.setAttribute('aria-pressed', String(on))
+    this.starButton.title = on
+      ? 'The 3D structure card sets this cell. Click to unstar — the card then sets every structure.'
+      : 'Star this cell: the 3D structure card then sets it alone.'
+  }
+
+  /** How many cells this cell's card is setting now; see {@link StructurePanelProps.together}. */
+  private togetherCount(): number {
+    return this.props.forEachStructure === undefined ? 1 : Math.max(1, this.props.together?.() ?? 1)
+  }
+
+  /**
+   * Do one thing the card asks to every cell it is setting — this one alone,
+   * or every structure cell while none is starred (§25.3).
+   */
+  private each(act: (cell: StructurePanel) => void): void {
+    if (this.togetherCount() > 1 && this.props.forEachStructure !== undefined) {
+      this.props.forEachStructure(act)
+      return
+    }
+    act(this)
+  }
+
+  /** Write one control's value onto every row the card is setting. */
+  private restyleAll(patch: Partial<StructureStyle>): void {
+    this.each((cell) => cell.restyle(patch))
+  }
+
+  /** Start or stop the turntable, to a state rather than a flip. */
+  private setTurning(on: boolean): void {
+    if (this.turning !== on) this.toggleTurning()
+  }
+
+  /**
+   * Whether this cell offers a star at all — a deck of one model does not.
+   *
+   * The card is repainted when that changes, since its line naming the starred
+   * cell is there exactly while the star is ({@link cardFor}).
+   */
   showStar(on: boolean): void {
+    const was = !this.starButton.classList.contains('hidden')
     this.starButton.classList.toggle('hidden', !on)
+    if (was !== on) this.paintSettings()
+  }
+
+  /**
+   * The line under the card's title that says which cell it sets (§25.3).
+   *
+   * `★ Yeast_structure` for the starred cell — the name its own heading
+   * wears, so the two are read as one — and `every structure — all 3` while
+   * none is starred. The *Map* card's line, in its classes and its words.
+   */
+  private cardFor(together: number): HTMLElement[] {
+    if (together > 1) {
+      return [
+        el(
+          'p',
+          {
+            class: 'map-card-for is-every structure-card-for',
+            title: 'No structure is starred, so a change here is made to every structure cell. Star one to set it alone.',
+          },
+          icon('star', { size: 12, class: 'map-card-star' }),
+          el('span', { text: `every structure — all ${together}` }),
+        ),
+      ]
+    }
+    const starred = !this.starButton.classList.contains('hidden') && this.starButton.classList.contains('is-on')
+    if (!starred) return []
+    const name = this.entry?.label ?? 'structure'
+    return [
+      el(
+        'p',
+        {
+          class: 'map-card-for structure-card-for',
+          title: `This card sets ${name}, the starred structure. Star another cell to set that one instead.`,
+        },
+        icon('star', { size: 12, class: 'map-card-star is-on' }),
+        el('span', { text: name }),
+      ),
+    ]
   }
 
   /** This seat's memory scope (§25.3), for whatever this cell remembers. */
@@ -2040,7 +2122,7 @@ export class StructurePanel implements DeckCell {
     if (this.camera.projection !== 'orthographic') this.camera = { ...this.camera, projection: 'orthographic' }
     // Keyed on the reader's own sequence colours too: a swatch changed on
     // the key is a colouring changed.
-    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}`
+    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}|${style.marksHidden.join(',')}`
     if (this.colours === null || this.colouredBy !== colourKey) {
       this.colours = resolveColours(structure, style, this.colourSource(structure, style.colourBy))
       this.colouredBy = colourKey
@@ -2213,7 +2295,7 @@ export class StructurePanel implements DeckCell {
       return featureSource(structure, payload.data, entry.label, entry.style.colour, colouring.colourOf)
     }
     if (by === STRUCTURE_COLOUR_MARKS) {
-      return marksSource(structure, this.props.manual?.()?.marks ?? [])
+      return marksSource(structure, this.props.manual?.()?.marks ?? [], new Set(this.style().marksHidden))
     }
     if (by === STRUCTURE_COLOUR_DISPLACEMENT) {
       // The overlay first, so the alignment exists; then each bead's distance
@@ -2314,6 +2396,11 @@ export class StructurePanel implements DeckCell {
   /** The corner key, as the map's is: what the colours mean. */
   private paintKey(key: StructureKey): void {
     this.keyEl.replaceChildren()
+    const manual = this.props.manual?.()
+    if (this.style().colourBy === STRUCTURE_COLOUR_MARKS && manual !== undefined) {
+      this.paintMarksKey(manual.marks)
+      return
+    }
     if (key.kind === 'none') {
       this.keyEl.classList.add('hidden')
       return
@@ -2406,6 +2493,81 @@ export class StructurePanel implements DeckCell {
     return el(
       'span',
       { class: `structure-key-level structure-key-seq${ghosted.has(name) ? ' is-off' : ''}` },
+      swatch,
+      button,
+    )
+  }
+
+  /**
+   * The key of *colour by manual annotations* (§25.5): a row per mark, as the
+   * sequence key has a row per sequence, with the same three gestures — the
+   * swatch is the mark's colour, a click on its name takes it off the model's
+   * colouring, a double-click shows it alone.
+   *
+   * The colour is the **mark's**, written to the marks' own store: the Manual
+   * annotations card lists the same marks and repaints from the same store, so
+   * a colour picked here is the colour there, and on every map. What a click
+   * hides is the model's colouring only, kept in its style — the mark is still
+   * drawn wherever it was put, and a key that deleted it would be a second ×.
+   */
+  private paintMarksKey(marks: readonly ManualMark[]): void {
+    this.keyEl.classList.remove('hidden')
+    this.keyEl.append(el('span', { class: 'structure-key-title', text: 'manual annotations' }))
+    if (marks.length === 0) {
+      this.keyEl.append(
+        el('span', {
+          class: 'structure-key-empty',
+          text: 'No marks yet: draw them on the Manual annotations card, or on the model.',
+        }),
+      )
+      return
+    }
+    const style = this.style()
+    const hidden = new Set(style.marksHidden)
+    for (const mark of marks.slice(0, 48)) this.keyEl.append(this.markChip(mark, marks, hidden))
+  }
+
+  /** One mark's row on the key — see {@link paintMarksKey}. */
+  private markChip(mark: ManualMark, marks: readonly ManualMark[], hidden: ReadonlySet<string>): HTMLElement {
+    const name = describeMark(mark)
+    const off = hidden.has(mark.id)
+    const swatch = el('input', {
+      class: 'structure-key-swatch',
+      type: 'color',
+      value: mark.colour,
+      title: `Colour for ${name}, on every map and on the Manual annotations card too`,
+    })
+    swatch.addEventListener('click', (event) => event.stopPropagation())
+    swatch.addEventListener('input', () => this.props.manual?.()?.update(mark.id, { colour: swatch.value }))
+    const button = el('button', {
+      class: 'structure-key-name',
+      type: 'button',
+      text: name,
+      title: off
+        ? `${name} is off the model: click to colour it again; double-click to show it alone`
+        : `Click to take ${name} off the model's colouring; double-click to show it alone`,
+    })
+    button.addEventListener('click', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = window.setTimeout(() => {
+        this.keyClickTimer = null
+        const next = new Set(hidden)
+        if (next.has(mark.id)) next.delete(mark.id)
+        else next.add(mark.id)
+        this.restyle({ marksHidden: [...next] })
+      }, 220)
+    })
+    button.addEventListener('dblclick', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = null
+      const others = marks.filter((other) => other.id !== mark.id).map((other) => other.id)
+      const alreadySolo = others.length > 0 && others.every((id) => hidden.has(id)) && !hidden.has(mark.id)
+      // Alone again is "all back", as on the sequence key.
+      this.restyle({ marksHidden: alreadySolo ? [] : others })
+    })
+    return el(
+      'span',
+      { class: `structure-key-level structure-key-seq structure-key-mark${off ? ' is-off' : ''}` },
       swatch,
       button,
     )
@@ -2685,31 +2847,29 @@ export class StructurePanel implements DeckCell {
       return settingsField(label, row(input, note), options.disabled ?? options.hint)
     }
     const rows: HTMLElement[] = []
+    // **Every cell at once**, while no structure is starred (§25.3). The rows
+    // that are about *this* cell's identity — which model it draws, which it is
+    // compared with or turned into the frame of — and the two that act on its
+    // one picture, the measurements and the export, are not offered then: one
+    // model compared with itself, or one file saved for five pictures, is not
+    // a setting that can be made to all of them.
+    const together = this.togetherCount()
+    const alone = together === 1
 
-    // Which structure, where there is more than one to choose between — and
-    // *structure* rather than *model*, which is one set of coordinates inside
-    // one (§25.1): what this picker chooses is the row, and the row is a file.
-    //
-    // A block field, like the three selects under it: the option is a file's
-    // own name and the label column leaves a select about seven characters
-    // wide, which turned `Yeast_structure` into `Yeast_str`.
+    // No *structure* picker. Which cell this card sets is said under its
+    // title, as the Map card says it (see below); which model a cell draws is
+    // the Structures card's to decide — its eye opens a cell for a row, and a
+    // row dragged onto a cell swaps that cell's model in place. A dropdown
+    // here was a third way to say the second thing, in the place where a
+    // reader looks for the first.
     const models = (store?.entries ?? []).filter((held) => held.kind === 'structure')
-    if (models.length > 1) {
-      rows.push(
-        pickField(
-          'structure',
-          select(models.map((held) => ({ value: held.id, text: held.label })), this.entry?.id ?? '', (value) => this.showModel(value)),
-          'Which structure row this cell draws; the Structures card says the same from its side.',
-        ),
-      )
-    }
 
     // Compare: another model on this one. Second, beside the picker, because
     // these are the two selects that decide *which models are on screen* — and
     // because `colour by: displacement` below is measured against this one, so
     // offering the colouring first was offering a reading of nothing.
     const others = models.filter((held) => held.id !== this.entry?.id && held.status === 'ready')
-    if (others.length > 0 || style.compare !== '') {
+    if (alone && (others.length > 0 || style.compare !== '')) {
       const choices = [{ value: '', text: 'none' }, ...others.map((held) => ({ value: held.id, text: held.label }))]
       if (style.compare !== '' && !choices.some((choice) => choice.value === style.compare)) {
         choices.push({ value: style.compare, text: `${style.compare} (no longer in the list)` })
@@ -2717,7 +2877,7 @@ export class StructurePanel implements DeckCell {
       rows.push(
         pickField(
           'compare with',
-          select(choices, style.compare, (value) => this.restyle({ compare: value })),
+          select(choices, style.compare, (value) => this.restyleAll({ compare: value })),
           'Another structure row, aligned onto this one over the beads the two share and drawn in grey beside it; colour by displacement shows where they differ.',
         ),
       )
@@ -2739,7 +2899,7 @@ export class StructurePanel implements DeckCell {
       rows.push(
         pickField(
           'in the frame of',
-          select(into, style.align, (value) => this.restyle({ align: value })),
+          select(into, style.align, (value) => this.restyleAll({ align: value })),
           'Turn this model into another model’s frame, over the beads the two share, without drawing the other. ' +
             'Two cells each in one frame are two models that can be turned together and read against each other.',
         ),
@@ -2751,9 +2911,9 @@ export class StructurePanel implements DeckCell {
       settingsField(
         'drawn as',
         row(
-          toggleIcon('circle-dot', this.keyed('Beads at each place', STRUCTURE_KEYS.beads), style.beads, (on) => this.restyle({ beads: on })),
-          toggleIcon('minus', this.keyed('Sticks between neighbours', STRUCTURE_KEYS.sticks), style.sticks, (on) => this.restyle({ sticks: on })),
-          toggleIcon('spline', this.keyed('A tube through each run', STRUCTURE_KEYS.tube), style.tube, (on) => this.restyle({ tube: on })),
+          toggleIcon('circle-dot', this.keyed('Beads at each place', STRUCTURE_KEYS.beads), style.beads, (on) => this.restyleAll({ beads: on })),
+          toggleIcon('minus', this.keyed('Sticks between neighbours', STRUCTURE_KEYS.sticks), style.sticks, (on) => this.restyleAll({ sticks: on })),
+          toggleIcon('spline', this.keyed('A tube through each run', STRUCTURE_KEYS.tube), style.tube, (on) => this.restyleAll({ tube: on })),
         ),
       ),
     )
@@ -2768,28 +2928,38 @@ export class StructurePanel implements DeckCell {
             'tag',
             this.keyed(style.labels ? 'Hide the sequence names' : 'Show the sequence names', STRUCTURE_KEYS.labels),
             style.labels,
-            (on) => this.restyle({ labels: on }),
+            (on) => this.restyleAll({ labels: on }),
           ),
-          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
+          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyleAll({ ruler: on })),
           toggleIcon(
             'unfold-horizontal',
             style.telomeres
               ? 'Hide the telomeres'
               : 'Mark the telomeres: a yellow bead at both ends of every chain',
             style.telomeres,
-            (on) => this.restyle({ telomeres: on }),
+            (on) => this.restyleAll({ telomeres: on }),
           ),
-          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
+          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyleAll({ axes: on })),
         ),
       ),
     )
 
     // Colour by, and size by.
+    //
+    // The model's own five first, in the order a reader goes through them —
+    // what it is, where along it, what they marked on it, and then the two
+    // that read from the pinned bin — and after them what another row lends.
+    // Named for what they measure: *spatial* distance, because the map beside
+    // it is a distance too, in base pairs, and *linear* position for the same
+    // reason. The file's score column is not among them: a g3d carries none
+    // worth a ramp, and the one it could name was a column of nothing.
     const colourings: Array<{ value: string; text: string }> = [
       { value: STRUCTURE_COLOUR_SEQUENCE, text: 'sequence' },
+      { value: STRUCTURE_COLOUR_POSITION, text: 'linear position along the sequence' },
+      ...(this.props.manual?.() !== undefined ? [{ value: STRUCTURE_COLOUR_MARKS, text: 'manual annotations' }] : []),
+      { value: STRUCTURE_COLOUR_DISTANCE, text: 'spatial distance to pinned bin' },
+      ...(this.props.contacts !== undefined ? [{ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with pinned bin' }] : []),
       ...(structure !== null && structure.haplotypes.length > 1 ? [{ value: STRUCTURE_COLOUR_HAPLOTYPE, text: 'haplotype' }] : []),
-      { value: STRUCTURE_COLOUR_POSITION, text: 'position along the sequence' },
-      { value: STRUCTURE_COLOUR_SCORE, text: 'score column' },
     ]
     if (structure !== null) {
       for (const field of featureFields(structure.set, 'structure')) {
@@ -2803,9 +2973,6 @@ export class StructurePanel implements DeckCell {
     )
     for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} · track` })
     for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} · features` })
-    if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
-    colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
-    if (this.props.contacts !== undefined) colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
     // `displacement`, not `displacement from the compared model`: the row above
     // this one is `compare with` and it names the model, and the longer text did
     // not fit the column even as a full-width block — it read `displacement from
@@ -2815,7 +2982,7 @@ export class StructurePanel implements DeckCell {
     if (!colourings.some((option) => option.value === style.colourBy)) {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
-    rows.push(pickField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
+    rows.push(pickField('colour by', select(colourings, style.colourBy, (value) => this.restyleAll({ colourBy: value }))))
     // The ramp, but only where the colouring is one. Sequence and haplotype are
     // levels and have no scale to change, and a control that does nothing under
     // the default colouring is one a reader tries and then distrusts.
@@ -2829,21 +2996,21 @@ export class StructurePanel implements DeckCell {
               ...COLORMAP_NAMES.map((name) => ({ value: name, text: name })),
             ],
             style.colormap,
-            (value) => this.restyle({ colormap: value }),
+            (value) => this.restyleAll({ colormap: value }),
           ),
           'The ramp this colouring is drawn on; left at its own, a track’s beads take the lane’s colormap and contacts take the map’s.',
         ),
       )
     }
-    rows.push(sliderField('bead radius', style.beadRadius, { min: 0.05, max: 1.5, step: 0.05 }, (v) => this.restyle({ beadRadius: v })))
-    rows.push(sliderField('tube radius', style.tubeRadius, { min: 0.05, max: 1, step: 0.05 }, (v) => this.restyle({ tubeRadius: v })))
+    rows.push(sliderField('bead radius', style.beadRadius, { min: 0.05, max: 1.5, step: 0.05 }, (v) => this.restyleAll({ beadRadius: v })))
+    rows.push(sliderField('tube radius', style.tubeRadius, { min: 0.05, max: 1, step: 0.05 }, (v) => this.restyleAll({ tubeRadius: v })))
 
     // Which homologue, on a phased model. `haplotype` and not `show`: the marks
     // row below is `overlays`, and two rows reading `show` on one card is one
     // name for two questions.
     if (structure !== null && structure.haplotypes.length > 1) {
       const haplotypes = [{ value: '', text: 'both homologues' }, ...structure.haplotypes.map((name) => ({ value: name, text: name }))]
-      rows.push(settingsField('haplotype', select(haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))))
+      rows.push(settingsField('haplotype', select(haplotypes, style.haplotype, (value) => this.restyleAll({ haplotype: value }))))
     }
 
 
@@ -2854,10 +3021,10 @@ export class StructurePanel implements DeckCell {
     rows.push(
       armedField(
         'outside window',
-        select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyle({ others: value as StructureStyle['others'] })),
+        select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyleAll({ others: value as StructureStyle['others'] })),
         style.opacity,
         { min: 0, max: 1, step: 0.05 },
-        (v) => this.restyle({ opacity: v }),
+        (v) => this.restyleAll({ opacity: v }),
         {
           hint: 'What becomes of the beads outside the window the maps are looking at, and how faint the ghosted ones are.',
           ...(style.others === 'hide'
@@ -2877,7 +3044,7 @@ export class StructurePanel implements DeckCell {
     const loopChoices: Array<{ value: string; text: string }> = [
       { value: '', text: 'none' },
       ...loopRows.map((held) => ({ value: held.id, text: held.label })),
-      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks' }] : []),
+      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'manual annotations' }] : []),
     ]
     if (style.loops !== '' && !loopChoices.some((choice) => choice.value === style.loops)) {
       loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
@@ -2889,8 +3056,8 @@ export class StructurePanel implements DeckCell {
         el('span', { class: 'field-label', text: 'loops as chords' }),
         ...(style.loops === ''
           ? []
-          : [toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on }))]),
-        select(loopChoices, style.loops, (value) => this.restyle({ loops: value })),
+          : [toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyleAll({ chords: on }))]),
+        select(loopChoices, style.loops, (value) => this.restyleAll({ loops: value })),
       ),
     )
 
@@ -2898,15 +3065,15 @@ export class StructurePanel implements DeckCell {
     rows.push(
       armedField(
         'fog',
-        toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
+        toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyleAll({ fogOn: on })),
         style.fog,
         { min: 0, max: 1, step: 0.05 },
-        (v) => this.restyle({ fog: v }),
+        (v) => this.restyleAll({ fog: v }),
         { hint: 'The fog for depth, and how far back it starts: Space + scroll on the model moves it too.' },
       ),
     )
     rows.push(
-      sliderField('depth slab', style.slab, { min: 0.02, max: 1, step: 0.02 }, (v) => this.restyle({ slab: v }), {
+      sliderField('depth slab', style.slab, { min: 0.02, max: 1, step: 0.02 }, (v) => this.restyleAll({ slab: v }), {
         hint: 'Keep only what lies within this fraction of the model’s reach of the centre of rotation, front and back. All the way right is everything.',
       }),
     )
@@ -2949,7 +3116,7 @@ export class StructurePanel implements DeckCell {
     }
 
     // Measurements: the list, each removable.
-    if (this.measures.length > 0) {
+    if (alone && this.measures.length > 0) {
       const list = el('div', { class: 'structure-measures' })
       this.measures.forEach((pair, index) => {
         list.append(
@@ -2979,14 +3146,17 @@ export class StructurePanel implements DeckCell {
       buttonField(
         'camera',
         row(
-          button('front', () => this.lookFrom(0, 0), { class: 'btn', title: 'Look from the front' }),
-          button('top', () => this.lookFrom(0, Math.PI / 2 - 0.01), { class: 'btn', title: 'Look from above' }),
-          button('side', () => this.lookFrom(Math.PI / 2, 0), { class: 'btn', title: 'Look from the side' }),
+          button('front', () => this.each((cell) => cell.lookFrom(0, 0)), { class: 'btn', title: 'Look from the front' }),
+          button('top', () => this.each((cell) => cell.lookFrom(0, Math.PI / 2 - 0.01)), { class: 'btn', title: 'Look from above' }),
+          button('side', () => this.each((cell) => cell.lookFrom(Math.PI / 2, 0)), { class: 'btn', title: 'Look from the side' }),
           toggleIcon(
             'rotate-cw',
             this.keyed(this.turning ? 'Stop the turntable' : 'Turn the model slowly by itself', STRUCTURE_KEYS.turntable),
             this.turning,
-            () => this.toggleTurning(),
+            () => {
+              const on = !this.turning
+              this.each((cell) => cell.setTurning(on))
+            },
           ),
           toggleIcon(
             'link',
@@ -2994,10 +3164,10 @@ export class StructurePanel implements DeckCell {
               ? 'Stop turning with the other cells'
               : 'Turn with every other cell set to turn together — one drag turns them all, each keeping its own centre and zoom',
             this.turnWith,
-            (on) => this.setTurnWith(on),
+            (on) => this.each((cell) => cell.setTurnWith(on)),
             { class: 'btn btn-icon structure-turn-with' },
           ),
-          button('replant the axes', () => this.replantAxes(), {
+          button('replant the axes', () => this.each((cell) => cell.replantAxes()), {
             class: 'btn structure-replant',
             title:
               'Lay the centre’s axes along this view — x across, y up, z out of the page. ' +
@@ -3010,11 +3180,11 @@ export class StructurePanel implements DeckCell {
       buttonField(
         'frame',
         row(
-          button('the window', () => this.frameLit(), {
+          button('the window', () => this.each((cell) => cell.frameLit()), {
             class: 'btn',
             title: this.keyed('Put the camera on what the maps are looking at', STRUCTURE_KEYS.frame),
           }),
-          button('everything', () => this.frameAll(), {
+          button('everything', () => this.each((cell) => cell.frameAll()), {
             class: 'btn',
             title: this.keyed('Put the camera on the whole model', STRUCTURE_KEYS.all),
           }),
@@ -3023,14 +3193,14 @@ export class StructurePanel implements DeckCell {
             'Mirror the model across the screen. A model from contacts is fixed only up to ' +
               'reflection, so this is how one is brought into the same hand as another.',
             style.mirrorX,
-            (on) => this.restyle({ mirrorX: on }),
+            (on) => this.restyleAll({ mirrorX: on }),
             { class: 'btn btn-icon structure-mirror-x' },
           ),
           toggleIcon(
             'flip-vertical',
             'Mirror the model up the screen — the same reflection as the one beside it, seen the other way up.',
             style.mirrorY,
-            (on) => this.restyle({ mirrorY: on }),
+            (on) => this.restyleAll({ mirrorY: on }),
             { class: 'btn btn-icon structure-mirror-y' },
           ),
         ),
@@ -3063,18 +3233,26 @@ export class StructurePanel implements DeckCell {
       saveTitle: 'Save the model, at the resolution and in the format chosen beside this',
       copyTitle: 'Copy the model as a PNG, ready to paste',
     })
-    rows.push(
-      el(
-        'div',
-        { class: 'field field-block' },
-        el('span', { class: 'field-label', text: 'export' }),
-        exportRowEl.el,
-        this.exportNote,
-      ),
-    )
+    if (alone) {
+      rows.push(
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'export' }),
+          exportRowEl.el,
+          this.exportNote,
+        ),
+      )
+    }
 
     this.settingsEl.replaceChildren(
       cardTitle('3D structure', 'box', 'controls-title'),
+      // The same line the *Map* card carries (§16.5): which cell a change here
+      // reaches, said where the change is made — the starred one by name, with
+      // the star it was starred by, or every cell while none is. Nothing on a
+      // deck of one structure cell, where the star is not offered and the card
+      // can be about nothing else.
+      ...this.cardFor(together),
       el('div', { class: 'panel-controls' }, ...rows),
     )
   }
@@ -3084,9 +3262,15 @@ export class StructurePanel implements DeckCell {
   // -------------------------------------------------------------------------
 
   private async savePng(dpi: number): Promise<void> {
+    if (this.view() === null) {
+      this.exportNote.textContent = 'nothing to save: no model is drawn'
+      return
+    }
     const now = new Date()
-    const name = `structure-${fileStamp(now)}-${dpi}dpi.png`
-    this.exportNote.textContent = `saving ${name}…`
+    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
+    const target = await chooseSaveTarget(`structure-${fileStamp(now)}-${dpi}dpi.png`, 'image/png')
+    if (target === null) return
+    this.exportNote.textContent = `saving ${target.name}…`
     try {
       const out = this.exportCanvas(dpi, now)
       if (out === null) {
@@ -3094,8 +3278,8 @@ export class StructurePanel implements DeckCell {
         return
       }
       const blob = await canvasToPng(out)
-      downloadBlob(blob, name)
-      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       this.exportNote.textContent =
         err instanceof Error ? `export failed: ${err.message}` : 'export failed'
@@ -3142,8 +3326,9 @@ export class StructurePanel implements DeckCell {
       return
     }
     const now = new Date()
-    const name = `structure-${fileStamp(now)}.pdf`
-    this.exportNote.textContent = `saving ${name}…`
+    const target = await chooseSaveTarget(`structure-${fileStamp(now)}.pdf`, 'application/pdf')
+    if (target === null) return
+    this.exportNote.textContent = `saving ${target.name}…`
     try {
       const width = Math.max(1, this.wrap.clientWidth)
       const height = Math.max(1, this.wrap.clientHeight)
@@ -3162,8 +3347,8 @@ export class StructurePanel implements DeckCell {
         drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
       }
       const blob = await page.toBlob({ title: 'structure', created: now })
-      downloadBlob(blob, name)
-      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+      await target.write(blob)
+      this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       this.exportNote.textContent =
         err instanceof Error ? `export failed: ${err.message}` : 'export failed'
