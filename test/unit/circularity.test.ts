@@ -13,7 +13,10 @@ import { describe, expect, it } from 'vitest'
 import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
+  MIN_JUNCTION_SEQUENCE_BINS,
+  junctionCandidates,
   junctionScore,
+  measureJunctions,
   type JunctionBlock,
 } from '../../src/analysis/circularity'
 
@@ -69,5 +72,51 @@ describe('the junction score', () => {
     const dropped = (i: number, j: number): number =>
       i < 3 || j < 3 || i >= n - 3 || j >= n - 3 ? Number.NaN : decay(Math.abs(i - j))
     expect(Number.isNaN(junctionScore(n, ...blocks(n, dropped)).score)).toBe(true)
+  })
+})
+
+describe('the test over a whole map', () => {
+  it('measures the long sequences, longest first, where each one starts', () => {
+    const candidates = junctionCandidates(
+      [
+        ['plasmid', 30_000],
+        ['chromosome', 200_000],
+        ['scrap', 5_000],
+        ['megaplasmid', 100_000],
+      ],
+      1000,
+    )
+    expect(candidates).toEqual([
+      { name: 'chromosome', from: 30, n: 200 },
+      { name: 'megaplasmid', from: 235, n: 100 },
+      { name: 'plasmid', from: 0, n: 30 },
+    ])
+    expect(MIN_JUNCTION_SEQUENCE_BINS).toBeGreaterThan(5)
+    expect(junctionCandidates([['a', 90_000], ['b', 80_000]], 1000, 1).map((one) => one.name)).toEqual(['a'])
+  })
+
+  /** A map of a 200-bin circle followed by a 100-bin line, read a block at a time. */
+  const ring = 200
+  const line = 100
+  const cell = (i: number, j: number): number => {
+    const ringI = i < ring
+    if (ringI !== j < ring) return 0
+    const d = Math.abs(i - j)
+    return ringI ? decay(Math.min(d, ring - d)) : decay(d)
+  }
+  const read = async (rows: [number, number], cols: [number, number]): Promise<number[]> =>
+    block(rows, cols, cell).values as number[]
+
+  it('reads each sequence off its own ends, and declares the circle', async () => {
+    const candidates = junctionCandidates([['ring', ring * 1000], ['line', line * 1000]], 1000)
+    const measured = await measureJunctions(candidates, read)
+    expect(measured?.circular).toEqual(['ring'])
+    expect(measured?.scores.ring).toBeCloseTo(1, 6)
+    expect(measured?.scores.line).toBeLessThan(0.01)
+  })
+
+  it('answers nothing once the answer is no longer wanted', async () => {
+    const candidates = junctionCandidates([['ring', ring * 1000]], 1000)
+    expect(await measureJunctions(candidates, read, () => false)).toBeNull()
   })
 })

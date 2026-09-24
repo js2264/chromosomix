@@ -18,7 +18,8 @@
  * on a line (under 0.03 on the linear chromosomes of *Borrelia burgdorferi* and
  * *Streptomyces coelicolor*, whose telomeres are known to meet).
  *
- * Pure: three small blocks in, one number out.
+ * Pure: three small blocks in, one number out — and, for a whole map, the
+ * blocks read through whichever host holds it.
  */
 
 /** Separations, in bins, the junction is compared at. */
@@ -102,4 +103,79 @@ export function junctionScore(
   const mid = Math.floor(sorted.length / 2)
   const score = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
   return { score, ratios }
+}
+
+/**
+ * How many sequences the test measures, longest first.
+ *
+ * A declaration is about a chromosome or a plasmid, and those are the longest
+ * sequences of any assembly; a draft's ten-thousandth contig is not a molecule
+ * anybody declares round, and three reads for each would be a burst of range
+ * requests on every open of one.
+ */
+export const CIRCULAR_DETECTION_LIMIT = 50
+
+/** A sequence the test is run on: its first bin on the map, and how many it has. */
+export interface JunctionCandidate {
+  name: string
+  from: number
+  n: number
+}
+
+/**
+ * The sequences worth measuring, from each one's name and length on a grid of
+ * `binsize`: long enough for the test to mean anything, the longest first, at
+ * most `limit` of them.
+ */
+export function junctionCandidates(
+  pairs: ReadonlyArray<readonly [string, number]>,
+  binsize: number,
+  limit = CIRCULAR_DETECTION_LIMIT,
+): JunctionCandidate[] {
+  const candidates: JunctionCandidate[] = []
+  let startBin = 0
+  for (const [name, length] of pairs) {
+    const n = Math.ceil(length / binsize)
+    if (n >= MIN_JUNCTION_SEQUENCE_BINS) candidates.push({ name, from: startBin, n })
+    startBin += n
+  }
+  candidates.sort((a, b) => b.n - a.n)
+  return candidates.slice(0, limit)
+}
+
+/** A dense block of the whole map, by bins of the whole map: what a host reads the test through. */
+export type JunctionReader = (rows: [number, number], cols: [number, number]) => Promise<ArrayLike<number>>
+
+/**
+ * The test over each candidate: its score where it could be decided, and the
+ * sequences at or above {@link CIRCULAR_SCORE}. Three reads a sequence — the
+ * diagonal at each end and the corner joining them — through whichever host
+ * holds the map: the session's reader worker on a first open, the file itself
+ * in `metacooler-run circular`. `null` when `alive` says the answer is no
+ * longer wanted.
+ */
+export async function measureJunctions(
+  candidates: readonly JunctionCandidate[],
+  read: JunctionReader,
+  alive: () => boolean = () => true,
+  k = JUNCTION_BINS,
+): Promise<{ scores: Record<string, number>; circular: string[] } | null> {
+  const scores: Record<string, number> = {}
+  const circular: string[] = []
+  for (const { name, from, n } of candidates) {
+    const local = async (rows: [number, number], cols: [number, number]): Promise<JunctionBlock> => ({
+      rows: [rows[0] - from, rows[1] - from],
+      cols: [cols[0] - from, cols[1] - from],
+      values: await read(rows, cols),
+    })
+    const head = await local([from, from + 2 * k], [from, from + 2 * k])
+    const tail = await local([from + n - 2 * k, from + n], [from + n - 2 * k, from + n])
+    const corner = await local([from, from + k], [from + n - k, from + n])
+    if (!alive()) return null
+    const { score } = junctionScore(n, head, tail, corner, k)
+    if (!Number.isFinite(score)) continue
+    scores[name] = score
+    if (score >= CIRCULAR_SCORE) circular.push(name)
+  }
+  return { scores, circular }
 }

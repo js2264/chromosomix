@@ -3076,7 +3076,12 @@ end has nothing to measure, it is left alone. **It only ever adds a tick, and
 only once per file**: the scores are kept with the declarations — the box's own
 tooltip quotes its sequence's — so a reader who unticks one is not overruled by
 the next open, and a file whose declarations arrived in a workspace is not
-measured at all.
+measured at all. A shell asks the same question with `metacooler-run circular <map>` — the same
+fifty sequences, three blocks, threshold and balancing — and is answered with a table of every
+sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
+handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a
+few of them linear, can neither declare them all round nor ask a person which. The DNA Bacterial
+Zoo's analyses are framed that way (§24.3).
 
 So it is a **column of tick boxes in the Chromosomes table**, beside the lengths,
 one row per sequence. It was a tickbox in the Map card, and that was the right
@@ -7592,10 +7597,15 @@ why one table for all of them was the wrong shape and is gone:
   line, the assembly and the provenance as chips, the paragraph behind a fold, and *open*; the data
   files under the figures as rows. Inline, so it costs no request.
 - **DNA Bacterial Zoo** — the genome gallery's cards over **one** file: a card a species, whose
-  button is the species' session, with its sample and its replicon count as chips and its map and
-  its tracks under the fold. A species whose model the suite wrote as a bed3d (§25.7) opens with it
-  in a structure cell beside the map — the session names the cell (`maps: 3d`), since a structure
-  row restored from a session opens none by itself (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
+  button is the species' session, with its sample and its replicon count as chips and its map, its
+  reference and every track under the fold. The session opens **three tracks and nothing else**:
+  the map whole at 4 kb, and under it the HiC score, the insulation score and E1 read along both
+  arms from the origin the suite called (§18.8) — no overlay, no calls, no model. A map with a dozen
+  lanes and two sets drawn on it was a card nobody could read at a glance, and the rest is one click
+  away on the map's shelf. It declares what the analyses ran with, the circles and each origin
+  (§8.15), so the Chromosomes table, the `ori` button and a task rerun in the viewer read the arms
+  from where E1's were read. A species' 3D model is a row of the fold, and opens in a structure cell
+  when clicked (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
   (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
   `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
   Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
@@ -7838,9 +7848,17 @@ or not a portal had published anything. `fingerprint.json` is the map of each fi
 timestamps removed; a run whose fingerprint matches the published one stops there.
 
 **One shipped store is not generated here.** The DNA Bacterial Zoo is the lab's own analyses —
-`hic-suite.sh` over each map, gathered by `scripts/DBZ_store.py` into a folder of maps, tracks and
-one session a species whose names are all relative — so there is no portal for a workflow to ask
-and nothing for it to regenerate on a Monday: the store changes when the lab reruns the suite. It
+`scripts/dbz-store.sh` over each map, written **straight into the folder that is published**: one
+directory a sample holding its map, its reference and a directory a step, and then indexed in
+place by `scripts/DBZ_store.py index`, which lists every file the viewer opens, species by species,
+and writes each species' session, with every name relative. There is no `results/` to gather from
+and no second copy to keep in step with it; the tables a step writes beside its tracks stay in the
+folder and out of the upload. Each map is framed before its first step: the junction test declares
+its circles (§8.15), and where a reference is found — named after the species, or holding the map's
+longest sequence — its base composition is written as tracks and *Origin and terminus* calls each
+origin, which the arm-frame compartments and the inter-arm alignment then read the arms from. So
+there is no portal for a workflow to ask and nothing for it to regenerate on a Monday: the store
+changes when the lab reruns the suite. It
 lives **beside its data**, on the lab's bucket next to the demo files
 (`https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`), published by `aws s3 sync` of
 that folder, and the tile reads it from there as Roadmap's reads WashU. Until it is uploaded the

@@ -158,10 +158,14 @@ const originBox = () => page.evaluate(() => {
   return box === null ? null : { value: box.value, placeholder: box.placeholder, title: box.title }
 })
 
-// GALLERY_ONLY runs one part alone: `groups` for Signal by group, and
+// GALLERY_ONLY runs one part alone: `groups` for Signal by group,
 // `declarations` for a 1D browser's Chromosomes table, a map dropped over it,
-// and a map's default origin.
+// and a map's default origin, and `store` for the DNA Bacterial Zoo as
+// scripts/dbz-store.sh writes it — GALLERY_STORE names its store.json, served
+// by `python3 scripts/DBZ_store.py serve <store>`; the lab's bucket otherwise.
 const ONLY = process.env.GALLERY_ONLY ?? ''
+const STORE = process.env.GALLERY_STORE ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
 
 try {
   if (ONLY === '') {
@@ -413,6 +417,59 @@ try {
   await sleep(8000)
   await ori('on the first base')
   await shot('b25-ori-on-first-base')
+  }
+  if (ONLY === '' || ONLY === 'store') {
+    // The store: a card a species, its session the card's button.
+    page = await fresh()
+    await page.goto(`${BASE}/?store=${encodeURIComponent(STORE)}`)
+    await page.waitForSelector('.genomes-card', { timeout: 60000 })
+    await sleep(1500)
+    await shot('b31-store-cards')
+    const card = page.locator('.genomes-card', { has: page.locator('.gallery-card-title', { hasText: /^PAK$/ }) }).first()
+    console.log('PAK card:', (await card.innerText()).split('\n').slice(0, 3).join(' · '))
+    console.log('its session:', await card.locator('.gallery-card-open').getAttribute('title'))
+
+    // Its fold: the map, the reference and every track, each a row.
+    await card.locator('summary').click()
+    await sleep(800)
+    await card.locator('summary').scrollIntoViewIfNeeded()
+    await shot('b32-store-fold')
+    console.log('fold:', (await card.locator('.portal-name').allInnerTexts()).join(' | '))
+
+    // The session: the map whole at 4 kb, and under it three tracks — nothing drawn on it.
+    await card.locator('summary').click()
+    await card.locator('.gallery-card-open').click()
+    await sleep(15000)
+    for (const name of ['General', 'Annotations', 'Analysis']) await fold(`Fold the ${name} panel`)
+    await sleep(4000)
+    console.log('session hash:', await page.evaluate(() => decodeURIComponent(location.hash)))
+    await shot('b33-session')
+
+    // What the session declared: the circle, and the origin E1's arms were read from.
+    await page.evaluate(() => { location.hash = location.hash.replace(/view=[a-z]+/, 'view=contigs') })
+    await sleep(5000)
+    console.log('declared:', JSON.stringify(await originBox()), 'circle:', await circleTicked())
+    await shot('b34-session-declarations')
+
+    // `ori`, on the origin the session carries, with the three tracks under it:
+    // on the chromosome's own view, which is where the arms have one sequence.
+    await page.evaluate(() => {
+      location.hash = location.hash.replace(/view=[a-z]+/, 'view=region') + '&region=LR657304.1'
+    })
+    await sleep(6000)
+    await word('ori').click()
+    await sleep(8000)
+    await ori('on the declared origin')
+    await shot('b35-session-ori')
+
+    // The shipped tile with nothing uploaded yet names what builds it.
+    page = await fresh()
+    await page.route(DBZ_STORE, (route) => route.fulfill({ status: 404, body: 'Not Found' }))
+    await page.goto(`${BASE}/?store=dbz`)
+    await until('Nothing has been published', 30000)
+    await sleep(1000)
+    console.log('unpublished:', await page.evaluate(() => document.querySelector('.portal-status')?.textContent ?? ''))
+    await shot('b36-dbz-unpublished')
   }
 } catch (error) {
   console.log('FAILED', error)

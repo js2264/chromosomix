@@ -38,13 +38,7 @@ import type {
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
 import { OriginStore } from '../state/origins'
-import {
-  CIRCULAR_SCORE,
-  JUNCTION_BINS,
-  MIN_JUNCTION_SEQUENCE_BINS,
-  junctionScore,
-  type JunctionBlock,
-} from '../analysis/circularity'
+import { junctionCandidates, measureJunctions } from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
 import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
@@ -601,16 +595,6 @@ function withCircularNames(
     ...(hasOrigins ? { origins: { ...origins } } : {}),
   }
 }
-
-/**
- * How many sequences the junction test measures on a first open, longest first.
- *
- * A declaration is about a chromosome or a plasmid, and those are the longest
- * sequences of any assembly; a draft's ten-thousandth contig is not a molecule
- * anybody declares round, and three reads for each would be a burst of range
- * requests on every open of one.
- */
-const CIRCULAR_DETECTION_LIMIT = 50
 
 let nextSessionId = 1
 
@@ -5276,52 +5260,26 @@ export class Session {
       return
     }
     if (this.destroyed || this.file !== file) return
-    const pairs = contigPairs(contigs)
-    const k = JUNCTION_BINS
-    let startBin = 0
-    const candidates: Array<{ name: string; from: number; n: number }> = []
-    for (const [name, length] of pairs) {
-      const n = Math.ceil(length / binsize)
-      if (n >= MIN_JUNCTION_SEQUENCE_BINS) candidates.push({ name, from: startBin, n })
-      startBin += n
-    }
     // A draft assembly is thousands of contigs; the ones a declaration is about
     // are the chromosomes and plasmids, which are the longest.
-    candidates.sort((a, b) => b.n - a.n)
-    const tested = candidates.slice(0, CIRCULAR_DETECTION_LIMIT)
+    const tested = junctionCandidates(contigPairs(contigs), binsize)
     const balance = file.info.hasWeights
-    const scores: Record<string, number> = {}
-    const circular: string[] = []
-    const read = async (rows: [number, number], cols: [number, number]): Promise<JunctionBlock> => {
-      const block = await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })
-      return {
-        rows: [rows[0], rows[1]],
-        cols: [cols[0], cols[1]],
-        values: block.values,
-      }
-    }
+    let measured: Awaited<ReturnType<typeof measureJunctions>>
     try {
-      for (const { name, from, n } of tested) {
-        const local = (block: JunctionBlock): JunctionBlock => ({
-          ...block,
-          rows: [block.rows[0] - from, block.rows[1] - from],
-          cols: [block.cols[0] - from, block.cols[1] - from],
-        })
-        const head = local(await read([from, from + 2 * k], [from, from + 2 * k]))
-        const tail = local(await read([from + n - 2 * k, from + n], [from + n - 2 * k, from + n]))
-        const corner = local(await read([from, from + k], [from + n - k, from + n]))
-        if (this.destroyed || this.file !== file) return
-        const { score } = junctionScore(n, head, tail, corner, k)
-        if (!Number.isFinite(score)) continue
-        scores[name] = score
-        if (score >= CIRCULAR_SCORE) circular.push(name)
-      }
+      measured = await measureJunctions(
+        tested,
+        async (rows, cols) =>
+          (await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })).values,
+        () => !this.destroyed && this.file === file,
+      )
     } catch {
       // A read that failed is a file this test cannot be run on, which is no
       // reason to disturb the one being looked at. Nothing is recorded, so the
       // next open tries again.
       return
     }
+    if (measured === null) return
+    const { scores, circular } = measured
     store.detected(scores, circular)
     const added = circular.filter((name) => store.has(name))
     for (const name of added) this.adoptCircular(name, true)

@@ -96,6 +96,12 @@ import {
 } from './tracks'
 import { outputToTsv } from '../analysis/write/tsv'
 import { gridAt } from '../analysis/context'
+import {
+  CIRCULAR_SCORE,
+  JUNCTION_BINS,
+  junctionCandidates,
+  measureJunctions,
+} from '../analysis/circularity'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import {
@@ -452,7 +458,11 @@ interface PairsBinning {
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
  */
-async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<Opened> {
+async function openForTask(
+  uri: string,
+  source: ByteSource,
+  options: Pick<RunOptions, 'binning' | 'quiet'>,
+): Promise<Opened> {
   const path = parseUri(uri).path
   try {
     return { mc: await MetaCooler.open(uri, source), source, orientation: null }
@@ -538,7 +548,7 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * — but the parse below is the shared one, so a number computed in a shell and
  * a number computed by clicking come out of the same implementation.
  */
-async function openLocal(uri: string, options: RunOptions): Promise<Opened> {
+async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'quiet'>): Promise<Opened> {
   // **The `::` is addressed to the container, not to the filesystem.** An
   // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
   // with a sentence naming the resolutions and telling the reader to write
@@ -1345,6 +1355,23 @@ function withTrackLabels(inputs: TaskInputs, tracks: ReadonlyMap<string, LoadedT
 }
 
 /**
+ * What each loaded reference is called: its file name, as a track's is.
+ *
+ * The tasks that read one name their outputs after it — *GC content · PAK.fa*,
+ * the name the app's own entry has — and fall back to the word *reference*
+ * where the label is missing, which here it always was.
+ */
+function withSequenceLabels(
+  inputs: TaskInputs,
+  sequences: ReadonlyMap<string, SequenceStore>,
+): TaskInputs {
+  if (sequences.size === 0) return inputs
+  const labels: Record<string, string> = { ...inputs.labels }
+  for (const path of sequences.keys()) labels[path] = basename(path)
+  return { ...inputs, labels }
+}
+
+/**
  * File each loaded set under the **parameter key** that chose it.
  *
  * {@link TaskInputs} is keyed by parameter key — `analysis/job.ts`'s
@@ -1428,6 +1455,12 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       at all — what a 1D browser session runs. The assembly is what the tracks
       and references declare.
 
+  metacooler-run circular <file.mcool::/resolutions/<bp>> [...]
+      Which sequences join their own ends: the junction test the app runs when
+      a map is first opened, as a table on stdout — sequence, length, score,
+      and yes or no where it could be decided. The names to hand every other
+      run as --circular.
+
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over. The workspace is what the
@@ -1481,7 +1514,7 @@ async function runCommand(args: Args): Promise<number> {
     inputs = bindInputs(task, params, await loadInputs(args))
     sequences = await loadSequences(args)
     tracks = await loadTrackFiles([{ task, params }], args)
-    inputs = withTrackLabels(inputs, tracks)
+    inputs = withSequenceLabels(withTrackLabels(inputs, tracks), sequences)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -1630,7 +1663,7 @@ async function replayCommand(args: Args): Promise<number> {
     args,
     config.tracks,
   )
-  const loaded = withTrackLabels(await loadInputs(args), tracks)
+  const loaded = withSequenceLabels(withTrackLabels(await loadInputs(args), tracks), sequences)
   const peers = all(args, 'against')
 
   process.stderr.write(
@@ -1689,6 +1722,69 @@ async function replayCommand(args: Args): Promise<number> {
   return failures === 0 ? 0 : 1
 }
 
+/**
+ * Which sequences of a map join their own ends: the junction test a session
+ * runs on a map's first open (§8.15), as a table on stdout.
+ *
+ * A declaration frames every run after it, so a batch has to make it before the
+ * first task and hand the same names to each with `--circular` — and a batch
+ * over eighty genomes, a few of them linear, can neither declare them all round
+ * nor ask a person which. The same candidates, reads, threshold and balancing
+ * as the session's (`analysis/circularity.ts`), so what a suite declares is
+ * what the viewer would have ticked on opening the file at that resolution.
+ *
+ * Every sequence gets a row, in the file's order: a score and a verdict where
+ * the test was run and decided, both empty where it was not — too short, past
+ * the fifty longest, or an end the balancer dropped.
+ */
+async function circularCommand(args: Args): Promise<number> {
+  if (args.positional.length === 0) {
+    process.stderr.write('circular needs at least one file.\n')
+    return 2
+  }
+  const quiet = flag(args, 'quiet')
+  let failures = 0
+  for (const path of args.positional) {
+    try {
+      const { mc } = await openLocal(resolve(path), { binning: pairsBinningOf(args), quiet })
+      try {
+        const balance = args.flags.has('balance') ? flag(args, 'balance') : mc.hasWeights
+        const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
+        const measured = await measureJunctions(
+          junctionCandidates(pairs, mc.binsize),
+          async (rows, cols) => (await mc.matrix({ rows, cols, balance })).values,
+        )
+        const lines = [
+          `# metacooler metacooler-run ${VERSION}`,
+          `# file: ${path}`,
+          `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
+            `or fewer; circular at ${CIRCULAR_SCORE} or more (§8.15)`,
+          `# framing: ${mc.binsize} bp${balance ? ', balanced' : ''}`,
+          ['sequence', 'length', 'score', 'circular'].join('\t'),
+        ]
+        for (const [name, length] of pairs) {
+          const score = measured?.scores[name]
+          lines.push(
+            [
+              name,
+              String(length),
+              score === undefined ? '' : score.toFixed(4),
+              score === undefined ? '' : score >= CIRCULAR_SCORE ? 'yes' : 'no',
+            ].join('\t'),
+          )
+        }
+        process.stdout.write(`${lines.join('\n')}\n`)
+      } finally {
+        mc.close()
+      }
+    } catch (error) {
+      failures += 1
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    }
+  }
+  return failures === 0 ? 0 : 1
+}
+
 /** The tasks a session recorded parameters for, in catalogue order. */
 export function recordedTasks(config: {
   analysis?: Record<string, Params> | undefined
@@ -1736,6 +1832,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 0
   }
   if (args.command === 'replay') return replayCommand(args)
+  if (args.command === 'circular') return circularCommand(args)
   return runCommand(args)
 }
 

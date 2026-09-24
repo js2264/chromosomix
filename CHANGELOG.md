@@ -20,6 +20,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a line. At 0.2 or above the Chromosomes table's box is ticked and a banner says so; the box's
   tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands. A
   map opened over a 1D browser is marked on the Sequences card too, which read the tracks' file.
+  A shell asks the same with `metacooler-run circular <map>`: every sequence's length, score and
+  verdict as a table, the names to hand each later run of a batch as `--circular`.
 
 - **Signal by group, a 1D task (§18.8).** Any track compared between groups of the genome: a
   feature set's intervals split by name, strand or score (A against B on a compartment call, with
@@ -72,6 +74,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **`metacooler-run` reads a model back in as a structure.** A bed3d or text g3d under `--features`
   is the structure *Spatial tracks* and *Model versus map* read, so a model the shell wrote can be
   read as tracks in the same batch; it was read as a BED and refused as *not a structure*.
+
+- **`metacooler-run` names what it reads from a reference after the file.** *GC content · PAK.fa*
+  and *Origin and terminus · PAK.fa*, as the app names them after its entry; a reference named with
+  `--sequence` had no label, and every output read from one said *reference*.
 
 - **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
   heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
@@ -167,13 +173,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
   IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
-  eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC
-  score, E1, and chromosight's borders and loops — and, where the suite wrote one, its 3D model in a
-  cell beside it; the fold holds the map and every track. A session `make_store.py` writes places a
-  model it is given the same way, as a structure row with `maps: 3d`, rather than dropping it. The store is not the Stores workflow's to write: `scripts/DBZ_store.py` builds it from
-  `hic-suite.sh`'s results and it lives beside its data on the lab's bucket, so until it is uploaded
-  the tile says that, not *run the workflow*. Its mark is drawn by the script that draws RSG's, over
-  a bacterial map — a circle whose far corners are warm, with the X of its zipped arms.
+  three of its tracks under it — the HiC score, insulation, and E1 read along both arms from the
+  replication origin — and nothing else, declaring the circles and origins they were computed with;
+  the fold holds the map, its reference and every track, 3D model included. A session
+  `make_store.py` writes places a model it is given as a structure row with `maps: 3d`, rather than
+  dropping it. The store is not the Stores workflow's to write: `scripts/dbz-store.sh` runs the
+  suite over every map straight into the folder that is published — framing each first by the
+  junction test and, where a reference is found beside it, by its base composition and its origin —
+  and `scripts/DBZ_store.py index` lists that folder in place. It lives beside its data on the lab's
+  bucket, so until it is uploaded the tile says that, not *run the workflow*. Its mark is drawn by the
+  script that draws RSG's, over a bacterial map — a circle whose far corners are warm, with the X of
+  its zipped arms.
 
 - **A store can ask to be drawn as cards (§24.1, §24.2).** Three optional keys on a store file:
   `group` names the field its rows belong to, `headline` the fields a group repeats, and
@@ -1064,6 +1074,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A workspace brings its circles, origins and added resolutions back in (§3.4, §8.15).** Saving one
+  wrote all three and opening it dropped them: the tab reader walked past the fields, so an origin
+  typed on the Chromosomes table, a circle unticked by the reader, a 10 kb rung added to a 4 kb file,
+  and the declarations a store's published session makes, reached nobody — and the first open then
+  measured its own circles over the author's.
 
 - **A task reads a declared circle as a circle (§8.15).** The declarations reached the drawer's header
   and not the framing a run was given, so a sequence ticked on the Chromosomes table was measured as

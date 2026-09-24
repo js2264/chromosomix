@@ -219,6 +219,37 @@ describe('the round trip', () => {
     expect(recall(key, 'annotations')).toEqual([TRACK])
   })
 
+  /**
+   * The declarations about the molecules (§8.15) and the rungs a reader added
+   * (§3.4), through JSON — the road a saved workspace and a store's session
+   * take. They were written out and dropped on the way back in.
+   */
+  it('carries the circles, the origins and the added rungs through the file', () => {
+    const key = 'trip|pak.mcool'
+    remember(key, 'map:circular', ['chr'])
+    remember(key, 'map:circular-evidence', { chr: 0.65 })
+    remember(key, 'map:origins', { chr: { at: 6_374_500, by: 'task' } })
+    remember(key, 'map:resolutions', [10_000])
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+
+    const read = roundTrip(config)
+    expect(read?.circular).toEqual(['chr'])
+    expect(read?.origins).toEqual({ chr: 6_374_500 })
+    expect(read?.resolutions).toEqual([10_000])
+    applyConfig(read as NonNullable<typeof read>, 's8|pak.mcool')
+    expect(recall('s8|pak.mcool', 'map:circular')).toEqual(['chr'])
+    expect(recall('s8|pak.mcool', 'map:origins')).toEqual({ chr: 6_374_500 })
+    expect(recall('s8|pak.mcool', 'map:resolutions')).toEqual([10_000])
+    // Declared, so the importer's first open does not measure its way past them.
+    expect(recall('s8|pak.mcool', 'map:circular-evidence')).not.toBeNull()
+
+    // *Measured, none* is an answer, and a file that says nothing says nothing.
+    expect(parseTab({ state: STATE, circular: [] })?.circular).toEqual([])
+    const silent = parseTab({ state: STATE })
+    expect(silent !== null && 'circular' in silent).toBe(false)
+    expect(silent !== null && 'origins' in silent).toBe(false)
+  })
+
   it('carries the deck’s arrangement into the importing session', () => {
     const key = 'deck|six.cool'
     remember(key, 'deck:starred', 'p4')

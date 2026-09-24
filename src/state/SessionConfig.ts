@@ -808,6 +808,24 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       ? row['plot']
       : {}) as PlotOptions,
     ...panelsOf(row['panels']),
+    // The declarations about the molecules (§8.15) and the rungs added to the
+    // ladder (§3.4): `buildConfig` writes them and `applyConfig` puts them back,
+    // and this read walked past all three — so a workspace carried them out and
+    // dropped them on the way in, and an origin typed on the Chromosomes table,
+    // or the circles and origins a published session declares, reached nobody.
+    // An empty circle list is kept: it is the answer *measured, none*. Each
+    // store checks its own shape again when it reads the scope.
+    ...(Array.isArray(row['circular'])
+      ? { circular: (row['circular'] as unknown[]).filter((name): name is string => typeof name === 'string') }
+      : {}),
+    ...originsOf(row['origins']),
+    ...resolutionsOf(
+      Array.isArray(row['resolutions'])
+        ? (row['resolutions'] as unknown[]).filter(
+            (size): size is number => typeof size === 'number' && Number.isInteger(size) && size > 0,
+          )
+        : null,
+    ),
   }
 }
 

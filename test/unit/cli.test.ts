@@ -109,6 +109,66 @@ describe('the surface', () => {
     expect(await main(['expected'])).toBe(2)
     expect(complained()).toMatch(/needs at least one file/)
   })
+
+  it('offers the junction test beside the tasks', async () => {
+    reset()
+    expect(await main([])).toBe(0)
+    expect(said()).toMatch(/metacooler-run circular/)
+  })
+})
+
+describe('the junction test', () => {
+  /** Rows of the table `circular` printed, without its `#` lines. */
+  const table = (): string[][] =>
+    said()
+      .split('\n')
+      .filter((line) => line !== '' && !line.startsWith('#'))
+      .map((line) => line.split('\t'))
+
+  it('reads the sequences of a map whose ends are a chromosome apart as lines', async () => {
+    reset()
+    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(said()).toMatch(/^# framing: 1000 bp$/m)
+    const rows = table()
+    expect(rows[0]).toEqual(['sequence', 'length', 'score', 'circular'])
+    expect(rows.slice(1).map((row) => [row[0], row[1], row[3]])).toEqual([
+      ['chrI', '120000', 'no'],
+      ['chrII', '60000', 'no'],
+    ])
+  })
+
+  it('reads a sequence whose ends are neighbours as a circle', async () => {
+    // Every cell present, and each a function of the separation round the ring.
+    const n = 60
+    const ring: HicRecord[] = []
+    for (let x = 0; x < n; x++) {
+      for (let y = x; y < n; y++) {
+        const d = Math.min(y - x, n - (y - x))
+        ring.push({ x, y, value: Math.round(1000 / (1 + d)) })
+      }
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'ring', length: n * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': ring },
+      blockBinCount: 32,
+    })
+    const file = join(directory, 'ring.hic')
+    await writeFile(file, fixture.bytes)
+    reset()
+    expect(await main(['circular', file, '--quiet'])).toBe(0)
+    const [, row] = table()
+    expect(row[0]).toBe('ring')
+    expect(Number(row[2])).toBeCloseTo(1, 1)
+    expect(row[3]).toBe('yes')
+  })
+
+  it('needs a file', async () => {
+    reset()
+    expect(await main(['circular'])).toBe(2)
+    expect(complained()).toMatch(/circular needs at least one file/)
+  })
 })
 
 describe('running a task', () => {
@@ -467,6 +527,10 @@ describe('the annotations venue', () => {
     const onMap = join(directory, 'composition-map')
     expect(await main(['composition', sample, '--sequence', genome, '--out', onMap, '--quiet'])).toBe(0)
     expect(await rows(onMap, 'sample')).toHaveLength(120 + 60)
+
+    // Named after the reference, as the app names them after its entry.
+    const gc = await readFile(join(onMap, 'sample.composition.composition-gc.tsv'), 'utf8')
+    expect(gc).toMatch(/^# output: GC content · genome\.fa/m)
 
     const asked = join(directory, 'composition-asked')
     expect(
