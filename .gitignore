@@ -53,3 +53,9 @@ dist-standalone/
 gallery/
 gallery-figures/
 gallery-bacteria/
+
+# What notebooks/dbz-chromosome-figures.ipynb fetches and makes: the store's maps
+# and references, every metacooler-run output, and the figures — all regenerated
+# by running it, and the maps alone are a hundred megabytes.
+notebooks/work/
+notebooks/figures/

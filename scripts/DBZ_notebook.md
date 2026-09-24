@@ -26,3 +26,11 @@ python3 scripts/DBZ_store.py serve ~/Downloads/metacooler/data/dbz/store
 aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delete \
   --exclude '*.tsv' --exclude '*.log'
 ```
+
+## Figures
+
+`notebooks/dbz-chromosome-figures.ipynb` draws one figure per species of the store — the longest
+chromosome from its origin to its compartments, with the inter-arm alignment of every species beside
+it — running `metacooler-run` over each map and parsing what it writes. It reads the published store
+by default; set `STORE` in its first cell to `~/Downloads/metacooler/data/dbz/store` to read the
+folder the suite wrote instead.
