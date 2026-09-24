@@ -306,7 +306,10 @@ function axisRows(
       `${which} name`,
       textBox(axis.label ?? '', (label) => patch({ label: label === '' ? null : label }), 'What the axis is called; empty is the task’s own name', which === 'x' ? spec.xLabel : spec.yLabel),
     ),
-    el('div', { class: 'field ann-field figure-range' }, el('span', { class: 'field-label', text: `${which} from` }), edge(0), el('span', { text: 'to' }), edge(1)),
+    // `to` is a label too, and wears the class: bare, it sat in the label column
+    // under `x from` at the body's size rather than the labels', the one word in
+    // the card set larger than its neighbours.
+    el('div', { class: 'field ann-field figure-range' }, el('span', { class: 'field-label', text: `${which} from` }), edge(0), el('span', { class: 'field-label', text: 'to' }), edge(1)),
     toggle(`${which} grid`, axis.grid, (grid) => patch({ grid }), 'Rules across the plot at the ticks'),
   ]
 }
@@ -430,7 +433,7 @@ function colourCard(style: FigureStyle, set: Apply): HTMLElement {
       { class: 'field ann-field figure-range' },
       el('span', { class: 'field-label', text: 'scale' }),
       numberBox(style.vmin, (vmin) => set({ vmin }), 'The value the lowest colour means; empty fits the data'),
-      el('span', { text: 'to' }),
+      el('span', { class: 'field-label', text: 'to' }),
       numberBox(style.vmax, (vmax) => set({ vmax }), 'The value the highest colour means; empty fits the data'),
     ),
   )

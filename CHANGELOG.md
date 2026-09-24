@@ -971,6 +971,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
+  and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in
+  the card.
+
 - **A narrow deck cell's lanes no longer paint over the next cell (§16.5).** Three or four across,
   the first map's side stacks were wider than its cell and were drawn over the neighbouring cell's
   heading and locus box. The map now gives way down to 10rem inside a deck, the rest of the cell
