@@ -836,7 +836,7 @@ describe('a band along one axis', () => {
 describe('the two axes of a wheel', () => {
   function wheeled(): {
     heatmap: HeatmapView
-    wheel: (deltaX: number, deltaY: number) => void
+    wheel: (deltaX: number, deltaY: number, keys?: { metaKey?: boolean; ctrlKey?: boolean }) => void
     prevented: () => number
   } {
     const { canvas, fire } = harness(400)
@@ -847,12 +847,14 @@ describe('the two axes of a wheel', () => {
     return {
       heatmap,
       prevented: () => count,
-      wheel: (deltaX, deltaY) =>
+      wheel: (deltaX, deltaY, keys = {}) =>
         fire('wheel', {
           clientX: 200,
           clientY: 200,
           deltaX,
           deltaY,
+          metaKey: keys.metaKey === true,
+          ctrlKey: keys.ctrlKey === true,
           preventDefault: () => {
             count++
           },
@@ -884,6 +886,26 @@ describe('the two axes of a wheel', () => {
     // Taken from the page, which is the half of this that keeps the map from
     // sliding *and* the tab from going back at the same time.
     expect(prevented()).toBe(2)
+  })
+
+  it('slides up and down with ⌘ held, instead of zooming', () => {
+    const { heatmap, wheel, prevented } = wheeled()
+    wheel(0, -400)
+    const zoom = heatmap.zoomLevel
+    const plot = heatmap.plotRect
+    const rowAt = (): number | undefined => heatmap.cellAt(plot.x + plot.width / 2, plot.y + 1)?.row
+    const before = rowAt()
+    wheel(0, 180, { metaKey: true })
+    expect(heatmap.zoomLevel).toBe(zoom)
+    expect(rowAt()).not.toBe(before)
+    expect(prevented()).toBe(2)
+  })
+
+  it('keeps a pinch — a wheel with Ctrl held — the zoom, ⌘ or not', () => {
+    const { heatmap, wheel } = wheeled()
+    const fitted = heatmap.zoomLevel
+    wheel(0, -200, { metaKey: true, ctrlKey: true })
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
   })
 })
 

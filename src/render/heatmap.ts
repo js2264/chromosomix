@@ -5355,6 +5355,15 @@ export class HeatmapView {
         this.panBy(-e.deltaX, 0)
         return
       }
+      // **With ⌘ held, up and down slide too** — both axes at once, so two
+      // fingers move the map wherever they go, and moving it up the screen no
+      // longer needs the button held down. ⌘ and never Ctrl: a trackpad pinch
+      // arrives as a wheel with `ctrlKey` set, and it has to stay the zoom.
+      if (e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        this.panBy(-e.deltaX, -e.deltaY)
+        return
+      }
       e.preventDefault()
       const [x, y] = local(e)
       // Exponential in the wheel delta so a trackpad's many small events and a

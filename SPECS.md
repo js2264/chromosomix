@@ -1469,6 +1469,14 @@ everywhere outside the picture. Over a lane stack it means the same thing as ove
 stack is drawn on the map's own axis — the map moving under the pointer while the profile above it
 stayed put would read as the two coming apart.
 
+**With ⌘ held, up and down slide too.** Two fingers on a trackpad slide a map sideways and zoom it
+vertically, so moving it *up or down the screen* took a drag with the button held — the one
+direction of the picture the fingers already on the pad could not reach. ⌘ turns the vertical axis
+into a slide as well, both axes at once, so with it held a two-finger drag moves the map wherever the
+fingers go and the zoom waits until it is let go. ⌘ and never Ctrl: a trackpad pinch arrives as a
+wheel with `ctrlKey` set, and it stays the zoom it is. Over a lane stack ⌘-scroll keeps its own
+meaning, that lane's ceiling (§5.8), since the gesture is aimed at the lane under it.
+
 **Touch is a first-class input**, not a fallback: one finger pans, two pinch, a tap opens what it
 lands on and a double tap refits. Below 34rem the app is one column — the plot as wide as the screen,
 the legend on its side beneath it. Every control revealed by *pointing* — a tab's ×, a track's colour

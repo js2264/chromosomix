@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **⌘ + two-finger scroll slides a map up and down (§7.2).** Sideways already slid it and up and
+  down zoomed, so moving the map up the screen needed a drag with the button held; with ⌘ held the
+  wheel slides on both axes. A pinch (Ctrl-wheel) stays the zoom, and ⌘-scroll over a lane still
+  sets that lane's ceiling. The shortcuts dialog says so, and no longer claims a sideways swipe over
+  the map goes back a page.
+
 - **A companion off the lead reads its own window (§16.3).** A box drawn on it with Option held
   re-reads that window for that map — as finely as its rung and its share of the budget allow —
   rather than magnifying the block it already held, so one file in three cells can be a whole

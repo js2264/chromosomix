@@ -17,7 +17,7 @@ import { buildLine } from '../version'
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
  *
- * Written `{opt}` / `{shift}` / `{ceil}` in the tables and resolved here.
+ * Written `{opt}` / `{shift}` / `{ceil}` / `{meta}` in the tables and resolved here.
  * The tables used to print both spellings — `⌥ / Alt + drag` — which asks a
  * reader to work out which half is theirs, in a dialog whose whole job is to
  * tell them what to press; and the pair could not say that the ceiling gesture
@@ -32,6 +32,9 @@ function gestureKeys(pattern: string): string {
     .replace(/\{opt\}/g, mac ? '⌥' : 'Alt')
     .replace(/\{shift\}/g, mac ? '⇧' : 'Shift')
     .replace(/\{ceil\}/g, mac ? '⌘' : 'Alt')
+    // The key the browser reports as `metaKey`: ⌘ on a Mac, the Windows key
+    // elsewhere — what slides a map up and down (`render/heatmap.ts`).
+    .replace(/\{meta\}/g, mac ? '⌘' : 'Win')
 }
 
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
@@ -41,7 +44,8 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['{shift} + {opt} + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
-  ['two fingers sideways', 'Back and forward, as anywhere else on the page'],
+  ['two fingers sideways', 'Slide the map left and right'],
+  ['{meta} + wheel', 'Slide the map up and down, and sideways with it'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
   ['+ / −', 'Zoom about the centre'],
