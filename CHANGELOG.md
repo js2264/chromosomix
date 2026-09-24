@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A key for *colour by manual annotations* (§25.5).** A row per mark, named as the Manual
+  annotations card names it: its swatch recolours the mark itself — on the card and every map too —
+  a click takes it off the model's colouring and a double-click shows it alone.
+
+- **A mark is edited in its row (§8.1).** A press on a mark's place on the Manual annotations card
+  turns it into the adding form's boxes (and a line's axis); Enter moves the mark in place, keeping
+  its colour and its position in the list, and Escape leaves it.
+
 - **Every export asks where to save, in a dialog opened in Downloads (§26.6).** Figures, decks,
   structures, bigWigs, bedGraphs, tables, marks, the console's script, a workspace and an `.mcool`
   used to land straight in the browser's downloads folder under the app's name; the platform's *Save
@@ -293,6 +301,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The 3D colourings are named for what they measure, and the model's own five lead the list
+  (§25.5).** *sequence*, *linear position along the sequence*, *manual annotations* (was *your
+  marks*, also under *loops as chords*), *spatial distance to pinned bin* and *contacts with pinned
+  bin*, then haplotype, the file's columns, tracks and feature sets. The *score column* colouring is
+  gone; a session stored with it opens coloured by sequence.
 
 - **The Aesthetics column's *Map* card is the starred map's (§16.5).** Starring a companion puts
   *its* card in the column, in the first map's place, and a setting changed there changes that map

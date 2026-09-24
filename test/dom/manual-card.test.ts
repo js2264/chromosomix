@@ -278,6 +278,68 @@ describe('the list', () => {
   })
 })
 
+describe('editing a mark in its row (§8.1)', () => {
+  const press = (key: string): void => {
+    const box = document.activeElement
+    box?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  }
+
+  it('moves a box in place — its colour, its id and its place in the list kept', () => {
+    const card = mount()
+    card.type('Rectangles', ['I:120000-180000'])
+    card.press('Rectangles', 'add')
+    card.type('Rectangles', ['I:500000-600000'])
+    card.press('Rectangles', 'add')
+    const first = card.store.rects[0]
+    card.store.update(first.id, { colour: '#123456' })
+    document.querySelector<HTMLButtonElement>('.manual-where')?.click()
+    const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
+    // The row's own grouped form, ready to be changed.
+    expect(boxes.map((box) => box.value)).toEqual(['I:120,000-180,000', 'I:120,000-180,000'])
+    boxes[0].value = 'I:130,000-190,000'
+    boxes[1].value = ''
+    press('Enter')
+    const moved = card.store.rects[0]
+    expect(moved.id).toBe(first.id)
+    expect(moved.colour).toBe('#123456')
+    // An empty second box is the same stretch on both axes, as in the form.
+    expect(moved.a).toEqual({ contig: 'I', from: 130000, to: 190000 })
+    expect(moved.b).toEqual({ contig: 'I', from: 130000, to: 190000 })
+    expect(card.store.rects[1].a.from).toBe(500000)
+    expect(document.querySelector('.manual-where')?.textContent).toBe('▭ I:130,000-190,000')
+  })
+
+  it('changes a line’s place and which rule it draws', () => {
+    const card = mount()
+    card.type('Lines', ['IV:1,200,000'])
+    card.press('Lines', 'add')
+    document.querySelector<HTMLButtonElement>('.manual-where')?.click()
+    const axis = document.querySelector<HTMLSelectElement>('.manual-edit-axis')
+    axis!.value = 'both'
+    const box = document.querySelector<HTMLInputElement>('.manual-edit-box')
+    box!.value = 'IV:1.25 Mb'
+    box!.focus()
+    press('Enter')
+    expect(card.store.lines[0].at).toEqual({ contig: 'IV', bp: 1250000 })
+    expect(card.store.lines[0].axis).toBe('both')
+  })
+
+  it('keeps a box it cannot read open and red, and Escape leaves the mark where it was', () => {
+    const card = mount()
+    card.type('Lines', ['IV:1,200,000'])
+    card.press('Lines', 'add')
+    document.querySelector<HTMLButtonElement>('.manual-where')?.click()
+    const box = document.querySelector<HTMLInputElement>('.manual-edit-box')
+    box!.value = 'nowhere'
+    press('Enter')
+    expect(box!.classList.contains('is-bad')).toBe(true)
+    expect(document.querySelector('.manual-edit')).not.toBeNull()
+    press('Escape')
+    expect(document.querySelector('.manual-edit')).toBeNull()
+    expect(card.store.lines[0].at).toEqual({ contig: 'IV', bp: 1200000 })
+  })
+})
+
 describe('importing', () => {
   it('takes a BEDPE dropped anywhere on the card and says what it added', async () => {
     const card = mount()

@@ -10,6 +10,7 @@
  */
 
 import { recall, remember } from '../state/UiMemory'
+import { fmt } from '../units'
 
 /** A genomic point, as the pointing mark kinds are anchored by. */
 export interface ManualPoint {
@@ -198,6 +199,23 @@ export class ManualStore {
     this.changed()
   }
 
+  /**
+   * Put a mark somewhere else: the same mark — its id, its colour, its place
+   * in the list — at the coordinates the reader typed over its row.
+   *
+   * The whole mark rather than a patch, for the reason {@link update} gives:
+   * the three kinds' geometry fields collide by name and not by type, so the
+   * caller hands over a mark its own type checked. A kind that differs from
+   * the one held is refused, since a line typed over an arrowhead's row is a
+   * different mark, and that is a remove and an add.
+   */
+  reshape(next: ManualMark): void {
+    const held = this.items.find((mark) => mark.id === next.id)
+    if (held === undefined || held.kind !== next.kind) return
+    this.items = this.items.map((mark) => (mark.id === next.id ? { ...next, colour: held.colour } : mark))
+    this.changed()
+  }
+
   remove(id: string): void {
     const before = this.items.length
     this.items = this.items.filter((mark) => mark.id !== id)
@@ -331,4 +349,40 @@ export function formatPoint(point: ManualPoint): string {
 /** A span, written the way {@link parseSpan} reads it back. */
 export function formatSpan(span: ManualSpan): string {
   return `${span.contig}:${Math.round(span.from)}-${Math.round(span.to)}`
+}
+
+/**
+ * A mark, as the reader reads it — grouped digits, which is what every other
+ * coordinate on screen wears (§26.1).
+ *
+ * `formatPoint` and `formatSpan` write the ungrouped form their own boxes take
+ * back, and that is what a *copy* wants (§26.1's last rule) — but this row is
+ * read rather than pasted, and `I:120000` in a card whose placeholders say
+ * `rows I:120,000` was the fifth spelling of a locus on one screen. The boxes
+ * take the grouped form too, so nothing about the round trip is lost.
+ */
+export function describeMark(mark: ManualMark): string {
+  if (mark.kind === 'line') {
+    const glyph = mark.axis === 'vertical' ? '│' : mark.axis === 'horizontal' ? '─' : '┼'
+    return `${glyph} ${pointLabel(mark.at)}`
+  }
+  if (mark.kind === 'rect') {
+    const a = spanLabel(mark.a)
+    const b = spanLabel(mark.b)
+    // One extent for a box on the diagonal, which is what its form takes back.
+    return a === b ? `▭ ${a}` : `▭ ${a} × ${b}`
+  }
+  const a = pointLabel(mark.a)
+  const b = pointLabel(mark.b)
+  return a === b ? `◤ ${a}` : `◤ ${a} × ${b}`
+}
+
+/** A point as a reader reads it: `IV:1,200,000`. Its box reads it back (§26.1). */
+export function pointLabel(point: ManualPoint): string {
+  return `${point.contig}:${fmt.pos(point.bp)}`
+}
+
+/** A span as a reader reads it: `IV:1,100,000-1,150,000`. */
+export function spanLabel(span: ManualSpan): string {
+  return `${span.contig}:${fmt.pos(span.from)}-${fmt.pos(span.to)}`
 }

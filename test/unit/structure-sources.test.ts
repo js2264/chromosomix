@@ -101,6 +101,16 @@ describe('colouring by the reader’s marks', () => {
       { id: 'm2', kind: 'line', axis: 'both', at: { contig: 'chrA', bp: 15000 }, colour: 'blue' },
     ])
     expect(source.colours).toEqual(['red', 'blue', 'red', null, 'red', null])
+    expect(source.label).toBe('manual annotations')
+  })
+
+  it('leaves out a mark its key has hidden, and only that one', () => {
+    const marks = [
+      { id: 'm1', kind: 'rect', a: { contig: 'chrA', from: 0, to: 25000 }, b: { contig: 'chrB', from: 0, to: 5000 }, colour: 'red' },
+      { id: 'm2', kind: 'line', axis: 'both', at: { contig: 'chrA', bp: 15000 }, colour: 'blue' },
+    ] as const
+    expect(marksSource(model(), marks, new Set(['m1'])).colours).toEqual([null, 'blue', null, null, null, null])
+    expect(marksSource(model(), marks, new Set(['m2'])).colours).toEqual(['red', 'red', 'red', null, 'red', null])
   })
 })
 

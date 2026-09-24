@@ -298,7 +298,7 @@ try {
   }
   const byContacts = row('colour by').locator('select')
   const contactOption = (await byContacts.locator('option').allTextContents()).find((v) =>
-    v.startsWith('contacts with the pinned bead'),
+    v.startsWith('contacts with pinned bin'),
   )
   if (contactOption) {
     await byContacts.selectOption({ label: contactOption })

@@ -213,7 +213,7 @@ function make(
   const view = document.createElement('div')
   view.appendChild(document.createElement('div')).className = 'view-head'
   deck.frame(view)
-  return { deck, published, went, dropped }
+  return { deck, published, went, dropped, manual }
 }
 
 function state(maps: string | undefined): ViewState {
@@ -811,6 +811,21 @@ describe('what the model can be coloured by', () => {
     expect(values).not.toContain('track:f1')
   })
 
+  it('opens on the model’s own five, by what each measures, and offers no score column', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const select = settingsRow(deck, 'colour by')?.querySelector<HTMLSelectElement>('select')
+    const texts = Array.from(select?.options ?? []).map((option) => option.textContent)
+    expect(texts.slice(0, 5)).toEqual([
+      'sequence',
+      'linear position along the sequence',
+      'manual annotations',
+      'spatial distance to pinned bin',
+      'contacts with pinned bin',
+    ])
+    expect(Array.from(select?.options ?? []).map((option) => option.value)).not.toContain('score')
+  })
+
   it('offers a loops row as chords only where the list has one, beside the reader\'s own marks', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
@@ -1057,6 +1072,49 @@ describe('the key (§25.5)', () => {
     swatch!.value = '#112233'
     swatch!.dispatchEvent(new Event('input'))
     expect(store.restyled.at(-1)?.patch.structure?.sequenceColours).toEqual({ chr1: '#112233' })
+  })
+})
+
+describe('the key of colour by manual annotations (§25.5)', () => {
+  it('lists every mark, hides one on a click, shows one alone on a double-click, and recolours the mark itself', async () => {
+    const entry = structureEntry()
+    const byMarks = {
+      ...entry,
+      style: { ...entry.style, structure: { ...entry.style.structure!, colourBy: 'marks' } },
+    } as AnnotationEntry
+    const store = fakeStore([byMarks])
+    const { deck, manual } = make(store)
+    manual.add({ id: 'k1', kind: 'line', axis: 'vertical', at: { contig: 'chr1', bp: 12000 }, colour: '#111318' })
+    manual.add({ id: 'k2', kind: 'rect', a: { contig: 'chr1', from: 10000, to: 20000 }, b: { contig: 'chr1', from: 10000, to: 20000 }, colour: '#c0392b' })
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    await new Promise((r) => setTimeout(r, 60))
+    expect(cell.querySelector('.structure-key-title')?.textContent).toBe('manual annotations')
+    const names = all<HTMLButtonElement>(cell, '.structure-key-mark .structure-key-name')
+    // Named as the Manual annotations card names them.
+    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,000', '▭ chr1:10,000-20,000'])
+    names[0].click()
+    await new Promise((r) => setTimeout(r, 260))
+    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    names[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    // The swatch writes the mark, which is what the card and every map draw.
+    const swatch = cell.querySelector<HTMLInputElement>('.structure-key-mark .structure-key-swatch')
+    swatch!.value = '#112233'
+    swatch!.dispatchEvent(new Event('input'))
+    expect(manual.marks.find((mark) => mark.id === 'k1')?.colour).toBe('#112233')
+  })
+
+  it('says where marks come from while there are none', async () => {
+    const entry = structureEntry()
+    const byMarks = {
+      ...entry,
+      style: { ...entry.style, structure: { ...entry.style.structure!, colourBy: 'marks' } },
+    } as AnnotationEntry
+    const { deck } = make(fakeStore([byMarks]))
+    deck.add({ kind: 'structure' })
+    await new Promise((r) => setTimeout(r, 60))
+    expect(structureCells(deck)[0].querySelector('.structure-key-empty')?.textContent).toMatch(/Manual annotations card/)
   })
 })
 

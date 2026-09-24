@@ -1140,7 +1140,7 @@ export type StructureProjection = 'perspective' | 'orthographic'
  * The built-in colourings a model offers before it asks any other row (§25).
  *
  * `sequence` is one hue per contig, `haplotype` one lightness per homologue,
- * `position` a ramp along each chain, `score` the file's fifth column. Every
+ * `position` a ramp along each chain. Every
  * other value of {@link StructureStyle.colourBy} is a key of another row —
  * `track:<id>`, `features:<id>` — or one of the two the pin makes
  * (`distance`, `contacts`), resolved where the row is, in
@@ -1149,7 +1149,6 @@ export type StructureProjection = 'perspective' | 'orthographic'
 export const STRUCTURE_COLOUR_SEQUENCE = 'sequence'
 export const STRUCTURE_COLOUR_HAPLOTYPE = 'haplotype'
 export const STRUCTURE_COLOUR_POSITION = 'position'
-export const STRUCTURE_COLOUR_SCORE = 'score'
 export const STRUCTURE_COLOUR_DISTANCE = 'distance'
 export const STRUCTURE_COLOUR_CONTACTS = 'contacts'
 /** The reader's own marks: a line colours its bead, a rectangle its run (§25.5). */
@@ -1245,6 +1244,12 @@ export interface StructureStyle {
   /** A colour the reader chose for a sequence, by name, over the palette's. */
   sequenceColours: Record<string, string>
   /**
+   * Marks left out of *colour by manual annotations* (§25.5): the key's click,
+   * by the mark's id. The model's own, and not the mark's — hiding one from the
+   * colouring leaves it drawn on every map, which is where it was made.
+   */
+  marksHidden: string[]
+  /**
    * How deep the fog sits, 0 (none) to 1 (the far side gone): space + scroll
    * in the cell, or the slider. 0.6 is the depth cue the cell always had.
    */
@@ -1337,6 +1342,7 @@ export function defaultStructureStyle(): StructureStyle {
     loops: '',
     ghosted: [],
     sequenceColours: {},
+    marksHidden: [],
     fog: 0.6,
     fogOn: true,
     chords: true,
@@ -1394,8 +1400,11 @@ export function structureStyleOf(value: unknown): StructureStyle {
     beads: flag('beads', representation === 'beads' || representation === 'beads+sticks'),
     sticks: flag('sticks', representation === 'sticks' || representation === 'beads+sticks'),
     tube: flag('tube', representation === 'tube'),
+    // `score` — the file's fifth column — was a colouring once and is not now:
+    // a g3d has no such column worth a ramp, and a session stored with it opens
+    // by sequence rather than on a row the menu no longer offers.
     colourBy:
-      typeof colourBy === 'string' && colourBy.length <= 200 ? colourBy : fallback.colourBy,
+      typeof colourBy === 'string' && colourBy.length <= 200 && colourBy !== 'score' ? colourBy : fallback.colourBy,
     beadRadius: bounded(row['beadRadius'], 0.02, 3, fallback.beadRadius),
     tubeRadius: bounded(row['tubeRadius'], 0.02, 3, fallback.tubeRadius),
     opacity: bounded(row['opacity'], 0, 1, fallback.opacity),
@@ -1415,6 +1424,9 @@ export function structureStyleOf(value: unknown): StructureStyle {
       ? (row['ghosted'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 200).slice(0, 10000)
       : [],
     sequenceColours: sequenceColoursOf(row['sequenceColours']),
+    marksHidden: Array.isArray(row['marksHidden'])
+      ? (row['marksHidden'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 64).slice(0, 10000)
+      : [],
     fog: bounded(row['fog'], 0, 1, fallback.fog),
     fogOn: row['fogOn'] !== false,
     chords: row['chords'] !== false,

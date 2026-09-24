@@ -36,7 +36,6 @@ import {
   STRUCTURE_COLOUR_DISTANCE,
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
-  STRUCTURE_COLOUR_SCORE,
   STRUCTURE_COLOUR_SEQUENCE,
   STRUCTURE_COLOUR_TRACK,
 } from '../annotations/types'
@@ -135,7 +134,6 @@ export function resolveColours(
   if (by === STRUCTURE_COLOUR_SEQUENCE || by === '') return bySequence(structure, style.sequenceColours)
   if (by === STRUCTURE_COLOUR_HAPLOTYPE) return byHaplotype(structure)
   if (by === STRUCTURE_COLOUR_POSITION) return byPosition(structure, ramp)
-  if (by === STRUCTURE_COLOUR_SCORE) return byField(structure, STRUCTURE_COLOUR_SCORE)
   if (source !== null) return bySource(structure, source, ramp)
   if (by.includes(':')) return bySequence(structure, style.sequenceColours)
   return byField(structure, by)
@@ -217,7 +215,7 @@ function byPosition(structure: Structure, ramp: string | null = null): BeadColou
   return {
     rgb: rgbOf(css),
     css,
-    key: { kind: 'ramp', title: 'position along the sequence', colormap, min: 0, max: 1 },
+    key: { kind: 'ramp', title: 'linear position along the sequence', colormap, min: 0, max: 1 },
   }
 }
 

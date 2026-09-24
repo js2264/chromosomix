@@ -1965,6 +1965,15 @@ resolution and no clipboard, since a BED is not a picture, and its two options a
 marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
 *loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
+**A mark is moved where it is listed.** Its row reads as the mark's place, grouped (§26.1), and a
+press on it turns that text into the boxes the adding forms use — one for a line, with its axis
+select beside it; rows and columns for an arrowhead or a rectangle, the second left empty meaning the
+same place on both — taking what those forms take. Enter, or a click away, moves the mark **in place**:
+its id, its colour and its position in the list are kept, so everything that names it — a map, the
+3D key, a chord — follows. Escape leaves it where it was, and a box that does not read stays open with
+a red edge rather than dropping what was typed. It used to be removed and drawn again, which lost its
+colour and sent it to the end of the list.
+
 **They come back in by the same card.** An *Import* section above *Export* holds the Tracks card's
 load zone, worded *Load marks*: click it to choose files, or drop one anywhere on the card — the zone
 lights as soon as a file crosses it, and the drop stops at the card, since the same BED let go over
@@ -1988,7 +1997,7 @@ is on a turned map, since that is what it is.
 glyph is — a mark stood off a cell along its 45° axis — and it can be put at any off-diagonal point
 rather than only at a loop. So the map's right-click menu offers *Arrowhead*, with *a loop at r × c*
 as its hint, where it used to offer *Loop* and send a reader looking for their mark under a heading
-called Arrowheads; the structure card's chord source is *your marks* for the same reason (§25.5).
+called Arrowheads; the structure card's chord source is *manual annotations* for the same reason (§25.5).
 
 **Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
 and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
@@ -8276,7 +8285,7 @@ map, lane and tracks cell. On the model it is the bead again, **twice the radius
 colour** — a place is a thing on the model, so it is drawn as a bigger bead rather than as one more
 line over one. **Mark a loop** holds the first bead clicked, names it in the status bar and closes
 an **arrowhead** — the map's loop mark — on the second; Esc lets the held bead go. An arrowhead made
-here is a chord on the model, since *loops as chords* switches to *your marks* when nothing else is
+here is a chord on the model, since *loops as chords* switches to *manual annotations* when nothing else is
 chosen. **Measure** is a **drag**: press on one bead, travel to another, let go, and the
 measurement is made — the line follows the pointer on the way, so what is about to be measured is
 what is drawn. The model does not turn under a measuring drag, because the hand is pointing rather
@@ -8322,8 +8331,18 @@ colour picker — click it to choose the sequence's colour, kept with the row by
 palette's — and its name as a button: a **click ghosts** that sequence (drawn as the beads outside
 the window are, and hidden with them under *outside the window: hide*), a **double-click shows it
 alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
-window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
-**arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
+window's: a ghosted sequence stays ghosted whatever the maps look at.
+
+**And under *colour by manual annotations* the key lists the marks**, a row each, named as the
+Manual annotations card names them (`│ IV:1,200,000`, `▭ IV:1,100,000-1,150,000`), with the same
+three gestures: the swatch is **the mark's own colour**, written to the marks' store, so a colour
+picked on the model is the colour on the card and on every map; a **click** takes that mark off the
+model's colouring, and a **double-click shows it alone** (a second brings all back). What is hidden is
+held in the model's style by the mark's id and hides the colouring only — the mark stays drawn
+wherever it was put, since a key that removed it would be a second ×. With no marks yet the key
+says where they are made. This colouring used to have no key at all, so a model coloured by six
+marks was six colours nobody could name. The reader's own
+**arrowhead marks** are offered under *loops as chords* as *manual annotations*, beside the loaded loop
 sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
 set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
 was a *show the chords* that could not show one, and a reader pressing it could not tell which of
@@ -8399,7 +8418,7 @@ reflection is applied **first**, since mirroring is what makes the fit possible 
 first would reflect the answer instead of the question. Two cells each *in the frame of* one row,
 *turning together* (§25.3), are two models in one frame showing the same face of each.
 
-**Contacts from the pin.** With a bead pinned, *colour by contacts with the pinned bead* puts the
+**Contacts from the pin.** With a bead pinned, *colour by contacts with pinned bin* puts the
 map's row through it onto the beads: each value through the map's own transform, clipped to its
 `vmin`–`vmax`, in its colormap — the virtual 4C of the pin, read in space and agreeing with the
 picture beside it cell for cell. **A pair the map never counted is the bottom of that scale**, not
@@ -8431,15 +8450,20 @@ by sequence or haplotype is levels and has no scale to change, and a control tha
 the default colouring is one a reader tries and then distrusts. The key follows the choice, because
 a legend naming one ramp over a model drawn on another is a legend that lies.
 
-One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
-own **score** and any column it carries; and, from the session, **a track's values** at each
-bead, read through the same sample cache the lanes use at one bucket per bead and on the lane's
-own limits, so a bead coloured by a bigWig agrees with the lane at every value; **a feature
-set's** colour where a bead overlaps one; **the reader's marks**; **the distance to the pinned
-bead** in the model's units; and **contacts with the pinned bead** — the lead map's own row
-through it, read out of the block in hand on the map's own transform, range and colormap, the
-virtual 4C drawn in space. A colouring the list no longer has stays named in the picker rather
-than silently becoming the first option. Two rules carried from the modules reused: fit the
+One picker, on the picture, and the model's own five lead it in the order a reader goes through
+them: **sequence**; **linear position along the sequence**; **manual annotations** — the reader's
+marks, a line colouring its bead and a rectangle its run; **spatial distance to pinned bin**, in the
+model's units; and **contacts with pinned bin** — the lead map's own row through it, read out of the
+block in hand on the map's own transform, range and colormap, the virtual 4C drawn in space. *Linear*
+and *spatial* because the picture beside the model measures a distance too, in base pairs, and the
+two words say which one each colouring is. After them, **haplotype** where there are homologues,
+any column the file carries, and from the session **a track's values** at each bead — read
+through the same sample cache the lanes use at one bucket per bead and on the lane's own limits, so
+a bead coloured by a bigWig agrees with the lane at every value — and **a feature set's** colour
+where a bead overlaps one. The file's **score column** was a colouring and is not now: a g3d carries
+none worth a ramp, so the row was a column of nothing, and a session stored coloured by it opens by
+sequence. Any other colouring the list no longer has stays named in the picker rather than silently
+becoming the first option. Two rules carried from the modules reused: fit the
 colouring to the file, not to the window, so turning the model never changes what a colour means;
 and use the lane's scale.
 

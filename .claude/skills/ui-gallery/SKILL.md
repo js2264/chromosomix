@@ -21,6 +21,7 @@ node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
+node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -68,6 +69,12 @@ file under the name "the reader" typed; then, in a page with no dialog, the plai
 after any change to `ui/export.ts` or to an export button. Any script that waits for a `download`
 event has to take the dialog away first (`window.showSaveFilePicker = undefined` in an init
 script), or the export is cancelled before it starts.
+
+The eighth follows the reader's **marks** from the Manual annotations card to the model (§8.1,
+§25.5): two marks typed, the structure dropped, the colour-by menu's order printed, *colour by manual
+annotations* and its key, a mark hidden from the key, one recoloured from it — with the card's row
+checked to have taken the same colour — and one moved by typing over its row. Run it after any
+change to the marks, the Manual annotations card or the structure's key.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

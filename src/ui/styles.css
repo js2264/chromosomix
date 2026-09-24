@@ -8873,6 +8873,39 @@ canvas.is-frozen {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A button, since a press edits the mark, drawn as the text it is — the
+     Tracks card's name box, which looks like a label until it has the caret. */
+  padding: 1px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.manual-where:hover {
+  border-color: var(--border);
+}
+
+/* The mark's coordinates as boxes, in the row they replace (§8.1). */
+.manual-edit {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manual-edit-box {
+  flex: 1 1 8rem;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+}
+
+.manual-edit-axis {
+  flex: none;
 }
 
 /* --- bookmarks --------------------------------------------------------- */
@@ -10001,6 +10034,23 @@ span.deck-name {
   grid-template-columns: repeat(2, auto);
   column-gap: 8px;
   max-width: 75%;
+}
+
+/* …except the marks (§25.5): each is a locus or two, `▭ IV:1,100,000-1,150,000`,
+   which two to a row cuts in half. One column, scrolling past its height as the
+   key always did — a reader with forty marks is reading a list anyway. */
+.structure-key:has(> .structure-key-level.structure-key-mark) {
+  display: flex;
+  max-width: 60%;
+}
+
+.structure-key-mark > .structure-key-name {
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.structure-key-empty {
+  color: var(--text-dim);
 }
 
 /* The title, the ramp and its two ends are about the whole key, so they span

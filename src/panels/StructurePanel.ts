@@ -36,14 +36,13 @@ export { STRUCTURE_COLOUR_DISPLACEMENT }
 import {
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
-  STRUCTURE_COLOUR_SCORE,
   STRUCTURE_COLOUR_SEQUENCE,
   STRUCTURE_OTHERS,
   structureOf,
 } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { ManualStore } from '../annotations/manual'
-import { mintMarkId } from '../annotations/manual'
+import { describeMark, mintMarkId, type ManualMark } from '../annotations/manual'
 import type { BookmarkStore } from '../annotations/bookmarks'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { SampleCache } from '../annotations/samples'
@@ -2079,7 +2078,7 @@ export class StructurePanel implements DeckCell {
     if (this.camera.projection !== 'orthographic') this.camera = { ...this.camera, projection: 'orthographic' }
     // Keyed on the reader's own sequence colours too: a swatch changed on
     // the key is a colouring changed.
-    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}`
+    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}|${style.marksHidden.join(',')}`
     if (this.colours === null || this.colouredBy !== colourKey) {
       this.colours = resolveColours(structure, style, this.colourSource(structure, style.colourBy))
       this.colouredBy = colourKey
@@ -2252,7 +2251,7 @@ export class StructurePanel implements DeckCell {
       return featureSource(structure, payload.data, entry.label, entry.style.colour, colouring.colourOf)
     }
     if (by === STRUCTURE_COLOUR_MARKS) {
-      return marksSource(structure, this.props.manual?.()?.marks ?? [])
+      return marksSource(structure, this.props.manual?.()?.marks ?? [], new Set(this.style().marksHidden))
     }
     if (by === STRUCTURE_COLOUR_DISPLACEMENT) {
       // The overlay first, so the alignment exists; then each bead's distance
@@ -2353,6 +2352,11 @@ export class StructurePanel implements DeckCell {
   /** The corner key, as the map's is: what the colours mean. */
   private paintKey(key: StructureKey): void {
     this.keyEl.replaceChildren()
+    const manual = this.props.manual?.()
+    if (this.style().colourBy === STRUCTURE_COLOUR_MARKS && manual !== undefined) {
+      this.paintMarksKey(manual.marks)
+      return
+    }
     if (key.kind === 'none') {
       this.keyEl.classList.add('hidden')
       return
@@ -2445,6 +2449,81 @@ export class StructurePanel implements DeckCell {
     return el(
       'span',
       { class: `structure-key-level structure-key-seq${ghosted.has(name) ? ' is-off' : ''}` },
+      swatch,
+      button,
+    )
+  }
+
+  /**
+   * The key of *colour by manual annotations* (§25.5): a row per mark, as the
+   * sequence key has a row per sequence, with the same three gestures — the
+   * swatch is the mark's colour, a click on its name takes it off the model's
+   * colouring, a double-click shows it alone.
+   *
+   * The colour is the **mark's**, written to the marks' own store: the Manual
+   * annotations card lists the same marks and repaints from the same store, so
+   * a colour picked here is the colour there, and on every map. What a click
+   * hides is the model's colouring only, kept in its style — the mark is still
+   * drawn wherever it was put, and a key that deleted it would be a second ×.
+   */
+  private paintMarksKey(marks: readonly ManualMark[]): void {
+    this.keyEl.classList.remove('hidden')
+    this.keyEl.append(el('span', { class: 'structure-key-title', text: 'manual annotations' }))
+    if (marks.length === 0) {
+      this.keyEl.append(
+        el('span', {
+          class: 'structure-key-empty',
+          text: 'No marks yet: draw them on the Manual annotations card, or on the model.',
+        }),
+      )
+      return
+    }
+    const style = this.style()
+    const hidden = new Set(style.marksHidden)
+    for (const mark of marks.slice(0, 48)) this.keyEl.append(this.markChip(mark, marks, hidden))
+  }
+
+  /** One mark's row on the key — see {@link paintMarksKey}. */
+  private markChip(mark: ManualMark, marks: readonly ManualMark[], hidden: ReadonlySet<string>): HTMLElement {
+    const name = describeMark(mark)
+    const off = hidden.has(mark.id)
+    const swatch = el('input', {
+      class: 'structure-key-swatch',
+      type: 'color',
+      value: mark.colour,
+      title: `Colour for ${name}, on every map and on the Manual annotations card too`,
+    })
+    swatch.addEventListener('click', (event) => event.stopPropagation())
+    swatch.addEventListener('input', () => this.props.manual?.()?.update(mark.id, { colour: swatch.value }))
+    const button = el('button', {
+      class: 'structure-key-name',
+      type: 'button',
+      text: name,
+      title: off
+        ? `${name} is off the model: click to colour it again; double-click to show it alone`
+        : `Click to take ${name} off the model's colouring; double-click to show it alone`,
+    })
+    button.addEventListener('click', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = window.setTimeout(() => {
+        this.keyClickTimer = null
+        const next = new Set(hidden)
+        if (next.has(mark.id)) next.delete(mark.id)
+        else next.add(mark.id)
+        this.restyle({ marksHidden: [...next] })
+      }, 220)
+    })
+    button.addEventListener('dblclick', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = null
+      const others = marks.filter((other) => other.id !== mark.id).map((other) => other.id)
+      const alreadySolo = others.length > 0 && others.every((id) => hidden.has(id)) && !hidden.has(mark.id)
+      // Alone again is "all back", as on the sequence key.
+      this.restyle({ marksHidden: alreadySolo ? [] : others })
+    })
+    return el(
+      'span',
+      { class: `structure-key-level structure-key-seq structure-key-mark${off ? ' is-off' : ''}` },
       swatch,
       button,
     )
@@ -2832,11 +2911,21 @@ export class StructurePanel implements DeckCell {
     )
 
     // Colour by, and size by.
+    //
+    // The model's own five first, in the order a reader goes through them —
+    // what it is, where along it, what they marked on it, and then the two
+    // that read from the pinned bin — and after them what another row lends.
+    // Named for what they measure: *spatial* distance, because the map beside
+    // it is a distance too, in base pairs, and *linear* position for the same
+    // reason. The file's score column is not among them: a g3d carries none
+    // worth a ramp, and the one it could name was a column of nothing.
     const colourings: Array<{ value: string; text: string }> = [
       { value: STRUCTURE_COLOUR_SEQUENCE, text: 'sequence' },
+      { value: STRUCTURE_COLOUR_POSITION, text: 'linear position along the sequence' },
+      ...(this.props.manual?.() !== undefined ? [{ value: STRUCTURE_COLOUR_MARKS, text: 'manual annotations' }] : []),
+      { value: STRUCTURE_COLOUR_DISTANCE, text: 'spatial distance to pinned bin' },
+      ...(this.props.contacts !== undefined ? [{ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with pinned bin' }] : []),
       ...(structure !== null && structure.haplotypes.length > 1 ? [{ value: STRUCTURE_COLOUR_HAPLOTYPE, text: 'haplotype' }] : []),
-      { value: STRUCTURE_COLOUR_POSITION, text: 'position along the sequence' },
-      { value: STRUCTURE_COLOUR_SCORE, text: 'score column' },
     ]
     if (structure !== null) {
       for (const field of featureFields(structure.set, 'structure')) {
@@ -2850,9 +2939,6 @@ export class StructurePanel implements DeckCell {
     )
     for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} · track` })
     for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} · features` })
-    if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
-    colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
-    if (this.props.contacts !== undefined) colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
     // `displacement`, not `displacement from the compared model`: the row above
     // this one is `compare with` and it names the model, and the longer text did
     // not fit the column even as a full-width block — it read `displacement from
@@ -2924,7 +3010,7 @@ export class StructurePanel implements DeckCell {
     const loopChoices: Array<{ value: string; text: string }> = [
       { value: '', text: 'none' },
       ...loopRows.map((held) => ({ value: held.id, text: held.label })),
-      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks' }] : []),
+      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'manual annotations' }] : []),
     ]
     if (style.loops !== '' && !loopChoices.some((choice) => choice.value === style.loops)) {
       loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
