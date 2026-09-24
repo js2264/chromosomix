@@ -12,8 +12,9 @@
  *   frames, for itself, at its own resolution — rather than magnifying the
  *   block it already held — and giving it back;
  * - the Contact maps card listing every map, a row of it dragged onto an
- *   empty cell opening that map there, and a companion's eye closing its cell
- *   and opening it again.
+ *   empty cell opening that map there, a companion's eye closing its cell
+ *   and opening it again, and the × on a map's own cell hiding it — leaving
+ *   the cell standing as a tracks cell where a track was drawn in it.
  *
  * It prints each measurement to stdout as well as shooting it, so a heading
  * that grew or a column that narrowed is a line in the log.
@@ -212,6 +213,46 @@ try {
   await sleep(4000)
   console.log('shown again by its eye:', JSON.stringify(await cardState()))
   await shot('c3-card-map-shown')
+
+  // The × on a map's own cell hides it: the row stays, eye dark.
+  /** Press the × on the heading of the companion called `name` (its name box's value). */
+  const closeCell = (name) =>
+    page.evaluate((wanted) => {
+      const cell = Array.from(document.querySelectorAll('.deck-grid > .deck-panel:not(.is-lead)')).find(
+        (node) => node.querySelector('input.deck-name')?.value === wanted,
+      )
+      const close = cell?.querySelector('.deck-head .btn-close')
+      if (close === null || close === undefined) throw new Error(`no cell called ${wanted}`)
+      close.click()
+    }, name)
+  const cellKinds = () =>
+    page.evaluate(() => Array.from(document.querySelectorAll('.deck-grid > *')).map((cell) =>
+      cell.classList.contains('deck-tracks') ? 'tracks' : cell.classList.contains('is-lead') ? 'lead' : cell.querySelector('input.deck-name')?.value ?? cell.className,
+    ))
+  await closeCell('Hi-C (hic)')
+  await sleep(2000)
+  console.log('Hi-C closed from its cell:', JSON.stringify(await cardState()), '· cells:', JSON.stringify(await cellKinds()))
+  await shot('c4-cell-closed-map-hidden')
+
+  // A track dropped on the other companion's right edge, then that map
+  // closed: the cell stays, as the tracks it held.
+  const trackId = await page.evaluate(() => {
+    const row = document.querySelector('.ann-row[data-id="demo-atac"]') ?? document.querySelector('.ann-row[data-id]')
+    return row?.getAttribute('data-id') ?? ''
+  })
+  await page.evaluate((id) => {
+    const zone = Array.from(document.querySelectorAll('.deck-grid > .deck-panel:not(.is-lead) .lane-drop-right'))[0]
+    if (zone === undefined) throw new Error('no edge to drop on')
+    const transfer = new DataTransfer()
+    transfer.setData('application/x-metacooler-track', id)
+    for (const kind of ['dragenter', 'dragover', 'drop']) zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
+  }, trackId)
+  await sleep(2500)
+  await shot('c5-track-on-companion')
+  await page.locator('.deck-grid > .deck-panel:not(.is-lead)').first().locator('.deck-head .btn-close').click()
+  await sleep(3000)
+  console.log('companion with', trackId, 'closed:', JSON.stringify(await cardState()), '· cells:', JSON.stringify(await cellKinds()))
+  await shot('c6-cell-left-as-tracks')
 
   console.log(errors.length === 0 ? 'no page errors' : `page errors:\n${errors.join('\n')}`)
 } finally {

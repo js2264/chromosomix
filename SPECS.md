@@ -4247,8 +4247,9 @@ bigWig dropped on a companion's edge is an import into the session's one track l
 so closing the maps it was drawn on would otherwise leave it loaded, invisible, and holding a row
 that says it is drawn nowhere. A track that is also on the first map is being read against a
 picture that is staying, so it keeps its lane there and loses only the companions'. The first map is
-untouched throughout: closing the deck leaves exactly what closing the last companion one at a time
-would.
+untouched throughout, and the companions are **put away, not let go**: each is held on the Contact
+maps card, hidden, as the × on its own cell holds it (§16.9) — the card's × is where a map is let
+go, and the eye there opens a cell for it again.
 
 **The Aesthetics column's *Map* card is the starred map's**, as its *3D structure* card is the
 starred structure cell's (§25.3). Every map of a deck has a card — the score, the smoothing, the
@@ -4451,10 +4452,21 @@ cell's heading gives it. The card used to list the first two only, so a deck of 
 card of one and the other three were named nowhere in the column.
 
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
-eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it closes that cell
-and keeps the map on the card, dimmed, with its eye dark; pressed again, the map opens in the first
+eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
+and keeps it on the card, dimmed, with its eye dark; pressed again, the map opens in the first
 empty cell, or in a new one at the end of the grid — the road every map that names no position takes
-— drawn as it was, its looks being remembered by its file. A hidden map is held by the session
+— drawn as it was, its looks being remembered by its file.
+
+**The × on a map's own cell is that eye, not a let-go.** Closing a contact map in the deck hides
+it: the map is kept on the card, eye dark, exactly as the eye would keep it — it used to be dropped
+from the session altogether, so a map closed to make room was a file to be found and opened again.
+The **cell** goes only where the map was all it held. A track dropped on a companion's edge is
+drawn in that cell and nowhere else, so a cell with tracks in it stays, as the tracks cell those
+tracks make, under the same id they are placed by — rather than closing and parking them on the
+first map, where the reader had not put them. The star cannot stand on a cell that is no longer a
+map, and goes back to the first map. The card's own × is the one that **lets go**, with the same
+rule for the cell; a map still on screen elsewhere — another cell of the same file, the first map,
+the lower triangle — is not listed twice, and one already hidden is not listed again. A hidden map is held by the session
 rather than by the deck, since a deck left with only the first map puts itself down, and it is let
 go by its × or when the session's own file closes; it is not in the link, which carries cells. Its
 eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The first map's eye and

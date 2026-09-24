@@ -4324,9 +4324,28 @@ export class Session {
       if (picked !== null) this.ensureDeck().showMap(picked)
     } else {
       const picked = this.deck?.takeMap(id) ?? null
-      if (picked !== null) this.hiddenMaps.push({ id: `hidden-${++this.hiddenMapCount}`, picked })
+      if (picked !== null) this.holdHidden(picked)
     }
     this.syncCompareCard()
+  }
+
+  /**
+   * Keep a map the reader put down in the deck, hidden, on the Contact maps
+   * card (§16.9) — from the eye, or from the × on its cell's own heading.
+   *
+   * Once per file: a map already held hidden is not listed twice, and one still
+   * on screen — in another cell, as the first map, or in its lower triangle —
+   * is not listed as hidden at all, since the card already lists it as shown
+   * and nothing about it has been lost.
+   */
+  private holdHidden(picked: PickedFile): void {
+    const uri = picked.uri
+    const shown =
+      this.file?.uri === uri ||
+      this.compare?.uri === uri ||
+      (this.deck?.companionMaps() ?? []).some((map) => map.uri === uri)
+    if (shown || this.hiddenMaps.some((held) => held.picked.uri === uri)) return
+    this.hiddenMaps.push({ id: `hidden-${++this.hiddenMapCount}`, picked })
   }
 
   /** Stop holding a hidden map, and hand back what opens it. */
@@ -5913,6 +5932,10 @@ export class Session {
       leadPicked: () => (this.file === null ? null : { uri: this.file.uri, source: this.file.source }),
       comparePicked: () => (this.compare === null ? null : { uri: this.compare.uri, source: this.compare.source }),
       hiddenPicked: (id) => this.takeHiddenMap(id),
+      onMapHidden: (picked) => {
+        this.holdHidden(picked)
+        this.syncCompareCard()
+      },
       // The *3D structure* card is the starred cell's (§25.3), so the star
       // moving is the column's card changing under it — and the session is
       // what puts a card in that column.

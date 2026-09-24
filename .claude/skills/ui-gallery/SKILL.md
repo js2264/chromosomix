@@ -58,8 +58,9 @@ laptop's 1600 × 1000 with every column open: three zooms, printing the heading'
 side column's width before and after — they must come out exactly as they went in — then a
 companion taken off the chain with a box drawn on it, which must read its own window (its cells
 change, the first map's title does not) and give it back; then the Contact maps card listing every
-map, a row of it dropped on an empty cell, and a companion's eye closing its cell and opening it
-again. Run it after any change to a view's heading, the side columns, `MapPanel`'s window or the
+map, a row of it dropped on an empty cell, a companion's eye closing its cell and opening it
+again, and the × on a map's own cell hiding it — the cell staying as a tracks cell where a track was
+drawn in it. Run it after any change to a view's heading, the side columns, `MapPanel`'s window or the
 Contact maps card.
 
 The seventh presses export buttons with the **save dialog** stubbed (§26.6) — a headless browser

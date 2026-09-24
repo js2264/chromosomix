@@ -183,6 +183,8 @@ interface Made {
   /** Whether the session's own file can answer a rung the deck asks for. */
   leadCanMove: boolean
   scales: unknown[]
+  /** The cell a track is drawn in, for the store's `entriesOn`; none by default. */
+  tracksOn?: MapId
 }
 
 function make(
@@ -213,6 +215,10 @@ function make(
     adoptHome: (map: MapId, uri: string) => {
       made.adopted.push(`${map}=${uri}`)
     },
+    // What a cell draws, for the × on a map's heading: a cell with tracks in it
+    // stays as those tracks (§16.9). Nothing is drawn anywhere unless a test
+    // says which cell.
+    entriesOn: (map: MapId) => (map === made.tracksOn ? [{ id: 't1', card: 'tracks', kind: 'track' }] : []),
   }
   made.deck = new PanelDeck({
     onMapsChange: (maps) => made.published.push(maps),
@@ -1541,6 +1547,64 @@ describe('a row of the Contact maps card dropped on a cell (§16.9)', () => {
     dropRow(zone, { kind: 'hidden', id: 'hidden-1' })
     expect(asked).toEqual(['hidden-1'])
     expect(cellNames(deck)).toEqual(['lead.cool', 'c.cool'])
+  })
+})
+
+describe('the × on a map’s own cell (§16.9)', () => {
+  const closeOf = (deck: PanelDeck): HTMLButtonElement | null =>
+    deck.el.querySelector<HTMLButtonElement>('.deck-grid > .deck-panel:not(.is-lead) .deck-head .btn-close')
+
+  it('hides the map rather than letting go of it, and takes the cell it was alone in', () => {
+    const hidden: string[] = []
+    const made = make({ extra: { onMapHidden: (picked) => hidden.push(picked.uri) } })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    closeOf(made.deck)?.click()
+    expect(hidden).toEqual(['https://x.example.org/b.cool'])
+    expect(cellNames(made.deck)).toEqual(['lead.cool'])
+  })
+
+  it('leaves the cell standing as its tracks where tracks were drawn in it', () => {
+    const hidden: string[] = []
+    const made = make({ extra: { onMapHidden: (picked) => hidden.push(picked.uri), tracks: { context: () => undefined } } })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const id = made.deck.companionMaps()[0]?.id
+    made.tracksOn = id
+    closeOf(made.deck)?.click()
+    expect(hidden).toEqual(['https://x.example.org/b.cool'])
+    // The same cell, under the same id — which is what its tracks are placed by.
+    expect(all(made.deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
+    expect(made.deck.mapList.find((map) => map.label === 'tracks')?.id).toBe(id)
+    expect(made.published.at(-1)).toBe('tracks')
+  })
+
+  it('moves the star back to the first map when the starred map is hidden', () => {
+    const made = make({ extra: { tracks: { context: () => undefined } } })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.tracksOn = made.deck.companionMaps()[0]?.id
+    made.deck.el.querySelector<HTMLButtonElement>('.deck-grid > .deck-panel:not(.is-lead) .deck-star')?.click()
+    closeOf(made.deck)?.click()
+    const leadStar = made.deck.el.querySelector('.deck-grid > .deck-panel.is-lead .deck-star')
+    expect(leadStar?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('is what closing the deck does to every map in it: each is put away, not let go', () => {
+    const hidden: string[] = []
+    const made = make({ extra: { onMapHidden: (picked) => hidden.push(picked.uri) } })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/c.cool' })
+    barButton(made.deck, 'close').click()
+    expect(hidden).toEqual(['https://x.example.org/b.cool', 'https://x.example.org/c.cool'])
+  })
+
+  it('is not what the Contact maps card’s × does: that lets go, keeping a cell of tracks the same way', () => {
+    const hidden: string[] = []
+    const made = make({ extra: { onMapHidden: (picked) => hidden.push(picked.uri), tracks: { context: () => undefined } } })
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const id = made.deck.companionMaps()[0]?.id ?? ''
+    made.tracksOn = id
+    made.deck.closeCell(id)
+    expect(hidden).toEqual([])
+    expect(all(made.deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
   })
 })
 

@@ -302,6 +302,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Closing a contact map in the deck hides it (§16.9, §16.5).** The × on a map's own cell, and
+  *close deck*, used to drop the map from the session; it now stays on the Contact maps card with its
+  eye dark, and the eye opens it in a cell again — the card's × is where a map is let go. The cell
+  closes only where the map was all it held: one with tracks drawn in it stays as a tracks cell
+  showing them, instead of parking them on the first map.
+
 - **The 3D colourings are named for what they measure, and the model's own five lead the list
   (§25.5).** *sequence*, *linear position along the sequence*, *manual annotations* (was *your
   marks*, also under *loops as chords*), *spatial distance to pinned bin* and *contacts with pinned

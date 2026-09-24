@@ -274,6 +274,12 @@ export interface PanelDeckProps {
    */
   hiddenPicked?(id: string): PickedFile | null
   /**
+   * A map's cell was closed from its own heading (§16.9): the map is *hidden*,
+   * not let go — the session holds it on the Contact maps card, whose eye opens
+   * it again. Absent, and the map simply leaves.
+   */
+  onMapHidden?(picked: PickedFile): void
+  /**
    * The **structure** star moved: the *3D structure* card in the Aesthetics
    * column is now a different cell's, and only the session can put it there.
    */
@@ -1587,6 +1593,12 @@ export class PanelDeck {
     origin: VacancyOrigin = 'link',
     /** The file a `remembered` vacancy is standing in for. */
     name?: string,
+    /**
+     * The id to build under, where a cell becomes another kind of cell in place
+     * — a map hidden from a cell that still has tracks drawn in it becomes that
+     * cell's tracks, and the tracks are placed by the cell's id ({@link vacateMap}).
+     */
+    id?: string,
   ): Slot {
     // A chain the reader deliberately opened stays open across a rebuild and
     // across a restore: a panel put back on the lead would jump to the deck's
@@ -1595,7 +1607,7 @@ export class PanelDeck {
     // arrives (§16.2).
     const held = isMapRef(ref) ? this.lookFor(ref.uri) : undefined
     const slot: Slot = {
-      id: `p${nextSlotId++}`,
+      id: id ?? `p${nextSlotId++}`,
       ref,
       panel: null,
       vacancy: null,
@@ -1728,7 +1740,7 @@ export class PanelDeck {
       // makes the fourth read smaller (§16.7).
       budgetBytes: () => panelBudgetBytes(this.filled, deviceDenseBudgetBytes()),
       onSettled: () => this.settle(slot),
-      onClose: () => this.remove(slot),
+      onClose: () => this.hideMap(slot),
       onToggleLock: () => this.toggleLock(slot),
       onStar: () => this.setStarred(slot.id),
       isLocked: () => slot.locked,
@@ -2291,7 +2303,10 @@ export class PanelDeck {
     // greyed tasks with nothing on screen having changed.
     if (this.starred === null && this.slots.length > 0) return
     if (this.starred === LEAD_MAP) return
-    if (this.starred !== null && this.slots.some((slot) => slot.id === this.starred)) return
+    // A *map* under that id: a cell whose map was hidden can stay as its
+    // tracks under the same id ({@link vacateMap}), and a star on it would be a
+    // Map card about a picture that has gone.
+    if (this.starred !== null && this.slots.some((slot) => slot.id === this.starred && slot.panel !== null)) return
     this.starred = LEAD_MAP
     remember(this.props.memoryKey(), 'deck:starred', LEAD_MAP)
     this.paintBar()
@@ -2650,8 +2665,55 @@ export class PanelDeck {
     const slot = this.slots.find((held) => held.id === id)
     if (slot === undefined || slot.panel === null || !isMapRef(slot.ref)) return null
     const picked: PickedFile = { uri: slot.ref.uri, source: slot.panel.sourceSpec }
-    this.remove(slot)
+    this.vacateMap(slot)
     return picked
+  }
+
+  /**
+   * The × on a map's own heading: the map is **hidden**, not let go (§16.9) —
+   * handed to the session, which lists it on the Contact maps card with its eye
+   * dark, as the eye itself would. Letting go of a map is the card's ×, the one
+   * place every map the session holds is listed.
+   */
+  private hideMap(slot: Slot): void {
+    const picked = this.takeMap(slot.id)
+    if (picked !== null) this.props.onMapHidden?.(picked)
+  }
+
+  /**
+   * Take the map out of its cell, and the cell with it **only where the map
+   * was all it held**.
+   *
+   * A track dropped on a companion's edge is drawn in that cell and nowhere
+   * else, and closing the map used to close the cell, park the track's lane on
+   * the first map and leave the reader looking for it. So a cell with tracks
+   * drawn in it stays, as the tracks cell those tracks make — built under the
+   * **same id**, which is what the tracks are placed by, so they are in it
+   * without being moved. A cell that held the map alone goes, as the × always
+   * took it.
+   */
+  private vacateMap(slot: Slot): void {
+    const index = this.slots.indexOf(slot)
+    if (index < 0) return
+    if (!this.hasTracksIn(slot) || this.props.tracks === undefined) {
+      this.remove(slot)
+      return
+    }
+    this.lock.leave(slot.id)
+    slot.panel?.destroy()
+    const built = this.build({ kind: 'tracks' }, undefined, 'drawn', undefined, slot.id)
+    this.slots[index] = built
+    this.paintGrid()
+    this.publish()
+    if (this.state !== null) built.cell?.apply(this.state)
+  }
+
+  /** Whether any track is drawn in this cell: a lane placed on it, of a file the reader loaded. */
+  private hasTracksIn(slot: Slot): boolean {
+    const store = this.props.annotations?.(LEAD_MAP)?.store
+    if (store === undefined) return false
+    // Not the map's own overlays — the 4C profile is the map's, and goes with it.
+    return store.entriesOn(slot.id).some((entry) => entry.card !== 'overlay' && entry.kind !== 'structure')
   }
 
   /**
@@ -2676,10 +2738,16 @@ export class PanelDeck {
     return out
   }
 
-  /** Close one cell by the deck's id for it — the × on the card's row. */
+  /**
+   * Let go of one cell's map by the deck's id for it — the × on the card's row.
+   * The cell goes with it only where the map was all it held, as when a map is
+   * hidden ({@link vacateMap}).
+   */
   closeCell(id: string): void {
     const slot = this.slots.find((held) => held.id === id)
-    if (slot !== undefined) this.remove(slot)
+    if (slot === undefined) return
+    if (slot.panel !== null) this.vacateMap(slot)
+    else this.remove(slot)
   }
 
   /** Show the tiling while a map is dragged towards a cell from outside the grid. */
@@ -2997,8 +3065,8 @@ export class PanelDeck {
     const close = button('close deck', () => this.closeDeck(), {
       class: 'btn deck-close',
       title:
-        'Every companion map goes, and any track loaded only for them. The first map, and ' +
-        'everything drawn on it, stays.',
+        'Every other cell closes. Its maps stay on the Contact maps card, hidden, and its tracks ' +
+        'on the Tracks card; the first map, and everything drawn on it, stays.',
     })
 
     // How many maps is a fact about *what is being looked at*, so it goes in the
@@ -3085,6 +3153,13 @@ export class PanelDeck {
    */
   private closeDeck(): void {
     if (this.slots.length === 0) return
+    // The maps are put away, not let go (§16.9): each is handed to the session
+    // to hold hidden on the Contact maps card, as the × on its own cell does —
+    // after the grid is empty, so the session does not count them as shown.
+    const putAway: PickedFile[] = []
+    for (const slot of this.slots) {
+      if (slot.panel !== null && isMapRef(slot.ref)) putAway.push({ uri: slot.ref.uri, source: slot.panel.sourceSpec })
+    }
     for (const slot of this.slots) {
       this.lock.leave(slot.id)
       slot.panel?.destroy()
@@ -3097,6 +3172,7 @@ export class PanelDeck {
     // way a cell can leave as well ({@link keepStarPresent},
     // {@link keepLanesOnLiveMaps}).
     this.paintGrid()
+    for (const picked of putAway) this.props.onMapHidden?.(picked)
     // Which leaves the deck empty, so the session's next render puts it down and
     // hands the view back its own frame (`app/Session.ts`'s `syncDeck`).
     this.publish()

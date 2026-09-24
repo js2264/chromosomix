@@ -158,7 +158,7 @@ export interface MapPanelProps {
   budgetBytes(): number
   /** The panel finished a read, or failed one; the deck relocks and repaints. */
   onSettled(): void
-  /** The × on this panel's heading. */
+  /** The × on this panel's heading: the map is hidden, not let go (§16.9). */
   onClose(): void
   /** The chain on this panel's heading — follow the deck, or go it alone. */
   onToggleLock(): void
@@ -594,7 +594,7 @@ export class MapPanel {
         this.placeEl,
         this.starButton,
         this.lockButton,
-        iconButton('x', `Close ${fileLabel(props.uri)}`, () => props.onClose(), {
+        iconButton('x', `Hide ${fileLabel(props.uri)} — it stays on the Contact maps card, whose eye brings it back`, () => props.onClose(), {
           class: 'btn-close',
           size: 14,
         }),

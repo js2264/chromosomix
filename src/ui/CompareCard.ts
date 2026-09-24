@@ -305,7 +305,9 @@ export class CompareCard {
         ...(this.props.onToggleDeckMap === undefined ? [] : [eye]),
         iconButton(
           'x',
-          shown ? `Close ${map.label}'s cell of the deck` : `Let go of ${map.label}`,
+          // The card's × is the one that lets go: the × on the map's own cell
+          // only hides it, back onto this list (§16.9).
+          shown ? `Let go of ${map.label}: its cell closes and it leaves this list` : `Let go of ${map.label}`,
           () => this.props.onCloseDeckMap?.(map.id),
           { class: 'btn-close', size: 14 },
         ),
