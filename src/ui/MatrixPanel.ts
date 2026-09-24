@@ -2316,6 +2316,7 @@ export class MatrixPanel {
             this.refit()
             this.heatmap.resize()
             this.placeKey()
+            this.centrePlot(body)
             this.schedule()
           })
     this.observer?.observe(this.grid)
@@ -2333,8 +2334,27 @@ export class MatrixPanel {
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
       this.placeKey()
+      this.centrePlot(body)
       this.schedule()
     })
+  }
+
+  /**
+   * Bring the map into the middle of a body too narrow for it and its lanes.
+   *
+   * A deck cell three or four across is that body (§16.5): its lanes are wider
+   * than it before the map has had a pixel, and it scrolls sideways rather than
+   * painting them over the next cell. Left at the start of that scroll, the
+   * cell showed its left-hand stack and no map at all — the one thing the cell
+   * is of. So the map is centred, and the stacks either side of it are what the
+   * reader scrolls to. A no-op anywhere the body is not a scroll box, or fits.
+   */
+  private centrePlot(body: HTMLElement): void {
+    if (body.scrollWidth <= body.clientWidth + 1) return
+    const box = body.getBoundingClientRect()
+    const plot = this.wrap.getBoundingClientRect()
+    const centre = plot.left - box.left + body.scrollLeft + plot.width / 2
+    body.scrollLeft = Math.max(0, Math.round(centre - body.clientWidth / 2))
   }
 
   /**

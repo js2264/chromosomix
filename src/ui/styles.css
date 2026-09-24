@@ -9612,6 +9612,28 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* **A cell's lanes stay in its cell.** Three or four across, the first map's
+   stacks — spatial tracks down its left edge, genes and a signal or two down
+   its right — are wider than the cell before the map has had a pixel, and the
+   grid used to spill them over the next cell's heading and locus box: a
+   picture drawn across another picture. So inside a deck the map's column
+   gives way down to the 10rem the map's own size has as its floor
+   (`ui/mapSize.ts`), not the 20rem a whole column affords; and what still does
+   not fit scrolls sideways inside the cell's body rather than being painted
+   over its neighbour or cut off unreachable. `safe`, because a centred row
+   that overflows spills equally both ways and a scroll box cannot reach the
+   half that went left. Only sideways: the tooltip flips to stay inside the
+   grid, so nothing needs the other axis. */
+.deck-panel .panel-body {
+  justify-content: safe center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.deck-panel .panel-grid {
+  grid-template-columns: auto minmax(min(10rem, 100%), auto) auto;
+}
+
 /* The plot fills its column instead of claiming the window's height:
    `.heatmap-wrap`'s own `clamp` has a 20rem floor, which four side by side
    overflow, and the cap stops a wide window from producing four plots taller

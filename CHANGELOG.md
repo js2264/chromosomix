@@ -949,6 +949,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A narrow deck cell's lanes no longer paint over the next cell (§16.5).** Three or four across,
+  the first map's side stacks were wider than its cell and were drawn over the neighbouring cell's
+  heading and locus box. The map now gives way down to 10rem inside a deck, the rest of the cell
+  scrolls sideways, and the scroll opens with the map in the middle.
+
 - **The Export card's save and copy include a deck's structure and tracks cells (§16.5).** With the
   first map beside a 3D model and no second map, the card wrote the map alone; it writes the deck's
   whole figure whenever any other cell has a picture, as the bar's own save does.

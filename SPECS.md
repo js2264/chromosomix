@@ -4184,6 +4184,15 @@ at the same height whatever heading sits above them. Without it a map inset by a
 stood beside a map that was not, which is a comparison the eye has to correct for before it can
 begin, in the one widget whose entire purpose is that adjacent pictures are comparable.
 
+**And a cell's lanes stay in its cell.** Three or four across, the first map's stacks — spatial
+tracks down its left edge, genes and a signal or two down its right — can be wider than the cell
+before the map has had a pixel, and the grid used to spill them over the next cell's heading and
+locus box: a picture drawn across another picture. Inside a deck the map's column gives way down to
+10rem, the floor the map's own size has, rather than the 20rem a whole column affords; what still
+does not fit **scrolls sideways inside the cell** instead of being painted over its neighbour or cut
+off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
+a cell with a stack down its left edge showed that stack and no map at all.
+
 **Rearranging is a drag, not a pair of arrows.** Every panel has a grip before its name; taking hold
 of one shows the tiling, and dropping a map on a cell **exchanges** the two. `◀` `▶` could only say
 *one place along a list*, which describes a 2 × 2 poorly: moving the bottom-left map to the top-right
