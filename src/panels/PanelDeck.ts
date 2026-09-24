@@ -3193,17 +3193,18 @@ export class PanelDeck {
    *
    * The card and the `S` key belong to the lead, and with maps beside it a
    * reader pressing either is asking for the arrangement they made — the same
-   * reasoning `copyDeck` gives for ⌘C. A deck of one map declines, and the
-   * panel exports its own figure, vector PDF and all.
+   * reasoning `copyDeck` gives for ⌘C. A deck with nothing drawn beside the
+   * first map — every other cell empty — declines, and the panel exports its
+   * own figure, vector PDF and all.
    */
   private readonly deckExport: DeckExport = {
     save: async (format, dpi) => {
-      if (!this.hasCompanions()) return false
+      if (!this.hasOtherCells()) return false
       await this.saveDeck(format, dpi)
       return true
     },
     copy: async (dpi) => {
-      if (!this.hasCompanions()) return false
+      if (!this.hasOtherCells()) return false
       await this.copyDeck(dpi)
       return true
     },
@@ -3414,9 +3415,18 @@ export class PanelDeck {
     return out
   }
 
-  /** Whether any cell beside the lead holds a map. */
-  private hasCompanions(): boolean {
-    return this.slots.some((slot) => slot.panel?.map !== undefined && slot.panel?.map !== null)
+  /**
+   * Whether any cell beside the lead has a picture of its own to export — a
+   * map, a structure, a stack of tracks.
+   *
+   * Every kind and not the maps alone: the Export card asks this to decide
+   * between the lead's own figure and the deck's, and a deck of the first map
+   * beside its 3D model answered *no maps beside it*, so saving or copying from
+   * the card wrote the map and left out the model the reader had arranged next
+   * to it. An empty cell still has nothing to say.
+   */
+  private hasOtherCells(): boolean {
+    return this.slots.some((slot) => (slot.panel?.map ?? null) !== null || slot.cell !== null)
   }
 
   /**

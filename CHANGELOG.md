@@ -949,6 +949,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The Export card's save and copy include a deck's structure and tracks cells (§16.5).** With the
+  first map beside a 3D model and no second map, the card wrote the map alone; it writes the deck's
+  whole figure whenever any other cell has a picture, as the bar's own save does.
+
 - **A view's heading no longer changes shape as it zooms (§5.4, §26.6).** The title bar wrapped or
   unwrapped whenever a press lengthened or shortened its title, and the summary under it could run to
   three lines on a pair of loci — so the map jumped a line up or down under a zoom, and the side

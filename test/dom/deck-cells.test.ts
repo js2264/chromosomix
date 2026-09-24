@@ -98,6 +98,12 @@ function structureEntry(text = G3D): AnnotationEntry {
   } as unknown as AnnotationEntry
 }
 
+/** The deck's answer to the lead's Export card, as far as these tests read it. */
+interface DeckExportLike {
+  save(format: string, dpi: number): Promise<boolean>
+  copy(dpi: number): Promise<boolean>
+}
+
 /** A lead the deck can drive, with the two calls a structure cell reaches it by. */
 function leadPanel() {
   const state = {
@@ -106,6 +112,8 @@ function leadPanel() {
     framed: 0,
     /** Every stretch a tracks cell asked the lead to put on its column axis. */
     followed: [] as Array<{ contig: string; start: number; end: number }>,
+    /** What the lead's Export card is answered by, once the deck has said. */
+    exporter: null as DeckExportLike | null,
   }
   const windows: { rows: LocusWindow[]; cols: LocusWindow[] } = {
     rows: [{ contig: 'chr1', start: 10000, end: 30000, unitFrom: 10, unitTo: 30 } as LocusWindow],
@@ -115,7 +123,9 @@ function leadPanel() {
     setViewportListener: (listener: typeof state.viewport) => {
       state.viewport = listener
     },
-    setDeckExport: () => {},
+    setDeckExport: (exporter: DeckExportLike | null) => {
+      state.exporter = exporter
+    },
     setCardFor: () => {},
     setLaneListener: () => {},
     setHoverListener: () => {},
@@ -329,6 +339,18 @@ describe('a structure cell in the deck', () => {
     close?.click()
     expect(structureCells(deck)).toHaveLength(0)
     expect(published.at(-1)).toBeUndefined()
+  })
+
+  it('is part of the figure the lead’s Export card saves and copies', async () => {
+    const lead = leadPanel()
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.setLead(lead.panel)
+    // Nothing beside the first map yet: the card exports the map's own figure.
+    expect(await lead.state.exporter?.save('png', 300)).toBe(false)
+    deck.add({ kind: 'structure' })
+    // A model beside it: the card is asked for the arrangement, model and all.
+    expect(await lead.state.exporter?.save('png', 300)).toBe(true)
+    expect(await lead.state.exporter?.copy(300)).toBe(true)
   })
 
   it('is handed what the maps are looking at when it is built, and on every pan after', () => {

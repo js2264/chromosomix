@@ -4205,6 +4205,12 @@ clip or bin size onto every panel once — greyed, with that reason on them, whi
 there being nothing to match *to*; how many across; and the whole deck as one figure — saved, or
 copied to the clipboard, which is what `⌘C` reaches while a deck is on.
 
+The Aesthetics column's **Export** card saves and copies that same figure whenever any cell beside
+the first map has a picture of its own — a map, a structure, a stack of tracks — and the first map's
+own figure, vector PDF and all, only while every other cell is empty. It used to ask for another
+*map*, so a deck of a map beside its 3D model exported the map alone from the card, while the bar's
+button beside it wrote both: two exports of one screen disagreeing about what was on it.
+
 Rearranging is the grip and is not a button here. **Adding is**, and that is the one thing the bar
 repeats: a `+` on an edge draws an *empty* cell for something to be dropped on, and a published
 cooler has nothing to drop — the URL box is the only road it can take (§11) — while the tracks cell
