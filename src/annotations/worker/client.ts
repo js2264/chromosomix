@@ -15,6 +15,7 @@
  * downloaded, parsed and thrown away for those.
  */
 
+import { beginWork } from '../../perf/inflight'
 import { registerThread, type ThreadHandle } from '../../perf/threads'
 import { withAccess } from '../../s3/attach'
 import { spawnAnnotationsWorker } from '../../worker/spawn'
@@ -97,10 +98,18 @@ export class AnnotationClient {
     // messages, so a private bigWig and a private cooler need the same nothing
     // of their callers.
     const message = withAccess({ ...payload, id }) as unknown as AnnotationRequest
+    // Counted until it settles (`perf/inflight.ts`), as the reader's are.
+    const done = beginWork(`annotations:${payload.kind}`)
     return new Promise<AnnotationResultMap[K]>((resolve, reject) => {
       this.pending.set(id, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
+        resolve: (value) => {
+          done()
+          resolve(value as AnnotationResultMap[K])
+        },
+        reject: (reason) => {
+          done()
+          reject(reason)
+        },
         ...(onProgress === undefined ? {} : { onProgress }),
       })
       worker.postMessage(message)

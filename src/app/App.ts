@@ -102,7 +102,8 @@ import {
   togglePlotOption,
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
-import { embedded, mounting } from '../embed'
+import { embedded, mounting, plotting } from '../embed'
+import type { PlotHost } from '../plot/types'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
@@ -293,6 +294,17 @@ export class App implements SessionHost {
    */
   private readonly embed = embedded()
   /**
+   * Whether a program is driving this window to save its figures (§27).
+   *
+   * A whole window, unlike an embed — the furniture stays, because the room it
+   * leaves is what sizes the map — and a *forgetful* one, like an embed: it is
+   * nobody's workspace, so it neither writes the reader's storage nor reads it
+   * back, and its columns start folded and stay out of the reader's preferences.
+   */
+  private readonly plot = plotting()
+  /** What {@link notify} and {@link warn} said on a plot mount, until the harness takes it. */
+  private readonly plotNotices: string[] = []
+  /**
    * The host page's end of the conversation, or `null`.
    *
    * `null` for every top-level page, which is the ordinary case: the app is then
@@ -347,7 +359,10 @@ export class App implements SessionHost {
     // own site, and a reader who opens one *in* a figure must not find the app
     // rearranged next time they go to it. So an embed's columns start folded and
     // leave no trace (`ui/SidePanel.ts`).
-    const remembers = !this.embed
+    // A plot mount is the same case from the other side: nobody's columns, so
+    // none are read and none written — and folded, which is the size a figure
+    // is taken at unless the command says otherwise (§27).
+    const remembers = !this.embed && !this.plot
     this.generalPanel = new SidePanel(GENERAL_PANEL, relayout, settled, remembers)
     this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout, settled, remembers)
     this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled, remembers)
@@ -840,6 +855,13 @@ export class App implements SessionHost {
 
     this.restore()
     this.channel?.start()
+    // The door `metacooler-plot` drives this window through (§27). Its own
+    // chunk, fetched only on a plot mount, so no reader's page carries it.
+    if (this.plot) {
+      void import('../plot/harness').then(({ installPlotHarness }) =>
+        installPlotHarness(this.plotHost()),
+      )
+    }
   }
 
   /**
@@ -909,7 +931,7 @@ export class App implements SessionHost {
     // later.
     const shared = readShareHash(window.location.hash) !== null
     const linked = shared ? null : parseViewState(window.location.hash)
-    const stored = this.embed ? { sessions: [], active: null } : readSessions()
+    const stored = this.embed || this.plot ? { sessions: [], active: null } : readSessions()
     reserveSessionIds(highestId(stored.sessions))
 
     for (const snapshot of stored.sessions.slice(0, MAX_SESSIONS)) {
@@ -976,7 +998,7 @@ export class App implements SessionHost {
     //
     // An embed asks nothing and settles at once: it has no record to offer back
     // and writes none, so both halves are answered before the question.
-    if (this.embed || stored.sessions.length > 0) this.durableSettled = true
+    if (this.embed || this.plot || stored.sessions.length > 0) this.durableSettled = true
     else void this.offerWorkspace()
   }
 
@@ -1492,7 +1514,7 @@ export class App implements SessionHost {
    * embedding site, that the reader has no interface to and no way to clear.
    */
   private remember(): void {
-    if (this.embed) return
+    if (this.embed || this.plot) return
     const snapshots: SessionSnapshot[] = []
     for (const session of this.sessions) {
       const state = session.state
@@ -1529,7 +1551,7 @@ export class App implements SessionHost {
     // writing here would be worse than the strip it does not write — the record
     // is what the *landing page* offers back, so an embedded figure would seed
     // the offer a reader meets on the real site.
-    if (this.embed) return
+    if (this.embed || this.plot) return
     const sessions: WorkspaceSession[] = []
     for (const session of this.sessions) {
       const config = session.exportConfig()
@@ -1573,6 +1595,7 @@ export class App implements SessionHost {
    * for instance — where refusing would be wrong and silence would be worse.
    */
   notify(message: string): void {
+    if (this.plot) this.plotNotices.push(message)
     this.noticeSlot.replaceChildren(
       noticeBanner(message, () => this.noticeSlot.replaceChildren()),
     )
@@ -1602,7 +1625,9 @@ export class App implements SessionHost {
    * and are opened by the reader — from the bar, or from their own spines.
    */
   applyPanelLayout(layout: PanelLayout | undefined): void {
-    if (this.embed || layout === undefined) return
+    // A plot mount keeps every column folded, whatever the workspace saved: the
+    // figure is taken at the room a folded window leaves the map (§27).
+    if (this.embed || this.plot || layout === undefined) return
     for (const [spec, column] of this.columns()) column.applyLayout(layout[spec.key])
   }
 
@@ -1800,11 +1825,20 @@ export class App implements SessionHost {
    * follows: adds rather than replaces in every case it can.
    */
   openWorkspaceFile(text: string, label: string, base?: string): void {
+    const refused = this.seatWorkspaceText(text, label, base)
+    if (refused !== null) this.warn(refused, 'That workspace could not be read')
+  }
+
+  /**
+   * Seat a workspace file's tabs, or say in one sentence why not.
+   *
+   * The whole of {@link openWorkspaceFile} but the dialog, so the one caller
+   * that has no reader to show a dialog to — a program driving the window (§27)
+   * — gets the same refusal as a sentence it can print.
+   */
+  private seatWorkspaceText(text: string, label: string, base?: string): string | null {
     const read = parseWorkspaceFile(text)
-    if (isRefusal(read)) {
-      this.warn(refusalMessage(read, label), 'That workspace could not be read')
-      return
-    }
+    if (isRefusal(read)) return refusalMessage(read, label)
     // A published workspace names its files relative to its own folder, so they
     // are pointed at wherever it was found. A dropped file has no folder a page
     // can see, and its names are already absolute or already local.
@@ -1819,6 +1853,25 @@ export class App implements SessionHost {
       },
       'append',
     )
+    return null
+  }
+
+  /**
+   * The window, as `metacooler-plot` drives it (§27, `plot/harness.ts`).
+   *
+   * Closures over what the shell already does for a reader: seating a
+   * workspace is the road a dropped one takes, bringing a tab in front is a
+   * press on it, and what the window says in its notice slot is kept for the
+   * program to print — a notice nobody can see is a notice nobody reads.
+   */
+  private plotHost(): PlotHost {
+    return {
+      openWorkspace: (text, label) => this.seatWorkspaceText(text, label),
+      tabs: () => this.sessions.map((session) => session.plotSurface()),
+      active: () => this.active,
+      activate: (index) => this.activate(index),
+      takeNotices: () => this.plotNotices.splice(0),
+    }
   }
 
   /**
@@ -2400,6 +2453,9 @@ export class App implements SessionHost {
    * read.
    */
   private warn(message: string, title: string): void {
+    // Kept for the program driving a plot mount (§27), which has no eyes for a
+    // dialog; shown as well, since the dialog is what the screen would say.
+    if (this.plot) this.plotNotices.push(`${title}: ${message}`)
     if (this.modal !== null) return
     this.modal = new Modal({
       title,

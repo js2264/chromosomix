@@ -1549,6 +1549,16 @@ on one line. The clipboard button in the same row takes a PNG whatever the forma
 while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
 a raster rasterised at a number they could no longer see or change.
 
+**A vector page writes what the canvas painted**, and each of the rules below was once a figure that
+differed from the PNG saved beside it. Every colour is read as the canvas reads it: hex of three,
+four, six or eight digits, and `rgb()` and `hsl()` in both the comma and the space spelling — the
+rotated categories a lane draws (a gene's other strand, a read's other mate) are `hsl()`, and they
+came out black. A colour's own alpha is multiplied into `globalAlpha`, for the fill and the stroke
+apart, as the canvas multiplies it; written opaque, the translucent fill inside a loop's ring hid the
+pixels the ring was drawn to show. A raster placed on the page is drawn at `globalAlpha` alone. And
+an arc swept through a whole turn is the whole circle: taken modulo a turn, every circle drawn from
+0 to 2π — the loops on a map, the beads of a model — was an arc of no length, and not on the page.
+
 **The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
 what it shows: the region on the first line, then the file, the bins, the score, the colour range
 and when it was made; a 1D browser figure names its genome, its window and the date on one line.
@@ -5047,7 +5057,12 @@ on (§5.8): a feature set, a pair set, a track — bigWig *or* synthetic — and
 lets a task like compartment phasing (§18.8) be a dropdown rather than a second file drop.
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
-a figure is opening the session and pressing Run.
+a figure is opening the session and pressing Run. *Per file* is the tab's own key for the file — the
+session and the file, as for every other decision about it (§8.6) — which is the key a session is
+exported from and imported into. The drawer used to keep both under the file's URI alone, so a
+workspace saved from a window carried none of its tasks' parameters or its figures' styling (§18.13),
+and one written by hand or published put them under a key the drawer never read: reopening it ran
+every task at its defaults, in its default style.
 
 **A locus parameter is in cooler's grammar** — 0-based half-open, ungrouped — because that is the one
 form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
@@ -6959,7 +6974,9 @@ is ~6 MB unpacked, 1.7 MB compressed.
 `files` is `dist/` and `dist-cli/`, and it is the whole of what stands between a publish and 250 MB of
 demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
 resolves inside the package — `npx metacooler-run` then works against a published version with no
-clone, which is what makes `h5wasm` and `@gmod/bbi` runtime dependencies rather than dev ones.
+clone, which is what makes `h5wasm` and `@gmod/bbi` runtime dependencies rather than dev ones. The
+second command, `metacooler-plot` (§27), serves `dist/` itself to the browser it drives, so a
+published package carries its viewer beside it and `build:cli` builds both.
 
 npm **force-includes the file `main` names**, ahead of `files` and ahead of a negation. `main` is the
 Electron entry point (§15) and cannot be dropped without breaking `electron .`, so a pack run in a
@@ -8952,3 +8969,226 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 
 A thing that can run says exactly one of: **never run**, **queued**, **running**, **done**,
 **failed**, **cancelled**, or **reading…** while it fetches. No surface invents a seventh.
+
+---
+
+## 27. Every figure a workspace shows, from a shell: `metacooler-plot`
+
+`metacooler-run` (§18) is the Analysis panel without the panel: the same numbers, over two hundred
+files instead of one. What it cannot give back is the *picture* — the map with its tracks on two
+edges, its loops circled and its colour scale clipped where the reader clipped it; a deck of four
+replicates side by side; the P(s) with the log axes and the window somebody zoomed it to. Those are
+what go into a paper, and the only way to make one was to open the workspace and press **save**, one
+tab, one bookmark and one drawer figure at a time. `metacooler-plot` takes a workspace — the file the
+save button writes (§5.6), every tab of a window in one file — and saves every figure it shows, as
+that window would have saved it.
+
+**Nothing is drawn by the command.** A figure here is a map read through a worker, lanes sampled
+through another, a model lit through WebGL and a chart laid out by a library, all onto a canvas with
+fonts; a second implementation of any of it for a shell would be a second picture to keep in step
+with the first, and it would drift the first time either changed. So the command runs **this app**,
+headless: it starts a Chromium already on the machine, serves it the viewer and the workspace's files
+from `127.0.0.1`, opens the page with `?plot=1`, and drives it through an object the page installs
+(§27.6) — one fresh page per tab, so no tab's memory, workers or preferences reach the next. Every
+figure is the surface's own export: the map's Export card, the deck's, the 1D browser's, a structure
+cell's row, a drawer figure's PNG and PDF buttons. Same code, same file.
+
+**C1 is untouched.** The server is on the reader's own machine, on the loopback interface, for the
+length of one command, and reads the files the reader named to a browser the command started; it is
+`metacooler-run` reading a file from disk by another road. Nothing is uploaded, nothing is fetched
+that the workspace does not name, and nothing about the viewer's hosting changes (§11).
+
+### 27.1 What it saves, and what each file is called
+
+| Flag | Saves | File |
+|---|---|---|
+| *(default)* | each tab's own figure, as its Export card saves it (§7.2): the map, the deck (§16.5) or the 1D browser (§5.8) | `<stem>.png` |
+| `--analysis` | first re-runs every task the tab recorded parameters for (§18.2), as its **Run** button would, then saves each figure the drawer draws, styled as the workspace saved it (§18.13) | `<stem>.<task>.<output>.png` |
+| `--tasks <id,…>` | the same, for these tasks only | |
+| `--structures` | each 3D structure cell of the deck (§25), as its row saves it | `<stem>.structure-<n>-<label>.png` |
+| `--bookmarks` | the tab's figure framed at each of its bookmarks (§8.10) | `<stem>.bookmark-<n>-<label>.png` |
+| `--region <locus>`, `--regions <bed>` | the tab's figure framed at a locus — machine form, 0-based half-open (§26.1), or a whole sequence — or at each row of a BED | `<stem>.<locus>.png` |
+| `--no-main` | leaves the tab's own figure out, keeping only what the flags above add | |
+
+The analyses run **before** the tab's own figure is taken, because a run puts its lanes and its
+called intervals back on the map (§18.5) and the figure after it is the one a reader who pressed Run
+would see. A drawer output that is a table rather than a figure is named and skipped: its file is a
+TSV, and `metacooler-run` writes it. A view with nothing its Export card would save — the genomes
+table, the picker — is a note, not a failure.
+
+`--format png,pdf` writes both; the default is PNG, at `--dpi 300`. A map's PDF — alone or as a cell
+of a deck — carries the matrix as an image and everything else as paths (§7.2); a 1D browser's and a
+drawer chart's are vector throughout, and a structure's is too unless it is drawn as a tube.
+
+**The stem is what the reader called the tab**, made safe for a filename with the characters a
+figure saved by hand keeps (`ui/export.ts`'s `exportBaseName`) and no leading dot, since it is joined
+onto a directory; and otherwise its file's stem as `metacooler-run` names a result (`cli/names.ts`) —
+so a TSV and the picture of the same output land side by side in one listing. Stems are unique
+across a run, the second of a name taking `-2` and no suffix ever taking another tab's own name.
+
+**A run prints every file it writes on stdout**, one path per line, and nothing else there: a
+pipeline reads what was made from the one stream that says only that. Progress, notes and failures go
+to stderr, `--quiet` keeps only the failures, and `--verbose` adds what the page itself logged.
+
+**The exit status is one of three.** `0`: everything asked for was written, or was a note. `1`:
+something failed — a tab that would not open, a figure that would not draw, a run that errored — and
+everything else was still written, because one bad file in two hundred is a line in the log and not
+the end of the batch. `2`: the command itself is wrong (§27.2), and nothing was started.
+
+### 27.2 The command is checked before anything starts
+
+Everything that can be wrong with a command is found before a browser is launched, and is exit `2`
+with one sentence: a command that is wrong should say so before it spends an hour being wrong.
+
+- **The flags are strict.** A flag the command does not know is an error with the nearest real one
+  suggested, and so is a value missing after one that takes it: a batch with `--dpi300` in it must
+  not run for an hour at the default. A switch never takes the next word, so `--analysis w.json` is
+  the switch and then the workspace. `--no-caption` and `--caption=false` say the same.
+- **Every value is checked** against what the app offers: `--text-scale` is one of the text sizes the
+  app has, `--dpi` is 24 to 1,200, `--viewport` is at least 320 × 240.
+- **Every file is looked for** (§27.3), and a workspace naming one that cannot be found is refused
+  with each missing name and what it was for — *the track "ATAC"*, *a map beside the first* — unless
+  `--allow-missing`, which leaves a missing track detached and a missing companion vacant, as a reload
+  leaves them (§8.6, §16.6). A missing **first map** is refused either way: without it there is no
+  figure to make.
+- `--list` prints the plan — each tab, every file it reads and where from, every file it would write
+  — and stops.
+
+### 27.3 A workspace, pointed at addresses
+
+A headless page cannot be handed a file, so every name in a tab is rewritten to an address the page
+reads before it sees the tab (`cli/plotWorkspace.ts`). A workspace names its files three ways:
+
+- **An address** — `https://…`, `s3://…`, `gs://…` — is left as it is, and the page reads it as a
+  reader's browser would.
+- **A name relative to the workspace** is what a *published* workspace carries (§21.1): resolved
+  against the workspace's folder, then each `--data` folder — or against its URL, when it was read
+  from one.
+- **A dropped file's name** — `rep1.cool`, with no directory, because no page ever knew one — is what
+  a workspace saved from local files carries. It is looked for in each `--data` folder and then in the
+  workspace's own, by the name as written and then by its last segment, since a workspace saved on
+  another machine names files by paths that machine had.
+
+**Every field that names a file goes through one function**, which is `resolveConfig`'s rule and for
+its reason: a companion's lanes, looks and name are keyed on the companion's file (§16.8), so
+rewriting the deck and not its keys would put every placed track back on the lead, every clip on the
+lead's scale and every name back on its file — each a legal deck, and none the one that was saved.
+The local second file (`compare`) becomes the square's `uri2` once it has an address, which is the
+only difference between the two (§5.7); a local companion becomes a map in the slot it was saved in;
+the identity of the local file the tab was saved from is dropped, since this one is read from an
+address and the note it would write is about a different road.
+
+**`--over <file>`** plots the tab over another file, as `metacooler-run replay --over` re-runs one:
+the same view, tracks, deck, colours, recorded analyses and figure styles, with `<file>` as the first
+map. Three things go, because each was a fact about the file replaced: the tab's name, the first map's
+own name, and the local file's identity. A group is carried across where the new file names none and
+has the old one's kind, so a tab of `a.mcool::/resolutions/5000` over `b.mcool` is `b`'s 5 kb rung.
+With `--over`, the tab plotted is the one that was in front, because a whole window applied to each of
+two hundred files is rarely what anybody means; `--tab` says otherwise. Each file's figures are named
+after that file, and after the tab too when several tabs go over one file.
+
+**An `--over` path is the shell's**, relative to where the command was run and not to the workspace,
+whose own names are relative to it. `--over` takes one value, so an unquoted `data/*.mcool` would hand
+it the first match and the rest to nobody — which is refused, with the way out named: repeat the flag,
+separate files with commas, or quote the glob, which the command expands itself (`*`, `?` and `[…]`
+within a segment; every match, in order; the `::` group on each). A glob that matches nothing is a
+mistyped one, and is refused before anything starts (§27.2).
+
+### 27.4 The browser, the protocol and the server
+
+**It needs a Chromium and downloads none.** Any from the last few years will do — the page needs module
+workers, `--headless=new` and `--remote-debugging-pipe`. It is looked for in this order: `--browser`,
+which is taken or refused and never swapped for another; `METACOOLER_BROWSER`; `CHROME_PATH`; Chrome,
+Chromium, Edge and Brave by name on `PATH`, then where each platform installs them; then the browsers
+Playwright and Puppeteer downloaded, newest revision first. A command that fetched a hundred megabytes
+on its first run would be doing something nobody asked it to, and a run that finds nothing says where
+it looked.
+
+It is started in a profile of its own that is deleted when it closes, so nothing a reader keeps in
+their own browser is read and nothing the run does is left behind; with WebGL through the software
+rasteriser, so a model draws on a machine with no GPU and two runs of one model are the same picture;
+in the sRGB profile whatever the display's; with its vendor's background services off — updates,
+field trials, translation, phishing lists — so a run does not check in with anybody while it draws,
+which on a locked-down network would be a line of refused connections per figure; and without the
+sandbox when run as root, which Chromium refuses otherwise in a way nobody reading a CI log would
+connect to this command.
+
+**The DevTools protocol is spoken over two pipes** (`cli/cdp.ts`): a JSON message per request, a NUL
+between messages, an id to match each answer by, a session to address one page. No port is opened, so
+nothing else on the machine can reach the browser being driven, and no WebSocket library is needed —
+which is `metacooler-run`'s rule that what is small and fixed is written rather than depended on. A
+browser that goes away fails every call still waiting, so a crash mid-figure ends the wait. Each tab is
+drawn in a browser context of its own, the one thing this command asks of a browser beyond a page.
+
+**The server** (`cli/serve.ts`) listens on the loopback interface, on a port the system picks, and
+serves each file **by its directory**, under a random token: a `.bam` looks for its `.bai` beside it,
+a FASTA for its `.fai`, a `.pairs` for its index and a HiC-Pro matrix for its bin file, all by name,
+and serving the one file would leave each of them looking at nothing. It answers byte ranges as a
+bucket does, sends a compressed file as the bytes on disk — a `.gz` here is a format, not a transfer
+encoding — and refuses a request under any `Host` but its own, which is what stops a page elsewhere
+reaching it through a name that resolves here. A message the page writes about a file names it by the
+address it read; the command prints it with the path the reader gave.
+
+The viewer served is the build beside the command — `dist/`, which `npm run build:cli` writes and a
+published package carries (§22.2) — or `--viewer`: another built directory, or the URL of a running
+`npm run dev`, whose requests are relayed so the page and its data stay one origin.
+
+### 27.5 The window it draws in
+
+`?plot=1` is a mounting of the same build (`src/embed.ts`), read the way `?embed=1` is. It is the
+embed's opposite in one respect and its twin in the other:
+
+- **A whole window.** The header, the strip, the columns and the status bar are all built, because the
+  size a map is drawn at is the room the window leaves it, and the figure should come out as a reader
+  would have seen it. The window is **1600 × 1000 with every side column folded** unless
+  `--viewport` says otherwise — a workspace does not record the reader's screen, so the command picks
+  one, and a folded window gives the picture the most of it. A layout the workspace saved (§5.6) is
+  not applied.
+- **A forgetful one.** Like an embed (§21.2), it is nobody's window: no tab strip or durable record is
+  written or offered back, no column writes its fold, no service worker is installed — it would outlive
+  the server it came from — and no version notice is shown.
+
+**The questions a file asks before it opens are answered by the command** (`plot/answers.ts`), since a
+headless window has nobody to press a button and a run that met a dialog would wait out its timeout for
+a figure that was never going to arrive. A `.pairs` is binned at `--bin-size` with `--rungs`, or refused
+with a sentence naming those flags (§3.7); a single-cell container is read in pieces unless
+`--scool whole` (§3.8) — its files are served from this machine, where a round trip costs a fraction of
+a millisecond; a HiC-Pro pair is read whole (§3.9); and a whole-file picture that waits behind a
+button stating its cost (§7.3) starts at once, the command having been asked for the picture.
+
+The Export card's settings come from the command: `--theme`, `--text-scale` (the app's default,
+1.35, unless told), `--no-caption` and `--dpi`. **`SOURCE_DATE_EPOCH`**, when set, is the date in
+every caption and every PDF's metadata, so two runs of one workspace are the same files. What the
+window says in its notice slot — a track it could not read, a note about a file — is printed as a note
+under the tab it was about.
+
+### 27.6 Knowing the picture is finished
+
+The one question a program has to answer that a reader answers by looking. The page installs
+`window.metacoolerPlot` (`plot/harness.ts`, in a chunk only a plot mount fetches) and the command calls
+it over the protocol: open the workspace, describe the tab, wait, save. **Waiting is counting two
+things until both have said *nothing* for 600 ms together:** every request a worker client has sent
+and not had answered, with the 3D chunk's import counted beside them (`perf/inflight.ts`), and
+whatever the tab itself says it is doing — a file opening, a loading screen, a track still loading,
+the analysis chunk (`Session.plotSurface`). *For a while*, because a picture's
+work is a chain — a block arrives, the lanes ask for their samples, a paint is scheduled — whose links
+are microseconds apart, and a gap that long is a chain that ended. Then two frames, so the paint
+every arrival scheduled has happened. A wait that reaches `--timeout` fails naming what it was still
+waiting on, because a run that hangs for ten minutes and then says only *timed out* has told nobody
+anything.
+
+A figure crosses back as bytes held in the page under a reference and read in pieces of 8 MB, so a
+600 dpi deck is not one message of a hundred megabytes.
+
+**It is not an API.** The object carries a protocol number (`PLOT_PROTOCOL`), and the command refuses a
+viewer that speaks another — a viewer and a command are built together, by one `npm run build:cli`.
+It changes with the command that drives it, and nothing else should script against it.
+
+### 27.7 What it does not do
+
+- **It does not replay a reader's session beyond what a workspace records.** A figure is what the
+  saved tab shows at its saved view — plus the analyses, bookmarks and loci it is asked for. A colour
+  scale that follows the view (§7.1) follows it at a bookmark or a `--region` too, as it would on screen.
+- **It does not write tables.** A drawer output that is a table is `metacooler-run`'s to write as TSV.
+- **It does not write SVG.** The two formats are the two every Export card writes.
+- **It does not download a browser**, for the reason above.

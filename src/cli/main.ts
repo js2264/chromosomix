@@ -95,6 +95,7 @@ import {
   type LoadedTrack,
 } from './tracks'
 import { outputToTsv } from '../analysis/write/tsv'
+import { stemOf } from './names'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import {
@@ -1619,22 +1620,8 @@ export function recordedTasks(config: {
   return out
 }
 
-/** `demo/yeast/Yeast_microC.cool` → `Yeast_microC`. */
-export function stemOf(path: string): string {
-  // The `::` half is the *group inside the container*, so a file addressed as
-  // `sample.mcool::/resolutions/1000` is still `sample` — it was `1000`, which
-  // is `basename` of a group path and named every output after a number. The
-  // group's last segment is kept as a suffix so two resolutions of one file
-  // written to one `--out` are two sets of results rather than one overwritten
-  // twice.
-  const { path: file, group } = parseUri(path)
-  const name = basename(file)
-  const dot = name.indexOf('.')
-  const stem = dot > 0 ? name.slice(0, dot) : (name || 'output')
-  if (group === '/') return stem
-  const last = group.split('/').filter((part) => part !== '').pop()
-  return last === undefined ? stem : `${stem}_${last}`
-}
+/** `demo/yeast/Yeast_microC.cool` → `Yeast_microC`; see `cli/names.ts`. */
+export { stemOf }
 
 export async function main(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv)

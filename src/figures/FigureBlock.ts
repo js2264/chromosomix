@@ -48,7 +48,11 @@ export interface FigureBlockProps {
   output: TaskOutput
   /** The task id, which with the output's id names this figure's memory. */
   task: string
-  /** The file the style is remembered against. */
+  /**
+   * The key the style is remembered under: the tab's key for the file the
+   * figure is of (`AnalysisDrawerOptions.memoryKey`), which is the key a saved
+   * workspace carries the style in.
+   */
   uri: string
   /** Buttons the drawer owns — TSV, bigWig, bedGraph — for the head row. */
   extras?: HTMLElement[]

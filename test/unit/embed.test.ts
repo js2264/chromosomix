@@ -22,7 +22,7 @@ const AT = 'https://viewer.example/app/'
 
 describe('reading a mount', () => {
   it('is a plain window when nothing is asked for', () => {
-    const plain = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+    const plain = { embed: false, plot: false, config: null, store: null, storeView: EMPTY_VIEW }
     expect(readMounting('', AT)).toEqual(plain)
     expect(readMounting('?other=1', AT)).toEqual(plain)
   })
@@ -36,6 +36,18 @@ describe('reading a mount', () => {
   it('lets a hand-edited "no" mean no', () => {
     for (const search of ['?embed=0', '?embed=false', '?embed=off']) {
       expect(readMounting(search, AT).embed).toBe(false)
+    }
+  })
+
+  it('reads the plot mount by the same rule, and apart from the embed', () => {
+    // `metacooler-plot` serves the page with `?plot=1` (§27). It is a whole
+    // window, so it says nothing about `embed` — and the reverse.
+    for (const search of ['?plot', '?plot=1', '?plot=true']) {
+      expect(readMounting(search, AT).plot).toBe(true)
+      expect(readMounting(search, AT).embed).toBe(false)
+    }
+    for (const search of ['?plot=0', '?plot=false', '?plot=off', '?embed=1']) {
+      expect(readMounting(search, AT).plot).toBe(false)
     }
   })
 

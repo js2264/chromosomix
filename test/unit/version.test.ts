@@ -53,8 +53,21 @@ describe('the package', () => {
     // the site, that is absolute asset URLs that 404 on every mount but the
     // site root, and 20 MB of source maps.
     expect(pkg.scripts?.prepack).toBe('npm run build:package')
-    expect(pkg.scripts?.['build:package']).toContain('vite.package.config.ts')
+    // The package build is one step down the chain: `build:cli` runs it, because
+    // `metacooler-plot` serves that same relative-base copy of the viewer
+    // (SPECS §27) — and the check runs last, over what the chain wrote.
+    const chain = [pkg.scripts?.['build:package'], pkg.scripts?.['build:cli']].join(' && ')
+    expect(pkg.scripts?.['build:package']).toContain('npm run build:cli')
+    expect(chain).toContain('vite.package.config.ts')
     expect(pkg.scripts?.['build:package']).toContain('check-package-build.mjs')
+  })
+
+  it('ships every command it names, each beside the viewer the plot command serves', () => {
+    // Two commands (SPECS §27): the second draws with the viewer in `dist/`,
+    // so a tarball carrying the command and not the viewer would install a
+    // command that refuses to start.
+    expect(Object.keys(pkg.bin ?? {}).sort()).toEqual(['metacooler-plot', 'metacooler-run'])
+    expect(pkg.files).toContain('dist')
   })
 
   it('declares no command that the tarball does not carry', () => {

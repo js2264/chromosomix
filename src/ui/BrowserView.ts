@@ -1024,7 +1024,7 @@ export class BrowserView {
     try {
       // Drawn first, so a resolution this figure cannot reach reports itself
       // through `rasterFigure`'s own message rather than as a clipboard failure.
-      const png = await this.rasterFigure(width, height, caption, ink)
+      const png = await this.rasterFigure(width, height, caption, ink, this.exportDpi)
       // An empty blob is `rasterFigure` refusing a size it has already explained
       // in the status line; overwriting that with "copied" would hide the reason.
       if (png.size === 0) return
@@ -2979,14 +2979,7 @@ export class BrowserView {
    * that is what a PNG is.
    */
   private async save(): Promise<void> {
-    // The whole canvas, name column included: the column is part of the figure —
-    // it is where the track names are — and a page cut to the data would lose
-    // every label on the left of it.
-    const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
-    const height = this.heightOf(this.lanes)
     const now = new Date()
-    const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
-    const ink = readCanvasPalette(this.canvas).labelColor
     const base = `${exportBaseName(this.props.assembly.name)}-${fileStamp(now)}`
     // Where it goes first, while the press is still the reader's (`ui/export.ts`).
     const target = await chooseSaveTarget(
@@ -2997,10 +2990,7 @@ export class BrowserView {
 
     let blob: Blob
     try {
-      blob =
-        this.exportFormat === 'pdf'
-          ? await this.vectorFigure(width, height, caption, ink)
-          : await this.rasterFigure(width, height, caption, ink)
+      blob = await this.figureBlob(this.exportFormat, this.exportDpi, now)
     } catch (err) {
       this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
       return
@@ -3012,6 +3002,25 @@ export class BrowserView {
     } catch (err) {
       this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
     }
+  }
+
+  /**
+   * The figure the Export card saves, as bytes, with no dialog in front of it —
+   * the half of {@link save} that draws, and what `metacooler-plot` (§27) asks
+   * for. Empty where the resolution is past what a canvas will hold, which the
+   * card's line then explains, exactly as it does for a press.
+   */
+  async figureBlob(format: BrowserExportFormat, dpi: number, now: Date): Promise<Blob> {
+    // The whole canvas, name column included: the column is part of the figure —
+    // it is where the track names are — and a page cut to the data would lose
+    // every label on the left of it.
+    const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
+    const height = this.heightOf(this.lanes)
+    const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
+    const ink = readCanvasPalette(this.canvas).labelColor
+    return format === 'pdf'
+      ? this.vectorFigure(width, height, caption, ink, now)
+      : this.rasterFigure(width, height, caption, ink, dpi)
   }
 
   /**
@@ -3029,6 +3038,7 @@ export class BrowserView {
     height: number,
     caption: string,
     ink: string,
+    now: Date,
   ): Promise<Blob> {
     const page = new VectorPage(width, height + this.captionHeight)
     const ctx = page.ctx
@@ -3046,7 +3056,9 @@ export class BrowserView {
       ctx.globalAlpha = 1
       ctx.fillText(caption, 2, height + this.captionHeight - 5)
     }
-    return page.toBlob({ title: this.props.assembly.name })
+    // The caption's date is the file's date, as every other export has it — and
+    // the one `metacooler-plot` fixes with SOURCE_DATE_EPOCH (§27.5).
+    return page.toBlob({ title: this.props.assembly.name, created: now })
   }
 
   /** The same figure as pixels, redrawn at the requested resolution. */
@@ -3055,10 +3067,11 @@ export class BrowserView {
     height: number,
     caption: string,
     ink: string,
+    dpi: number,
   ): Promise<Blob> {
-    const scale = scaleForDpi(this.exportDpi)
+    const scale = scaleForDpi(dpi)
     const fits = largestDpiThatFits(width, height + this.captionHeight)
-    if (fits !== null && fits < this.exportDpi) {
+    if (fits !== null && fits < dpi) {
       this.exportStatus.textContent = `${fits} dpi is the largest that fits this figure.`
       return new Blob([])
     }

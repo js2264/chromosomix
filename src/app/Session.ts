@@ -142,7 +142,8 @@ import { mcoolNameFor } from '../pairs/mcoolName'
 import { MetadataCard } from '../ui/MetadataCard'
 import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
-import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
+import { BookmarkStore, formatRegion, parseRegion, type Bookmark } from '../annotations/bookmarks'
+import type { FigureKind, PlotRequest, SessionPlot } from '../plot/types'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable, type CircularColumn } from '../ui/ContigsTable'
@@ -152,6 +153,8 @@ import type { ProviderId } from '../ui/connectFronts'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
+import { pairsRefusal, plotAnswers } from '../plot/answers'
+import { plotting } from '../embed'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
@@ -1939,6 +1942,160 @@ export class Session {
     })
   }
 
+  // -------------------------------------------------------------------------
+  // For a program driving the window (§27)
+  // -------------------------------------------------------------------------
+
+  /**
+   * This tab, as `metacooler-plot` asks about it (`plot/types.ts`).
+   *
+   * Closures over what the tab already holds, and nothing it does not: every
+   * figure is the one its own Export card saves, every place is one its own
+   * cards go to, and every analysis is the one its own drawer runs. A second
+   * route to any of them would be a second picture to keep in step with the
+   * first.
+   */
+  plotSurface(): SessionPlot {
+    return {
+      label: () => this.label,
+      state: () => this.store.state,
+      busy: () => this.plotBusy(),
+      failure: () => this.plotFailure(),
+      figureKind: () => this.plotFigureKind(),
+      figure: (request) => this.plotFigure(request),
+      bookmarks: () =>
+        (this.bookmarkStore?.marks ?? []).map((mark) => ({
+          label: mark.label,
+          locus: formatRegion(mark),
+        })),
+      goToBookmark: (index) => {
+        const mark = this.bookmarkStore?.marks[index]
+        if (mark !== undefined) this.goToBookmark(mark)
+      },
+      goToLocus: (locus) => this.plotGoTo(locus),
+      structures: () =>
+        (this.deck?.plotStructures() ?? []).map((cell) => ({
+          label: cell.label,
+          figure: (request) => cell.figure(request.format, request.dpi, request.now),
+        })),
+      analysis: () => this.analysis?.plot() ?? null,
+    }
+  }
+
+  /**
+   * What this tab is still doing, a phrase each — the half of "is the picture
+   * finished" the worker counts cannot see (`perf/inflight.ts` is the other):
+   * the gaps between requests while a file opens, a loading screen still up,
+   * a track still being read, the analysis chunk on its way.
+   */
+  private plotBusy(): string[] {
+    const out: string[] = []
+    if (this.primed) out.push('the tab has not been opened yet')
+    if (this.opening !== null) out.push(`opening ${fileLabel(this.opening)}`)
+    if (this.resolving !== null) out.push(`finding ${fileLabel(this.resolving)}`)
+    if (this.compareOpening !== null) out.push(`opening ${fileLabel(this.compareOpening)}`)
+    if (this.analysisLoading) out.push('loading the Analysis panel')
+    for (const node of this.contentEl.querySelectorAll('.loading')) {
+      if (node.getClientRects().length === 0) continue
+      out.push('a loading screen is up')
+      break
+    }
+    for (const entry of this.annotations?.store.entries ?? []) {
+      if (entry.status === 'loading') out.push(`loading ${entry.label}`)
+    }
+    return out
+  }
+
+  /**
+   * Why this tab shows no picture, in the words its own screen uses: the error
+   * view's title and message, or the note over a picker that is asking for a
+   * file. `null` for a tab showing something.
+   */
+  private plotFailure(): string | null {
+    if (this.store.state === null) return 'nothing is open in this tab'
+    const error = this.contentEl.querySelector('.view-error')
+    if (error !== null) {
+      const parts = ['.error-title', '.error-message']
+        .map((selector) => error.querySelector(selector)?.textContent?.trim() ?? '')
+        .filter((text) => text !== '')
+      return parts.join(': ') || 'the tab shows an error'
+    }
+    if (this.contentEl.contains(this.picker.el)) {
+      const note = this.contentEl.querySelector('.view > .inline-error')?.textContent?.trim()
+      return note !== undefined && note !== '' ? note : 'the tab is back at the file picker'
+    }
+    return null
+  }
+
+  /** Which picture the Export card would save here — see {@link plotFigure}. */
+  private plotFigureKind(): FigureKind {
+    if (this.browser !== null && this.assembly !== null) return { kind: 'browser' }
+    const panel = this.current?.panel
+    if (panel !== undefined) return { kind: panel.savesDeck ? 'deck' : 'map' }
+    const view = this.store.state?.view
+    return {
+      kind: null,
+      why:
+        view === undefined
+          ? 'nothing is open'
+          : `this tab is on its ${view} view, which is a table rather than a picture`,
+    }
+  }
+
+  /**
+   * The figure the Export card — or the `S` key — would save: the 1D browser's,
+   * or the map's, which is the deck's where the map leads one with anything
+   * beside it. `null` for a view with no picture.
+   */
+  private async plotFigure(request: PlotRequest): Promise<Blob | null> {
+    if (this.browser !== null && this.assembly !== null) {
+      const blob = await this.browser.figureBlob(request.format, request.dpi, request.now)
+      // Empty is `rasterFigure` refusing a size past what a canvas holds, which
+      // on screen it says in the card's line; here it has to be said aloud.
+      if (blob.size === 0) {
+        throw new Error(
+          `this figure at ${request.dpi} dpi is past what a browser canvas will draw; ask for fewer dots per inch`,
+        )
+      }
+      return blob
+    }
+    const panel = this.current?.panel
+    if (panel === undefined) return null
+    return panel.figureBlob(request.format, request.dpi, request.now)
+  }
+
+  /**
+   * Frame the picture at a locus, keeping everything else it is showing (§27).
+   *
+   * On a map it is the region — `IV:1000000-1400000`, the link's own grammar,
+   * or a bare sequence name — cut at those coordinates, as a link naming it
+   * would open; the transform, the clip, the score and the deck all stay, since
+   * a figure made at twenty places is one figure twenty times. On a 1D browser
+   * it is the window. A sentence where the view has nothing a locus can name.
+   */
+  private plotGoTo(locus: string): string | null {
+    const state = this.store.state
+    if (state === null) return 'nothing is open in this tab'
+    const trimmed = locus.trim()
+    const parsed = trimmed.includes(':') ? parseRegion(trimmed) : null
+    if (trimmed.includes(':') && parsed === null) {
+      return `${locus} is not a region: write it as chrI:100000-200000, or name a whole sequence`
+    }
+    if (this.browser !== null && this.assembly !== null) {
+      this.goToLocus(parsed === null ? trimmed : formatLocus(parsed))
+      return null
+    }
+    if (this.file === null) return 'this tab has no map or browser to frame'
+    this.navigate({
+      ...state,
+      view: 'region',
+      region: parsed === null ? trimmed : formatRegion(parsed),
+      region2: undefined,
+      focus: undefined,
+    })
+    return null
+  }
+
   /**
    * Take a config file back, in this tab.
    *
@@ -2548,6 +2705,18 @@ export class Session {
       const probe = pairsProbe(err)
       if (probe !== null) {
         this.opening = null
+        // Asked of the command rather than of a reader when a program is
+        // driving the page (§27): the resolution it was given, or a refusal
+        // that names the flag.
+        const answers = plotAnswers()
+        if (answers !== null) {
+          if (answers.pairs === null) {
+            this.showError(new Error(pairsRefusal(fileLabel(uri))), uri, source)
+            return
+          }
+          await this.open(uri, source, carry, index, { ...answers.pairs, download: false })
+          return
+        }
         openPairsDialog({
           probe,
           fileLabel: fileLabel(uri),
@@ -7461,7 +7630,9 @@ export class Session {
             }),
           onError: (err) => this.showError(err),
           onOutOfMemory: () => this.refuseBinLevel(state),
-          start: this.takeStart(state.uri),
+          // A program driving the page has already agreed to the read — it
+          // asked for this view by name — so the gate is passed at once (§27).
+          start: this.takeStart(state.uri) || plotting(),
         })
       },
     )
@@ -7804,7 +7975,9 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
-          start: this.takeStart(state.uri),
+          // A program driving the page has already agreed to the read — it
+          // asked for this view by name — so the gate is passed at once (§27).
+          start: this.takeStart(state.uri) || plotting(),
         }),
     )
   }
@@ -8318,6 +8491,11 @@ export class Session {
       changed: () => {
         this.setAnalysis(this.analysis?.hasTasks === true ? [this.analysis.panelEl] : [])
       },
+      // This tab's key for a file's decisions — the one `exportConfig` gathers a
+      // workspace from and `applyConfig` writes one back under — so what a task
+      // was last run with, and how its figures were styled, travel in a saved
+      // workspace and come back into the form that recorded them (§18.2).
+      memoryKey: (uri) => this.memoryKey(uri),
     }
   }
 

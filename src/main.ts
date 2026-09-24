@@ -16,7 +16,7 @@
 import './ui/styles.css'
 
 import { App } from './app/App'
-import { embedded } from './embed'
+import { embedded, plotting } from './embed'
 import { parseViewState } from './state/ViewState'
 import { readShareHash } from './state/shareLink'
 import { initTheme } from './ui/ThemeToggle'
@@ -44,7 +44,10 @@ if (!recoverPinnedNavigation()) {
   // one only the page's author could sensibly accept — they chose the pinned
   // build in the `src=`, on purpose, so that the embed still renders the same
   // way in five years (docs/deploy.md).
-  if (!embedded()) {
+  // Nor in a window `metacooler-plot` is driving (§27): it is served by the
+  // command for the length of one run, and a worker installed there would
+  // outlive the server it came from.
+  if (!embedded() && !plotting()) {
     // Offline, after the first visit. Nothing downstream depends on it: a browser
     // that refuses, or a page served over plain HTTP, simply has no cache.
     registerServiceWorker()

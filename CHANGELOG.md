@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`metacooler-plot`: every figure a saved workspace shows, from a shell (§27).**
+  `metacooler-plot figure.metacooler.json -o figures/` opens the workspace in the app itself, in a
+  headless Chromium already on the machine, and saves each tab's figure as its Export card would —
+  the map, the deck or the 1D browser, with its tracks, marks, colour scale and caption. With
+  `--analysis` it first re-runs every task the tab recorded parameters for and saves each figure the
+  drawer draws, styled as the workspace saved it; `--structures`, `--bookmarks` and `--region` /
+  `--regions <bed>` add the 3D cells, each bookmark and any locus; `--over <file>` applies the tab to
+  other files, as `metacooler-run replay --over` does. PNG or PDF at any DPI, `--theme`,
+  `--text-scale`, `--no-caption`, and `SOURCE_DATE_EPOCH` for dates that do not change between runs.
+  A workspace saved from dropped files finds them with `--data <dir>`; `--list` shows what would be
+  read and written. Nothing is uploaded — the files are served to the page from `127.0.0.1` for the
+  length of the run — and nothing is downloaded: it needs Chrome, Chromium, Edge, Brave or
+  Playwright's browser, and finds it. `npm run build:cli` builds it and the viewer it serves; `npm
+  run plot` runs it from a clone.
+
 - **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
   heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
   where it will land; drop it anywhere in any open side panel. ⌥↑ / ⌥↓ on the heading's chevron move
@@ -997,6 +1012,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A workspace carries and restores each task's parameters and each figure's styling (§18.2,
+  §18.13).** The Analysis drawer kept both under a key the workspace was neither written from nor
+  read back into, so a saved workspace had none of them and a published one reopened every task at
+  its defaults — the P(s) of a figure without its log axes, title or window.
+
+- **A vector PDF draws what the screen drew (§7.2).** A gene on the reverse strand, a read's other
+  mate — every category a lane draws in `hsl()` — came out black; a translucent fill (inside a loop's
+  ring, under a highlight) came out opaque; and every circle drawn as a whole turn — the loops on a
+  map, the beads of a model — was missing.
+
+- **A 1D browser's PDF is dated like its caption (§7.2).** Its metadata carried the moment the file
+  was written rather than the date the figure's caption names.
 
 - **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
   and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in

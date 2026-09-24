@@ -66,6 +66,25 @@ export interface Mounting {
   /** Chrome-less: one view, and none of the window around it. */
   readonly embed: boolean
   /**
+   * Driven by `metacooler-plot` (§27): a window that a program looks at, not a
+   * reader.
+   *
+   * The whole window is built — the header, the strip, the columns, the status
+   * bar — because the size a map is drawn at is decided by the room that window
+   * leaves it, and a figure is meant to come out as a reader would have seen it.
+   * What goes is everything that is about *a reader's* window rather than this
+   * one: nothing is remembered or offered back, no worker is installed, every
+   * column starts folded and none of them writes its fold, and the questions a
+   * file can ask before it opens are answered by the program that asked for it
+   * (`plot/answers.ts`). `window.metacoolerPlot` is then the door it drives the
+   * page through (`plot/harness.ts`).
+   *
+   * Nothing a reader can reach turns it on: it is a query parameter on a page a
+   * shell serves itself, and a reader who types it gets a window that forgets
+   * itself and an object in the console.
+   */
+  readonly plot: boolean
+  /**
    * A published workspace to open on arrival, absolute, or `null`.
    *
    * The pointer form of a session, where `#session=` is the payload form. Both open
@@ -103,7 +122,7 @@ export interface Mounting {
 }
 
 /** The mount of a page that was not asked for anything in particular. */
-const PLAIN: Mounting = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+const PLAIN: Mounting = { embed: false, plot: false, config: null, store: null, storeView: EMPTY_VIEW }
 
 /**
  * A shipped store's id, or a remembered one's: a short name, not an address.
@@ -141,18 +160,30 @@ export function readMounting(search: string, base: string): Mounting {
   } catch {
     return PLAIN
   }
-  const flag = params.get('embed')
-  const embed = flag !== null && flag !== '0' && flag !== 'false' && flag !== 'off'
+  const embed = present(params.get('embed'))
 
   const named = params.get('store')
   const store =
     named !== null && named !== '' && STORE_ID.test(named) ? named : fetchable(named, base)
   return {
     embed,
+    // Read the way `embed` is. The two are not exclusive in the parser, and the
+    // app does not need them to be: a plot mount is a whole window, so an
+    // `embed` beside it would fold away the furniture the figure is sized by —
+    // which the shell never asks for.
+    plot: present(params.get('plot')),
     config: fetchable(params.get('config'), base),
     store,
     storeView: store === null ? EMPTY_VIEW : readStoreView(params),
   }
+}
+
+/**
+ * A flag that is on for a key that is present — `?embed`, `?embed=1`,
+ * `?embed=true` — and off for the three spellings of "no".
+ */
+function present(flag: string | null): boolean {
+  return flag !== null && flag !== '0' && flag !== 'false' && flag !== 'off'
 }
 
 /**
@@ -198,6 +229,11 @@ export function mounting(): Mounting {
 /** Sugar for the check that is made in a dozen places. */
 export function embedded(): boolean {
   return mounting().embed
+}
+
+/** Whether a program is driving this page to save its figures (§27). */
+export function plotting(): boolean {
+  return mounting().plot
 }
 
 /**

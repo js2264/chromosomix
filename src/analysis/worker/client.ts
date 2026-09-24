@@ -25,6 +25,7 @@
  * lives in `analysis.worker.ts`, where the cost actually is.
  */
 
+import { beginWork } from '../../perf/inflight'
 import { registerThread } from '../../perf/threads'
 import { withAccess } from '../../s3/attach'
 import type { Cancellable } from '../../worker/client'
@@ -111,8 +112,20 @@ export class AnalysisClient {
     // union carries a `source`, so the spread is not assignable to the union
     // without it; `payload.kind` is the discriminant and is already pinned.
     const message = withAccess({ ...payload, id }) as unknown as AnalysisRequest
+    // Counted until it settles (`perf/inflight.ts`), as the reader's are.
+    const done = beginWork(`analysis:${payload.kind}`)
     return new Promise<AnalysisResultMap[K]>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
+      this.pending.set(id, {
+        resolve: (value) => {
+          done()
+          resolve(value as AnalysisResultMap[K])
+        },
+        reject: (reason) => {
+          done()
+          reject(reason)
+        },
+        onProgress,
+      })
       this.worker.postMessage(message)
     })
   }

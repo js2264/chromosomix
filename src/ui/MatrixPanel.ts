@@ -888,6 +888,14 @@ export interface AnnotationContext {
 export interface DeckExport {
   save(format: ExportFormat, dpi: number): Promise<boolean>
   copy(dpi: number): Promise<boolean>
+  /**
+   * The deck's figure as bytes, for a program asking for the figure this card
+   * would save (§27) — or `null` for a deck of one map, whose figure is the
+   * panel's own. The same decision {@link save} makes, answered without a dialog.
+   */
+  figure(format: ExportFormat, dpi: number, now: Date): Promise<Blob | null>
+  /** Whether {@link figure} would answer, which is what the save would do. */
+  takes(): boolean
 }
 
 export class MatrixPanel {
@@ -3800,6 +3808,26 @@ export class MatrixPanel {
       colExtent: [data.colExtent[0], data.colExtent[1]],
       binsPerCell: data.binsPerCell ?? 1,
     }
+  }
+
+  /**
+   * The figure this card saves, as bytes, with no dialog in front of it.
+   *
+   * For `metacooler-plot` (§27), which asks a window for its figures the way a
+   * reader presses **save**: the deck's when this panel leads one with anything
+   * beside it, this map's own otherwise — a PNG redrawn at `dpi`, or the vector
+   * page with the matrix as its one image. The same two functions {@link save}
+   * writes from, so the file a shell saves is the file the button saves.
+   */
+  async figureBlob(format: ExportFormat, dpi: number, now: Date): Promise<Blob> {
+    const deck = this.deckExport === null ? null : await this.deckExport.figure(format, dpi, now)
+    if (deck !== null) return deck
+    return format === 'png' ? canvasToPng(this.exportCanvas(dpi, now)) : this.vectorFigure(now)
+  }
+
+  /** Whether {@link figureBlob} would be the deck's figure rather than this map's. */
+  get savesDeck(): boolean {
+    return this.deckExport?.takes() === true
   }
 
   /** Save the figure. The status line under the row reports what happened. */

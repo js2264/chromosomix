@@ -77,37 +77,88 @@ interface State {
 /**
  * A CSS colour as PDF's `r g b` in `[0, 1]`.
  *
- * Hex and `rgb()`/`rgba()` only, which is everything this app produces: the
- * palettes are hex literals and `getComputedStyle` normalises custom properties
- * to one of the two. Anything else comes out black, which is a visible wrong
- * answer rather than a silent one.
+ * Hex (three, four, six or eight digits), `rgb()`/`rgba()` and `hsl()`/`hsla()`,
+ * in both the comma and the space-separated spelling: the palettes are hex
+ * literals, `getComputedStyle` normalises custom properties to one of the first
+ * two, and `render/hue.ts` writes a lane's rotated categories — a gene's other
+ * strand, a read's other mate — as `hsl(210 55% 48%)`. That last one used to
+ * come out black on every vector page, beside a PNG of the same figure that had
+ * it in colour. Anything else still comes out black, which is a visible wrong
+ * answer rather than a silent one; `transparent` is black at no opacity, which
+ * is what the canvas makes of it.
  */
 export function pdfColour(css: string): [number, number, number] {
-  const value = css.trim()
-  const hex = /^#([0-9a-f]{3,8})$/i.exec(value)
+  return readColour(css)?.rgb ?? [0, 0, 0]
+}
+
+/**
+ * The opacity a CSS colour carries of its own — `rgba(…, 0.3)`, `#rrggbbaa`,
+ * `hsl(… / 40%)` — or `1` for one that states none.
+ *
+ * A canvas multiplies it with `globalAlpha`; the page does the same
+ * ({@link VectorPage}), since a translucent fill written opaque hides whatever
+ * the screen drew under it.
+ */
+export function pdfAlpha(css: string): number {
+  return readColour(css)?.alpha ?? 1
+}
+
+/** A colour's channels in `[0, 1]` and its alpha, or `null` for a spelling this does not read. */
+function readColour(css: string): { rgb: [number, number, number]; alpha: number } | null {
+  const value = css.trim().toLowerCase()
+  if (value === 'transparent') return { rgb: [0, 0, 0], alpha: 0 }
+  const hex = /^#([0-9a-f]{3,8})$/.exec(value)
   if (hex !== null) {
     const digits = hex[1]
+    if (![3, 4, 6, 8].includes(digits.length)) return null
     const short = digits.length === 3 || digits.length === 4
     const part = (index: number): number => {
-      const text = short
-        ? digits[index].repeat(2)
-        : digits.slice(index * 2, index * 2 + 2)
+      const text = short ? digits[index].repeat(2) : digits.slice(index * 2, index * 2 + 2)
       return parseInt(text, 16) / 255
     }
-    return [part(0), part(1), part(2)]
+    const alpha = digits.length === 4 || digits.length === 8 ? part(3) : 1
+    return { rgb: [part(0), part(1), part(2)], alpha }
   }
-  const rgb = /^rgba?\(([^)]+)\)$/i.exec(value)
-  if (rgb !== null) {
-    const parts = rgb[1].split(/[,/\s]+/).filter((piece) => piece !== '')
-    const channel = (index: number): number => {
-      const raw = parts[index] ?? '0'
-      const number = Number.parseFloat(raw)
-      if (!Number.isFinite(number)) return 0
-      return raw.endsWith('%') ? number / 100 : number / 255
-    }
-    return [channel(0), channel(1), channel(2)]
+  const call = /^(rgba?|hsla?)\(([^)]+)\)$/.exec(value)
+  if (call === null) return null
+  // `rgb(1 2 3 / 50%)`, `rgb(1, 2, 3, 0.5)` and every mix of the two: the
+  // slash, if any, divides the channels from the alpha.
+  const [head, tail] = call[2].split('/')
+  const parts = head.split(/[,\s]+/).filter((piece) => piece !== '')
+  const extra = parts.length > 3 ? parts[3] : undefined
+  const alphaText = tail?.trim() ?? extra
+  const alpha = alphaText === undefined ? 1 : clamp01(fraction(alphaText, 1))
+  if (call[1].startsWith('rgb')) {
+    const channel = (index: number): number => clamp01(fraction(parts[index] ?? '0', 255))
+    return { rgb: [channel(0), channel(1), channel(2)], alpha }
   }
-  return [0, 0, 0]
+  const hue = Number.parseFloat(parts[0] ?? '0')
+  const turn = /turn$/.test(parts[0] ?? '') ? hue * 360 : /rad$/.test(parts[0] ?? '') ? (hue * 180) / Math.PI : hue
+  const saturation = clamp01(fraction(parts[1] ?? '0', 100))
+  const lightness = clamp01(fraction(parts[2] ?? '0', 100))
+  return { rgb: hslToRgb(Number.isFinite(turn) ? turn : 0, saturation, lightness), alpha }
+}
+
+/** A channel or an alpha: a percentage of 100, or a number of `scale`. */
+function fraction(text: string, scale: number): number {
+  const number = Number.parseFloat(text)
+  if (!Number.isFinite(number)) return 0
+  return text.trim().endsWith('%') ? number / 100 : number / scale
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
+}
+
+/** CSS Color 4's own conversion, which is what a canvas paints an `hsl()` as. */
+function hslToRgb(hue: number, saturation: number, lightness: number): [number, number, number] {
+  const h = (((hue % 360) + 360) % 360) / 360
+  const f = (n: number): number => {
+    const k = (n + h * 12) % 12
+    const a = saturation * Math.min(lightness, 1 - lightness)
+    return lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+  }
+  return [f(0), f(8), f(4)]
 }
 
 /** Size in CSS pixels and whether it is bold, out of a CSS `font` shorthand. */
@@ -187,7 +238,8 @@ export class VectorPage {
   private path: string[] = []
   /** Where the current subpath started, for `closePath` and for `arc`. */
   private current: { x: number; y: number } | null = null
-  private readonly alphas = new Map<number, string>()
+  /** The graphics states allocated so far, by fill and stroke opacity (`ca|CA`). */
+  private readonly alphas = new Map<string, string>()
   /**
    * The rasters placed on this page, in the order they were drawn.
    *
@@ -266,18 +318,26 @@ export class VectorPage {
   }
 
   /**
-   * `/GSn gs`, allocating an ExtGState the first time an alpha is seen.
+   * `/GSn gs`, allocating an ExtGState the first time a pair of opacities is seen.
    *
    * Opaque gets a state of its own rather than being skipped, because PDF's
    * alpha is graphics state and survives until something replaces it: a lane
    * drawn at 0.65 would otherwise tint every mark after it.
+   *
+   * Two numbers, because a canvas has two: `globalAlpha`, and the alpha a
+   * colour carries — `rgba(…, 0.3)` — which it multiplies in. The fill and the
+   * stroke colour each carry their own, so the page's `ca` and `CA` are set
+   * apart. `image` is a raster, drawn at `globalAlpha` alone as a canvas draws one.
    */
-  private alpha(): void {
-    const value = Math.max(0, Math.min(1, this.state.globalAlpha))
-    let name = this.alphas.get(value)
+  private alpha(image = false): void {
+    const global = clamp01(this.state.globalAlpha)
+    const fill = image ? global : global * pdfAlpha(this.state.fillStyle)
+    const stroke = image ? global : global * pdfAlpha(this.state.strokeStyle)
+    const key = `${round(fill)}|${round(stroke)}`
+    let name = this.alphas.get(key)
     if (name === undefined) {
       name = `GS${this.alphas.size}`
-      this.alphas.set(value, name)
+      this.alphas.set(key, name)
     }
     this.emit(`/${name} gs`)
   }
@@ -472,7 +532,12 @@ export class VectorPage {
         // four-Bézier arc approximation for a shape used by one caller.
         const steps = 24
         const sweep = counter === true ? start - end : end - start
-        const span = ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+        // A sweep of a whole turn or more is the whole circumference, as the
+        // canvas draws it — and not the zero-length arc the modulo alone makes
+        // of it, which took every circle a caller drew as `0` to `2π` off the
+        // page: the loops on a map, the beads of a model.
+        const span =
+          sweep >= Math.PI * 2 ? Math.PI * 2 : ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
         let last = { x, y }
         for (let i = 0; i <= steps; i++) {
           const angle = start + (counter === true ? -1 : 1) * span * (i / steps)
@@ -621,7 +686,7 @@ export class VectorPage {
 
     this.images.push({ width: crop.width, height: crop.height, rgb })
     const name = `Im${this.images.length - 1}`
-    this.alpha()
+    this.alpha(true)
     this.emit('q')
     this.emit(`${round(width)} 0 0 ${round(height)} ${round(x0)} ${round(y0)} cm`)
     this.emit(`/${name} Do`)
@@ -701,7 +766,10 @@ export class VectorPage {
     const { data: stream, filter } = await deflateBytes(new TextEncoder().encode(body))
 
     const gs = [...this.alphas.entries()]
-      .map(([value, name]) => `/${name} << /Type /ExtGState /ca ${round(value)} /CA ${round(value)} >>`)
+      .map(([key, name]) => {
+        const [fill, stroke] = key.split('|')
+        return `/${name} << /Type /ExtGState /ca ${fill} /CA ${stroke} >>`
+      })
       .join(' ')
 
     // The rasters, deflated. Numbered from 8, after the seven fixed objects, so

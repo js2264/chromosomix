@@ -31,6 +31,8 @@ server-side processing or data upload.
 
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line with `metacooler-run`, with the same parameters and producing the same results. A bottom Console panel in the genome browser records every action and reports the corresponding `metacooler-run` command.
 
+- CLI-based figures: `metacooler-plot` saves every figure a saved workspace shows — each tab's map, deck or 1D browser, its bookmarks, any locus, its 3D cells and the figures of its recorded analyses — exactly as the app's own Export buttons would, by running the app itself in a headless browser.
+
 ## Philosophy
 
 1. **No backend or install of any kind.** No tile server, no specific process on a host, no accounts. The viewer is static files; the data are objects on a bucket, or a file on your disk. This is what makes the app free to run and free to archive.
@@ -409,6 +411,47 @@ metacooler-run replay workspace.metacooler.json --over 'data/*.hic'
 You do not have to write those lines from memory. The browser app has a **console** and every analysis run lands in it as the `metacooler-run` command that repeats it, written the moment the run happens rather than when you look at the result. 
 
 The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed in **Stored data** with everything else this app keeps, and **Forget everything** drops it.
+
+## Saving every figure of a workspace: `metacooler-plot`
+
+A workspace — the `.metacooler.json` that **Save every tab as a file** writes — records everything a figure is: the files, the view, the tracks and where they sit, the deck, the colour scale, the marks, the bookmarks, the parameters each analysis was run with and how each of its figures was styled. `metacooler-plot` opens it in the app itself, in a headless browser, and saves every figure it shows as the Export buttons would. Nothing is drawn twice: the pictures are the app's own.
+
+It is built with the analysis CLI above:
+
+```bash
+npm run build:cli && npm link    # metacooler-run and metacooler-plot, and the viewer the second one serves
+```
+
+It needs a Chromium on the machine — Chrome, Chromium, Edge, Brave, or the one Playwright downloaded — and finds it itself; `--browser <path>` (or `METACOOLER_BROWSER`) names another. Nothing is downloaded, and nothing is uploaded: the files a workspace names are served to the page from `127.0.0.1` for the length of the run.
+
+```bash
+# Every tab's figure — the map, the deck or the 1D browser — as a PNG at 300 dpi.
+metacooler-plot demo/yeast/Yeast_microC.metacooler.json -o figures/
+
+# PDF as well, dark, without the caption line, at the app's smaller text size.
+metacooler-plot figure.metacooler.json -o figures/ --format png,pdf --theme dark --no-caption --text-scale 1
+
+# Re-run every analysis the tab recorded (P(s), insulation, APA, ...) with its
+# recorded parameters, and save each figure the drawer draws, styled as saved.
+# The lanes those runs add are on the tab's figure too.
+metacooler-plot figure.metacooler.json -o figures/ --analysis
+metacooler-plot figure.metacooler.json -o figures/ --tasks expected,apa
+
+# The tab's figure at each of its bookmarks, at a locus, at every row of a BED,
+# and each 3D structure cell of its deck.
+metacooler-plot figure.metacooler.json -o figures/ --bookmarks --region IV:1000000-1400000 --regions loops.bed --structures
+
+# The same figure over other files, as `metacooler-run replay --over` does.
+metacooler-plot figure.metacooler.json -o figures/ --over 'data/*.mcool::resolutions/5000'
+
+# A workspace saved from files dropped on the page names them by name alone.
+metacooler-plot figure.metacooler.json -o figures/ --data ~/runs/2026-09
+
+# What would be read and written, without starting a browser.
+metacooler-plot figure.metacooler.json --list
+```
+
+Each file written is printed on stdout, one per line, named after the tab (or its file) — `Yeast_microC_G2M_1kb.png`, `Yeast_microC_G2M_1kb.bookmark-1-loop_cluster.png`, `Yeast_microC_G2M_1kb.expected.ps.png` — beside the TSVs `metacooler-run` writes for the same outputs. A tab that cannot be drawn is reported and skipped, and the exit status is 1; a command that is wrong is refused before anything starts, with status 2. `SOURCE_DATE_EPOCH` fixes the date in every caption and PDF, so two runs of one workspace are the same files. `metacooler-plot --help` lists every option.
 
 ## Licence
 

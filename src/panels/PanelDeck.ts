@@ -3254,8 +3254,21 @@ export class PanelDeck {
       format === 'pdf' ? 'application/pdf' : 'image/png',
     )
     if (target === null) return
+    const blob = await this.deckFigure(format, dpi, now)
+    if (blob === null) return
+    await target.write(blob)
+  }
+
+  /**
+   * The deck as one figure, in bytes: the half of {@link saveDeck} that draws.
+   *
+   * Its own method so the save and a program asking for the same figure (§27)
+   * are one composition, and `null` exactly where the save wrote nothing — a
+   * browser with no 2d context, or a PNG encode it refused.
+   */
+  private async deckFigure(format: ExportFormat, dpi: number, now: Date): Promise<Blob | null> {
     const out = this.composeDeck(now, dpi)
-    if (out === null) return
+    if (out === null) return null
     if (format === 'pdf') {
       // One page carrying the composed raster at the dpi it was drawn at: every
       // panel's own PDF is vector, but the deck is an arrangement of pictures,
@@ -3263,13 +3276,9 @@ export class PanelDeck {
       const scale = scaleForDpi(dpi)
       const page = new VectorPage(out.width / scale, out.height / scale)
       page.ctx.drawImage(out, 0, 0, out.width / scale, out.height / scale)
-      const blob = await page.toBlob({ title: 'deck', created: now })
-      await target.write(blob)
-      return
+      return page.toBlob({ title: 'deck', created: now })
     }
-    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
-    if (blob === null) return
-    await target.write(blob)
+    return new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
   }
 
   /**
@@ -3292,6 +3301,9 @@ export class PanelDeck {
       await this.copyDeck(dpi)
       return true
     },
+    figure: (format, dpi, now) =>
+      this.hasOtherCells() ? this.deckFigure(format, dpi, now) : Promise.resolve(null),
+    takes: () => this.hasOtherCells(),
   }
 
   /**
@@ -3422,6 +3434,20 @@ export class PanelDeck {
     const starred = this.slots.find((slot) => slot.id === this.starredStructure && slot.cell?.settings !== undefined)
     const cell = starred ?? this.slots.find((slot) => slot.cell?.settings !== undefined)
     return cell?.cell?.settings?.() ?? null
+  }
+
+  /**
+   * Every structure cell's figure, in grid order — for `metacooler-plot` (§27),
+   * which saves each model as the cell's own export row would.
+   */
+  plotStructures(): Array<{
+    label: string
+    figure(format: ExportFormat, dpi: number, now: Date): Promise<Blob | null>
+  }> {
+    return this.structureCells().map((cell) => ({
+      label: cell.label,
+      figure: (format, dpi, now) => cell.figureBlob(format, dpi, now),
+    }))
   }
 
   /** The structure cells, in the order they stand in the grid. */

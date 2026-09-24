@@ -14,9 +14,9 @@
  * hundred thousand path operators of repeated digits.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { VectorPage, escapeText, parseFont, pdfColour } from '@/ui/vector'
+import { VectorPage, escapeText, parseFont, pdfAlpha, pdfColour } from '@/ui/vector'
 
 async function bytesOf(blob: Blob): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer())
@@ -51,10 +51,30 @@ describe('pdfColour', () => {
     expect(pdfColour('#ffffff')).toEqual([1, 1, 1])
     expect(pdfColour('#000')).toEqual([0, 0, 0])
     expect(pdfColour('#ff0000')).toEqual([1, 0, 0])
-    // Eight digits is a hex colour with alpha; the alpha is `globalAlpha`'s job.
+    // Eight digits is a hex colour with alpha; the alpha is `pdfAlpha`'s.
     expect(pdfColour('#00ff0080')).toEqual([0, 1, 0])
     expect(pdfColour('rgb(255, 128, 0)')[1]).toBeCloseTo(128 / 255, 6)
     expect(pdfColour('rgba(0, 0, 255, 0.5)')).toEqual([0, 0, 1])
+    expect(pdfColour('rgb(255 128 0 / 50%)')[1]).toBeCloseTo(128 / 255, 6)
+  })
+
+  // `render/hue.ts` writes a lane's rotated categories — a gene on the other
+  // strand, a read's other mate — as `hsl()`, and every one of them came out
+  // black on a vector page beside a PNG that had them in colour.
+  it('reads hsl() in both spellings, as CSS Color 4 converts it', () => {
+    const close = (actual: number[], expected: number[]): void => {
+      actual.forEach((value, index) => expect(value).toBeCloseTo(expected[index], 3))
+    }
+    close(pdfColour('hsl(0 100% 50%)'), [1, 0, 0])
+    close(pdfColour('hsl(120, 100%, 25%)'), [0, 0.5, 0])
+    close(pdfColour('hsla(240, 100%, 50%, 0.4)'), [0, 0, 1])
+    // What `hue.ts` writes for the reverse strand of a blue gene track.
+    close(pdfColour('hsl(210 55% 48%)'), [0.216, 0.48, 0.744])
+    // A hue is an angle, however it is written, and it wraps.
+    close(pdfColour('hsl(0.5turn 100% 50%)'), [0, 1, 1])
+    close(pdfColour('hsl(-120 100% 50%)'), [0, 0, 1])
+    // No saturation is grey, whatever the hue.
+    close(pdfColour('hsl(300 0% 40%)'), [0.4, 0.4, 0.4])
   })
 
   // Black is a visible wrong answer rather than a silent one — a named colour
@@ -62,6 +82,27 @@ describe('pdfColour', () => {
   it('falls back to black on anything else', () => {
     expect(pdfColour('rebeccapurple')).toEqual([0, 0, 0])
     expect(pdfColour('')).toEqual([0, 0, 0])
+    expect(pdfColour('#12345')).toEqual([0, 0, 0])
+  })
+})
+
+describe('pdfAlpha', () => {
+  it('is the opacity a colour carries of its own', () => {
+    expect(pdfAlpha('rgba(0, 0, 255, 0.5)')).toBe(0.5)
+    expect(pdfAlpha('rgb(0 0 255 / 25%)')).toBe(0.25)
+    expect(pdfAlpha('hsl(210 55% 48% / 0.4)')).toBe(0.4)
+    expect(pdfAlpha('#00ff0080')).toBeCloseTo(128 / 255, 6)
+    expect(pdfAlpha('#0f08')).toBeCloseTo(136 / 255, 6)
+    expect(pdfAlpha('transparent')).toBe(0)
+  })
+
+  it('is opaque for a colour that states none, or one it cannot read', () => {
+    expect(pdfAlpha('#fff')).toBe(1)
+    expect(pdfAlpha('rgb(1, 2, 3)')).toBe(1)
+    expect(pdfAlpha('rebeccapurple')).toBe(1)
+    // An alpha past either end is clamped, as the canvas clamps it.
+    expect(pdfAlpha('rgba(0, 0, 0, 3)')).toBe(1)
+    expect(pdfAlpha('rgba(0, 0, 0, -1)')).toBe(0)
   })
 })
 
@@ -222,6 +263,89 @@ describe('VectorPage', () => {
     // state and survives until something replaces it.
     const content = await contentOf(bytes)
     expect((content.match(/gs$/gm) ?? []).length).toBe(3)
+  })
+
+  // A canvas multiplies a colour's own alpha into `globalAlpha`. The loops on a
+  // map are ringed in `rgba(…, 0.9)` over a fill of `rgba(…, 0.25)`; written
+  // opaque, the fill hid the pixels the ring was drawn to show.
+  it('folds a colour’s own alpha into the fill and stroke opacities', async () => {
+    const page = new VectorPage(50, 50)
+    page.ctx.globalAlpha = 0.5
+    page.ctx.fillStyle = 'rgba(255, 0, 0, 0.4)'
+    page.ctx.strokeStyle = '#0000ff'
+    page.ctx.fillRect(0, 0, 10, 10)
+    page.ctx.globalAlpha = 1
+    page.ctx.strokeStyle = 'hsl(210 55% 48% / 0.3)'
+    page.ctx.strokeRect(10, 0, 10, 10)
+    const bytes = await bytesOf(await page.toBlob())
+    const states = [...latin1(bytes).matchAll(/\/GS\d+ << \/Type \/ExtGState \/ca ([\d.]+) \/CA ([\d.]+) >>/g)]
+    expect(states.map((match) => [match[1], match[2]])).toEqual([
+      ['0.2', '0.5'],
+      ['0.4', '0.3'],
+    ])
+    // The colour itself is written without its alpha.
+    const content = await contentOf(bytes)
+    expect(content).toContain('1 0 0 rg')
+    expect(content).toContain('0.216 0.48 0.744 RG')
+  })
+
+  // A raster is drawn at `globalAlpha` alone, whatever colour was last set.
+  it('draws a raster at globalAlpha, not at the fill colour’s alpha', async () => {
+    // The page reads a raster's pixels through a scratch canvas, which is all
+    // of the DOM this needs: white, as the page composites onto.
+    const scratch = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        fillStyle: '',
+        fillRect: () => undefined,
+        drawImage: () => undefined,
+        getImageData: (_x: number, _y: number, width: number, height: number) => ({
+          data: new Uint8ClampedArray(width * height * 4).fill(255),
+        }),
+      }),
+    }
+    vi.stubGlobal('document', { createElement: () => scratch })
+    try {
+      const page = new VectorPage(20, 20)
+      page.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
+      page.ctx.globalAlpha = 0.8
+      page.ctx.drawImage({ width: 2, height: 2 } as unknown as CanvasImageSource, 0, 0, 20, 20)
+      const text = latin1(await bytesOf(await page.toBlob()))
+      expect(text).toContain('/Subtype /Image')
+      expect(text).toMatch(/\/ExtGState \/ca 0\.8 \/CA 0\.8 >>/)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  // The loops on a map and the beads of a model are circles drawn from 0 to 2π,
+  // and a sweep of a whole turn taken modulo a whole turn is no sweep at all:
+  // every one of them was a point, which is to say nothing on the page.
+  it('draws a whole-turn arc as the whole circle', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.arc(50, 50, 20, 0, Math.PI * 2)
+    page.ctx.fill()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    // Start at 3 o'clock, pass through 9 o'clock, and come back.
+    expect(content).toContain('70 50 m')
+    expect(content).toContain('30 50 l')
+    expect(content).toMatch(/70 50 l\nf/)
+    // A sweep past a whole turn is still one circle, not the remainder.
+    const again = new VectorPage(100, 100)
+    again.ctx.beginPath()
+    again.ctx.arc(50, 50, 20, 0, Math.PI * 5)
+    again.ctx.fill()
+    expect(await contentOf(await bytesOf(await again.toBlob()))).toContain('30 50 l')
+    // …and a part-turn is still a part-turn: a half from 0 ends at 9 o'clock.
+    const half = new VectorPage(100, 100)
+    half.ctx.beginPath()
+    half.ctx.arc(50, 50, 20, 0, Math.PI)
+    half.ctx.stroke()
+    const halfContent = await contentOf(await bytesOf(await half.toBlob()))
+    expect(halfContent).toMatch(/30 50 l\nS/)
+    expect(halfContent).not.toContain('50 70 l')
   })
 
   it('writes text as text, in a base-14 font, bold when asked', async () => {

@@ -84,10 +84,11 @@ import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
 import { cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
-import { figureBlock } from '../figures/FigureBlock'
+import { figureBlock, type FigureBlock } from '../figures/FigureBlock'
 import type { MapId } from '../annotations/placement'
 import type { RunTarget } from '../analysis/runner'
 import type { CurveOutput } from '../analysis/types'
+import type { RunFigure } from '../plot/types'
 
 /**
  * The tab that is not a map: every map's curves on one axis.
@@ -182,6 +183,19 @@ export interface AnalysisDrawerOptions {
     provenance: Provenance,
     format: 'bigwig' | 'bedgraph',
   ): Promise<void>
+  /**
+   * The key a file's decisions are kept under in this tab's memory — its
+   * parameters and its figures' styles (§18.2, §18.13).
+   *
+   * The session's own `fileMemoryKey`, which is the key `state/SessionConfig.ts`
+   * gathers a workspace from and writes one back under. This drawer used to
+   * write under the bare file URI instead, so a saved workspace carried no task's
+   * parameters and no figure's style, and one opened from a file put them where
+   * this drawer never looked — the form came up at its defaults under a workspace
+   * that recorded otherwise. Absent — a test's drawer, with no tab around it —
+   * the URI is the key.
+   */
+  memoryKey?(uri: string): string
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +421,34 @@ function figureBox(host: HTMLElement): { width: number; height: number } {
 }
 
 /**
+ * A figure as a PNG, redrawn into its on-screen box at `dpi`.
+ *
+ * The one drawing every PNG button in the drawer does, and what a program
+ * asking for the same figure is handed (§27): a second copy of these eight
+ * lines is how the two would come to differ.
+ */
+async function figurePng(figure: PlotFigure, dpi: number): Promise<Blob> {
+  const box = figureBox(figure.el)
+  const scale = scaleForDpi(dpi)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(box.width * scale))
+  canvas.height = Math.max(1, Math.round(box.height * scale))
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) throw new Error('The browser would not give this page a canvas.')
+  ctx.setTransform(scale, 0, 0, scale, 0, 0)
+  figure.draw(ctx, box)
+  return canvasToPng(canvas)
+}
+
+/** The same figure as a one-page vector PDF — see {@link figurePng}. */
+async function figurePdf(figure: PlotFigure, title: string, now: Date): Promise<Blob> {
+  const box = figureBox(figure.el)
+  const page = new VectorPage(box.width, box.height)
+  figure.draw(page.ctx, box)
+  return page.toBlob({ title, created: now })
+}
+
+/**
  * The export filename, with the extension swapped.
  *
  * `tsvName` owns the rule — which parts, in which order, and when the output
@@ -490,6 +532,12 @@ export class AnalysisDrawer {
   private form: ParamForm | null = null
   private params: Params = {}
   private figures: Array<{ destroy(): void }> = []
+  /**
+   * The figure blocks of the result on screen, with the output each is of — for
+   * `metacooler-plot` (§27), which saves them as their own PNG and PDF buttons
+   * would. Cleared with {@link figures}.
+   */
+  private blocks: Array<{ block: FigureBlock; output: TaskOutput; provenance: Provenance }> = []
   /** The result the output blocks were built from, compared by identity. */
   private drawn: TaskResult | null = null
   /**
@@ -810,6 +858,12 @@ export class AnalysisDrawer {
   private clearFigures(): void {
     for (const figure of this.figures) figure.destroy()
     this.figures = []
+    this.blocks = []
+  }
+
+  /** Where `uri`'s decisions are kept; see {@link AnalysisDrawerOptions.memoryKey}. */
+  private keyOf(uri: string): string {
+    return this.options.memoryKey?.(uri) ?? uri
   }
 
   // -------------------------------------------------------------------------
@@ -878,7 +932,7 @@ export class AnalysisDrawer {
       this.form.setContext(context)
       return
     }
-    this.params = recallParamsFor(task, context.uri)
+    this.params = recallParamsFor(task, this.keyOf(context.uri))
     const form = new ParamForm({
       specs: task.params,
       context,
@@ -901,7 +955,7 @@ export class AnalysisDrawer {
     // Remembered on every edit rather than on Run, so that reproducing a figure
     // is opening the session and pressing Run (§18.2) — including the run the
     // reader configured, thought better of, and came back to.
-    rememberParams(context.uri, task.id, next)
+    rememberParams(this.keyOf(context.uri), task.id, next)
     this.syncRun(task, context)
   }
 
@@ -1212,7 +1266,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output: curve,
       task: `${this.current?.id ?? 'task'}:combined`,
-      uri: this.options.context()?.uri ?? '',
+      uri: this.keyOf(this.options.context()?.uri ?? ''),
       onPng: (figure) => void this.savePngPlain(figure, curve.label),
       onPdf: (figure) => void this.savePdfPlain(figure, curve.label),
     })
@@ -1388,7 +1442,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: this.current?.id ?? 'task',
-      uri: this.options.context()?.uri ?? '',
+      uri: this.keyOf(this.options.context()?.uri ?? ''),
       extras: [
         // The two formats a genome browser opens, on the one file where this
         // drawer is the only place they are offered from (§18.7).
@@ -1399,6 +1453,7 @@ export class AnalysisDrawer {
       onPdf: (figure) => void this.savePdf(figure, output, provenance),
     })
     this.figures.push(block)
+    this.blocks.push({ block, output, provenance })
     return block.el
   }
 
@@ -1577,16 +1632,7 @@ export class AnalysisDrawer {
     const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(new Date())}.png`, 'image/png')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(box.width * scale))
-      canvas.height = Math.max(1, Math.round(box.height * scale))
-      const ctx = canvas.getContext('2d')
-      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      figure.draw(ctx, box)
-      await target.write(await canvasToPng(canvas))
+      await target.write(await figurePng(figure, FIGURE_EXPORT_DPI))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1598,11 +1644,7 @@ export class AnalysisDrawer {
     const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(now)}.pdf`, 'application/pdf')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const page = new VectorPage(box.width, box.height)
-      figure.draw(page.ctx, box)
-      const blob = await page.toBlob({ title: label, created: now })
-      await target.write(blob)
+      await target.write(await figurePdf(figure, label, now))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1617,16 +1659,7 @@ export class AnalysisDrawer {
     const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(new Date()), 'png'), 'image/png')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(box.width * scale))
-      canvas.height = Math.max(1, Math.round(box.height * scale))
-      const ctx = canvas.getContext('2d')
-      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      figure.draw(ctx, box)
-      await target.write(await canvasToPng(canvas))
+      await target.write(await figurePng(figure, FIGURE_EXPORT_DPI))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1651,15 +1684,63 @@ export class AnalysisDrawer {
     const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(now), 'pdf'), 'application/pdf')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const page = new VectorPage(box.width, box.height)
-      figure.draw(page.ctx, box)
-      const blob = await page.toBlob({ title: output.label, created: now })
-      await target.write(blob)
+      await target.write(await figurePdf(figure, output.label, now))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // For a program pressing the buttons (§27)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Why **Run** would refuse the task that is open, or `null` when it would run.
+   *
+   * The same three answers {@link syncRun} greys the button with — no map
+   * starred, no contact map to run against, a price past its budget — asked for
+   * rather than painted, so `metacooler-plot` says the drawer's own sentence
+   * instead of waiting on a job that was never started.
+   */
+  plotRefusal(): string | null {
+    const task = this.current
+    if (task === null) return 'no task is open'
+    const blocked = this.options.blocked?.() ?? null
+    if (blocked !== null) return blocked
+    const context = this.options.context()
+    if (context === null) return 'This view has no contact map to run against.'
+    const estimate = task.estimate(context, this.params)
+    return estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
+      ? estimate.refusal
+      : null
+  }
+
+  /** Press **Run** on the task that is open, with the parameters its form holds. */
+  plotRun(): void {
+    this.run()
+  }
+
+  /**
+   * The figures the result on screen drew, each as its own PNG and PDF buttons
+   * would save it: redrawn into the box it has on screen — the width the drawer
+   * gives it, which is what a reader widening the drawer changes — at `dpi` for
+   * the PNG, as paths for the PDF.
+   */
+  plotFigures(): RunFigure[] {
+    return this.blocks.map(({ block, output }) => ({
+      output: output.id,
+      label: output.label,
+      drawable: block.drawable() !== null,
+      figure: async (request) => {
+        await block.ready()
+        const figure = block.drawable()
+        if (figure === null) return null
+        return request.format === 'png'
+          ? figurePng(figure, request.dpi)
+          : figurePdf(figure, output.label, request.now)
+      },
+    }))
   }
 
   /**

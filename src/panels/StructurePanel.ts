@@ -123,6 +123,7 @@ import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
 import { publishTurn, subscribeTurn } from '../ui/turnLink'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { VectorPage } from '../ui/vector'
+import { track } from '../perf/inflight'
 import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
@@ -785,7 +786,9 @@ export class StructurePanel implements DeckCell {
   private async loadRenderer(): Promise<void> {
     let made: StructureRenderer
     try {
-      const { StructureRenderer: Renderer } = await import('../structure/three')
+      // Counted while it is in flight (`perf/inflight.ts`): a model is drawn
+      // only once this chunk has arrived, and nothing else is pending meanwhile.
+      const { StructureRenderer: Renderer } = await track('import:three', import('../structure/three'))
       if (this.destroyed) return
       made = new Renderer(this.palette())
     } catch {
@@ -3272,18 +3275,55 @@ export class StructurePanel implements DeckCell {
     if (target === null) return
     this.exportNote.textContent = `saving ${target.name}…`
     try {
-      const out = this.exportCanvas(dpi, now)
-      if (out === null) {
+      const blob = await this.figureBlob('png', dpi, now)
+      if (blob === null) {
         this.exportNote.textContent = 'nothing to save: no model is drawn'
         return
       }
-      const blob = await canvasToPng(out)
       await target.write(blob)
       this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
       this.exportNote.textContent =
         err instanceof Error ? `export failed: ${err.message}` : 'export failed'
     }
+  }
+
+  /** What the cell's heading calls the model it draws. */
+  get label(): string {
+    return this.entry?.label ?? 'structure'
+  }
+
+  /**
+   * The figure this cell's export row saves, as bytes, or `null` where no model
+   * is drawn — for `metacooler-plot` (§27), and the one place both of the row's
+   * buttons draw from, so a shell and a press cannot write different pictures.
+   *
+   * PNG is the raster the GPU draws at `dpi`. PDF is paths where the
+   * representation is paths — beads and sticks through `structure/painter.ts`,
+   * projected through the camera the screen used — and the same raster on a
+   * page where it is a lit tube no `arc` can be.
+   */
+  async figureBlob(format: ExportFormat, dpi: number, now: Date): Promise<Blob | null> {
+    const view = this.view()
+    if (view === null) return null
+    if (format === 'png') {
+      const out = this.exportCanvas(dpi, now)
+      return out === null ? null : canvasToPng(out)
+    }
+    const width = Math.max(1, this.wrap.clientWidth)
+    const height = Math.max(1, this.wrap.clientHeight)
+    const page = new VectorPage(width, height)
+    if (view.style.tube) {
+      // At the row's resolution, not a fixed 300: the reader chose a number
+      // beside this button and the one part of this page that is a raster is
+      // the one part that could have ignored it.
+      const raster = this.exportCanvas(dpi, now)
+      if (raster === null) return null
+      page.ctx.drawImage(raster, 0, 0, width, height)
+    } else {
+      drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+    }
+    return page.toBlob({ title: 'structure', created: now })
   }
 
   /**
@@ -3320,8 +3360,7 @@ export class StructurePanel implements DeckCell {
    * does.
    */
   private async savePdf(dpi: number): Promise<void> {
-    const view = this.view()
-    if (view === null) {
+    if (this.view() === null) {
       this.exportNote.textContent = 'nothing to save: no model is drawn'
       return
     }
@@ -3330,23 +3369,11 @@ export class StructurePanel implements DeckCell {
     if (target === null) return
     this.exportNote.textContent = `saving ${target.name}…`
     try {
-      const width = Math.max(1, this.wrap.clientWidth)
-      const height = Math.max(1, this.wrap.clientHeight)
-      const page = new VectorPage(width, height)
-      if (view.style.tube) {
-        // At the row's resolution, not a fixed 300: the reader chose a number
-        // beside this button and the one part of this page that is a raster is
-        // the one part that could have ignored it.
-        const raster = this.exportCanvas(dpi, now)
-        if (raster === null) {
-          this.exportNote.textContent = 'nothing to save: no model is drawn'
-          return
-        }
-        page.ctx.drawImage(raster, 0, 0, width, height)
-      } else {
-        drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+      const blob = await this.figureBlob('pdf', dpi, now)
+      if (blob === null) {
+        this.exportNote.textContent = 'nothing to save: no model is drawn'
+        return
       }
-      const blob = await page.toBlob({ title: 'structure', created: now })
       await target.write(blob)
       this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
     } catch (err) {

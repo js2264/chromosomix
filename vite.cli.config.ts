@@ -4,8 +4,18 @@
  * The rule `vite.desktop.config.ts` states applies here unchanged: `build` is
  * the command line the deploy workflow runs and it must keep working byte for
  * byte, so this is a *second reading* of `src/` and never an edit to the first.
- * What comes out is one ESM file under `dist-cli/`, and what goes into it is the
- * same `RUNNERS`, the same `MetaCooler` and the same writers the tab uses.
+ * What comes out is one ESM file per command under `dist-cli/`, and what goes
+ * into `metacooler-run` is the same `RUNNERS`, the same `MetaCooler` and the
+ * same writers the tab uses.
+ *
+ * ## Two commands, and what the second one needs beside it
+ *
+ * `metacooler-plot` (§27) draws nothing itself: it serves the *viewer* to a
+ * headless browser and saves the figures the app draws. So `npm run build:cli`
+ * is this build and then the package build of the viewer (`vite.package.config.ts`,
+ * into `dist/`) — the relative-base copy, which is the one that serves from any
+ * path, and the one a published package already carries beside `dist-cli/`.
+ * Code both commands import lands in `dist-cli/chunks/`, once.
  *
  * ## Why a bundle rather than running the TypeScript
  *
@@ -68,10 +78,13 @@ function executable(): Plugin {
       outDir = config.build.outDir
     },
     closeBundle() {
-      chmodSync(joinPath(outDir, 'metacooler-run.mjs'), 0o755)
+      for (const command of COMMANDS) chmodSync(joinPath(outDir, `${command}.mjs`), 0o755)
     },
   }
 }
+
+/** The commands this build writes, each an entry of its own. */
+const COMMANDS = ['metacooler-run', 'metacooler-plot'] as const
 
 export default defineConfig({
   plugins: [executable()],
@@ -100,18 +113,22 @@ export default defineConfig({
     emptyOutDir: true,
     minify: false,
     sourcemap: false,
-    lib: {
-      entry: new URL('./src/cli/main.ts', import.meta.url).pathname,
-      formats: ['es'],
-      fileName: () => 'metacooler-run.mjs',
-    },
     rollupOptions: {
-      // `lib.fileName` is not consulted under `ssr: true`, which names the
-      // output after the entry instead — so the command would have been
-      // `dist-cli/main.js`. Said here as well, where it is obeyed.
+      // One entry per command, named for it: `lib` mode takes one entry, and
+      // its `fileName` is not consulted under `ssr: true` anyway — which named
+      // the output after the source file, so the first command would have been
+      // `dist-cli/main.js`.
+      input: {
+        'metacooler-run': new URL('./src/cli/main.ts', import.meta.url).pathname,
+        'metacooler-plot': new URL('./src/cli/plot.ts', import.meta.url).pathname,
+      },
       output: {
-        entryFileNames: 'metacooler-run.mjs',
-        banner: '#!/usr/bin/env node',
+        format: 'es',
+        entryFileNames: '[name].mjs',
+        chunkFileNames: 'chunks/[name]-[hash].mjs',
+        // A command is run by its file, so the entries carry the interpreter
+        // line; a chunk is only ever imported, and has no use for one.
+        banner: (chunk) => (chunk.isEntry ? '#!/usr/bin/env node' : ''),
       },
       external: [
         ...builtinModules,

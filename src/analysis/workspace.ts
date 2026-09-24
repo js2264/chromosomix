@@ -57,8 +57,9 @@ import {
 } from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
 import { TASKS, tasksFor } from './registry'
-import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
-import { rememberParams } from './memory'
+import { AnalysisRunner, type JobState, type RunnerHost, type RunTarget } from './runner'
+import { readAnalysisMemory, rememberParams } from './memory'
+import type { AnalysisPlot, RecordedTask } from '../plot/types'
 import type {
   AnalysisContext,
   AnalysisFraming,
@@ -175,6 +176,12 @@ export interface AnalysisWorkspaceHost {
    * nothing else.
    */
   groups?(): GroupSettings | null
+  /**
+   * The key a file's decisions hang on in this tab's memory — the session's own
+   * `fileMemoryKey`, so what a task was run with is what a saved workspace
+   * carries (§18.2). Absent, the file's URI is the key.
+   */
+  memoryKey?(uri: string): string
   /** A panel's availability changed, or a row needs repainting. */
   changed(): void
 }
@@ -318,6 +325,7 @@ export class AnalysisWorkspace {
       // written over the grid it was measured on.
       writeProfile: (output, provenance, format) =>
         this.writeProfile(output, provenance, format, this.grid()),
+      memoryKey: (uri) => this.keyOf(uri),
     })
     this.drawerEl = this.drawer.el
 
@@ -389,6 +397,83 @@ export class AnalysisWorkspace {
     return context !== null && tasksFor(context).length > 0
   }
 
+  /** Where `uri`'s parameters and figure styles are kept in this tab's memory. */
+  private keyOf(uri: string): string {
+    return this.host.memoryKey?.(uri) ?? uri
+  }
+
+  /**
+   * The analysis side of this tab, for `metacooler-plot --analysis` (§27).
+   *
+   * Every task the tab recorded parameters for, run as a reader reopening the
+   * workspace would run it: the drawer opened on the task — so its form is the
+   * one the recorded parameters fill — and **Run** pressed. What comes back is
+   * the drawer's own figures, so each is drawn and styled exactly as it is on
+   * screen, and saved by the same two functions its buttons use.
+   */
+  plot(): AnalysisPlot {
+    return {
+      recorded: () => {
+        const context = this.host.context()
+        if (context === null) return []
+        const held = readAnalysisMemory(this.keyOf(context.uri))
+        const out: RecordedTask[] = []
+        // Catalogue order, which is the order the column lists them in — and
+        // then anything this build does not know, so a count printed before a
+        // run is honest about what will not happen.
+        for (const task of TASKS) {
+          if (held[task.id] === undefined) continue
+          const availability = task.availability(context)
+          out.push({
+            id: task.id,
+            title: task.title,
+            state: availability.state,
+            ...(availability.state === 'waiting' ? { needs: availability.needs } : {}),
+          })
+        }
+        for (const id of Object.keys(held)) {
+          if (!TASKS.some((task) => task.id === id)) out.push({ id, title: id, state: 'unknown' })
+        }
+        return out
+      },
+      run: async (id) => {
+        const task = TASKS.find((candidate) => candidate.id === id)
+        if (task === undefined) {
+          return { status: 'unknown', message: `this build has no task ${id}` }
+        }
+        this.show(task)
+        const refusal = this.drawer.plotRefusal()
+        if (refusal !== null) return { status: 'refused', message: refusal }
+        const before = this.runner.stateOf(id)
+        const previous = before.status === 'done' ? before.result : null
+        const settled = new Promise<JobState>((resolve) => {
+          const check = (): boolean => {
+            const state = this.runner.stateOf(id)
+            const over =
+              (state.status === 'done' && state.result !== previous) ||
+              state.status === 'failed' ||
+              state.status === 'cancelled'
+            if (over) resolve(state)
+            return over
+          }
+          const stop = this.runner.subscribe(() => {
+            if (check()) stop()
+          })
+        })
+        this.drawer.plotRun()
+        const state = await settled
+        if (state.status === 'failed') return { status: 'failed', message: state.message }
+        if (state.status !== 'done') return { status: 'cancelled', message: 'the run was cancelled' }
+        // The drawer repaints on the runner's own notice; asked again here so
+        // the blocks are the ones built from *this* result whichever listener
+        // ran first.
+        this.drawer.refresh()
+        return { status: 'done', figures: this.drawer.plotFigures(), notes: [...state.result.notes] }
+      },
+      close: () => this.show(null),
+    }
+  }
+
   /** Whether the drawer is up, so the shell knows to show the slot. */
   get isDrawerOpen(): boolean {
     return this.drawer.isOpen
@@ -439,7 +524,7 @@ export class AnalysisWorkspace {
    */
   private adopt(task: AnalysisTask, result: TaskResult, on: RunTarget): void {
     const map = on.map
-    rememberParams(result.provenance.framing.uri, task.id, result.provenance.params)
+    rememberParams(this.keyOf(result.provenance.framing.uri), task.id, result.provenance.params)
 
     // **Before the early return below**, because this task produces neither a
     // profile nor an interval set: its output is a table, and its destination is

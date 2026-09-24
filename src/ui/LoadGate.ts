@@ -50,6 +50,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { plotAnswers } from '../plot/answers'
 import { button, el, fmt } from './dom'
 import { Modal } from './Modal'
 
@@ -85,6 +86,12 @@ function sizeOf(error: ViewerError): number {
  * again rather than starting a read nobody agreed to.
  */
 export function askLoadCost(error: ViewerError, label: string): Promise<ScoolReading> {
+  // A program driving the page answers for itself (§27): a HiC-Pro pair has one
+  // reading, and an `.scool` the one its command chose (`plot/answers.ts`).
+  const answers = plotAnswers()
+  if (answers !== null) {
+    return Promise.resolve(error.code === 'hicpro-load-cost' ? 'whole' : answers.scool)
+  }
   if (error.code === 'hicpro-load-cost') return askHicProLoad(error)
   return new Promise((resolve) => {
     let answered: ScoolReading = null

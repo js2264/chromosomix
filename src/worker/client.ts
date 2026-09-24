@@ -7,6 +7,7 @@
  * the only place a file is open.
  */
 
+import { beginWork } from '../perf/inflight'
 import { registerThread } from '../perf/threads'
 import { withAccess } from '../s3/attach'
 import { spawnReaderWorker } from './spawn'
@@ -106,8 +107,21 @@ export class ReaderClient {
     // makes a key edited mid-session apply to the next request rather than to
     // the next reload.
     const message = withAccess({ ...payload, id }) as WorkerRequest
+    // Counted until it settles, whichever way (`perf/inflight.ts`): the one
+    // number that says a picture is still waiting on this file.
+    const done = beginWork(`reader:${payload.kind}`)
     return new Promise<ResultMap[K]>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
+      this.pending.set(id, {
+        resolve: (value) => {
+          done()
+          resolve(value as ResultMap[K])
+        },
+        reject: (reason) => {
+          done()
+          reject(reason)
+        },
+        onProgress,
+      })
       this.worker.postMessage(message)
     })
   }
