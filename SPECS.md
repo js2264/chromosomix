@@ -1079,14 +1079,23 @@ from one corner, so the coordinate it names is a pixel at its tip with a blunt b
 below and to the right of it — which on a matrix where a cell can be one pixel is the only thing
 covering the answer.
 
-**Over the map it is a ring**: Lucide's `locate`, forty pixels across with its hotspot in the middle —
-a ring with four ticks, in blue on a white casing so it reads over paper, dark contacts and every
-colour between. What it is for is what is *inside* it: a hole about twenty pixels across, so the cell
-under the hand and the cells round it stay visible whole, with the guide lines running through the
-middle. The small open cross it replaces left a hole of a few pixels, which on a 1 kb map is the pixel
-itself and none of its neighbourhood. It is not a second copy of the guide lines: they are at the
-position the app has *resolved*, and the ring is where the **hand** is, which between one frame and the
-next is somewhere the lines have not got to yet.
+**Over the map it is a ring**: Lucide's `locate`, twenty pixels square — the arrowhead's own size —
+with its hotspot in the middle: a ring with four ticks, in blue on a white casing so it reads over
+paper, dark contacts and every colour between. What it is for is what is *inside* it, the cell under
+the hand and the cells round it, whole, and so **the guide lines stop short of it**: every line is cut
+where it comes within the ends of the ticks of the hand (a little over eight pixels), so a line through
+the hand runs into a tick and none of it crosses the ring. The small open cross the ring replaced left
+a hole of a few pixels, which on a 1 kb map is the pixel itself and none of its neighbourhood; a ring
+twice this size with the lines running through its middle was a gunsight over the picture rather than a
+pointer on it, and put back over the answer the very ink it was drawn to take away.
+
+It is not a second copy of the guide lines: they are at the position the app has *resolved*, through
+the middle of a cell that, zoomed in, is wider than the ring, and the ring is where the **hand** is.
+So the gap is cut round the hand rather than round the cell, and it follows the hand inside a cell: a
+move that shifts the gap is a repaint, and one that changes nothing drawn — a hand in the far corner of
+a large cell, clear of both lines — is not. The rays of a turned map and its span guide are cut the
+same way. A tap on a touch screen names a cell with no pointer on screen, and there the lines are
+drawn whole.
 
 **Over a lane or the 1D browser there is no pointer at all.** There the hairline under the hand runs
 the height of the stack and names one base pair; there is no cell whose neighbours a ring could frame,

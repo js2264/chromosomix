@@ -127,8 +127,10 @@ The twelfth drives the **Tracks card and the lanes** (§5.8, §8.1, §8.6, §8.8
 Annotations column's foot with Metadata annotations and Bookmarks folded, two tracks ticked and set
 together from the batch box — `points` and one pair of limits — a diamond insulation run whose rows
 land on the Tracks card marked `*`, the crosshair toggled off and on over a lane, the map's ring
-pointer painted where the hand is (a screenshot carries no cursor), a typed locus with no ring round
-the map, the 1D browser drawing points, the same session on a throttled line drawing its map before
+pointer painted where the hand is (a screenshot carries no cursor) and a crop round it five times over
+— `tr10b` at rest and `tr11b` in a cell wider than the ring, where the guide lines must stop at its
+ticks and nothing may be drawn inside it — a typed locus with no ring round the map, the 1D browser
+drawing points, the same session on a throttled line drawing its map before
 its tracks with their room kept, and a circle whose pan stops at its end, framed on `ori` and zoomed
 on the join. It prints what each step found. Run it after any change to the Tracks card, the batch
 box, a track style, the pointers or the crosshair, the order a session loads in, or §8.15's frame.

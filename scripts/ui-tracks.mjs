@@ -6,8 +6,10 @@
  * its two folded cards, two tracks ticked and set together from the batch box —
  * the `points` style among the settings it carries — a task's synthetic track
  * as a row of the Tracks card with its `*` and its exports, the crosshair turned
- * off and on over a lane, the pointer over the map drawn beside it (a
- * screenshot has no cursor in it), a typed locus with no ring round the map, the
+ * off and on over a lane, the pointer over the map drawn where the hand is (a
+ * screenshot has no cursor in it) and again five times over, so the guide lines
+ * can be seen stopping at its ticks — at rest, and in a cell wider than the
+ * ring — a typed locus with no ring round the map, the
  * 1D browser drawing points, a map opened on a throttled line drawing before its
  * tracks with their room kept, and a circle framed on `ori` rather than slid
  * round. Prints what it found at each step, so a card that did not change is a
@@ -171,28 +173,52 @@ try {
   await page.screenshot({ path: `${OUT}/tr09-crosshair-on-over-a-lane.png`, clip: { x: map.x - 40, y: map.y - 10, width: map.width + 380, height: map.height + 260 } })
 
   // The pointer over the map. A screenshot carries no cursor, so the one the
-  // stylesheet gives the guided map is drawn where the hand is, at its own
-  // size and again at four times it.
-  const px = map.x + map.width * 0.52
-  const py = map.y + map.height * 0.52
-  await page.mouse.move(px, py)
-  await sleep(600)
-  await page.evaluate(({ px, py, inset }) => {
-    const canvas = document.querySelector('.heatmap-canvas')
-    const cursor = getComputedStyle(canvas).cursor
-    const url = /url\("?(.*?)"?\)/.exec(cursor)?.[1] ?? ''
-    for (const [scale, left, top] of [[1, px - 20, py - 20], [4, inset.x, inset.y]]) {
+  // stylesheet gives the guided map is drawn where the hand is, at its own size
+  // and on its own hotspot, both read off the rule rather than restated here.
+  // Then the few dozen pixels round the hand are cut out of a screenshot and
+  // shown five times over — the only way to see, in a picture, that the guide
+  // lines stop at the ends of the ring's ticks and nothing is drawn inside it.
+  const pointerAt = async (x, y) => {
+    await page.mouse.move(x, y)
+    await sleep(600)
+    const drawn = await page.evaluate(({ x, y }) => {
+      const canvas = document.querySelector('.heatmap-canvas')
+      const cursor = getComputedStyle(canvas).cursor
+      const url = /url\("?(.*?)"?\)/.exec(cursor)?.[1] ?? ''
+      const [hx, hy] = (/\)\s*(\d+) (\d+)/.exec(cursor) ?? ['', '0', '0']).slice(1).map(Number)
+      const size = Number(/width='(\d+)'/.exec(decodeURIComponent(url))?.[1] ?? 0)
       const img = document.createElement('img')
       img.src = url
-      img.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${40 * scale}px;height:${40 * scale}px;z-index:99999;pointer-events:none;${scale > 1 ? 'background:rgba(255,255,255,.35);outline:1px dashed #888;' : ''}`
+      img.style.cssText = `position:fixed;left:${x - hx}px;top:${y - hy}px;width:${size}px;height:${size}px;z-index:99999;pointer-events:none`
       img.className = 'gallery-cursor'
       document.body.append(img)
-    }
-    console.log('cursor', cursor.slice(0, 60))
-  }, { px, py, inset: { x: map.x + 16, y: map.y + map.height - 176 } })
-  await sleep(400)
+      return { size, hotspot: [hx, hy] }
+    }, { x, y })
+    await sleep(300)
+    return drawn
+  }
+  const magnified = async (x, y, name, side = 64, times = 5) => {
+    const crop = await page.screenshot({ clip: { x: x - side / 2, y: y - side / 2, width: side, height: side } })
+    await page.evaluate(({ data, size }) => {
+      const img = document.createElement('img')
+      img.src = `data:image/png;base64,${data}`
+      img.style.cssText = `position:fixed;left:0;top:0;width:${size}px;height:${size}px;z-index:100000;image-rendering:pixelated;background:#fff`
+      img.className = 'gallery-cursor gallery-zoom'
+      document.body.append(img)
+    }, { data: crop.toString('base64'), size: side * times })
+    await sleep(300)
+    await page.screenshot({ path: `${OUT}/${name}.png`, clip: { x: 0, y: 0, width: side * times, height: side * times } })
+    await page.evaluate(() => { for (const img of document.querySelectorAll('.gallery-zoom')) img.remove() })
+    console.log('shot', name)
+  }
+  const clearPointer = () => page.evaluate(() => { for (const img of document.querySelectorAll('.gallery-cursor')) img.remove() })
+  const px = map.x + map.width * 0.52
+  const py = map.y + map.height * 0.52
+  console.log('pointer:', await pointerAt(px, py))
   await page.screenshot({ path: `${OUT}/tr10-pointer-over-the-map.png`, clip: { x: map.x - 10, y: map.y - 10, width: map.width + 20, height: map.height + 20 } })
-  await page.evaluate(() => { for (const img of document.querySelectorAll('.gallery-cursor')) img.remove() })
+  console.log('shot tr10-pointer-over-the-map')
+  await magnified(px, py, 'tr10b-pointer-magnified')
+  await clearPointer()
 
   // A typed locus and Enter: the map takes the focus, and draws no ring.
   const box = page.locator('input.search, .search-box input').first()
@@ -203,6 +229,24 @@ try {
   await sleep(2500)
   console.log('focused after Enter:', await page.evaluate(() => document.activeElement?.className ?? ''))
   await shot('tr11-typed-locus-no-ring')
+
+  // Zoomed in until a cell is wider than the ring, with the hand off the cell's
+  // middle: the lines stay on the cell and the gap stays on the hand.
+  await box.click()
+  await box.fill('IV:1,195,001-1,205,000')
+  await box.press('Enter')
+  await mapDrawn()
+  await sleep(2500)
+  const wide = await page.locator('.heatmap-canvas').first().boundingBox()
+  const [zx, zy] = [wide.x + wide.width * 0.5 + 7, wide.y + wide.height * 0.5 - 5]
+  await pointerAt(zx, zy)
+  await magnified(zx, zy, 'tr11b-pointer-in-a-wide-cell', 96, 4)
+  await clearPointer()
+  await box.click()
+  await box.fill('IV:1,150,000-1,250,000')
+  await box.press('Enter')
+  await mapDrawn()
+  await sleep(2500)
 
   // The 1D browser over the same tracks — `V` puts the map away — points and all.
   await page.mouse.move(5, 5)

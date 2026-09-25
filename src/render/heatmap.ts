@@ -845,6 +845,84 @@ export interface PlotOptions {
 export const CROSSHAIR_COLOR = '#1f5fa9'
 
 /**
+ * The pointer over the map while the guide lines are on, in CSS pixels square.
+ *
+ * The stylesheet draws it (`.heatmap-canvas.is-guided`): Lucide's `locate`, a
+ * ring with four ticks on the icon's own 24-unit grid, with its hotspot in the
+ * middle. Stated here as well because the guide lines have to know how far it
+ * reaches, and `lane-crosshair.test.ts` reads the rule back so that the two
+ * stay one number.
+ */
+export const LOCATE_SIZE = 20
+
+/**
+ * How far from the hand the guide lines stop, in CSS pixels: where `locate`'s
+ * ticks end, ten of its twenty-four units out from the middle.
+ *
+ * Nothing of the crosshair is drawn inside that circle ({@link outsideCircle}).
+ * The ring is there to leave the cell under the hand and its neighbours in
+ * plain view, and two lines through its middle put back exactly the ink over
+ * the answer that it was drawn to take away. Stopping at the ends of the ticks
+ * rather than at the ring means a line through the hand runs straight into a
+ * tick, so the pointer and the guide still read as one cross.
+ */
+export const LOCATE_REACH = (LOCATE_SIZE * 10) / 24
+
+/** A stretch of straight line, as its two ends. */
+export type LineSegment = [[number, number], [number, number]]
+
+/**
+ * The parts of the segment `from`–`to` that lie outside a circle, in order.
+ *
+ * None where the circle holds all of it, the whole segment where it misses, and
+ * otherwise a piece on each side the segment reaches past the circle. A segment
+ * that only touches the circle is left whole: a tangent has no inside to cut.
+ */
+export function outsideCircle(
+  from: readonly [number, number],
+  to: readonly [number, number],
+  centre: readonly [number, number],
+  radius: number,
+): LineSegment[] {
+  const dx = to[0] - from[0]
+  const dy = to[1] - from[1]
+  const fx = from[0] - centre[0]
+  const fy = from[1] - centre[1]
+  // |from + t·d − centre|² = radius², as a quadratic in t.
+  const a = dx * dx + dy * dy
+  const b = 2 * (fx * dx + fy * dy)
+  const c = fx * fx + fy * fy - radius * radius
+  const whole: LineSegment = [
+    [from[0], from[1]],
+    [to[0], to[1]],
+  ]
+  if (a === 0) return c < 0 ? [] : [whole]
+  const discriminant = b * b - 4 * a * c
+  if (discriminant <= 0) return [whole]
+  const root = Math.sqrt(discriminant)
+  const enter = (-b - root) / (2 * a)
+  const leave = (-b + root) / (2 * a)
+  const at = (t: number): [number, number] => [from[0] + t * dx, from[1] + t * dy]
+  const pieces: LineSegment[] = []
+  if (enter > 0) pieces.push([whole[0], enter < 1 ? at(enter) : whole[1]])
+  if (leave < 1) pieces.push([leave > 0 ? at(leave) : whole[0], whole[1]])
+  return pieces
+}
+
+/** Whether two guides are the same strokes, to a hundredth of a pixel. */
+function sameGuide(a: readonly LineSegment[], b: readonly LineSegment[]): boolean {
+  const near = (p: readonly [number, number], q: readonly [number, number]): boolean =>
+    Math.abs(p[0] - q[0]) < 0.01 && Math.abs(p[1] - q[1]) < 0.01
+  return (
+    a.length === b.length &&
+    a.every(([from, to], i) => {
+      const other = b[i]
+      return other !== undefined && near(from, other[0]) && near(to, other[1])
+    })
+  )
+}
+
+/**
  * Half the length of the cross another panel's pointer leaves, in CSS pixels.
  *
  * About the size of a cursor: big enough to find at a glance on a busy map,
@@ -1755,6 +1833,12 @@ export class HeatmapView {
    * moving it can be answered. `null` once the pointer has left.
    */
   private hoverPoint: { x: number; y: number } | null = null
+  /**
+   * The hand the guide lines through {@link hoverCell} are cut round
+   * ({@link guideFor}): {@link hoverPoint} as it was when the cell was last
+   * set, so the two together are the guide on screen.
+   */
+  private guideHand: { x: number; y: number } | null = null
   private lastX = 0
   private lastY = 0
 
@@ -4365,7 +4449,9 @@ export class HeatmapView {
 
   private drawCrosshair(): void {
     const cell = this.hoverCell
-    if (cell === null || this.matrix === null) return
+    if (cell === null) return
+    const pieces = this.guideFor(cell, this.guideHand)
+    if (pieces.length === 0) return
     const plot = this.dataRect
     const ctx = this.ctx
     ctx.save()
@@ -4374,23 +4460,57 @@ export class HeatmapView {
     ctx.clip()
     ctx.strokeStyle = this.opts.crosshairColor
     ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
-    const origin = this.plotRect
     ctx.beginPath()
+    for (const [from, to] of pieces) {
+      ctx.moveTo(from[0], from[1])
+      ctx.lineTo(to[0], to[1])
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
+   * The guide lines through `cell` as they are stroked: cut round `hand`.
+   *
+   * None of it inside the pointer. The lines are drawn through the cell the
+   * view resolved and the ring is centred on the hand, which is not always the
+   * same point — a zoomed-in cell is wider than the ring — so the gap is cut
+   * round the hand, where the ring is, and follows it inside a cell
+   * ({@link setHover}). Every line is cut the same way, the rays and the span
+   * guide included. No hand, no gap: a tap on a phone names a cell with nothing
+   * on screen where it landed.
+   *
+   * Asked by {@link setHover} as well as by the frame, because whether a move
+   * needs a frame is whether this answer changed.
+   */
+  private guideFor(cell: Cell, hand: { x: number; y: number } | null): LineSegment[] {
+    if (this.matrix === null) return []
+    const plot = this.dataRect
+    const origin = this.plotRect
+    const lines: LineSegment[] = []
     const turn = this.turn
     if (turn === null) {
       const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
       const y = this.snap(origin.y + this.rowScale.toPixel(cell.row + 0.5))
-      ctx.moveTo(x, plot.y)
-      ctx.lineTo(x, plot.y + plot.height)
-      ctx.moveTo(plot.x, y)
-      ctx.lineTo(plot.x + plot.width, y)
+      lines.push(
+        [
+          [x, plot.y],
+          [x, plot.y + plot.height],
+        ],
+        [
+          [plot.x, y],
+          [plot.x + plot.width, y],
+        ],
+      )
     } else if (this.spanGuide) {
       // The edge the band about to be dragged would start at — see
       // {@link spanGuide}. Snapped, unlike the rays: this one is a straight line
       // on the device grid and rounding it sharpens rather than moves it.
       const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
-      ctx.moveTo(x, plot.y)
-      ctx.lineTo(x, plot.y + plot.height)
+      lines.push([
+        [x, plot.y],
+        [x, plot.y + plot.height],
+      ])
     } else {
       // Both edges of the band, so the pair of rays is a whole X wherever the
       // picture has room for one — and, where it has not, exactly the part of an
@@ -4401,18 +4521,20 @@ export class HeatmapView {
       // device grid, and rounding its two ends would move it off the contact it
       // is drawn through rather than sharpen it.
       for (const ray of anchorRays(turnedCentre(turn, cell.row, cell.col), [0, this.matrix.nrows])) {
-        ctx.moveTo(
-          origin.x + this.colScale.toPixel(ray.from.col),
-          origin.y + this.rowScale.toPixel(ray.from.row),
-        )
-        ctx.lineTo(
-          origin.x + this.colScale.toPixel(ray.to.col),
-          origin.y + this.rowScale.toPixel(ray.to.row),
-        )
+        lines.push([
+          [
+            origin.x + this.colScale.toPixel(ray.from.col),
+            origin.y + this.rowScale.toPixel(ray.from.row),
+          ],
+          [
+            origin.x + this.colScale.toPixel(ray.to.col),
+            origin.y + this.rowScale.toPixel(ray.to.row),
+          ],
+        ])
       }
     }
-    ctx.stroke()
-    ctx.restore()
+    if (hand === null) return lines
+    return lines.flatMap(([from, to]) => outsideCircle(from, to, [hand.x, hand.y], LOCATE_REACH))
   }
 
   /**
@@ -5531,20 +5653,29 @@ export class HeatmapView {
 
   /**
    * Record the hovered cell, repainting only when the crosshair is on and the
-   * cell actually changed. With it off this is a field assignment, so pointer
-   * moves stay free — the §12 budget is for the frames a *drag* costs, and a
-   * redraw per mousemove would spend it on a line nobody asked to see.
+   * guide it draws actually changed. With it off this is a field assignment, so
+   * pointer moves stay free — the §12 budget is for the frames a *drag* costs,
+   * and a redraw per mousemove would spend it on a line nobody asked to see.
+   *
+   * *The guide*, not the cell, because the lines stop short of the hand
+   * ({@link guideFor}): zoomed in, a cell is wider than the pointer, and a gap
+   * left where the hand *was* would let the lines back into the ring as it
+   * crossed the cell. A move that changes neither — a hand in the far corner of
+   * a large cell, clear of both lines — is still no frame.
    */
   private setHover(cell: Cell | null): void {
+    const held = this.hoverCell
+    const heldHand = this.guideHand
     const same =
-      (cell === null && this.hoverCell === null) ||
-      (cell !== null &&
-        this.hoverCell !== null &&
-        cell.row === this.hoverCell.row &&
-        cell.col === this.hoverCell.col)
+      (cell === null && held === null) ||
+      (cell !== null && held !== null && cell.row === held.row && cell.col === held.col)
     this.hoverCell = cell
+    this.guideHand = this.hoverPoint
     this.syncGuidedCursor()
-    if (!same && this.plot.crosshair) this.changed()
+    if (!this.plot.crosshair) return
+    const moved =
+      cell !== null && !sameGuide(this.guideFor(cell, heldHand), this.guideFor(cell, this.guideHand))
+    if (!same || moved) this.changed()
   }
 
   /**

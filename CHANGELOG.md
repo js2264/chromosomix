@@ -410,10 +410,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   reaches a row four times a second rather than twenty.
 
 - **The pointer over a map with the crosshair on is a ring, and over the tracks there is none (§5.8).**
-  Lucide's `locate`, forty pixels across and centred on the hand, replaces the small open cross, so
-  the cell under the pointer and its neighbours stay visible inside it. Over a lane or the 1D browser
-  the hairline is the pointer, and no mark is drawn over it; with the crosshair off all three show the
-  arrowhead.
+  Lucide's `locate`, twenty pixels square (the arrowhead's size) and centred on the hand, replaces
+  the small open cross, and the guide lines stop at the ends of its ticks rather than running through
+  it, so the cell under the pointer and its neighbours stay clear inside it; the gap follows the hand
+  inside a zoomed-in cell. Over a lane or the 1D browser the hairline is the pointer, and no mark is
+  drawn over it; with the crosshair off all three show the arrowhead.
 
 - **The crosshair toggle reaches the tracks beside a map (§5.8).** Their own hairline under the
   pointer, and the line it carries across the map, were drawn whatever the toggle said, so turning

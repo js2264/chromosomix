@@ -3672,7 +3672,7 @@ p {
 }
 
 /* …unless the guide lines are on, in which case the pointer over the map is
-   Lucide's `locate` — a ring with four ticks — drawn large.
+   Lucide's `locate` — a ring with four ticks — twenty pixels square.
 
    The arrowhead is the wrong shape over a picture being *measured*. It points
    from one corner, so the position it names is a pixel at its tip with a
@@ -3683,13 +3683,20 @@ p {
    between one frame and the next the hand is somewhere the lines have not got
    to yet.
 
-   A ring rather than a cross, and a big one — forty pixels, a hole about
-   twenty across — because the point of it is what is *inside*: the cell under
-   the hand and the cells round it, whole, with the guide lines running through
-   the middle. A small open cross left a hole of a few pixels, which on a 1 kb
-   map is the pixel itself and none of its neighbourhood. A white casing under
-   the blue, because it crosses white paper, dark contacts and every colour in
-   between, and one flat colour would vanish somewhere in every colourmap.
+   A ring rather than a cross, because the point of it is what is *inside*: the
+   cell under the hand and the cells round it, whole, with nothing drawn over
+   them. The guide lines stop where its ticks end (`LOCATE_REACH` in
+   `render/heatmap.ts`, which is worked out from this icon's size and has to
+   change with it), so a line through the hand runs into a tick and none of it
+   crosses the ring. Twenty pixels, the arrowhead's own size: at forty it was a
+   gunsight over the picture rather than a pointer on it, and twenty still leaves
+   a hole about ten across — a cell of a 1 kb map and the few round it, where a
+   small open cross left the pixel itself and none of its neighbourhood. The
+   strokes are heavier on the icon's grid than Lucide's for the same reason the
+   arrowhead's are: at this size its own weight is under a pixel. A white casing
+   under the blue, because it crosses white paper, dark contacts and every
+   colour in between, and one flat colour would vanish somewhere in every
+   colourmap.
 
    **No pointer at all over a lane or the 1D browser**, while the crosshair is
    on. There the hairline under the hand runs the whole height of the stack and
@@ -3714,8 +3721,8 @@ p {
    still gets a pointer of the right *kind*, which is the part that matters. */
 .heatmap-canvas.is-guided {
   cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='2.4' opacity='.85'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3Cg stroke='%231f5fa9' stroke-width='1.1'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-      20 20,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='3' opacity='.85'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3Cg stroke='%231f5fa9' stroke-width='1.5'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+      10 10,
     crosshair;
 }
 

@@ -10,16 +10,17 @@
  * stands in for it when it is off.
  *
  * And the pointers themselves, which are stylesheet rules and are read here as
- * text, as `toggle-look.test.ts` reads the lit look: over the map a ring large
- * enough to leave the cell under the hand and its neighbours visible, centred on
- * the hand; over a lane or the 1D browser nothing, since the hairline there is
- * the pointer.
+ * text, as `toggle-look.test.ts` reads the lit look: over the map a ring the
+ * arrowhead's size, centred on the hand, whose ticks end exactly where the guide
+ * lines stop (`LOCATE_REACH`, and `crosshair-gap.test.ts` for the lines); over a
+ * lane or the 1D browser nothing, since the hairline there is the pointer.
  */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { LOCATE_REACH, LOCATE_SIZE } from '@/render/heatmap'
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import { DEFAULT_UI_PLOT_OPTIONS, setPlotOptions } from '@/ui/plotOptions'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -75,15 +76,28 @@ describe('the pointers', () => {
     throw new Error(`no rule for ${selectors}`)
   }
 
-  it('is Lucide’s locate over the map, large, and centred on the hand', () => {
+  it('is Lucide’s locate over the map, the arrowhead’s size, and centred on the hand', () => {
     const body = decodeURIComponent(rule('.heatmap-canvas.is-guided'))
     // The ring and its four ticks, as the icon draws them.
     expect(body).toContain("circle cx='12' cy='12' r='7'")
     expect(body).toContain('M2 12H5M19 12H22M12 2V5M12 19V22')
     const size = Number(/width='(\d+)'/.exec(body)?.[1])
-    expect(size).toBeGreaterThanOrEqual(32)
+    expect(size).toBe(LOCATE_SIZE)
+    // No bigger than the arrowhead it stands in for.
+    const arrow = decodeURIComponent(rule('.heatmap-canvas, .lane-canvas, .browser-canvas'))
+    expect(size).toBeLessThanOrEqual(Number(/width='(\d+)'/.exec(arrow)?.[1]))
     // The hotspot is the middle of the ring, which is where the cell is.
     expect(body).toMatch(new RegExp(`\\)\\s*${size / 2} ${size / 2},`))
+  })
+
+  it('ends its ticks exactly where the guide lines stop', () => {
+    const body = decodeURIComponent(rule('.heatmap-canvas.is-guided'))
+    const size = Number(/width='(\d+)'/.exec(body)?.[1])
+    const grid = Number(/viewBox='0 0 (\d+) \d+'/.exec(body)?.[1])
+    // The first tick starts at the icon's edge and runs in towards the ring, so
+    // where it starts is how far out from the middle the icon reaches.
+    const start = Number(/d='M([\d.]+) /.exec(body)?.[1])
+    expect(LOCATE_REACH).toBeCloseTo(((grid / 2 - start) * size) / grid, 9)
   })
 
   it('is nothing over a lane or the 1D browser while they are guided', () => {

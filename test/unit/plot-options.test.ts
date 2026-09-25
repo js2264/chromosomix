@@ -209,11 +209,15 @@ describe('overlay toggles', () => {
     liveRedraws = 0
     live.fire('mousemove', { clientX: 100, clientY: 100 })
     expect(liveRedraws).toBe(1)
-    // Same cell, no new information, no frame.
+    // Same cell, but the lines stop short of the hand and the gap has moved
+    // with it (`crosshair-gap.test.ts`), so this is a frame after all.
     live.fire('mousemove', { clientX: 101, clientY: 101 })
-    expect(liveRedraws).toBe(1)
+    expect(liveRedraws).toBe(2)
+    // The hand where it was: no new information, no frame.
+    live.fire('mousemove', { clientX: 101, clientY: 101 })
+    expect(liveRedraws).toBe(2)
     // Leaving clears the mark, which is itself a repaint.
     live.fire('mouseleave', {})
-    expect(liveRedraws).toBe(2)
+    expect(liveRedraws).toBe(3)
   })
 })
