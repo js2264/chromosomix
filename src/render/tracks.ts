@@ -1,5 +1,5 @@
 /**
- * Value tracks: a bigWig, resolved into a line, an area or bars.
+ * Value tracks: a bigWig, resolved into a line, an area, bars or points.
  *
  * Two stages, deliberately separate. {@link profileOf} reduces whatever arrived
  * — a thousand summary intervals or a hundred thousand base-resolution ones —
@@ -591,6 +591,42 @@ export function drawTrack(
     return
   }
 
+  // **A dot per value and nothing between them** — a Manhattan plot's picture.
+  // What a line claims and a scatter does not is that the ground between two
+  // values is the straight run between them; a track of p-values, or of scores
+  // over sparse bins, has no such ground, and its outliers are the reading.
+  //
+  // One dot per *run* of equal values rather than per pixel: zoomed in, one
+  // bin spans many pixels that all carry its value, and a dot on each was a
+  // dash where the value is one point — at the middle of the run, which is the
+  // bin's middle when all of it is in view. Zoomed out, every pixel is its own
+  // mean and its own dot. From the mean, as the line, the area and the bars
+  // are, so a points lane answers to the same limits, the same group axis and
+  // the same autoscale: a dot at each pixel's highest value would stand above
+  // the range the axis was scaled to, all of them piled on the lane's edge.
+  //
+  // `outline` does not apply, as `fills` does not to bars: a ring round each
+  // of a thousand overlapping dots is a smear of the page's ink.
+  if (paint.mode === 'points') {
+    ctx.fillStyle = paint.colour
+    ctx.beginPath()
+    for (const [start, stop] of valueRuns(profile)) {
+      const across = valueAcross(frame, norm(profile.mean[start]))
+      const [x, y] = pointOf(frame, profile.from + (start + stop) / 2, across)
+      // A subpath per dot: an arc joins the current point with a line on a
+      // canvas, and the PDF page starts one of its own, so without the move the
+      // screen would fill the polygon between the dots and the figure would not.
+      ctx.moveTo(x + POINT_RADIUS, y)
+      ctx.arc(x, y, POINT_RADIUS, 0, Math.PI * 2)
+    }
+    ctx.fill()
+    drawVariants(ctx, frame, profile, norm, baseAcross, paint)
+    drawZeroLine(ctx, frame, baseAcross, paint)
+    drawFloor(ctx, frame, paint)
+    ctx.restore()
+    return
+  }
+
   if (paint.mode === 'bar') {
     ctx.fillStyle = paint.colour
     ctx.beginPath()
@@ -768,6 +804,34 @@ function traceBack(
     const across = valueAcross(frame, norm(profile.mean[slot]))
     ctx.lineTo(...pointOf(frame, profile.from + slot + 0.5, across))
   }
+}
+
+/**
+ * How big a `points` lane's dot is, in CSS pixels: three across, which reads
+ * as a mark at every lane height a track can be given and lets a dot per pixel
+ * overlap its neighbours into a band where the values are steady.
+ */
+export const POINT_RADIUS = 1.5
+
+/**
+ * The half-open slot ranges over which the mean holds one value — a dot each.
+ *
+ * Exact equality, because a run of pixels inside one bin carries the bin's
+ * value bit for bit, and two neighbouring pixels that merely round alike are
+ * two values. A gap ends a run and starts none.
+ */
+export function valueRuns(profile: PixelProfile): Array<[number, number]> {
+  const runs: Array<[number, number]> = []
+  const mean = profile.mean
+  let start = -1
+  for (let slot = 0; slot < mean.length; slot++) {
+    const value = mean[slot]
+    if (start >= 0 && value === mean[start]) continue
+    if (start >= 0) runs.push([start, slot])
+    start = Number.isFinite(value) ? slot : -1
+  }
+  if (start >= 0) runs.push([start, mean.length])
+  return runs
 }
 
 /** The half-open slot ranges that have data, so gaps break the line. */

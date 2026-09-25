@@ -191,6 +191,27 @@ describe('VectorPage', () => {
     expect((content.match(/^Q$/gm) ?? []).length).toBe(2)
   })
 
+  // A whole turn is the whole circle, as the canvas has it. The flattening took
+  // the sweep modulo a turn, which read exactly one turn as none: every full
+  // circle — a points lane's dots, a loop's ring — was a path of zero length.
+  it('draws a full circle whole', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.arc(50, 50, 10, 0, Math.PI * 2)
+    page.ctx.fill()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    const points = [...content.matchAll(/^(-?[\d.]+) (-?[\d.]+) [ml]$/gm)].map((m) => [
+      Number(m[1]),
+      Number(m[2]),
+    ])
+    expect(points.length).toBe(25)
+    const xs = points.map(([x]) => x)
+    const ys = points.map(([, y]) => y)
+    // It reaches both sides of the centre on both axes: a circle, not a point.
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(20, 0)
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(20, 0)
+  })
+
   // An unmatched `restore` is a no-op on a canvas and a corrupt stream in a PDF.
   it('never writes a Q it has no q for', async () => {
     const page = new VectorPage(10, 10)

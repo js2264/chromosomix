@@ -2365,6 +2365,20 @@ map disagreed with the bottom one and two cells of one deck disagreed with each 
 file, which is the one conclusion a picture of one file must not invite (§16.2). The ceiling can then
 sit a little above the highest mean drawn, which is the trade every other browser makes.
 
+**A lane's drawing style is one of six**: `area`, `line`, `bar`, `points`, `heatmap` (§18.11) and
+`ribbon` (§18.12), all modes of one `drawTrack`, so every one of them answers to the same limits,
+group, ceiling drag, flip and figure on both surfaces. **`points`** is a Manhattan plot's picture: a dot
+per value and nothing drawn between them, for a track whose values are not a curve — p-values, a score
+over sparse bins, anything whose outliers are the reading, where a line claims the straight run between
+two values is data. A dot is placed from the pixel's **mean**, as a line's vertex is, so it answers to
+the axis autoscale drew; a dot at each pixel's highest value would stand above that range, piled on the
+lane's edge. **One dot per run of equal values**, not per pixel: zoomed in, a bin twenty pixels wide is
+one point at its middle rather than a dash; zoomed out, each pixel is its own mean and its own dot. A
+gap draws nothing. The dots are three pixels across, the zero line and the floor are drawn as under bars,
+and the *outline* preference does not apply — a ring round each of a thousand overlapping dots is a
+smear of the page's ink. In a figure each dot is a circle of its own, which the PDF page draws whole
+(a full turn used to flatten to nothing there).
+
 The rest follows the same shape. **Groups** are a fact about the tracks rather than about a view
 (`annotations/groups.ts`), so one `GroupSettings` per open file is handed to both surfaces, one
 `planStack` decides which lanes exist, and one `resolveGroupExtents` decides what they are drawn

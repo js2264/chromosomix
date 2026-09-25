@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A `points` style for tracks (§8.8).** A dot per value and nothing between them — a Manhattan
+  plot's picture, for p-values, sparse scores and anything whose outliers are the reading. From each
+  pixel's mean like the other styles, so the same limits, groups and flip apply; one dot per run of
+  equal values, so a zoomed-in bin is one point at its middle. In the style picker of every track, in
+  the batch box, beside the map, in the 1D browser and in figures.
+
 - **A file's first open proposes which sequences are circular (§8.15).** Each of the fifty longest
   sequences is read at its two ends and its corner, and scored as the contacts across the junction
   over the contacts along the diagonal at the same separation — about one on a circle, about zero on
@@ -1128,6 +1134,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A full circle is drawn in a vector figure.** The PDF page flattened an arc of exactly one turn to
+  a path of zero length, so a loop drawn as a ring on screen was missing from the saved figure.
 
 - **A track's edge button lights on the press that sets it.** Moving a track to another edge of the
   first map announced the move before it made it, so the row went on showing the old edge — and the

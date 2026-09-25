@@ -110,11 +110,13 @@ export function heightField(store: AnnotationStore, entry: AnnotationEntry): HTM
 }
 
 /**
- * Line, area, bars or a heatmap — how a value profile is resolved into ink.
+ * Area, line, bars, points, a heatmap or a ribbon — how a value profile is
+ * resolved into ink (`TrackMode`).
  *
- * The first three draw the value as a position across the lane; `heatmap` draws
- * it as a colour, which costs no height and is the only one of the four that
- * several tracks can be stacked in without a screen's worth of lane each.
+ * The first four draw the value as a position across the lane — `points` as a
+ * dot per value, a Manhattan plot's picture; `heatmap` draws it as a colour,
+ * which costs no height and is the one several tracks can be stacked in without
+ * a screen's worth of lane each.
  */
 export function modeField(
   store: AnnotationStore,

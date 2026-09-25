@@ -792,12 +792,14 @@ export function normalisePlacement(placement: Partial<Placement> | undefined): P
   return base
 }
 
-/** How a value track is resolved into ink. */
 /**
  * How a value profile is resolved into ink.
  *
  * The first three draw the value as a *position* across the lane and are the
- * three a genome browser has always had. `heatmap` draws it as a **colour**
+ * three a genome browser has always had. `points` is a position too, as a dot
+ * per value with nothing drawn between them — a Manhattan plot's picture, for a
+ * track whose values are not a continuous curve: p-values, scores over sparse
+ * bins, anything whose outliers are the reading. `heatmap` draws it as a **colour**
  * instead, filling the lane's whole thickness, which trades the precision of a
  * position for the one thing a position cannot do: it costs no height. A track
  * that is unreadable at 20 pixels as a line is perfectly readable at 20 pixels
@@ -812,10 +814,10 @@ export function normalisePlacement(placement: Partial<Placement> | undefined): P
  * were drawn, and the reader sees the topmost one and four edges. See
  * {@link nestsAsRibbons}.
  */
-export type TrackMode = 'line' | 'area' | 'bar' | 'heatmap' | 'ribbon'
+export type TrackMode = 'line' | 'area' | 'bar' | 'points' | 'heatmap' | 'ribbon'
 
 /** Every mode, in the order the picker offers them. */
-export const TRACK_MODES: readonly TrackMode[] = ['area', 'line', 'bar', 'heatmap', 'ribbon']
+export const TRACK_MODES: readonly TrackMode[] = ['area', 'line', 'bar', 'points', 'heatmap', 'ribbon']
 
 /** A clip on the value axis. `auto` recomputes from what is in view. */
 export interface Limits {
