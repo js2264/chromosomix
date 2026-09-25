@@ -4152,7 +4152,10 @@ export class MatrixPanel {
    */
   private paintLaneGuide(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
     const guide = this.laneHover
-    if (guide === null) return
+    // Under the crosshair preference, as the lane's own hairline is: the two
+    // are one line, the hand's place on a track carried across the map, and a
+    // reader who turned the crosshair off should not find half of it still on.
+    if (guide === null || !getPlotOptions().crosshair) return
     const { data, dpr } = frame
     const at = (Math.round(guide.along * dpr - 0.5) + 0.5) / dpr
     if (guide.edge === 'bottom') {

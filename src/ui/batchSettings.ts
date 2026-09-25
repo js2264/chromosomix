@@ -144,20 +144,20 @@ export function batchFields(options: BatchFieldsOptions): HTMLElement[] {
   const signalRows = signals(rows)
   const styled = rows.filter((entry) => hasTrackControls(entry.kind) || entry.kind === 'sequence')
 
-  const first: HTMLElement[] = [colourField(options)]
-  if (laneRows.length > 0) first.push(heightField(options, laneRows))
-  out.push(el('div', { class: 'ann-inline' }, ...first))
-
-  if (styled.length > 0 || signalRows.length > 0) {
-    out.push(
-      el(
-        'div',
-        { class: 'ann-inline' },
-        ...(styled.length > 0 ? styleFields(options, styled, signalRows) : []),
-        ...(signalRows.length > 0 ? [scaleField(options, signalRows), flipButton(options, signalRows)] : []),
-      ),
-    )
-  }
+  // One wrapping row, as a single track's lane settings are (`laneRow`): the
+  // thickness and how the values are drawn, in a row's order, then the colour
+  // a row keeps on its head — last, so the column's width breaks the row into
+  // two full lines rather than leaving the flip on a line of its own.
+  out.push(
+    el(
+      'div',
+      { class: 'ann-inline' },
+      ...(laneRows.length > 0 ? [heightField(options, laneRows)] : []),
+      ...(styled.length > 0 ? styleFields(options, styled, signalRows) : []),
+      ...(signalRows.length > 0 ? [scaleField(options, signalRows), flipButton(options, signalRows)] : []),
+      colourField(options),
+    ),
+  )
   const withLimits = limited(rows)
   if (withLimits.length > 0) out.push(limitsField(options, withLimits))
   if (signalRows.length > 0) out.push(groupField(options, signalRows))

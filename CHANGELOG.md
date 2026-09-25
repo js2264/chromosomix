@@ -416,8 +416,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   arrowhead.
 
 - **The crosshair toggle reaches the tracks beside a map (§5.8).** Their own hairline under the
-  pointer was drawn whatever the toggle said, so turning the crosshair off took it off the map and
-  left it on every track; a deck's tracks cell went on following the map's pointer the same way.
+  pointer, and the line it carries across the map, were drawn whatever the toggle said, so turning
+  the crosshair off took it off the map and left it on every track; a deck's tracks cell went on
+  following the map's pointer the same way.
 
 - **Ticked tracks are edited together (§8.1).** The box two ticks open carries a row's settings —
   colour, height, style, scale, flip, limits, group, location, and opacity for overlays — showing what

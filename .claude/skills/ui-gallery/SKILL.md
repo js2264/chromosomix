@@ -25,6 +25,7 @@ node scripts/ui-marks.mjs gallery            # marks on the card and the model's
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
+node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle: tr01 … tr17
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -121,6 +122,16 @@ reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
 name the folder's address in `GALLERY_DATA`; for the store part, serve a store the script wrote and
 name its `store.json` in `GALLERY_STORE`. Run it after any change to §8.15's declarations, to the
 arm reading, to those tasks, or to the store's script.
+
+The twelfth drives the **Tracks card and the lanes** (§5.8, §8.1, §8.6, §8.8, §8.15, §18.5): the
+Annotations column's foot with Metadata annotations and Bookmarks folded, two tracks ticked and set
+together from the batch box — `points` and one pair of limits — a diamond insulation run whose rows
+land on the Tracks card marked `*`, the crosshair toggled off and on over a lane, the map's ring
+pointer painted where the hand is (a screenshot carries no cursor), a typed locus with no ring round
+the map, the 1D browser drawing points, the same session on a throttled line drawing its map before
+its tracks with their room kept, and a circle whose pan stops at its end, framed on `ori` and zoomed
+on the join. It prints what each step found. Run it after any change to the Tracks card, the batch
+box, a track style, the pointers or the crosshair, the order a session loads in, or §8.15's frame.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

@@ -1095,9 +1095,10 @@ and any mark over the line covers the value it points at.
 So the pointer gives way exactly where the line comes, condition for condition: on the map while the
 crosshair is on and the pointer is over a cell, here while it is on and the pointer is on the axis
 rather than in the strip before it, and on a lane stack beside the map while it is on. With the
-crosshair off there is no line on any of them — the lanes' own hairline under the hand follows the
-preference too, where it used to be drawn whatever the preference said, so a reader who turned the
-crosshair off watched it leave the map and stay on every track — and all three show the arrowhead.
+crosshair off there is no line on any of them — the lanes' own hairline under the hand, and the line
+it carries across the map, follow the preference too, where they used to be drawn whatever it said, so
+a reader who turned the crosshair off watched it leave the map and stay on every track — and all
+three show the arrowhead.
 The transient cursors stay — the closed hand while panning, the crosshair while a selection is about
 to be drawn — because those say what is *happening*, which no guide line does.
 
