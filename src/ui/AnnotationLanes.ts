@@ -1469,12 +1469,14 @@ export class AnnotationLanes {
       ) {
         laneTick(ctx, frame, frame.toPixel(geometry.laneEcho.unit), geometry.palette.crosshair, dpr)
       }
-      // ...and the reader's own, from pointing at this stack. Not under the
-      // crosshair preference: that option is about what the *map* draws while
-      // you move over it, and this line is the direct answer to a gesture being
-      // made right now. A pointer over a track with no line under it looks like
-      // a track that does not respond.
-      if (geometry.guide !== null && geometry.guide.edge === edge) {
+      // ...and the reader's own, from pointing at this stack — under the same
+      // preference as the rest. It used to be exempt, on the argument that the
+      // option was about what the *map* draws; but the one toggle is offered as
+      // *the* crosshair, beside the map and beside the tracks, and a reader who
+      // turned it off watched the line go from the map and stay on every track.
+      // Off, the stack shows the arrowhead instead (`MatrixPanel.syncLaneCursors`),
+      // so a track still answers the pointer.
+      if (geometry.crosshair && geometry.guide !== null && geometry.guide.edge === edge) {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }
 

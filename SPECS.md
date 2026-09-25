@@ -1073,27 +1073,33 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
-**Where a guide line is drawn the pointer is a small open cross**, and that is one rule across all
-three surfaces. The arrowhead is the wrong shape over a picture being measured: it points from one
-corner, so the coordinate it names is a pixel at its tip with a blunt body over everything below and
-to the right of it — which on a matrix where a cell can be one pixel is the only thing covering the
-answer. The cross is four short arms around a hole, so the pixel it is about stays visible through
-the middle of it, and it is drawn a little heavier than the hairlines it stands among, which are one
-device pixel and deliberately faint: a pointer that reads as one of the guides is a pointer that has
-to be hunted for.
+**Where a guide line is drawn, the pointer gives way to it**, and that is one rule across all three
+surfaces with two answers. The arrowhead is the wrong shape over a picture being measured: it points
+from one corner, so the coordinate it names is a pixel at its tip with a blunt body over everything
+below and to the right of it — which on a matrix where a cell can be one pixel is the only thing
+covering the answer.
 
-It is not a second copy of the guide lines, and the difference is what it is for. The lines are at
-the position the app has *resolved* — the cell, the bin, the column — and the cross is where the
-**hand** is, which between one frame and the next is somewhere the lines have not got to yet. Taking
-the pointer away entirely, which this used to do, left nothing at all to follow in that gap, and a
-surface with no pointer over it reads as a surface that is not listening.
+**Over the map it is a ring**: Lucide's `locate`, forty pixels across with its hotspot in the middle —
+a ring with four ticks, in blue on a white casing so it reads over paper, dark contacts and every
+colour between. What it is for is what is *inside* it: a hole about twenty pixels across, so the cell
+under the hand and the cells round it stay visible whole, with the guide lines running through the
+middle. The small open cross it replaces left a hole of a few pixels, which on a 1 kb map is the pixel
+itself and none of its neighbourhood. It is not a second copy of the guide lines: they are at the
+position the app has *resolved*, and the ring is where the **hand** is, which between one frame and the
+next is somewhere the lines have not got to yet.
 
-So the cross comes exactly where the line comes, condition for condition: on the map while the
+**Over a lane or the 1D browser there is no pointer at all.** There the hairline under the hand runs
+the height of the stack and names one base pair; there is no cell whose neighbours a ring could frame,
+and any mark over the line covers the value it points at.
+
+So the pointer gives way exactly where the line comes, condition for condition: on the map while the
 crosshair is on and the pointer is over a cell, here while it is on and the pointer is on the axis
-rather than in the strip before it, and on a lane stack always, since a lane answers a pointer with
-its own hairline whatever that preference says. The transient cursors stay — the closed hand while
-panning, the crosshair while a selection is about to be drawn — because those say what is
-*happening*, which no guide line does.
+rather than in the strip before it, and on a lane stack beside the map while it is on. With the
+crosshair off there is no line on any of them — the lanes' own hairline under the hand follows the
+preference too, where it used to be drawn whatever the preference said, so a reader who turned the
+crosshair off watched it leave the map and stay on every track — and all three show the arrowhead.
+The transient cursors stay — the closed hand while panning, the crosshair while a selection is about
+to be drawn — because those say what is *happening*, which no guide line does.
 
 Only what follows the pointer goes down there. Everything that describes the *picture* — the sequence
 boundaries, the name column's own edge — stops with the tracks: a boundary is a mark *on* the tracks,

@@ -395,6 +395,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The pointer over a map with the crosshair on is a ring, and over the tracks there is none (§5.8).**
+  Lucide's `locate`, forty pixels across and centred on the hand, replaces the small open cross, so
+  the cell under the pointer and its neighbours stay visible inside it. Over a lane or the 1D browser
+  the hairline is the pointer, and no mark is drawn over it; with the crosshair off all three show the
+  arrowhead.
+
+- **The crosshair toggle reaches the tracks beside a map (§5.8).** Their own hairline under the
+  pointer was drawn whatever the toggle said, so turning the crosshair off took it off the map and
+  left it on every track; a deck's tracks cell went on following the map's pointer the same way.
+
 - **Ticked tracks are edited together (§8.1).** The box two ticks open carries a row's settings —
   colour, height, style, scale, flip, limits, group, location, and opacity for overlays — showing what
   the ticked rows share and *mixed* where they differ, and writing a pick to every ticked row it

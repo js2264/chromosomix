@@ -1962,6 +1962,7 @@ export class MatrixPanel {
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
+      this.syncLaneCursors(options.crosshair)
       // The key is the panel's, not the renderer's, so the renderer's copy of
       // the option changes nothing on its own: hidden here, and skipped in the
       // export, which draws what the screen shows.
@@ -2381,20 +2382,8 @@ export class MatrixPanel {
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
     })
-    for (const edge of LANE_EDGES) {
-      const canvas = this.lanes.canvasFor(edge)
-      // No drawn pointer on a stack, ever, and unconditionally rather than under
-      // the crosshair preference. A lane puts a hairline under the pointer the
-      // moment it is over the canvas at all — its own, not the map's echo, and
-      // deliberately not under that preference, because it is the direct answer
-      // to a gesture being made right now (`ui/AnnotationLanes.ts`). So there is
-      // always a line here saying where the hand is, and the arrowhead over it
-      // is a second mark for the same base pair. The map is the conditional one:
-      // it has gutters, and a gutter holds no cell to draw a crosshair at
-      // (`render/heatmap.ts`'s `syncGuidedCursor`).
-      canvas.classList.add('is-guided')
-      this.watchLane(edge, canvas)
-    }
+    for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
+    this.syncLaneCursors(getPlotOptions().crosshair)
     this.watchEdgeDrops()
     // A restyle, a rename or a move of any lane is a different picture. Taken
     // on the store this panel was built against, which on a file with no
@@ -4557,6 +4546,26 @@ export class MatrixPanel {
    * ones it draws in. That is the whole of §8.4's "nothing computes a second
    * mapping", stated as one function.
    */
+  /**
+   * No drawn pointer on a stack while the crosshair is on; the arrowhead while
+   * it is off.
+   *
+   * A lane puts a hairline under the pointer the moment it is over the canvas
+   * — its own, not the map's echo — and while that line is drawn it *is* the
+   * pointer: an arrowhead over it is a second mark for the same base pair,
+   * sitting on the value being read. The hairline follows the crosshair
+   * preference (`ui/AnnotationLanes.ts`), so the pointer does too: with the
+   * preference off there is no line, and the arrowhead the map shows with it
+   * off is what says where the hand is. The map's own condition is finer — it
+   * has gutters, and a gutter holds no cell to draw a crosshair at
+   * (`render/heatmap.ts`'s `syncGuidedCursor`).
+   */
+  private syncLaneCursors(crosshair: boolean): void {
+    for (const edge of LANE_EDGES) {
+      this.lanes.canvasFor(edge).classList.toggle('is-guided', crosshair)
+    }
+  }
+
   private laneGeometry(): LaneGeometry {
     const palette = readCanvasPalette(this.canvas)
     return {

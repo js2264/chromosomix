@@ -1906,9 +1906,12 @@ export class BrowserView {
     }
     // Another surface's pointer, at the same coordinate on this axis: a bead
     // under the hand in the structure cell, a cell on a map of the deck (§25.4).
-    // The same guide, so a reader learns one mark for "here" everywhere.
+    // The same guide, so a reader learns one mark for "here" everywhere — and
+    // under the same preference, as the lanes beside a map draw theirs: a
+    // tracks cell under a map went on following the map's pointer with the
+    // crosshair turned off, which read as the toggle not reaching the tracks.
     const echo = this.echo
-    if (chrome && echo !== null) {
+    if (chrome && this.crosshair && echo !== null) {
       const unit = this.axis.locusToUnit(echo.contig, echo.bp)
       if (unit !== null) {
         const px = this.gutter + this.scale.toPixel(unit)
