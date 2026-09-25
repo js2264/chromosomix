@@ -39,7 +39,7 @@ import {
 import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { KEYS, withKey } from './commands'
+import { KEYS, keyLabel, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
@@ -213,6 +213,16 @@ import {
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
+import {
+  endCarry,
+  landingAt,
+  offerLanding,
+  startCarry,
+  within,
+  type LaneCarry,
+  type LaneLanding,
+  type LaneSurface,
+} from './laneCarry'
 import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
@@ -311,11 +321,12 @@ const TURN_HINT =
 const DIAGONAL_ICON = 'diagonal'
 
 const DIAGONAL_HINT =
-  'Recentre on the diagonal. Slides the view onto the nearest on-diagonal window at the zoom ' +
-  'it is already at, without changing the region or the resolution. Every gesture that lands ' +
-  'off the diagonal — a pan, a box, a zoom around the pointer — takes several more to come ' +
-  'back from, and no drag can say “here, but on the diagonal”. Greyed on a block that has no ' +
-  'diagonal, and while the map is turned, where the picture already is one.'
+  `Recentre on the diagonal (${keyLabel(KEYS.diagonal)}). Slides the view onto the nearest ` +
+  'on-diagonal window at the zoom it is already at, without changing the region or the ' +
+  'resolution. Every gesture that lands off the diagonal — a pan, a box, a zoom around the ' +
+  'pointer — takes several more to come back from, and no drag can say “here, but on the ' +
+  'diagonal”. Greyed on a block that has no diagonal, and while the map is turned, where the ' +
+  'picture already is one.'
 
 /** The band, as an ordinary dense block the renderer can be handed. */
 function turnedDense(turned: RotatedBlock): DenseMatrix {
@@ -1260,6 +1271,8 @@ export class MatrixPanel {
   private turnButton: HTMLElement | null = null
   /** The recentre control, greyed where there is no diagonal to go to. */
   private diagonalButton: HTMLElement | null = null
+  /** Whether there is a diagonal to go to: one in the block, and no turn. */
+  private diagonalPossible = false
   /** The adaptive-resolution switch, and its unsubscribe. */
   private refineButton: HTMLElement | null = null
   private stopRefineWatch: (() => void) | null = null
@@ -1429,6 +1442,32 @@ export class MatrixPanel {
    * annotations and therefore no lanes.
    */
   private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
+  /**
+   * This map's edge rectangles as places a lane carried from **another** map
+   * can land (§16.9, `ui/laneCarry.ts`). A lane of this map's own is answered
+   * by its own drag, which knows the edge it came from and puts it out.
+   */
+  private readonly laneSurface: LaneSurface = {
+    landingAt: (x, y, carry) => {
+      if (carry.from === this.mapId) return null
+      for (const [edge, zone] of this.edgeZones) {
+        if (!within(zone, x, y)) continue
+        return {
+          light: (on) => zone.classList.toggle('over', on),
+          take: (moved) => this.takeLane(moved, edge),
+        }
+      }
+      return null
+    },
+    // Every map shows its rectangles while a lane from another is in the air,
+    // as the map it came from shows its own: a place that only appears once
+    // the hand is on it is a place nobody finds.
+    carrying: (carry) => {
+      if (carry !== null && carry.from === this.mapId) return
+      this.grid.classList.toggle('is-dropping', carry !== null)
+      if (carry === null) for (const zone of this.edgeZones.values()) zone.classList.remove('over')
+    },
+  }
   /**
    * The layer of controls over each lane stack, and the caret that opens in one.
    *
@@ -2170,14 +2209,10 @@ export class MatrixPanel {
       // An action rather than a toggle — there is no state to read off it — so
       // it takes neither `btn-toggle` nor a lit state, and it is the one mark in
       // these rows that means "do this" instead of "this is on".
-      const diagonalButton = iconButton(
-        DIAGONAL_ICON,
-        DIAGONAL_HINT,
-        () => {
-          this.heatmap.centreOnDiagonal()
-        },
-        { class: 'btn btn-icon', size: 15 },
-      )
+      const diagonalButton = iconButton(DIAGONAL_ICON, DIAGONAL_HINT, () => this.centreOnDiagonal(), {
+        class: 'btn btn-icon',
+        size: 15,
+      })
       this.diagonalButton = diagonalButton
       // Disabled until a block says otherwise: the panel is built before
       // anything is read, and a control that is live before there is a picture
@@ -2387,6 +2422,7 @@ export class MatrixPanel {
     })
     for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
     this.watchEdgeDrops()
+    this.laneListeners.push(offerLanding(this.laneSurface))
     // A restyle, a rename or a move of any lane is a different picture. Taken
     // on the store this panel was built against, which on a file with no
     // annotation machinery is the empty one — it never fires, and that costs
@@ -2837,6 +2873,20 @@ export class MatrixPanel {
     this.remeasure()
   }
 
+  /** Whether {@link centreOnDiagonal} has somewhere to go: a diagonal in the block, and no turn. */
+  get canCentreOnDiagonal(): boolean {
+    return this.diagonalPossible
+  }
+
+  /**
+   * The recentre button's press, and Space's (§7.2): the view slid onto the
+   * diagonal at the zoom it is at. Nothing where the button is greyed — a block
+   * with no diagonal, or a turned map, whose picture already is one.
+   */
+  centreOnDiagonal(): void {
+    if (this.diagonalPossible) this.heatmap.centreOnDiagonal()
+  }
+
   fitTracks(): void {
     const box = this.grid.getBoundingClientRect()
     // Per axis rather than per edge: the stacks above and below the map take
@@ -2921,6 +2971,7 @@ export class MatrixPanel {
    * button would be offering to move the view to where it already is.
    */
   private paintDiagonal(possible: boolean): void {
+    this.diagonalPossible = possible
     const button = this.diagonalButton
     if (button === null) return
     button.classList.toggle('is-disabled', !possible)
@@ -4705,7 +4756,9 @@ export class MatrixPanel {
      * Three gestures on one surface, told apart by *where* the press lands.
      *
      * The **handle** moves the track: up and down its own stack to reorder, out
-     * onto either rectangle in the map to change which edge it is drawn on. The
+     * onto a rectangle in the map to change which edge it is drawn on — or off
+     * this map altogether, onto another's rectangles, a `+` or a cell of the
+     * deck (`ui/laneCarry.ts`), which moves it there. The
      * **border** resizes, because that is the only thing a border can be dragged
      * for. Everything else is a **pan**, which is what dragging a track beside a
      * map has always meant.
@@ -4737,6 +4790,10 @@ export class MatrixPanel {
           to: LaneEdge | null
           /** The slot last dropped into, so a reorder fires once per crossing. */
           over: number
+          /** For a handle drag: the lane in the hand, as other surfaces see it. */
+          carry: LaneCarry | null
+          /** …and the place off this map it would land on, if it is over one. */
+          landing: LaneLanding | null
         }
       | null = null
 
@@ -4762,6 +4819,8 @@ export class MatrixPanel {
         members,
         to: null,
         over: -1,
+        carry: null,
+        landing: null,
       }
       canvas.setPointerCapture(event.pointerId)
       event.preventDefault()
@@ -4802,6 +4861,14 @@ export class MatrixPanel {
         start(handle.entry.id, 'grip', event, handle.entry.style.size)
         canvas.classList.add('grabbing')
         this.laneGripping = true
+        // In the hand, as every other map and the deck see it: they light the
+        // places it can go (§16.9, `ui/laneCarry.ts`).
+        const carry: LaneCarry = {
+          ids: lanes.membersOf(edge, handle.entry.id).map((member) => member.id),
+          from: this.mapId,
+        }
+        if (drag !== null) drag.carry = carry
+        startCarry(carry)
         this.tooltip.classList.add('hidden')
         // The rectangle comes up with the gesture, because it is where the
         // gesture can end: a drag whose target only appears once you are on it
@@ -4955,7 +5022,19 @@ export class MatrixPanel {
         const over = this.edgeUnder(event.clientX, event.clientY)
         drag.to = over
         for (const [name, zone] of this.edgeZones) zone.classList.toggle('over', name === over)
-        if (over !== null) return
+        // Off this map: another map's edge, a cell of the deck, a `+` — the
+        // places the others offer (§16.9). Asked only where this map's own
+        // rectangles did not answer.
+        const away =
+          over === null && drag.carry !== null
+            ? landingAt(event.clientX, event.clientY, drag.carry, this.laneSurface)
+            : null
+        if (away !== drag.landing) {
+          drag.landing?.light(false)
+          away?.light(true)
+          drag.landing = away
+        }
+        if (over !== null || away !== null) return
         // Otherwise it is a reorder, and only while the pointer is actually
         // beside the stack: past either end there is no slot being pointed at,
         // and answering anyway would fling the track to the top of the order on
@@ -5049,10 +5128,18 @@ export class MatrixPanel {
           store.placeAt(member.id, this.mapId, placementOn(target))
         }
       }
+      // Let go off this map, on a place another offered: the lane goes there
+      // and leaves this map (§16.9).
+      if (drag.kind === 'grip' && drag.to === null && drag.landing !== null && drag.carry !== null) {
+        drag.landing.light(false)
+        drag.landing.take(drag.carry)
+      }
       if (drag.kind === 'grip') {
+        drag.landing?.light(false)
         this.grid.classList.remove('is-dropping')
         for (const zone of this.edgeZones.values()) zone.classList.remove('over', 'away')
         this.laneGripping = false
+        if (drag.carry !== null) endCarry()
       }
       drag = null
       canvas.style.cursor = ''
@@ -5089,6 +5176,8 @@ export class MatrixPanel {
     const onCancel = (event: PointerEvent): void => {
       if (drag === null) return
       drag.to = null
+      drag.landing?.light(false)
+      drag.landing = null
       onUp(event)
     }
     canvas.addEventListener('pointerup', onUp)
@@ -5101,6 +5190,19 @@ export class MatrixPanel {
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('contextmenu', onMenu)
     })
+  }
+
+  /**
+   * A lane carried from another map, let go on this map's `edge` (§16.9): drawn
+   * here on that edge, and taken off the map it came from — a move, as a drag
+   * between two places is. Every track of an overlay group, which travels as
+   * the one lane it is on screen.
+   */
+  private takeLane(carry: LaneCarry, edge: LaneEdge): void {
+    for (const id of carry.ids) {
+      this.laneStore.placeAt(id, this.mapId, placementOn(edge))
+      if (carry.from !== this.mapId) this.laneStore.unplaceFrom(id, carry.from)
+    }
   }
 
   /**

@@ -32,7 +32,14 @@
  * `PanelDeck` on the way.
  */
 
-import { dragHasMapRow, el, readMapRow, type MapRow } from '../ui/dom'
+import {
+  STRUCTURE_DRAG_TYPE,
+  TRACK_DRAG_TYPE,
+  dragHasMapRow,
+  el,
+  readMapRow,
+  type MapRow,
+} from '../ui/dom'
 import { icon } from '../ui/icons'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
@@ -46,6 +53,18 @@ export interface DeckFrameProps {
    * that edge names and put that map in the first of them.
    */
   onGrowWithMap?(direction: GrowDirection, row: MapRow): void
+  /**
+   * A row of the Structures card dropped on an edge (§16.9): open the cells and
+   * put that model in the first of them — moved there, if a cell was drawing it.
+   * Absent where the deck cannot hold a model.
+   */
+  onGrowWithStructure?(direction: GrowDirection, id: string): void
+  /**
+   * A row of the Tracks card dropped on an edge: open the cells and draw that
+   * track alone in the first of them, as a tracks cell. Absent where the session
+   * carries no tracks (§8.5).
+   */
+  onGrowWithTrack?(direction: GrowDirection, id: string): void
 }
 
 /** What the cells an edge opens may hold, which is what its note is worded from. */
@@ -132,6 +151,28 @@ export class DeckFrame {
   hold(node: HTMLElement): HTMLElement {
     this.body.replaceChildren(node)
     return this.el
+  }
+
+  /**
+   * Which edge a point on the page is on, if either — for a lane carried by its
+   * grip (`ui/laneCarry.ts`), whose pointer drag no `dragover` ever hears.
+   * Asked of the edges' boxes as they stand, so an edge that is off screen or
+   * greyed for want of room is no answer.
+   */
+  edgeAt(x: number, y: number): GrowDirection | null {
+    for (const direction of ['beside', 'below'] as const) {
+      const node = this.edges[direction]
+      if (!this.room[direction] || !node.isConnected) continue
+      const box = node.getBoundingClientRect()
+      if (box.width <= 0 || box.height <= 0) continue
+      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return direction
+    }
+    return null
+  }
+
+  /** Light one edge as where a carried lane will land, or put it out. */
+  lightEdge(direction: GrowDirection, on: boolean): void {
+    this.edges[direction].classList.toggle('over', on)
   }
 
   /**
@@ -246,6 +287,20 @@ export class DeckFrame {
         event.preventDefault()
         const row = readMapRow(event)
         if (row !== null) this.props.onGrowWithMap?.(direction, row)
+        return
+      }
+      // A model or a track off the Annotations panel, by id: the cells this
+      // edge names, with that one in the first of them.
+      const model = event.dataTransfer?.getData(STRUCTURE_DRAG_TYPE) ?? ''
+      if (model !== '' && this.props.onGrowWithStructure !== undefined) {
+        event.preventDefault()
+        this.props.onGrowWithStructure(direction, model)
+        return
+      }
+      const track = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
+      if (track !== '' && this.props.onGrowWithTrack !== undefined) {
+        event.preventDefault()
+        this.props.onGrowWithTrack(direction, track)
         return
       }
       const file = event.dataTransfer?.files?.[0]

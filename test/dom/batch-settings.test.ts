@@ -209,7 +209,7 @@ describe('a setting given to the ticked rows', () => {
     const made = make([['ATAC'], ['MNase']], ['ATAC', 'MNase'])
     const edge = (name: string): HTMLButtonElement => {
       const found = all<HTMLButtonElement>(box(made), '.ann-place').find(
-        (node) => node.textContent === name,
+        (node) => node.dataset.edge === name,
       )
       if (found === undefined) throw new Error(`no ${name} edge`)
       return found

@@ -70,6 +70,17 @@ import { resolutionLabel } from '../units'
 import { cardTitle, foldable, icon, iconButton, startFolded } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
+/**
+ * Which map the File card describes, in a deck (§16.5).
+ *
+ * `own`: the session's own file — or its two, while it compares — named as the
+ * map it is. `other`: a starred companion's, whose facts arrive once its panel
+ * has opened the file (`info` is `null` until then).
+ */
+export type FileShown =
+  | { kind: 'own'; name: string; starred: boolean }
+  | { kind: 'other'; name: string; info: OpenResult | null }
+
 export interface InfoPanelProps {
   info: OpenResult
   /**
@@ -133,6 +144,8 @@ export class InfoPanel {
    */
   private readonly fileHost = el('div', { class: 'file-host' })
   private compare: OpenResult | null = null
+  /** The map the card is about while a deck is up; `null` with no deck. */
+  private shown: FileShown | null = null
 
   constructor(private readonly props: InfoPanelProps) {
     this.el = el(
@@ -211,30 +224,82 @@ export class InfoPanel {
     this.paintFiles()
   }
 
+  /**
+   * Follow the star (§16.5): describe the starred map's file, and say under the
+   * heading which map that is — as the Aesthetics column's *Map* card does, and
+   * for the same reason. A deck is several files, and a card headed *File*
+   * that went on describing the first of them after the star had moved to
+   * another was a card about a map the reader had just said they were not
+   * looking at. `null` takes the line away, for a session with no deck.
+   */
+  setShown(shown: FileShown | null): void {
+    this.shown = shown
+    this.paintFiles()
+  }
+
   private paintFiles(): void {
-    if (this.compare === null) {
+    const shown = this.shown
+    if (shown?.kind === 'other') {
+      // A companion's one file. The comparison is the *first* map's two
+      // triangles, and neither of them is the starred map's.
       this.fileHost.replaceChildren(
-        el(
-          'div',
-          { class: 'card' },
-          foldable(
-            el(
-              'h3',
-              { class: 'file-head card-head' },
-              icon('file', { size: 13 }),
-              el('span', { class: 'file-name', text: 'File' }),
-            ),
-            'File',
-          ),
-          this.fileTable(this.props.info),
+        this.singleCard(
+          shown.info === null
+            ? el('p', { class: 'clip-note', text: 'Its file’s facts are here once it has opened.' })
+            : this.fileTable(shown.info),
         ),
       )
       return
     }
-    this.fileHost.replaceChildren(
-      this.fileCard(1, this.props.info),
-      this.fileCard(2, this.compare),
+    if (this.compare === null) {
+      this.fileHost.replaceChildren(this.singleCard(this.fileTable(this.props.info)))
+      return
+    }
+    const first = this.fileCard(1, this.props.info)
+    const line = this.forLine()
+    if (line !== null) first.querySelector('.card-head')?.after(line)
+    this.fileHost.replaceChildren(first, this.fileCard(2, this.compare))
+  }
+
+  /** The one File card: its heading, the line naming its map in a deck, and `body`. */
+  private singleCard(body: HTMLElement): HTMLElement {
+    const line = this.forLine()
+    return el(
+      'div',
+      { class: 'card' },
+      foldable(
+        el(
+          'h3',
+          { class: 'file-head card-head' },
+          icon('file', { size: 13 }),
+          el('span', { class: 'file-name', text: 'File' }),
+        ),
+        'File',
+      ),
+      ...(line === null ? [] : [line]),
+      body,
     )
+  }
+
+  /**
+   * The map this card describes, named, with the star it carries — the Map
+   * card's own line (`MatrixPanel.setCardFor`), so the two columns say the same
+   * thing the same way. Nothing with no deck: one map needs no name.
+   */
+  private forLine(): HTMLElement | null {
+    const shown = this.shown
+    if (shown === null) return null
+    const starred = shown.kind === 'other' || shown.starred
+    const line = el(
+      'p',
+      { class: 'map-card-for file-card-for' },
+      icon('star', { size: 12, class: starred ? 'map-card-star is-on' : 'map-card-star' }),
+      el('span', { text: shown.name }),
+    )
+    line.title = starred
+      ? `The file of ${shown.name}, the starred map. Star another map to read its file here.`
+      : `The file of ${shown.name}, the session’s own map. Star a map to read its file here.`
+    return line
   }
 
   private fileCard(which: 1 | 2, info: OpenResult): HTMLElement {

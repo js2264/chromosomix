@@ -120,6 +120,18 @@ export const KEYS = {
    * unloaded either way; see `Session.hideMap`.
    */
   mapToggle: 'v',
+  /**
+   * Back onto the diagonal, at the zoom the map is at — the recentre button
+   * beside the turn.
+   *
+   * Space, the one key a hand finds without looking, for the one gesture a
+   * reader makes over and over while reading a map: every pan and box lands a
+   * little off the diagonal, and the way back used to be a trip to a 15 px
+   * button in the Aesthetics column. It stands down wherever Space already has
+   * a job — a focused button it presses, a box it ticks, a field it types into
+   * (see `Command.yieldsToControls`).
+   */
+  diagonal: ' ',
 } as const
 
 /**
@@ -241,6 +253,15 @@ export interface Command {
    * every time it is read; this is about the keystroke, not about the command.
    */
   yieldsToText?: boolean
+  /**
+   * Stand down when the keystroke is a focused control's.
+   *
+   * For Space, which a button, a tickbox, a menu row or a tab already answers:
+   * a reader who has just pressed a button and presses Space again means that
+   * button again, and the key going somewhere else instead is the shortcut
+   * taking a gesture the page already had. See {@link wantsSpace}.
+   */
+  yieldsToControls?: boolean
   run(): void
 }
 
@@ -256,6 +277,34 @@ export function wantsTextCopy(target: EventTarget | null): boolean {
   const selection = typeof window === 'undefined' ? null : window.getSelection()
   return selection !== null && !selection.isCollapsed && selection.toString() !== ''
 }
+
+/**
+ * Whether Space, pressed now, belongs to what has the focus rather than to the
+ * app: a field it types into, or a control it presses — a button, a link, a
+ * tickbox, a menu row, a tab.
+ */
+export function wantsSpace(target: EventTarget | null): boolean {
+  if (isTypingTarget(target)) return true
+  if (!(target instanceof Element)) return false
+  return target.closest(SPACE_TAKERS) !== null
+}
+
+/** Everything the browser, or an ARIA role, gives Space a job on. */
+const SPACE_TAKERS = [
+  'button',
+  'a[href]',
+  'summary',
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="switch"]',
+  '[role="radio"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="tab"]',
+  '[role="slider"]',
+].join(', ')
 
 /** `true` on a platform where `mod` means ⌘. */
 export function isMac(): boolean {
@@ -288,9 +337,10 @@ export function keyLabel(keys: string): string {
  * tell it from `'` at 11 px, and cannot say it out loud to a colleague looking
  * over their shoulder. The word is longer and it is the thing they would say.
  * Only the marks that are genuinely unreadable are spelled out: `/` and `\\`
- * are unmistakable at any size and stay as they are.
+ * are unmistakable at any size and stay as they are. Space is the other
+ * extreme — a badge with nothing in it at all.
  */
-const NAMED_KEYS: Record<string, string> = { '`': 'backtick' }
+const NAMED_KEYS: Record<string, string> = { '`': 'backtick', ' ': 'Space' }
 
 /**
  * The order the groups are printed in, wherever the whole registry is listed.

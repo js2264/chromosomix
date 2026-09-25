@@ -8727,34 +8727,34 @@ body.is-carrying-card * {
   color: var(--text-dim);
 }
 
-/* Which edge a lane is drawn on, as two words that latch rather than two
-   initials with tick boxes. Not a choice between them — a track can be on one
-   edge or on both — so they are drawn as one segmented control with two
-   independent segments rather than as a radio pair.
+/* Which edges a lane is drawn on, as four marks that latch — the map as a
+   dashed square with that one edge solid — rather than four words. Not a
+   choice between them — a track can be on several edges — so they are one
+   segmented control with independent segments rather than a radio group.
 
    The frame is on the *group* and the segments have none. A ready row makes
    every button inside it borderless (see `.ann-row.ann-ready .btn`), which is
    right for the icons on the head and wrong for a toggle, whose unpressed state
-   would then be indistinguishable from a word of prose. One frame around the
-   pair says "these are controls" once, without putting boxes back on the row. */
+   would then be indistinguishable from a mark of decoration. One frame around
+   the four says "these are controls" once, without putting boxes back on the
+   row.
+
+   As wide as the four marks and no wider: they were four words stretched
+   across the card on a line of their own, and a map's name now shares their
+   line (§8.1). */
 .ann-places {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-/* Four segments in the width two used to have, so the padding comes off the
-   sides rather than the words: "bottom" is the longest of them and it has to
-   read as a word rather than as a truncation. */
 .ann-place {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
   border: 0;
   border-radius: 0;
-  padding: 0.15rem 0.15rem;
-  font-size: var(--step--2);
+  padding: 0.15rem 0.3rem;
   background: var(--bg);
   color: var(--text-dim);
 }
@@ -10757,13 +10757,14 @@ span.deck-name {
   border-style: dashed;
 }
 
-/* One row of four edges per map, for a track that can be drawn on any of them
-   (`annotations/placement.ts`). A session with one map gets the bare row of
-   edges it has always had, so none of this applies until a deck exists. */
+/* One line per map — its name, then its four edges — for a track that can be
+   drawn on any of them (`annotations/placement.ts`). A session with one map
+   gets the bare four edges beside the label, so none of this applies until a
+   deck exists. */
 .ann-place-maps {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
@@ -10774,10 +10775,11 @@ span.deck-name {
   min-width: 0;
 }
 
-/* The name is allowed to run out of room before the buttons are: which edges a
-   track is on is the answer being read, and the map's name is the label on it. */
+/* The name takes what the four marks leave, and is allowed to run out of room
+   before they are: which edges a track is on is the answer being read, and the
+   map's name is the label on it. */
 .ann-place-name {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -10798,38 +10800,22 @@ span.deck-name {
   color: var(--text-dim);
 }
 
-/* The one field in the body that does not put its label in the 3.6rem column
-   the others share, because four edges and a label cannot both have the width
-   they need in a sidebar this narrow. `bottom` came out as `bottc` — the single
-   thing `.ann-place` was laid out to avoid — and beside a deck, where each row
-   also carries a map's name, both names came out as `Ecoli.mcool…`, truncated
-   at exactly the point where they stop being the same file. Two labels that
-   read alike are worse than none.
+/* With one map the field is an ordinary one: `location` in the label column
+   and the four marks beside it.
 
-   So the field turns on its side: `location` over the rows, and each map's name
-   over its own edges. A session with one map has no name to show and gets the
-   bare row of edges, now with the whole body to spell them out in. */
-.ann-field-places {
+   Beside a deck it turns on its side, because a map's name, four marks and a
+   label cannot all have the width they need in a sidebar this narrow: the
+   names came out as `Ecoli.mcool…`, truncated at exactly the point where they
+   stop being the same file, and two labels that read alike are worse than
+   none. So `location` goes over the lines, and each line is a map's name with
+   its own four marks at the end of it. */
+.ann-field-places.is-named {
   flex-direction: column;
   align-items: stretch;
   gap: 0.2rem;
 }
 
-.ann-field-places > .field-label {
-  flex: 0 0 auto;
-}
-
-.ann-field-places .ann-place-maps {
-  gap: 0.4rem;
-}
-
-.ann-field-places .ann-place-map {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.1rem;
-}
-
-.ann-field-places .ann-place-name {
+.ann-field-places.is-named > .field-label {
   flex: 0 0 auto;
 }
 

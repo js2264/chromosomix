@@ -155,6 +155,7 @@ import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
+import { offerLanding, type LaneSurface } from '../ui/laneCarry'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
@@ -821,7 +822,33 @@ export class Session {
     onGrowWithMap: (direction, row) => {
       if (this.deckIsPossible) this.ensureDeck().growWithMap(direction, row)
     },
+    // A model or a track off the Annotations panel, the same way: the deck,
+    // with that one in the new cell (§16.9).
+    onGrowWithStructure: (direction, id) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithStructure(direction, id)
+    },
+    onGrowWithTrack: (direction, id) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithTrack(direction, id)
+    },
   })
+  /**
+   * Those edges as places a lane carried off the map by its grip can land
+   * (`ui/laneCarry.ts`): the deck, with the lane moved into its new cell. Only
+   * while they are round a lone map — once there is a deck, its own edges are
+   * the ones on screen, and it answers for them.
+   */
+  private readonly edgeLanding: LaneSurface = {
+    landingAt: (x, y) => {
+      if (this.deck !== null || !this.deckIsPossible) return null
+      const direction = this.deckEdges.edgeAt(x, y)
+      if (direction === null) return null
+      return {
+        light: (on) => this.deckEdges.lightEdge(direction, on),
+        take: (carry) => this.ensureDeck().landLaneGrowing(direction, carry),
+      }
+    },
+  }
+  private readonly stopEdgeLanding = offerLanding(this.edgeLanding)
   /**
    * The genome this session is browsing, when there is no contact map.
    *
@@ -1284,6 +1311,7 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.stopEdgeLanding()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
     // navigation back to it.
@@ -1578,6 +1606,20 @@ export class Session {
         keys: KEYS.autoscale,
         enabled: this.current?.panel !== undefined && this.annotations !== null,
         run: () => this.current?.panel?.autoscaleTracks(),
+      },
+      {
+        id: 'map-diagonal',
+        group: 'View',
+        title: 'Recentre on the diagonal',
+        // The first map's, which in a deck is every map's: their windows are
+        // locked together, so one of them going to the diagonal takes the rest.
+        hint:
+          'The view slid onto the nearest on-diagonal window, at the zoom it is at — the button ' +
+          'beside the turn. A focused button or tickbox keeps Space for itself.',
+        keys: KEYS.diagonal,
+        yieldsToControls: true,
+        enabled: this.current?.panel?.canCentreOnDiagonal === true,
+        run: () => this.current?.panel?.centreOnDiagonal(),
       },
       {
         // One command and one key for the file's own landing table, whichever
@@ -2446,6 +2488,7 @@ export class Session {
       // it, and the read that fills it is the one the annotation gate has just
       // paid for. A metacool never reaches it (see {@link paintSequences}).
       this.paintSequences()
+      this.syncFileCard()
       this.setGeneral([this.infoPanel.el])
       this.host.activity(this)
       // Destroyed, not merely dropped: a scan of the *previous* file may still
@@ -4485,6 +4528,31 @@ export class Session {
   /** Redraw the Contact maps card's eyes from what this session is showing. */
   private syncCompareCard(): void {
     this.compareCard?.sync()
+    // Every change that card follows — a map in or out of the deck, a map
+    // renamed, the first map hidden — is one the File card's line can name.
+    this.syncFileCard()
+  }
+
+  /**
+   * The General column's File card follows the star (§16.5): the starred
+   * companion's file, once its panel has opened it, and the session's own file
+   * while the star is on the first map or on no map — named under the heading
+   * whenever a deck is up, as the Aesthetics column's *Map* card is.
+   */
+  private syncFileCard(): void {
+    const panel = this.infoPanel
+    if (panel === null) return
+    const deck = this.deck
+    if (deck === null || deck.isEmpty || this.file === null) {
+      panel.setShown(null)
+      return
+    }
+    const companion = deck.starredPanel
+    if (companion !== null) {
+      panel.setShown({ kind: 'other', name: this.mapLabel(companion.uri), info: companion.openInfo })
+      return
+    }
+    panel.setShown({ kind: 'own', name: this.mapLabel(this.file.uri), starred: deck.starredMap === LEAD_MAP })
   }
 
   /** The map's eye, in the card that lists it: hide it, or bring it back. */
@@ -6228,6 +6296,9 @@ export class Session {
        */
       onStarChange: () => {
         this.analysis?.refresh()
+        // The File card is the starred map's too, and this is also the call
+        // that says its file has opened (`MapPanel.prepareAnalysis`).
+        this.syncFileCard()
       },
       // The column's *Map* card is the starred map's (§16.5), so the star
       // moving, or the starred companion's card being built, changes the card

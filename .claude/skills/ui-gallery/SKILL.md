@@ -28,6 +28,9 @@ node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from ori
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
 node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
+node scripts/ui-lane-carry.mjs gallery       # a lane's grip carried to another map, a +, a tracks cell, an empty cell; a model's row on a +: lc1 … lc14
+node scripts/ui-track-location.mjs gallery   # the location marks, a left lane growing away, Space, the File card and the star, card rows on a + and an empty cell: tl1 … tl13
+node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor region, and the profile with and without the anchor: fc1 … fc4
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -173,6 +176,18 @@ slot that is emptied and refilled rather than removed.
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
 Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL
 (`--use-angle=swiftshader`) so the structure cell renders in a container with no GPU.
+
+The three after *Copy this* drive the gestures a gallery of arrivals cannot show. **Lane carry**
+takes a lane by its grip with real pointer moves — a pointer drag captured on the lane's canvas,
+which no `dragover` hears — and lets go on another map's rectangle, on a `+`, on a tracks cell and
+on an empty cell, printing each cell's lane stacks before and after, so a lane that landed but did
+not *leave* is a line in the log; it finds the grip by hunting the lane canvas for the `is-grab`
+hand. **Track location** drives the four location marks on one map and on a deck, a left-hand lane
+(which must grow away from the map), a pan off the diagonal put back by Space, the General
+column's File card before and after the star moves to Hi-C, and a Tracks card row dragged — a real
+HTML5 drag, not dispatched events, since a cell that refuses `dragover` never gets a drop — onto a
+`+` and onto an empty cell. **4C** fills the anchor, runs the task with *exclude anchor region*
+off and on, and shoots the left-hand lane each time.
 
 ## What it drives
 

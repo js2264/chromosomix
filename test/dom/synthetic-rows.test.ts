@@ -232,7 +232,7 @@ describe('where a computed track is drawn', () => {
   it('carries the location control a loaded track has', () => {
     const made = make()
     expect(all<HTMLElement>(made.card.el, '.ann-field-places')).toHaveLength(1)
-    expect(edges(made.card).map((node) => node.textContent)).toEqual([
+    expect(edges(made.card).map((node) => node.dataset.edge)).toEqual([
       'top',
       'right',
       'bottom',
@@ -242,13 +242,13 @@ describe('where a computed track is drawn', () => {
 
   it('opens on the left, which is the one edge a dropped file never takes', () => {
     const made = make()
-    const left = edges(made.card).find((node) => node.textContent === 'left')
+    const left = edges(made.card).find((node) => node.dataset.edge === 'left')
     expect(left?.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('moves to another edge of its own map', () => {
     const made = make()
-    edges(made.card).find((node) => node.textContent === 'bottom')?.click()
+    edges(made.card).find((node) => node.dataset.edge === 'bottom')?.click()
     expect(made.store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
   })
 
@@ -271,7 +271,7 @@ describe('where a computed track is drawn', () => {
         { id: 'p3', label: 'rep2.cool' },
       ],
     })
-    edges(made.card, 1).find((node) => node.textContent === 'bottom')?.click()
+    edges(made.card, 1).find((node) => node.dataset.edge === 'bottom')?.click()
     expect(made.store.drawnOnMap('p3', 'bottom')).toHaveLength(1)
     expect(made.store.drawnOnMap(LEAD_MAP, 'left')).toHaveLength(1)
     expect(made.store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
@@ -377,5 +377,31 @@ describe('a computed track’s drawing style', () => {
     style.dispatchEvent(new Event('change'))
     expect(made.store.byId(made.id)?.style.mode).toBe('heatmap')
     expect(coloursField(made.card).classList.contains('hidden')).toBe(false)
+  })
+})
+
+/**
+ * A row's grip starts a drag that every place a row can land accepts (§16.9):
+ * moved up and down the list and onto a map's edge, placed — a copy — on a
+ * cell of the deck. It allowed `move` alone, and a browser refuses a drop whose
+ * target answers an effect the source did not allow, so an empty cell answering
+ * `copy` never received the row at all.
+ */
+describe('dragging a row by its grip', () => {
+  it('allows the row to be moved or copied, and names it by id', () => {
+    const made = make({ also: ['ATAC'] })
+    const grip = rowOf(made.card, 'ATAC').querySelector<HTMLElement>('.ann-grip')
+    if (grip === null) throw new Error('no grip')
+    const data = new Map<string, string>()
+    const transfer = {
+      setData: (type: string, value: string) => data.set(type, value),
+      setDragImage: () => undefined,
+      effectAllowed: '',
+    }
+    const start = new window.Event('dragstart', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(start, 'dataTransfer', { value: transfer })
+    grip.dispatchEvent(start)
+    expect(transfer.effectAllowed).toBe('copyMove')
+    expect(data.get('application/x-metacooler-track')).toBe('ATAC')
   })
 })

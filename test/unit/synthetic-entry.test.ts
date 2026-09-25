@@ -188,6 +188,9 @@ describe('what a synthetic row is', () => {
     // computed track arrives beside the reader's own stack rather than in the
     // middle of it. See `SYNTHETIC_EDGE`.
     expect(entry.placement).toEqual({ top: false, right: false, bottom: false, left: true })
+    // …and grown away from the map, as every lane on that edge starts: its
+    // style is handed to `begin` whole, and a handed-in style is not turned.
+    expect(entry.style.flip).toBe(true)
   })
 
   // `NaN` is *no value here* and is skipped rather than propagated: one filtered

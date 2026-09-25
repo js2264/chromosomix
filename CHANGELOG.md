@@ -14,6 +14,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A lane dragged by its grip moves to another map, or into a cell of its own (§16.9).** Let go on a
+  rectangle round another map — they light up on every map while a lane is carried — it is drawn on
+  that edge of that map; on a `+` edge, a tracks cell opens there drawing it; on an empty cell, the
+  cell becomes the 1D browser of it; on a tracks cell, that cell draws it. Each is a move: the lane
+  leaves the map it came from.
+
+- **Rows of the Tracks and Structures cards open a cell on a `+` edge (§16.9).** A track's row opens a
+  tracks cell drawing it, in the cell nearest the edge; a model's row opens its model there and moves
+  it, the cell it was in left empty where it stood.
+
+- **The 4C task can leave the anchor out (§18.8).** *Exclude anchor region* empties the anchor's own
+  bins and one either side, so the diagonal's spike no longer sets the scale the rest of the profile
+  is read on.
+
+- **Space recentres the map on its diagonal (§7.2).** The recentre button's press, from anywhere the
+  keyboard is not a focused button's, tickbox's or field's; it is in the shortcuts dialog, the
+  palette and the button's tooltip.
+
 - **Copy this, on the right-click menus (§7.2).** On the map, on a lane beside it, on a lane of the 1D
   browser, and on a 3D model (a right click that does not drag): the one object under the pointer
   onto the clipboard as a PNG, as it is drawn on screen — the map's cells with no axis, key, frame,
@@ -427,6 +445,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **A track to the left of a map grows away from it (§8.9).** Left-hand lanes grew towards the matrix,
+  pointing a profile's peaks into the map where the same track above it points them away; they now
+  mirror the top stack across the diagonal, as the right-hand stack mirrors the bottom one. A file
+  dropped there, a computed track (which opens on the left) and a row placed there all start that
+  way; a lane saved before keeps its direction. A track placed on a map it was not on now arrives
+  turned for its edge, rather than growing into the map beside lanes that grew away, and so does one
+  moved by two presses of its location marks — the new edge on, the old one off.
+
+- **A track's location is four marks on its map's line (§8.1).** The four words — top, right,
+  bottom, left — are four marks of the map with one edge drawn solid, beside the label with one map,
+  and at the end of each map's own line in a deck, where the words took a line of their own under
+  every name. The same in the box that edits ticked tracks together.
+
+- **The General column's File card follows the star (§16.5).** It describes the starred map's file,
+  named under its heading with the star as the Map card is, where it went on describing the first map
+  whatever was starred.
+
+- **A file dropped on a `+` lands at the near end of the edge (§16.9).** Below a short last row it
+  went into the hole the press squared up, a row above the one the reader aimed at.
 
 - **The first map's eye on the Contact maps card closes its cell in a deck (§16.9).** As every other
   map's eye does. It put the map down for the 1D browser, which in a deck also took every companion
@@ -1199,6 +1237,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A Tracks card row dropped on an empty cell of the deck opens the 1D browser of it (§16.9).** The
+  browser refused the drop without a word: the row allowed only a *move* and the cell answered with
+  a *copy*, and an effect the drag does not allow is a drop that never happens. The row now allows
+  either, and every empty cell answers with an effect the drag allows.
+
+- **A `+` that fills the cell it opens writes the deck once (§16.9).** The link was written twice in
+  one gesture, and the first write, read back a moment later, rebuilt the cell empty: a map's row, a
+  model's or a lane dropped on a `+` could land in a cell that was then emptied again.
 
 - **A BED12 or bigBed of transcripts draws its exons (§8.16).** The glyph followed the lane's kind, and
   a BED is a `segments` lane, so a gene set in BED12 came out as one plain box per gene: its blocks

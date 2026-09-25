@@ -835,7 +835,10 @@ export class AnnotationCard {
       const row = node.closest('.ann-row')
       row?.classList.add('is-dragging')
       if (event.dataTransfer !== null) {
-        event.dataTransfer.effectAllowed = 'move'
+        // Moved, up and down this list and onto a map's edge; *placed* — a copy
+        // — onto a cell of the deck, where the track stays on every map it was
+        // on (§16.9). `move` alone made the browser refuse that drop outright.
+        event.dataTransfer.effectAllowed = 'copyMove'
         // Some browsers cancel a drag that carries nothing at all.
         event.dataTransfer.setData('text/plain', entry.id)
         // And the same id under a type only this app writes, so a drop target

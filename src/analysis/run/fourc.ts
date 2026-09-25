@@ -105,6 +105,19 @@ export const runFourC: TaskRunner = async (job) => {
     ? await cisProfile(job, anchor, balance, value, overExpected, overCoverage)
     : await wholeProfile(job, anchor, balance, overExpected, overCoverage)
 
+  // Last, over whatever the profile came to be — counts or ratios, one half or
+  // both — so the gap is the same gap whichever divisions ran (§18.8).
+  const excluded = boolParam(job.params, 'excludeAnchor', false)
+  if (excluded) {
+    excludeAnchor(values, anchor.band)
+    if (values.every((each) => Number.isNaN(each))) {
+      job.note(
+        `The anchor covers everything this profile reads, so leaving it out leaves nothing` +
+          `${cis ? ' — turn off “cis only”, or name a narrower anchor.' : '.'}`,
+      )
+    }
+  }
+
   const profile: ProfileOutput = {
     kind: 'profile',
     id: `fourc-${anchor.band.from}-${anchor.band.to}`,
@@ -113,7 +126,8 @@ export const runFourC: TaskRunner = async (job) => {
     // task does, on every track, which is a label that distinguishes nothing.
     label:
       `4C · ${text}${cis || whole ? '' : ' (with trans)'}` +
-      `${overExpected ? ' · O/E' : ''}${overCoverage ? ' · per coverage' : ''}`,
+      `${overExpected ? ' · O/E' : ''}${overCoverage ? ' · per coverage' : ''}` +
+      `${excluded ? ' · anchor excluded' : ''}`,
     values,
     extent: [0, job.mc.nBins],
     binsize: job.mc.binsize,
@@ -125,6 +139,17 @@ export const runFourC: TaskRunner = async (job) => {
   }
   const outputs: TaskOutput[] = [profile]
   return outputs
+}
+
+/**
+ * The anchor's own bins, and one bin either side of them, as gaps (§18.8).
+ *
+ * Gaps and not zeros: nothing was measured away, and a zero is a claim that
+ * the anchor touches itself not at all. The bins are the profile's — absolute,
+ * as the anchor's band is — and a band at either end of the file stops there.
+ */
+export function excludeAnchor(values: Float32Array, band: Span): void {
+  values.fill(Number.NaN, Math.max(0, band.from - 1), Math.min(values.length, band.to + 1))
 }
 
 /**

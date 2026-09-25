@@ -216,13 +216,15 @@ describe('the 4C form', () => {
     // *Cis only* and *Normalisation* are real questions on a file of
     // chromosomes: cis is the commonest reading and the cheap one, and a
     // chromosome's own P(s) is the curve to divide by. Nothing here changed.
-    expect(asked({ genomes: null, hasGenomes: false })).toEqual(['anchor', 'normalise', 'cis'])
+    expect(asked({ genomes: null, hasGenomes: false })).toEqual(['anchor', 'normalise', 'cis', 'excludeAnchor'])
   })
 
-  it('asks a metagenome for the anchor and nothing else', () => {
-    // Neither question survives contact with a metacool: the reading wanted is
-    // what a MAG touches *elsewhere*, and one assembly's decay is not the
-    // expectation for contact between assemblies. The runner settles both.
-    expect(asked()).toEqual(['anchor'])
+  it('asks a metagenome for the anchor, whether to leave it out, and nothing else', () => {
+    // Neither other question survives contact with a metacool: the reading
+    // wanted is what a MAG touches *elsewhere*, and one assembly's decay is not
+    // the expectation for contact between assemblies. The runner settles both.
+    // Leaving the anchor out is the one that does survive — it is that same
+    // reading, with the MAG's contact with itself taken off the scale.
+    expect(asked()).toEqual(['anchor', 'excludeAnchor'])
   })
 })

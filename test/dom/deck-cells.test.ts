@@ -926,6 +926,55 @@ describe('the model, enlarged', () => {
   })
 })
 
+describe('a Structures row dropped on a `+` (§16.9)', () => {
+  /** The grid in reading order, by what each cell is. */
+  const kinds = (deck: PanelDeck): string[] =>
+    all<HTMLElement>(deck.el, '.deck-grid > .deck-panel').map((cell) =>
+      cell.classList.contains('deck-structure')
+        ? '3d'
+        : cell.classList.contains('deck-tracks')
+          ? 'tracks'
+          : cell.classList.contains('is-vacant')
+            ? 'empty'
+            : 'map',
+    )
+
+  it('moves the model to the near end of the edge, its old cell left empty where it stood', () => {
+    const { deck, published } = make(fakeStore([structureEntry()]), tracksContext())
+    deck.showStructure('a1')
+    deck.add({ kind: 'tracks' })
+    // The session's own map first, then the two cells, in one row.
+    expect(kinds(deck)).toEqual(['map', '3d', 'tracks'])
+    const before = published.length
+    deck.growWithStructure('below', 'a1')
+    // The new row's first cell, and the cell the model was in stays where it
+    // was, empty. Closing it closed the grid up in reading order, and the
+    // model slid straight back into the place it had just left.
+    expect(kinds(deck)).toEqual(['map', 'empty', 'tracks', '3d', 'empty', 'empty'])
+    expect(deck.shownStructures()).toEqual(['a1'])
+    // One write, filled: see `PanelDeck.growFilled`.
+    expect(published.length - before).toBe(1)
+  })
+
+  it('fills the new row, not the hole a short last row leaves above it', () => {
+    const { deck } = make(fakeStore([structureEntry()]), tracksContext())
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'tracks' })
+    // Three across, from the bar's own control: four cells, and a second row
+    // of one.
+    const across = deck.el.querySelector<HTMLSelectElement>('.deck-columns')
+    if (across === null) throw new Error('no columns control')
+    across.value = '3'
+    across.dispatchEvent(new Event('change'))
+    expect(kinds(deck)).toEqual(['map', 'tracks', 'tracks', 'tracks'])
+    deck.growWithStructure('below', 'a1')
+    // A row below fills the short one's holes too — but the `+` below was
+    // aimed at the row it opens, so the model goes there.
+    expect(kinds(deck)).toEqual(['map', 'tracks', 'tracks', 'tracks', 'empty', 'empty', '3d', 'empty', 'empty'])
+  })
+})
+
 describe('which model each cell draws (§25.3, §25.6)', () => {
   const second = Array.from({ length: 8 }, (_, i) => `chr2\t${i * 5000}\t${-i}\t${i}\t0`).join('\n')
 
@@ -1337,6 +1386,28 @@ describe('an empty cell', () => {
     // are drawn under.
     const cell = deck.mapList.find((map) => map.label === 'tracks')
     expect(placed).toEqual([{ id: 't1', map: cell?.id }])
+  })
+
+  it('answers a drag with an effect its source allows, so the browser lets it drop', () => {
+    // A browser refuses a drop whose target answers an effect the source did
+    // not allow, with no `drop` event at all. A row whose source allows `move`
+    // alone is still taken; the tests that dispatch a `drop` never see this.
+    const { deck } = withTracks()
+    deck.grow('beside')
+    const zone = deck.el.querySelector('.deck-vacant')
+    if (zone === null) throw new Error('no empty cell')
+    const transfer = {
+      types: ['application/x-metacooler-track'],
+      effectAllowed: 'move',
+      dropEffect: 'none',
+      getData: () => '',
+      files: [],
+    }
+    const over = new window.Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(over, 'dataTransfer', { value: transfer })
+    zone.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+    expect(transfer.dropEffect).toBe('move')
   })
 
   it('becomes a tracks cell loading a track file dropped on it', () => {

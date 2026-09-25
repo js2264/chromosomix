@@ -119,6 +119,7 @@ import {
   withLead,
 } from './deck'
 import { ViewportLock, spansAgree, type LockUnit } from './lock'
+import { offerLanding, within, type LaneCarry, type LaneSurface } from '../ui/laneCarry'
 import type { PickHandlers } from '../ui/mapPick'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
@@ -629,6 +630,10 @@ export class PanelDeck {
   /** The lead when it is not a map — the browser (§25 stage D); else `null`. */
   private leadAxis: LeadAxis | null = null
   private readonly unsubscribeHover: () => void
+  /** Takes the deck's places off offer to a carried lane (`ui/laneCarry.ts`). */
+  private readonly stopLanding: () => void
+  /** How many times {@link publish} has written the deck, for {@link growFilled} to tell. */
+  private writes = 0
   /** Whether the echo on the maps is one a structure cell's pointer put there. */
   private echoingPlace = false
   private leadLocked = true
@@ -855,7 +860,15 @@ export class PanelDeck {
     this.edges = new DeckFrame({
       onGrow: (direction, picked) => this.grow(direction, picked),
       onGrowWithMap: (direction, row) => this.growWithMap(direction, row),
+      ...(props.structure === undefined
+        ? {}
+        : {
+            onGrowWithStructure: (direction: GrowDirection, id: string) =>
+              this.growWithStructure(direction, id),
+          }),
+      onGrowWithTrack: (direction, id) => this.growWithTrack(direction, id),
     })
+    this.stopLanding = offerLanding(this.laneSurface)
     this.el = el(
       'div',
       { class: 'deck' },
@@ -1365,6 +1378,7 @@ export class PanelDeck {
   destroy(): void {
     this.destroyed = true
     this.unsubscribeHover()
+    this.stopLanding()
     // Before anything else: the heading is the *view's*, it outlives this deck,
     // and a session that puts its last companion down must get it back rather
     // than lose its locus box with the grid.
@@ -2648,8 +2662,15 @@ export class PanelDeck {
     this.growing(direction, picked)
   }
 
-  /** {@link grow}, answering with the first cell the press opened, if it opened any. */
-  private growing(direction: GrowDirection, picked?: PickedFile): Slot | undefined {
+  /**
+   * {@link grow}, answering with the cell the press aimed at — the near end of
+   * the edge pressed — if it opened any.
+   *
+   * `filling`: the caller puts something in that cell at once, and the grid is
+   * painted and written into the link by whatever fills it rather than here
+   * first — see {@link growFilled}, the one caller that passes it.
+   */
+  private growing(direction: GrowDirection, picked?: PickedFile, filling = false): Slot | undefined {
     const shape = { cells: Math.max(1, this.shownCells), columns: this.columnsNow() }
     const next = grownDeck(shape, direction)
     if (next.cells > MAX_PANELS) {
@@ -2671,15 +2692,24 @@ export class PanelDeck {
     const places = grownPlacement(shape, direction)
     const held = this.shownOrder()
     const seated: Array<Slot | typeof LEAD_CELL> = []
+    // The near end of the edge that was pressed — the top of the new column,
+    // the left of the new row — which is where whatever came with the press
+    // goes. Not simply the first new cell in reading order: a last row the deck
+    // had not filled gains cells too, and the first of those sits in a row
+    // above the one the reader pressed for, so a model dropped on the `+` below
+    // went one cell to the right of where it had been.
+    const aimed = direction === 'beside' ? next.columns - 1 : places.length - next.columns
     let first: Slot | undefined
-    for (const from of places) {
+    let opened: Slot | undefined
+    for (const [index, from] of places.entries()) {
       if (from === null) {
         // Drawn, not left by a link, and that is all the difference amounts to:
         // the card offers to take a map, a track or a structure rather than
         // telling the reader that a map they never had used to be there
         // (`panels/MapPanel.ts`).
         const drawn = this.build({ kind: 'vacant' }, undefined, 'drawn')
-        first ??= drawn
+        opened ??= drawn
+        if (index === aimed) first = drawn
         seated.push(drawn)
       } else {
         const cell = held[from]
@@ -2687,16 +2717,18 @@ export class PanelDeck {
       }
     }
 
+    first ??= opened
     this.columns = next.columns
     remember(this.props.memoryKey(), 'deck:columns', next.columns)
     this.slots = seated.filter((cell): cell is Slot => cell !== LEAD_CELL)
     if (!this.leadHidden) this.placeLead(seated.indexOf(LEAD_CELL), false)
-    // `first` is the first cell the press opened, in reading order — which for
-    // `beside` is the top of the new column and for `below` the left of the new
-    // row, both being the near end of the edge that was pressed.
+    // `first` is the cell the press aimed at (above): the near end of the edge
+    // that was pressed.
     if (picked === undefined || first === undefined) {
-      this.paintGrid()
-      this.publish()
+      if (!filling || first === undefined) {
+        this.paintGrid()
+        this.publish()
+      }
     } else {
       // Paints and publishes on its way through, with the cell already filled,
       // so the hash is written once rather than as a vacancy and then a map.
@@ -2708,7 +2740,7 @@ export class PanelDeck {
 
   /**
    * A row of the Contact maps card dropped on a `+` edge (§16.9): the cells that
-   * edge names, with that map in the first of them.
+   * edge names, with that map in the one nearest the edge.
    */
   growWithMap(direction: GrowDirection, row: MapRow): void {
     const picked = this.mapRowPicked(row)
@@ -2716,8 +2748,136 @@ export class PanelDeck {
       if (picked !== null) this.grow(direction, picked)
       return
     }
-    const opened = this.growing(direction)
-    if (opened !== undefined) this.putMapRow(opened, row)
+    this.growFilled(direction, (opened) => this.putMapRow(opened, row))
+  }
+
+  /**
+   * The cells a `+` opens, with `fill` putting something in the one nearest the
+   * edge — a lane, a model, a row of a card — painted and written into the link
+   * **once**, filled.
+   *
+   * Once because the link is read back a beat later: `Session.syncDeck` awaits
+   * before it hands the deck a state, so two writes in one gesture come back as
+   * two states, and the first of them — the cell still empty — is no longer
+   * what this deck holds. Read as a link the deck had not written, it rebuilt
+   * the cells from it: the cell the second write filled came back empty, and a
+   * lane let go on a `+` was put back on the map it had left.
+   *
+   * Whatever `fill` did not write — there was nothing to put there after all —
+   * is written here, so the cells the press opened are on screen either way.
+   */
+  private growFilled(direction: GrowDirection, fill: (opened: Slot) => void): void {
+    const opened = this.growing(direction, undefined, true)
+    if (opened === undefined) return
+    const written = this.writes
+    fill(opened)
+    if (this.writes === written) {
+      this.paintGrid()
+      this.publish()
+    }
+  }
+
+  /**
+   * A row of the Structures card dropped on a `+` edge (§16.9): the cells that
+   * edge names, with that model in the one nearest the edge — **moved** there,
+   * as a lane dragged to a `+` leaves the map it was on. A cell that was
+   * drawing it is left **empty where it stands** rather than closed: closing it
+   * would close the grid up in reading order, and the new cell — the last in
+   * it — slid into the place the model had just left, which read as a drop
+   * that did nothing but add two empty cells. The eye opens a model where
+   * there is room; this puts it where the reader aimed.
+   */
+  growWithStructure(direction: GrowDirection, id: string): void {
+    this.growFilled(direction, (opened) => {
+      for (const slot of [...this.slots]) {
+        if (slot.ref.kind === 'structure' && slot.cell?.shownModel?.() === id) this.emptyInPlace(slot)
+      }
+      this.occupy(opened, { kind: 'structure' })?.cell?.showModel?.(id)
+    })
+  }
+
+  /**
+   * Take whatever a cell holds out of it, leaving an empty cell where it stood
+   * — the grid painted and written by whoever asked, which is why this does
+   * neither: it is one half of a gesture whose other half writes the deck.
+   */
+  private emptyInPlace(slot: Slot): void {
+    const index = this.slots.indexOf(slot)
+    if (index < 0) return
+    this.lock.leave(slot.id)
+    slot.panel?.destroy()
+    slot.cell?.destroy()
+    this.slots[index] = this.build({ kind: 'vacant' }, undefined, 'drawn')
+  }
+
+  /**
+   * A row of the Tracks card dropped on a `+` edge: the cells that edge names,
+   * with that track drawn alone in the first — a tracks cell, the 1D browser of
+   * it (§16.9). *Placed*, as a row dropped on an empty cell is: the card's row
+   * says which track, not which map it leaves, and it stays on every map it was
+   * drawn on.
+   */
+  growWithTrack(direction: GrowDirection, id: string): void {
+    if (!this.takesTracks()) return
+    this.growFilled(direction, (opened) => this.putTrack(opened, id))
+  }
+
+  /**
+   * The deck's places a lane carried off a map by its grip can land
+   * (`ui/laneCarry.ts`, §16.9): an empty cell and a `+` edge open a tracks
+   * cell drawing it, and a tracks cell draws it too. The maps' own edges are
+   * the maps' to answer. Every one is a **move**: the lane leaves the map it
+   * came from.
+   */
+  private readonly laneSurface: LaneSurface = {
+    landingAt: (x, y, carry) => {
+      if (!this.takesTracks()) return null
+      const direction = this.edges.edgeAt(x, y)
+      if (direction !== null) {
+        return {
+          light: (on) => this.edges.lightEdge(direction, on),
+          take: (moved) => this.landLaneGrowing(direction, moved),
+        }
+      }
+      for (const slot of this.slots) {
+        const node = elOf(slot)
+        if (node === undefined || !within(node, x, y)) continue
+        const lit = (on: boolean): void => {
+          node.classList.toggle('is-target', on)
+        }
+        if (slot.ref.kind === 'vacant') return { light: lit, take: (moved) => this.landLane(slot, moved) }
+        if (slot.cell?.kind === 'tracks' && slot.id !== carry.from) {
+          return { light: lit, take: (moved) => this.moveLane(moved, slot.id) }
+        }
+        return null
+      }
+      return null
+    },
+    // The tiling, as a map's grip shows it: the cells are only worth seeing as
+    // cells while something is looking for one.
+    carrying: (carry) => this.setArranging(carry !== null),
+  }
+
+  /** A carried lane let go on a `+` edge: the cells that edge names, the lane in the first. */
+  landLaneGrowing(direction: GrowDirection, carry: LaneCarry): void {
+    if (!this.takesTracks()) return
+    this.growFilled(direction, (opened) => this.landLane(opened, carry))
+  }
+
+  /** A carried lane let go on an empty cell: a tracks cell there, drawing it. */
+  private landLane(slot: Slot, carry: LaneCarry): void {
+    const built = this.occupy(slot, { kind: 'tracks' })
+    if (built !== null) this.moveLane(carry, built.id)
+  }
+
+  /** Draw a carried lane on `to`, and take it off the map it came from. */
+  private moveLane(carry: LaneCarry, to: MapId): void {
+    const store = this.props.annotations?.(LEAD_MAP)?.store
+    if (store === undefined) return
+    for (const id of carry.ids) {
+      store.placeAt(id, to, placementOn('bottom'))
+      if (carry.from !== to) store.unplaceFrom(id, carry.from)
+    }
   }
 
   /**
@@ -2880,6 +3040,7 @@ export class PanelDeck {
    * looking at is untouched. See {@link serialiseMaps}.
    */
   private publish(): void {
+    this.writes++
     const refs = this.slots.map((slot) => slot.ref)
     const value = serialiseMaps(refs)
     this.published = { value }

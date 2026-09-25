@@ -91,6 +91,28 @@ export function dragHasTrack(event: DragEvent): boolean {
 }
 
 /**
+ * The drop effect a target should answer a drag with: `wanted`, where the
+ * drag's source allows it, and otherwise the first effect it does allow.
+ *
+ * A target is not free to choose. A drop effect the source's `effectAllowed`
+ * does not include makes the browser **refuse the drop without a word** — no
+ * `drop` event, the ghost sliding back — however hard the target's `dragover`
+ * said yes. That is how an empty cell of the deck, answering `copy`, refused
+ * every row of the Tracks card, which allowed `move` alone; the tests that
+ * dispatch a `drop` directly never saw it, because only a browser checks.
+ */
+export function dropEffectFor(
+  transfer: DataTransfer,
+  wanted: 'copy' | 'move' | 'link',
+): 'copy' | 'move' | 'link' | 'none' {
+  const allowed = (transfer.effectAllowed ?? 'uninitialized').toLowerCase()
+  const allows = (effect: string): boolean =>
+    allowed === 'all' || allowed === 'uninitialized' || allowed.includes(effect)
+  if (allows(wanted)) return wanted
+  return (['copy', 'move', 'link'] as const).find(allows) ?? 'none'
+}
+
+/**
  * A row of the **Structures** card, dragged onto a cell of the deck (§25.3).
  *
  * Its own type beside {@link TRACK_DRAG_TYPE} rather than a reuse of it,

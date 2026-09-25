@@ -755,6 +755,14 @@ describe('4C on a metagenome', () => {
     expect(asks(view, 'Cis only')).toBe(false)
     expect(asks(view, 'Normalisation')).toBe(false)
     expect(asks(view, 'Anchor')).toBe(true)
+    expect(asks(view, 'Exclude anchor region')).toBe(true)
+    view.destroy()
+  })
+
+  it('offers to leave the anchor out, off until asked', () => {
+    const view = form(FOURC_TASK)
+    expect(asks(view, 'Exclude anchor region')).toBe(true)
+    expect(view.value.excludeAnchor).toBe(false)
     view.destroy()
   })
 

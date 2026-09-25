@@ -29,6 +29,7 @@ import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, LaneEdge } from '../annotations/types'
 import { LANE_EDGES, emptyPlacement } from '../annotations/types'
 import { button, el } from './dom'
+import { icon, type IconName } from './icons'
 
 /** One map a track may be drawn on, as the deck names it. */
 export interface PlacementMap {
@@ -59,9 +60,10 @@ export function placementField(
   const named = maps.length > 1
   return el(
     'div',
-    // The one field in a card body that does not put its label in a column; see
-    // the stylesheet for why four edges cannot share a row this narrow with one.
-    { class: 'field ann-field ann-field-places' },
+    // One line for one map, the label in its column like every other field's;
+    // a line per map under the label once there are several (see the
+    // stylesheet).
+    { class: `field ann-field ann-field-places${named ? ' is-named' : ''}` },
     el('span', { class: 'field-label', text: 'location' }),
     el(
       'div',
@@ -91,18 +93,16 @@ function edgeRow(
   const edgeButton = (edge: LaneEdge): HTMLElement => {
     const on = placement[edge]
     const last = on && only.length === 1
-    const node = el('button', {
-      class: 'btn btn-toggle ann-place',
-      type: 'button',
-      text: edge,
-      title: last
+    const node = edgeToggle(
+      edge,
+      last
         ? `Drawn on the ${edge} edge${named ? ` of ${map.label}` : ''} — pressing it again takes ` +
           'the track off this map, and leaves it in the list to put back'
         : on
           ? `Stop drawing this on the ${edge} edge${named ? ` of ${map.label}` : ''}`
           : `Draw this on the ${edge} edge${named ? ` of ${map.label}` : ''} as well`,
-    })
-    node.setAttribute('aria-pressed', String(on))
+      on ? 'true' : 'false',
+    )
     if (map.edges !== undefined && !map.edges.includes(edge)) {
       node.disabled = true
       node.title = `${map.label} has no ${edge} edge: a stack of tracks is drawn along one axis`
@@ -160,6 +160,39 @@ function everyMapRow(
       text: drawn === maps.length ? 'on every map' : `on ${drawn} of ${maps.length}`,
     }),
   )
+}
+
+/**
+ * The mark for each edge: the map as a dashed square, with that edge drawn
+ * solid — Lucide's `square-dashed-top-solid`, and the same square turned for
+ * the other three (`scripts/build-icons.mjs`).
+ */
+export const EDGE_ICONS: Readonly<Record<LaneEdge, IconName>> = {
+  top: 'square-dashed-top-solid',
+  right: 'square-dashed-right-solid',
+  bottom: 'square-dashed-bottom-solid',
+  left: 'square-dashed-left-solid',
+}
+
+/**
+ * One edge's button, as both placement controls draw it — this one and the
+ * batch box's twin (`ui/batchSettings.ts`).
+ *
+ * A mark and not the word. The four words — `top`, `right`, `bottom`, `left` —
+ * were a segmented control as wide as the card, a line of its own under each
+ * map's name; four marks of the map with one edge drawn are a quarter of that,
+ * and sit on the name's own line. The word is still the button's name, for a
+ * screen reader and in `data-edge`, and the title says what a press does.
+ */
+export function edgeToggle(edge: LaneEdge, title: string, pressed: 'true' | 'false' | 'mixed'): HTMLButtonElement {
+  const node = el('button', {
+    class: 'btn btn-icon btn-toggle ann-place',
+    type: 'button',
+    title,
+    attrs: { 'aria-label': edge, 'aria-pressed': pressed, 'data-edge': edge },
+  }) as HTMLButtonElement
+  node.append(icon(EDGE_ICONS[edge], { size: 15 }))
+  return node
 }
 
 /** The maps a card was given, or the single unnamed lead. */

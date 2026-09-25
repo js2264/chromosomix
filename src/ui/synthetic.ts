@@ -36,6 +36,7 @@ import type { ProfileOutput } from '../analysis/types'
 import type { AnnotationEntry, ComputedSource, LaneEdge } from '../annotations/types'
 import { defaultStyle, placementOn } from '../annotations/types'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
+import { laneStartsFlipped } from '../render/lane'
 import { button, el } from './dom'
 
 /** The formats a computed row can leave the app as (§18.7). */
@@ -224,9 +225,9 @@ export function syntheticId(outputId: string, map: MapId = LEAD_MAP): string {
  * drags it anywhere, and §18.5's claim that a synthetic track is a track is
  * about what it *can* do, not about where it starts.
  *
- * Left rather than top for the reason `render/lane.ts` gives about reading
- * direction: a vertical lane grows towards the matrix, so a left-hand lane and
- * the map's rows share an axis and can be read across.
+ * Left rather than top because a left-hand lane and the map's rows share an
+ * axis and can be read across — and it grows away from the matrix, as every
+ * lane on that edge starts (`render/lane.ts`'s `laneStartsFlipped`).
  */
 export const SYNTHETIC_EDGE: LaneEdge = 'left'
 
@@ -274,6 +275,9 @@ export function syntheticEntry(
     placement: placementOn(SYNTHETIC_EDGE),
     style: {
       ...defaultStyle('track', colour),
+      // Turned for the edge it opens on, as `begin` turns a file dropped there:
+      // the style is handed in whole, and a handed-in style is not turned again.
+      flip: laneStartsFlipped(SYNTHETIC_EDGE) !== defaultStyle('track', colour).flip,
       // The task's display hints, where it gave any (§18.11). Written into the
       // style rather than kept beside it, because from here on they are the
       // reader's: a group they can rename and a style they can change, and not

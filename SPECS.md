@@ -2032,6 +2032,14 @@ or areas), and **bed-like files** (any number, resolved as genomic segments). Ea
 of the map's four edges — above, below, or down either side — or on several at once; each carries its
 own limits, style, colour and value scaling; and any set of tracks may share one autoscale group.
 
+The row's **location** is four marks rather than four words: the map as a dashed square with one edge
+drawn solid — Lucide's `square-dashed-top-solid`, and the same square turned for the other three
+(`scripts/build-icons.mjs`) — each a switch, lit where the track is drawn, named for its edge to a
+screen reader. With one map they sit beside the label like any other field. In a deck they sit at the
+end of each map's own line, the map's name before them, under the label: the four words were as wide
+as the card and took a line of their own under every name, so a deck of four maps spent eight lines
+saying where one track is.
+
 **Ticking rows edits them together.** Each row of the Tracks card has a tick box (shift-click takes
 the rows between it and the last one clicked), and two or more ticked open a box above the list: the
 count and what can be done to them — *combine…* for a pair of tracks (§7.5), *hide* or *show*,
@@ -2517,12 +2525,29 @@ alike: there is a universal reading convention for a track on a genomic axis —
 built draws coverage rising from a floor under a ruler — and it beats every argument from the
 picture's own symmetry, because a profile above a contact map hanging from its ceiling is one a
 reader has to mirror in their head before they can compare it with the one below. A **vertical** lane
-has no such convention, so what decides is the corner: it grows towards the matrix, since a lane
-growing outward from the map's own edge reads as pointing away from the thing it is beside.
+is a horizontal one mirrored in the diagonal, which is what it is: the rows are the same genome as the
+columns. The stack on the **left** is the top stack turned over that line, so it grows **away** from
+the matrix as the top one does; the stack on the right is the bottom one turned, so it grows towards
+the matrix as the bottom one does. Both grow leftward — the vertical "up the page".
 
-Exactly one edge therefore turns a lane's axis on arrival, which is what it was when there were only
-two. Moving a lane between two edges turns it again exactly when that answer changes, so a reader who
-deliberately hung a track from its ceiling keeps that decision through the move.
+The left-hand stack used to grow towards the matrix, on the argument that the stacks meeting at a
+corner should agree about which way is more; it pointed a profile's peaks *into* the map, where the
+same profile above the map points them away, so one track either side of the diagonal read as two
+shapes. A lane saved before the change keeps the direction it was saved with; the invert button in
+the track's settings, or *Grow away from the map* on its lane's right-click menu, turns it.
+
+Both edges beside the map therefore turn a lane's axis on arrival — a file dropped there, a computed
+track, which opens on the left (§18.5), a row of the Tracks card placed there. Moving a lane between
+an edge above or below the map and one beside it turns it again, so a reader who deliberately hung a
+track from its ceiling keeps that decision through the move. A lane on **two** edges has one `flip`
+and two readings, so on the way to two it keeps what it had; on the way back to one it is turned from
+the edge it was last on *alone*. That is the move the location marks make — the new edge on, then the
+old one off — and read from its placement alone the second press came from neither edge and turned
+nothing, so a track moved from under the map to its left arrived growing into it. Which edge that was
+is remembered for the session; after a reload a lane on two edges keeps its flip, as it did before. A lane arriving on a **map it was not
+on** — a row placed on a companion's edge, a lane carried there by its grip (§16.9) — is turned from
+the edge the *track* reads for: its `flip` is a fact about that edge. It used to arrive unturned,
+growing into the map beside lanes that grew away from it.
 
 #### The lane that used to be here
 
@@ -2593,6 +2618,14 @@ turn and `O/E`, that slides the view onto the nearest on-diagonal window at the 
 that lands off the diagonal takes several more of the same gestures to come back from, and no drag can
 say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
 where the picture already is one.
+
+**Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
+without looking, for the one gesture a reader makes over and over while reading a map — every pan and
+box lands a little off the diagonal, and the way back was a trip to a 15-pixel button in another
+column. It is the button's press, gated as the button is, and on a deck the first map's, whose
+window the others are locked to. It stands down wherever Space already has a job: a focused button
+it presses, a tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the
+shortcuts dialog and the palette as *Recentre on the diagonal*, and in the button's own tooltip.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -4528,6 +4561,15 @@ never the first map's card standing in for it. The one row on it that reaches fu
 which is the deck's (§16.2) and is on every map's card for that reason; the overlays are preferences
 about every picture in the app, as they always were.
 
+**The General column's *File* card follows the star too.** It describes the starred map's file — a
+companion's bin size, format, pixel count and the rest once its panel has opened the file, and a line
+saying they arrive then until it has — under the same line the *Map* card carries: the map's name,
+with the star. With the star on the first map, or on none (the star shown dark), it is the session's
+own file, and a comparison's *File 1* and *File 2* are the first map's two triangles, so they stand
+aside while a companion is starred. It used to describe the first map whatever was starred, under a
+heading that did not say which file it was: a reader who starred a Hi-C map beside a micro-C one read
+the micro-C file's bin size as the map they had just chosen.
+
 **The star can be on no map.** A filled star is live — pressed, it leaves none filled — and then the
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
@@ -4655,6 +4697,13 @@ used to say *drop a map here*, which was true of the one kind it then took and h
 a tracks cell had no road on screen but the bar's row. Where the session carries no tracks (§8.5)
 it does not promise one.
 
+It **answers a drag with an effect the drag allows**. A drop target's effect has to be one the
+source's `effectAllowed` includes, or the browser refuses the drop with no event at all: the Tracks
+card's rows allowed only a *move*, the cell answered a *copy*, and a row dropped there slid back to the
+card while a test that dispatched the `drop` itself saw it land. The rows allow either now — moved up
+and down the card and onto a map's edge, placed on a cell — and an empty cell answers with what the
+drag allows (`ui/dom.ts`'s `dropEffectFor`).
+
 This is the first entry point a reader can *find*, and until there is a deck it is the only one —
 once there is, its bar offers *add a cell…* beside it (§16.5). Before either, the first companion was
 reachable only through the command palette, so nothing on screen said several maps side by side was
@@ -4704,11 +4753,40 @@ opened is written back into `maps`, so the link names the map rather than the co
 against a recipient's own lead it could otherwise be a different rung.
 
 A file **dropped on an edge** opens the cell that edge names and fills it in one movement, which is
-the gesture a reader tries first. It goes into the first cell that press opened rather than the
-first empty cell in the deck: the two differ only when the deck already had a hole somewhere, and
-there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
-chooser, the command palette — takes the first empty cell instead, because those name no position
-and the empty cells are the reader's own instruction about where the next map goes.
+the gesture a reader tries first. It goes into the cell that press opened **nearest the edge** — the
+top of a new column, the left of a new row — rather than the first empty cell in the deck: the two
+differ only when the deck already had a hole somewhere, and there the aim is the tie-breaker. Not
+the first cell the press opened, either: a press below a short last row squares that row up too
+(above), and the first of its new cells sits in a row above the one the reader pressed for. A map
+arriving by any other road — the bar's URL box, the file chooser, the command palette — takes the
+first empty cell instead, because those name no position and the empty cells are the reader's own
+instruction about where the next map goes.
+
+**Rows of the Tracks and Structures cards take the edges too.** A Tracks card row dropped on a `+`
+opens the cells with a tracks cell drawing that track in the one nearest the edge — *placed*, as on
+an empty cell, so it stays on every map it was drawn on. A Structures card row opens its model there
+and **moves** it: a cell that was drawing it is left **empty where it stands** rather than closed.
+Closing it closed the grid up in reading order, and the new cell slid into the place the model had
+just left, so the drop read as two empty cells and nothing else.
+
+**A lane carried by its grip goes anywhere a track can be drawn, and it is a move**: drawn where it
+is let go, and taken off the map it came from. Onto a rectangle round **another map** — they light
+on every map while a lane is in the air, not only on the map it is leaving — it is drawn on that edge
+of that map. Onto a `+`, it opens the cells with a tracks cell drawing it in the one nearest the edge;
+onto an **empty cell**, that cell becomes a tracks cell — the 1D browser of it; onto a **tracks
+cell**, that cell draws it. The cells show their tiling while a lane is carried, as they do while a
+cell is. An overlay group travels as the one lane it is on screen; a lane arriving on a map it was not
+on is turned for the edge it lands on (§8.9); and what it held of its own on the map it left — a
+ceiling, set on that library's depth — stays behind with that map. The Tracks card is where a track
+is put somewhere *as well*. The grip drag is a pointer drag captured by the lane it began on, so
+nothing else on the page hears it as a drag: the places a lane can land answer where the pointer is
+through one registry instead (`ui/laneCarry.ts`).
+
+**A `+` that fills the cell it opens writes the deck once, filled.** The deck is written into the
+link and the session reads the link back a moment later, so two writes in one gesture — the empty
+cell, then the filled one — came back as two states, the first of them no longer what the deck held,
+and the deck rebuilt its cells from it: a lane let go on a `+` went back to the map it had left, and
+the new cell stood empty.
 
 **Every map the session holds is a row of the Contact maps card**, in the order the grid holds
 them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
@@ -5998,8 +6076,14 @@ the estimate says the pass is the whole file rather than half of it. A marginal 
 the file would correct the bins before the anchor and leave those after it uncorrected — one quantity
 by the axis and two by the arithmetic, which is the failure the trans expectation already exists to
 prevent.
-**On a metacool the form asks for the anchor and nothing else**, and the two switches are absent
-because neither question survives contact with the file. An anchor there is one MAG among hundreds
+**Exclude anchor region** leaves the anchor's own bins, and one bin either side, empty (`NaN`, a gap
+rather than a zero) — off by default. The anchor against itself is the diagonal and the bin beside it
+its shoulder: the brightest cells of the map by orders of magnitude, so in a track they are a spike
+that sets the scale every other bin is read on, and on a metagenome the whole of the MAG named. With
+it on, the label says *anchor excluded*, and a profile left with nothing — a whole sequence named,
+cis only — says so in the job's notes rather than exporting an empty bigWig without a word.
+**On a metacool the form asks for the anchor and that, and nothing else**, and the two other switches
+are absent because neither question survives contact with the file. An anchor there is one MAG among hundreds
 sharing a tube, and the reading wanted is what it touches *everywhere* — a profile restricted to the
 anchor's own assembly answers a question about a genome in isolation, which is not why anybody opened a
 metagenomic map. And a decay curve accumulated from one MAG's contigs is not an expectation for contact

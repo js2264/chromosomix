@@ -19,7 +19,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ClipRange } from '@/ui/ClipRange'
-import { append, button, clear, dragHasFiles, dragHasTrack, el, field, fmt, TRACK_DRAG_TYPE } from '@/ui/dom'
+import { append, button, clear, dragHasFiles, dragHasTrack, dropEffectFor, el, field, fmt, TRACK_DRAG_TYPE } from '@/ui/dom'
 import { recordCard, recordFields } from '@/ui/RecordCard'
 import { stepper } from '@/ui/Stepper'
 import { ThemeToggle, initTheme } from '@/ui/ThemeToggle'
@@ -140,6 +140,37 @@ describe('telling one drag from another', () => {
     expect(dragHasTrack(dragOf(TRACK_DRAG_TYPE, 'text/plain'))).toBe(true)
     expect(dragHasTrack(dragOf('text/plain'))).toBe(false)
     expect(TRACK_DRAG_TYPE).toBe(TRACK_DRAG_TYPE.toLowerCase())
+  })
+})
+
+/**
+ * A target's drop effect has to be one the drag's source allows, or the browser
+ * refuses the drop with no event at all — which is how an empty cell of the
+ * deck, answering `copy`, refused every row of the Tracks card (`move` only),
+ * and how the tests that dispatch a `drop` themselves never noticed.
+ */
+describe('answering a drag with an effect it allows', () => {
+  const allowing = (effectAllowed: string) => ({ effectAllowed }) as unknown as DataTransfer
+
+  it('gives what the target wants where the source allows it', () => {
+    expect(dropEffectFor(allowing('copy'), 'copy')).toBe('copy')
+    expect(dropEffectFor(allowing('copyMove'), 'copy')).toBe('copy')
+    expect(dropEffectFor(allowing('copyMove'), 'move')).toBe('move')
+    expect(dropEffectFor(allowing('linkMove'), 'link')).toBe('link')
+  })
+
+  it('falls back to what the source does allow, rather than to a refusal', () => {
+    expect(dropEffectFor(allowing('move'), 'copy')).toBe('move')
+    expect(dropEffectFor(allowing('link'), 'copy')).toBe('link')
+  })
+
+  it('takes anything from a source that said nothing — a file from the desktop', () => {
+    expect(dropEffectFor(allowing('all'), 'copy')).toBe('copy')
+    expect(dropEffectFor(allowing('uninitialized'), 'move')).toBe('move')
+  })
+
+  it('answers none only where the source allows nothing', () => {
+    expect(dropEffectFor(allowing('none'), 'copy')).toBe('none')
   })
 })
 

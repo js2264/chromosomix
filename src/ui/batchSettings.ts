@@ -42,7 +42,7 @@ import {
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
-import type { PlacementMap } from './lanePlacement'
+import { edgeToggle, type PlacementMap } from './lanePlacement'
 import { MAX_SIZE, MIN_SIZE } from './laneSettings'
 
 /** What the ticked rows say about one setting: one value, or several. */
@@ -489,17 +489,15 @@ function placementField(options: BatchFieldsOptions, applies: readonly Annotatio
       const all = on.length === applies.length
       const some = on.length > 0 && !all
       const where = `the ${edge} edge${named ? ` of ${map.label}` : ''}`
-      const node = el('button', {
-        class: 'btn btn-toggle ann-place',
-        type: 'button',
-        text: edge,
-        title: all
+      const node = edgeToggle(
+        edge,
+        all
           ? `Take ${reach(applies, options.rows)} off ${where}`
           : some
             ? `${on.length} of these are on ${where}: a press puts ${reach(applies, options.rows)} there`
             : `Draw ${reach(applies, options.rows)} on ${where} as well`,
-      })
-      node.setAttribute('aria-pressed', all ? 'true' : some ? 'mixed' : 'false')
+        all ? 'true' : some ? 'mixed' : 'false',
+      )
       if (map.edges !== undefined && !map.edges.includes(edge)) {
         node.disabled = true
         node.title = `${map.label} has no ${edge} edge: a stack of tracks is drawn along one axis`
@@ -527,7 +525,7 @@ function placementField(options: BatchFieldsOptions, applies: readonly Annotatio
   return el(
     'div',
     {
-      class: 'field ann-field ann-field-places',
+      class: `field ann-field ann-field-places${named ? ' is-named' : ''}`,
       title: `Where ${reach(applies, options.rows)} are drawn.`,
     },
     el('span', { class: 'field-label', text: 'location' }),

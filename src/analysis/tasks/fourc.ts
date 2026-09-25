@@ -207,6 +207,20 @@ const PARAMS: readonly ParamSpec[] = [
       'table for the contacts leaving that sequence.',
     default: true,
   },
+  /**
+   * The anchor against itself is the diagonal, and the bin beside it its
+   * shoulder — the brightest cells of the map by orders of magnitude, so in a
+   * track they are the spike that sets the scale every other bin is read on.
+   * Offered on every file: on a metagenome the anchor is a whole MAG, and what
+   * it touches *other* than itself is the reading this leaves.
+   */
+  {
+    kind: 'toggle',
+    key: 'excludeAnchor',
+    label: 'exclude anchor region',
+    hint: 'Leave the anchor and one bin either side empty, so its contact with itself does not set the scale.',
+    default: false,
+  },
   BALANCE_PARAM,
 ]
 

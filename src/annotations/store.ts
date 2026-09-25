@@ -196,6 +196,8 @@ export class AnnotationStore {
    * today would name nothing tomorrow.
    */
   private homes: StoredLane[] = []
+  /** Each lane's last lone edge, by `track map` — see {@link readingEdge}. */
+  private readonly alone = new Map<string, LaneEdge>()
 
   /** Every placement, for the card that lists where a track is drawn. */
   get placements(): readonly Lane[] {
@@ -706,16 +708,21 @@ export class AnnotationStore {
    * Toggling preserves it: a pre-flipped bottom track becomes an unflipped
    * right-hand one, and moving it home restores exactly what was there.
    *
-   * Only between one edge and one other. A track drawn on *two* has one `flip`
-   * and two readings, so there is no answer that is right for both stacks — it
-   * keeps whatever it had, and the reader decides.
+   * A track drawn on *two* has one `flip` and two readings, so there is no
+   * answer that is right for both stacks — on the way to two it keeps whatever
+   * it had, and the reader decides. On the way back to one it is turned from the
+   * edge it was last on alone ({@link readingEdge}), which is what makes a move
+   * in two presses — the new edge on, the old one off — arrive the way a move in
+   * one does.
    */
   place(id: string, placement: Partial<Placement>): void {
     const entry = this.byId(id)
     if (entry === undefined) return
     const whole = normalisePlacement(placement)
-    const was = sideOf(entry.placement)
+    const was = this.readingEdge(id, LEAD_MAP, entry.placement)
     const now = sideOf(whole)
+    this.remember(id, LEAD_MAP, was)
+    this.remember(id, LEAD_MAP, now)
     const turned =
       was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
     // The lead's own lane follows, because this control *is* the lead's. A
@@ -748,8 +755,13 @@ export class AnnotationStore {
    *
    * A track not drawn on that map yet gets a lane, which is the same gesture
    * arriving from the other direction: a row carried from the Tracks card onto
-   * the third replicate's edge is a reader saying *put it there*, and there is
-   * nothing to turn because there is no edge it is coming from.
+   * the third replicate's edge, or a lane carried off another map by its grip,
+   * is a reader saying *put it there*. It arrives turned for that edge exactly
+   * as a move from the track's own edge would turn it — the track's `flip` is
+   * a fact about *that* edge, so it is the edge the new lane is coming from.
+   * It used to arrive unturned, which drew a bottom track carried onto a
+   * companion's left edge growing into the map while every other lane on that
+   * edge grew away from it.
    *
    * The turn {@link place} performs is performed here too, and as a **lane
    * override** — `flip` is one of the two fields a lane may differ on precisely
@@ -765,20 +777,55 @@ export class AnnotationStore {
     if (entry === undefined) return
     const lane = laneOf(this.lanes, id, map)
     const whole = normalisePlacement(placement)
-    const was = lane === undefined ? 'neither' : sideOf(lane.placement)
+    const was =
+      lane === undefined
+        ? this.readingEdge(id, LEAD_MAP, entry.placement)
+        : this.readingEdge(id, map, lane.placement)
     const now = sideOf(whole)
+    // The edge it reads for, then the edge it is on: a lane new to this map
+    // reads for the track's own edge until it is on one of its own alone.
+    this.remember(id, map, was)
+    this.remember(id, map, now)
     const turned =
       was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
     this.lanes = place(this.lanes, id, map, whole)
-    if (!turned || lane === undefined) {
+    if (!turned) {
       this.changed()
       return
     }
-    // Read through the cascade, so a lane that has said nothing about `flip`
-    // turns away from whatever its *track* says rather than from `false`.
-    const flip = resolveStyle(entry.style, lane).flip === true
+    // Read through the cascade, so a lane that has said nothing about `flip` —
+    // or one that is new here — turns away from whatever its *track* says
+    // rather than from `false`.
+    const flip = (lane === undefined ? entry.style : resolveStyle(entry.style, lane)).flip === true
     // Announces on its own, which is why nothing follows it.
     this.overrideOn(id, map, { flip: !flip })
+  }
+
+  /**
+   * The edge a lane's `flip` reads for: the one edge it is on — or, on two, the
+   * one it was last on **alone**.
+   *
+   * A lane on two edges has one `flip` and two readings, so which of them the
+   * flip was set for is history rather than state. And the history is what the
+   * commonest move there is needs: the location marks move a track in two
+   * presses — the new edge on, then the old one off — and between them the
+   * track is on both. Read from its placement alone, that step came from
+   * *neither* edge, nothing was turned, and a track moved from under the map to
+   * its left arrived growing into the map where one moved in a single gesture
+   * grew away from it (§8.9).
+   *
+   * Kept for the session only: after a reload a lane on two edges keeps its
+   * flip through a move off one of them, as it always did.
+   */
+  private readingEdge(track: string, map: MapId, placement: Placement): LaneEdge | 'neither' {
+    const side = sideOf(placement)
+    if (side !== 'neither') return side
+    return this.alone.get(`${track} ${map}`) ?? 'neither'
+  }
+
+  /** Note the one edge a lane is on alone, for {@link readingEdge}; a lane on several is not noted. */
+  private remember(track: string, map: MapId, side: LaneEdge | 'neither'): void {
+    if (side !== 'neither') this.alone.set(`${track} ${map}`, side)
   }
 
   /** Merge a patch into one row's style. */
@@ -838,7 +885,7 @@ export class AnnotationStore {
   turnAxesForBrowser(): void {
     let hit = false
     this.items = this.items.map((entry) => {
-      const side = sideOf(entry.placement)
+      const side = this.readingEdge(entry.id, LEAD_MAP, entry.placement)
       if (side === 'neither' || !laneStartsFlipped(side)) return entry
       hit = true
       return { ...entry, style: { ...entry.style, flip: !entry.style.flip } }

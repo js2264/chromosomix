@@ -54,7 +54,10 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.
   ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
-  ['drag a lane’s grip', 'Reorder it, or drop it on either rectangle in the map to change edge'],
+  [
+    'drag a lane’s grip',
+    'Reorder it; drop it on a rectangle round this map or another to move it there, or on a + or an empty cell to give it a cell of its own',
+  ],
   ['drag a track’s row from the panel', 'The same, for the reader looking at the list'],
   ['click a lane', 'Open that track’s settings'],
   ['click a feature in a lane', 'Open its card — names, attributes, exons'],
