@@ -18,13 +18,13 @@ node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-comp
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
-node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
+node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -97,18 +97,7 @@ General with the companion then starred (the card there must become the companio
 every column's cards after each step, so a card that did not come back is a line in the log. Run it
 after any change to `ui/cardLayout.ts`, to a column's builder or to a card's heading.
 
-Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
-than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
-the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
-of figure titles changes** — waiting for a chart to exist returns at once, since the drawer still
-holds the last task's, and waiting for the form to go away never returns at all, the form being a
-slot that is emptied and refilled rather than removed.
-
-Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
-Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL
-(`--use-angle=swiftshader`) so the structure cell renders in a container with no GPU.
-
-The fifth drives what the yeast demo cannot show, because it has no circle and no origin: *P.
+The eleventh drives what the yeast demo cannot show, because it has no circle and no origin: *P.
 aeruginosa* PAK from the DNA Bacterial Zoo read as circular on its first open, *Origin and terminus*
 and *Base composition* run from the Chromosomes table, the origin in the table's column, the map
 framed on it with `ori` — lit while the origin is in the middle, through a zoom and not a pan, and
@@ -132,6 +121,17 @@ reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
 name the folder's address in `GALLERY_DATA`; for the store part, serve a store the script wrote and
 name its `store.json` in `GALLERY_STORE`. Run it after any change to §8.15's declarations, to the
 arm reading, to those tasks, or to the store's script.
+
+Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
+than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
+the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
+of figure titles changes** — waiting for a chart to exist returns at once, since the drawer still
+holds the last task's, and waiting for the form to go away never returns at all, the form being a
+slot that is emptied and refilled rather than removed.
+
+Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
+Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL
+(`--use-angle=swiftshader`) so the structure cell renders in a container with no GPU.
 
 ## What it drives
 
