@@ -25,7 +25,7 @@
 import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
-import { strandBands, type BarScale } from '../annotations/fields'
+import { strandBands, type BarScale, type FeatureDisplay } from '../annotations/fields'
 import type { AnnotationKind, FeatureSet } from '../annotations/types'
 import {
   BAR_GAP,
@@ -59,6 +59,7 @@ const OVERHANG_PX = 80
 import {
   canvasToAcross,
   laneGrowsInward,
+  laneCurve,
   laneIsHorizontal,
   laneLine,
   laneMove,
@@ -297,7 +298,7 @@ export function layoutFeatures(
 /**
  * The shortest a strand band may be, in pixels.
  *
- * A three-pixel glyph — the floor `drawSegments` keeps for a box — plus the gap
+ * A three-pixel glyph — the floor {@link glyphSizes} keeps for a block — plus the gap
  * that makes two rows read as two, plus a pixel either side of the glyph. Below
  * it the two strands are two hairlines and the packing has bought nothing;
  * above it they are two rows of small boxes, which is what a sixteen-pixel
@@ -419,6 +420,11 @@ export interface FeaturePaint {
    */
   arrows?: boolean
   /**
+   * How the rows are spent (`FeatureStyle.display`), which decides how thick a
+   * glyph is drawn in the row it is given. `expanded` when absent.
+   */
+  display?: FeatureDisplay
+  /**
    * What a barChart's bars are measured against (§8.17).
    *
    * Absent is `file` — one ceiling for every chart on the lane, which is the
@@ -441,26 +447,37 @@ export interface FeaturePaint {
 export const LABEL_BAND = 11
 
 /**
- * Plain segments: a box per feature, pointed where the file gives it a strand.
+ * Every feature lane but a barChart: a glyph per feature, drawn by the feature's
+ * **own** structure rather than by the lane's kind (§8.16).
  *
- * The point is *part of the box* rather than a mark beside it — the head is cut
- * out of the leading end, so the glyph occupies exactly the bases the feature
- * does and the thing that is drawn, the thing that is clicked and the thing the
- * packing kept a row clear for stay one span (§8.4). At the sizes a peak lane
- * runs to there is no room beside anything, and an arrow drawn past the end of
- * a feature is an arrow claiming bases the file never mentioned.
+ * A feature with no parts — a peak, a plain BED row, a variant — is one block.
+ * One with exons is a transcript: its exons are blocks on a hairline that
+ * stands for the introns between them, the coding span is drawn thick and the
+ * untranslated ends and every exon of a non-coding transcript thin, and one with
+ * a coding span and no exon table is a single exon split the same way. It used
+ * to be the kind that decided, which is how a BED12 or a bigBed of transcripts —
+ * a `segments` lane — came out as one plain box per gene: the exons and the
+ * coding span were read, carried and never drawn.
  *
- * A feature with no strand, and every feature on a lane whose reader has turned
- * the points off, is the rectangle this always drew. So is one too narrow to
- * hold a head: below {@link ARROW_MIN_WIDTH} a point is a smudge that makes a
- * five-pixel peak look like a four-pixel peak.
+ * **A stranded feature ends in a point**, on the block where it ends — the
+ * last exon in the direction it is transcribed — cut *out of* the block rather
+ * than drawn past it, so the glyph occupies exactly the bases the feature does
+ * and the box drawn, the box clicked and the box the packing kept a row clear
+ * for are one span (§8.4). No chevrons inside it: they were a second way of
+ * saying the same thing, laid over the one thing the glyph exists to show.
+ *
+ * Blocks have their corners rounded a little, and they take most of their row:
+ * a lane made taller draws its features thicker, up to {@link MAX_THICK}.
+ * Variants stay square — a mark on a base is a mark, not a box to be shaped —
+ * and so does anything too narrow for a corner to be a corner.
  */
-export function drawSegments(
+function drawModels(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,
   set: FeatureSet,
   layout: FeatureLayout,
   paint: FeaturePaint,
+  round: boolean,
 ): void {
   if (layout.dense) {
     drawDensity(ctx, frame, layout, paint)
@@ -468,43 +485,72 @@ export function drawSegments(
   }
   const rowHeight = frame.thickness / layout.rows
   const band = labelBandOf(paint, rowHeight)
-  const boxHeight = Math.max(3, rowHeight - band - 2)
+  // The glyph is centred in what is left of the row once the name has its band,
+  // rather than in the row: centring in the row and then writing under it puts
+  // the name over the next feature down.
+  const room = rowHeight - band
+  const sizes = glyphSizes(room, paint.display ?? 'expanded')
   const pointed = paint.arrows !== false
   ctx.save()
   ctx.globalAlpha = paint.opacity
+  // One group of placements per ink, and both passes inside it: a transcript's
+  // introns and its exons are one glyph and must come out in one colour,
+  // whatever column the reader is colouring by (§8.16).
   for (const [ink, placements] of groupByInk(layout, paint)) {
     ctx.fillStyle = ink
+    // The introns first, so the blocks sit on them.
     ctx.beginPath()
     for (const placement of placements) {
-      const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
-      segmentPath(
-        ctx,
-        frame,
-        placement.along0,
-        placement.along1,
-        top,
-        boxHeight,
-        pointed ? set.strand[placement.index] : 0,
-      )
+      const centre = placement.row * rowHeight + room / 2
+      intronPath(ctx, frame, set, placement, centre, sizes.line)
+    }
+    ctx.fill()
+    ctx.beginPath()
+    for (const placement of placements) {
+      const centre = placement.row * rowHeight + room / 2
+      forEachBlock(set, placement, (along0, along1, coding, point) => {
+        const height = coding ? sizes.thick : sizes.thin
+        blockPath(ctx, frame, along0, along1, centre - height / 2, height, pointed ? point : 0, round)
+      })
     }
     ctx.fill()
   }
-
-  if (!layout.dense) {
-    // Chevrons *inside* a long box, in the halo colour, so a segment that runs
-    // across the whole window says which way it goes at every point rather than
-    // only at the end the head is on. Only on the long ones: on a box a few
-    // times the height of its own row the head is the whole of the answer, and
-    // a tick through it is noise over a fact already stated.
-    if (pointed) {
-      drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band, {
-        least: SEGMENT_MARK_MIN,
-        reach: boxHeight * 0.3,
-      })
-    }
-    if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
-  }
+  if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   ctx.restore()
+}
+
+/**
+ * How tall a feature's parts are drawn, given the room its row leaves for them.
+ *
+ * `thick` is a plain block and a coding span; `thin` an untranslated end and a
+ * non-coding exon, about three fifths of it, which is the ratio at which the two
+ * read as two weights of one shape rather than as two shapes; `line` the intron.
+ * Expanded and collapsed rows give the glyph all but a pixel either side of it,
+ * up to {@link MAX_THICK}: the cap is what keeps a lane dragged to two hundred
+ * pixels from drawing its genes as slabs, and it sits well above the nine and
+ * thirteen pixels a gene used to stop at whatever the lane was given. Squished
+ * rows are thin by design, and their glyphs are capped low for the same reason.
+ */
+export function glyphSizes(
+  room: number,
+  display: FeatureDisplay,
+): { thick: number; thin: number; line: number } {
+  if (display === 'squished') {
+    const thick = clamp(room * 0.7, 2, SQUISHED_THICK)
+    return { thick, thin: Math.max(1.5, thick * 0.6), line: 1 }
+  }
+  const thick = clamp(room - 2, 3, MAX_THICK)
+  return { thick, thin: Math.max(2, thick * 0.6), line: thick >= 16 ? 1.5 : 1 }
+}
+
+/** The tallest a block is drawn, in pixels, however much room its row has. */
+export const MAX_THICK = 22
+
+/** …and the tallest in a squished row. */
+const SQUISHED_THICK = 7
+
+function clamp(value: number, low: number, high: number): number {
+  return value < low ? low : value > high ? high : value
 }
 
 /**
@@ -524,22 +570,39 @@ export function featureLayoutFor(
   kind: AnnotationKind,
   thickness: number,
   scale: (length: number) => number,
+  display: FeatureDisplay = 'expanded',
 ): { rows: number; least: number; banded: boolean } {
+  // A single base is a hairline at every zoom a chromosome is browsed at
+  // (§8.14).
+  const least = kind === 'variants' ? scale(VARIANT_MIN_WIDTH) : 0
+  if (kind === 'barchart') {
+    // A chart's rows divide its value axis, so how many of them fit is a
+    // question about the *measurement* and not about the label under it — and
+    // no display mode reaches it (§8.17).
+    return { rows: barChartRows(thickness, rowsThatFit(thickness, scale(22))), least, banded: false }
+  }
+  // One row across the whole lane, strands and all: the point and the colour
+  // say which way each feature runs, and banding would halve the one row.
+  if (display === 'collapsed') return { rows: 1, least, banded: false }
+  if (display === 'squished') {
+    return {
+      rows: Math.max(1, Math.min(MAX_SQUISHED_ROWS, Math.floor(thickness / SQUISHED_ROW))),
+      least,
+      banded: true,
+    }
+  }
   // Taller rows than a bare glyph needs, because each one carries a name under
   // its features; `labelBandOf` refuses the band on a row too short for both,
   // so a lane dragged down to sixteen pixels still falls back to names inside
   // the wide features.
-  const fit = rowsThatFit(thickness, scale(kind === 'gtf' ? 26 : 22))
-  return {
-    // A chart's rows divide its value axis, so how many of them fit is a
-    // question about the *measurement* and not about the label under it.
-    rows: kind === 'barchart' ? barChartRows(thickness, fit) : fit,
-    // A single base is a hairline at every zoom a chromosome is browsed at
-    // (§8.14).
-    least: kind === 'variants' ? scale(VARIANT_MIN_WIDTH) : 0,
-    banded: kind !== 'barchart',
-  }
+  return { rows: rowsThatFit(thickness, scale(kind === 'gtf' ? 26 : 22)), least, banded: true }
 }
+
+/** A squished row, in pixels: a thin glyph and the gap under it, and no name. */
+const SQUISHED_ROW = 8
+
+/** …and how many of them a lane may hold, which is well past {@link MAX_ROWS}. */
+const MAX_SQUISHED_ROWS = 32
 
 /**
  * The renderer a feature lane of this kind is drawn by.
@@ -557,17 +620,16 @@ export function drawFeatures(
   paint: FeaturePaint,
   kind: AnnotationKind,
 ): void {
-  if (kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
-  else if (kind === 'barchart') drawBarCharts(ctx, frame, set, layout, paint)
-  else drawSegments(ctx, frame, set, layout, paint)
+  if (kind === 'barchart') drawBarCharts(ctx, frame, set, layout, paint)
+  else drawModels(ctx, frame, set, layout, paint, kind !== 'variants')
 }
 
 /**
  * A barChart: one chart per feature, drawn inside the bases the feature covers
  * (§8.17).
  *
- * The third renderer over {@link layoutFeatures}' layout, and it is a third one
- * rather than a flag on {@link drawSegments} because nothing in it is a box:
+ * The second renderer over {@link layoutFeatures}' layout, and it is a second one
+ * rather than a flag on {@link drawModels} because nothing in it is a box:
  * where that function asks *what colour is this feature and which way does it
  * point*, this asks *what are its values and is there room to show them*.
  *
@@ -615,7 +677,7 @@ export function drawBarCharts(
   // already written; drawing an empty chart would be an assertion that the
   // values are all zero.
   if (bars === undefined) {
-    drawSegments(ctx, frame, set, layout, paint)
+    drawModels(ctx, frame, set, layout, paint, true)
     return
   }
   if (layout.dense) {
@@ -799,9 +861,9 @@ function barAcross(
 }
 
 /**
- * The narrowest a feature can be and still be worth pointing, in pixels.
+ * The narrowest a block can be and still be worth pointing, in pixels.
  *
- * A head is cut out of the box, so on a narrow one it eats the part that says
+ * A head is cut out of the block, so on a narrow one it eats the part that says
  * *where*: at four pixels a pentagon and a rectangle are the same three pixels
  * of ink with a different corner, and the reader has lost a pixel of extent to
  * learn nothing. Six is where a head reads as a head.
@@ -811,52 +873,152 @@ export const ARROW_MIN_WIDTH = 6
 /** …and the shortest head worth cutting, once the two caps below are applied. */
 const ARROW_MIN_HEAD = 2
 
-/** Chevrons along each spine, every {@link STRAND_MARK_GAP} pixels. */
-const STRAND_MARK_GAP = 26
+/** The roundest a block's corner is, in pixels, however big the block. */
+const MAX_RADIUS = 3
 
 /**
- * How long a segment must be before chevrons are drawn through it.
+ * Walk one placed feature's blocks, in axis order: where each one runs, whether
+ * it is coding (drawn thick) or not, and which way it points, `0` for none.
  *
- * Four gaps, so the first box to get them holds three of them and reads as a
- * run rather than as a box with one mark in it.
+ * The point is on the block the feature *ends* in, in the direction it runs:
+ * the last one for a forward feature and the first for a reverse one, since the
+ * blocks come in axis order (`FeatureBuilder.finish` sorts a transcript's exons,
+ * which a GTF lists 5′ to 3′ and so backwards on the minus strand).
  */
-const SEGMENT_MARK_MIN = STRAND_MARK_GAP * 4
+function forEachBlock(
+  set: FeatureSet,
+  placement: FeaturePlacement,
+  visit: (along0: number, along1: number, coding: boolean, point: number) => void,
+): void {
+  const index = placement.index
+  const strand = sign(set.strand[index])
+  const first = set.exonAt[index]
+  const last = set.exonAt[index + 1]
+  const cdsFrom = set.cdsStart[index]
+  const cdsTo = set.cdsEnd[index]
+  const coding = cdsTo > cdsFrom
+  if (first === last && !coding) {
+    // No parts: the feature is its own single block, at the placement's own
+    // extent — which carries a variant's floor, so the mark drawn is the mark
+    // the pointer finds (§8.14).
+    visit(placement.along0, placement.along1, true, strand)
+    return
+  }
+  const start = set.start[index]
+  const scale = (placement.along1 - placement.along0) / Math.max(1, set.end[index] - start)
+  const at = (bp: number): number => placement.along0 + (bp - start) * scale
+  // Each exon, split where the coding span begins and ends: an exon can hold an
+  // untranslated end, the coding span, or — in a gene of one exon — both ends
+  // and the span between them.
+  const parts: Array<[number, number, boolean]> = []
+  const exons = first === last ? 1 : last - first
+  for (let k = 0; k < exons; k++) {
+    const from = first === last ? start : set.exonStart[first + k]
+    const to = first === last ? set.end[index] : set.exonEnd[first + k]
+    if (!coding) {
+      parts.push([from, to, false])
+      continue
+    }
+    if (from < cdsFrom) parts.push([from, Math.min(to, cdsFrom), false])
+    const inFrom = Math.max(from, cdsFrom)
+    const inTo = Math.min(to, cdsTo)
+    if (inTo > inFrom) parts.push([inFrom, inTo, true])
+    if (to > cdsTo) parts.push([Math.max(from, cdsTo), to, false])
+  }
+  const tip = strand > 0 ? parts.length - 1 : strand < 0 ? 0 : -1
+  for (let i = 0; i < parts.length; i++) {
+    const [from, to, isCoding] = parts[i]
+    if (!(to > from)) continue
+    visit(at(from), at(to), isCoding, i === tip ? strand : 0)
+  }
+}
 
 /**
- * One feature's outline: a rectangle, or a rectangle with a point on it.
- *
- * Through `laneRect` in the flat case and through `laneMove`/`laneLine` in the
- * pointed one, so a right-hand lane's quarter turn stays `render/lane.ts`'s
- * business in both (§8.8). The head is capped twice — by the glyph's own height,
- * so it is a point rather than a spear, and by a third of the feature's width,
- * so a short feature keeps most of its body.
+ * The hairline a transcript's introns are, from the end of its first exon to
+ * the start of its last — under the blocks, so only the gaps between them show.
+ * Nothing for a feature of one block.
  */
-function segmentPath(
+function intronPath(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  set: FeatureSet,
+  placement: FeaturePlacement,
+  centre: number,
+  line: number,
+): void {
+  const index = placement.index
+  const first = set.exonAt[index]
+  const last = set.exonAt[index + 1]
+  if (last - first < 2) return
+  const start = set.start[index]
+  const scale = (placement.along1 - placement.along0) / Math.max(1, set.end[index] - start)
+  const from = placement.along0 + (set.exonEnd[first] - start) * scale
+  const to = placement.along0 + (set.exonStart[last - 1] - start) * scale
+  if (!(to > from)) return
+  const [x, y, width, height] = laneRect(frame, from, to, centre - line / 2, centre + line / 2)
+  ctx.rect(x, y, width, height)
+}
+
+/**
+ * One block's outline: a box with its corners rounded, pointed at one end where
+ * `point` says so — `+1` at the far end along the axis, `-1` at the near one.
+ *
+ * Through `laneMove`/`laneLine`/`laneCurve`, so a right-hand lane's quarter turn
+ * stays `render/lane.ts`'s business (§8.8). The head is capped twice — by the
+ * block's height, so it is a point rather than a spear, and by a third of its
+ * width, so a short block keeps most of its body — and it is not cut at all
+ * below {@link ARROW_MIN_WIDTH}. Every outline is traced the same way round,
+ * whichever end is pointed, so blocks that overlap in one path add up rather
+ * than cancel into a hole.
+ */
+function blockPath(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,
   along0: number,
   along1: number,
   top: number,
   height: number,
-  strand: number,
+  point: number,
+  round: boolean,
 ): void {
   const width = along1 - along0
-  const head = strand === 0 ? 0 : Math.min(height * 0.55, width * 0.35)
-  if (head < ARROW_MIN_HEAD || width < ARROW_MIN_WIDTH) {
+  const head = point === 0 ? 0 : Math.min(height * 0.55, width * 0.35)
+  const pointed = point !== 0 && head >= ARROW_MIN_HEAD && width >= ARROW_MIN_WIDTH
+  const corner = round ? Math.min(MAX_RADIUS, height * 0.22, (width - (pointed ? head : 0)) / 2) : 0
+  // Under a pixel a corner is not a corner, and a one-pixel feature stays the
+  // crisp rectangle `laneRect` floors it to.
+  const r = corner >= 1 ? corner : 0
+  if (!pointed && r === 0) {
     const [x, y, boxWidth, boxHeight] = laneRect(frame, along0, along1, top, top + height)
     ctx.rect(x, y, boxWidth, boxHeight)
     return
   }
-  // `+1` is further along the axis, which on a right-hand lane is downward —
-  // the same reading the chevrons make, so the two agree on every edge.
-  const tip = strand > 0 ? along1 : along0
-  const neck = strand > 0 ? along1 - head : along0 + head
-  const tail = strand > 0 ? along0 : along1
-  laneMove(ctx, frame, tail, top)
-  laneLine(ctx, frame, neck, top)
-  laneLine(ctx, frame, tip, top + height / 2)
-  laneLine(ctx, frame, neck, top + height)
-  laneLine(ctx, frame, tail, top + height)
+  const bottom = top + height
+  const middle = top + height / 2
+  const near = pointed && point < 0 ? along0 + head : along0 + r
+  const far = pointed && point > 0 ? along1 - head : along1 - r
+  laneMove(ctx, frame, near, top)
+  laneLine(ctx, frame, far, top)
+  if (pointed && point > 0) {
+    laneLine(ctx, frame, along1, middle)
+    laneLine(ctx, frame, far, bottom)
+  } else if (r > 0) {
+    laneCurve(ctx, frame, along1, top, along1, top + r)
+    laneLine(ctx, frame, along1, bottom - r)
+    laneCurve(ctx, frame, along1, bottom, far, bottom)
+  } else {
+    laneLine(ctx, frame, along1, bottom)
+  }
+  laneLine(ctx, frame, near, bottom)
+  if (pointed && point < 0) {
+    laneLine(ctx, frame, along0, middle)
+  } else if (r > 0) {
+    laneCurve(ctx, frame, along0, bottom, along0, bottom - r)
+    laneLine(ctx, frame, along0, top + r)
+    laneCurve(ctx, frame, along0, top, near, top)
+  } else {
+    laneLine(ctx, frame, along0, top)
+  }
   ctx.closePath()
 }
 
@@ -902,124 +1064,6 @@ export function labelBandOf(paint: FeaturePaint, rowHeight: number): number {
   // Room for the band *and* a glyph above it, in the band's own units — a row
   // that gave half of its height to text would have a line left for the gene.
   return paint.labelsBelow === true && paint.labels && rowHeight >= band + 9 ? band : 0
-}
-
-/**
- * Gene models: a spine, exon boxes on it, and the coding part thicker.
- *
- * The thick/thin distinction is not decoration — it is the difference between
- * the transcript and the protein, and it is the first thing anyone reads off a
- * gene track. Strand is a chevron *on* the spine, repeated along it, so a long
- * gene says which way it runs at every point rather than only at one end.
- */
-export function drawGenes(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  set: FeatureSet,
-  layout: FeatureLayout,
-  paint: FeaturePaint,
-): void {
-  if (layout.dense) {
-    drawDensity(ctx, frame, layout, paint)
-    return
-  }
-  const rowHeight = frame.thickness / layout.rows
-  const band = labelBandOf(paint, rowHeight)
-  // The glyph is centred in what is left of the row once the name has its band,
-  // rather than in the row: centring in the row and then writing under it puts
-  // the name over the next gene down.
-  const glyph = rowHeight - band
-  const exonHeight = Math.max(3, Math.min(9, glyph * 0.5))
-  const cdsHeight = Math.max(exonHeight + 2, Math.min(13, glyph * 0.78))
-
-  const pointed = paint.arrows !== false
-  ctx.save()
-  ctx.globalAlpha = paint.opacity
-
-  // One group of placements per ink, and all three passes inside it: a gene's
-  // spine, its exons and its coding part are one glyph and must come out in one
-  // colour, whatever column the reader is colouring by (§8.16). A lane with no
-  // `colourOf` is the single group it always was.
-  for (const [ink, placements] of groupByInk(layout, paint)) {
-    ctx.strokeStyle = ink
-    ctx.fillStyle = ink
-    ctx.lineWidth = 1
-
-    // The spines first, in one path: a gene with no exon table is a bare box,
-    // and one with exons is a line the boxes sit on.
-    ctx.beginPath()
-    for (const placement of placements) {
-      if (set.exonAt[placement.index + 1] === set.exonAt[placement.index]) continue
-      const centre = placement.row * rowHeight + glyph / 2
-      const [x, y, width, height] = laneRect(
-        frame,
-        placement.along0,
-        placement.along1,
-        centre - 0.5,
-        centre + 0.5,
-      )
-      ctx.rect(x, y, width, height)
-    }
-    ctx.fill()
-
-    // Exons, then the coding part of each exon over them.
-    for (const pass of [0, 1] as const) {
-      const height = pass === 0 ? exonHeight : cdsHeight
-      ctx.beginPath()
-      for (const placement of placements) {
-        const index = placement.index
-        const cdsFrom = set.cdsStart[index]
-        const cdsTo = set.cdsEnd[index]
-        if (pass === 1 && !(cdsTo > cdsFrom)) continue
-        const centre = placement.row * rowHeight + glyph / 2
-        const top = centre - height / 2
-        const first = set.exonAt[index]
-        const last = set.exonAt[index + 1]
-
-        if (first === last) {
-          // No sub-structure: the feature is its own single block, and only on
-          // the first pass — there is no coding span to thicken. It is pointed
-          // like a segment, because a box is all this gene has and the chevrons
-          // below ride a spine it does not own.
-          if (pass === 0) {
-            segmentPath(
-              ctx,
-              frame,
-              placement.along0,
-              placement.along1,
-              top,
-              height,
-              pointed ? set.strand[index] : 0,
-            )
-          }
-          continue
-        }
-
-        const scale =
-          (placement.along1 - placement.along0) / Math.max(1, set.end[index] - set.start[index])
-        for (let exon = first; exon < last; exon++) {
-          let bpFrom = set.exonStart[exon]
-          let bpTo = set.exonEnd[exon]
-          if (pass === 1) {
-            bpFrom = Math.max(bpFrom, cdsFrom)
-            bpTo = Math.min(bpTo, cdsTo)
-            if (!(bpTo > bpFrom)) continue
-          }
-          const a0 = placement.along0 + (bpFrom - set.start[index]) * scale
-          const a1 = placement.along0 + (bpTo - set.start[index]) * scale
-          const [x, y, width, boxHeight] = laneRect(frame, a0, a1, top, top + height)
-          ctx.rect(x, y, width, boxHeight)
-        }
-      }
-      ctx.fill()
-    }
-  }
-
-  if (!layout.dense) {
-    if (pointed) drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band)
-    if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
-  }
-  ctx.restore()
 }
 
 /**
@@ -1076,76 +1120,6 @@ function drawDensity(
   }
   ctx.fill()
   ctx.restore()
-}
-
-/**
- * Where the chevrons go, for the caller that is not a gene model.
- *
- * A gene's chevrons ride a spine that is thinner than the glyph around it, so
- * they may be as tall as the row allows and they start on the first gene long
- * enough to hold one. A segment's ride *inside* a filled box: they must fit the
- * box's own height, and they are worth drawing only on a box long enough that
- * the head on its end has stopped being the whole answer.
- */
-interface MarkOptions {
-  /** The narrowest feature that gets any. */
-  least: number
-  /** How far a chevron reaches from the centre line, before the row's own cap. */
-  reach: number
-}
-
-function drawStrandMarks(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  set: FeatureSet,
-  layout: FeatureLayout,
-  paint: FeaturePaint,
-  rowHeight: number,
-  band = 0,
-  options?: MarkOptions,
-): void {
-  ctx.save()
-  ctx.strokeStyle = paint.haloColour
-  ctx.lineWidth = 1
-  ctx.globalAlpha = paint.opacity * 0.9
-  ctx.beginPath()
-  const reach = Math.max(
-    2,
-    Math.min(3.5, rowHeight * 0.2, options?.reach ?? Number.POSITIVE_INFINITY),
-  )
-  const least = Math.max(STRAND_MARK_GAP, options?.least ?? 0)
-  for (const placement of layout.placements) {
-    const strand = set.strand[placement.index]
-    if (strand === 0) continue
-    const width = placement.along1 - placement.along0
-    if (width < least) continue
-    // The chevrons ride the spine, so they follow it above the name's band.
-    const centre = placement.row * rowHeight + (rowHeight - band) / 2
-    for (let at = placement.along0 + STRAND_MARK_GAP / 2; at < placement.along1; at += STRAND_MARK_GAP) {
-      // The chevron points the way the gene is transcribed. On a right-hand
-      // lane the axis runs downward, so `+1` still means "further along the
-      // axis" and the mark comes out consistent with the map beside it.
-      const tip = at + reach * strand
-      const back = at - reach * strand
-      line(ctx, frame, back, centre - reach, tip, centre)
-      line(ctx, frame, back, centre + reach, tip, centre)
-    }
-  }
-  ctx.stroke()
-  ctx.restore()
-}
-
-/** One segment of a strand chevron, in lane coordinates. */
-function line(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  along0: number,
-  across0: number,
-  along1: number,
-  across1: number,
-): void {
-  laneMove(ctx, frame, along0, across0)
-  laneLine(ctx, frame, along1, across1)
 }
 
 /**

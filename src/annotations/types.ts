@@ -256,6 +256,18 @@ export function hasAMovableAxis(kind: AnnotationKind): boolean {
 }
 
 /**
+ * Whether a lane of this kind packs its features into rows that can be
+ * expanded, squished or collapsed (`FeatureStyle.display`, §8.16).
+ *
+ * The interval lanes whose glyph is a box on a row: a gene model, a segments
+ * file, a call set. Not a barChart, whose rows are its value axis (§8.17), and
+ * not a structure, whose lane is a bead per bin rather than a packing.
+ */
+export function hasFeatureRows(kind: AnnotationKind): boolean {
+  return kind === 'gtf' || kind === 'segments' || kind === 'variants'
+}
+
+/**
  * What a lane of this entry is *called on screen* — `sequence · GC`.
  *
  * A FASTA drawn as a value track is drawn as its GC content, and an unlabelled

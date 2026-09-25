@@ -17,9 +17,11 @@
 
 import type { AnnotationStore } from '../annotations/store'
 import {
+  FEATURE_DISPLAYS,
   featureFields,
   featuresOf,
   fieldFor,
+  type FeatureDisplay,
   type FeatureStyle,
 } from '../annotations/fields'
 import { barExtentOf } from '../render/barchart'
@@ -737,7 +739,7 @@ export function layoutField(store: AnnotationStore, entry: AnnotationEntry): HTM
  * from `patchReads`: these are about how one lane is *drawn*, and a feature set
  * has no second row drawn from the same bytes.
  */
-function patchFeatures(
+export function patchFeatures(
   store: AnnotationStore,
   entry: AnnotationEntry,
   patch: Partial<FeatureStyle>,
@@ -816,6 +818,55 @@ export function featureColourField(
 }
 
 /**
+ * What each way of spending a feature lane's rows is called, and what it does
+ * (§8.16) — one table for the card's picker and the lane's right-click menu, so
+ * the two cannot come to call one mode by two names.
+ */
+export const FEATURE_DISPLAY_WORDS: Record<FeatureDisplay, { label: string; hint: string }> = {
+  expanded: {
+    label: 'expanded',
+    hint: 'A row for each overlapping feature, with room under it for its name.',
+  },
+  squished: {
+    label: 'squished',
+    hint: 'Thin rows and no names, so a crowded stretch shows every feature in it.',
+  },
+  collapsed: {
+    label: 'collapsed',
+    hint: 'One row across the whole lane, overlapping features drawn over each other.',
+  },
+}
+
+/**
+ * How the lane spends its rows: expanded, squished or collapsed (§8.16).
+ *
+ * A select rather than three chips, for the reason the colour picker beside it
+ * is one: three words side by side in a card this narrow wrap, and a wrapped
+ * group of chips reads as two groups.
+ */
+export function featureDisplayField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const display = featuresOf(entry.style, entry.kind).display
+  const select = el('select', { class: 'select' })
+  for (const one of FEATURE_DISPLAYS) {
+    const words = FEATURE_DISPLAY_WORDS[one]
+    select.appendChild(el('option', { value: one, text: words.label, title: words.hint }))
+  }
+  select.value = display
+  select.title = FEATURE_DISPLAY_WORDS[display].hint
+  select.addEventListener('change', () => {
+    const picked = FEATURE_DISPLAYS.find((one) => one === select.value) ?? display
+    select.title = FEATURE_DISPLAY_WORDS[picked].hint
+    patchFeatures(store, entry, { display: picked })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'rows' }),
+    select,
+  )
+}
+
+/**
  * Point the stranded features the way they run.
  *
  * A switch rather than a setting with three answers, because there are two: a
@@ -835,8 +886,8 @@ export function arrowsToggle(store: AnnotationStore, entry: AnnotationEntry): HT
     {
       class: `btn btn-chip${on ? ' is-on' : ''}`,
       title:
-        'Cut an arrowhead out of the leading end of every feature the file gives a strand, and ' +
-        'run chevrons through the long ones. The glyph keeps the feature’s exact extent either way.',
+        'End every feature the file gives a strand in a point, on the end it runs to — a ' +
+        'transcript’s last exon. The glyph keeps the feature’s exact extent either way.',
     },
   )
   chip.setAttribute('aria-pressed', String(on))

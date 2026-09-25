@@ -2367,6 +2367,20 @@ p {
   white-space: nowrap;
 }
 
+/* A choice's tick, in a column of its own, so a group of choices lines up
+   whether or not each one is the one in force — and the label beside it takes
+   the room, so the hint stays at the far end as it does on every other row. */
+.context-menu-check {
+  flex: 0 0 0.8rem;
+  margin-right: -0.45rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.context-menu-check + span {
+  flex: 1 1 auto;
+}
+
 /* Names the group under it; not a target. */
 .context-menu-head {
   padding: 0.3rem 0.5rem 0.15rem;

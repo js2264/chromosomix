@@ -178,8 +178,62 @@ describe('GTF', () => {
     expect(set.end[at]).toBe(9756)
     expect(set.strand[at]).toBe(-1)
     expect(set.contigs[set.contig[at]]).toBe('IV')
-    // Its CDS starts three bases in, at 8686 one-based.
-    expect(set.cdsStart[at]).toBe(8685)
+    // Its CDS *row* starts three bases in, at 8686 one-based; the three before
+    // it are the stop codon (a minus-strand gene ends on the left), which the
+    // file writes on a row of its own and which is coding (§8.16). So the
+    // coding span runs from the transcript's own first base.
+    expect(set.cdsStart[at]).toBe(8682)
+  })
+
+  it('counts the stop codon as coding, on either strand', () => {
+    // Ensembl's convention: the CDS rows stop short of the stop codon, and the
+    // stop codon is a row of its own. A genePred's `cdsEnd` includes it, so
+    // without this the same gene drew three bases short from a GTF.
+    const set = parseGtf(
+      [
+        'I\tsrc\ttranscript\t100\t400\t.\t+\t.\tgene_id "G1"; transcript_id "T1";',
+        'I\tsrc\texon\t100\t400\t.\t+\t.\tgene_id "G1"; transcript_id "T1";',
+        'I\tsrc\tCDS\t150\t347\t.\t+\t0\tgene_id "G1"; transcript_id "T1";',
+        'I\tsrc\tstop_codon\t348\t350\t.\t+\t0\tgene_id "G1"; transcript_id "T1";',
+      ].join('\n') + '\n',
+    )
+    expect(set.cdsStart[0]).toBe(149)
+    expect(set.cdsEnd[0]).toBe(350)
+  })
+
+  it('takes a transcript’s exons from its CDS and UTR rows where it writes no exon rows', () => {
+    // GFF3 allows a transcript to be spelled as its parts; the gaps between the
+    // merged parts are its introns, and a picture with none would be wrong.
+    const set = parseGtf(
+      [
+        '##gff-version 3',
+        'I\tsrc\tmRNA\t100\t900\t.\t+\t.\tID=t1;Name=GENE1',
+        'I\tsrc\tfive_prime_UTR\t100\t149\t.\t+\t.\tParent=t1',
+        'I\tsrc\tCDS\t150\t300\t.\t+\t0\tParent=t1',
+        'I\tsrc\tCDS\t601\t850\t.\t+\t2\tParent=t1',
+        'I\tsrc\tthree_prime_UTR\t851\t900\t.\t+\t.\tParent=t1',
+      ].join('\n') + '\n',
+    )
+    const first = set.exonAt[0]
+    const last = set.exonAt[1]
+    expect(last - first).toBe(2)
+    expect([set.exonStart[first], set.exonEnd[first]]).toEqual([99, 300])
+    expect([set.exonStart[first + 1], set.exonEnd[first + 1]]).toEqual([600, 900])
+  })
+
+  it('leaves a transcript of one coding piece as the span it always was', () => {
+    // A bacterial gene: one CDS row under a longer transcript row. Taking the
+    // CDS as its only exon would drop the rest of the transcript from view.
+    const set = parseGtf(
+      [
+        '##gff-version 3',
+        'I\tsrc\tmRNA\t100\t900\t.\t+\t.\tID=t1;Name=GENE1',
+        'I\tsrc\tCDS\t150\t850\t.\t+\t0\tParent=t1',
+      ].join('\n') + '\n',
+    )
+    expect(set.exonAt[1] - set.exonAt[0]).toBe(0)
+    expect([set.start[0], set.end[0]]).toEqual([99, 900])
+    expect([set.cdsStart[0], set.cdsEnd[0]]).toEqual([149, 850])
   })
 
   it('names a transcript by its gene name, falling back to the id', () => {

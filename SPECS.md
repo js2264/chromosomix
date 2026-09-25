@@ -3409,22 +3409,63 @@ font. They are built from `featureColouring` — the function the renderer itsel
 disagreed with the picture would be a bug in the ink rule rather than a second palette drifting out
 of step.
 
-**A stranded feature points the way it runs.** On a segment box — and on a gene the file gives no
-exon table, which is a box too — the arrowhead is cut *out of* the leading end rather than drawn past
-it, so the glyph occupies exactly the bases the feature does and §8.4's rule holds:
-the box that is drawn, the box that is clicked and the box the packing kept a row clear for are one
-span. An ink says *which* strand; a point says *which way*, and a reader following an operon or a
-tandem array is reading the second. The head is capped by the glyph's own height, so it is a point
-rather than a spear, and by a third of the feature's width; below six pixels there is no head at all,
-because a pentagon and a rectangle three pixels wide are the same ink with a different corner and the
-reader has lost a pixel of extent to learn nothing. A long box additionally carries chevrons in the
-halo colour, so a segment running across the whole window says its direction at every point rather
-than only at one end.
+**A feature is drawn by its own structure, whatever format it came from.** A feature with no parts —
+a peak, a plain BED row, a call — is one block. One with exons is a transcript: its exons are blocks
+on a hairline standing for the introns between them, from the end of the first exon to the start of
+the last; the coding span is drawn **thick** and the untranslated ends, and every exon of a
+non-coding transcript, **thin** — three fifths of the thick height, which is the ratio at which the
+two read as two weights of one shape rather than as two shapes. One with a coding span and no exon
+table is a single exon split the same way. It used to be the lane's *kind* that decided, so a BED12 or
+a bigBed of transcripts — a `segments` lane — was drawn as one plain box per gene: its blocks and its
+thick span were parsed, carried and never drawn. The same gene from a GTF, a genePred and a BED12
+now draws the same blocks.
 
-A gene **with** exons keeps the chevrons on its spine and no head, which is not an omission: its
-glyph is a line with boxes on it, a point on the last exon would be a point on a piece of the gene
-rather than on the gene, and the chevrons already say the direction at every position along it. That
-is also what every genome browser draws, and the one place this lane should not be inventive.
+**The coding span includes the stop codon.** The Sequence Ontology's CDS ends with it and UCSC's
+genePred tables count it in `cdsEnd`, but a GTF in Ensembl's convention writes it on a row of its
+own outside the last CDS row — so read naively, the same gene drew three bases short of its stop
+from a GTF. The GTF reader folds `stop_codon` rows into the coding span, and the demo's genePred is
+written the same way (`scripts/make_demo_hub.py`). A GFF3 transcript spelled as its CDS and UTR rows
+with no `exon` rows has its exons in them: merged, they are the blocks and the gaps between them its
+introns — where that makes more than one block, since a single coding piece inside a longer
+transcript row is a coding span and not the transcript's only exon.
+
+**A stranded feature ends in a point**, on the block it ends in — the last exon in the direction it is
+transcribed — cut *out of* that block rather than drawn past it, so the glyph occupies exactly the
+bases the feature does and §8.4's rule holds: the box that is drawn, the box that is clicked and the
+box the packing kept a row clear for are one span. An ink says *which* strand; a point says *which
+way*, and a reader following an operon or a tandem array is reading the second. The head is capped
+by the block's height, so it is a point rather than a spear, and by a third of its width; below six
+pixels there is no head at all, because a pentagon and a rectangle three pixels wide are the same ink
+with a different corner. **Nothing else says the direction**: the chevrons that used to run through
+every long box and along every intron, in the halo colour, were a second way of saying it laid over
+the one thing the glyph exists to show — the extent — and on a gene they were the busiest marks on
+the lane. A long feature whose end is out of the window says its strand by its colour and its band.
+
+**Blocks are rounded and they fill their row.** Their corners are rounded a little — a fifth of the
+block's height, three pixels at most, and not at all under a pixel, where a corner is a smudge — and a
+block takes all of its row but a pixel either side, up to 22 pixels: a lane made taller draws its
+features thicker, where a gene used to stop at nine and thirteen pixels however tall its lane was
+made. Variants stay square: a mark on a base is a mark, not a box to be shaped (§8.14).
+
+**How the rows are spent is the reader's choice**, among the three every genome browser offers under
+the names it is known by: **expanded**, the default, gives each row room for a glyph and the name under
+it and bands the strands; **squished** packs rows eight pixels tall, as many as the lane holds up to
+thirty-two, with thin glyphs and no names, so a crowded stretch shows every overlapping feature in the
+height *expanded* needs for a few; **collapsed** puts everything in one row across the whole lane,
+overlaps drawn over each other and the strands unbanded — the point and the colour say which way each
+runs — which is a picture of *where* there are features rather than of each one. The lane keeps the
+height its reader gave it in all three; a mode that resized the lane to fit the window's rows would
+move the map every time a pan changed how many overlapped. A barChart has none of it, because its rows
+are its value axis (§8.17).
+
+The choice is offered in the card, as `rows`, and in the lane's **right-click menu**, which a feature
+lane now fills with what a reader changes about a gene track while looking at it: the three row modes
+with a tick on the one in force, and the point as a switch with its own tick. Opened *on* a feature,
+the menu leads with that feature — named, with its card a click away (what a click on it opens), its
+name and its position to copy (the position as the locus box writes a window, so it can be pasted
+into one; where the browser will not allow the clipboard, the text is shown to be copied by hand), and
+in the 1D browser a zoom that frames it with a search hit's margin. Beside a map there is no zoom:
+the map's view is a region on two axes, and framing the gene on one would leave the other where it was.
 
 **The rows are banded by strand.** Unstranded first, then forward, then reverse, outward from the map
 — which on the 1D browser and on a bottom stack reads top to bottom. Two genes on the same bases and
@@ -3467,7 +3508,7 @@ a gene name that is not in the file**: `MSW1` was drawn as `SW1`, `HEH2` as `HE`
 feature the name is dropped where the window has cut the box, since a name centred in half a box is
 centred on a place the feature does not have.
 
-**Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows }` — a nested optional
+**Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows, bars, display }` — a nested optional
 record in the shape `reads` is one and for the same reasons: the fields mean nothing to a value
 track, optional means no stored row changes shape, and one accessor (`featuresOf`) keeps `undefined`
 from reaching a renderer. `colourBy` is an **open string** rather than a union, because the

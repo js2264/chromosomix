@@ -46,10 +46,12 @@ import {
   LANE_EDGES,
   drawsAProfile,
   hasAMovableAxis,
+  hasFeatureRows,
   placementOn,
   type AnnotationEntry,
   type FeatureSet,
 } from '../annotations/types'
+import { FEATURE_DISPLAYS, featuresOf } from '../annotations/fields'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import {
@@ -210,6 +212,7 @@ import {
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
+import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
 import { setHoverPlace, type HoverPlace } from './hoverLocus'
@@ -5063,10 +5066,19 @@ export class MatrixPanel {
 
     const onMenu = (event: MouseEvent): void => {
       const box = canvas.getBoundingClientRect()
-      const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+      const x = event.clientX - box.left
+      const y = event.clientY - box.top
+      const hit = lanes.laneAt(edge, x, y)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId)
+      // The feature under the pointer, which a map can open and not frame: its
+      // view is a region on two axes (see the press above).
+      const found = lanes.featureAt(edge, x, y)
+      const feature =
+        found === null
+          ? null
+          : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId, feature)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -9546,6 +9558,62 @@ export function toDense(data: MatrixResult): DenseMatrix {
 }
 
 
+/**
+ * A feature a lane's menu was opened on, and what may be done with it from there.
+ *
+ * Built by the surface that owns the pointer, because it is the one that knows
+ * what *opening* and *framing* a feature mean on it: the 1D browser frames one
+ * on its single axis, and a map has no such gesture — its view is a region on
+ * two axes, and framing the gene on one would leave the other wherever it was.
+ */
+export interface LaneMenuFeature {
+  /** What the feature is called, or its accession where it has no name. */
+  name: string
+  /** Where it is, as the locus box writes a window, so it can be pasted into one. */
+  locus: string
+  /** Open its card — what a click on it does. */
+  open: () => void
+  /** Frame it, on a surface with one axis to frame it on. */
+  zoom?: () => void
+}
+
+/**
+ * What a lane's menu says about the feature at an index of a set.
+ *
+ * The name a reader searches for — the symbol, else the accession, else the
+ * place itself — and the window `formatLocus` writes, which is what the locus
+ * box accepts back.
+ */
+export function laneMenuFeature(
+  set: FeatureSet,
+  index: number,
+  actions: { open: () => void; zoom?: () => void },
+): LaneMenuFeature {
+  const locus = formatLocus({
+    contig: set.contigs[set.contig[index]] ?? '',
+    start: set.start[index],
+    end: set.end[index],
+  })
+  const name = set.name[index] !== '' ? set.name[index] : set.id[index] !== '' ? set.id[index] : locus
+  return { name, locus, ...actions }
+}
+
+/** The first letter up, for a menu row built from a word the card writes lower-case. */
+function capitalised(word: string): string {
+  return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1)
+}
+
+/**
+ * Put text on the clipboard, or — where the browser will not allow it, as in an
+ * insecure context — hand it to the reader to copy by hand: a menu row that
+ * silently did nothing would be a row that lied.
+ */
+function copyOrShow(text: string): void {
+  void copyTextToClipboard(text).catch(() => {
+    window.prompt('This browser would not copy it. Here it is to copy by hand:', text)
+  })
+}
+
 /** What each edge is called, wherever one has to be named to a reader. */
 const EDGE_WORDS: Record<LaneEdge, string> = {
   top: 'above the map',
@@ -9591,9 +9659,25 @@ export function openLaneMenu(
    * deck behind it — see `annotations/store.ts`'s `placeAt`.
    */
   map: MapId = LEAD_MAP,
+  /** The feature under the pointer, where there is one (§8.16). */
+  feature: LaneMenuFeature | null = null,
 ): void {
   const limits = entry.style.limits
-  const items: MenuItem[] = [
+  const items: MenuItem[] = []
+  // The thing under the pointer first, and the track it is on after it: a menu
+  // opened on a gene is most often about the gene.
+  if (feature !== null) {
+    items.push(
+      { label: feature.name },
+      { label: 'About it…', run: feature.open },
+      ...(feature.zoom === undefined
+        ? []
+        : [{ label: 'Zoom to it', hint: feature.locus, run: feature.zoom }]),
+      { label: 'Copy its name', hint: feature.name, run: () => copyOrShow(feature.name) },
+      { label: 'Copy its position', hint: feature.locus, run: () => copyOrShow(feature.locus) },
+    )
+  }
+  items.push(
     { label: entry.label },
     {
       label: 'Colour…',
@@ -9613,7 +9697,31 @@ export function openLaneMenu(
         swatch.click()
       },
     },
-  ]
+  )
+
+  // How the rows are spent, and whether a feature points the way it runs
+  // (§8.16) — the two things a reader changes about a gene track while looking
+  // at it, and both as a tick on the one in force rather than as a toggle that
+  // names the state it would leave.
+  if (hasFeatureRows(entry.kind)) {
+    const features = featuresOf(entry.style, entry.kind)
+    items.push(
+      { label: 'Rows' },
+      ...FEATURE_DISPLAYS.map((display) => ({
+        label: capitalised(FEATURE_DISPLAY_WORDS[display].label),
+        title: FEATURE_DISPLAY_WORDS[display].hint,
+        checked: features.display === display,
+        run: () => patchFeatures(store, entry, { display }),
+      })),
+    )
+    if (entry.kind !== 'variants') {
+      items.push({
+        label: 'Point the way each runs',
+        checked: features.arrows,
+        run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
+      })
+    }
+  }
 
   if (hasAMovableAxis(entry.kind)) {
     items.push(

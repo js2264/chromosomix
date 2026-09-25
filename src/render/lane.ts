@@ -224,6 +224,30 @@ export function laneLine(
 }
 
 /**
+ * `ctx.quadraticCurveTo` in lane coordinates: a curve bent towards the control
+ * point, which is how a glyph's corners are rounded.
+ *
+ * A quadratic rather than `arcTo`, because the PDF export's context has the one
+ * and not the other (`ui/vector.ts` raises a quadratic to PDF's cubic exactly),
+ * and at a corner of two or three pixels the two are the same curve.
+ */
+export function laneCurve(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  controlAlong: number,
+  controlAcross: number,
+  along: number,
+  across: number,
+): void {
+  ctx.quadraticCurveTo(
+    laneX(frame, controlAlong, controlAcross),
+    laneY(frame, controlAlong, controlAcross),
+    laneX(frame, along, across),
+    laneY(frame, along, across),
+  )
+}
+
+/**
  * A rectangle spanning `[alongFrom, alongTo)` and `[acrossFrom, acrossTo)`, in
  * lane coordinates.
  *

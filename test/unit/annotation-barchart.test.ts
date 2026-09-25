@@ -406,10 +406,24 @@ interface Rect {
   fill: string
 }
 
-/** A canvas that remembers the rectangles it filled, and in what ink. */
+/**
+ * A canvas that remembers the boxes it filled, and in what ink — a rectangle as
+ * itself, and a traced outline (a box with rounded corners, §8.16) as the
+ * rectangle that bounds it.
+ */
 function recorder(): { ctx: CanvasRenderingContext2D; filled: Rect[] } {
   const filled: Rect[] = []
   let pending: Array<{ x: number; y: number; w: number; h: number }> = []
+  let outline: Array<[number, number]> = []
+  const close = (): void => {
+    if (outline.length === 0) return
+    const xs = outline.map(([x]) => x)
+    const ys = outline.map(([, y]) => y)
+    const x = Math.min(...xs)
+    const y = Math.min(...ys)
+    pending.push({ x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y })
+    outline = []
+  }
   const state = { fillStyle: '#000', globalAlpha: 1 }
   const stack: Array<typeof state> = []
   const ctx = {
@@ -421,10 +435,13 @@ function recorder(): { ctx: CanvasRenderingContext2D; filled: Rect[] } {
     font: '', textAlign: '', textBaseline: '', lineJoin: '',
     save: () => { stack.push({ ...state }) },
     restore: () => { Object.assign(state, stack.pop() ?? state) },
-    beginPath: () => { pending = [] },
-    closePath: () => {},
+    beginPath: () => { pending = []; outline = [] },
+    closePath: close,
     rect: (x: number, y: number, w: number, h: number) => { pending.push({ x, y, w, h }) },
-    moveTo: () => {}, lineTo: () => {}, stroke: () => {},
+    moveTo: (x: number, y: number) => { close(); outline = [[x, y]] },
+    lineTo: (x: number, y: number) => { outline.push([x, y]) },
+    quadraticCurveTo: (_cx: number, _cy: number, x: number, y: number) => { outline.push([x, y]) },
+    stroke: () => {},
     fillText: () => {}, strokeText: () => {},
     measureText: () => ({ width: 20, actualBoundingBoxAscent: 7 }),
     translate: () => {}, rotate: () => {}, setLineDash: () => {}, getLineDash: () => [],
@@ -626,8 +643,8 @@ describe('a barChart lane, drawn', () => {
   it('draws boxes for a set that reached this lane with no chart on it', () => {
     // A stored session restored against a file that was re-read as a BED. The
     // lane must not draw an empty chart, which would assert the values are zero.
-    // Unstranded, so the box is a plain rectangle: `drawSegments` cuts an
-    // arrowhead out of a stranded one and this recorder only keeps rectangles.
+    // Unstranded, so the box has no point to it — one rounded box, which the
+    // recorder keeps as the rectangle that bounds it.
     const flat = [TRACK, rows(['chrI 1000 2000 YAL001C 500 . TFC3 3 10.5,3.2,0'])].join('\n')
     const set = parseBarChart(flat, 'toy.barChart')
     delete set.bars

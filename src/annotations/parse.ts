@@ -417,6 +417,11 @@ interface Draft {
   source: string
   product: string
   exons: number[]
+  /**
+   * The CDS, UTR and stop-codon rows, as flat pairs: what a transcript is made
+   * of when the file writes no `exon` rows for it, which GFF3 allows.
+   */
+  pieces: number[]
   cdsFrom: number
   cdsTo: number
 }
@@ -499,6 +504,7 @@ export function parseGtf(text: string): FeatureSet {
         source,
         product,
         exons: [],
+        pieces: [],
         cdsFrom: -1,
         cdsTo: -1,
       })
@@ -524,6 +530,7 @@ export function parseGtf(text: string): FeatureSet {
         source,
         product,
         exons: [],
+        pieces: [],
         cdsFrom: -1,
         cdsTo: -1,
       }
@@ -545,9 +552,16 @@ export function parseGtf(text: string): FeatureSet {
     if (draft.biotype === '') draft.biotype = biotype
     if (draft.product === '') draft.product = product
     if (feature === 'exon') draft.exons.push(start, end)
-    if (feature === 'cds') {
+    // The coding span **with its stop codon**. A GTF writes the stop codon as a
+    // row of its own outside the last CDS row — Ensembl's convention — where a
+    // genePred's `cdsEnd` and a BED's `thickEnd` include it, so the same gene
+    // drew three bases shorter at its 3′ end from a GTF than from either.
+    if (feature === 'cds' || feature === 'stop_codon') {
       if (draft.cdsFrom < 0 || start < draft.cdsFrom) draft.cdsFrom = start
       if (end > draft.cdsTo) draft.cdsTo = end
+    }
+    if (feature === 'cds' || feature === 'stop_codon' || UTR_ROW.test(feature)) {
+      draft.pieces.push(start, end)
     }
   })
 
@@ -565,6 +579,15 @@ export function parseGtf(text: string): FeatureSet {
 
   const builder = new FeatureBuilder()
   for (const draft of rows) {
+    // A transcript the file spells as CDS and UTR rows alone has its exons in
+    // them: merged, they are the blocks and the gaps between them its introns.
+    // Only where that makes more than one block — a single piece inside a longer
+    // transcript row is a coding span, not the transcript's only exon, and
+    // drawing it as one would drop the rest of the feature from the picture.
+    if (draft.exons.length === 0) {
+      const merged = mergedPairs(draft.pieces)
+      if (merged.length >= 4) draft.exons = merged
+    }
     // The gene's own line wins over the transcript's. Where a file names both —
     // `Name=LipL1` on the gene, `Name=LipL1-1` on its mRNA — the gene's is the
     // one a reader searched for, and the transcript's suffix is a fact the
@@ -602,6 +625,26 @@ export function parseGtf(text: string): FeatureSet {
     })
   }
   return builder.finish()
+}
+
+/** A UTR row under any of the names GTF and GFF3 give one, and nothing else. */
+const UTR_ROW = /^(five_prime_|three_prime_|5'|3')?utr$/
+
+/**
+ * Flat `[start, end, start, end, …]` pairs, sorted and with every overlapping or
+ * touching pair joined — a CDS row and the UTR row beside it are one exon.
+ */
+function mergedPairs(pairs: readonly number[]): number[] {
+  const spans: Array<[number, number]> = []
+  for (let i = 0; i + 1 < pairs.length; i += 2) spans.push([pairs[i], pairs[i + 1]])
+  spans.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const merged: number[] = []
+  for (const [from, to] of spans) {
+    const last = merged.length - 1
+    if (last > 0 && from <= merged[last]) merged[last] = Math.max(merged[last], to)
+    else merged.push(from, to)
+  }
+  return merged
 }
 
 /**

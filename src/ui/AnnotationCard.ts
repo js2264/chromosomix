@@ -53,6 +53,7 @@ import { stepperField } from './trackControls'
 import {
   arrowsToggle,
   barScaleToggle,
+  featureDisplayField,
   colourByField,
   colourLegend,
   featureColourField,
@@ -1171,6 +1172,7 @@ export class AnnotationCard {
             ),
             arrowsToggle(this.props.store, entry),
           ),
+          featureDisplayField(this.props.store, entry),
           key,
         )
       }

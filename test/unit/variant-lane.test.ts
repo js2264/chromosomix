@@ -10,7 +10,7 @@
  *
  * So what these do is build a real `FeatureSet` from a real VCF through
  * `parseVcf`, lay it out through `layoutFeatures`, and draw it through
- * `drawSegments` onto a recording canvas — the same three calls
+ * `drawFeatures` onto a recording canvas — the same three calls
  * `BrowserView.paintLane` makes. Every claim below is about a rectangle that
  * came out of that, not about a constant.
  */
@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseVcf } from '@/annotations/vcf'
 import type { FeatureSet } from '@/annotations/types'
-import { drawSegments, featureAt, layoutFeatures } from '@/render/features'
+import { drawFeatures, featureAt, layoutFeatures } from '@/render/features'
 import type { LaneFrame } from '@/render/lane'
 import { LocusAxis } from '@/render/locus'
 import { BASE_COLOURS } from '@/render/sequence'
@@ -90,7 +90,7 @@ function frameOf(from: number, to: number, pixels = 1000): LaneFrame {
 
 const LANE = '#0072b2'
 
-function paintOf(set: FeatureSet): Parameters<typeof drawSegments>[4] {
+function paintOf(set: FeatureSet): Parameters<typeof drawFeatures>[4] {
   return {
     colour: LANE,
     guideColour: '#333',
@@ -112,7 +112,7 @@ function vcf(rows: string[]): FeatureSet {
 function drawn(set: FeatureSet, frame: LaneFrame): Rect[] {
   const layout = layoutFeatures(frame, axisOf(), set, 4, VARIANT_MIN_WIDTH)
   const { ctx, filled } = recorder()
-  drawSegments(ctx, frame, set, layout, paintOf(set))
+  drawFeatures(ctx, frame, set, layout, paintOf(set), 'variants')
   return filled
 }
 
@@ -169,7 +169,7 @@ describe('a variant lane, drawn', () => {
     const frame = frameOf(0, 8000)
     const layout = layoutFeatures(frame, axisOf(), set, 4)
     const { ctx, filled } = recorder()
-    drawSegments(ctx, frame, set, layout, { ...paintOf(set), colourOf: undefined })
+    drawFeatures(ctx, frame, set, layout, { ...paintOf(set), colourOf: undefined }, 'variants')
     expect(filled.every((r) => r.fill === LANE)).toBe(true)
   })
 

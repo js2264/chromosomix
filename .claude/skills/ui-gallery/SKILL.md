@@ -25,7 +25,7 @@ node scripts/ui-marks.mjs gallery            # marks on the card and the model's
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
-node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle: tr01 … tr17
+node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -132,8 +132,11 @@ pointer painted where the hand is (a screenshot carries no cursor) and a crop ro
 ticks and nothing may be drawn inside it — a typed locus with no ring round the map, the 1D browser
 drawing points, the same session on a throttled line drawing its map before
 its tracks with their room kept, and a circle whose pan stops at its end, framed on `ori` and zoomed
-on the join. It prints what each step found. Run it after any change to the Tracks card, the batch
-box, a track style, the pointers or the crosshair, the order a session loads in, or §8.15's frame.
+on the join — then genes (§8.16): the rounded, pointed blocks beside the map and in the 1D browser, a
+two-exon transcript (ACT1), the lane's right-click menu opened on a gene, the lane squished and
+collapsed from that menu, and the same `rows` choice in the card. It prints what each step found. Run
+it after any change to the Tracks card, the batch box, a track style, the pointers or the crosshair,
+the order a session loads in, §8.15's frame, or how a feature is drawn.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

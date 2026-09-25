@@ -1,6 +1,6 @@
 /**
  * Drive the Tracks card and the lanes in headless Chromium and write what each
- * state looks like (§5.8, §8.1, §8.6, §8.8, §8.15, §18.5).
+ * state looks like (§5.8, §8.1, §8.6, §8.8, §8.15, §8.16, §18.5).
  *
  * The parts a gallery of arrivals passes by: the Annotations column's order and
  * its two folded cards, two tracks ticked and set together from the batch box —
@@ -9,11 +9,13 @@
  * off and on over a lane, the pointer over the map drawn where the hand is (a
  * screenshot has no cursor in it) and again five times over, so the guide lines
  * can be seen stopping at its ticks — at rest, and in a cell wider than the
- * ring — a typed locus with no ring round the map, the
- * 1D browser drawing points, a map opened on a throttled line drawing before its
- * tracks with their room kept, and a circle framed on `ori` rather than slid
- * round. Prints what it found at each step, so a card that did not change is a
- * line in the log as well as a picture.
+ * ring — a typed locus with no ring round the map, the 1D browser drawing
+ * points, a map opened on a throttled line drawing before its tracks with their
+ * room kept, a circle framed on `ori` rather than slid round, and genes drawn
+ * as rounded blocks pointed the way they run — with the lane's right-click
+ * menu, and the lane squished and collapsed from it. Prints what it found at
+ * each step, so a card that did not change is a line in the log as well as a
+ * picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-tracks.mjs [out-dir]
@@ -321,6 +323,99 @@ try {
   await page.mouse.move(5, 5)
   console.log('zoomed on the join:', await window())
   await shot('tr17-circle-join')
+
+  // -------------------------------------------------------------------------
+  // Genes (§8.16): rounded blocks pointed the way they run, a transcript's
+  // exons and introns, the lane's right-click menu, and its three row modes.
+  // -------------------------------------------------------------------------
+  page = await fresh()
+  await page.goto(CONFIG)
+  await mapDrawn()
+  await allReady(7)
+  await sleep(1500)
+  const locusBox = () => page.locator('input.search, .search-box input').first()
+  const goTo = async (locus) => {
+    const input = locusBox()
+    await input.click()
+    await input.fill(locus)
+    await input.press('Enter')
+    await sleep(3500)
+    await page.mouse.move(5, 5)
+    await sleep(300)
+  }
+  await goTo('IV:1,050,001-1,090,000')
+  const heat = await page.locator('.heatmap-canvas').first().boundingBox()
+  await page.screenshot({ path: `${OUT}/tr18-genes-beside-the-map.png`, clip: { x: heat.x - 30, y: heat.y - 20, width: heat.width + 260, height: heat.height + 200 } })
+  console.log('shot tr18-genes-beside-the-map')
+  await page.keyboard.press('v')
+  await page.waitForSelector('.browser-canvas', { timeout: 60000 })
+  await sleep(2500)
+  const browserBox = async () => page.locator('.browser-canvas').first().boundingBox()
+  const lanesShot = async (name) => {
+    const box = await browserBox()
+    await page.screenshot({ path: `${OUT}/${name}.png`, clip: { x: box.x, y: box.y + 40, width: box.width, height: Math.min(box.height - 40, 360) } })
+    console.log('shot', name)
+  }
+  await goTo('VI:52,001-56,000')
+  await lanesShot('tr19-transcript-act1')
+  await goTo('IV:1,050,001-1,090,000')
+  await lanesShot('tr20-genes-in-the-browser')
+  // A forward gene is drawn in the lane's own colour, which no other lane on
+  // the demo uses: found on the canvas rather than at a remembered position.
+  const aGene = () =>
+    page.evaluate(() => {
+      const canvas = document.querySelector('.browser-canvas')
+      const ctx = canvas.getContext('2d')
+      const { width, height } = canvas
+      const data = ctx.getImageData(0, 0, width, height).data
+      const box = canvas.getBoundingClientRect()
+      const scale = width / box.width
+      for (let y = 0; y < height; y += 2) {
+        let run = 0
+        for (let x = Math.floor(width * 0.35); x < width; x++) {
+          const i = (y * width + x) * 4
+          const hit = Math.abs(data[i] - 0x5b) < 4 && Math.abs(data[i + 1] - 0x61) < 4 && Math.abs(data[i + 2] - 0x69) < 4
+          run = hit ? run + 1 : 0
+          if (run > 12 * scale) return { x: box.left + (x - 6 * scale) / scale, y: box.top + y / scale }
+        }
+      }
+      return null
+    })
+  const menuOn = async (name) => {
+    const gene = await aGene()
+    if (gene === null) throw new Error('no forward gene found on the browser canvas')
+    await page.mouse.click(gene.x, gene.y, { button: 'right' })
+    await sleep(500)
+    const menu = await page.locator('.context-menu').first().boundingBox()
+    console.log('menu:', await page.$$eval('.context-menu .context-menu-head, .context-menu .crumb-menu-item', (rows) => rows.map((row) => `${row.getAttribute('aria-checked') === 'true' ? '✓ ' : ''}${row.firstChild?.textContent ?? ''}${row.classList.contains('context-menu-head') ? ':' : ''}`).join(' | ')))
+    if (name !== null) {
+      const left = Math.max(0, Math.min(gene.x - 160, menu.x - 20))
+      const top = Math.max(0, Math.min(gene.y - 60, menu.y - 20))
+      await page.screenshot({ path: `${OUT}/${name}.png`, clip: { x: left, y: top, width: Math.max(menu.x + menu.width, gene.x + 160) - left + 20, height: Math.max(menu.y + menu.height, gene.y + 60) - top + 20 } })
+      console.log('shot', name)
+    }
+  }
+  await menuOn('tr21-lane-menu-on-a-gene')
+  await page.locator('.context-menu .crumb-menu-item', { hasText: /^Squished/ }).first().click()
+  await sleep(1200)
+  await lanesShot('tr22-genes-squished')
+  await menuOn(null)
+  await page.locator('.context-menu .crumb-menu-item', { hasText: /^Collapsed/ }).first().click()
+  await sleep(1200)
+  await lanesShot('tr23-genes-collapsed')
+  await menuOn(null)
+  await page.locator('.context-menu .crumb-menu-item', { hasText: /^Expanded/ }).first().click()
+  await sleep(800)
+  // …and the same choice in the card.
+  await fold('Show the Annotations panel')
+  const genesAt = (await rowNames()).indexOf('genes')
+  const genesRow = page.locator('.annotation-card .ann-row').nth(genesAt)
+  await genesRow.scrollIntoViewIfNeeded()
+  await genesRow.locator('.ann-more').click()
+  await sleep(600)
+  await genesRow.scrollIntoViewIfNeeded()
+  await genesRow.screenshot({ path: `${OUT}/tr24-rows-in-the-card.png` })
+  console.log('shot tr24-rows-in-the-card')
 } catch (err) {
   console.error('FAILED', err)
   if (page !== null) await page.screenshot({ path: `${OUT}/tr-failed.png` }).catch(() => {})

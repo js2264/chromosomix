@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A feature lane's rows can be expanded, squished or collapsed (§8.16).** Expanded is the rows with
+  names under them, as before; squished packs many thin rows with no names, so a crowded stretch shows
+  every overlapping feature; collapsed puts everything in one row across the lane. In the card, as
+  `rows`, and in the lane's right-click menu, which now also carries the strand points as a switch —
+  both ticked where they are in force — and, opened on a feature, that feature: its card, its name
+  and position to copy, and in the 1D browser a zoom that frames it.
+
 - **A `points` style for tracks (§8.8).** A dot per value and nothing between them — a Manhattan
   plot's picture, for p-values, sparse scores and anything whose outliers are the reading. From each
   pixel's mean like the other styles, so the same limits, groups and flip apply; one dot per run of
@@ -400,6 +407,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **Features are rounded blocks that end in a point, and grow with their lane (§8.16).** A stranded
+  feature's direction is the point on the block it ends in — a transcript's last exon — and nothing
+  else: the chevrons through long boxes and along introns are gone. Corners are rounded a little, and
+  a block takes its whole row up to 22 pixels, so a taller lane draws thicker genes where they used to
+  stop at nine and thirteen. Variants stay square.
 
 - **A map opened with its tracks is drawn first, and laid out once (§8.6).** The tracks' rows are
   seated at once and their files read once the map's first block is drawn (at most four seconds
@@ -1151,6 +1164,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A BED12 or bigBed of transcripts draws its exons (§8.16).** The glyph followed the lane's kind, and
+  a BED is a `segments` lane, so a gene set in BED12 came out as one plain box per gene: its blocks
+  and its thick span were read and never drawn. Every feature is now drawn by its own structure, so
+  the same gene draws the same blocks from a GTF, a genePred and a BED12.
+
+- **A GTF's coding span reaches its stop codon (§8.16).** The stop codon is a row of its own in
+  Ensembl's GTFs, outside the last CDS row, and was left out — so every coding gene drew three bases
+  short of its stop, and differently from the same gene in a genePred or BED12. The demo's genePred
+  is regenerated the same way. A GFF3 transcript written as CDS and UTR rows with no `exon` rows now
+  draws its exons and introns rather than one box.
 
 - **A full circle is drawn in a vector figure.** The PDF page flattened an arc of exactly one turn to
   a path of zero length, so a loop drawn as a ring on screen was missing from the saved figure.

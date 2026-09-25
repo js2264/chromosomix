@@ -1353,7 +1353,14 @@ export class AnnotationLanes {
         // function decides the rows, the floor and the banding for both
         // surfaces, because a number spelled at each is a number that drifts
         // (§8.16, §8.17).
-        const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+        //
+        // The same rule as the browser's, on the same lane drawn beside a map
+        // (§8.16, and §8.14 for the variant arm of it). One resolution of the
+        // colouring, the points and the rows on both surfaces, because a lane
+        // that read one way under the map and another in the browser would be
+        // two pictures of one file.
+        const features = featuresOf(entry.style, entry.kind)
+        const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength, features.display)
         const layout = layoutFeatures(
           frame,
           axis,
@@ -1364,11 +1371,6 @@ export class AnnotationLanes {
         )
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const set = entry.payload.data
-        // The same rule as the browser's, on the same lane drawn beside a map
-        // (§8.16, and §8.14 for the variant arm of it). One resolution of the
-        // colouring on both surfaces, because a lane that read one way under the
-        // map and another in the browser would be two pictures of one file.
-        const features = featuresOf(entry.style, entry.kind)
         // A value axis the reader fixed by hand, which a barChart lane reads and
         // every other feature kind ignores (§8.17) — moved by the factor of a
         // ceiling drag in progress, exactly as the profile lanes above are.
@@ -1393,10 +1395,12 @@ export class AnnotationLanes {
           haloColour: geometry.palette.halo,
           font: scaleFont(LANE_FONT),
           opacity: entry.style.opacity,
-          labels: text,
+          // A squished lane is names-free by definition (§8.16).
+          labels: text && features.display !== 'squished',
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
           arrows: features.arrows,
+          display: features.display,
           barScale: features.bars,
           ...(barLimits === undefined ? {} : { barLimits }),
           colourOf: ink.colourOf,

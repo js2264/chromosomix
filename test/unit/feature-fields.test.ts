@@ -31,7 +31,7 @@ import {
 import type { FeatureSet } from '@/annotations/types'
 import { defaultStyle } from '@/annotations/types'
 import { featureColouring, NO_ANSWER } from '@/render/featureInk'
-import { drawSegments, layoutFeatures } from '@/render/features'
+import { drawFeatures, layoutFeatures } from '@/render/features'
 import type { LaneFrame } from '@/render/lane'
 import { LocusAxis } from '@/render/locus'
 
@@ -216,6 +216,7 @@ describe('a stored choice, read back', () => {
       colourBy: 'biotype',
       arrows: false,
       bars: 'file',
+      display: 'expanded',
     })
     // Untrusted input: a session outlives the build that wrote it.
     expect(featureStyleOf({ colourBy: 42 }, 'segments').colourBy).toBe('strand')
@@ -223,10 +224,20 @@ describe('a stored choice, read back', () => {
       colourBy: 'strand',
       arrows: true,
       bars: 'file',
+      display: 'expanded',
     })
     // Absent means on, so a row written before the switch existed comes back
     // pointing rather than blank.
     expect(featureStyleOf({ colourBy: 'strand' }, 'segments').arrows).toBe(true)
+  })
+
+  it('keeps one of the three ways of spending the rows, and nothing else', () => {
+    expect(featureStyleOf({ display: 'squished' }, 'gtf').display).toBe('squished')
+    expect(featureStyleOf({ display: 'collapsed' }, 'segments').display).toBe('collapsed')
+    // A row written before the choice existed, and one written by something
+    // else entirely, both come back expanded.
+    expect(featureStyleOf({ colourBy: 'strand' }, 'gtf').display).toBe('expanded')
+    expect(featureStyleOf({ display: 'dense' }, 'gtf').display).toBe('expanded')
   })
 
   it('takes only the one string that names the other bar scale (§8.17)', () => {
@@ -325,9 +336,11 @@ function recorder(): {
   ctx: CanvasRenderingContext2D
   rects: Array<{ x: number; w: number; fill: string }>
   polys: Array<{ points: Array<[number, number]>; fill: string }>
+  curves: { count: number }
 } {
   const rects: Array<{ x: number; w: number; fill: string }> = []
   const polys: Array<{ points: Array<[number, number]>; fill: string }> = []
+  const curves = { count: 0 }
   let pendingRects: Array<{ x: number; w: number }> = []
   let pendingPolys: Array<Array<[number, number]>> = []
   let current: Array<[number, number]> | null = null
@@ -350,6 +363,12 @@ function recorder(): {
     rect: (x: number, _y: number, w: number) => { pendingRects.push({ x, w }) },
     moveTo: (x: number, y: number) => { current = [[x, y]] },
     lineTo: (x: number, y: number) => { current?.push([x, y]) },
+    // A rounded corner's far end, which is where the outline goes next; the
+    // bend is counted so a test can ask whether the corners were rounded.
+    quadraticCurveTo: (_cx: number, _cy: number, x: number, y: number) => {
+      current?.push([x, y])
+      curves.count++
+    },
     stroke: () => { current = null; pendingPolys = [] },
     fillText: () => {}, strokeText: () => {},
     measureText: () => ({ width: 20, actualBoundingBoxAscent: 7 }),
@@ -361,10 +380,10 @@ function recorder(): {
       pendingPolys = []
     },
   }
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, polys }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, polys, curves }
 }
 
-function paintOf(over: Partial<Parameters<typeof drawSegments>[4]> = {}): Parameters<typeof drawSegments>[4] {
+function paintOf(over: Partial<Parameters<typeof drawFeatures>[4]> = {}): Parameters<typeof drawFeatures>[4] {
   return {
     colour: LANE,
     guideColour: '#333',
@@ -385,60 +404,86 @@ const BED = parseBed(
   'stranded.bed',
 )
 
+/** The x of the outline's point: its one vertex on the centre line, if it has one. */
+function tipOf(poly: { points: Array<[number, number]> }): number | null {
+  const ys = poly.points.map(([, y]) => y)
+  const middle = (Math.min(...ys) + Math.max(...ys)) / 2
+  const on = poly.points.filter(([, y]) => Math.abs(y - middle) < 0.01)
+  return on.length === 1 ? on[0][0] : null
+}
+
 describe('a stranded segment, drawn', () => {
-  it('cuts a point out of the leading end, the way the feature runs', () => {
+  it('ends in a point at the end it runs to', () => {
     const frame = frameOf(0, 10_000, 1000, 40)
     const layout = layoutFeatures(frame, axisOf(), BED, 4)
     const { ctx, polys } = recorder()
-    drawSegments(ctx, frame, BED, layout, paintOf())
-    // The two wide ones are pentagons; five points each.
+    drawFeatures(ctx, frame, BED, layout, paintOf(), 'segments')
+    // The two wide ones are outlines; the one-pixel one is a rectangle.
     expect(polys.length).toBe(2)
-    expect(polys.every((poly) => poly.points.length === 5)).toBe(true)
-    // A forward feature's point is at its far end and a reverse one's at its
-    // near end — measured as the x of the vertex that is alone on the centre
-    // line, against the two the box's own corners sit on.
-    const tipOf = (poly: (typeof polys)[number]): number => {
-      const ys = poly.points.map(([, y]) => y)
-      const middle = (Math.min(...ys) + Math.max(...ys)) / 2
-      return poly.points.find(([, y]) => Math.abs(y - middle) < 0.01)?.[0] ?? Number.NaN
-    }
     const xs = (poly: (typeof polys)[number]): number[] => poly.points.map(([x]) => x)
-    const forward = polys[0]
-    const reverse = polys[1]
+    const [forward, reverse] = polys
+    // A forward feature's point is at its far end and a reverse one's at its
+    // near end — the vertex alone on the centre line, against the corners.
     expect(tipOf(forward)).toBeCloseTo(Math.max(...xs(forward)), 5)
     expect(tipOf(reverse)).toBeCloseTo(Math.min(...xs(reverse)), 5)
+  })
+
+  it('draws no chevrons through a long one: the point is the whole of it', () => {
+    const frame = frameOf(0, 10_000, 1000, 40)
+    const layout = layoutFeatures(frame, axisOf(), BED, 4)
+    const { ctx } = recorder()
+    const strokes: number[] = []
+    const stroke = ctx.stroke.bind(ctx)
+    ;(ctx as unknown as { stroke: () => void }).stroke = () => {
+      strokes.push(1)
+      stroke()
+    }
+    drawFeatures(ctx, frame, BED, layout, paintOf(), 'segments')
+    expect(strokes).toHaveLength(0)
+  })
+
+  it('rounds the corners it does not point', () => {
+    const frame = frameOf(0, 10_000, 1000, 40)
+    const layout = layoutFeatures(frame, axisOf(), BED, 4)
+    const { ctx, curves } = recorder()
+    drawFeatures(ctx, frame, BED, layout, paintOf(), 'segments')
+    // Two outlines, each with a square end rounded at both of its corners.
+    expect(curves.count).toBe(4)
   })
 
   it('keeps the feature’s exact extent, point and all', () => {
     const frame = frameOf(0, 10_000, 1000, 40)
     const layout = layoutFeatures(frame, axisOf(), BED, 4)
     const { ctx, polys } = recorder()
-    drawSegments(ctx, frame, BED, layout, paintOf())
+    drawFeatures(ctx, frame, BED, layout, paintOf(), 'segments')
     // 1000–3000 of a 10 kb window drawn 1000 px wide is x 100 to 300. The head
-    // is cut *out of* the box, so it costs the glyph no bases (§8.4).
+    // is cut *out of* the box and the corners are rounded *into* it, so neither
+    // costs the glyph a base nor adds one (§8.4).
     const xs = polys[0].points.map(([x]) => x)
     expect(Math.min(...xs)).toBeCloseTo(100, 5)
     expect(Math.max(...xs)).toBeCloseTo(300, 5)
   })
 
-  it('leaves a feature too narrow to hold a head as the box it always was', () => {
+  it('leaves a feature too narrow to hold a head as a plain box', () => {
     const frame = frameOf(0, 10_000, 1000, 40)
     const layout = layoutFeatures(frame, axisOf(), BED, 4)
     const { ctx, rects } = recorder()
-    drawSegments(ctx, frame, BED, layout, paintOf())
+    drawFeatures(ctx, frame, BED, layout, paintOf(), 'segments')
     // 9000–9010 is one pixel: a point there would eat the extent it exists to
-    // show.
+    // show, and a rounded corner on it would be a smudge.
     expect(rects.length).toBe(1)
     expect(rects[0].w).toBeLessThan(2)
   })
 
-  it('draws plain rectangles when the reader turns the points off', () => {
+  it('draws rounded boxes with no point when the reader turns the points off', () => {
     const frame = frameOf(0, 10_000, 1000, 40)
     const layout = layoutFeatures(frame, axisOf(), BED, 4)
-    const { ctx, rects, polys } = recorder()
-    drawSegments(ctx, frame, BED, layout, paintOf({ arrows: false }))
-    expect(polys.length).toBe(0)
-    expect(rects.length).toBe(3)
+    const { ctx, polys, curves } = recorder()
+    drawFeatures(ctx, frame, BED, layout, paintOf({ arrows: false }), 'segments')
+    expect(polys.length).toBe(2)
+    expect(polys.every((poly) => tipOf(poly) === null)).toBe(true)
+    // All four corners of each rounded.
+    expect(curves.count).toBe(8)
   })
 
   it('paints each strand in its own ink, in one path per colour', () => {
@@ -446,7 +491,7 @@ describe('a stranded segment, drawn', () => {
     const layout = layoutFeatures(frame, axisOf(), BED, 4)
     const { colourOf, key } = featureColouring(BED, 'segments', 'strand', LANE)
     const { ctx, rects, polys } = recorder()
-    drawSegments(ctx, frame, BED, layout, paintOf({ colourOf }))
+    drawFeatures(ctx, frame, BED, layout, paintOf({ colourOf }), 'segments')
     const inks = [...polys, ...rects].map((one) => one.fill)
     expect(new Set(inks)).toEqual(new Set([key.levels[0].colour, key.levels[1].colour]))
   })

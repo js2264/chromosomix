@@ -211,7 +211,7 @@ import {
   SELECTION_PAD,
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
+import { laneMenuFeature, openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
   PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
@@ -2348,9 +2348,14 @@ export class BrowserView {
         }
       }
     } else if (entry.payload?.kind === 'features') {
+      // What the boxes are coloured by, whether the stranded ones point and how
+      // the rows are spent (§8.16). Resolved through `featureColouring` on both
+      // surfaces and in the settings card's key, so the picture, the legend and
+      // the lane's own name cannot disagree about what a colour means.
+      const features = featuresOf(entry.style, entry.kind)
       // Every per-kind number in one place, so this surface and the map lanes
       // cannot drift into two pictures of one file (§8.16, §8.17).
-      const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+      const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength, features.display)
       const layout = layoutFeatures(
         frame,
         this.axis,
@@ -2361,11 +2366,6 @@ export class BrowserView {
       )
       this.layouts.set(entry.id, { frame, layout })
       const set = entry.payload.data
-      // What the boxes are coloured by, and whether the stranded ones point
-      // (§8.16). Resolved through `featureColouring` on both surfaces and in the
-      // settings card's key, so the picture, the legend and the lane's own name
-      // cannot disagree about what a colour means.
-      const features = featuresOf(entry.style, entry.kind)
       // A value axis the reader fixed by hand, which a barChart lane reads and
       // every other feature kind ignores (§8.17) — moved by the factor of a
       // ceiling drag in progress, exactly as a signal lane's is. Mid-drag an
@@ -2382,10 +2382,13 @@ export class BrowserView {
         haloColour: palette.labelHaloColor,
         font: scaleFont(LANE_FONT),
         opacity: entry.style.opacity,
-        labels: this.text,
+        // A squished lane is names-free by definition: its rows are too thin
+        // to hold one under anything (§8.16).
+        labels: this.text && features.display !== 'squished',
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,
+        display: features.display,
         barScale: features.bars,
         ...(barLimits === undefined ? {} : { barLimits }),
         colourOf: ink.colourOf,
@@ -3510,14 +3513,24 @@ export class BrowserView {
     }
 
     const onMenu = (event: MouseEvent): void => {
-      const { y } = at(event)
+      const { x, y } = at(event)
       const hit = this.laneAt(y)
       if (hit === null) return
       event.preventDefault()
+      // The feature under the pointer, if there is one, with what this surface
+      // can do with it: open its card, and frame it on the one axis it has.
+      const found = this.featureAtPoint(x, y)
+      const feature =
+        found === null
+          ? null
+          : laneMenuFeature(found.set, found.index, {
+              open: () => this.openFeatureCard(found),
+              zoom: () => this.frameFeature(found.set, found.index),
+            })
       // No edge: this surface has no map for a lane to be beside, so there is
       // no location to offer and every lane reads the way a horizontal track
       // under a ruler does.
-      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null)
+      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null, undefined, feature)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -3706,32 +3719,41 @@ export class BrowserView {
         if (lane !== null && !lane.onBorder) revealTrack(lane.lane.entry.id)
         return
       }
-      const { set, index, source } = hit
-      const contig = set.contigs[set.contig[index]]
-      const start = set.start[index]
-      const end = set.end[index]
       // The card, not the zoom. A gene that has been clicked is already on
       // screen, so "go there" answers a question the reader did not have; what
       // they want is the systematic name, the biotype and the exons, in
       // something that stays open long enough to be read and copied out of.
       // Zooming is still one press away, inside it.
-      this.featureDialog?.close()
-      this.featureDialog = openFeatureDialog({
-        set,
-        index,
-        source,
-        onGoTo: () => {
-          // The same margin a search hit gets, from the same function: finding a
-          // gene by name and framing the gene you clicked are two gestures for
-          // one intention, and the picture must not shift between them.
-          const span = paddedSpan(start, end)
-          this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
-        },
-        onClose: () => {
-          this.featureDialog = null
-        },
-      })
+      this.openFeatureCard(hit)
     }, DOUBLE_CLICK_MS)
+  }
+
+  /** A feature's card: what a click on it opens, and the lane menu's *About it*. */
+  private openFeatureCard(hit: { set: FeatureSet; index: number; source: string }): void {
+    const { set, index, source } = hit
+    this.featureDialog?.close()
+    this.featureDialog = openFeatureDialog({
+      set,
+      index,
+      source,
+      onGoTo: () => this.frameFeature(set, index),
+      onClose: () => {
+        this.featureDialog = null
+      },
+    })
+  }
+
+  /**
+   * Frame a feature — the card's *zoom to it*, and the lane menu's.
+   *
+   * The same margin a search hit gets, from the same function: finding a gene
+   * by name and framing the gene you clicked are two gestures for one
+   * intention, and the picture must not shift between them.
+   */
+  private frameFeature(set: FeatureSet, index: number): void {
+    const contig = set.contigs[set.contig[index]]
+    const span = paddedSpan(set.start[index], set.end[index])
+    this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
   }
 
   /**
