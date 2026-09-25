@@ -426,6 +426,11 @@ def analyse(card):
     step(d / f'compartments-distance-{METHOD}', 'compartments', at, *common, '--expected', 'distance')
     step(d / f'compartments-arms-{METHOD}', 'compartments', at, *common, '--expected', 'arms',
          '--armWindow', ARM_WINDOW)
+    # The same along the arms by the other method, to say how much E1 depends on the choice.
+    OTHER = 'correlation' if METHOD == 'cooltools' else 'cooltools'
+    step(d / f'compartments-arms-{OTHER}', 'compartments', at,
+         *[OTHER if value == METHOD else value for value in common], '--expected', 'arms',
+         '--armWindow', ARM_WINDOW)
     # GC content of A against B, by Signal by group — the task the app runs, so the test and its P
     # are the tool's own rather than recomputed here.
     if fasta is not None:
@@ -450,6 +455,14 @@ def analyse(card):
         e1_distance=profile(one(d / f'compartments-distance-{METHOD}', '*compartment-e1.bedGraph'), chrom, n),
         e1_arms=profile(one(d / f'compartments-arms-{METHOD}', '*compartment-e1.bedGraph'), chrom, n),
         components=rows_of(one(d / f'compartments-arms-{METHOD}', '*compartment-components.tsv').read_text()),
+        components_distance=rows_of(
+            one(d / f'compartments-distance-{METHOD}', '*compartment-components.tsv').read_text()),
+        # Every component of both runs, E1 to E3, for what each follows before and after detrending.
+        eigen_distance=[profile(one(d / f'compartments-distance-{METHOD}', f'*compartment-e{k}.bedGraph'), chrom, n)
+                        for k in (1, 2, 3)],
+        eigen_arms=[profile(one(d / f'compartments-arms-{METHOD}', f'*compartment-e{k}.bedGraph'), chrom, n)
+                    for k in (1, 2, 3)],
+        e1_arms_other=profile(one(d / f'compartments-arms-{OTHER}', '*compartment-e1.bedGraph'), chrom, n),
         interarm=rows_of(one(d / 'interarm', '*interarm-table.tsv').read_text())[0],
         curve=rows_of(one(d / 'interarm', '*interarm-curve.tsv').read_text()),
         radial=profile(one(d / 'spatial', '*radial*.bedGraph'), chrom, n),
@@ -681,7 +694,8 @@ for species, r in results.items():
 
 Per species, each with the test behind it. **Distance from the origin** is in bins, the short way
 round a circle; its Spearman |ρ| with E1 is how far an eigenvector follows the ori–ter axis rather
-than compartments. **GC content of A against B** is *Signal by group*'s — its group means and its
+than compartments; before detrending, the largest |r| of E1, E2 or E3 with GC content says whether any of
+the leading components carries the compartments at all. **GC content of A against B** is *Signal by group*'s — its group means and its
 Mann–Whitney test, as the app reports them. **The secondary diagonal** is read as the inter-arm task reads it — the cells within
 `BAND` bins of a bin's mirror across the origin, on opposite arms and more than `2·BAND + 2` bins
 from the main diagonal — as its mean log2 O/E by distance (which is the task's score, recomputed
@@ -695,6 +709,11 @@ def distance_from_origin(r):
     i = np.arange(r['n'])
     d = np.abs(i - r['o'])
     return np.minimum(d, r['n'] - d) if r['circular'] else d
+
+
+def pearson(a, b):
+    ok = np.isfinite(a) & np.isfinite(b)
+    return stats.pearsonr(a[ok], b[ok])[0] if ok.sum() > 2 else np.nan
 
 
 def secondary_diagonal(r, band=BAND):
@@ -728,10 +747,16 @@ def quoted(r):
         # |ρ|: an eigenvector's sign is GC content's to set, and arbitrary where it cannot.
         'E1 distance ~ ori |rho|': abs(stats.spearmanr(e1d, d, nan_policy='omit')[0]),
         'E1 arms ~ ori |rho|': abs(stats.spearmanr(e1, d, nan_policy='omit')[0]),
+        'E1 distance share': num(next((row for row in r['components_distance']
+                                       if row.get('component') == 'E1'), {}).get('explained')),
         'E1 arms share': num(top.get('explained')),
+        # The detrended E1 by the other method: how much the compartments depend on the choice.
+        '|r| E1 arms, other method': abs(pearson(e1, r['e1_arms_other'])),
     }
     both = np.isfinite(e1) & np.isfinite(gc)
     if both.sum() > 2:
+        # Before detrending, whether any of the three leading components follows GC content.
+        out['max |r(GC)| E1-E3, distance'] = max(abs(pearson(e, gc)) for e in r['eigen_distance'])
         rr, rp = stats.pearsonr(e1[both], gc[both])
         low = both & (gc <= np.nanpercentile(gc[both], 5))
         in_b, total_b = int((e1[low] < 0).sum()), int((e1[both] < 0).sum())
