@@ -1,42 +1,47 @@
 #!/usr/bin/env python3
-"""Gather hic-suite.sh's results into the DNA Bacterial Zoo, the viewer's `dbz` store.
+"""Index the DNA Bacterial Zoo — the viewer's `dbz` store — in the folder it was written to.
 
-    python3 scripts/DBZ_store.py build ~/Downloads/Martial_DBZ
-    python3 scripts/DBZ_store.py serve ~/Downloads/Martial_DBZ/store
-    aws s3 sync ~/Downloads/Martial_DBZ/store/ s3://rsglab-data/dbz/ --delete
+    scripts/dbz-store.sh                     the analyses, into store/, and then this
+    python3 scripts/DBZ_store.py index ~/Downloads/metacooler/data/dbz/store
+    python3 scripts/DBZ_store.py serve ~/Downloads/metacooler/data/dbz/store
+    aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delete \\
+        --exclude '*.tsv' --exclude '*.log'
 
 The viewer ships a tile for it (``DBZ_STORE`` in ``src/ui/stores/registry.ts``)
 that reads ``https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json``, so
 publishing it is the sync above: the folder goes up as it is, names and all.
 
-``build`` reads ``cool/`` and ``results/`` under the folder it is given and
-writes ``store/`` beside them::
+``scripts/dbz-store.sh`` writes every step of every sample straight into the
+store's folder for it, and ``index`` reads that folder as it stands::
 
     store/
-      store.json                                   the store (SPECS §24.1)
+      store.json                                   the store (SPECS §24.1): written here
       <sample>/<sample>.mcool                      the map every result came from
-      <sample>/<sample>.metacooler.json            a session: the map with eight tracks placed, and its model
-      <sample>/model3d/…reconstructed-model.bed3d  the 3D model, where the step wrote one
-      <sample>/<step>/<sample>_<bp>.<task>.<output>.bw|bed|bedpe
+      <sample>/<species>.fa                        its reference
+      <sample>/<sample>.metacooler.json            its session: written here
+      <sample>/framing.tsv                         the circles and origins every step ran with
+      <sample>/<step>/<sample>_<bp>.<task>.<output>.bw|bed|bedpe|bed3d|tsv
 
 The store asks to be drawn as cards, one per species like IGV's genomes: the
-session is the card's button and the map and its tracks are under its fold.
+session is the card's button, and the map, its reference and its tracks are
+under its fold.
+
+**Every file the viewer opens is a row**: each map, its reference, and every
+bigWig, BED, BEDPE and bed3d a step wrote. The TSVs are not — P(s), cis/trans,
+the pileups, the component and origin tables: tables this viewer does not open
+— and they stay out of the published copy with the logs (the sync's excludes).
+
+**A session opens on three tracks and nothing else**: the map, whole at the
+patterns' bin size, and under it its HiC score, its insulation score and E1 over
+the decay along both arms — no overlay, no calls, no model; everything else is
+on the map's shelf. It declares what the analyses ran with (``framing.tsv``):
+the sequences read as circles, and each origin, so the Chromosomes table, the
+``ori`` button and any task rerun in the viewer read the arms from where E1's
+were read (SPECS §8.15).
 
 Every name in the store and in the sessions is relative, so the folder is
 self-contained: served from this machine or copied to a bucket, it opens the
-same way (SPECS §24.1, §21.1). Files are **hard links** into ``cool/`` and
-``results/`` — no second copy of a gigabyte of maps, and unlike a symlink a
-hard link survives ``aws s3 sync`` and ``rsync -a`` as the file itself. Re-run
-``build`` after hic-suite.sh has run again: a re-run step writes new files, and
-the store keeps the old ones until it is rebuilt.
-
-What goes in is what the viewer opens: each map, every bigWig, BED and BEDPE a
-step wrote, and the 3D model where the step wrote one as a bed3d — which
-``metacooler-run`` does since it stopped writing models as a BED of their bins
-alone (§25.7); a sample whose ``model3d/`` holds only that older BED has no
-model here until the step is rerun. Left in ``results/``: the bedGraphs (the
-bigWig beside each says the same thing, indexed) and the TSVs (P(s), cis/trans,
-pileups — tables this viewer does not open).
+same way (SPECS §24.1, §21.1).
 
 ``serve`` is for looking at it before it goes anywhere: a static server with
 the two things the viewer needs of a host — byte ranges and a cross-origin
@@ -51,13 +56,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
-import shutil
 import sys
 import urllib.parse
 from collections import Counter
-from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
@@ -71,11 +73,15 @@ SPECIES = HERE / "DBZ_species.tsv"
 #: The steps whose outputs become rows, in the order they are listed under a
 #: species, with the name the Analysis facet gives each.
 STEPS = {
+    "composition": "Base composition",
+    "oriter": "Origin and terminus",
     "coverage": "Coverage",
     "insulation": "Insulation",
     "di": "Directionality index",
     "hicscore": "HiC score",
+    "compartments-arms": "Compartments along both arms",
     "compartments": "Compartments",
+    "interarm": "Inter-arm alignment",
     "borders": "Borders",
     "loops": "Loops",
     "model3d": "3D model",
@@ -84,25 +90,22 @@ STEPS = {
 #: What the viewer opens, by suffix, and what the Format facet calls it.
 FORMATS = {".bw": "bigWig", ".bed": "BED", ".bedpe": "BEDPE", ".bed3d": "bed3d"}
 
-#: The tracks a species' session opens with, top to bottom under the map: the
-#: coverage (where the map is thin), the two domain scores with insulation's
-#: calls, the HiC score, E1, and chromosight's borders and loops — the loops on
-#: the map itself, a BEDPE being a pair of loci. The other nine outputs are on
-#: the map's shelf and in the store as rows of their own.
+#: A reference, by suffix: what ``dbz-store.sh`` places beside the map.
+REFERENCES = (".fa", ".fna", ".fasta")
+
+#: The tracks a species' session opens with, top to bottom under the map, by
+#: step and output: the HiC score, the insulation score — its boundaries and
+#: domains stay on the shelf — and E1 over the decay along both arms, read from
+#: the origin the suite called. Every other output of the sample is on the
+#: map's shelf and in the store as a row of its own.
 SESSION_TRACKS = (
-    "coverage.coverage-total.bw",
-    "insulation.insulation-w10.bw",
-    "insulation.insulation-boundaries.bed",
-    "di.di-w10.bw",
-    "hicscore.hicscore-d3.bw",
-    "compartments.compartment-e1.bw",
-    "chromosight.chromosight-patterns.bed",
-    "chromosight.chromosight-patterns.bedpe",
-    # …and the model, in a cell beside the map, where the sample has one.
-    "reconstruct3d.reconstructed-model.bed3d",
+    "hicscore/hicscore.hicscore-d3.bw",
+    "insulation/insulation.insulation-w10.bw",
+    "compartments-arms/compartments.compartment-e1.bw",
 )
 
-#: hic-suite.sh's RES_PATTERNS: the bin size a session opens its map at.
+#: The bin size a session opens its map at, where dbz-store.sh's RES_PATTERNS
+#: is not handed over.
 PATTERNS_BP = 4000
 
 COLUMNS = [
@@ -116,7 +119,7 @@ COLUMNS = [
 
 
 # ---------------------------------------------------------------------------
-# Reading results/
+# Reading a sample's folder
 # ---------------------------------------------------------------------------
 
 
@@ -153,18 +156,44 @@ def called(path: Path) -> int:
         return sum(1 for line in handle if line.strip() and not line.startswith("#"))
 
 
-def genome_of(sample_dir: Path) -> dict[str, int]:
-    """Sequence lengths, from the coverage track's last bin on each — the one place they are written."""
-    lengths: dict[str, int] = {}
-    for path in sample_dir.glob("coverage/*.coverage-total.bedGraph"):
-        with path.open(encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith(("#", "track")):
-                    continue
-                cells = line.split("\t")
-                if len(cells) >= 3:
-                    lengths[cells[0]] = max(lengths.get(cells[0], 0), int(cells[2]))
-    return lengths
+def read_framing(path: Path) -> list[dict]:
+    """``framing.tsv``: each sequence, its length, whether it was read as a circle, its origin (1-based)."""
+    rows: list[dict] = []
+    if not path.exists():
+        return rows
+    header: Optional[list[str]] = None
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if line.startswith("#") or not line.strip():
+                continue
+            cells = line.rstrip("\n").split("\t")
+            if header is None:
+                header = cells
+                continue
+            row = dict(zip(header, cells))
+            length = row.get("length", "")
+            origin = row.get("origin", "")
+            rows.append(
+                {
+                    "sequence": row.get("sequence", ""),
+                    "length": int(length) if length.isdigit() else 0,
+                    "circular": row.get("circular") == "yes",
+                    "origin": int(origin) if origin.isdigit() and int(origin) >= 1 else None,
+                }
+            )
+    return rows
+
+
+def reference_extent(path: Path) -> tuple[int, int]:
+    """How many sequences a FASTA holds, and how many bases between them."""
+    sequences = bases = 0
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if line.startswith(">"):
+                sequences += 1
+            else:
+                bases += len(line.strip())
+    return sequences, bases
 
 
 def bp(value: int) -> str:
@@ -176,72 +205,79 @@ def bp(value: int) -> str:
     return f"{value} bp"
 
 
-def placed(source: Path, target: Path, copy: bool) -> None:
-    """*target* as a hard link to *source*, or a copy where a link cannot be made."""
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if not copy:
-        try:
-            os.link(source, target)
-            return
-        except OSError:
-            pass  # another volume, or a filesystem without links
-    shutil.copy2(source, target)
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 # ---------------------------------------------------------------------------
-# build
+# index
 # ---------------------------------------------------------------------------
 
 
-def build(root: Path, species_table: Path, copy: bool) -> int:
-    cool, results, store_dir = root / "cool", root / "results", root / "store"
+def index(store_dir: Path, species_table: Path, resolution: int) -> int:
     table = read_species(species_table)
     repeated = {name for name, count in Counter(name for name, _ in table).items() if count > 1}
     created = make_store.now_iso()
-    store_dir.mkdir(exist_ok=True)
 
     sessions: list[dict] = []
     maps: list[dict] = []
     tracks: list[dict] = []
     skipped: list[str] = []
+    thin: list[str] = []
     producers: set[str] = set()
     circular = 0
+    origins = 0
     models = 0
 
     for species, sample in table:
-        mcool = cool / f"{sample}.mcool"
-        sample_dir = results / sample
-        if not mcool.exists() or not sample_dir.is_dir():
-            skipped.append(f"{sample}: no {'map' if not mcool.exists() else 'results'}")
+        out = store_dir / sample
+        mcool = out / f"{sample}.mcool"
+        if not mcool.exists():
+            skipped.append(f"{sample}: not in the store yet (no {mcool.name})")
             continue
         # A species run twice (two libraries) is told apart by what follows its name.
         label = species
         if species in repeated:
             label = f"{species} ({sample[len(species) + 1:] if sample.startswith(species + '_') else sample})"
 
-        out = store_dir / sample
-        if out.exists():
-            shutil.rmtree(out)  # only links and the session this script wrote
-        placed(mcool, out / mcool.name, copy)
-
-        lengths = genome_of(sample_dir)
-        run_log = sample_dir / "run.log"
-        if run_log.exists() and "  circular: " in run_log.read_text(encoding="utf-8"):
-            circular += 1
+        framing = read_framing(out / "framing.tsv")
+        declared = [row["sequence"] for row in framing if row["circular"]]
+        called_at = {row["sequence"]: row["origin"] for row in framing if row["origin"] is not None}
+        circular += bool(declared)
+        origins += bool(called_at)
+        size = sum(row["length"] for row in framing)
         # What tells two samples of a species apart: the sample name less the species.
         tail = sample[len(species) + 1:] if sample.startswith(species + "_") else ""
         common = {
             "species": label,
             **({"id": tail} if tail else {}),
-            **({"sequences": f"{len(lengths)} sequence{'s' if len(lengths) != 1 else ''}"} if lengths else {}),
+            **({"sequences": plural(len(framing), "sequence")} if framing else {}),
         }
 
+        # The shelf: what the map offers once open, the reference first.
         shelf: list[dict] = []
+        references = sorted(path for path in out.iterdir() if path.is_file() and path.suffix in REFERENCES)
+        for path in references:
+            count, bases = reference_extent(path)
+            relative = f"{sample}/{path.name}"
+            tracks.append(
+                {
+                    "label": f"{label} · Reference · {path.name}",
+                    "uri": relative,
+                    "kind": "genome",
+                    "size": path.stat().st_size,
+                    "note": f"{bp(bases)} over {plural(count, 'sequence')} · the sequence every track "
+                    "of this sample was read against",
+                    "fields": {"analysis": "Reference", "format": "FASTA", **common},
+                }
+            )
+            shelf.append({"label": f"Reference · {path.name}", "url": relative, "key": "reference"})
+
         for step, analysis in STEPS.items():
-            for path in sorted((sample_dir / step).glob("*")):
+            for path in sorted((out / step).glob("*")):
                 fmt = FORMATS.get(path.suffix)
                 # The model step's BED is the model's bins without their
-                # coordinates, from before the shell wrote a bed3d: nothing to draw.
+                # coordinates, from before the command wrote a bed3d: nothing to draw.
                 if fmt is None or (step == "model3d" and fmt != "bed3d"):
                     continue
                 count = called(path) if fmt != "bigWig" else None
@@ -251,9 +287,14 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
                 facts = provenance(path.with_suffix(".tsv"))
                 producers.add(facts.get("producer", ""))
                 title = facts.get("output") or path.stem.split(".", 1)[-1]
+                # A track named after a file of this sample — the coverage the
+                # origin call fitted its spline to — is named after that file's
+                # output instead, which a card's fold has room for.
+                title = re.sub(
+                    rf"\b{re.escape(sample)}_\d+\.[\w-]+\.([\w-]+)\.(?:bw|bigwig|bedGraph)\b", r"\1", title
+                )
                 binsize = re.search(r"_(\d+)\.[^.]+\.[^.]+\.[^.]+$", path.name)
                 relative = f"{sample}/{step}/{path.name}"
-                placed(path, store_dir / relative, copy)
                 note = " · ".join(
                     piece
                     for piece in (
@@ -282,9 +323,12 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
                         },
                     }
                 )
-                shelf.append({"label": title, "url": relative, "key": path.name.split(".", 1)[-1]})
+                shelf.append(
+                    {"label": title, "url": relative, "key": f"{step}/{path.name.split('.', 1)[-1]}"}
+                )
+                models += fmt == "bed3d"
 
-        # The session: the map, eight of its tracks and its model, named relative to the
+        # The session: the map and three of its tracks, named relative to the
         # session's own folder, which is where the viewer resolves them (§21.1).
         chosen = [
             {"label": track["label"], "url": track["url"].split("/", 1)[1]}
@@ -292,37 +336,39 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
             for track in shelf
             if track["key"] == key
         ]
-        model = any(track["url"].endswith(".bed3d") for track in chosen)
-        models += model
-        lanes = len(chosen) - (1 if model else 0)
-        document = make_store.session_document(
-            name=label, uri=mcool.name, tracks=chosen, created=created
-        )
+        for key in SESSION_TRACKS:
+            if not any(track["key"] == key for track in shelf):
+                thin.append(f"{sample}: no {key.split('/', 1)[1]} in {key.split('/', 1)[0]}/")
+        document = make_store.session_document(name=label, uri=mcool.name, tracks=chosen, created=created)
+        tab = document["tabs"][0]
         # The whole matrix rather than the chromosome list make_store opens a
         # map on: a bacterial genome is a few megabases, and its map with the
-        # tracks under it is the picture. At the patterns' bin size, which
-        # every sample with a HiC score has; the finest rung whole would be a
+        # tracks under it is the picture. At the patterns' bin size, which a
+        # sample has wherever a step ran at it; the finest rung whole would be a
         # dense read the size guard refuses (§9).
-        if any(track["key"].startswith("hicscore.") for track in shelf):
-            # Updated rather than replaced: `maps` says a model's cell opens.
-            document["tabs"][0]["state"].update(
-                uri=f"{mcool.name}::resolutions/{PATTERNS_BP}",
-                view="whole",
-            )
+        if any(f"_{resolution}." in track["url"] for track in shelf):
+            tab["state"].update(uri=f"{mcool.name}::resolutions/{resolution}", view="whole")
+        # What every step ran with, declared as the viewer keeps it: the circles
+        # by name, and each origin 0-based. Declared even when empty, so a first
+        # open does not tick by its own test what the analyses read as a line.
+        if framing:
+            tab["circular"] = declared
+            tab["origins"] = {name: at - 1 for name, at in called_at.items()}
         session_path = out / f"{sample}.metacooler.json"
         session_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
-        size = sum(lengths.values())
+        arms = ", ".join(f"{name}:{at:,}" for name, at in called_at.items())
         sessions.append(
             {
-                "label": f"{label} — map with {lanes} tracks{' and its 3D model' if model else ''}",
+                "label": f"{label} — map with its HiC score, insulation and E1",
                 "uri": f"{sample}/{session_path.name}",
                 "kind": "workspace",
-                "note": ", ".join(track["label"] for track in chosen),
+                "note": ", ".join(track["label"] for track in chosen)
+                + (f" · arms from the origin at {arms}" if arms else ""),
                 # No format: the row's icon says workspace, and a chip reading
                 # *session* beside one reading *Session* says it twice.
                 # `tracks` is the count a card's chip says (§24.2), as on IGV's sessions.
-                "fields": {"analysis": "Session", "tracks": str(lanes), **common},
+                "fields": {"analysis": "Session", "tracks": str(len(chosen)), **common},
             }
         )
         maps.append(
@@ -334,9 +380,8 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
                 "note": " · ".join(
                     piece
                     for piece in (
-                        f"{bp(size)} over {len(lengths)} sequence{'s' if len(lengths) != 1 else ''}"
-                        if lengths
-                        else "",
+                        f"{bp(size)} over {plural(len(framing), 'sequence')}" if framing else "",
+                        f"circular: {', '.join(declared)}" if declared else "",
                         mcool.name,
                     )
                     if piece
@@ -348,29 +393,25 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
 
     samples = len(maps)
     if samples == 0:
-        print("Nothing to publish: no sample in the table has both a map and results.", file=sys.stderr)
+        print(f"Nothing to index: no sample of {species_table.name} has a map in {store_dir}.", file=sys.stderr)
         return 2
-    framing = (
-        "every sequence declared circular"
-        if circular == samples
-        else "every sequence read as linear"
-        if circular == 0
-        else f"{circular} of {samples} samples declared circular"
-    )
     producer = ", ".join(sorted(p for p in producers if p)) or "metacooler-run"
     store = {
         "kind": make_store.STORE_KIND,
         "version": make_store.STORE_VERSION,
         "name": "DNA Bacterial Zoo",
         "description": (
-            f"hic-suite.sh over {samples} bacterial Hi-C maps: each map, a session opening it with "
-            "eight of its tracks, and every track on its own — coverage, insulation, directionality "
-            "index, HiC score, compartments, and chromosight's borders and loops"
+            f"dbz-store.sh over {samples} bacterial Hi-C maps: each map, a session opening it with its "
+            "HiC score, insulation and E1 — read along both arms from the replication origin — and "
+            "every file on its own: the reference and its base composition, the origin and "
+            "terminus, coverage, insulation, directionality index, HiC score, compartments along "
+            "both arms and by distance, inter-arm alignment, and chromosight's borders and loops"
             + (f"; a 3D model for {models} of them" if models else "")
-            + f". Analyses ran with {framing}."
+            + f". {circular} of {samples} samples have a sequence read as a circle, and {origins} "
+            "an origin called from their sequence."
         ),
         "generatedAt": created,
-        "source": f"{root.name}/results, written by hic-suite.sh with {producer}",
+        "source": f"{store_dir.name}/, written in place by dbz-store.sh with {producer}",
         # One card per species, as IGV's genomes are: its session the button,
         # its sample ID and replicon count the chips, its files under a fold.
         "layout": "cards",
@@ -381,15 +422,15 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
         # screen is one row per species that opens it whole.
         "entries": sessions + maps + tracks,
     }
-    out = store_dir / "store.json"
-    out.write_text(json.dumps(store, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    written = store_dir / "store.json"
+    written.write_text(json.dumps(store, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     # make_store's checks, less two rules that are its own portals' and not the
     # viewer's: an order by assembly and label, and absolute session names — a
     # session published *beside* its data is resolved against its own URL.
     problems = [
         problem
-        for problem in make_store.check_store(out)
+        for problem in make_store.check_store(written)
         if "sorts before the entry above it" not in problem
     ]
     for session in sorted(store_dir.glob("*/*.metacooler.json")):
@@ -404,14 +445,13 @@ def build(root: Path, species_table: Path, copy: bool) -> int:
         if path.is_dir() and path.name not in {sample for _, sample in table}
     )
 
-    print(
-        f"{out}: {len(sessions)} sessions, {len(maps)} maps, {len(tracks)} tracks "
-        f"({'copied' if copy else 'hard-linked'} from cool/ and results/)"
-    )
+    print(f"{written}: {len(sessions)} sessions, {len(maps)} maps, {len(tracks)} tracks")
     for line in skipped:
         print(f"  left out  {line}")
+    for line in thin:
+        print(f"  session   {line}")
     for name in stale:
-        print(f"  stale     store/{name}/ is no longer in {species_table.name}; remove it by hand")
+        print(f"  stale     {name}/ is no longer in {species_table.name}; remove it by hand")
     for problem in problems:
         print(f"  PROBLEM   {problem}", file=sys.stderr)
     return 1 if problems else 0
@@ -506,17 +546,22 @@ def serve(folder: Path, host: str, port: int) -> int:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    one = commands.add_parser("build", help="write <root>/store/ from <root>/cool and <root>/results")
-    one.add_argument("root", type=Path, help="the folder holding cool/ and results/")
+    one = commands.add_parser("index", help="write store.json and the sessions over a store dbz-store.sh wrote")
+    one.add_argument("store", type=Path, help="the folder dbz-store.sh wrote: one sub-folder a sample")
     one.add_argument("--species", type=Path, default=SPECIES, help=f"species<TAB>sample table (default: {SPECIES.name})")
-    one.add_argument("--copy", action="store_true", help="copy the files rather than hard-linking them")
+    one.add_argument(
+        "--resolution",
+        type=int,
+        default=PATTERNS_BP,
+        help=f"the bin size a session opens its map at: dbz-store.sh's RES_PATTERNS (default: {PATTERNS_BP})",
+    )
     two = commands.add_parser("serve", help="serve a store folder with byte ranges and CORS")
     two.add_argument("folder", type=Path)
     two.add_argument("--host", default="127.0.0.1")
     two.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
-    if args.command == "build":
-        return build(args.root.expanduser().resolve(), args.species, args.copy)
+    if args.command == "index":
+        return index(args.store.expanduser().resolve(), args.species, args.resolution)
     return serve(args.folder.expanduser().resolve(), args.host, args.port)
 
 

@@ -30,6 +30,7 @@ import { COVERAGE_TASK } from "./tasks/coverage";
 import { FOURC_TASK } from "./tasks/fourc";
 import { APA_TASK } from "./tasks/apa";
 import { COMPARTMENTS_TASK } from "./tasks/compartments";
+import { INTERARM_TASK } from "./tasks/interarm";
 import {
   MAG_NETWORK_TASK,
   MAG_PURITY_TASK,
@@ -41,6 +42,9 @@ import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
+import { COMPOSITION_TASK } from "./tasks/composition";
+import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
+import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
 import { DI_TASK } from "./tasks/di";
 import { HIC_SCORE_TASK } from "./tasks/hicscore";
@@ -79,6 +83,10 @@ export const TASKS: readonly AnalysisTask[] = [
   DI_TASK,
   HIC_SCORE_TASK,
   COMPARTMENTS_TASK,
+  // The arms of a bacterial chromosome, after the compartments that are read
+  // with their secondary diagonal divided out: how strongly the two arms touch
+  // is the question that makes the arm-frame expectation necessary at all.
+  INTERARM_TASK,
   CHROMOSIGHT_TASK,
   HICREP_TASK,
   APA_TASK,
@@ -94,9 +102,18 @@ export const TASKS: readonly AnalysisTask[] = [
   // take. Same reading order as the 2D card's — the thing that comes first is
   // the thing the next one is built on.
   MOTIF_TASK,
+  // Then the two that read a bacterial chromosome off its own sequence: its
+  // composition, whose GC skew changes sign at the ends of replication, and the
+  // origin and terminus that skew and the sites around it place — which the 2D
+  // tasks that read the chromosome's arms then take as their reference point.
+  COMPOSITION_TASK,
+  ORITER_TASK,
   METAPLOT_TASK,
   TRACK_CORRELATION_TASK,
   FRIP_TASK,
+  // Beside FRiP, which asks how much of a track sits inside one set: this asks
+  // how its values differ between the groups of one — A against B.
+  GROUP_SIGNAL_TASK,
   OVERLAP_TASK,
   // **Metagenome**, absent unless the file has genomes, so the card is there
   // for a metacool and nowhere else.

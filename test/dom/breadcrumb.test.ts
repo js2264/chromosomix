@@ -252,6 +252,59 @@ describe('the trail below the root', () => {
   })
 })
 
+/**
+ * A genome browsed as tracks (§5.8): its root picks between its sequence list —
+ * where a circle and an origin are declared with no map open (§8.15) — and its
+ * whole genome, which is the browser rather than a map.
+ */
+describe('a genome browsed as tracks', () => {
+  const genome = (): Built =>
+    build({
+      rootKind: 'contigs',
+      rootChoices: ['contigs', 'whole'],
+      contigNoun: 'Chromosomes',
+      browser: true,
+      fileLabel: 'PAK.fa',
+    })
+
+  it('names the browser the whole genome, and offers the Chromosomes table beside it', () => {
+    const built = genome()
+    built.crumb.render({ uri: 'PAK.fa', view: 'browser' })
+    expect(trail(built.crumb)).toEqual(['PAK.fa', 'Whole genome'])
+    const menu = built.crumb.el.querySelector('.crumb-menu') as HTMLElement
+    const labels = all<HTMLElement>(menu, '.crumb-menu-item').map((item) => item.firstChild?.textContent ?? '')
+    expect(labels).toEqual(['Chromosomes', 'Whole genome'])
+    all<HTMLButtonElement>(menu, '.crumb-menu-item')[0].click()
+    expect(built.navigated).toEqual([{ uri: 'PAK.fa', view: 'contigs' }])
+  })
+
+  it('goes back to the browser, not to a map, from the table', () => {
+    const built = genome()
+    built.crumb.render({ uri: 'PAK.fa', view: 'contigs' })
+    expect(trail(built.crumb)).toEqual(['PAK.fa', 'Chromosomes'])
+    const menu = built.crumb.el.querySelector('.crumb-menu') as HTMLElement
+    all<HTMLButtonElement>(menu, '.crumb-menu-item')[1].click()
+    expect(built.navigated).toEqual([{ uri: 'PAK.fa', view: 'browser' }])
+  })
+
+  it('keeps the sequence and the window below the root', () => {
+    const built = genome()
+    built.crumb.render({ uri: 'PAK.fa', view: 'browser', locus: 'LR657304.1:1-20,000' })
+    expect(trail(built.crumb)).toEqual(['PAK.fa', 'Whole genome', 'LR657304.1', '1-20,000'])
+    // Off the root, its label leads back to the whole genome.
+    const root = all<HTMLButtonElement>(built.crumb.el, 'button.crumb').find((node) => node.textContent === 'Whole genome')
+    root?.click()
+    expect(built.navigated).toEqual([{ uri: 'PAK.fa', view: 'browser' }])
+  })
+
+  it('stays a plain crumb where there is no table to offer', () => {
+    const built = build({ rootKind: 'contigs', rootChoices: [], fileLabel: 'x.bw' })
+    built.crumb.render({ uri: 'x.bw', view: 'browser' })
+    expect(trail(built.crumb)).toEqual(['x.bw', 'Whole genome'])
+    expect(built.crumb.el.querySelector('.crumb-menu')).toBeNull()
+  })
+})
+
 describe('the entry picker', () => {
   it('precedes the root, because switching entry invalidates everything after it', () => {
     const built = build({ entries: ['rep1', 'rep2'], currentEntry: 'rep2' })

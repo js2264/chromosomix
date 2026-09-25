@@ -380,6 +380,7 @@ describe('the cards', () => {
       'di',
       'hicscore',
       'compartments',
+      'interarm',
       'chromosight',
       'hicrep',
       // The pileup is about the matrix — it piles the matrix up at a set of
@@ -396,7 +397,16 @@ describe('the cards', () => {
 
   it('opens the 1D card with the task that makes an interval set', () => {
     // A motif search produces exactly the input the four below it take.
-    expect(idsIn('1d')).toEqual(['motif', 'metaplot', 'trackcorr', 'frip', 'overlap'])
+    expect(idsIn('1d')).toEqual([
+      'motif',
+      'composition',
+      'oriter',
+      'metaplot',
+      'trackcorr',
+      'frip',
+      'groupsignal',
+      'overlap',
+    ])
   })
 
   it('keeps the metagenome tasks together rather than cutting them by dimension', () => {

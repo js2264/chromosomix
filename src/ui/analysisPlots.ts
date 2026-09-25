@@ -1832,7 +1832,12 @@ function cellText(column: TableColumn, raw: string | number | undefined): string
   // `NaN` is *no value here*, the same as everywhere else in this codebase — an
   // em dash, never a zero and never the word NaN.
   if (!Number.isFinite(value)) return '—'
-  return column.digits === undefined ? fmt.int(value) : value.toFixed(column.digits)
+  if (column.digits === undefined) return fmt.int(value)
+  // Too small for its digits, in a column that says it may be (a P-value).
+  if (column.scientific === true && value !== 0 && Math.abs(value) < 10 ** -column.digits) {
+    return value.toExponential(2)
+  }
+  return value.toFixed(column.digits)
 }
 
 export interface TableFigure {

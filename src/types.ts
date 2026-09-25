@@ -478,6 +478,18 @@ export interface ViewState {
    * reading is observed over expected *of* balanced counts.
    */
   oe?: boolean
+  /**
+   * Divide by the decay along **both arms** of a bacterial chromosome rather
+   * than along the diagonal alone, within this many bins along the arms (`0`,
+   * the whole sequence) — `analysis/arms.ts`, read from the origin declared for
+   * the sequence on screen (§8.15).
+   *
+   * A modifier of {@link oe} rather than a second baseline beside it: it changes
+   * *which* expectation the ratio is taken against, so it is meaningless without
+   * one and turning it on turns the O/E on. In the link for `oe`'s reason — the
+   * two pictures are different numbers of the same region.
+   */
+  arms?: number
    /**
    * How much despeckling, as the token the picker carries — a fixed radius
    * (`1` is 3 × 3) or an adaptive target (`a200`, a window that grows per cell

@@ -90,11 +90,25 @@ export function tsvNumber(value: number): string {
   return trimZeros(value.toFixed(decimals))
 }
 
-/** A number to a stated number of places — a table column, a printed statistic. */
-function fixed(value: number, digits: number | undefined): string {
+/**
+ * A number to a stated number of places — a table column, a printed statistic.
+ *
+ * `small` is a column's `scientific`: a value too small for its places is
+ * written with an exponent rather than as zero, as the drawer draws it. A P of
+ * 10⁻²³ written `0` is a claim the test never made, and a script reading the
+ * file has no way to tell it from a P that really was.
+ */
+function fixed(value: number, digits: number | undefined, small = false): string {
   if (!Number.isFinite(value)) return ''
   if (digits === undefined) return tsvNumber(Math.round(value))
+  if (small && value !== 0 && Math.abs(value) < 10 ** -digits) return withExponent(value)
   return trimZeros(value.toFixed(Math.min(MAX_DECIMALS, Math.max(0, digits))))
+}
+
+/** `6.53e-23`: the drawer's spelling, at the precision a file keeps. */
+function withExponent(value: number): string {
+  const [mantissa, exponent] = value.toExponential(SIGNIFICANT_DIGITS - 1).split('e')
+  return `${trimZeros(mantissa)}e${exponent}`
 }
 
 /** `1.500000` is six digits of nothing; `1.5` is the same number. */
@@ -370,7 +384,9 @@ function tableToTsv(output: TableOutput): string[] {
           const value = record[column.key]
           if (value === undefined || value === null) return ''
           if (typeof value === 'number')
-            return column.kind === 'number' ? fixed(value, column.digits) : tsvNumber(value)
+            return column.kind === 'number'
+              ? fixed(value, column.digits, column.scientific === true)
+              : tsvNumber(value)
           return cell(value)
         }),
       ),

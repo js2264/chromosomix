@@ -120,6 +120,21 @@ const PARAMS: readonly ParamSpec[] = [
   },
   {
     kind: 'number',
+    key: 'mismatches',
+    label: 'mismatches',
+    // Zero by default, which is the exact search this task has always been: a
+    // restriction site or a telomere repeat is a string, and a budget there
+    // finds things that are not it. A binding site is a consensus — parS is a
+    // sixteen-base palindrome with a few variants per genome — and one
+    // mismatch is how it is searched for (§18.8).
+    hint: 'Positions a site may differ from the motif by; N in the motif is always free.',
+    default: 0,
+    min: 0,
+    max: 4,
+    integer: true,
+  },
+  {
+    kind: 'number',
     key: 'limit',
     label: 'most sites',
     // The ceiling is written from the constant rather than typed out, so a hint

@@ -197,6 +197,85 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.contacts !== 'trans',
   },
   {
+    kind: 'choice',
+    key: 'expected',
+    label: 'expected',
+    /**
+     * What each cell is divided by before the correlation — **the distance
+     * decay by default**, which is every other tool's answer and the right one
+     * for a chromosome with one diagonal.
+     *
+     * A bacterial chromosome whose arms are held together has two: the ordinary
+     * one and a secondary diagonal through the origin. The decay curve averages
+     * each diagonal of the map and every one of them crosses the secondary
+     * diagonal, so the ratio is left with an X that the correlation then draws
+     * and the eigenvectors follow — the arms, and not the compartments.
+     * *Decay along both arms* is the expectation that removes both
+     * (`analysis/arms.ts`), read from the origin declared for the sequence —
+     * the one the Chromosomes table shows. Cis only, because the arms are a
+     * fact about one sequence.
+     */
+    default: 'distance',
+    options: [
+      {
+        value: 'distance',
+        label: 'distance decay',
+        hint: 'The mean of each diagonal: the ordinary observed/expected.',
+      },
+      {
+        value: 'arms',
+        label: 'decay along both arms',
+        hint:
+          'Also removes the secondary diagonal of a bacterial chromosome whose arms are aligned, ' +
+          'reading the arms from the origin on the Chromosomes table — the first base unless set.',
+      },
+    ],
+    when: (params) => contactsOf(params) === 'cis',
+  },
+  {
+    kind: 'number',
+    key: 'armWindow',
+    label: 'window along the arms',
+    unit: 'bins',
+    hint: 'Each cell is compared within this far along the arms; 0 is the whole chromosome.',
+    default: 50,
+    min: 0,
+    integer: true,
+    when: (params) => contactsOf(params) === 'cis' && params.expected === 'arms',
+  },
+  {
+    kind: 'choice',
+    key: 'method',
+    label: 'method',
+    /**
+     * What the eigenvectors are taken of — **cooltools' way by default**
+     * (`eigs_cis`): observed/expected itself, clipped at its 99.9th percentile,
+     * less one so the matrix is each cell's departure from expected, and every
+     * gap read as expected (`cooltoolsMatrix`). What the field computes today,
+     * and a track made this way compares with one cooltools wrote, on its scale,
+     * √|λ| — |r| = 1.000 with `eigs_cis` on the zoo's maps, the rest being
+     * cooltools' expectation (SPECS §18.8). It skips the correlation, the one
+     * cubic step, so a fine map takes seconds.
+     *
+     * The other is the correlation of the rows, as Lieberman-Aiden et al. (2009)
+     * did it. The two agree where a chromosome has compartments to find and part
+     * where it has none, which is itself worth seeing.
+     */
+    default: 'cooltools',
+    options: [
+      {
+        value: 'cooltools',
+        label: 'cooltools',
+        hint: 'Observed/expected itself, clipped at its 99.9th percentile and less one, decomposed.',
+      },
+      {
+        value: 'correlation',
+        label: 'Lieberman-Aiden 2009',
+        hint: 'The Pearson correlation of observed/expected’s rows, decomposed.',
+      },
+    ],
+  },
+  {
     kind: 'number',
     key: 'components',
     label: 'components',
@@ -217,12 +296,24 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Phasing',
   },
   {
+    kind: 'track',
+    key: 'phaseTrack',
+    label: 'phase by a track',
+    optional: true,
+    noneLabel: 'Do not use a track',
+    // Chosen, never assumed: filled from the first bigWig, it would phase every
+    // map with a ChIP track loaded by that track rather than by GC content.
+    startsEmpty: true,
+    hint: 'Positive is made to follow this track, when no gene model is chosen.',
+    section: 'Phasing',
+  },
+  {
     kind: 'sequence',
     key: 'phaseSequence',
     label: 'phase by GC content',
     optional: true,
     noneLabel: 'Do not use a sequence',
-    hint: 'Used when no gene model is chosen.',
+    hint: 'Used when neither a gene model nor a track is chosen.',
     section: 'Phasing',
   },
   {
@@ -330,6 +421,7 @@ function estimateCis(
   context: AnalysisContext,
   chosen: readonly ContextContig[],
   balance: boolean,
+  cooltools: boolean,
 ): CostEstimate {
   const usable = chosen.filter((contig) => contig.bins <= MAX_CORRELATION_BINS)
   const skipped = chosen.length - usable.length
@@ -341,7 +433,8 @@ function estimateCis(
       note: 'Nothing to read.',
       refusal:
         `Every ticked sequence is past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin limit on ` +
-        'a correlation matrix. Open the file at a coarser resolution.',
+        `${cooltools ? 'the matrix it decomposes' : 'a correlation matrix'}. Open the file at a ` +
+        'coarser resolution.',
     }
   }
   const widestContig = usable.reduce<ContextContig | undefined>(
@@ -350,7 +443,7 @@ function estimateCis(
   )
   const widest = widestContig?.bins ?? 0
   const bytes = widest * widest * 8
-  const tooFine = tooFineNote(context, widest, widestContig?.length ?? 0, 'a sequence')
+  const tooFine = cooltools ? '' : tooFineNote(context, widest, widestContig?.length ?? 0, 'a sequence')
   return {
     // A run that will take minutes is coloured as a scan is, whatever its
     // request count: the colour is the one warning a reader sees before Run.
@@ -360,9 +453,9 @@ function estimateCis(
     note:
       tooFine +
       `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
-      `correlation each — up to ${(bytes / 1e6).toFixed(0)} MB held at once, over at most ` +
-      `${widest.toLocaleString()} bins. ` +
-      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped.` : ''}`,
+      `${cooltools ? 'decomposition' : 'correlation'} each — up to ${(bytes / 1e6).toFixed(0)} MB ` +
+      `held at once, over at most ${widest.toLocaleString()} bins. ` +
+      `${skipped > 0 ? `${skipped.toLocaleString()} too large to ${cooltools ? 'decompose' : 'correlate'} and skipped.` : ''}`,
   }
 }
 
@@ -394,9 +487,16 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   const balance = params.balance === true
+  // **The correlation's cost is the correlation's.** cooltools' road skips it and
+  // pays for the eigenvectors alone, each a few hundred passes over the square:
+  // eight seconds for three of them over the 4,642 bins of *E. coli* at 1 kb,
+  // where the correlation takes minutes. So the warning about a resolution too
+  // fine, which is a warning about minutes, is the correlation's to give.
+  // Absent is the default, which is cooltools'.
+  const cooltools = params.method !== 'correlation'
   // Cis-only is a different shape of run, not a narrower one — see `estimateCis`
   // and the `contacts` parameter.
-  if (contacts === 'cis') return estimateCis(context, chosen, balance)
+  if (contacts === 'cis') return estimateCis(context, chosen, balance, cooltools)
 
   const bins = chosen.reduce((total, contig) => total + contig.bins, 0)
   const bytes = bins * bins * 8
@@ -407,12 +507,13 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `Refusing to build a ${bins.toLocaleString()}×${bins.toLocaleString()} correlation ` +
-        `matrix (${(bytes / 1e9).toFixed(1)} GB) over ${chosen.length.toLocaleString()} ticked ` +
+        `Refusing to build a ${bins.toLocaleString()}×${bins.toLocaleString()} ` +
+        `${cooltools ? '' : 'correlation '}matrix (${(bytes / 1e9).toFixed(1)} GB) over ` +
+        `${chosen.length.toLocaleString()} ticked ` +
         `${chosen.length === 1 ? 'sequence' : 'sequences'}. The limit is ` +
         `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, open the file at a ` +
-        'coarser resolution, or read the cis contacts alone, which correlates each sequence on ' +
-        'its own.',
+        `coarser resolution, or read the cis contacts alone, which ${cooltools ? 'decomposes' : 'correlates'} ` +
+        'each sequence on its own.',
     }
   }
 
@@ -437,20 +538,22 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // reader who sees only the megabytes will tick everything at a fine
   // resolution and conclude the app has hung.
   const note =
-    `A ${bins.toLocaleString()} bin correlation matrix over ` +
+    `A ${bins.toLocaleString()} bin ${cooltools ? 'observed/expected' : 'correlation'} matrix over ` +
     `${chosen.length.toLocaleString()} ${chosen.length === 1 ? 'sequence' : 'sequences'}, ` +
     `${contacts === 'trans' ? 'trans only' : 'cis and trans'} — ${(bytes / 1e6).toFixed(0)} MB ` +
-    'held while it is solved, and the correlation itself grows as the cube of the bin count.'
+    `held while it is solved${cooltools ? '.' : ', and the correlation itself grows as the cube of the bin count.'}`
   if (free) {
     return { class: 'free', requests: 0, bytes, note: `${note} Read from the block on screen.` }
   }
   const reads = readsFor(context, chosen)
-  const tooFine = tooFineNote(
-    context,
-    bins,
-    chosen.reduce((total, contig) => total + contig.length, 0),
-    'in all',
-  )
+  const tooFine = cooltools
+    ? ''
+    : tooFineNote(
+        context,
+        bins,
+        chosen.reduce((total, contig) => total + contig.length, 0),
+        'in all',
+      )
   return {
     class: reads > 1 || tooFine !== '' ? 'scan' : 'bounded',
     requests: reads * (balance ? 5 : 4),
@@ -464,10 +567,18 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 export const COMPARTMENTS_TASK: AnalysisTask = {
   id: 'compartments',
   title: 'Compartments (eigenvectors)',
-  blurb: 'Observed/expected, correlated, and its leading components.',
+  blurb: 'Observed/expected, correlated or taken as it is, and its leading components.',
   group: '2d',
   venue: 'analysis',
-  version: 1,
+  // 2: a sequence declared circular is divided by its own decay measured the
+  // short way round (§8.15), where it used to be measured along a line — which
+  // changes every number the task produces on one.
+  // 3: the components are ranked by their eigenvalues alone — the phasing signal
+  // signs each and no longer chooses among them — the components table gives
+  // each one's eigenvalue, and its r with the signal as it is drawn, and what is
+  // decomposed is a choice: observed/expected as cooltools prepares it by
+  // default, where every earlier version took the correlation of its rows.
+  version: 3,
   // Absent on a metacool, which is a scientific judgement rather than a
   // technical one: a bacterial MAG has domains and no compartments, and a row
   // offering an eigenvector of a thing that has none is an invitation to
@@ -482,6 +593,6 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
         ? READY
         : waitingFor(NEEDS_MAP),
   params: PARAMS,
-  outputs: ['profile', 'intervals', 'matrix'],
+  outputs: ['profile', 'intervals', 'matrix', 'table'],
   estimate,
 }

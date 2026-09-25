@@ -287,16 +287,25 @@ and the branch name in the two workflows; nothing else knows where they live.
 ### The DNA Bacterial Zoo, which no workflow writes
 
 One shipped store is the lab's own analyses rather than a portal's catalogue, so it is not on the
-`stores` branch. `scripts/DBZ_store.py` gathers `hic-suite.sh`'s results into a folder — one
-directory a sample with its `.mcool`, its bigWigs, BEDs and BEDPEs, and a session opening the map
-with eight of them — and writes `store.json` over it with every name relative. The folder is the
+`stores` branch. `scripts/dbz-store.sh` runs the suite over every map of `scripts/DBZ_species.tsv`
+straight into the folder that is published — one directory a sample with its `.mcool`, its reference
+and a directory a step — and then `scripts/DBZ_store.py index` writes `store.json` over it with every
+name relative: every file the viewer opens, species by species, and a session a species that opens
+the map with its HiC score, insulation and E1 along both arms and nothing else. The folder is the
 store, and publishing it is uploading it beside the demo data:
 
 ```bash
-python3 scripts/DBZ_store.py build ~/Downloads/Martial_DBZ          # writes store/ beside results/
-python3 scripts/DBZ_store.py serve ~/Downloads/Martial_DBZ/store    # look at it first, on :8765
-aws s3 sync ~/Downloads/Martial_DBZ/store/ s3://rsglab-data/dbz/ --delete
+npm run build:cli                                                   # the metacooler-run it drives
+scripts/dbz-store.sh                                                # ~/Downloads/metacooler/data/dbz → …/dbz/store
+python3 scripts/DBZ_store.py serve ~/Downloads/metacooler/data/dbz/store   # look at it first, on :8765
+aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delete \
+  --exclude '*.tsv' --exclude '*.log'                               # the tables and logs stay here
 ```
+
+The maps and references are found at any depth under `DATA` (a reference is `<species>.fa`, `.fna`
+or `.fasta`, gzipped or not, or failing that the one holding the map's longest sequence), and the
+store goes to `STORE`, `$DATA/store` by default. `STEPS="oriter compartments-arms"` reruns two steps
+and keeps the rest; `scripts/dbz-store.sh --help` lists the other settings.
 
 The *DNA Bacterial Zoo* tile reads `https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`
 (`DBZ_STORE` in `src/ui/stores/registry.ts`), whose bucket already answers the cross-origin ranged

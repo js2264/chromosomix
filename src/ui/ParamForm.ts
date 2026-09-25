@@ -238,7 +238,16 @@ function resolveOne(
     // parameter was optional, so none is a state the task is built to handle,
     // and silently swapping in a different file would change what the numbers
     // mean without changing anything the reader can see.
-    return named || held === '' ? '' : (starredId(candidates) ?? '')
+    //
+    // Filled from what the reader **loaded**, never from what a task made: an
+    // optional input is one a task reads if it is there, and another task's
+    // output is not a gene model because it is the first interval set on the
+    // list — the two loci an origin call leaves behind phased the compartments
+    // by default, and said only that the phasing was ambiguous.
+    const loaded = candidates.filter(
+      (entry) => entry.source.kind !== 'computed' && entry.source.kind !== 'derived',
+    )
+    return named || held === '' ? '' : (starredId(loaded) ?? '')
   }
   return starredId(candidates)
 }
@@ -925,7 +934,10 @@ export class ParamForm {
       if (spec.max !== undefined) value = Math.min(spec.max, value)
       return value
     }
-    const held = (): number => numberOr(this.params[spec.key], spec.default)
+    // An unanswered seeded number shows what it stands for on this context —
+    // the open map's resolution, say — and follows it until the reader types.
+    const held = (): number =>
+      numberOr(this.params[spec.key], spec.seed?.(this.context) ?? spec.default)
     const show = (value: number): void => {
       box.value = String(value)
       if (slider !== null) slider.value = String(value)

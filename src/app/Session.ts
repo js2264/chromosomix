@@ -37,6 +37,8 @@ import type {
 } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { OriginStore } from '../state/origins'
+import { junctionCandidates, measureJunctions } from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
 import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
@@ -84,10 +86,12 @@ import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type {
+  ArmsPresentation,
   CircularPresentation,
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
   CellsResult,
@@ -145,7 +149,7 @@ import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
-import { ContigsTable, type CircularColumn } from '../ui/ContigsTable'
+import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
@@ -346,6 +350,8 @@ function genomeCard(
    * where in the column it sits.
    */
   minimap?: HTMLElement,
+  /** Which sequences are declared circular, for the mark beside each (§8.15). */
+  circular?: { has(name: string): boolean; subscribe(listener: () => void): () => void },
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -394,6 +400,7 @@ function genomeCard(
       contigs: assembly.contigs,
       selection,
       onGoTo,
+      ...(circular === undefined ? {} : { circular }),
       ...BROWSER_TICKS,
     }),
     // No card about contact maps here. There is one in the Annotations column,
@@ -574,9 +581,19 @@ interface FileAnnotations {
 function withCircularNames(
   framing: AnalysisFraming | null,
   names: readonly string[],
+  origins: Readonly<Record<string, number>> = {},
 ): AnalysisFraming | null {
-  if (framing === null || names.length === 0) return framing
-  return { ...framing, circular: names }
+  if (framing === null) return framing
+  const hasOrigins = Object.keys(origins).length > 0
+  if (names.length === 0 && !hasOrigins) return framing
+  return {
+    ...framing,
+    ...(names.length === 0 ? {} : { circular: names }),
+    // The declared origins travel beside the circles they are on, for the same
+    // reason: facts about the molecule that change what an arm-reading task
+    // computes, so they belong in its provenance (§8.15).
+    ...(hasOrigins ? { origins: { ...origins } } : {}),
+  }
 }
 
 let nextSessionId = 1
@@ -2238,6 +2255,9 @@ export class Session {
     // An empty tab takes the file's name as its own, as {@link addRemote}'s
     // does. Read before anything below replaces what the tab holds.
     const wasEmpty = this.file === null && this.assembly === null
+    // …and a genome being browsed as tracks, whose declarations a map of it
+    // takes once it has opened (§8.15).
+    const browsed = this.file === null && this.assembly !== null ? this.sessionKey() : null
     // A Drive address ends in an id and says nothing else; where nobody gave a
     // name, Drive is asked for it first (§24.9) — one small request that names
     // the loading screen and the tab, and decides the door where the bytes
@@ -2494,6 +2514,21 @@ export class Session {
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
       named()
+      // A circle ticked and an origin set while the genome was browsed as
+      // tracks are about the molecules this map is of (§8.15).
+      if (browsed !== null) this.carryDeclarations(browsed)
+      // The Sequences card was painted before the navigation, while the state
+      // still named whatever this session held — a genome browsed as tracks,
+      // another map — so its circles were read under that file's key and would
+      // never show this one's. Again, under this map's.
+      if (this.sequencesKey !== this.sessionKey()) this.paintSequences()
+      // Not awaited: three small reads per sequence, on the file's first open
+      // only, and nothing on screen waits for them (§8.15). After the
+      // navigation, because the declarations are kept under the key of the file
+      // the *state* names: asked before it, the store was the previous file's,
+      // so a file opened over one already measured was never measured, and one
+      // opened over a measurement still running had its ticks written there.
+      void this.detectCircular(uri)
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -3134,10 +3169,14 @@ export class Session {
    * follow the view through the selection, so rebuilding would only throw away
    * the filter text and the scroll position of a list being read.
    */
+  /** The key the Sequences card's circles were read under; see {@link open}. */
+  private sequencesKey: string | null = null
+
   private paintSequences(): void {
     const file = this.file
     const panel = this.infoPanel
     if (file === null || panel === null) return
+    this.sequencesKey = this.sessionKey()
     if (file.info.hasGenomes) {
       this.paintMetaSequences(this.metaScope ?? { kind: 'genomes' })
       return
@@ -3452,6 +3491,51 @@ export class Session {
     } finally {
       this.echoingSequences = false
     }
+  }
+
+  /**
+   * A genome's own sequence list, as the Chromosomes table (§5.8).
+   *
+   * The table a cooler lands on, built from the assembly the browser was opened
+   * with rather than from a file's `/chroms`: each sequence's name and length,
+   * and the two columns that are declarations about the molecules rather than
+   * about any one map — the circle and the origin (§8.15). Declared here, with no
+   * map open, they are under this genome's key, and a map dropped in later takes
+   * them for its own sequences of the same names ({@link carryDeclarations}).
+   */
+  private mountAssemblyContigs(state: ViewState): void {
+    const assembly = this.assembly
+    if (assembly === null) return
+    const data: ContigsResult = {
+      table: {
+        length: assembly.contigs.length,
+        columns: ['name', 'length'],
+        data: {
+          name: assembly.contigs.map((contig) => contig.name),
+          length: Float64Array.from(assembly.contigs, (contig) => contig.length),
+        },
+      },
+    }
+    const circular = this.circularColumn()
+    const origins = this.originColumn()
+    const browse = (locus?: string): void => {
+      this.navigate({ uri: state.uri, view: 'browser', ...(locus === undefined ? {} : { locus }) })
+    }
+    const view = new ContigsTable({
+      data,
+      title: 'Chromosomes',
+      noun: 'chromosome',
+      hint: 'The sequences this genome was opened with. Pick one to browse its tracks.',
+      assembly,
+      ...(this.annotations === null ? {} : { store: this.annotations.store }),
+      ...(circular === null ? {} : { circular }),
+      ...(origins === null ? {} : { origins }),
+      persistence: this.tableMemory(state.uri, 'contigs'),
+      onOpenContig: (contig) => browse(contig),
+      onOpenRegion: (region) => browse(formatLocus(rangeOfRegion(region))),
+      onOpenWhole: () => browse(),
+    })
+    this.showContent(view.el, view)
   }
 
   private mountBrowser(state: ViewState): void {
@@ -4016,7 +4100,12 @@ export class Session {
   private browserBreadcrumb(assembly: Assembly): Breadcrumb {
     return new Breadcrumb({
       rootKind: 'contigs',
-      rootChoices: [],
+      // The genome's own sequence list as well as the browser (§5.8): the
+      // Chromosomes table is where a circle and an origin are declared, and a
+      // genome browsed as tracks has both to declare with no map open (§8.15).
+      rootChoices: ['contigs', 'whole'],
+      contigNoun: 'Chromosomes',
+      browser: true,
       fileLabel: assembly.name,
       entries: [],
       onNavigate: (state) => this.navigate(state),
@@ -4381,6 +4470,8 @@ export class Session {
       (locus) => this.goToLocus(locus),
       this.selectionFor(assembly),
       this.minimap?.el,
+      // Declared on the genome's own Chromosomes table (§5.8, §8.15).
+      this.circularColumn() ?? undefined,
     )
   }
 
@@ -5049,6 +5140,159 @@ export class Session {
   }
 
   /**
+   * The declared replication origins for the file on screen, held and keyed
+   * exactly as the circular declarations are and for the same reason: a fact
+   * about the file's molecules, the same at every rung (§8.15).
+   */
+  private originsHeld: { key: string; store: OriginStore } | null = null
+
+  private originStore(): OriginStore | null {
+    const key = this.sessionKey()
+    if (key === null) return null
+    if (this.originsHeld?.key !== key) this.originsHeld = { key, store: new OriginStore(key) }
+    return this.originsHeld.store
+  }
+
+  /**
+   * The origins as the Chromosomes table draws them, and takes a typed one.
+   *
+   * A typed origin is the reader's (`OriginStore.set`), which a later run of
+   * Origin and terminus leaves alone; cleared, the sequence goes back to its
+   * first base and the task may place one again.
+   */
+  private originColumn(): OriginColumn | null {
+    const store = this.originStore()
+    if (store === null) return null
+    return {
+      get: (name) => store.get(name),
+      set: (name, at) => {
+        store.set(name, at)
+        // The arms on screen and `ori` are read from it.
+        this.rederive()
+      },
+      subscribe: (listener) => store.subscribe(listener),
+    }
+  }
+
+  /**
+   * Where an Origin and terminus run put each origin, taken into the
+   * declarations for every sequence the reader has not set one on — and said,
+   * because it changes what every arm-reading task will read from next.
+   */
+  private adoptOrigins(uri: string, found: Readonly<Record<string, number>>): void {
+    const file = this.file
+    if (file === null || file.uri !== uri) return
+    const taken = this.originStore()?.fill(found) ?? []
+    if (taken.length === 0) return
+    this.host.notify(
+      `Origin set on ${taken.slice(0, 3).join(', ')}${taken.length > 3 ? ', …' : ''} — the arms ` +
+        'are read from it from now on. It is on the Chromosomes table.',
+    )
+    this.rederive()
+  }
+
+  /**
+   * Take a genome's declarations for a map of it (§8.15).
+   *
+   * A circle ticked and an origin set while the genome was browsed as tracks are
+   * facts about the molecules the map is of, so a map opened over the browser
+   * takes them — for its sequences of the same names, and only where it has no
+   * declaration of its own. The map's first open still measures its circles
+   * ({@link detectCircular}), which only ever adds a tick, and an origin already
+   * set on the map stands; a reader's origin stays the reader's, and a task's
+   * stays one the task may move.
+   */
+  private carryDeclarations(fromKey: string): void {
+    const toKey = this.sessionKey()
+    if (toKey === null || toKey === fromKey) return
+    const names = new Set(contigPairs(this.file?.contigs ?? null).map(([name]) => name))
+    const known = (name: string): boolean => names.size === 0 || names.has(name)
+    const circular = this.circularStore()
+    const added: string[] = []
+    if (circular !== null) {
+      for (const name of new CircularStore(fromKey).list()) {
+        if (!known(name) || circular.has(name)) continue
+        circular.set(name, true)
+        added.push(name)
+      }
+    }
+    const origins = this.originStore()
+    if (origins !== null) {
+      const from = new OriginStore(fromKey)
+      const found: Record<string, number> = {}
+      for (const name of Object.keys(from.record())) {
+        const held = from.get(name)
+        if (held === undefined || !known(name) || origins.get(name) !== undefined) continue
+        if (held.by === 'reader') origins.set(name, held.at)
+        else found[name] = held.at
+      }
+      origins.fill(found)
+    }
+    for (const name of added) this.adoptCircular(name, true)
+  }
+
+  /**
+   * Tick the sequences whose contacts say they are circles — once per file, on
+   * its first open (§8.15).
+   *
+   * Three small reads per sequence: the diagonal at each end and the corner that
+   * joins them, `junctionScore` over the three. Balanced where the file has
+   * weights, so the ends' own coverage does not decide it. Only the longest
+   * sequences are measured, and only those long enough for the test to mean
+   * anything; a sequence it could not decide is left as it was. What it measured
+   * is kept whatever it found, which is what stops it running a second time — so
+   * a box the reader unticks stays unticked.
+   */
+  private async detectCircular(uri: string): Promise<void> {
+    const file = this.file
+    if (file === null || file.uri !== uri || file.info.hasGenomes) return
+    // The store is the file the state names; measuring one file into another's
+    // declarations is the one mistake here that outlives the tab.
+    if (this.sessionKey() !== this.memoryKey(uri)) return
+    const store = this.circularStore()
+    if (store === null || store.evidence() !== null) return
+    const binsize = file.info.binsize ?? 0
+    if (!(binsize > 0)) return
+    let contigs: ContigsResult
+    try {
+      contigs = await this.contigs()
+    } catch {
+      return
+    }
+    if (this.destroyed || this.file !== file) return
+    // A draft assembly is thousands of contigs; the ones a declaration is about
+    // are the chromosomes and plasmids, which are the longest.
+    const tested = junctionCandidates(contigPairs(contigs), binsize)
+    const balance = file.info.hasWeights
+    let measured: Awaited<ReturnType<typeof measureJunctions>>
+    try {
+      measured = await measureJunctions(
+        tested,
+        async (rows, cols) =>
+          (await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })).values,
+        () => !this.destroyed && this.file === file,
+      )
+    } catch {
+      // A read that failed is a file this test cannot be run on, which is no
+      // reason to disturb the one being looked at. Nothing is recorded, so the
+      // next open tries again.
+      return
+    }
+    if (measured === null) return
+    const { scores, circular } = measured
+    store.detected(scores, circular)
+    const added = circular.filter((name) => store.has(name))
+    for (const name of added) this.adoptCircular(name, true)
+    if (added.length > 0) {
+      this.host.notify(
+        `${added.slice(0, 3).join(', ')}${added.length > 3 ? ', …' : ''} ` +
+          `${added.length === 1 ? 'reads' : 'read'} as circular — the contacts across the ` +
+          'junction are those of neighbours. Untick on the Chromosomes table if not.',
+      )
+    }
+  }
+
+  /**
    * Resolutions the reader has added to this file's ladder (§3.4).
    *
    * Held and keyed exactly as the circular declarations above are, and for the
@@ -5255,6 +5499,7 @@ export class Session {
         this.adoptCircular(name, on)
       },
       subscribe: (listener) => store.subscribe(listener),
+      evidence: (name) => store.evidence()?.[name],
     }
   }
 
@@ -5279,6 +5524,10 @@ export class Session {
     const names = this.contigNames()
     if (names === null || contigOf(state.region, names) !== name) return
     this.current?.setCircular?.(on)
+    // The arms are read round the circle or along the line (§8.15), and the
+    // `ori` framing exists only on a circle: the map's presentation of both is
+    // built from the declaration, so it is built again with it.
+    this.rederive()
   }
 
   /**
@@ -5901,7 +6150,9 @@ export class Session {
       derive: () => {
         const state = this.store.state
         if (state === null) return undefined
-        const { onExpectedChange: _own, ...shared } = this.derivePresentation(state)
+        // Nor the arms: their frame is the lead file's bins, and a companion is
+        // another file with a layout of its own (§8.15).
+        const { onExpectedChange: _own, arms: _lead, ...shared } = this.derivePresentation(state)
         return shared
       },
       annotations: (map) => this.annotationContext(map),
@@ -6517,9 +6768,12 @@ export class Session {
       ...(normalise === undefined ? {} : { normalise }),
       expected: state.oe === true,
       onExpectedChange: (on) => {
-        this.store.patch({ oe: on ? true : undefined })
+        // Off takes the arms with it: they are which expectation the ratio is
+        // taken against, and with no ratio they are a setting about nothing.
+        this.store.patch({ oe: on ? true : undefined, ...(on ? {} : { arms: undefined }) })
         this.rederive()
       },
+      ...this.armsOf(state),
       // From the score rather than from a key of its own: the correlation *is*
       // one of the answers to "what are these numbers", and it carries the
       // balancing and the baseline it needs with it (`ui/scores.ts`).
@@ -6566,6 +6820,111 @@ export class Session {
         this.rederive()
       },
     }
+  }
+
+  /**
+   * The arm-frame O/E for a view that is a window on one sequence (§8.15).
+   *
+   * Nothing on any other view — a whole genome is several molecules, and a
+   * metagenome's contigs are pieces of thousands. On a sequence with no declared
+   * origin the control is offered greyed, saying where one comes from, rather
+   * than hidden: a reader looking at a bacterial chromosome should find out the
+   * reading exists.
+   */
+  private armsOf(state: ViewState): { arms?: ArmsPresentation } {
+    if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
+      return {}
+    }
+    const file = this.file
+    if (file === null || file.info.hasGenomes) return {}
+    const binsize = file.info.binsize ?? 0
+    const names = this.contigNames()
+    if (!(binsize > 0) || names === null) return {}
+    const name = contigOf(state.region, names)
+    if (name === null) return {}
+    let startBin = 0
+    let bins = 0
+    let length = 0
+    for (const [contig, bp] of contigPairs(file.contigs)) {
+      const n = binsForLength(bp, binsize)
+      if (contig === name) {
+        bins = n
+        length = bp
+        break
+      }
+      startBin += n
+    }
+    if (bins === 0) return {}
+    const declared = this.originStore()?.get(name)
+    const circular = this.circularStore()?.has(name) === true
+    // Offered on what can have arms: a circle, or a sequence somebody placed an
+    // origin on. A yeast chromosome has neither and is not asked.
+    if (declared === undefined && !circular) return {}
+    // Where nobody has set one, the first base (§8.15): what every task reads
+    // too, and where a complete bacterial assembly conventionally starts.
+    const at = declared?.at ?? 0
+    return {
+      arms: {
+        window: state.arms,
+        frame: {
+          startBin,
+          n: bins,
+          origin: Math.max(0, Math.min(bins - 1, Math.floor(at / binsize))),
+          circular,
+          binsize,
+          length,
+          originBp: at,
+        },
+        refusal: null,
+        onChange: (window) => {
+          // On turns the O/E on with it, for the reason the adaptive despeckle
+          // does: it is a reading of the ratio and nothing else.
+          this.store.patch({ arms: window, ...(window === undefined ? {} : { oe: true }) })
+          this.rederive()
+        },
+        // The origin read when pressed, not when the view was built: a second
+        // run of the task moves it, and the button must follow. Pressed while
+        // lit — the origin already in the middle — it is undone: the sequence
+        // framed as it is anywhere else, from its first base (§8.15).
+        ...(!circular
+          ? {}
+          : {
+              onCentre: (centred: boolean) => {
+                // The hash does not follow a pan, so either answer can be the
+                // state already held — the centred window panned away from, or
+                // the whole sequence zoomed until the origin sat in the middle —
+                // and a navigation to it moves nothing. The view is rebuilt on
+                // its own region instead.
+                const moved = centred
+                  ? this.navigate({ uri: file.uri, view: 'region', region: name })
+                  : this.centreOnOrigin(file.uri, name, this.originStore()?.get(name)?.at ?? 0)
+                if (!moved) this.remount()
+              },
+            }),
+      },
+    }
+  }
+
+  /**
+   * Frame a circle with its origin in the middle (§8.15).
+   *
+   * A window across the junction, written the way the region box takes one —
+   * an end below the start — that runs from half a lap after the origin round to
+   * half a lap before it. One base short of a whole lap, because a window whose
+   * two ends meet *is* the whole sequence and is named as one, from its first
+   * base (`RegionView.zoomedRegion`), which would put the origin back at the
+   * edge.
+   *
+   * @returns Whether the view state moved — `false` when it was already this
+   *   window, which a pan away from it leaves in place — and `true` where there
+   *   is no sequence length to frame by.
+   */
+  private centreOnOrigin(uri: string, name: string, origin: number): boolean {
+    const length = contigPairs(this.file?.contigs ?? null).find(([contig]) => contig === name)?.[1]
+    if (length === undefined || !(length > 2)) return true
+    const from = (origin + Math.ceil(length / 2)) % length
+    const to = (from - 1 + length) % length
+    return this.navigate({ uri, view: 'region', region: `${name}:${from}-${to}` })
   }
 
   /**
@@ -6758,6 +7117,18 @@ export class Session {
         return
       }
       await this.openGenome(state.uri, source, state.locus, true)
+      return
+    }
+
+    // A genome's own sequence list (§5.8): the Chromosomes table with no map
+    // behind it. Before the file check below, which would otherwise read a
+    // genome's address as a map to open.
+    if (state.view === 'contigs' && this.file === null && this.assembly?.uri === state.uri) {
+      this.breadcrumb?.render(state)
+      this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
+      this.mounted = state
+      this.mountAssemblyContigs(state)
+      this.host.activity(this)
       return
     }
 
@@ -7350,6 +7721,11 @@ export class Session {
       // knows the shape of.
       ...(cooler && this.circularColumn() !== null
         ? { circular: this.circularColumn() as CircularColumn }
+        : {}),
+      // Where each origin is, beside the circle it is on (§8.15). Cooler only,
+      // for the circular column's reason.
+      ...(cooler && this.originColumn() !== null
+        ? { origins: this.originColumn() as OriginColumn }
         : {}),
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
@@ -8218,13 +8594,21 @@ export class Session {
         if (starred !== null) {
           const facts = starred.analysisFacts()
           const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
-          return withCircularNames(framed, this.circularStore()?.list() ?? [])
+          return withCircularNames(
+            framed,
+            this.circularStore()?.list() ?? [],
+            this.originStore()?.record() ?? {},
+          )
         }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
-          : withCircularNames(panel.analysisFraming(file.uri), this.circularStore()?.list() ?? [])
+          : withCircularNames(
+              panel.analysisFraming(file.uri),
+              this.circularStore()?.list() ?? [],
+              this.originStore()?.record() ?? {},
+            )
       },
       block: () => {
         const starred = this.deck?.starredPanel ?? null
@@ -8238,6 +8622,8 @@ export class Session {
       groups: () => this.annotations?.groups ?? null,
       // The one result that goes to a table rather than to the drawer (§3.8).
       cellMeasurements: (uri, table) => this.adoptCellMeasurements(uri, table),
+      // The origins an Origin and terminus run placed, into the declarations.
+      originsFound: (uri, origins) => this.adoptOrigins(uri, origins),
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
       // A deck the reader has left with no map starred has no file for a task
@@ -8387,6 +8773,14 @@ export class Session {
     return out
   }
 
+  /** The file's circular declarations and origins, as a context carries them. */
+  private declarations(): { circular: readonly string[]; origins: Record<string, number> } {
+    return {
+      circular: this.circularStore()?.list() ?? [],
+      origins: this.originStore()?.record() ?? {},
+    }
+  }
+
   private analysisContext(): AnalysisContext | null {
     const file = this.file
     // **A session with no contact map still has a panel.** Three tasks run
@@ -8438,6 +8832,7 @@ export class Session {
         framing: null,
         blockLoaded: false,
         blockBytes: 0,
+        ...this.declarations(),
       })
     }
     // Every coordinate a *map* analysis produces is arithmetic on a fixed bin
@@ -8456,7 +8851,15 @@ export class Session {
     const binsize = info.binsize
     if (binsize === null || binsize <= 0) return null
     const panel = starred === null ? this.current?.panel : (starredPanel?.map ?? undefined)
-    const framing = panel === undefined || panel === null ? null : panel.analysisFraming(uri)
+    const declared = this.declarations()
+    // The framing a task is **run** on, and so the one that has to carry the
+    // declarations: the drawer's header was given them and the run was not, so
+    // a circle ticked on the table was still measured as a line (§8.15).
+    const framing = withCircularNames(
+      panel === undefined || panel === null ? null : panel.analysisFraming(uri),
+      declared.circular,
+      declared.origins,
+    )
     const block = panel === undefined || panel === null ? null : panel.analysisBlock()
     return buildAnalysisContext({
       uri,
@@ -8473,6 +8876,7 @@ export class Session {
       framing,
       blockLoaded: block !== null,
       blockBytes: block === null ? 0 : block.values.byteLength,
+      ...declared,
       // The cells of the map the star is on, not of the session's first file: a
       // deck can hold an `.scool` beside a `.cool`, and the per-cell task is
       // offered for whichever one an analysis would be measured against.

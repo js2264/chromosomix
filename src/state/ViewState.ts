@@ -62,6 +62,7 @@ const KEY_ORDER = [
   'balance',
   'score',
   'oe',
+  'arms',
   'smooth',
   'op',
   'flip',
@@ -89,6 +90,7 @@ const OPTIONAL_KEYS = [
   'balance',
   'score',
   'oe',
+  'arms',
   'smooth',
   'op',
   'flip',
@@ -251,6 +253,13 @@ export function parseViewState(hash: string): ViewState | null {
   const oe = raw.get('oe')
   if (oe !== undefined) state.oe = oe === '1' || oe === 'true'
 
+  // The window along the arms, in bins, for an O/E against both of a bacterial
+  // chromosome's diagonals (§8.15). A whole number or nothing: a link is a string
+  // a stranger can edit, and a value this build cannot read lands on the plain
+  // O/E rather than on a guess.
+  const arms = raw.get('arms')
+  if (arms !== undefined && /^\d{1,6}$/.test(arms)) state.arms = Number(arms)
+
   // Clamped to the radii this build offers rather than believed. A link is a
   // string a stranger can edit, and the filter's cost is linear in nothing a
   // reader can see — `smooth=400` would be accepted by the arithmetic and would
@@ -340,7 +349,7 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * force decides which controls the panel draws — the depth tickbox is offered
  * under one and not the others — and controls are built once, at construction.
  */
-export const DERIVED_KEYS = ['oe', 'smooth', 'flip'] as const
+export const DERIVED_KEYS = ['oe', 'arms', 'smooth', 'flip'] as const
 
 /**
  * The keys that name what is on screen **beside** this view (§16).
@@ -412,7 +421,7 @@ export const COMPANION_KEYS = ['maps', 'uri2'] as const
  * rule and with the same exception: a state that has said something about the
  * key is believed, including having said `false`.
  */
-export const READING_KEYS = ['flip', 'oe', 'smooth'] as const
+export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
 
 /**
  * The keys that say **which data the file is being read through**, and outlive

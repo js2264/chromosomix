@@ -95,6 +95,13 @@ import {
   type LoadedTrack,
 } from './tracks'
 import { outputToTsv } from '../analysis/write/tsv'
+import { gridAt } from '../analysis/context'
+import {
+  CIRCULAR_SCORE,
+  JUNCTION_BINS,
+  junctionCandidates,
+  measureJunctions,
+} from '../analysis/circularity'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import {
@@ -106,7 +113,7 @@ import {
 } from '../annotations/parse'
 import { parseBarChart, sniffBarChart } from '../annotations/barchart'
 import { formatIntervals } from '../annotations/export'
-import { writeBed3d } from '../annotations/g3d'
+import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
 import type { StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
@@ -118,6 +125,7 @@ import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
 import {
   defaultParams,
+  paramDerived,
   type AnalysisFraming,
   type AnalysisTask,
   type Params,
@@ -199,13 +207,49 @@ function pairsBinningOf(args: Args): PairsBinning | undefined {
  * `--value`, `--circular` and `--cell`: the framing a session sets from the
  * picture, spelled as flags (see `RESERVED`).
  */
-function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells'> {
+function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins'> {
   const value = one(args, 'value')
   return {
     ...(value === undefined || value === '' ? {} : { value }),
     circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     cells: all(args, 'cell').flatMap((item) => item.split(',')).filter((item) => item !== ''),
+    origins: originsOf(all(args, 'origin')),
   }
+}
+
+/**
+ * `--origin NAME:POS`, repeated or comma-separated: where each sequence's
+ * replication origin is (§8.15), in the **display** form — 1-based, the number
+ * the Origin and terminus table prints — and kept 0-based in the framing, like
+ * every coordinate a worker is handed (§26.1). Digit grouping is allowed, since
+ * the number is copied from a table that groups it.
+ */
+function originsOf(items: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  // A comma separates two origins only where a name and its colon follow it:
+  // `LR657304.1:6,374,501` — the form the framing line prints — is one origin
+  // with its digits grouped, not three.
+  for (const item of items.flatMap((entry) => entry.split(/,(?=[^,]*:)/))) {
+    const at = item.lastIndexOf(':')
+    if (at <= 0) {
+      if (item.trim() !== '') throw new Error(`--origin ${item} is not NAME:POSITION.`)
+      continue
+    }
+    const name = item.slice(0, at)
+    const position = Number(item.slice(at + 1).replace(/[,_]/g, ''))
+    if (!Number.isFinite(position) || position < 1) {
+      throw new Error(`--origin ${item}: the position is 1-based and at least 1.`)
+    }
+    out[name] = Math.floor(position) - 1
+  }
+  return out
+}
+
+/** `LR657304.1:6,374,501` — the origins as a reader would type them back. */
+function originLabel(origins: Readonly<Record<string, number>>): string {
+  return Object.entries(origins)
+    .map(([name, at]) => `${name}:${(at + 1).toLocaleString('en-US')}`)
+    .join(', ')
 }
 
 const flag = (args: Args, key: string): boolean => {
@@ -233,6 +277,13 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
   const params: Record<string, Params[string]> = {}
   const known = new Map(task.params.map((param) => [param.key, param]))
   for (const param of task.params) {
+    // A number whose default is the context's (`NumberParam.seed`) is left
+    // unanswered, and the runner decides it from the framing — the map's own
+    // resolution where a map was named — as the form would have.
+    if (param.kind === 'number' && param.seed !== undefined) continue
+    // Nor a parameter the form answers from the file (`paramDerived`) — *use
+    // balancing weights* — which `runOne` answers from the file it opens.
+    if (paramDerived(param)) continue
     if ('default' in param && param.default !== undefined) {
       params[param.key] = param.default as Params[string]
     }
@@ -240,10 +291,10 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
   for (const [key, values] of args.flags) {
     const param = known.get(key)
     // The task's own parameters win over the CLI's flags where the names
-    // collide, and `--balance` is the collision that matters: six tasks declare
-    // it. Skipping a reserved name first would have set the framing and left the
-    // task at its default, which is precisely the silent-default failure the
-    // unknown-key error below exists to prevent.
+    // collide: coverage's own `--balance`, which is off by default, is that
+    // task's and not the framing's. Skipping a reserved name first would have
+    // set the framing and left the task at its default, which is precisely the
+    // silent-default failure the unknown-key error below exists to prevent.
     if (param === undefined && RESERVED.has(key)) continue
     if (param === undefined) {
       throw new Error(
@@ -253,15 +304,55 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
     }
     params[key] = coerce(param, values)
   }
+  // `--no-balance` answers the parameter the file otherwise would: off, as the
+  // framing then is.
+  if (flag(args, 'no-balance')) {
+    for (const param of task.params) if (paramDerived(param)) params[param.key] = false
+  }
   return params
+}
+
+/**
+ * A task's parameters with the ones the file answers filled in.
+ *
+ * *Use balancing weights* is the one there is (`BALANCE_PARAM`). A form never
+ * shows it and sets it from the file (`ParamForm`), and a shell now does the
+ * same: on wherever the file carries weights, as the framing is — so a command
+ * that says nothing about balancing reads what the app would have read. Only
+ * where the command left it open: `--no-balance` has already answered it.
+ */
+function withDerived(task: AnalysisTask, params: Params, balance: boolean): Params {
+  if (!task.params.some((spec) => paramDerived(spec) && params[spec.key] === undefined)) return params
+  const out: Record<string, Params[string]> = { ...params }
+  for (const spec of task.params) {
+    if (paramDerived(spec) && out[spec.key] === undefined) out[spec.key] = balance
+  }
+  return out
+}
+
+/**
+ * Whether `--balance` means something to this command.
+ *
+ * Balanced counts are the default wherever the file carries weights, so the
+ * flag that used to ask for them asks for nothing — and a flag that asks for the
+ * default reads as though the default were the other one, which is how a run
+ * came out unbalanced three times over for want of it. It survives only as a
+ * task's own parameter where one is declared and is *not* the file's to answer:
+ * coverage's, which is off because raw coverage is the point of it.
+ */
+function takesBalance(command: string): boolean {
+  return (
+    taskById(command)?.params.some((spec) => spec.key === 'balance' && !paramDerived(spec)) ?? false
+  )
 }
 
 /**
  * Flags that belong to the CLI rather than to a task.
  *
- * Consulted only for a name the task does *not* declare. `--balance` is on both
- * lists deliberately: it sets the framing, and where a task also has a `balance`
- * parameter it sets that too, because a reader typing it once means both.
+ * Consulted only for a name the task does *not* declare. `--no-balance` reads
+ * the raw counts: it sets the framing, and the `balance` parameter of every task
+ * whose form answers it from the file, because a reader typing it once means
+ * both (`paramsFor`, `withDerived`).
  *
  * `--window` rather than `--region`: the reconstruction and the model
  * comparison both take a parameter called `region`, meaning *which sequences*,
@@ -272,7 +363,7 @@ const RESERVED = new Set([
   'out',
   'o',
   'window',
-  'balance',
+  'no-balance',
   'features',
   'pairs',
   'sequence',
@@ -291,6 +382,9 @@ const RESERVED = new Set([
   // without them repeats a different run.
   'value',
   'circular',
+  // Where each sequence's replication origin is (§8.15), which the arm-frame
+  // expectation and the inter-arm alignment read their arms from.
+  'origin',
   'cell',
   'over',
   'quiet',
@@ -371,6 +465,8 @@ interface RunOptions {
   value?: string | undefined
   /** Sequences declared circular (§8.15), by this file's names. */
   circular: readonly string[]
+  /** Declared replication origins, 0-based base pairs by this file's names (§8.15). */
+  origins: Readonly<Record<string, number>>
   /** The cells of an `.scool` to sum; empty is every cell (§3.8). */
   cells: readonly string[]
   quiet: boolean
@@ -406,7 +502,11 @@ interface PairsBinning {
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
  */
-async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<Opened> {
+async function openForTask(
+  uri: string,
+  source: ByteSource,
+  options: Pick<RunOptions, 'binning' | 'quiet'>,
+): Promise<Opened> {
   const path = parseUri(uri).path
   try {
     return { mc: await MetaCooler.open(uri, source), source, orientation: null }
@@ -492,7 +592,7 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * — but the parse below is the shared one, so a number computed in a shell and
  * a number computed by clicking come out of the same implementation.
  */
-async function openLocal(uri: string, options: RunOptions): Promise<Opened> {
+async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'quiet'>): Promise<Opened> {
   // **The `::` is addressed to the container, not to the filesystem.** An
   // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
   // with a sentence naming the resolutions and telling the reader to write
@@ -540,7 +640,7 @@ async function openLocal(uri: string, options: RunOptions): Promise<Opened> {
  * loops and a promise that never resolves would hang.
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
-  const { task, params, path } = options
+  const { task, path } = options
   const opened = await openLocal(resolve(path), options)
   const { mc } = opened
   try {
@@ -562,11 +662,27 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
           `${mc.scoreColumns.join(', ') || DEFAULT_COUNT_COLUMN}.`,
       )
     }
+    // An origin on a sequence the file has not got, or past its end, is a
+    // typing mistake — refused by name rather than read as *no origin*.
+    for (const [name, at] of Object.entries(options.origins)) {
+      const id = mc.chromnames.indexOf(name)
+      if (id < 0) {
+        throw new Error(`--origin ${name}: ${basename(parseUri(path).path)} has no sequence of that name.`)
+      }
+      const length = mc.coords.contigLengths[id]
+      if (at >= length) {
+        throw new Error(
+          `--origin ${name}:${(at + 1).toLocaleString('en-US')} is past its end, at ` +
+            `${length.toLocaleString('en-US')} bp.`,
+        )
+      }
+    }
     const extent =
       options.window === undefined
         ? ([0, mc.nBins] as [number, number])
         : mc.extent(options.window)
     const balance = options.balance ?? mc.hasWeights
+    const params = withDerived(task, options.params, balance)
     const framing: AnalysisFraming = {
       uri: mc.uri,
       rows: extent,
@@ -581,8 +697,10 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
+        `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
         `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}`,
       ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
+      ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
     }
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -803,7 +921,17 @@ async function runChain(
       if (required === undefined) {
         throw new Error(`${node.id} requires the task ${id}, which this build does not have`)
       }
-      const requiredParams = defaultParams(required.params)
+      // Its own defaults, and balancing as the framing reads the file — which a
+      // required step's form would have set from the file too.
+      const requiredParams = withDerived(
+        required,
+        Object.fromEntries(
+          Object.entries(defaultParams(required.params)).filter(
+            ([key]) => !required.params.some((spec) => spec.key === key && paramDerived(spec)),
+          ),
+        ),
+        framing.balance,
+      )
       const started = Date.now()
       const outputs = await walk(required, requiredParams)
       upstream[id] = {
@@ -854,7 +982,15 @@ async function runTracksOnly(
     value: 'count',
     normalise: null,
     level: 'bin',
-    label: `${basename(named)} · loaded tracks, no contact map`,
+    label:
+      `${basename(named)} · loaded tracks, no contact map` +
+      `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
+      `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}`,
+    // A task on the sequence reads what the molecules are as surely as one on
+    // the map (§8.15): an origin call on a circle read as a line splits an
+    // origin at the first base between the two ends.
+    ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
+    ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
   }
   const notes: string[] = []
   const started = Date.now()
@@ -887,8 +1023,9 @@ async function runTracksOnly(
   }
   const outputs = await runner(job)
   if (!options.quiet) process.stderr.write('\r')
-  // No grid, so no profile can come out of this — but a writer that is handed
-  // the assembly anyway writes a BED against the right names.
+  // No map, so no grid of its own: the one profile that can come out of this —
+  // base composition's, on bins it picked (§18.8) — is written over these
+  // sequences cut at its bin size, and a BED against the right names.
   const contigs: BedGraphContig[] = Object.entries(lengths).map(([name, length]) => ({
     name,
     startBin: 0,
@@ -1088,12 +1225,18 @@ async function writeOutputs(
       )
     }
     if (output.kind === 'profile') {
-      await put(`${stem}.bedGraph`, profileToBedGraph(output, contigs, result.provenance))
+      // Over the grid the values are on: the map's, for every task that reads at
+      // its resolution, and the same sequences cut at the output's own bin size
+      // for the one that picks its own (§18.8) — which is also the only grid
+      // there is with no map named.
+      const grid =
+        output.binsize === result.provenance.framing.binsize ? contigs : gridAt(contigs, output.binsize)
+      await put(`${stem}.bedGraph`, profileToBedGraph(output, grid, result.provenance))
       // The same three arguments the drawer's own bigWig button passes, so the
       // two writers cannot drift: one implementation, one byte layout, one set
       // of round-trip tests behind it.
       const blob = await writeBigWig({
-        contigs: contigs.map((contig) => ({ name: contig.name, length: contig.length })),
+        contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
         values: output.values,
         firstBin: output.extent[0],
         binsize: output.binsize,
@@ -1133,6 +1276,13 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
     // the vector.
     if (sniffBarChart(text, path)) {
       inputs.features = { ...inputs.features, [id]: parseBarChart(text, path) }
+    } else if (sniffBed3d(text, path) || sniffG3d(text, path)) {
+      // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set
+      // whose rows carry coordinates, which is what the structure tasks read
+      // (§25). Read as a BED it kept its intervals and lost the model, and
+      // Spatial tracks said the row it had just been handed was not a structure.
+      const model = sniffBed3d(text, path) ? parseBed3d(text, path) : parseG3d(text, path)
+      inputs.features = { ...inputs.features, [id]: model }
     } else if (sniffFormat(text, path) === 'bedpe') {
       inputs.pairs = { ...inputs.pairs, [id]: parseBedpe(text) }
     } else {
@@ -1260,6 +1410,23 @@ function withTrackLabels(inputs: TaskInputs, tracks: ReadonlyMap<string, LoadedT
 }
 
 /**
+ * What each loaded reference is called: its file name, as a track's is.
+ *
+ * The tasks that read one name their outputs after it — *GC content · PAK.fa*,
+ * the name the app's own entry has — and fall back to the word *reference*
+ * where the label is missing, which here it always was.
+ */
+function withSequenceLabels(
+  inputs: TaskInputs,
+  sequences: ReadonlyMap<string, SequenceStore>,
+): TaskInputs {
+  if (sequences.size === 0) return inputs
+  const labels: Record<string, string> = { ...inputs.labels }
+  for (const path of sequences.keys()) labels[path] = basename(path)
+  return { ...inputs, labels }
+}
+
+/**
  * File each loaded set under the **parameter key** that chose it.
  *
  * {@link TaskInputs} is keyed by parameter key — `analysis/job.ts`'s
@@ -1307,7 +1474,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
 
       --out <dir>          where to write (default: .)
       --window <chr:a-b>   a window rather than the whole file
-      --balance            force balancing on; --balance=false forces it off
+      --no-balance         read the raw counts. A map is read balanced wherever
+                           the file carries weights, as the app reads it
       --features <file>    a BED/narrowPeak/loop table a task needs
       --sequence <ref.fa>  a reference, for a task that reads residues (motif)
                            or phases by GC content (compartments). Gzipped or not
@@ -1319,6 +1487,9 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            (hicrep). Repeat it for a third
       --value <column>     the score column to read, for a file that carries
                            more than the count (default: count)
+      --origin <name:pos>  where a sequence's replication origin is, 1-based,
+                           as the Origin and terminus task reports it; repeat
+                           or separate with commas
       --circular <name>    a sequence to read as a circle (a plasmid); repeat
                            or separate with commas
       --cell <name>        a cell of an .scool to sum into the map; repeat or
@@ -1329,15 +1500,22 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`. A task
-                           that reads tracks (metaplot, trackcorr, frip) takes
-                           them as --tracks <file.bw>, repeated or
-                           comma-separated: a bigWig, a bedGraph, a wig, or a
-                           FASTA read as GC content
+                           that reads tracks (metaplot, trackcorr, frip,
+                           groupsignal) takes them as --tracks <file.bw>,
+                           repeated or comma-separated: a bigWig, a bedGraph, a
+                           wig, or a FASTA read as GC content
 
   metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
-      A task that reads tracks and no matrix (metaplot, trackcorr, frip, overlap,
-      motif), run with no contact map at all — what a 1D browser session runs.
-      The assembly is what the tracks and references declare.
+      A task that reads tracks and no matrix (metaplot, trackcorr, frip,
+      groupsignal, overlap, motif, composition, oriter), run with no contact map
+      at all — what a 1D browser session runs. The assembly is what the tracks
+      and references declare.
+
+  metacooler-run circular <file.mcool::/resolutions/<bp>> [...]
+      Which sequences join their own ends: the junction test the app runs when
+      a map is first opened, as a table on stdout — sequence, length, score,
+      and yes or no where it could be decided. The names to hand every other
+      run as --circular.
 
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
@@ -1362,6 +1540,12 @@ function listTasks(): void {
       process.stdout.write('      --against <file>  The other maps to compare with; repeat per map\n')
     }
     for (const param of task.params) {
+      if (paramDerived(param) && param.key === 'balance') {
+        process.stdout.write(
+          '      --no-balance  read the raw counts (balanced by default where the file carries weights)\n',
+        )
+        continue
+      }
       const fallback = (param as { default?: unknown }).default
       process.stdout.write(
         `      --${param.key}` +
@@ -1392,7 +1576,7 @@ async function runCommand(args: Args): Promise<number> {
     inputs = bindInputs(task, params, await loadInputs(args))
     sequences = await loadSequences(args)
     tracks = await loadTrackFiles([{ task, params }], args)
-    inputs = withTrackLabels(inputs, tracks)
+    inputs = withSequenceLabels(withTrackLabels(inputs, tracks), sequences)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -1462,7 +1646,7 @@ async function runCommand(args: Args): Promise<number> {
         window: task.params.some((param) => param.key === 'window')
           ? undefined
           : one(args, 'window'),
-        balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
+        balance: flag(args, 'no-balance') ? false : undefined,
         inputs,
         sequences,
         tracks,
@@ -1541,7 +1725,7 @@ async function replayCommand(args: Args): Promise<number> {
     args,
     config.tracks,
   )
-  const loaded = withTrackLabels(await loadInputs(args), tracks)
+  const loaded = withSequenceLabels(withTrackLabels(await loadInputs(args), tracks), sequences)
   const peers = all(args, 'against')
 
   process.stderr.write(
@@ -1600,6 +1784,69 @@ async function replayCommand(args: Args): Promise<number> {
   return failures === 0 ? 0 : 1
 }
 
+/**
+ * Which sequences of a map join their own ends: the junction test a session
+ * runs on a map's first open (§8.15), as a table on stdout.
+ *
+ * A declaration frames every run after it, so a batch has to make it before the
+ * first task and hand the same names to each with `--circular` — and a batch
+ * over eighty genomes, a few of them linear, can neither declare them all round
+ * nor ask a person which. The same candidates, reads, threshold and balancing
+ * as the session's (`analysis/circularity.ts`), so what a suite declares is
+ * what the viewer would have ticked on opening the file at that resolution.
+ *
+ * Every sequence gets a row, in the file's order: a score and a verdict where
+ * the test was run and decided, both empty where it was not — too short, past
+ * the fifty longest, or an end the balancer dropped.
+ */
+async function circularCommand(args: Args): Promise<number> {
+  if (args.positional.length === 0) {
+    process.stderr.write('circular needs at least one file.\n')
+    return 2
+  }
+  const quiet = flag(args, 'quiet')
+  let failures = 0
+  for (const path of args.positional) {
+    try {
+      const { mc } = await openLocal(resolve(path), { binning: pairsBinningOf(args), quiet })
+      try {
+        const balance = flag(args, 'no-balance') ? false : mc.hasWeights
+        const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
+        const measured = await measureJunctions(
+          junctionCandidates(pairs, mc.binsize),
+          async (rows, cols) => (await mc.matrix({ rows, cols, balance })).values,
+        )
+        const lines = [
+          `# metacooler metacooler-run ${VERSION}`,
+          `# file: ${path}`,
+          `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
+            `or fewer; circular at ${CIRCULAR_SCORE} or more (§8.15)`,
+          `# framing: ${mc.binsize} bp${balance ? ', balanced' : ''}`,
+          ['sequence', 'length', 'score', 'circular'].join('\t'),
+        ]
+        for (const [name, length] of pairs) {
+          const score = measured?.scores[name]
+          lines.push(
+            [
+              name,
+              String(length),
+              score === undefined ? '' : score.toFixed(4),
+              score === undefined ? '' : score >= CIRCULAR_SCORE ? 'yes' : 'no',
+            ].join('\t'),
+          )
+        }
+        process.stdout.write(`${lines.join('\n')}\n`)
+      } finally {
+        mc.close()
+      }
+    } catch (error) {
+      failures += 1
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    }
+  }
+  return failures === 0 ? 0 : 1
+}
+
 /** The tasks a session recorded parameters for, in catalogue order. */
 export function recordedTasks(config: {
   analysis?: Record<string, Params> | undefined
@@ -1646,7 +1893,15 @@ export async function main(argv: readonly string[]): Promise<number> {
     listTasks()
     return 0
   }
+  if (args.flags.has('balance') && !takesBalance(args.command)) {
+    process.stderr.write(
+      '--balance is the default now: a map is read balanced wherever the file carries weights. ' +
+        'Drop it, or use --no-balance for the raw counts.\n',
+    )
+    return 2
+  }
   if (args.command === 'replay') return replayCommand(args)
+  if (args.command === 'circular') return circularCommand(args)
   return runCommand(args)
 }
 

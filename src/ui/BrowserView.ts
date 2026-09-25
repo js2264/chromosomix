@@ -1737,6 +1737,7 @@ export class BrowserView {
 
     const live = new Set(this.props.store.entries.map((entry) => entry.id))
     this.cache.prune(live)
+    this.cache.revise(this.props.store.entries)
     this.bases.prune(live)
     // The third cache, and it was missed when it was added. Its `prune` and
     // `destroy` were written, documented and never called — so a BAM removed

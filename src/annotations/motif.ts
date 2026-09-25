@@ -147,6 +147,11 @@ export interface MotifHit {
   start: number
   end: number
   strand: MotifStrand
+  /**
+   * Positions of the window that the pattern does not permit, `0` for an exact
+   * match. Never more than {@link MotifSearch.mismatches}.
+   */
+  mismatches: number
 }
 
 /**
@@ -190,7 +195,7 @@ export function compileMotif(pattern: string): Motif | MotifRefusal {
     return {
       reason:
         `${letters.length} bases is longer than this searches for (${MOTIF_MAX_LENGTH}). ` +
-        'It looks for exact matches, so a query that long is a job for an aligner.',
+        'It looks for short motifs, so a query that long is a job for an aligner.',
     }
   }
   const masks = new Uint8Array(letters.length)
@@ -233,18 +238,31 @@ export function isPalindromic(motif: Motif): boolean {
 }
 
 /**
- * Does the window starting at `from` match?
+ * How many positions of the window starting at `from` the pattern does not
+ * permit — or `budget + 1` as soon as it is clear the window is out of budget.
  *
- * The subset test the module docstring argues for: every residue must be a
- * nucleotide, and every base it could be must be one the pattern permits.
+ * The subset test the module docstring argues for, counted rather than
+ * short-circuited: a position matches when its residue is a nucleotide and every
+ * base it could be is one the pattern permits, and any other position is a
+ * mismatch. A reference `N` against a pattern base is therefore a mismatch, as
+ * it is a failed match at a budget of zero — an assembly gap is not allowed to
+ * spend a mismatch it did not earn.
+ *
+ * The early exit is what keeps a search with a budget no slower than one
+ * without: almost every window of a genome fails on its first or second
+ * position, and stops there.
  */
-function matchesAt(bases: Uint8Array, motif: Motif, from: number): boolean {
+function mismatchesAt(bases: Uint8Array, motif: Motif, from: number, budget: number): number {
+  let wrong = 0
   for (let at = 0; at < motif.length; at++) {
     const residue = BASE_MASK[bases[from + at] ?? 0] ?? 0
     const allowed = motif[at] ?? 0
-    if (residue === 0 || (residue & ~allowed) !== 0) return false
+    if (residue === 0 || (residue & ~allowed) !== 0) {
+      wrong++
+      if (wrong > budget) return wrong
+    }
   }
-  return true
+  return wrong
 }
 
 export interface MotifSearch {
@@ -268,6 +286,19 @@ export interface MotifSearch {
    * the offset is stated once, beside the array it belongs to.
    */
   offset?: number
+  /**
+   * How many positions of a site may disagree with the pattern. `0`, the
+   * default, is an exact match.
+   *
+   * There for the binding sites that are a *consensus* rather than a string. A
+   * bacterial centromere, `parS`, is a 16-base palindrome of which each genome
+   * carries a few variants — on *Pseudomonas aeruginosa* PAK an exact search
+   * for `TGTTNCACGTGNAACA` finds two of the four sites flanking the origin, and
+   * a search allowing one mismatch finds all four and nothing else. A
+   * mismatch is a position the pattern does not permit, counted over the
+   * whole site; `N` in the pattern permits everything and never costs one.
+   */
+  mismatches?: number
 }
 
 export interface MotifResult {
@@ -306,6 +337,9 @@ export function findMotif(
 
   const offset = options.offset ?? 0
   const limit = options.limit ?? Number.POSITIVE_INFINITY
+  // Never as many as the motif is long: a budget that covers every position
+  // matches every window of the reference, which is not a search.
+  const budget = Math.max(0, Math.min(motif.length - 1, Math.floor(options.mismatches ?? 0)))
   const both = options.bothStrands === true
   const palindrome = both && isPalindromic(motif)
   const reverse = both && !palindrome ? reverseComplement(motif) : null
@@ -313,17 +347,27 @@ export function findMotif(
 
   const last = bases.length - motif.length
   for (let from = 0; from <= last; from++) {
-    if (matchesAt(bases, motif, from)) {
+    const forward = mismatchesAt(bases, motif, from, budget)
+    if (forward <= budget) {
       hits.push({
         start: from + offset,
         end: from + motif.length + offset,
         strand: forwardStrand,
+        mismatches: forward,
       })
       if (hits.length >= limit) return { hits, truncated: from < last }
     }
-    if (reverse !== null && matchesAt(bases, reverse, from)) {
-      hits.push({ start: from + offset, end: from + motif.length + offset, strand: -1 })
-      if (hits.length >= limit) return { hits, truncated: from < last }
+    if (reverse !== null) {
+      const back = mismatchesAt(bases, reverse, from, budget)
+      if (back <= budget) {
+        hits.push({
+          start: from + offset,
+          end: from + motif.length + offset,
+          strand: -1,
+          mismatches: back,
+        })
+        if (hits.length >= limit) return { hits, truncated: from < last }
+      }
     }
   }
   return { hits, truncated: false }

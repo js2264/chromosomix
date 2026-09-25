@@ -24,6 +24,7 @@ node scripts/ui-saves.mjs gallery            # every export through the save dia
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
+node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -95,6 +96,31 @@ land after the Map card), the palette's reset, and on the two-map deck the Map c
 General with the companion then starred (the card there must become the companion's). It prints
 every column's cards after each step, so a card that did not come back is a line in the log. Run it
 after any change to `ui/cardLayout.ts`, to a column's builder or to a card's heading.
+
+The eleventh drives what the yeast demo cannot show, because it has no circle and no origin: *P.
+aeruginosa* PAK from the DNA Bacterial Zoo read as circular on its first open, *Origin and terminus*
+and *Base composition* run from the Chromosomes table, the origin in the table's column, the map
+framed on it with `ori` — lit while the origin is in the middle, through a zoom and not a pan, and
+pressed again to go back to the sequence from its first base, each step printed to stdout — the O/E
+taken along the arms with `arms` and correlated at 8 kb, the inter-arm and compartment tasks —
+compartments by each *method*, the correlation's run with its own lane and components table after
+cooltools' default —
+*Base composition* again in a 1D browser holding the FASTA alone, at 10 kb (§8.15, §18.8) — and
+then that browser's own Chromosomes table: a circle ticked and an origin typed there (and one past
+the end refused), the map dropped over the browser taking both, and a fresh map's origin at its
+first base, `ori` centring on it (§5.8, §8.15); and *Signal by group* comparing GC content between
+the A and B the arms' compartments found, by the call's names and by E1's sign, with an origin typed
+into the table first; and last, the DNA Bacterial Zoo as `scripts/dbz-store.sh` writes it (§24.2,
+§24.3) — the cards, a species' fold, its session opening the map with the HiC score, insulation and
+E1 along both arms under it and nothing on it, the circle and origin that session declares, `ori`
+on that origin, and the shipped tile with nothing uploaded naming what builds it.
+`GALLERY_ONLY=declarations`, `GALLERY_ONLY=groups` or `GALLERY_ONLY=store` runs one part alone,
+in a minute or two. It reads the lab's bucket; where the browser cannot
+reach it, serve the three files — `PAK_MM142.mcool`, `PAK.fa` and
+`PAK_MM142_500.coverage.coverage-total.bw` — with `python3 scripts/DBZ_store.py serve <folder>` and
+name the folder's address in `GALLERY_DATA`; for the store part, serve a store the script wrote and
+name its `store.json` in `GALLERY_STORE`. Run it after any change to §8.15's declarations, to the
+arm reading, to those tasks, or to the store's script.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

@@ -57,6 +57,9 @@ export interface ContextInput {
   peers?: Array<{ label: string; uri: string; binsize: number }>
   /** The resolution ladder in bp, finest first; absent or empty without one. */
   resolutions?: number[]
+  /** The sequences declared circular, and the declared origins (§8.15). */
+  circular?: readonly string[]
+  origins?: Readonly<Record<string, number>>
 }
 
 function strings(
@@ -83,6 +86,31 @@ function numbers(table: ContextInput['contigs'], column: string): Float64Array |
 export function binsForLength(length: number, binsize: number): number {
   if (!(binsize > 0) || !(length > 0)) return 0
   return Math.ceil(length / binsize)
+}
+
+/**
+ * The same sequences, in the same order, each cut from its first base into bins
+ * of `binsize` — the grid a vector at a bin size of its own is laid out over.
+ *
+ * Base composition is the task that makes one (§18.8): it reads at the map's
+ * resolution unless told otherwise, and at 10 kb with no map, and a lane or a
+ * file laid out over the map's grid at any other size gives every sequence after
+ * the first the values of the one before it. A sequence with no length has no
+ * bins, as on the session's own grid.
+ */
+export function gridAt(
+  contigs: ReadonlyArray<{ name: string; length: number }>,
+  binsize: number,
+): Array<{ name: string; startBin: number; bins: number; length: number }> {
+  const out: Array<{ name: string; startBin: number; bins: number; length: number }> = []
+  let startBin = 0
+  for (const contig of contigs) {
+    const bins = binsForLength(contig.length, binsize)
+    if (bins === 0) continue
+    out.push({ name: contig.name, startBin, bins, length: contig.length })
+    startBin += bins
+  }
+  return out
 }
 
 /** Assemble the context. Pure, so a test can build one without a worker. */
@@ -126,6 +154,13 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     ...(input.resolutions === undefined || input.resolutions.length === 0
       ? {}
       : { resolutions: [...input.resolutions] }),
+    // Absent rather than empty where nothing is declared, as on a framing.
+    ...(input.circular === undefined || input.circular.length === 0
+      ? {}
+      : { circular: [...input.circular] }),
+    ...(input.origins === undefined || Object.keys(input.origins).length === 0
+      ? {}
+      : { origins: { ...input.origins } }),
     // Absent rather than zero on a file with no cells, so that a task asking
     // `(context.cells ?? 0) > 0` reads the same on an old stored context as on a
     // fresh one.

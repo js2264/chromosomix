@@ -320,6 +320,26 @@ export function readsAsCircular(job: JobContext, name: string): boolean {
   return flagged.some((entry) => contigIdFor(job.mc, entry) === cid)
 }
 
+/**
+ * The declared replication origin of a sequence, in base pairs, or `undefined`.
+ *
+ * Resolved by {@link readsAsCircular}'s rule and for its reason: the
+ * declaration is made against the session's map, and a batch asks every panel
+ * of a deck for it under whatever spelling that file uses (§5.9).
+ */
+export function originOf(job: JobContext, name: string): number | undefined {
+  const declared = job.framing.origins
+  if (declared === undefined) return undefined
+  const direct = declared[name]
+  if (typeof direct === 'number' && Number.isFinite(direct)) return direct
+  const cid = job.mc.hasContig(name) ? job.mc.contigId(name) : -1
+  if (cid < 0) return undefined
+  for (const [entry, at] of Object.entries(declared)) {
+    if (typeof at === 'number' && Number.isFinite(at) && contigIdFor(job.mc, entry) === cid) return at
+  }
+  return undefined
+}
+
 // ---------------------------------------------------------------------------
 // Cancellation
 // ---------------------------------------------------------------------------

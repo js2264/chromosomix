@@ -665,6 +665,64 @@ export interface TurnPresentation {
   onAvailable?(possible: boolean): void
 }
 
+/**
+ * What the map needs to offer and apply the arm-frame O/E (§8.15).
+ *
+ * The frame is the sequence the view is a window on — where it starts in the
+ * file's bins, how many it has, where its origin is and whether it is round — so
+ * the panel can say which bin of it each row of whatever block arrives is, a
+ * rotated one included. `null` where there is no origin to read the arms from,
+ * with {@link refusal} saying so.
+ */
+export interface ArmsPresentation {
+  /** The window along the arms in bins while it is on; `undefined` while off. */
+  window: number | undefined
+  /**
+   * The sequence the arms are of, in the **open** map's bins: where it starts
+   * on the axis, how many bins it has and which holds the origin — with that
+   * grid's bin size and the sequence's length in base pairs, so a block read on
+   * another grid can be placed on it.
+   */
+  frame: {
+    startBin: number
+    n: number
+    origin: number
+    circular: boolean
+    binsize: number
+    length: number
+    /** The origin itself, in base pairs, 0-based — what `ori` centres on. */
+    originBp: number
+  } | null
+  /** Why it cannot be offered on this view, or `null` when it can. */
+  refusal: string | null
+  /** Absent on a panel that applies it without owning the control. */
+  onChange?(window: number | undefined): void
+  /**
+   * Frame the whole circle with its origin in the middle, where the sequence is
+   * circular and has one — the way every figure of a bacterial map is drawn,
+   * with the arms running out to the corners and meeting at the terminus.
+   *
+   * @param centred Whether the origin is in the middle of what is drawn now —
+   *   the button is lit then, and pressed it frames the sequence as usual again.
+   */
+  onCentre?(centred: boolean): void
+}
+
+const CENTRE_HINT =
+  'Frame the whole circle with its origin in the middle: the arms run out to the corners and ' +
+  'meet at the terminus.'
+
+const UNCENTRE_HINT =
+  'The origin is in the middle of the view. Press to frame the sequence from its first base again.'
+
+/** The window the arms control turns on at, in bins — the compartments task's default. */
+export const DEFAULT_ARM_WINDOW = 50
+
+const ARMS_HINT =
+  'Divide by the decay along both arms of a bacterial chromosome — its secondary diagonal ' +
+  'through the origin as well as the main one — so what is left is its compartments. Reads the ' +
+  'origin on the Chromosomes table: the first base unless one is set.'
+
 export interface DerivePresentation {
   /** Normalisation to compute from the block; absent for none. */
   normalise?: Normalisation
@@ -680,6 +738,14 @@ export interface DerivePresentation {
    * control, and the values are still derived.
    */
   onExpectedChange?(on: boolean): void
+  /**
+   * The baseline against **both** diagonals of a bacterial chromosome (§8.15),
+   * offered where the view is one sequence.
+   *
+   * Absent on every view that is not a window on one sequence, and on a
+   * companion that draws it without owning the control.
+   */
+  arms?: ArmsPresentation
   /**
    * How much despeckling, as the picker's token; `0` for none
    * (`render/smooth.ts`).
@@ -781,6 +847,79 @@ export interface DerivePresentation {
  * flipped a switch on a map they were reading.
  */
 export const MAP_CORRELATION_BINS = 1500
+
+/** What identifies an arms setting, for the caches a derivation is keyed on. */
+function armsKey(arms: ArmsPresentation | undefined): string {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
+  const { startBin, n, origin, circular } = arms.frame
+  return `${arms.window}:${startBin}:${n}:${origin}:${circular ? 'o' : '-'}`
+}
+
+/**
+ * Whether a circle's origin is in the middle of the picture, to within
+ * `tolerance` base pairs — what lights `ori` (§8.15).
+ *
+ * `middle` is the locus at the centre of the visible domain, read off the scale
+ * rather than off the window the view note prints: that window is widened to
+ * whole bins at both ends, which moves its middle by up to a bin however exactly
+ * the picture is centred. Measured round the circle, so an origin a few
+ * kilobases before the sequence's first base is in the middle of a view that
+ * crosses the junction there.
+ */
+export function originInMiddle(
+  middle: { contig: string; bp: number } | null,
+  frame: { circular: boolean; length: number; originBp: number },
+  tolerance: number,
+): boolean {
+  if (middle === null || !frame.circular || !(frame.length > 0)) return false
+  const apart = Math.abs(middle.bp - frame.originBp) % frame.length
+  return Math.min(apart, frame.length - apart) <= tolerance
+}
+
+/**
+ * The arm frame for this block, where the arms are on and there is one.
+ *
+ * **In the block's own cells**, which are not the open map's bins in general: a
+ * pooled read sums several of them, and a read from a sibling rung of an
+ * `.mcool` is on another grid altogether, with extents in that grid's bins.
+ * Each row is placed by where it is *in base pairs* — through the same axis
+ * runs the ticks are placed by, which is also what folds a block read round a
+ * circle (`worker/wrap.ts`) back onto the sequence — and the frame and its
+ * window are carried over to the block's resolution. A frame kept at the open
+ * rung placed a coarse block's rows as the first stretch of a longer sequence,
+ * all on one arm, and sized its tables for a resolution nobody was drawing.
+ */
+export function armsFor(
+  data: MatrixResult,
+  arms: ArmsPresentation | undefined,
+  bpPerCell: number,
+): Derivation['arms'] | undefined {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
+  if (arms.refusal !== null || data.level !== 'bin') return undefined
+  const { n, origin, circular, binsize, length } = arms.frame
+  if (!(n > 0) || !(binsize > 0) || !(bpPerCell > 0) || !(length > 0)) return undefined
+  const cells = Math.max(1, Math.ceil(length / bpPerCell))
+  const originCell = Math.min(cells - 1, Math.floor(((origin + 0.5) * binsize) / bpPerCell))
+  const place = (runs: AxisGroup[], blockStart: number, count: number): Int32Array => {
+    const axis = locusAxisFrom({ runs, blockStart, level: 'bin', binsize: bpPerCell, contigLength: () => length })
+    const out = new Int32Array(count)
+    for (const segment of axis?.segments ?? []) {
+      for (let i = Math.max(0, segment.unitStart); i < Math.min(count, segment.unitEnd); i++) {
+        const bp = segment.bpStart + (i - segment.unitStart + 0.5) * segment.bpPerUnit
+        const cell = Math.floor(bp / bpPerCell)
+        out[i] = ((cell % cells) + cells) % cells
+      }
+    }
+    return out
+  }
+  return {
+    frame: { n: cells, origin: originCell, circular },
+    rowBins: place(data.rowGroups, data.rowExtent[0], data.nrows),
+    colBins: place(data.colGroups, data.colExtent[0], data.ncols),
+    // The same stretch of the arms, counted in the block's cells.
+    window: arms.window > 0 ? Math.max(1, Math.round((arms.window * binsize) / bpPerCell)) : 0,
+  }
+}
 
 const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
@@ -1122,6 +1261,10 @@ export class MatrixPanel {
   private stopRefineWatch: (() => void) | null = null
   /** The O/E control, lit from {@link setDerive} rather than from its own click. */
   private expectedButton: HTMLElement | null = null
+  /** The arm-frame toggle beside it, where the view is one sequence (§8.15). */
+  private armsButton: HTMLButtonElement | null = null
+  /** The `ori` action beside it, shown where there is a circle and an origin. */
+  private centreButton: HTMLButtonElement | null = null
 
   /**
    * The despeckle picker, lit from {@link setDerive} for the O/E toggle's
@@ -2066,6 +2209,45 @@ export class MatrixPanel {
       this.paintExpected(derive.expected)
       this.gateExpected(derive.baseline)
       picture.push(button)
+
+      // Beside the O/E it modifies, and only where there is one sequence for it
+      // to be about. A word, like the O/E's: the thing it divides out has no
+      // shape of its own to draw a mark from.
+      //
+      // **Made with the O/E and shown by the presentation**, never decided once
+      // here: the row is built with the panel, and the origin a task places, or
+      // the circle the first open ticks, arrives after it — so a button built
+      // only if the answer was already in stayed missing until the view was
+      // rebuilt, and an `ori` that captured its origin centred on the old one
+      // after a second run moved it. Both read the live presentation instead.
+      const armsButton = el('button', {
+        class: 'btn btn-icon btn-toggle btn-word',
+        title: ARMS_HINT,
+        attrs: { type: 'button', 'aria-label': ARMS_HINT },
+      })
+      armsButton.append(el('span', { class: 'btn-word-text', text: 'arms' }))
+      armsButton.addEventListener('click', () => {
+        const held = this.options.derive?.arms
+        held?.onChange?.(held.window === undefined ? DEFAULT_ARM_WINDOW : undefined)
+      })
+      this.armsButton = armsButton
+      picture.push(armsButton)
+      // A toggle, lit while the origin is in the middle of what is drawn:
+      // pressed then, it frames the sequence from its first base again (§8.15).
+      // Read off the window on screen rather than off the view's named region,
+      // which a pan does not move.
+      const centre = el('button', {
+        class: 'btn btn-icon btn-toggle btn-word',
+        title: CENTRE_HINT,
+        attrs: { type: 'button', 'aria-label': CENTRE_HINT, 'aria-pressed': 'false' },
+      })
+      centre.append(el('span', { class: 'btn-word-text', text: 'ori' }))
+      centre.addEventListener('click', () =>
+        this.options.derive?.arms?.onCentre?.(this.centredOnOrigin()),
+      )
+      this.centreButton = centre
+      picture.push(centre)
+      this.paintArms(derive.arms)
     }
 
     if (picture.length > 0) {
@@ -2770,6 +2952,68 @@ export class MatrixPanel {
     button.classList.toggle('is-on', on)
   }
 
+  /**
+   * Light the arms toggle, and grey it with the reason where there is no origin
+   * to read the arms from — a control that does nothing when pressed is one a
+   * reader concludes is broken.
+   */
+  private paintArms(arms: ArmsPresentation | undefined): void {
+    this.centreButton?.classList.toggle('hidden', arms?.onCentre === undefined)
+    this.paintCentre()
+    const button = this.armsButton
+    if (button === null) return
+    button.classList.toggle('hidden', arms?.onChange === undefined)
+    const on = arms?.window !== undefined && arms.refusal === null
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+    const refused = arms === undefined || arms.refusal !== null
+    button.disabled = refused
+    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : ARMS_HINT
+    button.title = hint
+    button.setAttribute('aria-label', hint)
+  }
+
+  /** Light `ori` while the origin is in the middle of what is drawn. */
+  private paintCentre(): void {
+    const button = this.centreButton
+    if (button === null) return
+    const on = this.centredOnOrigin()
+    if (button.getAttribute('aria-pressed') === String(on)) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+    const hint = on ? UNCENTRE_HINT : CENTRE_HINT
+    button.title = hint
+    button.setAttribute('aria-label', hint)
+  }
+
+  /**
+   * Whether the origin is in the middle of the window on screen, to within a
+   * drawn cell — which is what `ori` leaves the view as, and what a zoom about
+   * the middle keeps.
+   */
+  private centredOnOrigin(): boolean {
+    const frame = this.options.derive?.arms?.frame
+    const axis = this.locusAxes.cols
+    if (frame === null || frame === undefined || this.data === null || axis === null) return false
+    // One sequence across the whole picture: a view over two has no one origin.
+    const scale = this.heatmap.scaleX
+    const windows = this.framedWindows(axis, scale)
+    if (windows.length === 0 || windows.some((window) => window.contig !== windows[0].contig)) {
+      return false
+    }
+    const [from, to] = scale.domain
+    const unit = (from + to) / 2
+    const perUnit = axis.segmentAt(unit)?.bpPerUnit ?? 0
+    // Two bins, or a pixel where a pixel is coarser. A bin is the grid the
+    // picture is drawn on, and the zoom buttons scale the window about its
+    // middle once its ends are rounded out to whole bins, which can move the
+    // middle by up to another one: a zoom about the origin keeps it lit, and a
+    // pan of any size a reader can see does not.
+    const bin = Math.max(frame.binsize, this.options.binsize)
+    const tolerance = Math.max(2 * bin, scale.unitsPerPixel * perUnit)
+    return originInMiddle(axis.unitToLocus(unit), frame, tolerance)
+  }
+
   /** Light the O/E toggle. Its state lives in the presentation, not in the DOM. */
   private paintExpected(on: boolean): void {
     const button = this.expectedButton
@@ -2843,6 +3087,7 @@ export class MatrixPanel {
       derivation.normalise ?? '',
       String(derivation.expected === true),
       derivation.smooth ?? '0',
+      armsKey(this.options.derive?.arms),
     ].join('|')
   }
 
@@ -3030,6 +3275,7 @@ export class MatrixPanel {
       String(derivation.expected === true),
       String(derivation.baseline === true),
       derivation.smooth ?? '0',
+      armsKey(this.options.derive?.arms),
     ].join('|')
   }
 
@@ -5650,6 +5896,10 @@ export class MatrixPanel {
       // (`render/smooth.ts`).
       smooth: this.options.derive?.smooth ?? '0',
     }
+    // `options.binsize` is the block's own — the read's bin size times its
+    // pooling, set from the block before it is derived (`setResolution`).
+    const arms = armsFor(data, this.options.derive?.arms, this.options.binsize)
+    if (arms !== undefined) derivation.arms = arms
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
     // A compared pair is never deferred: two blocks would need two jobs, and a
     // half-finished pair would put a smoothed map over an unsmoothed one and call
@@ -6420,8 +6670,10 @@ export class MatrixPanel {
       (held?.expected === true) === (derive?.expected === true) &&
       (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
       (held?.correlate === true) === (derive?.correlate === true) &&
-      (held?.baseline === true) === (derive?.baseline === true)
+      (held?.baseline === true) === (derive?.baseline === true) &&
+      armsKey(held?.arms) === armsKey(derive?.arms)
     this.options.derive = derive
+    this.paintArms(derive?.arms)
     // The toggle holds no state of its own — the setting is the session's, and
     // it can move from the command palette or from a link as easily as from a
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
@@ -6695,7 +6947,14 @@ export class MatrixPanel {
    */
   private derivedLabel(): string | null {
     if (this.options.derive?.baseline === true) return this.comparisonLabel() ?? 'expected'
-    return this.comparisonLabel() ?? (this.options.derive?.expected === true ? 'O/E' : null)
+    // Which decay was divided out, where it was not the ordinary one: the two
+    // pictures differ by exactly the X a figure of a bacterial map is about.
+    // Two words, because the key is one line the width of its two numbers and
+    // `Balanced O/E along the arms (log2)` was cut off before the part that
+    // said so.
+    const held = this.options.derive?.arms
+    const arms = held?.refusal === null && armsKey(held) !== ''
+    return this.comparisonLabel() ?? (this.options.derive?.expected === true ? (arms ? 'arm O/E' : 'O/E') : null)
   }
 
   /** How the two open files are being combined, or `null` for one file or a split. */
@@ -6870,6 +7129,8 @@ export class MatrixPanel {
       if (phrase !== this.framedAt) {
         this.framedAt = phrase
         this.options.onViewMoved?.()
+        // A pan moves the origin off the middle and a zoom about it does not.
+        this.paintCentre()
       }
       this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.

@@ -202,23 +202,48 @@ describe('the shape of the command', () => {
   })
 
   it('writes a boolean as the flag, or as the flag turned off', () => {
-    const on = flagsOf(
-      commandOf(
-        cliCommandFor({ task: detect, provenance: provenance('chromosight', {}), context: context() })
-          .text,
-      ),
-    )
-    expect(on.get('balance')).toBe(true)
-    const off = flagsOf(
+    const coverage = taskById('coverage') as AnalysisTask
+    const flags = flagsOf(
       commandOf(
         cliCommandFor({
-          task: detect,
-          provenance: provenance('chromosight', {}, { balance: false }),
+          task: coverage,
+          provenance: provenance('coverage', { total: true, fraction: false }),
           context: context(),
         }).text,
       ),
     )
-    expect(off.get('balance')).toBe('false')
+    expect(flags.get('total')).toBe(true)
+    expect(flags.get('fraction')).toBe('false')
+  })
+
+  /**
+   * Balanced is what a shell reads wherever the file carries weights, so a
+   * balanced run says nothing about it and an unbalanced one says
+   * `--no-balance` — the one spelling the parser takes (§18.9).
+   */
+  it('says nothing of a balanced run, and --no-balance of one that was not', () => {
+    const on = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: detect,
+          provenance: provenance('chromosight', { balance: true }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(on.has('balance')).toBe(false)
+    expect(on.has('no-balance')).toBe(false)
+    const off = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: detect,
+          provenance: provenance('chromosight', { balance: false }, { balance: false }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(off.get('no-balance')).toBe(true)
+    expect(off.has('balance')).toBe(false)
   })
 
   /**
@@ -227,15 +252,43 @@ describe('the shape of the command', () => {
    * were unbalanced. The framing always has one, and it is the better answer.
    */
   it('falls back to the framing when the record carries no balance of its own', () => {
-    const coverage = taskById('coverage') as AnalysisTask
-    expect(coverage.params.some((param) => param.key === 'balance')).toBe(true)
-    const flags = flagsOf(
+    const balanced = flagsOf(
       commandOf(
-        cliCommandFor({ task: coverage, provenance: provenance('coverage', {}), context: context() })
+        cliCommandFor({ task: detect, provenance: provenance('chromosight', {}), context: context() })
           .text,
       ),
     )
-    expect(flags.get('balance')).toBe(true)
+    expect(balanced.has('no-balance')).toBe(false)
+    const raw = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: detect,
+          provenance: provenance('chromosight', {}, { balance: false }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(raw.get('no-balance')).toBe(true)
+  })
+
+  /**
+   * Coverage's `balance` is its own, off by default because raw coverage is the
+   * point of it, and not the file's to answer — so it is written as that task's
+   * parameter, which the parser still takes, and the framing speaks for itself.
+   */
+  it('writes coverage’s own balance as its parameter', () => {
+    const coverage = taskById('coverage') as AnalysisTask
+    const flags = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: coverage,
+          provenance: provenance('coverage', { balance: false }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(flags.get('balance')).toBe('false')
+    expect(flags.has('no-balance')).toBe(false)
   })
 })
 
@@ -425,6 +478,24 @@ describe('a run with no contact map', () => {
     expect(command).toContain('--features peaks.bed')
   })
 
+  it('still says what the molecules are declared to be', () => {
+    // An origin call run from the Chromosomes table reads the circle; the line
+    // that repeats it has to, or it repeats a different call.
+    const oriter = taskById('oriter') as AnalysisTask
+    const built = cliCommandFor({
+      task: oriter,
+      provenance: provenance('oriter', defaultsOf(oriter), {
+        ...mapless,
+        circular: ['chr'],
+        origins: { chr: 999 },
+      }),
+      context: context(),
+    })
+    const command = commandOf(built.text)
+    expect(command).toContain('--circular chr')
+    expect(command).toContain('--origin chr:1000')
+  })
+
   it('still writes the file for the same task over a map', () => {
     const overlap = taskById('overlap') as AnalysisTask
     const built = cliCommandFor({
@@ -558,7 +629,7 @@ describe('every task in the registry', () => {
    * before a file is opened.
    */
   const RESERVED = new Set([
-    'out', 'o', 'window', 'balance', 'features', 'pairs', 'over', 'quiet', 'help',
+    'out', 'o', 'window', 'no-balance', 'features', 'pairs', 'over', 'quiet', 'help',
     'bin-size', 'binsize', 'rungs', 'sequence', 'track', 'against', 'value', 'circular', 'cell',
   ])
 

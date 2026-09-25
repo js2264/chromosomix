@@ -145,6 +145,18 @@ export interface NumberParam extends ParamBase {
   slider?: boolean
   /** Whole numbers only — a window in bins, a component count. */
   integer?: boolean
+  /**
+   * A default that is the context's to decide, for a number whose right answer
+   * moves with what is open — a bin size that is the open map's resolution, and
+   * some other length where no map is open.
+   *
+   * The value is then `null` until the reader types one, so it follows the
+   * context instead of freezing at whatever the form was first opened on: the
+   * form shows what `null` stands for, and a run is handed the number itself
+   * ({@link resolveSeeds}), so its record says what was read. {@link default} is
+   * what a caller with no context — a shell — falls back on.
+   */
+  seed?(context: AnalysisContext): number
 }
 
 /**
@@ -242,6 +254,15 @@ export interface EntryParam extends ParamBase {
   optional?: boolean
   /** Label for the empty choice. Only read when `optional`. */
   noneLabel?: string
+  /**
+   * Optional only: start on the empty choice rather than on the star.
+   *
+   * For an input that changes what a task computes by being there at all — a
+   * track the compartments are phased by, the coverage an origin call breaks a
+   * tie with. The first bigWig loaded is a guess at either that nobody made, and
+   * a ChIP track taken for coverage gives a ratio that looks like any other.
+   */
+  startsEmpty?: boolean
 }
 
 /**
@@ -406,6 +427,9 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
   for (const spec of specs) {
     switch (spec.kind) {
       case 'number':
+        // Unanswered where the context decides it, so it keeps deciding it.
+        out[spec.key] = spec.seed === undefined ? spec.default : null
+        break
       case 'seed':
         out[spec.key] = spec.default
         break
@@ -435,12 +459,34 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
       case 'pairSet':
       case 'track':
       case 'sequence':
-        out[spec.key] = spec.multiple === true ? [] : null
+        // `''` is the empty choice already answered, which the form keeps.
+        out[spec.key] =
+          spec.multiple === true
+            ? []
+            : spec.optional === true && spec.startsEmpty === true
+              ? ''
+              : null
         break
       case 'column':
         out[spec.key] = null
         break
     }
+  }
+  return out
+}
+
+/**
+ * The parameters with every context-seeded number answered (see
+ * {@link NumberParam.seed}) — what a run is handed, so its record names the
+ * number that was read rather than the absence of one.
+ */
+export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisContext, params: Params): Params {
+  const out: Record<string, ParamValue> = { ...params }
+  for (const spec of specs) {
+    if (spec.kind !== 'number' || spec.seed === undefined) continue
+    const held = out[spec.key]
+    if (typeof held === 'number' && Number.isFinite(held)) continue
+    out[spec.key] = spec.seed(context)
   }
   return out
 }
@@ -538,6 +584,19 @@ export interface AnalysisFraming {
    * build restores as what it was: nothing circular.
    */
   circular?: readonly string[]
+  /**
+   * Where the reader has declared each sequence's replication **origin**, in
+   * base pairs, 0-based, by this file's own names. Absent where none is.
+   *
+   * The same kind of fact as {@link circular} and carried for the same reason:
+   * it is about the molecule rather than the window, and it changes the numbers
+   * of every task that reads a bacterial chromosome in the frame of its two arms
+   * — the arm-frame expectation of compartments and the inter-arm alignment
+   * (§8.15, §18.8) — so it belongs in the provenance of what they produce. Filled
+   * by the *Origin and terminus* task for every sequence the reader has not set
+   * one on, and shown in the Chromosomes table.
+   */
+  origins?: Readonly<Record<string, number>>
 }
 
 // ---------------------------------------------------------------------------
@@ -673,8 +732,13 @@ export interface CurveSeries {
    * one value per sequence, per sample, per MAG — has nothing between its
    * samples at all, and the mark that says so is a bar standing on a baseline.
    * It goes with {@link CurveOutput.xTicks}, which is what names the list.
+   *
+   * `violin` is a series with no x at all: a sample of one quantity, drawn as
+   * its distribution beside the other series' (§18.13) — a group's values in
+   * *Signal by group*. A figure every series of which says so opens as violins,
+   * and the reader's mark control can turn them into boxes or a histogram.
    */
-  mark?: 'line' | 'points' | 'bars'
+  mark?: 'line' | 'points' | 'bars' | 'violin'
   /**
    * The stack this series shares, where the bars are parts of one whole.
    *
@@ -862,6 +926,12 @@ export interface TableColumn {
   kind: 'text' | 'number'
   /** Decimal places for a number column; integers when absent. */
   digits?: number
+  /**
+   * Written in scientific notation where the fixed digits would print it as
+   * zero — a P of 10⁻²¹ is not `0.000000`. For a column whose values span
+   * orders of magnitude below its digits and whose smallness is the point.
+   */
+  scientific?: boolean
   hint?: string
 }
 
@@ -1143,6 +1213,16 @@ export interface AnalysisContext {
    * stratified correlation is meaningless across two grids.
    */
   peers?: Array<{ label: string; uri: string; binsize: number }>
+  /**
+   * The file's circular declarations and origins (§8.15), as a framing carries
+   * them — here as well because a track task can run where there is **no**
+   * framing, from the Chromosomes table or a 1D browser, and the one the runner
+   * makes for it there must carry them too. An *Origin and terminus* run from the
+   * table read a declared circle as a line, and a line splits an origin near its
+   * first base between its two ends.
+   */
+  circular?: readonly string[]
+  origins?: Readonly<Record<string, number>>
 }
 
 // ---------------------------------------------------------------------------

@@ -81,6 +81,17 @@ function context(options: { entries?: AnnotationEntry[]; hasMap?: boolean } = {}
   }
 }
 
+
+/**
+ * **Most sites**, which is the number box whose ceiling is the site limit —
+ * found by that ceiling rather than by position, since the mismatch budget
+ * above it is a number box too.
+ */
+function limitBox(root: HTMLElement): HTMLInputElement | null {
+  const boxes = [...root.querySelectorAll<HTMLInputElement>('input[type="number"]')]
+  return boxes.find((box) => box.max === String(MOTIF_SITE_LIMIT)) ?? null
+}
+
 describe('whether the task is offered', () => {
   it('waits for a reference rather than hiding itself', () => {
     const state = MOTIF_TASK.availability(context())
@@ -203,7 +214,7 @@ describe('the form it renders', () => {
    */
   it('will not commit a site limit above the ceiling the run enforces', () => {
     const view = form()
-    const box = view.el.querySelector<HTMLInputElement>('input[type="number"]')
+    const box = limitBox(view.el)
     expect(box).not.toBeNull()
     if (box === null) return
     // In the DOM as well as in the clamp, so the box itself says what it takes.
@@ -216,7 +227,7 @@ describe('the form it renders', () => {
 
   it('still takes a smaller limit, which is the reader’s to choose', () => {
     const view = form()
-    const box = view.el.querySelector<HTMLInputElement>('input[type="number"]')
+    const box = limitBox(view.el)
     if (box === null) return
     box.value = '1000'
     box.dispatchEvent(new Event('change'))

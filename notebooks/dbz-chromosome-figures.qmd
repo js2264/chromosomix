@@ -1,0 +1,794 @@
+---
+title: "One bacterial chromosome, from its origin to its compartments"
+subtitle: "The DNA Bacterial Zoo, one figure per species, every number from metacooler-run"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    fig-format: png
+jupyter: python3
+execute:
+  warning: false
+---
+
+A figure per species of the **DNA Bacterial Zoo** store, over each one's **longest chromosome**:
+
+| panel | what | from |
+|---|---|---|
+| a | balanced contacts, the origin in the middle | the map |
+| b | observed / expected by distance decay — the X of the aligned arms remains | the map |
+| c | observed / expected along both arms — both diagonals divided out | the map |
+| d, e | what the eigenvectors are taken of: b and c clipped and less one, as cooltools prepares them — or, with `METHOD = 'correlation'`, the correlation of b and of c | the map |
+| f | cumulative GC skew, E1 by distance, E1 along the arms, GC content, in the same frame | `composition`, `compartments` |
+| g, k | inter-arm alignment by distance from the origin, every species of the run | `interarm` |
+| h | GC content of the A and B compartments (E1 along the arms) | `composition`, `compartments` |
+| i | E1 against radial position in the 3D model | `reconstruct3d`, `spatialtracks` |
+| j | the 3D model, its first two principal components, coloured by E1 | `reconstruct3d` |
+
+Every number comes from **`metacooler-run`** — the Analysis panel from a shell, the same code the
+viewer runs — whose outputs this notebook parses: which sequences are circles (`circular`), the
+origin (`oriter`), the base composition, the inter-arm alignment, E1 by distance and along the arms,
+the model and each bin's radial position in it. The CLI writes tracks, curves and tables but not
+matrices, so the five maps (a–e) are drawn from the `.mcool` with the app's arithmetic ported
+line for line — the distance decay the short way round a circle, `armExpected` of
+`src/analysis/arms.ts`, and the correlation of `src/analysis/compartments.ts` — and **checked
+against the CLI**: the leading eigenvector of the matrix `METHOD` decomposes must be the E1
+`compartments` wrote.
+
+**E1 is the component with the largest eigenvalue, always.** GC content signs each component —
+positive where the component rises with it, once their correlation reaches `minR` — and never
+chooses among them, so comparing the GC content of the A and B compartments (panel h) is not
+comparing GC content with itself.
+
+**Before rendering:** `npm run build:cli` at the repository root (this checkout's
+`metacooler-run`), and a Python with `numpy`, `scipy`, `matplotlib`, `h5py` and `jupyter`. Then
+
+```bash
+quarto render notebooks/dbz-chromosome-figures.qmd
+```
+
+or run the chunks one by one from an editor that knows Quarto (VS Code, Positron, RStudio). The
+maps and references are fetched from the store once into `notebooks/work/`, which also holds every
+command's outputs; the figures go to `notebooks/figures/`, with `numbers.tsv` beside them. Both
+folders are ignored by git. Every map is read balanced, which is `metacooler-run`'s default wherever
+the file carries weights; the raw coverage the origin call reads is asked for with `--no-balance`.
+
+```{python}
+from pathlib import Path
+
+#: The store: the lab's bucket, or a folder scripts/dbz-store.sh wrote (the folder or its store.json).
+STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+#: Only these species, as the store's cards name them — e.g. ['PAK'] — or None for every card.
+SPECIES = None
+
+#: The bin size every panel is read at.
+RES = 8000
+#: How far along the arms each cell's expectation reaches, in bins: 400 kb at 8 kb.
+ARM_WINDOW = 50
+#: What the eigenvectors are taken of: 'cooltools', observed/expected itself as cooltools' eigs_cis
+#: prepares it — clipped at its 99.9th percentile, less one, gaps as expected — which is the app's
+#: default, or 'correlation', the Pearson correlation of its rows (Lieberman-Aiden et al. 2009).
+METHOD = 'cooltools'
+#: The inter-arm band, in bins either side of the secondary diagonal.
+BAND = 2
+#: Refinement steps of the 3D reconstruction (pastis-NB).
+MODEL_ITERATIONS = 150
+#: Run a step again even where its outputs are already on disk.
+REDO = False
+
+HERE = Path.cwd().resolve()
+REPO = HERE.parent if HERE.name == 'notebooks' else HERE
+CLI = REPO / 'dist-cli' / 'metacooler-run.mjs'
+WORK = REPO / 'notebooks' / 'work'
+FIGURES = REPO / 'notebooks' / 'figures'
+```
+
+## Running `metacooler-run`, and reading what it writes
+
+Each step writes into a directory of its own under `work/<sample>/`, and is skipped when that
+directory already holds its outputs (`REDO` above). Every command is printed as it runs, so a cell's
+output is the script that made the figure.
+
+```{python}
+import json
+import math
+import shlex
+import shutil
+import subprocess
+import time
+import urllib.parse
+import urllib.request
+
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LogNorm, TwoSlopeNorm
+from scipy import stats
+
+if not CLI.exists():
+    raise FileNotFoundError(f'{CLI} is not there: run `npm run build:cli` at the repository root.')
+WORK.mkdir(parents=True, exist_ok=True)
+FIGURES.mkdir(parents=True, exist_ok=True)
+
+
+#: Seconds of metacooler-run per sample, over the commands this render actually ran.
+SECONDS = {}
+
+
+def mr(*args, out=None):
+    # One metacooler-run command, printed, run and timed; its notes back, a failure an error.
+    argv = [str(arg) for arg in args] + ([] if out is None else ['--out', str(out)])
+    print('$ metacooler-run ' + ' '.join(shlex.quote(arg) for arg in argv))
+    started = time.perf_counter()
+    done = subprocess.run(['node', str(CLI), *argv, '--quiet'], capture_output=True, text=True)
+    seconds = time.perf_counter() - started
+    if done.returncode != 0:
+        raise RuntimeError(f'metacooler-run {argv[0]} failed:\n{done.stderr}')
+    notes = [line.strip()[6:] for line in done.stderr.splitlines() if line.strip().startswith('note: ')]
+    for note in notes:
+        print('    note:', note)
+    print(f'    {seconds:.1f} s')
+    sample = next((part for arg in argv[1:] for part in Path(arg.split('::')[0]).parts if part in SECONDS), None)
+    if sample is not None:
+        SECONDS[sample] += seconds
+    return done.stdout
+
+
+def step(out, *args):
+    # A step writing into `out`, skipped where its outputs are already there.
+    out = Path(out)
+    if not REDO and out.is_dir() and any(out.iterdir()):
+        print(f'  kept {out.parent.name}/{out.name}/')
+        return
+    shutil.rmtree(out, ignore_errors=True)
+    mr(*args, out=out)
+
+
+def num(value):
+    # A table cell as a number; NaN for an empty one.
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float('nan')
+
+
+def fmt(value, spec):
+    return '—' if not np.isfinite(value) else format(value, spec)
+
+
+def rows_of(text):
+    # A metacooler-run table: `#` lines are its provenance, the first other line its header.
+    lines = [line for line in text.splitlines() if line and not line.startswith('#')]
+    header = lines[0].split('\t')
+    return [dict(zip(header, line.split('\t'))) for line in lines[1:]]
+
+
+def one(directory, pattern):
+    # The one output of a step's directory that matches.
+    found = sorted(Path(directory).glob(pattern))
+    if len(found) != 1:
+        raise FileNotFoundError(f'{directory}: {len(found)} files match {pattern}')
+    return found[0]
+
+
+def profile(path, chrom, n):
+    # A bedGraph as a vector over the n bins of one sequence, NaN where it has no value.
+    out = np.full(n, np.nan)
+    for line in Path(path).read_text().splitlines():
+        cells = line.split('\t')
+        if len(cells) < 4 or line.startswith(('#', 'track')) or cells[0] != chrom:
+            continue
+        out[int(cells[1]) // RES] = float(cells[3])
+    return out
+
+
+def beads(path, chrom, n):
+    # A bed3d over the n bins of one sequence: x, y, z a bead, NaN where none was placed.
+    xyz = np.full((n, 3), np.nan)
+    for line in Path(path).read_text().splitlines():
+        cells = line.split('\t')
+        if len(cells) < 6 or line.startswith(('#', 'track')) or cells[0] != chrom:
+            continue
+        try:
+            xyz[int(cells[1]) // RES] = [float(value) for value in cells[3:6]]
+        except ValueError:
+            pass
+    return xyz
+```
+
+## The store's cards
+
+One card per species: its sample, its map and its reference, read from `store.json` and fetched
+once where the store is a URL — `metacooler-run` reads files, not addresses.
+
+```{python}
+def read_store(store):
+    # The store's cards by species: the sample, the map and the reference, as addresses.
+    if store.startswith(('http://', 'https://')):
+        text = urllib.request.urlopen(store).read().decode()
+        base = store.rsplit('/', 1)[0] + '/'
+    else:
+        path = Path(store).expanduser()
+        path = path / 'store.json' if path.is_dir() else path
+        text = path.read_text()
+        base = f'{path.parent}/'
+    cards = {}
+    for entry in json.loads(text)['entries']:
+        fields = entry.get('fields', {})
+        card = cards.setdefault(fields.get('species', ''), {'species': fields.get('species', '')})
+        if entry['kind'] == 'map':
+            card['sample'] = entry['uri'].split('/')[0]
+            card['map'] = base + entry['uri']
+        elif fields.get('analysis') == 'Reference':
+            card['reference'] = base + entry['uri']
+    return [card for card in cards.values() if 'map' in card]
+
+
+def local(address, directory):
+    # A file of the store on this disk: itself for a store folder, else downloaded once.
+    if not address.startswith(('http://', 'https://')):
+        return Path(address)
+    target = Path(directory) / urllib.parse.unquote(address.rsplit('/', 1)[-1])
+    if not target.exists():
+        print(f'fetching {address}')
+        partial = target.with_name(target.name + '.part')
+        with urllib.request.urlopen(address) as response, open(partial, 'wb') as handle:
+            shutil.copyfileobj(response, handle)
+        partial.rename(target)
+    return target
+
+
+cards = [card for card in read_store(STORE) if SPECIES is None or card['species'] in SPECIES]
+for card in cards:
+    print(f"{card['species']:<24} {card['sample']:<28} reference: {card.get('reference', 'none').rsplit('/', 1)[-1]}")
+```
+
+## The maps, with the app's arithmetic
+
+The balanced square of one sequence, and the three things drawn from it. **O/E by distance**: each
+cell over the mean of every cell as far apart, the short way round a circle. **O/E along the
+arms**: `armExpected` — each cell over the mean of the cells of its own kind (same arm, or across
+the two) at the same separation along the origin–terminus axis, within `ARM_WINDOW` bins of its own
+position along the arms. **Correlation**: the compartment chain's — the usable bins (a value in a
+tenth of their row), the two diagonals nearest the main one left out, each pair of rows correlated
+over the cells both have.
+
+```{python}
+def balanced(mcool, chrom):
+    # The balanced contacts of one sequence at RES, dense; NaN where a bin has no weight.
+    with h5py.File(mcool, 'r') as f:
+        g = f[f'resolutions/{RES}']
+        names = [name.decode() if isinstance(name, bytes) else str(name) for name in g['chroms/name'][:]]
+        cid = names.index(chrom)
+        lo, hi = int(g['indexes/chrom_offset'][cid]), int(g['indexes/chrom_offset'][cid + 1])
+        first, last = int(g['indexes/bin1_offset'][lo]), int(g['indexes/bin1_offset'][hi])
+        bin1 = g['pixels/bin1_id'][first:last]
+        bin2 = g['pixels/bin2_id'][first:last]
+        count = g['pixels/count'][first:last].astype(float)
+        weight = g['bins/weight'][lo:hi] if 'weight' in g['bins'] else np.ones(hi - lo)
+    inside = bin2 < hi
+    n = hi - lo
+    square = np.zeros((n, n))
+    square[bin1[inside] - lo, bin2[inside] - lo] = count[inside]
+    square[bin2[inside] - lo, bin1[inside] - lo] = count[inside]
+    return square * weight[:, None] * weight[None, :]
+
+
+def separations(n, circular):
+    i = np.arange(n)
+    straight = np.abs(i[:, None] - i[None, :])
+    return np.minimum(straight, n - straight) if circular else straight
+
+
+def over_distance(square, circular):
+    s = separations(len(square), circular)
+    finite = np.isfinite(square)
+    sums = np.bincount(s[finite], weights=square[finite], minlength=s.max() + 1)
+    counts = np.bincount(s[finite], minlength=s.max() + 1)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return square / (sums / counts)[s]
+
+
+def arm_expected(square, origin, circular, window):
+    # armExpected of src/analysis/arms.ts, over the whole square.
+    n = len(square)
+    i = np.arange(n)
+    u = ((i - origin + n // 2) % n) - n // 2 if circular else i - origin
+    a = np.abs(u)
+    longest = int(a.max())
+    max_delta, max_sigma = longest + 1, 2 * longest + 1
+    whole = not window > 0
+    bucket = max_sigma if whole else max(1, window // 4)
+    buckets = -(-max_sigma // bucket)
+    reach = buckets if whole else max(1, -(-window // bucket))
+    kind = ((u[:, None] >= 0) != (u[None, :] >= 0)).astype(int)
+    delta = np.abs(a[:, None] - a[None, :])
+    slot = (a[:, None] + a[None, :]) // bucket
+    finite = np.isfinite(square)
+    expected = np.full(square.shape, np.nan)
+    lo = np.maximum(0, np.arange(buckets) - reach)
+    hi = np.minimum(buckets, np.arange(buckets) + reach + 1)
+    for k in (0, 1):
+        cells = finite & (kind == k)
+        at = delta[cells] * buckets + slot[cells]
+        sums = np.bincount(at, weights=square[cells], minlength=max_delta * buckets).reshape(max_delta, buckets)
+        counts = np.bincount(at, minlength=max_delta * buckets).reshape(max_delta, buckets).astype(float)
+        prefix_sum = np.concatenate([np.zeros((max_delta, 1)), np.cumsum(sums, 1)], 1)
+        prefix_count = np.concatenate([np.zeros((max_delta, 1)), np.cumsum(counts, 1)], 1)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            means = (prefix_sum[:, hi] - prefix_sum[:, lo]) / (prefix_count[:, hi] - prefix_count[:, lo])
+        mine = kind == k
+        expected[mine] = means[delta[mine], slot[mine]]
+    return expected
+
+
+def correlation(oe, square, circular, ignore=2):
+    # The compartment chain's correlation, put back on the whole square with dropped bins as gaps.
+    n = len(square)
+    usable = np.isfinite(square).sum(1) >= max(1, math.ceil(n * 0.1))
+    x = oe.copy()
+    x[separations(n, circular) < ignore] = np.nan
+    x = x[np.ix_(usable, usable)]
+    valid = np.isfinite(x).astype(float)
+    x0 = np.where(valid > 0, x, 0.0)
+    pairs = valid @ valid.T
+    sx = x0 @ valid.T
+    sxx = (x0 * x0) @ valid.T
+    with np.errstate(invalid='ignore', divide='ignore'):
+        cov = x0 @ x0.T - sx * sx.T / pairs
+        var_x, var_y = sxx - sx * sx / pairs, sxx.T - sx.T * sx.T / pairs
+        c = cov / np.sqrt(var_x * var_y)
+    c[(pairs < 3) | ~(var_x > 0) | ~(var_y > 0) | ~np.isfinite(c)] = 0.0
+    np.fill_diagonal(c, 1.0)
+    out = np.full((n, n), np.nan)
+    out[np.ix_(usable, usable)] = c
+    return out
+
+
+def prepared(oe, square, circular, ignore=2, percentile=99.9):
+    # cooltoolsMatrix of src/analysis/compartments.ts, put back on the whole square: over the usable
+    # bins, clipped at zero and at the 99.9th percentile of its finite cells, less one, and every gap
+    # (the two diagonals nearest the main one among them) zero — read as expected.
+    n = len(square)
+    usable = np.isfinite(square).sum(1) >= max(1, math.ceil(n * 0.1))
+    x = oe.copy()
+    x[separations(n, circular) < ignore] = np.nan
+    x = x[np.ix_(usable, usable)]
+    finite = np.isfinite(x)
+    out = np.full((n, n), np.nan)
+    out[np.ix_(usable, usable)] = np.where(finite, np.clip(x, 0, np.percentile(x[finite], percentile)) - 1, 0.0)
+    return out
+
+
+def decompose(oe, square, circular):
+    # What METHOD takes the eigenvectors of: panels d and e.
+    return (correlation if METHOD == 'correlation' else prepared)(oe, square, circular)
+
+
+def agreement(c, e1):
+    # Which of the decomposed matrix's three leading eigenvectors — by size, as the app ranks
+    # them — the CLI's E1 is, and how closely.
+    usable = np.isfinite(np.diag(c))
+    values, vectors = np.linalg.eigh(c[np.ix_(usable, usable)])
+    best = (0.0, 0)
+    for rank, k in enumerate(np.argsort(-np.abs(values))[:3], start=1):
+        v, e = vectors[:, k], e1[usable]
+        ok = np.isfinite(e)
+        r = abs(np.corrcoef(v[ok], e[ok])[0, 1])
+        best = max(best, (r, rank))
+    return best
+```
+
+## One species
+
+The chain for one card, each step a `metacooler-run` command: the junction test names the longest
+chromosome and says whether it is a circle; *Origin and terminus* places the origin, from the GC
+skew, the parS and matS sites and the coverage; every later step is framed by both. Then the maps.
+
+```{python}
+def analyse(card):
+    d = WORK / card['sample']
+    d.mkdir(parents=True, exist_ok=True)
+    SECONDS[card['sample']] = 0.0
+    mcool = local(card['map'], d)
+    fasta = local(card['reference'], d) if 'reference' in card else None
+    at = f'{mcool}::/resolutions/{RES}'
+
+    # Every sequence with its length and whether it is a circle; the longest is the one drawn.
+    junctions = rows_of(mr('circular', at))
+    longest = max(junctions, key=lambda row: int(row['length']))
+    chrom, length = longest['sequence'], int(longest['length'])
+    circular = longest['circular'] == 'yes'
+    frame = ['--circular', chrom] if circular else []
+    print(f"{card['species']}: {chrom}, {length / 1e6:.2f} Mb, {'a circle' if circular else 'a line'}")
+
+    # The origin, from the sequence and the raw coverage.
+    origin, rule = 1, 'no reference: the first base'
+    if fasta is not None:
+        step(d / 'coverage', 'coverage', f'{mcool}::/resolutions/500', '--no-balance', '--total')
+        step(d / 'oriter', 'oriter', at, '--sequence', fasta, '--sequences', chrom,
+             '--coverage', one(d / 'coverage', '*coverage-total.bw'), *frame)
+        call = next(row for row in rows_of(one(d / 'oriter', '*oriter-table.tsv').read_text())
+                    if row['sequence'] == chrom)
+        origin, rule = int(call['ori']), f"ter placed by {call['rule']}"
+    arms = ['--origin', f'{chrom}:{origin}']
+    print(f'  origin {origin:,} ({rule})')
+
+    phase = [] if fasta is None else ['--sequence', fasta, '--phaseSequence', fasta]
+    common = ['--sequences', chrom, '--contacts', 'cis', '--ignoreDiags', 2, '--components', 3,
+              '--minR', 0.1, '--saddle=false', '--method', METHOD, *phase, *frame, *arms]
+    if fasta is not None:
+        step(d / 'composition', 'composition', at, '--sequence', fasta, *frame)
+    step(d / 'interarm', 'interarm', at, '--sequences', chrom, '--band', BAND, *frame, *arms)
+    # E1 by the distance decay, and E1 along both arms — what the store's sessions open with. Each
+    # is the largest eigenvalue's component, signed by GC content. A folder per method, so a run
+    # kept from one is never read as the other.
+    step(d / f'compartments-distance-{METHOD}', 'compartments', at, *common, '--expected', 'distance')
+    step(d / f'compartments-arms-{METHOD}', 'compartments', at, *common, '--expected', 'arms',
+         '--armWindow', ARM_WINDOW)
+    # The same along the arms by the other method, to say how much E1 depends on the choice.
+    OTHER = 'correlation' if METHOD == 'cooltools' else 'cooltools'
+    step(d / f'compartments-arms-{OTHER}', 'compartments', at,
+         *[OTHER if value == METHOD else value for value in common], '--expected', 'arms',
+         '--armWindow', ARM_WINDOW)
+    # GC content of A against B, by Signal by group — the task the app runs, so the test and its P
+    # are the tool's own rather than recomputed here.
+    if fasta is not None:
+        step(d / f'groups-{METHOD}', 'groupsignal',
+             '--tracks', one(d / 'composition', '*composition-gc.bw'),
+             '--features', one(d / f'compartments-arms-{METHOD}', '*compartment-ab.bed'),
+             '--outside', 'false', '--resolution', RES, *frame)
+    step(d / 'model', 'reconstruct3d', at, '--region', chrom, '--method', 'nb', '--alpha', 3,
+         '--iterations', MODEL_ITERATIONS, *frame)
+    model = one(d / 'model', '*reconstructed-model.bed3d')
+    step(d / 'spatial', 'spatialtracks', at, '--features', model, '--structure', model, *frame, *arms)
+
+    square = balanced(mcool, chrom)
+    n = len(square)
+    o = min(n - 1, (origin - 1) // RES)
+    oe_distance = over_distance(square, circular)
+    oe_arms = square / arm_expected(square, o, circular, ARM_WINDOW)
+    r = dict(
+        card=card, chrom=chrom, length=length, n=n, circular=circular, origin=origin, o=o, rule=rule,
+        square=square, oe_distance=oe_distance, oe_arms=oe_arms,
+        c_distance=decompose(oe_distance, square, circular), c_arms=decompose(oe_arms, square, circular),
+        e1_distance=profile(one(d / f'compartments-distance-{METHOD}', '*compartment-e1.bedGraph'), chrom, n),
+        e1_arms=profile(one(d / f'compartments-arms-{METHOD}', '*compartment-e1.bedGraph'), chrom, n),
+        components=rows_of(one(d / f'compartments-arms-{METHOD}', '*compartment-components.tsv').read_text()),
+        components_distance=rows_of(
+            one(d / f'compartments-distance-{METHOD}', '*compartment-components.tsv').read_text()),
+        # Every component of both runs, E1 to E3, for what each follows before and after detrending.
+        eigen_distance=[profile(one(d / f'compartments-distance-{METHOD}', f'*compartment-e{k}.bedGraph'), chrom, n)
+                        for k in (1, 2, 3)],
+        eigen_arms=[profile(one(d / f'compartments-arms-{METHOD}', f'*compartment-e{k}.bedGraph'), chrom, n)
+                    for k in (1, 2, 3)],
+        e1_arms_other=profile(one(d / f'compartments-arms-{OTHER}', '*compartment-e1.bedGraph'), chrom, n),
+        interarm=rows_of(one(d / 'interarm', '*interarm-table.tsv').read_text())[0],
+        curve=rows_of(one(d / 'interarm', '*interarm-curve.tsv').read_text()),
+        radial=profile(one(d / 'spatial', '*radial*.bedGraph'), chrom, n),
+        model=beads(model, chrom, n),
+    )
+    r['gc'] = r['cumulative'] = np.full(n, np.nan)
+    r['groups'], r['group tests'] = [], []
+    if fasta is not None:
+        r['groups'] = rows_of(one(d / f'groups-{METHOD}', '*groupsignal-groups.tsv').read_text())
+        r['group tests'] = rows_of(one(d / f'groups-{METHOD}', '*groupsignal-tests.tsv').read_text())
+        r['gc'] = profile(one(d / 'composition', '*composition-gc.bedGraph'), chrom, n)
+        r['cumulative'] = profile(one(d / 'composition', '*composition-cumulative.bedGraph'), chrom, n)
+    # The maps are the CLI's own inputs only if the matrix METHOD decomposes has the CLI's E1 first.
+    for name in ('distance', 'arms'):
+        agree, rank = agreement(r[f'c_{name}'], r[f'e1_{name}'])
+        print(f'  E1 by {name}: eigenvector {rank} of the {METHOD} matrix, |r| = {agree:.3f}')
+    return r
+```
+
+## The figure
+
+The whole chromosome with the origin in the middle — rotated round the circle, or as it lies where
+the chromosome is a line — and every track in the same frame. Panels g and k compare every species
+of the run, the one the figure is about drawn heavier.
+
+```{python}
+PALETTE = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
+
+
+def smoothed(y, k=5):
+    return np.array([np.nanmean(y[max(0, i - k):i + k + 1]) if np.isfinite(y[max(0, i - k):i + k + 1]).any()
+                     else np.nan for i in range(len(y))])
+
+
+def figure(r, everyone):
+    n, o = r['n'], r['o']
+    shift = (o + (n + 1) // 2) % n if r['circular'] else 0
+    rot = (np.arange(n) + shift) % n
+    ticks = np.linspace(0, n - 1, 5)
+    labels = [f'{((int(t) + shift) % n) * RES / 1e6:.1f}' for t in ticks]
+    kb = f'{RES // 1000} kb'
+    where = 'origin in the middle' if r['circular'] else f"origin at {r['origin'] / 1e6:.2f} Mb"
+    centred = lambda m: m[np.ix_(rot, rot)]
+
+    fig = plt.figure(figsize=(16, 15.5))
+    gs = fig.add_gridspec(4, 3, height_ratios=[1, 1, 0.42, 0.9], hspace=0.35, wspace=0.34, top=0.93, bottom=0.04)
+
+    def matrix(cell, m, title, norm, cmap):
+        ax = fig.add_subplot(cell)
+        im = ax.imshow(centred(m), norm=norm, cmap=cmap, interpolation='none')
+        ax.set_title(title, fontsize=11)
+        ax.set_xticks(ticks, labels, fontsize=8)
+        ax.set_yticks(ticks, labels, fontsize=8)
+        ax.set_xlabel(f'Mb ({where})', fontsize=8)
+        if not r['circular']:
+            ax.axvline(o, color='k', lw=0.6, ls=':')
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+
+    square = r['square']
+    positive = square[np.isfinite(square) & (square > 0)]
+    matrix(gs[0, 0], square, f'a  balanced contacts ({kb})',
+           LogNorm(np.percentile(positive, 2), np.percentile(positive, 99.8)), 'YlOrRd')
+    matrix(gs[0, 1], r['oe_distance'], 'b  O/E, distance decay: the X remains', TwoSlopeNorm(1, 0.25, 4), 'RdBu_r')
+    matrix(gs[0, 2], r['oe_arms'], f'c  O/E along the arms (window {ARM_WINDOW * RES // 1000} kb)',
+           TwoSlopeNorm(1, 0.5, 2), 'RdBu_r')
+    edge = lambda m: np.nanpercentile(np.abs(m[np.isfinite(m)]), 99)
+    if METHOD == 'correlation':
+        matrix(gs[1, 0], r['c_distance'], 'd  correlation of b', TwoSlopeNorm(0, -1, 1), 'RdBu_r')
+        matrix(gs[1, 1], r['c_arms'], 'e  correlation of c: the plaid',
+               TwoSlopeNorm(0, -edge(r['c_arms']), edge(r['c_arms'])), 'RdBu_r')
+    else:
+        matrix(gs[1, 0], r['c_distance'], 'd  b, clipped and less one (cooltools)',
+               TwoSlopeNorm(0, -1, edge(r['c_distance'])), 'RdBu_r')
+        matrix(gs[1, 1], r['c_arms'], 'e  c, clipped and less one (cooltools)',
+               TwoSlopeNorm(0, -1, edge(r['c_arms'])), 'RdBu_r')
+
+    # f: the tracks, in the frame of the maps.
+    ax = fig.add_subplot(gs[1, 2])
+    x = np.arange(n)
+    scaled = lambda v: v[rot] / np.nanmax(np.abs(v))
+    cum = r['cumulative']
+    if np.isfinite(cum).any():
+        ax.plot(x, (cum[rot] - np.nanmin(cum)) / (np.nanmax(cum) - np.nanmin(cum)) * 0.9 + 3.6, color='#d95f02', lw=1)
+    ax.plot(x, scaled(r['e1_distance']) + 2.4, color='0.4', lw=0.8)
+    e1 = scaled(r['e1_arms'])
+    ax.fill_between(x, 0, e1, where=e1 > 0, color='#b2182b', lw=0)
+    ax.fill_between(x, 0, e1, where=e1 < 0, color='#2166ac', lw=0)
+    gc = r['gc']
+    if np.isfinite(gc).any():
+        ax.plot(x, (gc[rot] - np.nanmean(gc)) / np.nanstd(gc) * 0.25 - 1.6, color='#7f6000', lw=0.6)
+    ax.set_yticks([4.05, 2.4, 0, -1.6], ['cumulative\nGC skew', 'E1\ndistance', 'E1\narms', 'GC\n(z/4)'], fontsize=8)
+    ax.set_xticks(ticks, labels, fontsize=8)
+    ax.set_xlim(0, n)
+    top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
+    whole = 'of variance' if METHOD == 'correlation' else 'of the matrix'
+    ax.set_title(f"f  tracks, same frame · E1 (arms) {fmt(num(top.get('explained')), '.0%')} {whole}",
+                 fontsize=11)
+
+    # g and k: the inter-arm alignment of every species of the run.
+    ax = fig.add_subplot(gs[2, :2])
+    rows = []
+    for (species, other), colour in zip(everyone.items(), PALETTE):
+        chrom = other['chrom']
+        distance = np.array([float(row[next(iter(row))]) for row in other['curve']]) / 1e6
+        values = np.array([num(row.get(chrom)) for row in other['curve']])
+        mine = other is r
+        ax.plot(distance, smoothed(values), color=colour, lw=2.2 if mine else 1.0,
+                alpha=1 if mine else 0.7, label=species, zorder=3 if mine else 2)
+        t = other['interarm']
+        rows.append([species, fmt(num(t['score']), '.2f'),
+                     f"{fmt(num(t['reach']) / 1e6, '.2f')} / {fmt(num(t['armLength']) / 1e6, '.2f')}"])
+    ax.axhline(0, color='0.6', lw=0.6)
+    ax.set_xlabel('distance from the origin (Mb)')
+    ax.set_ylabel('secondary diagonal\nlog2 O/E')
+    ax.legend(fontsize=8, ncol=4, loc='upper right')
+    ax.set_title(f'g  inter-arm alignment ({kb}, band ±{BAND} bins)', fontsize=11)
+    ax = fig.add_subplot(gs[2, 2])
+    ax.axis('off')
+    tb = ax.table(cellText=rows, colLabels=['inter-arm', 'score (log2)', 'reach / arm (Mb)'],
+                  loc='center', cellLoc='center')
+    tb.auto_set_font_size(False)
+    tb.set_fontsize(9)
+    tb.auto_set_column_width([0, 1, 2])
+    tb.scale(1, 1.3)
+    for (row, col), cell in tb.get_celld().items():
+        if row > 0 and rows[row - 1][0] == r['card']['species']:
+            cell.set_text_props(fontweight='bold')
+    ax.set_title(f'k  inter-arm table ({kb}, balanced)', fontsize=10)
+
+    # h: GC content of the A and B compartments.
+    ax = fig.add_subplot(gs[3, 0])
+    e1 = r['e1_arms']
+    a = gc[np.isfinite(e1) & (e1 > 0) & np.isfinite(gc)] * 100
+    b = gc[np.isfinite(e1) & (e1 < 0) & np.isfinite(gc)] * 100
+    if len(a) and len(b):
+        ax.boxplot([a, b], widths=0.5, showfliers=False)
+        ax.set_xticks([1, 2], [f'A (n={len(a)})', f'B (n={len(b)})'])
+        p = stats.mannwhitneyu(a, b).pvalue
+        ax.set_title(f'h  GC content: A {a.mean():.1f}% · B {b.mean():.1f}%  (p={p:.0e})', fontsize=10)
+    else:
+        ax.set_title('h  GC content: no reference', fontsize=10)
+    ax.set_ylabel(f'GC per {kb} bin (%)')
+
+    # i: E1 against radial position in the model.
+    ax = fig.add_subplot(gs[3, 1])
+    radial = r['radial']
+    ok = np.isfinite(radial) & np.isfinite(e1)
+    ax.scatter(e1[ok], radial[ok], s=4, c=np.where(e1[ok] > 0, '#b2182b', '#2166ac'), alpha=0.5)
+    rho, p = stats.spearmanr(e1[ok], radial[ok])
+    ax.set_xlabel('E1 (arms)')
+    ax.set_ylabel('radial position in the 3D model')
+    ax.set_title(f'i  E1 vs radial position: ρ={rho:.2f} (p={p:.0e})', fontsize=10)
+
+    # j: the model, on its first two principal components, coloured by E1.
+    ax = fig.add_subplot(gs[3, 2])
+    xyz = r['model']
+    placed = np.isfinite(xyz).all(1)
+    centre = xyz[placed] - xyz[placed].mean(0)
+    _, _, vt = np.linalg.svd(centre, full_matrices=False)
+    plane = np.full((n, 2), np.nan)
+    plane[placed] = centre @ vt[:2].T
+    ax.plot(plane[:, 0], plane[:, 1], color='0.85', lw=0.5, zorder=1)
+    finite = np.isfinite(e1) & placed
+    lim = np.nanmax(np.abs(e1))
+    ax.scatter(plane[finite, 0], plane[finite, 1], c=e1[finite], cmap='RdBu_r',
+               norm=TwoSlopeNorm(0, -lim, lim), s=6, zorder=2)
+    if placed[o]:
+        ax.scatter(*plane[o], marker='*', s=160, c='k', zorder=3)
+        ax.annotate('ori', plane[o], xytext=(5, 5), textcoords='offset points')
+    ax.set_aspect('equal')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(f'j  3D model (pastis-NB, {kb}), first two PCs, by E1', fontsize=10)
+
+    card = r['card']
+    fig.suptitle(f"{card['species']} ({card['sample']}) · {r['chrom']}, {r['length'] / 1e6:.2f} Mb, "
+                 f"{'a circle' if r['circular'] else 'a line'}, origin at {r['origin']:,} ({r['rule']})\n"
+                 'ori/ter → ori-centred map → inter-arm → arm detrending → '
+                 f"{'correlation' if METHOD == 'correlation' else 'clip, less one (cooltools)'} → compartments",
+                 fontsize=13, y=0.975)
+    return fig
+```
+
+## Every species
+
+The analyses first, since panels g and k compare them all; then one figure each, saved as
+`figures/<sample>.png`.
+
+```{python}
+results = {}
+for card in cards:
+    print(f"\n=== {card['species']}")
+    results[card['species']] = analyse(card)
+```
+
+```{python}
+for species, r in results.items():
+    fig = figure(r, results)
+    path = FIGURES / f"{r['card']['sample']}.png"
+    fig.savefig(path, dpi=110, bbox_inches='tight')
+    print(path)
+    plt.show()
+```
+
+## The numbers behind the figures
+
+```{python}
+header = ['species', 'chromosome', 'Mb', 'circle', 'origin', 'inter-arm', 'reach/arm',
+          'E1 var' if METHOD == 'correlation' else 'E1 share', 'r(E1, GC)',
+          'GC A', 'GC B', 'ρ radial']
+widths = [18, 12, 5, 6, 10, 9, 9, 8, 9, 5, 5, 8]
+print('  '.join(f'{h:>{w}}' for h, w in zip(header, widths)))
+for species, r in results.items():
+    e1, gc, radial = r['e1_arms'], r['gc'], r['radial']
+    a, b = gc[np.isfinite(e1) & (e1 > 0)] * 100, gc[np.isfinite(e1) & (e1 < 0)] * 100
+    ok = np.isfinite(e1) & np.isfinite(radial)
+    both = np.isfinite(e1) & np.isfinite(gc)
+    top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
+    t = r['interarm']
+    cells = [species, r['chrom'], f"{r['length'] / 1e6:.2f}", 'yes' if r['circular'] else 'no', f"{r['origin']:,}",
+             fmt(num(t['score']), '.2f'), fmt(num(t['reach']) / num(t['armLength']), '.0%'),
+             fmt(num(top.get('explained')), '.0%'),
+             fmt(np.corrcoef(e1[both], gc[both])[0, 1] if both.sum() > 2 else np.nan, '.2f'),
+             fmt(np.nanmean(a), '.1f'), fmt(np.nanmean(b), '.1f'), fmt(stats.spearmanr(e1[ok], radial[ok])[0], '.2f')]
+    print('  '.join(f'{str(c)[:w]:>{w}}' for c, w in zip(cells, widths)))
+```
+
+## The numbers the text quotes
+
+Per species, each with the test behind it. **Distance from the origin** is in bins, the short way
+round a circle; its Spearman |ρ| with E1 is how far an eigenvector follows the ori–ter axis rather
+than compartments; before detrending, the largest |r| of E1, E2 or E3 with GC content says whether any of
+the leading components carries the compartments at all. **GC content of A against B** is *Signal by group*'s — its group means and its
+Mann–Whitney test, as the app reports them. **The secondary diagonal** is read as the inter-arm task reads it — the cells within
+`BAND` bins of a bin's mirror across the origin, on opposite arms and more than `2·BAND + 2` bins
+from the main diagonal — as its mean log2 O/E by distance (which is the task's score, recomputed
+here) and along both arms: what the detrending leaves of it. **A** is where E1 (arms) is positive once GC content has signed it, **B** where it is
+negative; the P values are two-sided. The seconds are the `metacooler-run` commands this render ran —
+0 where every step was kept from an earlier one, so set `REDO = True` to time a whole chain. The same
+table is written to `figures/numbers.tsv`.
+
+```{python}
+def distance_from_origin(r):
+    i = np.arange(r['n'])
+    d = np.abs(i - r['o'])
+    return np.minimum(d, r['n'] - d) if r['circular'] else d
+
+
+def pearson(a, b):
+    ok = np.isfinite(a) & np.isfinite(b)
+    return stats.pearsonr(a[ok], b[ok])[0] if ok.sum() > 2 else np.nan
+
+
+def secondary_diagonal(r, band=BAND):
+    # Each bin with its mirror across the origin, on the other arm and clear of the main diagonal.
+    n, o = r['n'], r['o']
+    i = np.arange(n)
+    u = ((i - o + n // 2) % n) - n // 2 if r['circular'] else i - o
+    mirror = np.abs(u[:, None] + u[None, :]) <= band
+    apart = separations(n, r['circular']) >= 2 * band + 2
+    return mirror & apart & (np.sign(u[:, None]) != np.sign(u[None, :]))
+
+
+def log2_mean(m, mask):
+    values = m[mask]
+    values = values[np.isfinite(values) & (values > 0)]
+    return np.log2(values).mean() if values.size else np.nan
+
+
+def quoted(r):
+    e1d, e1, gc, radial = r['e1_distance'], r['e1_arms'], r['gc'], r['radial']
+    d = distance_from_origin(r)
+    t = r['interarm']
+    top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
+    anti = secondary_diagonal(r)
+    out = {
+        'species': r['card']['species'], 'chromosome': r['chrom'],
+        'inter-arm log2': num(t['score']), 'inter-arm fold': 2 ** num(t['score']),
+        'reach Mb': num(t['reach']) / 1e6, 'arm Mb': num(t['armLength']) / 1e6,
+        'anti-diagonal log2, distance': log2_mean(r['oe_distance'], anti),
+        'anti-diagonal log2, arms': log2_mean(r['oe_arms'], anti),
+        # |ρ|: an eigenvector's sign is GC content's to set, and arbitrary where it cannot.
+        'E1 distance ~ ori |rho|': abs(stats.spearmanr(e1d, d, nan_policy='omit')[0]),
+        'E1 arms ~ ori |rho|': abs(stats.spearmanr(e1, d, nan_policy='omit')[0]),
+        'E1 distance share': num(next((row for row in r['components_distance']
+                                       if row.get('component') == 'E1'), {}).get('explained')),
+        'E1 arms share': num(top.get('explained')),
+        # The detrended E1 by the other method: how much the compartments depend on the choice.
+        '|r| E1 arms, other method': abs(pearson(e1, r['e1_arms_other'])),
+    }
+    both = np.isfinite(e1) & np.isfinite(gc)
+    if both.sum() > 2:
+        # Before detrending, whether any of the three leading components follows GC content.
+        out['max |r(GC)| E1-E3, distance'] = max(abs(pearson(e, gc)) for e in r['eigen_distance'])
+        rr, rp = stats.pearsonr(e1[both], gc[both])
+        low = both & (gc <= np.nanpercentile(gc[both], 5))
+        in_b, total_b = int((e1[low] < 0).sum()), int((e1[both] < 0).sum())
+        out.update({'r(E1, GC)': rr, 'P(r)': rp, 'A share of bins': (e1[both] > 0).mean(),
+                    'AT-richest 5% in B': in_b / low.sum(),
+                    # One-sided hypergeometric: that many of the AT-richest bins in B, or more.
+                    'P(AT-richest in B)': stats.hypergeom.sf(in_b - 1, int(both.sum()), total_b, int(low.sum()))})
+        # Signal by group's own numbers: each group's mean GC, and its Mann–Whitney test.
+        means = {row['group']: num(row['mean']) * 100 for row in r['groups']}
+        test = next((row for row in r['group tests'] if {row['a'], row['b']} == {'A', 'B'}), None)
+        out.update({'GC A %': means.get('A', np.nan), 'GC B %': means.get('B', np.nan)})
+        if test is not None:
+            out.update({'P(A vs B)': num(test['p']), 'effect (rank-biserial)': num(test['effect'])})
+    ok = np.isfinite(e1) & np.isfinite(radial)
+    if ok.sum() > 2:
+        rho, rho_p = stats.spearmanr(e1[ok], radial[ok])
+        out.update({'radial rho': rho, 'P(radial)': rho_p})
+    out['CLI s'] = SECONDS.get(r['card']['sample'], 0.0)
+    return out
+
+
+numbers = [quoted(r) for r in results.values()]
+columns = list(dict.fromkeys(key for row in numbers for key in row))
+lines = ['\t'.join(columns)]
+for row in numbers:
+    lines.append('\t'.join(
+        str(row[key]) if isinstance(row.get(key), str) else ('' if key not in row else f'{row[key]:.4g}')
+        for key in columns))
+(FIGURES / 'numbers.tsv').write_text('\n'.join(lines) + '\n')
+for row in numbers:
+    print(f"\n{row['species']} · {row['chromosome']}")
+    for key in columns[2:]:
+        if key in row:
+            print(f'  {key:<22} {row[key]:.3g}')
+```

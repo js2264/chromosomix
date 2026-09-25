@@ -998,6 +998,7 @@ export class AnnotationLanes {
     groups: Map<string, { min: number; max: number }>
   } {
     this.cache?.prune(new Set(this.options.store.entries.map((entry) => entry.id)))
+    this.cache?.revise(this.options.store.entries)
     const built = {
       top: this.buildEdge('top', geometry),
       right: this.buildEdge('right', geometry),

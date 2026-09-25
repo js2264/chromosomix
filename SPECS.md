@@ -1006,6 +1006,14 @@ map, tracks and all; closing the map from the File card falls back to a browser 
 `/chroms`, with the same tracks still loaded. Neither is a new session: the tab, its id and its
 memory are the same throughout.
 
+**A genome has a Chromosomes table too.** The trail's root picks between it and *Whole genome*, the
+browser, as a map's picks between its table and its whole: the sequences the genome was opened with,
+their lengths, and the two columns that are declarations about the molecules rather than about any
+map — which are circles, and where each one's origin is (§8.15). A reader with a FASTA and no map
+declares them there, and the tasks that read a sequence read them. A row opens its sequence in the
+browser. **A map opened over the browser takes them**, for its sequences of the same names and only
+where it has declared nothing itself; its first open still measures its circles, which only adds.
+
 **One key walks the three pictures a file with tracks can be**: `v` goes from the map and its tracks,
 to the tracks alone, to the map alone, and home. Two of those swap what is mounted and the third does
 not, which is why it is a cycle written in one place rather than a toggle in each — a reader pressing
@@ -1705,6 +1713,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 |---|---|---|
 | **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
 | **Baseline** — observed / expected | a toggle of its own | two passes |
+| **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
@@ -1734,6 +1743,31 @@ It **overrides** the toggle rather than composing with it — O/E of the baselin
 anything — so the toggle greys and says why, and it is drawn on a sequential ramp with no neutral,
 because a mean of counts is count-like and a diverging scale centred at 1 would be centred where
 nothing in the picture lives.
+
+**On a bacterial chromosome the baseline can be taken along both arms.** Where the
+two arms are held side by side the map has two diagonals, and the decay curve
+knows only one: it averages each diagonal of the map, every one of them crosses
+the secondary diagonal through the origin, so the ratio keeps an X — brightest
+along the secondary diagonal, darker than it should be everywhere else — and a
+correlation of it draws the X and nothing under it. The arms toggle
+(`analysis/arms.ts`) places each bin by its offset from the declared origin, the
+short way round on a circle, and compares a cell with the cells of **its own
+kind** — the same arm, or across the two — the **same distance apart along the
+arms**, `||uᵢ| − |uⱼ||`, and within a window of its own position along them, 50
+bins by default and the whole sequence at `0`. The window is what lets the
+expectation follow what changes slowly from origin to terminus — the arms are held
+tightest near the origin — and not what changes quickly, which is the plaid left
+behind for the eye and for the correlation. It replaces the decay wherever the O/E
+or the baseline would use it and turns the O/E on with it. It is measured in the
+cells of the block on screen, whatever grid that was read on: a pooled read or
+one from a sibling rung is placed by base pairs, with the window carried over to
+its cells. It is named `arm O/E` in the key, which is one line two numbers wide,
+and `O/E along the arms` in the caption. The score picker's correlation is then
+of that ratio, and it is the picture the compartment call of §18.8 makes along
+the arms. **It is weakest where
+the two diagonals cross**, at the origin and at the terminus, where a pair close
+along the DNA is averaged with pairs that are not; that is stated rather than
+modelled, because the model would be of two small stretches of a chromosome.
 
 **Normalisation and baseline compose, and their order is fixed.** Normalise first: the decay curve is
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on
@@ -1923,8 +1957,9 @@ mattered. A derived lane fetches nothing of its own — both operands go through
 cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
-`oe`, the comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
-radius (`smooth=2` is 5 × 5) or the adaptive window (`smooth=a50`). All four are part of *what is
+`oe`, and `arms` its window along the arms in bins where it is taken along them (`arms=50`); the
+comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
+radius (`smooth=2` is 5 × 5) or the adaptive window (`smooth=a50`). All of them are part of *what is
 being looked at* rather than how it is shaded, so §11's rule applies: a recipient sees the numbers the
 sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
 key would send a recipient a picture whose single-cell features had been averaged away with nothing
@@ -3020,10 +3055,33 @@ and the contacts joining the last bin to the first — which on a circle are the
 most local contacts there are — sit in the far corner of the square, as far from
 the diagonal as two bins can be.
 
-**Nobody can infer it from the data, so the reader declares it.** A circular
-chromosome's map has a bright far corner; so does a translocation, so does an
-assembly error, and so does nothing at all if the sample is shallow. The one
-thing that reliably knows is the person who chose the organism.
+**The reader declares it, and the file's first open proposes it.** A bright far
+corner is not the evidence: a translocation, an assembly error and two arms zipped
+end to end all make one, and a shallow sample makes none. What separates a circle
+from all of them is the very tip of the corner. On a circle the last bin and the
+first are **neighbours**, so the cells joining them hold what the diagonal holds
+at the same separation — the most contacts there are — while anything else that
+brightens a corner brightens it by a factor, never to the level of the diagonal
+itself. So the first time a file is opened, each of its fifty longest sequences of
+at least twelve bins is read at its two ends and at its corner — three blocks a
+few bins wide — and scored as the contacts across the junction at a circular
+separation of one, two and three bins over the contacts along the diagonal at the
+same separations, measured at the two ends the junction joins, the median of the
+three (`analysis/circularity.ts`). It is about one on a circle — 0.65 on the
+*Pseudomonas aeruginosa* PAK chromosome, 1.1 on a *Borrelia* plasmid — and under
+0.03 on the linear chromosomes of *Borrelia burgdorferi* and *Streptomyces
+coelicolor*, whose telomeres are known to meet. At **0.2** or above the sequence
+is ticked, and a banner names it and says where to untick it; below, or where an
+end has nothing to measure, it is left alone. **It only ever adds a tick, and
+only once per file**: the scores are kept with the declarations — the box's own
+tooltip quotes its sequence's — so a reader who unticks one is not overruled by
+the next open, and a file whose declarations arrived in a workspace is not
+measured at all. A shell asks the same question with `metacooler-run circular <map>` — the same
+fifty sequences, three blocks, threshold and balancing — and is answered with a table of every
+sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
+handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a
+few of them linear, can neither declare them all round nor ask a person which. The DNA Bacterial
+Zoo's analyses are framed that way (§24.3).
 
 So it is a **column of tick boxes in the Chromosomes table**, beside the lengths,
 one row per sequence. It was a tickbox in the Map card, and that was the right
@@ -3045,7 +3103,9 @@ assembled organisms, and a declaration is made about a molecule somebody knows
 the shape of.
 
 It is kept per file and carried in an exported workspace, beside the tracks
-somebody loaded and the marks they drew. **Not in the view state**: a bare
+somebody loaded and the marks they drew — as an empty list once the file has been
+measured, since *no circles* is then an answer an importer's first open must not
+measure its way past. **Not in the view state**: a bare
 `#`-hash link names a place and a colour scale (§5.5), and this is a fact about
 the assembly rather than about the window.
 
@@ -3152,16 +3212,63 @@ far end when a circle is scored as a line — those are the contacts joining the
 ends of the molecule, wearing a chromosome-long separation, and every fit through
 that tail is a fit through an artefact; **diamond insulation**, which reads a band
 rather than tiled squares there and therefore scores the bins at the junction that
-a linear reading leaves as gaps; and the three banded readings of §18.8 — the
-**directionality index**, the **HiC score** and the **scalogram**.
+a linear reading leaves as gaps; the three banded readings of §18.8 — the
+**directionality index**, the **HiC score** and the **scalogram**; **compartments**,
+whose cis cells are divided by their sequence's decay measured the short way round;
+and the three tasks that read a bacterial chromosome from its origin — the
+**composition** lanes, whose windows wrap; the **origin and terminus** call, whose
+skew windows and site clusters wrap; and the **inter-arm alignment** (§18.8).
 
-What is not, and is stated rather than left to be discovered: **compartments**,
-**chromosight** and the **observed/expected** map divide by an expected curve at a
-linear separation, so near the junction their denominator is the curve's far tail
-rather than its near one. A **deck companion** draws the sequence linearly — the
-declaration is the lead map's — so a deck of a circular chromosome shows the lead
-sliding and the companions standing still. Both are seams rather than wrong
-answers, and both are in the same place: the reader can see the junction.
+What is not, and is stated rather than left to be discovered: **chromosight** and
+the **observed/expected** map divide by an expected curve at a linear separation,
+so near the junction their denominator is the curve's far tail rather than its
+near one — except where the map's O/E is taken along the arms, below, whose
+offsets from the origin are measured round the circle. A **deck companion** draws
+the sequence linearly — the declaration is the lead map's — so a deck of a
+circular chromosome shows the lead sliding and the companions standing still. Both
+are seams rather than wrong answers, and both are in the same place: the reader
+can see the junction.
+
+#### The origin, and the two arms
+
+A bacterial chromosome is read from its **origin of replication**. Its two
+replichores run from there to the terminus, the strand bias of its composition
+changes sign at both, and where SMC is loaded at parS beside the origin the two
+arms are held side by side along their length — so a locus touches its mirror
+image on the other arm, and the map carries a **secondary diagonal** through the
+origin, perpendicular to the main one. The origin is declared the way the circle
+is and kept the same way: per file, carried in an exported workspace and in
+`AnalysisFraming.origins`, not in the view state, and shown **1-based in a column
+of the Chromosomes table** beside the tick. **Every sequence has one: its first
+base, until another is set** — which is where a complete bacterial assembly
+conventionally starts, at *dnaA*, and what every task that reads the arms reads
+where nothing else has been said. The column shows it greyed, so there is no
+blank in it that means something, and the framing carries only the declared
+ones. **Two hands write it and the difference is kept.** The *Origin and
+terminus* task (§18.8) fills it in for every sequence it places, and says so; a
+reader's own is **typed into the column** — 1-based, digits grouped or not, and
+emptied (or `0`) to go back to the first base — or comes in with a workspace or on
+a `metacooler-run` line's `--origin`, and a task never overwrites it — a reader
+who has corrected a call knows something the skew did not — while a task's is
+replaced by the next run of the task, which is what running it again with other
+sites is for. A position past the sequence's end is refused in the box, which
+goes back to what it held and says why.
+
+**The map offers two things from it**, beside the O/E and only on a view of one
+sequence that is declared circular or has an origin — a yeast chromosome has
+neither and is not asked. **`ori`**, on a circle, frames the whole of it with the
+origin in the middle: a window across the junction, from half
+a lap past the origin round to half a lap before it, one base short of a lap
+because a window whose ends meet is named as the whole sequence from its first
+base. The arms then run out to the corners and meet at the terminus, and the
+secondary diagonal is the antidiagonal of the square, which is the picture every
+figure of one is drawn as. `ori` is **lit while the origin is in the middle of
+what is drawn**, to within two bins or a pixel — a zoom about the middle keeps it
+lit, a pan does not — and pressed while lit it frames the sequence from its first
+base again, as a view of it opens. Either press after a pan, which the address
+does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
+along the diagonal alone (§7.5), read from the origin in the column — the first
+base where none has been set.
 
 **The turn slides too, and it needed one gate widened.** `isTurnable` asked for
 *one run or none*, on the sound ground that a boundary between two sequences is a
@@ -5046,8 +5153,24 @@ the starred entry** where the concept exists — the same star the 1D browser's 
 on (§5.8): a feature set, a pair set, a track — bigWig *or* synthetic — and a sequence. This is what
 lets a task like compartment phasing (§18.8) be a dropdown rather than a second file drop.
 
+**An optional one is filled only from what the reader loaded.** It is an input a task reads *if it is
+there*, and another task's output is not a gene model because it is the first interval set on the list:
+the two loci an *Origin and terminus* run leaves behind phased every compartment call after it by their
+"gene density", and the drawer said only that the phasing was ambiguous. A computed row can still be
+chosen; it is never assumed. And an optional input that is a guess however it is filled — the track
+compartments are phased by, the coverage an origin call breaks a tie with — **starts on none**: the first
+bigWig loaded is a ChIP track as often as it is anything, and a ratio from the wrong one looks like any
+other.
+
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
+
+**A number can take its default from the file.** Base composition's bin size is the open map's
+resolution until the reader types another, and 10 kb where no map is open (§18.8). The form shows what
+that comes to on the file in front of it and follows a change of resolution, because the answer is
+still *the map's*; the run is handed the number itself, and its record, its command line and a replay
+carry that number. A `metacooler-run` line with no such flag gets the same rule from the map it names,
+or 10 kb with none.
 
 **A locus parameter is in cooler's grammar** — 0-based half-open, ungrouped — because that is the one
 form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
@@ -5195,6 +5318,14 @@ it.
 Mechanically, a finished vector is **registered with the annotations worker as a bin-vector source**,
 and the lane then asks for samples over a window exactly as it does of a bigWig. One new request kind,
 and no renderer changes anywhere.
+
+**A task run again gives its rows new values, and every lane is told.** The second run replaces its
+own rows rather than adding copies — the same id, so the same lane in the same place in the reader's
+arrangement — and a lane's samples are held by id and window, which that does not change. So the row
+carries a *revision* the run bumps and each sample cache compares once a frame, as it prunes: what it
+holds for a revised row is fetched again, and drawn meanwhile rather than blanked. Without it the lane
+went on drawing the previous run's values under the new run's name until a pan or a zoom happened to
+refetch, so that compartments run again under another *method* (§18.8) read exactly as before.
 
 **A gap and a measured zero are not the same thing, and the difference is the
 file's to declare.** `NaN` means *no value here* throughout, and the temptation
@@ -5431,7 +5562,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Twenty-five tasks, in **four cards — 2D, 3D, 1D and Metagenome**. The build order is in
+Twenty-eight tasks, in **four cards — 2D, 3D, 1D and Metagenome**. The build order is in
 `TASKS_PLAN.md`; what follows is what each one must be.
 
 **Cut by the dimension the question is about**, not by the file it reads: a task is **2D** when its
@@ -5687,8 +5818,10 @@ settles both keys itself on such a file rather than trusting a value a stored se
 in on a cooler left behind: always trans, never over expected. The arithmetic of both switches is
 untouched and still goldened (`run/fourc.ts`); what varies by file is which of it is *offered*, which
 is the same stated rule §18.2 already bends by for options that need a `/genomes` table.
-*Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
-behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
+*Compartments* — expected → observed/expected, as cooltools prepares it or as the Pearson
+correlation of its rows (*method*, below) → eigenvectors by power iteration, behind the bin-count
+gate — with
+**phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
 correlation is too weak to decide a sign. It is over **several ticked sequences, every one of them by
 default**, and by default the square it correlates holds their **cis and trans blocks together**: two
@@ -5708,6 +5841,68 @@ fragments, the largest cells in the matrix and the least structural — from car
 diamond sum that then reads as structure. It emits **A/B segments** from E1's sign beside the eigenvector,
 because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
 comparison against zero. *Saddle*, which follows from the two above.
+
+**On a bacterial chromosome the expectation can be taken along both arms** — *decay along both
+arms*, the map's own reading of §7.5, within a window along them (50 bins by default, the whole
+sequence at 0), read from the origin declared for the sequence (§8.15), and cis only, because the
+arms are a fact about one sequence. Divided by the decay alone, a chromosome whose arms are held
+together correlates to the X its two diagonals draw, and its leading eigenvector is the arms rather
+than its compartments: on the *P. aeruginosa* PAK map at 8 kb, by the default method, it follows
+the distance from the origin (Spearman 0.74) and nothing in the sequence (|r| = 0.04 with GC
+content), where along the arms the first component carries 28% of the matrix, no longer follows the
+origin (0.05) and follows GC content (r = 0.35; 22% of the variance and r = 0.33 by the
+correlation). **The
+components are ranked by their eigenvalues and by nothing else**: E1 is the component with the
+largest, E2 the next. The phasing signal *signs* each one — positive where it rises with the signal,
+once their correlation reaches `minR` — and never chooses among them, because a component chosen for
+following GC content would make any later comparison of GC content between the compartments it
+calls a comparison of GC content with itself. A *components* table says what each one is: its
+eigenvalue, the share of the whole it explains, and its Pearson r with the phasing signal as drawn. The
+phasing signal is a gene model, else **a track** — any loaded or computed lane, chosen and never
+assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
+the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone and
+reports r as drawn.
+
+**What the eigenvectors are taken of is a choice** — *method*, **cooltools' by default**
+(`eigs_cis`), which is what the field computes today; the other is the Pearson correlation of
+observed/expected's rows, as Lieberman-Aiden et al. (2009) did it and as every version of this task
+before the third did. cooltools' matrix is observed/expected itself, clipped at 0 and at its 99.9th
+percentile (NumPy's, linear
+between ranks, of the cells that have a value), one subtracted so that each cell is its departure
+from expected, and every gap — a cell with no value, and the `ignore_diags` near-diagonal — zero,
+which after the subtraction reads *as expected*; each eigenvector is then scaled by √|λ|, as
+cooltools writes it. Everything before the decomposition is shared — the usable bins, the
+expectation chosen (the distance decay, both arms, the short way round a circle), the contacts mode
+and its gate, the phasing. On the zoo's *P. aeruginosa* PAK, *C. necator* and *E. coli* maps at
+8 kb, each read as a line over its distance decay, all three components agree with
+`cooltools.eigs_cis` on the same balanced matrix to |r| = 1.000, with eigenvalues within 0.03% and no
+bin more than 0.03 apart on a track reaching ±0.74. What remains is cooltools' own expectation, which
+averages the diagonals past about the thirtieth in logarithmic groups, and its percentile, which also
+counts the dropped rows' zeros and the ignored diagonals' ones. The two methods agree where a
+chromosome has compartments to find and part where it has none: E1 against E1, r = 0.94 on PAK and
+0.58 on *E. coli*. Under cooltools the table's share is the eigenvalue squared over the sum of every
+cell squared, which is what a matrix that is not a correlation's has in place of a variance. It
+skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
+about minutes — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds. A method the
+task does not have is refused rather than read as the default.
+
+*Inter-arm alignment* — how strongly a bacterial chromosome's two arms are held together, as a number
+rather than an impression of a picture: the secondary diagonal is the mark SMC leaves when it is loaded
+at parS and zips the arms together as it travels (Wang et al. 2017), present in *Bacillus subtilis*,
+lost without ParB or SMC, and absent from *Escherichia coli*, whose MukBEF does not align them. It is
+the mean `log2` observed/expected within `band` bins of the secondary diagonal, over the sequence's own
+decay — the ordinary one, which is what makes the secondary diagonal stand out — read from the declared
+origin and round the circle on a declared circle. **Only where the two diagonals are apart**: near the
+origin and the terminus they run into each other and a cell there is a pair a few bins apart along the
+DNA, whose ratio says how compact the stretch is rather than whether the arms are aligned, so a cell
+nearer the main diagonal than `2 × band + 2` bins is left out. Three shapes of one reading: a
+**curve** against distance from the origin, the figure the literature draws; a **track**, how much
+each locus touches its mirror image; and a **table** of the mean enrichment over the arms, its peak,
+and its **reach** — outwards from the peak, how far it holds above half of it, both read from a
+running mean over 2% of the arm so that one noisy distance neither sets the peak nor carries the reach
+to the terminus of a flat profile. It separates what it should, at every rung: 1.6 on *P. aeruginosa*
+PAK, reaching 2.7 of its 3.2 Mb arms; 0.37 on *B. subtilis* 168; 0.07 on *E. coli* MG1655. Absent on a
+metacool, whose MAGs have no declared origins.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
@@ -5801,6 +5996,29 @@ run with nothing ticked, and refuses one whose ticked sequences are all too shor
 rather than reading them and reporting a column of gaps; **unanswered** is every sequence, which is
 what a job that never met a form means — a stored session, or a `metacooler-run` line with no
 `--sequences`.
+
+**Over the sequence.** *Find a motif* allows **mismatches**, up to four and never the whole motif,
+because a binding site is a consensus and a genome carries variants of it: its sites carry how many
+they differ by, and its name says what it was asked. *Base composition* — GC content, GC skew
+`(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin and under the map's names, each a lane
+like any other and each written as a bigWig. The **bin size** is the open map's resolution unless the
+reader asks for another, and 10 kb with no map open: a 1D browser (§5.8) with a FASTA in it is enough
+to run it. The lanes, and the files they leave as, are laid out over the same sequences cut at the bin
+size read, never over the map's grid at another; a window wider than a bin is an odd number of them
+centred on it, named as what was read, and wraps on a circle. *Origin and terminus*, the first step of any analysis of a bacterial
+chromosome's folding, since the map is read *from* the origin: the two turning points of the
+cumulative GC skew (5 kb windows, 1 kb steps) are the candidates, and which is the terminus is
+decided as Bacchus decides it (Lamy-Besnier et al. 2023) — the one nearer the matS cluster where ten
+or more matS sites are found, else the one farther from the parS cluster, else the one with the
+lower Hi-C coverage. The sites are searched with the motif search above — parS `TGTTNCACGTGNAACA` at
+one mismatch, matS `GTGACRNYGTCAC` exactly, both parameters and either skippable — and the coverage,
+where a track is chosen, is sampled at 5 kb and smoothed by a cubic spline whose maximum over its
+minimum is the **ori/ter ratio**, copies of the origin per copy of the terminus. It leaves the two
+loci and the two site sets as interval sets that draw on the map and leave as BED, the smoothed
+coverage as a lane, a table of how each call was made, and **the origin itself, declared** on every
+sequence the reader has not declared one on (§8.15). A call whose terminus disagrees with where the
+skew alone would put it is said, and so is a sequence read as a line, on which an origin at the
+first base is split between the two ends.
 
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
@@ -5920,6 +6138,25 @@ before they are measured, or a GTF with one row per transcript counts its shared
 and reports a fraction above one; the features are read finely and the assembly coarsely, because a
 span-weighted sum estimates the same area at any resolution *except at a boundary*, and a peak set is
 nothing but boundaries while a genome-wide total has almost none. Both resolutions are reported.
+*Signal by group* — one or more tracks compared between groups of the genome, which is the question
+behind *is compartment A GC-rich* and *is B transcribed less*. The groups come from **a feature
+set**, split by what is written on its features — the name (A and B on a compartment call), the
+strand, the score in quantiles, or nothing — with what the set does not cover as a group of its own;
+or from **a track**, its bins cut by sign (an eigenvector's two compartments, uncalled) or into
+quantiles, and a grouping made that way is written out as intervals named by group. What is compared
+is **stretches of at most one bin**: a group's merged intervals cut on the bin grid, a piece shorter
+than half a bin joined to its neighbour and a feature shorter than a bin kept whole, so a 30 kb
+compartment is three observations and a 300 bp peak one, each the track's mean over the bases it has
+a value for; the bin size is seeded as base composition's is (§18.2). Each group is summarised (count,
+bases, mean, SD, median, quartiles, and its mean less that of every other stretch) and drawn as a
+**violin**, and the groups are tested **by ranks** — Mann–Whitney pairwise, with the rank-biserial
+effect and the median difference, and Kruskal–Wallis over three or more — tie-corrected, in the
+asymptotic forms SciPy uses and held to its numbers, with every test's q-value (Benjamini–Hochberg)
+adjusted together, and P and q written in scientific notation where four decimals would print a zero
+(`TableColumn.scientific`) — a P of 10⁻¹³ is not `0.0000` — in the drawer and in the exported TSV
+alike, where the TSV keeps six significant digits (`6.5319e-22`). A group with nothing in it — the rest of
+the genome, where a compartment call covers every base — is left out and named in a note. A row per
+feature, with its mean on every track, is one toggle away.
 *Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
 on a boundary" is the question that follows every domain call.
 
@@ -6447,7 +6684,9 @@ unless one is typed, Tukey's whiskers stopping at the furthest *observed* value 
 a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled
 by the same peak, because two violins each normalised to their own width say the two samples are
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
-one against another as a scatter.
+one against another as a scatter. A task whose every series is a sample rather than a function says
+so (`CurveSeries.mark = 'violin'`), and its figure opens as violins, one per series — *Signal by
+group*'s groups — which the mark control turns into boxes or a histogram like any other.
 
 **Bars stack where the series are parts of one whole.** A sequence's cis and trans fractions sum to
 one, and the reading is one bar split in two rather than two bars side by side whose sum the reader
@@ -7036,12 +7275,24 @@ is no refusal left for `cliCommandFor` to write. What the record does not hold a
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
 
-**The framing is written, not only the parameters.** Three facts a session sets from the picture are
+**The framing is written, not only the parameters.** Four facts a session sets from the picture are
 inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
-the sequences declared circular (§8.15), and the ticked cells of an `.scool` (§3.8). A line without
-them repeats a different run, so each is a reserved flag of the command's own — `--value`,
-`--circular`, `--cell` — written whenever it differs from the shell's default and refused before the
-run when the file cannot answer it. The window is *not* one of them: no runner reads the framing's
+the sequences declared circular and the origins declared on them (§8.15), and the ticked cells of an
+`.scool` (§3.8). A line without them repeats a different run, so each is a reserved flag of the
+command's own — `--value`, `--circular`, `--origin NAME:POS` (1-based, as the table prints it,
+digits grouped or not), `--cell` — written whenever it differs from the shell's default and refused
+before the run when the file cannot answer it.
+
+**Balanced is the shell's default, as it is the form's.** *Use balancing weights* is answered from
+the file and never shown in a form (`paramDerived`), and a shell answers it the same way: a map is
+read balanced wherever the file carries weights — the framing and every such parameter alike — and
+`--no-balance` reads the raw counts. So a balanced run's line says nothing about it and an
+unbalanced one says `--no-balance`. `--balance` itself is refused by name rather than taken as a
+no-op: it asked for what is now the default, and a command that forgot it ran on raw counts under a
+framing line that said *balanced*, which is the failure the default exists to prevent. It survives
+only as coverage's own parameter, which is not the file's to answer and is off, since raw coverage
+is the point of it. The two about the molecules are written for a run with
+no map as well: an origin call from the Chromosomes table reads the circle, and so must its line. The window is *not* one of them: no runner reads the framing's
 extent, which decides only whether the block on screen can be reused, so `--window` is written for
 the record's label and the numbers are the same either way. An imported `.pairs` writes the
 `--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
@@ -7395,10 +7646,15 @@ why one table for all of them was the wrong shape and is gone:
   line, the assembly and the provenance as chips, the paragraph behind a fold, and *open*; the data
   files under the figures as rows. Inline, so it costs no request.
 - **DNA Bacterial Zoo** — the genome gallery's cards over **one** file: a card a species, whose
-  button is the species' session, with its sample and its replicon count as chips and its map and
-  its tracks under the fold. A species whose model the suite wrote as a bed3d (§25.7) opens with it
-  in a structure cell beside the map — the session names the cell (`maps: 3d`), since a structure
-  row restored from a session opens none by itself (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
+  button is the species' session, with its sample and its replicon count as chips and its map, its
+  reference and every track under the fold. The session opens **three tracks and nothing else**:
+  the map whole at 4 kb, and under it the HiC score, the insulation score and E1 read along both
+  arms from the origin the suite called (§18.8) — no overlay, no calls, no model. A map with a dozen
+  lanes and two sets drawn on it was a card nobody could read at a glance, and the rest is one click
+  away on the map's shelf. It declares what the analyses ran with, the circles and each origin
+  (§8.15), so the Chromosomes table, the `ori` button and a task rerun in the viewer read the arms
+  from where E1's were read. A species' 3D model is a row of the fold, and opens in a structure cell
+  when clicked (§25.3). It is what a store read by URL gets by asking for `layout: "cards"`
   (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
   `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
   Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
@@ -7641,9 +7897,17 @@ or not a portal had published anything. `fingerprint.json` is the map of each fi
 timestamps removed; a run whose fingerprint matches the published one stops there.
 
 **One shipped store is not generated here.** The DNA Bacterial Zoo is the lab's own analyses —
-`hic-suite.sh` over each map, gathered by `scripts/DBZ_store.py` into a folder of maps, tracks and
-one session a species whose names are all relative — so there is no portal for a workflow to ask
-and nothing for it to regenerate on a Monday: the store changes when the lab reruns the suite. It
+`scripts/dbz-store.sh` over each map, written **straight into the folder that is published**: one
+directory a sample holding its map, its reference and a directory a step, and then indexed in
+place by `scripts/DBZ_store.py index`, which lists every file the viewer opens, species by species,
+and writes each species' session, with every name relative. There is no `results/` to gather from
+and no second copy to keep in step with it; the tables a step writes beside its tracks stay in the
+folder and out of the upload. Each map is framed before its first step: the junction test declares
+its circles (§8.15), and where a reference is found — named after the species, or holding the map's
+longest sequence — its base composition is written as tracks and *Origin and terminus* calls each
+origin, which the arm-frame compartments and the inter-arm alignment then read the arms from. So
+there is no portal for a workflow to ask and nothing for it to regenerate on a Monday: the store
+changes when the lab reruns the suite. It
 lives **beside its data**, on the lab's bucket next to the demo files
 (`https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`), published by `aws s3 sync` of
 that folder, and the tile reads it from there as Roadmap's reads WashU. Until it is uploaded the

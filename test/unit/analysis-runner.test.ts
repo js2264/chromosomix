@@ -812,6 +812,16 @@ describe('sameRecipe', () => {
     // spelled must not invalidate a cache.
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, label: 'reworded' } })).toBe(true)
   })
+
+  it('rejects a changed declaration of what the molecules are', () => {
+    // A circle ticked, or an origin placed, since the result was computed: its
+    // decay was measured along a line, or its arms from another place (§8.15).
+    const { params } = provenance
+    const round = { ...provenance, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } }
+    expect(sameRecipe(provenance, { params, framing: { ...FRAMING, circular: ['chrI'] } })).toBe(false)
+    expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 11 } } })).toBe(false)
+    expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } })).toBe(true)
+  })
 })
 
 describe('a view with no map', () => {
@@ -877,6 +887,29 @@ describe('a view with no map', () => {
     runner.run(task('trackcorr', { group: '1d', venue: 'annotations' }), {})
     await settle()
     expect(runner.stateOf('trackcorr').status).toBe('done')
+    runner.destroy()
+  })
+
+  it('says what the molecules are declared to be where there is no map to frame', async () => {
+    // An Origin and terminus run from the Chromosomes table: no panel, so no
+    // framing, and the one made over the tracks carried neither the circles
+    // nor the origins — a declared circle was read as a line, which splits an
+    // origin near its first base between the two ends (§8.15).
+    const sent: Array<{ framing?: AnalysisFraming }> = []
+    const tracks = {
+      request: (payload: { framing?: AnalysisFraming }) => {
+        sent.push(payload)
+        return Promise.resolve(trackResult('oriter'))
+      },
+    }
+    const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
+      context: () => ({ ...context(null), circular: ['chr'], origins: { chr: 1_000 } }),
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+    runner.run(task('oriter', { group: '1d', venue: 'annotations' }), {})
+    await settle()
+    expect(sent[0]?.framing?.circular).toEqual(['chr'])
+    expect(sent[0]?.framing?.origins).toEqual({ chr: 1_000 })
     runner.destroy()
   })
 

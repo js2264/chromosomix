@@ -14,6 +14,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  COOLTOOLS_CLIP_PERCENTILE,
+  cooltoolsMatrix,
   correlationMatrix,
   observedOverExpected,
   singleGroupPlan,
@@ -102,6 +104,71 @@ describe('the compartment chain', () => {
     const a = (await chainOf(blocks(n), n)).component
     const b = (await chainOf(blocks(n), n)).component
     expect(Array.from(a)).toEqual(Array.from(b))
+  })
+})
+
+/**
+ * The other road to the eigenvectors (§18.8): observed/expected decomposed as it
+ * is, the way cooltools' `eigs_cis` prepares it. The numbers below are NumPy's —
+ * `np.clip(oe, 0, np.percentile(finite, p)) - 1` with every gap zero — and the
+ * eigenvalues are `cooltools.lib.numutils.get_eig`'s on the same matrix.
+ */
+describe('cooltoolsMatrix', () => {
+  const nan = Number.NaN
+
+  it('clips at the percentile, subtracts one, and reads every gap as expected', () => {
+    const oe = Float64Array.from([
+      nan, 1.2, 0.8, 1.0,
+      1.2, nan, 2.5, 0.5,
+      0.8, 2.5, nan, 9.0,
+      1.0, 0.5, 9.0, nan,
+    ])
+    // The 90th percentile of the twelve finite cells is 8.35, between 2.5 and 9.
+    const prepared = cooltoolsMatrix(oe, 4, 90)
+    const expected = [
+      0, 0.2, -0.2, 0,
+      0.2, 0, 1.5, -0.5,
+      -0.2, 1.5, 0, 7.35,
+      0, -0.5, 7.35, 0,
+    ]
+    for (let i = 0; i < expected.length; i++) expect(prepared[i]).toBeCloseTo(expected[i], 12)
+    // …and at cooltools' own 99.9th the ceiling is the brightest cell itself.
+    expect(cooltoolsMatrix(oe, 4)[11]).toBeCloseTo(8, 12)
+    // The observed/expected is left as it was: the saddle reads it afterwards.
+    expect(oe[11]).toBe(9)
+    expect(Number.isNaN(oe[0])).toBe(true)
+  })
+
+  it('takes NumPy’s percentile, linear between ranks, over the finite cells alone', () => {
+    // Two thousand values in a scrambled order, and 25 gaps that must not count.
+    const m = 45
+    const oe = new Float64Array(m * m).fill(nan)
+    for (let i = 0; i < 2000; i++) oe[i] = ((i * 7919) % 1009) / 97
+    const ceiling = (percentile: number): number => Math.max(...cooltoolsMatrix(oe, m, percentile)) + 1
+    expect(ceiling(COOLTOOLS_CLIP_PERCENTILE)).toBeCloseTo(10.381453608247424, 10)
+    expect(ceiling(97.5)).toBeCloseTo(10.134278350515462, 10)
+    expect(ceiling(50)).toBeCloseTo(5.195876288659794, 10)
+  })
+
+  it('gives cooltools’ eigenvalues, and a first component that separates the compartments', () => {
+    const n = 40
+    const values = blocks(n)
+    const accumulator = new ExpectedAccumulator(n)
+    accumulator.addBlock({ nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] })
+    const index = usableBins(values, n, 0.1)
+    const oe = observedOverExpected(values, n, index, singleGroupPlan(n, accumulator.finish()))
+    const pairs = leadingEigenpairs(cooltoolsMatrix(oe, index.length), index.length, 3)
+    // Ranked by size, sign kept: the second and third are negative.
+    expect(pairs.map((pair) => pair.value)).toEqual([
+      expect.closeTo(8.794928356553529, 6),
+      expect.closeTo(-5.610452250317817, 6),
+      expect.closeTo(-1.7935906495302383, 6),
+    ])
+    const first = pairs[0].vector
+    const sign = Math.sign(first[0])
+    for (let i = 0; i < index.length; i++) {
+      expect(Math.sign(first[i])).toBe(compartmentOf(index[i]) === 0 ? sign : -sign)
+    }
   })
 })
 

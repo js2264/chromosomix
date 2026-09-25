@@ -27,7 +27,8 @@
  * `detached` machinery answers it.
  */
 
-import { CIRCULAR_SCOPE } from './circular'
+import { CIRCULAR_EVIDENCE_SCOPE, CIRCULAR_SCOPE } from './circular'
+import { ORIGIN_SCOPE } from './origins'
 import { RESOLUTIONS_SCOPE } from './resolutions'
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
@@ -162,17 +163,26 @@ export interface SessionConfig {
   /** Ticked sequences, when the session is a genome browser. */
   sequences: string[]
   /**
-   * Sequences the reader has declared **circular** (SPECS §8.15).
+   * Sequences declared **circular** (SPECS §8.15) — by the reader, or by the
+   * junction test the first open ran and the reader let stand.
    *
-   * A declaration rather than a reading — no contact map says whether a sequence
-   * joins its own ends, and no statistic reliably infers it — so it belongs with
-   * the tracks somebody loaded and the marks they drew rather than in the view
-   * state beside `region=`. See `state/circular.ts`.
+   * A declaration about the molecule rather than a reading of the window, so it
+   * belongs with the tracks somebody loaded and the marks they drew rather than
+   * in the view state beside `region=`. See `state/circular.ts`.
    *
    * Optional, so a workspace written before this existed imports as what it was:
    * nothing circular.
    */
   circular?: string[]
+  /**
+   * Declared replication **origins**, in base pairs, 0-based, by sequence name
+   * (§8.15) — filled in by the *Origin and terminus* task, or typed by the
+   * reader. The same kind of fact as {@link circular} and carried for the same
+   * reason. See `state/origins.ts`.
+   *
+   * Optional, so a workspace written before this existed imports as none.
+   */
+  origins?: Record<string, number>
   /**
    * Resolutions the reader **added** to this file's ladder, in bp (§3.4).
    *
@@ -409,6 +419,8 @@ const SCOPES = {
   bookmarks: 'bookmarks',
   sequences: 'browser:sequences',
   circular: CIRCULAR_SCOPE,
+  circularEvidence: CIRCULAR_EVIDENCE_SCOPE,
+  origins: ORIGIN_SCOPE,
   resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
@@ -474,7 +486,8 @@ export function buildConfig(options: {
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
     bookmarks: recall<Bookmark[]>(key, SCOPES.bookmarks) ?? [],
     sequences: recall<string[]>(key, SCOPES.sequences) ?? [],
-    ...circularOf(recall<string[]>(key, SCOPES.circular)),
+    ...circularOf(recall<string[]>(key, SCOPES.circular), recall<unknown>(key, SCOPES.circularEvidence)),
+    ...originsOf(recall<unknown>(key, SCOPES.origins)),
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
@@ -505,9 +518,35 @@ export function buildConfig(options: {
  * Absent rather than empty, on the rule the fields around it follow: a config
  * that carries the key means *these and no others*, and one that does not means
  * *this build had nothing to say*, which is what an older workspace is.
+ *
+ * **Empty once the file has been measured** (§8.15), because *no circles* is an
+ * answer then: its author may have unticked every tick the first open made, and
+ * a workspace that said nothing let the importer's first open measure again and
+ * tick them back.
  */
-function circularOf(names: string[] | null): { circular?: string[] } {
-  return Array.isArray(names) && names.length > 0 ? { circular: names } : {}
+function circularOf(names: string[] | null, evidence: unknown): { circular?: string[] } {
+  if (Array.isArray(names) && names.length > 0) return { circular: names }
+  return evidence !== null && evidence !== undefined ? { circular: [] } : {}
+}
+
+/**
+ * `{ origins: … }` for a file with a declared origin, else nothing — as base
+ * pairs by name, whoever set them: a workspace hands a colleague the origins,
+ * and on their side each is the reader's own (`OriginStore.replace`).
+ */
+function originsOf(stored: unknown): { origins?: Record<string, number> } {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return {}
+  const out: Record<string, number> = {}
+  for (const [name, value] of Object.entries(stored as Record<string, unknown>)) {
+    const at =
+      typeof value === 'number'
+        ? value
+        : value !== null && typeof value === 'object'
+          ? (value as { at?: unknown }).at
+          : undefined
+    if (typeof at === 'number' && Number.isFinite(at) && at >= 0) out[name] = Math.floor(at)
+  }
+  return Object.keys(out).length > 0 ? { origins: out } : {}
 }
 
 /** `{ resolutions: … }` for a file the reader added one to, else nothing. */
@@ -542,7 +581,16 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   // Only where the config carries it, on the rule the deck's fields below use:
   // a workspace written before circularity existed must leave whatever this tab
   // already declared alone rather than clearing it.
-  if (config.circular !== undefined) remember(key, SCOPES.circular, config.circular)
+  if (config.circular !== undefined) {
+    remember(key, SCOPES.circular, config.circular)
+    // The declarations a workspace carries are the file's from here on, so the
+    // junction test is recorded as done: measuring on top of them could re-tick
+    // a sequence its author had unticked (§8.15).
+    if (recall<unknown>(key, SCOPES.circularEvidence) === null) {
+      remember(key, SCOPES.circularEvidence, {})
+    }
+  }
+  if (config.origins !== undefined) remember(key, SCOPES.origins, config.origins)
   if (config.resolutions !== undefined) {
     remember(key, SCOPES.resolutions, config.resolutions)
   }
@@ -760,6 +808,24 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       ? row['plot']
       : {}) as PlotOptions,
     ...panelsOf(row['panels']),
+    // The declarations about the molecules (§8.15) and the rungs added to the
+    // ladder (§3.4): `buildConfig` writes them and `applyConfig` puts them back,
+    // and this read walked past all three — so a workspace carried them out and
+    // dropped them on the way in, and an origin typed on the Chromosomes table,
+    // or the circles and origins a published session declares, reached nobody.
+    // An empty circle list is kept: it is the answer *measured, none*. Each
+    // store checks its own shape again when it reads the scope.
+    ...(Array.isArray(row['circular'])
+      ? { circular: (row['circular'] as unknown[]).filter((name): name is string => typeof name === 'string') }
+      : {}),
+    ...originsOf(row['origins']),
+    ...resolutionsOf(
+      Array.isArray(row['resolutions'])
+        ? (row['resolutions'] as unknown[]).filter(
+            (size): size is number => typeof size === 'number' && Number.isInteger(size) && size > 0,
+          )
+        : null,
+    ),
   }
 }
 

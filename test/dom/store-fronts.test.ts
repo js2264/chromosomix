@@ -231,7 +231,7 @@ describe('the DNA Bacterial Zoo', () => {
     document.body.appendChild(view.el)
     await vi.waitFor(() =>
       expect(view.el.querySelector('.portal-status')?.textContent).toContain(
-        'Nothing has been published for DNA Bacterial Zoo yet; scripts/DBZ_store.py builds it',
+        'Nothing has been published for DNA Bacterial Zoo yet; scripts/dbz-store.sh builds it',
       ),
     )
     expect(view.el.querySelector('.portal-status')?.textContent).not.toContain('Stores workflow')

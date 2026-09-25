@@ -644,7 +644,7 @@ export function corrToPvalue(corr: number, present: number): number {
  * on, and an approximation that flattens the far tail makes the ordering of the
  * strongest patterns arbitrary — which is exactly where the reader looks first.
  */
-function standardNormalCdf(z: number): number {
+export function standardNormalCdf(z: number): number {
   return 0.5 * erfc(-z / Math.SQRT2)
 }
 

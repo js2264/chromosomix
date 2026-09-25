@@ -142,7 +142,7 @@ metacooler-run tasks
 ##       --minContacts (default 10)  Least contact worth listing
 ##       --maxEdges (default 500)  Pairs to list
 ##       --matrix (default true)  Also draw the square
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## cellqc
 ##     Per-cell contact QC
@@ -150,7 +150,7 @@ metacooler-run tasks
 ##       --nearFrom (default 23000)  Near band, from
 ##       --nearTo (default 2000000)  Near band, to
 ##       --mitoticTo (default 12000000)  Mitotic band, to
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## expected
 ##     Contact probability P(s)
@@ -162,7 +162,7 @@ metacooler-run tasks
 ##       --derivative (default true)  Also plot the log-log slope
 ##       --stranded (default false)  Also the four orientations
 ##       --pairsUri  From this .pairs
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## scalogram
 ##     Scalogram
@@ -171,14 +171,14 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --ignoreDiags (default 1)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the distribution
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## fourc
 ##     4C profile from an anchor
 ##       --anchor  Anchor
 ##       --normalise (default "none")  Normalisation
 ##       --cis (default true)  Cis only
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## insulation
 ##     Diamond insulation
@@ -187,7 +187,7 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --ignoreDiags (default 2)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the diamond
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --call (default true)  Call boundaries from the minima
 ##       --prominence (default 0.2)  Minimum prominence
 ##       --spacing (default 0)  Minimum spacing
@@ -199,7 +199,7 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of each side
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --call (default true)  Call borders from the sign flips
 ##       --prominence (default 10)  Minimum prominence
 ##       --spacing (default 0)  Minimum spacing
@@ -211,7 +211,7 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the line
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## compartments
 ##     Compartments (eigenvectors)
@@ -224,7 +224,7 @@ metacooler-run tasks
 ##       --minR (default 0.1)  Least convincing correlation
 ##       --saddle (default true)  Also draw the saddle
 ##       --quantiles (default 50)  Quantile groups
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## chromosight
 ##     Pattern detection
@@ -240,7 +240,7 @@ metacooler-run tasks
 ##       --maxPercZero (default 10)  Most empty pixels a window may hold
 ##       --nMads (default 5)  Detectability cut
 ##       --maxQvalue (default 1)  Report down to a q-value of
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## hicrep
 ##     Reproducibility (HiCRep)
@@ -248,7 +248,7 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --maxDistance (default 500)  Furthest separation compared
 ##       --smooth (default 1)  Smoothing half-width
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## motif
 ##     Find a sequence
@@ -302,7 +302,7 @@ metacooler-run tasks
 ##       --subset (default "all")  Then
 ##       --count (default 500)  N
 ##       --groups (default 4)  Groups
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## trackcorr
 ##     Track correlation
@@ -331,7 +331,7 @@ metacooler-run tasks
 ## 
 ## magqc
 ##     MAG contact QC
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --network (default true)  Also build the inter-MAG matrix
 ## 
 ## magnetwork
@@ -342,30 +342,31 @@ metacooler-run tasks
 ## 
 ## magpurity
 ##     MAG purity and contamination
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --minContacts (default 10)  Least contact before judging a contig
 ##       --flagAbove (default 0.5)  Flag above this outside fraction
 ## 
 ## magsplit
 ##     Split-MAG detection
-##       --balance (default false)  Use balancing weights
+##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --minContigs (default 4)  Least contigs before judging a MAG
 ##       --flagBelow (default 0.1)  Flag below this cross-block ratio
 ```
 
-Every task writes its results where `--out` points:
+Every task writes its results where `--out` points. A map is read balanced wherever the file
+carries balancing weights, as the app reads it; `--no-balance` reads the raw counts.
 
 ```bash
 metacooler-run insulation *.mcool --sequences II --out results/
-metacooler-run chromosight sample.cool --pattern borders --balance --out results/
-metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
+metacooler-run chromosight sample.cool --pattern borders --out results/
+metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight
 
 # The domain pileup: a set of TADs — the span from one insulation boundary to
 # the next — every one of them stretched to the same width, with half a domain
 # of padding each side. The distance-matched control is shifted by a multiple of
 # the window, so it never overlaps the domain it is the denominator of.
 metacooler-run apa sample.cool --features domains.bed --anchors features \
-  --mode scaled --grid 48 --flankFraction 0.5 --balance --out results/
+  --mode scaled --grid 48 --flankFraction 0.5 --out results/
 
 # Two of the tasks that run beside the tracks rather than on the map. A motif
 # search reads the reference `--sequence` names and writes both halves: the

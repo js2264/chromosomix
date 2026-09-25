@@ -1,6 +1,6 @@
 /**
- * Compartments, run: expected → observed/expected → correlation → eigenvectors,
- * then phasing, then the saddle.
+ * Compartments, run: expected → observed/expected → its correlation, or itself as
+ * cooltools prepares it → eigenvectors, then phasing, then the saddle.
  *
  * Everything mathematical is in `analysis/compartments.ts` and
  * `analysis/linalg.ts`. What is here is the chain, the places it can refuse, and
@@ -32,8 +32,12 @@ import { contextOf } from '../../genome/naming'
 import type { FeatureSet } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
+import { armExpected, type ArmFrame } from '../arms'
 import {
+  COOLTOOLS_CLIP_PERCENTILE,
+  cisSeparation,
   compartmentSegments,
+  cooltoolsMatrix,
   correlationMatrix,
   observedOverExpected,
   phaseComponent,
@@ -49,6 +53,9 @@ import {
   contigIdsFor,
   idParam,
   numParam,
+  originOf,
+  readsAsCircular,
+  strParam,
   tickedSequences,
   type JobContext,
   type TaskRunner,
@@ -56,7 +63,7 @@ import {
 import type { Params } from '../types'
 import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
-import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
+import type { MatrixOutput, ProfileOutput, TableOutput, TaskOutput } from '../types'
 import { displayableContigs, usableBlock, type Span } from './blocks'
 
 /**
@@ -239,7 +246,11 @@ async function readSquare(
  * task, and that is not a shortcut — an O/E over one chromosome wants that
  * chromosome's own decay, and the whole-file curve is a different denominator.
  */
-function planExpected(values: Float32Array, selection: Selection): ExpectedPlan {
+function planExpected(
+  values: Float32Array,
+  selection: Selection,
+  laps: Int32Array,
+): ExpectedPlan {
   const { group, n } = selection
   const k = selection.contigs.length
   const starts: number[] = []
@@ -251,10 +262,16 @@ function planExpected(values: Float32Array, selection: Selection): ExpectedPlan 
 
   const cis = starts.map((start, g) => {
     const length = ends[g] - start
-    const accumulator = new ExpectedAccumulator(Math.max(0, length - 1))
+    // A circle's longest separation is half of it, measured the short way
+    // round (§8.15) — the same rule `observedOverExpected` reads it back with.
+    const lap = laps[g]
+    const accumulator = new ExpectedAccumulator(
+      lap > 0 ? Math.floor(length / 2) : Math.max(0, length - 1),
+      lap,
+    )
     for (let r = start; r < ends[g]; r++) {
       for (let c = start; c < ends[g]; c++) {
-        accumulator.add(Math.abs(c - r), values[r * n + c])
+        accumulator.add(cisSeparation(Math.abs(c - r), lap), values[r * n + c])
       }
     }
     return accumulator.finish()
@@ -282,7 +299,110 @@ function planExpected(values: Float32Array, selection: Selection): ExpectedPlan 
     }
   }
 
-  return { group, cis, trans, contacts: 'both', ignoreDiags: 0 }
+  return {
+    group,
+    cis,
+    trans,
+    contacts: 'both',
+    ignoreDiags: 0,
+    ...(laps.some((lap) => lap > 0) ? { laps } : {}),
+  }
+}
+
+/**
+ * Bins per sequence of the square where it is read as a circle, `0` otherwise.
+ *
+ * Only a sequence the square holds **whole** can be read round: the plan's cis
+ * separation is `|col − row|` within a group, which is the circle's only when the
+ * group is the circle from its first bin to its last — which `selectionOf`
+ * guarantees by taking whole sequences.
+ */
+function lapsOf(job: JobContext, selection: Selection): Int32Array {
+  const laps = new Int32Array(selection.contigs.length)
+  for (let g = 0; g < selection.contigs.length; g++) {
+    const cid = selection.contigs[g]
+    if (!readsAsCircular(job, job.mc.chromnames[cid])) continue
+    const [from, to] = job.mc.contigExtent(cid)
+    laps[g] = to - from
+  }
+  return laps
+}
+
+/**
+ * Observed over the **arm-frame** expectation (`analysis/arms.ts`), over the
+ * usable bins — the square with both of a bacterial chromosome's diagonals
+ * divided out, rather than the main one alone.
+ *
+ * One sequence, always: the arms are a fact about one molecule, and the mode is
+ * offered only where the run is one square per sequence. The near-diagonal is
+ * left out on the same rule, and a cell is a gap on the same conditions, as in
+ * `observedOverExpected` — the only thing that differs is the denominator.
+ */
+function armsObservedOverExpected(
+  values: Float32Array,
+  n: number,
+  index: Int32Array,
+  frame: ArmFrame,
+  window: number,
+  ignoreDiags: number,
+): Float64Array {
+  const bins = Int32Array.from({ length: n }, (_, i) => i)
+  const expected = armExpected(values, bins, bins, frame, window)
+  const m = index.length
+  const lap = frame.circular ? n : 0
+  const out = new Float64Array(m * m)
+  for (let r = 0; r < m; r++) {
+    const row = index[r]
+    for (let c = 0; c < m; c++) {
+      const col = index[c]
+      if (cisSeparation(Math.abs(col - row), lap) < ignoreDiags) {
+        out[r * m + c] = Number.NaN
+        continue
+      }
+      const observed = values[row * n + col]
+      const denominator = expected[row * n + col]
+      out[r * m + c] =
+        Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0
+          ? observed / denominator
+          : Number.NaN
+    }
+  }
+  return out
+}
+
+/**
+ * The arms of the one sequence in a square: its bins, where its origin falls,
+ * and whether it is a circle.
+ *
+ * The origin is the one declared for the sequence (`AnalysisFraming.origins`),
+ * which the *Origin and terminus* task fills in and the Chromosomes table shows.
+ * With none, the first base stands in — where most assemblies of a bacterial
+ * chromosome start, at `dnaA` — and the run says so, because arms measured from
+ * the wrong place fold the map about the wrong line.
+ */
+function armFrameOf(
+  job: JobContext,
+  selection: Selection,
+  laps: Int32Array,
+  label: string,
+): ArmFrame {
+  const cid = selection.contigs[0]
+  const name = job.mc.chromnames[cid]
+  const declared = originOf(job, name)
+  const binsize = job.mc.binsize
+  if (declared === undefined) {
+    job.note(
+      `${label}: the arms were read from the first base, the origin every sequence has until one ` +
+        'is set — on the Chromosomes table, or by Origin and terminus.',
+    )
+  }
+  const at = declared ?? 0
+  const origin = Math.max(0, Math.min(selection.n - 1, Math.floor(at / binsize)))
+  job.note(
+    `${label}: arms read from the origin at ${(at + 1).toLocaleString()} ` +
+      `(bin ${origin.toLocaleString()}), ${laps[0] > 0 ? 'round the circle' : 'along the line'}.`,
+  )
+  return { n: selection.n, origin, circular: laps[0] > 0 }
 }
 
 /** Which contacts enter the correlation; see {@link ExpectedPlan.contacts}. */
@@ -320,6 +440,20 @@ async function runSquare(
     label: string
     /** Reported as `done of total` while several squares are being run. */
     step: { at: number; of: number }
+    /**
+     * Divide by the arm-frame expectation rather than the distance decay, with
+     * this half-width along the arms in bins (`0` the whole sequence). Only for
+     * a square of one sequence; absent is the ordinary observed/expected.
+     */
+    arms?: { window: number }
+    /**
+     * What is decomposed: the Pearson correlation of observed/expected's rows
+     * (Lieberman-Aiden et al. 2009), or observed/expected itself as cooltools
+     * prepares it (`cooltoolsMatrix`).
+     */
+    method: 'correlation' | 'cooltools'
+    /** One row per component, for the components table. */
+    rows: Array<Record<string, string | number>>
   },
 ): Promise<{ saddle: MatrixOutput | null } | null> {
   const { label } = options
@@ -328,8 +462,9 @@ async function runSquare(
   const square = await readSquare(job, selection, { balance, value })
   job.throwIfCancelled()
 
+  const laps = lapsOf(job, selection)
   const plan: ExpectedPlan = {
-    ...planExpected(square, selection),
+    ...planExpected(square, selection, laps),
     contacts: options.contacts,
     ignoreDiags: options.ignoreDiags,
   }
@@ -349,7 +484,17 @@ async function runSquare(
     )
   }
 
-  const oe = observedOverExpected(square, selection.n, index, plan)
+  const oe =
+    options.arms !== undefined && selection.contigs.length === 1
+      ? armsObservedOverExpected(
+          square,
+          selection.n,
+          index,
+          armFrameOf(job, selection, laps, label),
+          options.arms.window,
+          options.ignoreDiags,
+        )
+      : observedOverExpected(square, selection.n, index, plan)
   job.throwIfCancelled()
 
   // A mode and a diagonal cut can between them leave nothing to correlate — a
@@ -370,27 +515,46 @@ async function runSquare(
     return null
   }
 
-  // Cubic in the bin count, and the one step of the chain that is — so it
-  // reports where it has got to and can be stopped from inside its own loop.
-  const correlation = await correlationMatrix(oe, index.length, async (row) => {
-    // Every sixty-fourth row rather than every row: a `breathe` is a
-    // `MessageChannel` round trip, and this is the loop that most needs to be
-    // stoppable *and* the one that would most notice paying for it `m` times.
-    // Between breaths the flag cannot have changed, so the synchronous check is
-    // the one that matters in between and the yield is what makes it able to.
-    if (row % 64 !== 0) {
-      job.throwIfCancelled()
-      return
-    }
-    await job.breathe()
-    job.progress(options.step.at, options.step.of, `correlating ${label}`)
-  })
+  // What is decomposed. The correlation of the rows, as Lieberman-Aiden et al.
+  // (2009) did — cubic in the bin count, and the one step of the chain that is,
+  // so it reports where it has got to and can be stopped from inside its own
+  // loop; or observed/expected itself, clipped, less one and with its gaps read
+  // as expected, as cooltools does. Either is consumed in place by the
+  // deflation, so the saddle below uses `oe` — which is the matrix it wants.
+  const cooltools = options.method === 'cooltools'
+  let decomposed: Float64Array
+  // What an eigenvalue is a share of: a correlation matrix's trace, which is its
+  // rows; the prepared observed/expected's sum of squares, which is the sum of
+  // its eigenvalues squared.
+  let whole = index.length
+  if (cooltools) {
+    job.progress(options.step.at, options.step.of, `decomposing ${label}`)
+    decomposed = cooltoolsMatrix(oe, index.length)
+    whole = 0
+    for (const value of decomposed) whole += value * value
+  } else {
+    decomposed = await correlationMatrix(oe, index.length, async (row) => {
+      // Every sixty-fourth row rather than every row: a `breathe` is a
+      // `MessageChannel` round trip, and this is the loop that most needs to be
+      // stoppable *and* the one that would most notice paying for it `m` times.
+      // Between breaths the flag cannot have changed, so the synchronous check is
+      // the one that matters in between and the yield is what makes it able to.
+      if (row % 64 !== 0) {
+        job.throwIfCancelled()
+        return
+      }
+      await job.breathe()
+      job.progress(options.step.at, options.step.of, `correlating ${label}`)
+    })
+  }
 
-  // The correlation matrix is consumed in place by the deflation, so the saddle
-  // below uses `oe` — which is the matrix it wants anyway.
-  const pairs = leadingEigenpairs(correlation, index.length, options.wanted)
+  // **Ranked by eigenvalue, and by nothing else.** The phasing signal signs each
+  // component below and never chooses among them: a component picked for
+  // following GC content would make any later comparison of GC content between
+  // the compartments it calls a comparison with itself.
+  const pairs = leadingEigenpairs(decomposed, index.length, options.wanted)
   if (pairs.length === 0) {
-    job.note(`${label}: the correlation matrix has no leading component; it may be too sparse.`)
+    job.note(`${label}: the ${cooltools ? 'matrix' : 'correlation matrix'} has no leading component; it may be too sparse.`)
     return null
   }
 
@@ -398,9 +562,18 @@ async function runSquare(
   let phased: Phasing | null = null
 
   for (let component = 0; component < pairs.length && component < options.tracks.length; component++) {
-    const vector = pairs[component].vector
+    const { value, vector } = pairs[component]
+    // cooltools' scale: each unit eigenvector times the square root of its
+    // eigenvalue's size, so a track made this way is the track cooltools writes.
+    if (cooltools) {
+      const scale = Math.sqrt(Math.abs(value))
+      for (let i = 0; i < vector.length; i++) vector[i] *= scale
+    }
+    let r = Number.NaN
     if (signal !== null) {
       const result = phaseComponent(vector, signal, numParam(job.params, 'minR', 0.1))
+      // As drawn: the sign the phasing fixed is the sign the table reports.
+      r = result.flipped ? -result.r : result.r
       if (component === 0) {
         phased = result
         job.note(
@@ -414,6 +587,13 @@ async function runSquare(
     } else if (component === 0) {
       job.note('Nothing was chosen to phase against, so the sign of each component is arbitrary.')
     }
+    options.rows.push({
+      sequence: label,
+      component: `E${component + 1}`,
+      eigenvalue: value,
+      explained: cooltools ? (value * value) / whole : value / whole,
+      r,
+    })
 
     // Back over the full bin grid, with every bin that took no part restored as
     // a gap — which is the whole reason the chain worked over an index (§18.8).
@@ -534,6 +714,38 @@ export const runCompartments: TaskRunner = async (job) => {
   for (let i = 0; i < wanted; i++) tracks.push(new Float32Array(job.mc.nBins).fill(Number.NaN))
   const segments = new FeatureBuilder()
   const outputs: TaskOutput[] = []
+  const rows: Array<Record<string, string | number>> = []
+  // The arm-frame expectation is offered in cis alone, where every square is
+  // one sequence; a stored recipe naming it under another mode is read as the
+  // mode it names, which has one expectation per cell and no arms.
+  const arms =
+    contacts === 'cis' && strParam(job.params, 'expected', 'distance') === 'arms'
+      ? { window: Math.max(0, Math.round(numParam(job.params, 'armWindow', 50))) }
+      : undefined
+  if (arms !== undefined) {
+    job.note(
+      arms.window === 0
+        ? 'Divided by the decay along both arms, over the whole of each chromosome.'
+        : `Divided by the decay along both arms, within ${arms.window.toLocaleString()} bins ` +
+            `(${(arms.window * job.mc.binsize).toLocaleString()} bp) of each cell along them.`,
+    )
+  }
+  // Refused rather than read as the default: the two methods give different
+  // numbers, and a misspelt one in a batch script would otherwise run the other
+  // without a word.
+  const method = strParam(job.params, 'method', 'cooltools')
+  if (method !== 'correlation' && method !== 'cooltools') {
+    throw new Error(`There is no method “${method}”. It is cooltools or correlation (Lieberman-Aiden 2009).`)
+  }
+  // Said either way, since either can be what a reader did not choose.
+  job.note(
+    method === 'cooltools'
+      ? 'Observed/expected decomposed itself, as cooltools does: clipped at its ' +
+          `${COOLTOOLS_CLIP_PERCENTILE}th percentile, one subtracted, every gap read as expected, and ` +
+          'each eigenvector scaled by the square root of its eigenvalue.'
+      : 'The correlation of observed/expected’s rows decomposed, as Lieberman-Aiden et al. (2009) ' +
+          'did it.',
+  )
   let ran = 0
 
   for (let s = 0; s < squares.length; s++) {
@@ -562,6 +774,9 @@ export const runCompartments: TaskRunner = async (job) => {
       segments,
       label,
       step: { at: s, of: squares.length },
+      ...(arms === undefined ? {} : { arms }),
+      method,
+      rows,
     })
     if (done === null) continue
     ran++
@@ -575,7 +790,44 @@ export const runCompartments: TaskRunner = async (job) => {
 
   // The tracks first, then the calls, then the pictures: a reader scanning the
   // drawer meets the thing they will keep before the thing they will look at.
-  const label = `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}`
+  const label =
+    `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}${arms === undefined ? '' : ' · arms'}` +
+    `${method === 'correlation' ? ' · correlation' : ''}`
+  // What every component explained, and how it follows the phasing signal that
+  // fixed its sign — reported, never used to choose one.
+  outputs.push({
+    kind: 'table',
+    id: 'compartment-components',
+    label: `Components · ${label}`,
+    columns: [
+      { key: 'sequence', label: 'sequence', kind: 'text' },
+      { key: 'component', label: 'component', kind: 'text', hint: 'By eigenvalue, largest first.' },
+      { key: 'eigenvalue', label: 'eigenvalue', kind: 'number', digits: 3 },
+      method === 'cooltools'
+        ? {
+            key: 'explained',
+            label: 'share',
+            kind: 'number',
+            digits: 3,
+            hint: 'Share of the decomposed matrix: its eigenvalue squared over the sum of its cells squared.',
+          }
+        : {
+            key: 'explained',
+            label: 'variance',
+            kind: 'number',
+            digits: 3,
+            hint: 'Share of the correlation matrix’s variance: its eigenvalue over its rows.',
+          },
+      {
+        key: 'r',
+        label: 'r with phasing',
+        kind: 'number',
+        digits: 3,
+        hint: 'Pearson’s r with the phasing signal, as drawn: positive once the sign is fixed.',
+      },
+    ],
+    rows,
+  } satisfies TableOutput)
   outputs.unshift(
     ...tracks.map(
       (values, i) =>
@@ -704,6 +956,26 @@ function phasingSignal(
   const set = chosenInput(job.inputs.features, job.params, 'phaseFeatures').value
   if (set !== undefined) {
     return { name: 'gene density', values: densityOf(job, set, selection, index) }
+  }
+
+  // Any track — a bigWig or a synthetic one — arrives as a vector on the map's
+  // bins, exactly as the GC content below does (`AnalysisRunner.inputsFor`).
+  const trackId = idParam(job.params, 'phaseTrack')
+  if (trackId !== null) {
+    const vector = job.inputs.vectors?.['phaseTrack']
+    if (vector === undefined) {
+      job.note(
+        'The track chosen for phasing could not be read, so it was not used. Load it again, or ' +
+          'choose another.',
+      )
+    } else {
+      const out = new Float64Array(index.length)
+      for (let i = 0; i < index.length; i++) {
+        const bin = selection.bin[index[i]]
+        out[i] = bin >= 0 && bin < vector.length ? vector[bin] : Number.NaN
+      }
+      return { name: job.inputs.labels?.[trackId] ?? 'the chosen track', values: out }
+    }
   }
 
   const sequenceId = idParam(job.params, 'phaseSequence')

@@ -14,6 +14,82 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A file's first open proposes which sequences are circular (§8.15).** Each of the fifty longest
+  sequences is read at its two ends and its corner, and scored as the contacts across the junction
+  over the contacts along the diagonal at the same separation — about one on a circle, about zero on
+  a line. At 0.2 or above the Chromosomes table's box is ticked and a banner says so; the box's
+  tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands. A
+  map opened over a 1D browser is marked on the Sequences card too, which read the tracks' file.
+  A shell asks the same with `metacooler-run circular <map>`: every sequence's length, score and
+  verdict as a table, the names to hand each later run of a batch as `--circular`.
+
+- **Signal by group, a 1D task (§18.8).** Any track compared between groups of the genome: a
+  feature set's intervals split by name, strand or score (A against B on a compartment call, with
+  the rest of the genome as a group), or a track's bins cut by sign or into quantiles. Per group a
+  summary and a violin; between groups Mann–Whitney and Kruskal–Wallis with effect sizes and
+  q-values; a row per feature on request. Runs with no map, and from `metacooler-run`.
+
+- **A 1D browser has a Chromosomes table (§5.8).** The trail's root picks between it and the
+  whole genome. Circles are ticked and origins typed there with no map open, and a map opened over
+  the browser takes them for its sequences of the same names.
+
+- **Base composition, a 1D task (§18.8).** GC content, GC skew, AT skew and the cumulative GC skew
+  of a loaded FASTA, as lanes that export as bigWig, bedGraph and TSV. Its bin size is the open
+  map's resolution unless changed, and 10 kb in a 1D browser, where a FASTA alone is enough to run
+  it.
+
+- **Origin and terminus, a 1D task (§18.8).** The turning points of the cumulative GC skew, the
+  terminus chosen as Bacchus chooses it — nearer the matS cluster, else farther from the parS
+  cluster, else lower in Hi-C coverage — with the sites found by the motif search. It leaves the
+  `ori` and `ter` loci and the parS and matS sites as BED-exportable sets, the coverage smoothed by
+  a cubic spline and the ori/ter ratio read off it, and declares the origin it found.
+
+- **Declared origins (§8.15).** A sequence's replication origin is kept per file like its circle,
+  shown 1-based in a column of the Chromosomes table, carried in a workspace and in a run's
+  framing, and written as `--origin NAME:POS` on a `metacooler-run` line. It is typed into the
+  column as well as set by the task, and a task never overwrites one a reader brought. Every
+  sequence has one: its first base, shown greyed, until another is set — so `arms` and every task
+  that reads the arms read from it rather than refusing.
+
+- **`ori` and `arms` on the map (§7.5, §8.15).** On a circle with an origin, `ori` frames the whole
+  of it with the origin in the middle, so the secondary diagonal is the square's antidiagonal; it
+  stays lit while the origin is in the middle of the view, and pressed again goes back to the
+  sequence from its first base. `arms`
+  divides by the decay along both of a bacterial chromosome's arms rather than along the diagonal
+  alone — the X its aligned arms draw on an O/E map, and on its correlation, is divided out and its
+  compartments are left. The key reads `arm O/E`; a link carries it as `arms=`.
+
+- **Inter-arm alignment, a 2D task (§18.8).** How strongly a chromosome's two arms touch, as the
+  secondary diagonal's enrichment over the distance decay: a curve against distance from the origin,
+  a track along the chromosome, and a score, peak and reach per sequence. 1.6 on *P. aeruginosa*,
+  0.37 on *B. subtilis*, 0.07 on *E. coli*.
+
+- **Compartments along both arms, and a table of their components (§18.8).** An *expected*
+  choice, *decay along both arms*; phasing by **a track** as well as by a gene model or GC content;
+  and a components table of each one's eigenvalue, what it explained, and its r with the phasing
+  signal as drawn. E1 is the largest eigenvalue's component, always: the phasing signal signs each
+  component and chooses none, so the GC content of the compartments E1 calls can be compared without
+  comparing GC content with itself.
+
+- **Compartments by cooltools' method, by default, as well as Lieberman-Aiden's (§18.8).** A
+  *method* dropdown, **cooltools** by default — observed/expected itself, clipped at its 99.9th
+  percentile, less one, its gaps read as expected, and each eigenvector scaled by √|λ| — or
+  **Lieberman-Aiden 2009**, the correlation of observed/expected decomposed, which is what every
+  earlier version computed. cooltools' agrees with `cooltools.eigs_cis` to |r| = 1.000 on the zoo's
+  maps, and skips the correlation, so a fine map takes seconds rather than minutes. A run by the
+  correlation says so in its label. `metacooler-run compartments --method correlation`;
+  `scripts/dbz-store.sh` takes `COMPARTMENTS_METHOD`, the DBZ notebook `METHOD`.
+
+- **Find a motif allows mismatches (§18.8)**, up to four, and says so in the set's name.
+
+- **`metacooler-run` reads a model back in as a structure.** A bed3d or text g3d under `--features`
+  is the structure *Spatial tracks* and *Model versus map* read, so a model the shell wrote can be
+  read as tracks in the same batch; it was read as a BED and refused as *not a structure*.
+
+- **`metacooler-run` names what it reads from a reference after the file.** *GC content · PAK.fa*
+  and *Origin and terminus · PAK.fa*, as the app names them after its entry; a reference named with
+  `--sequence` had no label, and every output read from one said *reference*.
+
 - **Every card moves by its heading, within a panel and between panels (§26.6).** Drag a card's
   heading — the strip that folds it on a press — and it lifts off the column, with a dashed slot
   where it will land; drop it anywhere in any open side panel. ⌥↑ / ⌥↓ on the heading's chevron move
@@ -108,13 +184,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The DNA Bacterial Zoo, a shipped store (§24.2, §24.3).** A tile between the lab's figures and
   IGV's genomes: the lab's Hi-C maps of bacteria, one card a species, whose button opens the map with
-  eight of its tracks — coverage, insulation and its boundaries, the directionality index, the HiC
-  score, E1, and chromosight's borders and loops — and, where the suite wrote one, its 3D model in a
-  cell beside it; the fold holds the map and every track. A session `make_store.py` writes places a
-  model it is given the same way, as a structure row with `maps: 3d`, rather than dropping it. The store is not the Stores workflow's to write: `scripts/DBZ_store.py` builds it from
-  `hic-suite.sh`'s results and it lives beside its data on the lab's bucket, so until it is uploaded
-  the tile says that, not *run the workflow*. Its mark is drawn by the script that draws RSG's, over
-  a bacterial map — a circle whose far corners are warm, with the X of its zipped arms.
+  three of its tracks under it — the HiC score, insulation, and E1 read along both arms from the
+  replication origin — and nothing else, declaring the circles and origins they were computed with;
+  the fold holds the map, its reference and every track, 3D model included. A session
+  `make_store.py` writes places a model it is given as a structure row with `maps: 3d`, rather than
+  dropping it. The store is not the Stores workflow's to write: `scripts/dbz-store.sh` runs the
+  suite over every map straight into the folder that is published — framing each first by the
+  junction test and, where a reference is found beside it, by its base composition and its origin —
+  and `scripts/DBZ_store.py index` lists that folder in place; `notebooks/dbz-chromosome-figures.qmd`,
+  rendered with Quarto, draws one figure per species from the same `metacooler-run` commands and
+  tabulates the numbers behind them, each with its test. It lives beside its data on the lab's
+  bucket, so until it is uploaded the tile says that, not *run the workflow*. Its mark is drawn by the
+  script that draws RSG's, over a bacterial map — a circle whose far corners are warm, with the X of
+  its zipped arms.
 
 - **A store can ask to be drawn as cards (§24.1, §24.2).** Three optional keys on a store file:
   `group` names the field its rows belong to, `headline` the fields a group repeats, and
@@ -312,6 +394,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **`metacooler-run` reads a map balanced by default (§23.1).** Wherever the file carries weights,
+  as the app does — the framing and every task's *use balancing weights* alike — and `--no-balance`
+  reads the raw counts. `--balance` is refused with a pointer, since it asked for the default and a
+  command that forgot it ran on raw counts under a framing line that said *balanced*; coverage keeps
+  its own `--balance`, off by default. A copied command says `--no-balance` for an unbalanced run and
+  nothing for a balanced one, and `scripts/dbz-store.sh` and the DBZ notebook no longer pass it.
+
+- **Compartments measure a circle's decay the short way round (§8.15).** A sequence declared circular
+  is divided by its decay measured the short way round; the task is version 2.
+
+- **An optional input is filled only from what the reader loaded (§18.2).** The two loci an origin
+  call leaves were the first interval set on the list and phased every compartment call after it; a
+  computed set is chosen now and never assumed. The compartments' phasing track and the origin
+  call's coverage start on none.
 
 - **The *3D structure* card names the starred cell, as the *Map* card names the starred map
   (§25.3).** `★ Yeast_structure` under its title, where the card had a *structure* dropdown; the
@@ -997,6 +1094,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **An exported P value is written as the drawer shows it, not as 0 (§18.7).** A table column that
+  says its values may be very small — *Signal by group*'s P and q — was written to a TSV at its fixed
+  places, so a P of 6.5 × 10⁻²² came out `0`, a claim the test never made and one a script could not
+  tell from a P that was. It is written `6.5319e-22` now, as the drawer draws it.
+
+- **A task run again draws its new values at once (§18.5).** A re-run replaces its own tracks under
+  the same ids, and every lane beside the map, in the 1D browser and on a model went on drawing the
+  previous run's numbers, under the new run's name, until a pan or a zoom refetched them — so
+  compartments run again by the other method looked unchanged. The row now carries a revision the run
+  bumps, and each lane asks again when that changes.
+
+- **A workspace brings its circles, origins and added resolutions back in (§3.4, §8.15).** Saving one
+  wrote all three and opening it dropped them: the tab reader walked past the fields, so an origin
+  typed on the Chromosomes table, a circle unticked by the reader, a 10 kb rung added to a 4 kb file,
+  and the declarations a store's published session makes, reached nobody — and the first open then
+  measured its own circles over the author's.
+
+- **A task reads a declared circle as a circle (§8.15).** The declarations reached the drawer's header
+  and not the framing a run was given, so a sequence ticked on the Chromosomes table was measured as
+  a line by every task run from the app — and by a track task run where no map is on screen, which
+  read an origin at the first base as split between the two ends. The run's framing carries the
+  circles and the origins now, including the one made over the tracks, and a cached result is reused
+  only under the same declarations.
 
 - **The figure settings' `to` is set like the labels around it (§18.13).** Under `x from`, `y from`
   and a heatmap's `scale`, the word was drawn at the body's size, larger than every other label in

@@ -25,6 +25,9 @@ import { WHOLE_FILE_LEVELS } from '../../src/ui/Overview'
 import type { ViewState } from '../../src/types'
 
 const CASES: ViewState[] = [
+  // The O/E against both of a bacterial chromosome's diagonals (§8.15): the
+  // window along the arms travels with the ratio it modifies.
+  { uri: 'PAK.mcool::resolutions/4000', view: 'region', region: 'LR657304.1', oe: true, arms: 50 },
   { uri: 'Hum53.metacool', view: 'genomes' },
   { uri: 'Hum53.mmetacool::entries/1000', view: 'genome', genome: 'MetaTOR_1_1' },
   {

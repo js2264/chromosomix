@@ -90,6 +90,15 @@ export interface BreadcrumbProps {
   disabledChoices?: Partial<Record<RootChoice, string>>
   /** What a contig is called in this file: `Contigs`, or `Chromosomes`. */
   contigNoun?: string
+  /**
+   * A genome browsed as tracks (§5.8), with no map behind it.
+   *
+   * Its *whole genome* is the browser rather than a map, so that choice goes to
+   * `view=browser`; and its *chromosomes* are the sequence list the genome was
+   * built from, which is where a circle and an origin are declared with no map
+   * open (§8.15).
+   */
+  browser?: boolean
   /** Short label for the open file, shown as the first crumb. */
   fileLabel: string
   /** Entry names of the enclosing mmetacool, or `[]` for a plain metacool. */
@@ -324,13 +333,13 @@ export class Breadcrumb {
   /**
    * A browser's trail: `genome › Whole genome › IV › 1,000,001-1,400,000`.
    *
-   * The root is the whole assembly rather than a table, because a genome opened
-   * as tracks has no table to go back up to — the chromosomes table is a
-   * cooler's view of its own `/chroms` (§5.8) — and "the whole genome" is both
-   * where a browser opens and the one place above the sequence in front of the
-   * reader. No picker on it for the same reason: there is no second table to
-   * pick, and a control with nothing to offer is absent rather than greyed
-   * (§8.5).
+   * The root is the whole assembly, because "the whole genome" is both where a
+   * browser opens and the one place above the sequence in front of the reader.
+   * Where the session also offers the genome's sequence list ({@link
+   * BreadcrumbProps.browser}) the root is a picker between the two, exactly as
+   * a map's is between its table and its whole; with nothing else to offer it
+   * is a plain crumb, a control with one choice being absent rather than
+   * greyed (§8.5).
    *
    * The locus is already the display form (`ViewState.locus` is 1-based
    * inclusive, written by `formatLocus`), so the sequence name is what is
@@ -342,11 +351,17 @@ export class Breadcrumb {
   private pushBrowser(state: ViewState): void {
     const locus = state.locus
     const whole: ViewState = { uri: state.uri, view: 'browser' }
-    this.push(
-      ROOT_LABEL.whole,
-      locus === undefined ? undefined : () => this.props.onNavigate(whole),
-      locus === undefined,
-    )
+    // With its sequence list to pick as well (§5.8), the root is the same
+    // picker a map's is: *Chromosomes* or *Whole genome*.
+    if (this.props.browser === true && this.props.rootChoices.length > 1) {
+      this.pushRootPicker(state)
+    } else {
+      this.push(
+        ROOT_LABEL.whole,
+        locus === undefined ? undefined : () => this.props.onNavigate(whole),
+        locus === undefined,
+      )
+    }
     if (locus === undefined) return
     const colon = locus.lastIndexOf(':')
     const contig = colon < 0 ? locus : locus.slice(0, colon)
@@ -731,10 +746,15 @@ export class Breadcrumb {
     const table: 'genomes' | 'cells' | 'contigs' = rootTable(state, rootKind)
     // The whole-file views belong in this crumb as much as the tables do:
     // leaving them out left them labelled "Chromosomes", so the only sign
-    // anything had happened was the heatmap itself.
-    const whole = state.view === 'whole' || state.view === 'overview' ? state.view : null
+    // anything had happened was the heatmap itself. A genome's whole is its
+    // browser, which is at the root while no sequence is named in it.
+    const browsing = this.props.browser === true && state.view === 'browser'
+    const whole =
+      state.view === 'whole' || state.view === 'overview' ? state.view : browsing ? 'whole' : null
     const active: RootChoice = whole ?? table
-    const atRoot = whole !== null || state.view === table
+    const atRoot = browsing ? state.locus === undefined : whole !== null || state.view === table
+    const viewOf = (kind: RootChoice): ViewState['view'] =>
+      this.props.browser === true && kind === 'whole' ? 'browser' : kind
 
     this.separator()
 
@@ -748,7 +768,7 @@ export class Breadcrumb {
       title: withKey(`Back to ${labelOf(active)}`, ROOT_KEYS[active]),
     })
     label.addEventListener('click', () =>
-      this.props.onNavigate({ uri: state.uri, view: active }),
+      this.props.onNavigate({ uri: state.uri, view: viewOf(active) }),
     )
 
     if (rootChoices.length < 2) {
@@ -782,7 +802,7 @@ export class Breadcrumb {
       } else {
         item.addEventListener('click', () => {
           menu.classList.add('hidden')
-          this.props.onNavigate({ uri: state.uri, view: kind })
+          this.props.onNavigate({ uri: state.uri, view: viewOf(kind) })
         })
       }
       menu.appendChild(item)

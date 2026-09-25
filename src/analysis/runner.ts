@@ -218,8 +218,27 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     a.binsPerCell === b.binsPerCell &&
     a.balance === b.balance &&
     a.value === b.value &&
-    a.level === b.level
+    a.level === b.level &&
+    // What the molecules are declared to be changes the numbers as surely as
+    // the window does (§8.15): a decay measured along a line is not the one a
+    // circle has, and an arm read from another origin is another arm.
+    sameNames(a.circular ?? [], b.circular ?? []) &&
+    sameOrigins(a.origins ?? {}, b.origins ?? {})
   )
+}
+
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const held = new Set(a)
+  return b.every((name) => held.has(name))
+}
+
+function sameOrigins(
+  a: Readonly<Record<string, number>>,
+  b: Readonly<Record<string, number>>,
+): boolean {
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((name) => a[name] === b[name])
 }
 
 // ---------------------------------------------------------------------------
@@ -1481,5 +1500,9 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     // rest of the line off the drawer and off a console row. What the uri is
     // wanted for is `# file:`, which every provenance block already carries.
     label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
+    // What the file's molecules are declared to be, which a task on the
+    // sequence reads as surely as one on the map (§8.15).
+    ...(context.circular === undefined ? {} : { circular: [...context.circular] }),
+    ...(context.origins === undefined ? {} : { origins: { ...context.origins } }),
   }
 }

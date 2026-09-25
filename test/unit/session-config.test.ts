@@ -136,6 +136,25 @@ describe('buildConfig', () => {
   })
 
   /**
+   * *No circles* is an answer once the file has been measured (§8.15): written
+   * as an empty list, and read back as the junction test already done, so the
+   * importer's first open does not tick what the author unticked.
+   */
+  it('carries an empty circular list for a measured file, and marks the test done on import', () => {
+    const from = 's9|circles-from'
+    remember(from, 'map:circular', [])
+    remember(from, 'map:circular-evidence', { chr: 0.8 })
+    const config = buildConfig({ state: STATE, memoryKey: from, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect(config.circular).toEqual([])
+    const to = 's9|circles-to'
+    applyConfig(config, to)
+    expect(recall(to, 'map:circular-evidence')).not.toBeNull()
+    // A file nobody measured says nothing, as an older workspace does.
+    const quiet = buildConfig({ state: STATE, memoryKey: 's9|circles-quiet', plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect('circular' in quiet).toBe(false)
+  })
+
+  /**
    * Which build wrote it.
    *
    * Asserted against the **imported** constant and never against a literal like
@@ -198,6 +217,37 @@ describe('the round trip', () => {
     expect(recall('s7|dropped.cool', 'bookmarks')).toEqual([BOOKMARK])
     // The exporting session's own memory is untouched by the import.
     expect(recall(key, 'annotations')).toEqual([TRACK])
+  })
+
+  /**
+   * The declarations about the molecules (§8.15) and the rungs a reader added
+   * (§3.4), through JSON — the road a saved workspace and a store's session
+   * take. They were written out and dropped on the way back in.
+   */
+  it('carries the circles, the origins and the added rungs through the file', () => {
+    const key = 'trip|pak.mcool'
+    remember(key, 'map:circular', ['chr'])
+    remember(key, 'map:circular-evidence', { chr: 0.65 })
+    remember(key, 'map:origins', { chr: { at: 6_374_500, by: 'task' } })
+    remember(key, 'map:resolutions', [10_000])
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+
+    const read = roundTrip(config)
+    expect(read?.circular).toEqual(['chr'])
+    expect(read?.origins).toEqual({ chr: 6_374_500 })
+    expect(read?.resolutions).toEqual([10_000])
+    applyConfig(read as NonNullable<typeof read>, 's8|pak.mcool')
+    expect(recall('s8|pak.mcool', 'map:circular')).toEqual(['chr'])
+    expect(recall('s8|pak.mcool', 'map:origins')).toEqual({ chr: 6_374_500 })
+    expect(recall('s8|pak.mcool', 'map:resolutions')).toEqual([10_000])
+    // Declared, so the importer's first open does not measure its way past them.
+    expect(recall('s8|pak.mcool', 'map:circular-evidence')).not.toBeNull()
+
+    // *Measured, none* is an answer, and a file that says nothing says nothing.
+    expect(parseTab({ state: STATE, circular: [] })?.circular).toEqual([])
+    const silent = parseTab({ state: STATE })
+    expect(silent !== null && 'circular' in silent).toBe(false)
+    expect(silent !== null && 'origins' in silent).toBe(false)
   })
 
   it('carries the deck’s arrangement into the importing session', () => {

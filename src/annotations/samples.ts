@@ -45,8 +45,17 @@ export const FETCH_PAD = 0.5
  */
 const SAMPLE_PIXELS_FLOOR = 1024
 
+/**
+ * The filter a held window is marked with once its row's values are replaced
+ * ({@link SampleCache.revise}): no request is ever made under it, so the next
+ * frame refetches, and until the answer lands the old samples are still drawn.
+ */
+const STALE = '\u0000stale'
+
 /** A request that is running, and what it was asked under. */
 interface Running {
+  /** The row it is for, so {@link SampleCache.revise} can find it. */
+  entry: string
   cancel: () => void
   /** The filter *this request* carries — not the one already drawn. */
   filter: string
@@ -65,6 +74,8 @@ export interface Progress {
 }
 
 interface Held {
+  /** The row these are values of, so {@link SampleCache.revise} can find them. */
+  entry: string
   /** The power-of-two bases-per-pixel these were fetched at. */
   bucket: number
   /** Genomic span held per contig. */
@@ -102,6 +113,8 @@ export class SampleCache {
    * `sample` behind it (§8.13).
    */
   private readonly inflight = new Map<string, Running>()
+  /** The {@link AnnotationEntry.revision} each row was last seen at. */
+  private readonly revisions = new Map<string, number>()
   private disposed = false
 
   constructor(
@@ -136,9 +149,46 @@ export class SampleCache {
       request.cancel()
       this.inflight.delete(key)
     }
+    for (const entry of [...this.revisions.keys()]) {
+      if (!live.has(entry)) this.revisions.delete(entry)
+    }
     if (this.held.size === 0) return
     for (const key of [...this.held.keys()]) {
       if (!live.has(key.slice(0, key.lastIndexOf(':')))) this.held.delete(key)
+    }
+  }
+
+  /**
+   * Let go of the values of a row that was given new ones under the same id.
+   *
+   * A computed track run again keeps its id ({@link AnnotationEntry.revision}),
+   * so nothing here would otherwise notice: its window and resolution are the
+   * same, and a lane would redraw the last run's numbers until a pan or a zoom
+   * happened to refetch. Reconciled against the store once a frame, like
+   * {@link prune}, and for the same reason — an event that is not sent leaves a
+   * lane wrong, and a comparison made every frame cannot.
+   *
+   * What is in flight is called off, since it was asked of the old values; what
+   * is held is marked stale rather than dropped, so the lane keeps drawing it
+   * for the moment the new values take to arrive instead of blanking — the rule
+   * a filter change already follows. A row seen for the first time has nothing
+   * held to be stale.
+   */
+  revise(entries: Iterable<{ id: string; revision?: number }>): void {
+    for (const { id, revision } of entries) {
+      if (revision === undefined) continue
+      const seen = this.revisions.get(id)
+      if (seen === revision) continue
+      this.revisions.set(id, revision)
+      if (seen === undefined) continue
+      for (const [key, request] of [...this.inflight]) {
+        if (request.entry !== id) continue
+        request.cancel()
+        this.inflight.delete(key)
+      }
+      for (const [key, held] of this.held) {
+        if (held.entry === id) this.held.set(key, { ...held, filter: STALE })
+      }
     }
   }
 
@@ -283,7 +333,7 @@ export class SampleCache {
         this.onChange()
       },
     )
-    const slot: Running = { cancel: request.cancel, filter }
+    const slot: Running = { entry: options.entry, cancel: request.cancel, filter }
     this.inflight.set(key, slot)
     void request.promise
       .then((samples) => {
@@ -297,7 +347,7 @@ export class SampleCache {
           if (held === undefined) covered.set(window.contig, [[window.start, window.end]])
           else held.push([window.start, window.end])
         }
-        this.held.set(key, { bucket, covered, filter, samples })
+        this.held.set(key, { entry: options.entry, bucket, covered, filter, samples })
         this.onChange()
       })
       .catch(() => {

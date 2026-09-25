@@ -211,7 +211,7 @@ describe('bounds and budgets', () => {
 
   it('offsets every coordinate, so a windowed read reports chromosome positions', () => {
     const result = findMotif(bases('ttACGTtt'), motif('ACGT'), { offset: 1_000 })
-    expect(result.hits).toEqual([{ start: 1_002, end: 1_006, strand: 1 }])
+    expect(result.hits).toEqual([{ start: 1_002, end: 1_006, strand: 1, mismatches: 0 }])
   })
 
   it('stops at the limit and says that it did', () => {
@@ -240,6 +240,76 @@ describe('bounds and budgets', () => {
     const overlap = motifOverlap(pattern)
     const from = cut - overlap
     const tail = findMotif(bases(genome.slice(from)), pattern, { offset: from })
-    expect([...head.hits, ...tail.hits]).toEqual([{ start: 4, end: 8, strand: 1 }])
+    expect([...head.hits, ...tail.hits]).toEqual([{ start: 4, end: 8, strand: 1, mismatches: 0 }])
+  })
+})
+
+describe('a search that allows mismatches', () => {
+  /** Coordinates, strand and how many positions disagreed. */
+  function loose(
+    text: string,
+    pattern: string,
+    mismatches: number,
+    bothStrands = false,
+  ): Array<[number, number, number, number]> {
+    return findMotif(bases(text), motif(pattern), { bothStrands, mismatches }).hits.map((hit) => [
+      hit.start,
+      hit.end,
+      hit.strand,
+      hit.mismatches,
+    ])
+  }
+
+  it('is an exact match at a budget of zero, which is the default', () => {
+    expect(loose('ttACGTttACGAtt', 'ACGT', 0)).toEqual([[2, 6, 1, 0]])
+    expect(spans('ttACGTttACGAtt', 'ACGT')).toEqual([[2, 6, 1]])
+  })
+
+  it('finds a site one base off the pattern, and says how far off it was', () => {
+    expect(loose('ttACGTttACGAtt', 'ACGT', 1)).toEqual([
+      [2, 6, 1, 0],
+      [8, 12, 1, 1],
+    ])
+  })
+
+  /**
+   * `N` in the pattern permits every base, so it can never be where a mismatch
+   * is spent — which is what makes a consensus with a free position mean the
+   * same thing at every budget.
+   */
+  it('never charges a mismatch for an N in the pattern', () => {
+    expect(loose('ACGT', 'ANGT', 0)).toEqual([[0, 4, 1, 0]])
+    expect(loose('ACGT', 'ANGA', 1)).toEqual([[0, 4, 1, 1]])
+  })
+
+  /** An assembly gap is not a base that happens to be any of four (§8.3). */
+  it('charges a reference N against a pattern base, as an exact search refuses it', () => {
+    expect(loose('ACNT', 'ACGT', 0)).toEqual([])
+    expect(loose('ACNT', 'ACGT', 1)).toEqual([[0, 4, 1, 1]])
+  })
+
+  it('never lets the budget reach the whole motif, which would match everywhere', () => {
+    // A budget of the pattern's length would accept any window; it is held one
+    // short, so a two-base motif may be one base wrong and no more.
+    expect(loose('TT', 'AA', 5)).toEqual([])
+    expect(loose('AT', 'AA', 5)).toEqual([[0, 2, 1, 1]])
+  })
+
+  /**
+   * The case the budget exists for. `parS`, the bacterial centromere, is a
+   * 16-base palindromic consensus; a palindrome is still one site per place, and
+   * a variant one base off the consensus is found where an exact search misses
+   * it.
+   */
+  it('finds a degenerate palindrome once per site, exact or one base off', () => {
+    const parS = 'TGTTNCACGTGNAACA'
+    const exact = 'TGTTCCACGTGGAACA'
+    const variant = 'TGTTCCACGTGGATCA' // one base off, at the fourteenth position
+    const genome = `aaaa${exact}aaaaaaaa${variant}aaaa`
+    expect(loose(genome, parS, 0, true)).toEqual([[4, 20, 0, 0]])
+    expect(loose(genome, parS, 1, true)).toEqual([
+      [4, 20, 0, 0],
+      [28, 44, 0, 1],
+    ])
   })
 })

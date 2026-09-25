@@ -144,6 +144,17 @@ describe('buildAnalysisContext', () => {
     expect(context.contigs).toEqual([])
     expect(context.genomes).toBeNull()
   })
+
+  it('carries the declared circles and origins, and leaves them absent where there are none', () => {
+    // The runner frames a track task from these where there is no panel
+    // (§8.15), so an empty declaration must read the same as none at all.
+    const declared = buildAnalysisContext(input({ circular: ['chr'], origins: { chr: 42 } }))
+    expect(declared.circular).toEqual(['chr'])
+    expect(declared.origins).toEqual({ chr: 42 })
+    const none = buildAnalysisContext(input({ circular: [], origins: {} }))
+    expect('circular' in none).toBe(false)
+    expect('origins' in none).toBe(false)
+  })
 })
 
 describe('contigNamed', () => {

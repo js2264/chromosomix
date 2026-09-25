@@ -80,7 +80,7 @@ import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 export function scanMotif(
   reader: SequenceReader,
   motif: Motif,
-  options: { bothStrands: boolean; limit: number },
+  options: { bothStrands: boolean; limit: number; mismatches?: number },
 ): MotifScanResult {
   // The same ceiling {@link MOTIF_SITE_LIMIT} names and `runMotif` has already
   // applied, kept here as the last line of defence for a caller that reaches
@@ -109,7 +109,12 @@ export function scanMotif(
     // without looking. Looking costs one more site's worth of scan and buys the
     // difference between a complete answer and a claim of truncation on one.
     const room = cap - total
-    const found = findMotif(bases, motif, { bothStrands: options.bothStrands, limit: room + 1 })
+    const budget = options.mismatches ?? 0
+    const found = findMotif(bases, motif, {
+      bothStrands: options.bothStrands,
+      limit: room + 1,
+      mismatches: budget,
+    })
     const kept = Math.min(found.hits.length, room)
     if (found.truncated || found.hits.length > room) truncated = true
     if (kept === 0) continue
@@ -117,13 +122,23 @@ export function scanMotif(
     const starts = new Int32Array(kept)
     const ends = new Int32Array(kept)
     const strands = new Int8Array(kept)
+    // Carried only where the search allowed any, so an exact search's sites
+    // keep the empty score column `motifFeatures` argues for.
+    const wrong = budget > 0 ? new Uint8Array(kept) : undefined
     for (let at = 0; at < kept; at++) {
       const hit = found.hits[at]
       starts[at] = hit.start
       ends[at] = hit.end
       strands[at] = hit.strand
+      if (wrong !== undefined) wrong[at] = hit.mismatches
     }
-    hits.push({ contig: contig.name, starts, ends, strands })
+    hits.push({
+      contig: contig.name,
+      starts,
+      ends,
+      strands,
+      ...(wrong === undefined ? {} : { mismatches: wrong }),
+    })
     total += kept
   }
   return { hits, total, truncated }
@@ -182,11 +197,18 @@ export const runMotif: TrackTaskRunner = async (job) => {
     Math.max(1, Math.round(numParam(job.params, 'limit', MOTIF_SITE_LIMIT))),
   )
 
+  // Never as many as the motif is long, which would match every window; the
+  // matcher holds the same line, and this is the number the label quotes.
+  const mismatches = Math.max(
+    0,
+    Math.min(compiled.length - 1, Math.round(numParam(job.params, 'mismatches', 0))),
+  )
+
   job.progress(0, 1, `searching ${reader.contigs.length.toLocaleString()} sequences`)
-  const result = scanMotif(reader, compiled, { bothStrands, limit })
+  const result = scanMotif(reader, compiled, { bothStrands, limit, mismatches })
   job.progress(1, 1, 'done')
 
-  const label = motifLabel(pattern, bothStrands)
+  const label = motifLabel(pattern, bothStrands, mismatches)
   if (result.total === 0) {
     job.note(`No match for ${label} anywhere in this reference.`)
     return []
@@ -218,7 +240,7 @@ export const runMotif: TrackTaskRunner = async (job) => {
   // pattern wants and what **Recompute** depends on. Letters and digits only by
   // construction: `motifPattern` dropped the whitespace and upper-cased it, and
   // `compileMotif` accepted every character that is left.
-  const id = `motif-${pattern}${bothStrands ? '-both' : ''}`
+  const id = `motif-${pattern}${bothStrands ? '-both' : ''}${mismatches > 0 ? `-mm${mismatches}` : ''}`
   const outputs: TaskOutput[] = [sitesOutput(result, pattern, label, id)]
   const density = densityOutput(job, result, label, id)
   if (density !== null) outputs.push(density)
@@ -341,7 +363,7 @@ function densityOutput(
  * rather than the sites. Written down rather than guarded, because the guard
  * would need a fact this venue is not given: the startBins themselves.
  */
-function gridContigs(job: TrackJobContext): Contig[] {
+export function gridContigs(job: TrackJobContext): Contig[] {
   const lengths = job.inputs.contigLengths
   if (lengths === undefined) return []
   const out: Contig[] = []

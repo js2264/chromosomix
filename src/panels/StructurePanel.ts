@@ -2328,6 +2328,7 @@ export class StructurePanel implements DeckCell {
     if (client === undefined) return null
     if (this.samples === null) this.samples = new SampleCache(client, () => this.recolour())
     const axis = structureAxis(structure)
+    this.samples.revise([entry])
     return this.samples.samplesFor({
       entry: entry.id,
       scope: `structure:${this.props.id}`,

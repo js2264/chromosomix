@@ -288,12 +288,12 @@ const ROADMAP: StoreFront = {
  * (§24.3).
  *
  * The one shipped store the Stores workflow does not write. Its rows are the
- * lab's own analyses — `hic-suite.sh` over each map, gathered by
- * `scripts/DBZ_store.py` into a folder whose names are all relative — so the
- * store lives **beside its data** on the lab's bucket, next to the demo files
- * (`DEMO_BUCKET` in `ui/examples.ts`), and is read from there on the gesture
- * that opens it. There is nothing for a workflow to regenerate: it changes when
- * the lab reruns the suite and uploads the folder again.
+ * lab's own analyses — `scripts/dbz-store.sh` over each map, written into a
+ * folder that `scripts/DBZ_store.py index` lists in place, with every name
+ * relative — so the store lives **beside its data** on the lab's bucket, next
+ * to the demo files (`DEMO_BUCKET` in `ui/examples.ts`), and is read from there
+ * on the gesture that opens it. There is nothing for a workflow to regenerate:
+ * it changes when the lab reruns the suite and uploads the folder again.
  */
 export const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
 
@@ -331,7 +331,7 @@ export function builtinStores(): StoreFront[] {
         url: DBZ_STORE,
         builtin: true,
         publishedBy:
-          'scripts/DBZ_store.py builds it from the lab’s Hi-C results, and the folder it writes is uploaded to s3://rsglab-data/dbz/',
+          'scripts/dbz-store.sh builds it from the lab’s Hi-C maps, and the folder it writes is uploaded to s3://rsglab-data/dbz/',
       },
       group: 'species',
       // The sample a card is, and how many replicons its genome has.

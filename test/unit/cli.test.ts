@@ -109,6 +109,66 @@ describe('the surface', () => {
     expect(await main(['expected'])).toBe(2)
     expect(complained()).toMatch(/needs at least one file/)
   })
+
+  it('offers the junction test beside the tasks', async () => {
+    reset()
+    expect(await main([])).toBe(0)
+    expect(said()).toMatch(/metacooler-run circular/)
+  })
+})
+
+describe('the junction test', () => {
+  /** Rows of the table `circular` printed, without its `#` lines. */
+  const table = (): string[][] =>
+    said()
+      .split('\n')
+      .filter((line) => line !== '' && !line.startsWith('#'))
+      .map((line) => line.split('\t'))
+
+  it('reads the sequences of a map whose ends are a chromosome apart as lines', async () => {
+    reset()
+    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(said()).toMatch(/^# framing: 1000 bp$/m)
+    const rows = table()
+    expect(rows[0]).toEqual(['sequence', 'length', 'score', 'circular'])
+    expect(rows.slice(1).map((row) => [row[0], row[1], row[3]])).toEqual([
+      ['chrI', '120000', 'no'],
+      ['chrII', '60000', 'no'],
+    ])
+  })
+
+  it('reads a sequence whose ends are neighbours as a circle', async () => {
+    // Every cell present, and each a function of the separation round the ring.
+    const n = 60
+    const ring: HicRecord[] = []
+    for (let x = 0; x < n; x++) {
+      for (let y = x; y < n; y++) {
+        const d = Math.min(y - x, n - (y - x))
+        ring.push({ x, y, value: Math.round(1000 / (1 + d)) })
+      }
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'ring', length: n * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': ring },
+      blockBinCount: 32,
+    })
+    const file = join(directory, 'ring.hic')
+    await writeFile(file, fixture.bytes)
+    reset()
+    expect(await main(['circular', file, '--quiet'])).toBe(0)
+    const [, row] = table()
+    expect(row[0]).toBe('ring')
+    expect(Number(row[2])).toBeCloseTo(1, 1)
+    expect(row[3]).toBe('yes')
+  })
+
+  it('needs a file', async () => {
+    reset()
+    expect(await main(['circular'])).toBe(2)
+    expect(complained()).toMatch(/circular needs at least one file/)
+  })
 })
 
 describe('running a task', () => {
@@ -239,6 +299,24 @@ describe('running a task', () => {
     }
     // A file of zeroes would satisfy every check above and hold no model.
     expect(moved).toBeGreaterThan(0)
+  })
+
+  it('reads a model it wrote back in as a structure, for the tasks that read one', async () => {
+    reset()
+    // The chain a bacterial figure is: model the map, then read the model as
+    // tracks — radial position against the compartments. `--features` read the
+    // bed3d as a BED, keeping its intervals and dropping its coordinates, so
+    // Spatial tracks refused the row it had just been handed.
+    const where = join(directory, 'spatial')
+    expect(
+      await main(['reconstruct3d', sample, '--out', where, '--quiet', '--iterations', '5']),
+    ).toBe(0)
+    const model = join(where, 'sample.reconstruct3d.reconstructed-model.bed3d')
+    expect(
+      await main(['spatialtracks', sample, '--features', model, '--structure', model, '--out', where, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/not a structure/)
+    expect((await readdir(where)).some((name) => /structure-radial.*\.tsv$/.test(name))).toBe(true)
   })
 
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {
@@ -427,6 +505,66 @@ describe('the annotations venue', () => {
     expect(text).toMatch(/signal\.bw\t0\.\d+/)
   })
 
+  it('lays base composition out on bins of its own, with a map and without one', async () => {
+    // §18.8: the map's resolution unless asked, and 10 kb with no map. Each file
+    // is cut at the bin size the lanes were read at, so the second sequence
+    // starts at its own first base — not at the map's 1 kb offset for it.
+    reset()
+    const genome = join(directory, 'genome.fa')
+    await writeFile(genome, `>chrI\n${'GC'.repeat(60_000)}\n>chrII\n${'AT'.repeat(30_000)}\n`)
+    const rows = async (where: string, stem: string): Promise<string[]> =>
+      (await readFile(join(where, `${stem}.composition.composition-gc.bedGraph`), 'utf8'))
+        .split('\n')
+        .filter((line) => line !== '' && !line.startsWith('#'))
+
+    const mapless = join(directory, 'composition-mapless')
+    expect(await main(['composition', '--sequence', genome, '--out', mapless, '--quiet'])).toBe(0)
+    const alone = await rows(mapless, 'genome')
+    expect(alone).toHaveLength(12 + 6)
+    expect(alone[0]).toBe('chrI\t0\t10000\t1')
+    expect(alone[12]).toBe('chrII\t0\t10000\t0')
+
+    const onMap = join(directory, 'composition-map')
+    expect(await main(['composition', sample, '--sequence', genome, '--out', onMap, '--quiet'])).toBe(0)
+    expect(await rows(onMap, 'sample')).toHaveLength(120 + 60)
+
+    // Named after the reference, as the app names them after its entry.
+    const gc = await readFile(join(onMap, 'sample.composition.composition-gc.tsv'), 'utf8')
+    expect(gc).toMatch(/^# output: GC content · genome\.fa/m)
+
+    const asked = join(directory, 'composition-asked')
+    expect(
+      await main(['composition', sample, '--sequence', genome, '--resolution', '20000', '--out', asked, '--quiet']),
+    ).toBe(0)
+    const coarse = await rows(asked, 'sample')
+    expect(coarse).toHaveLength(6 + 3)
+    expect(coarse[6]).toBe('chrII\t0\t20000\t0')
+  })
+
+  it('compares a track between the groups of a set, with no map', async () => {
+    // §18.8's Signal by group, from a shell: the bigWig's bin index over chrI,
+    // split into A (its first 60 kb) and B (the rest of chrI) by a named BED.
+    reset()
+    const groups = join(directory, 'ab.bed')
+    await writeFile(groups, 'chrI\t0\t60000\tA\nchrI\t60000\t120000\tB\n')
+    const where = join(directory, 'groupsignal')
+    expect(
+      await main([
+        'groupsignal', '--tracks', bigwig, '--features', groups,
+        '--resolution', '10000', '--outside=false', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('signal.groupsignal.groupsignal-groups.tsv')
+    expect(files).toContain('signal.groupsignal.groupsignal-tests.tsv')
+    const summary = await readFile(join(where, 'signal.groupsignal.groupsignal-groups.tsv'), 'utf8')
+    // Six stretches of 10 kb each, their means 4.5 … 54.5 on A and 64.5 … 114.5 on B.
+    expect(summary).toMatch(/signal\.bw\tA\t6\t60000\t29\.5\b/)
+    expect(summary).toMatch(/signal\.bw\tB\t6\t60000\t89\.5\b/)
+    const tests = await readFile(join(where, 'signal.groupsignal.groupsignal-tests.tsv'), 'utf8')
+    expect(tests).toMatch(/Mann–Whitney U\tA\tB\t-60\t-1\b/)
+  })
+
   it('still needs a file for a task that reads the matrix', async () => {
     reset()
     expect(await main(['insulation', '--out', out])).toBe(2)
@@ -523,7 +661,10 @@ describe('inputs the session used to fill and the shell did not', () => {
     expect(
       await main([
         'compartments', sample, '--sequence', reference, '--phaseSequence', reference,
-        '--sequences', 'chrI', '--out', where, '--quiet',
+        // The correlation: each of this map's diagonals is one value, so its
+        // observed/expected is one throughout and cooltools' matrix of it zero —
+        // no component to phase (see "compartments by either method").
+        '--sequences', 'chrI', '--method', 'correlation', '--out', where, '--quiet',
       ]),
     ).toBe(0)
     expect(complained()).not.toMatch(/could not be read/)
@@ -554,6 +695,190 @@ describe('inputs the session used to fill and the shell did not', () => {
     expect(complained()).not.toMatch(/not an address this can fetch/)
     const files = await readdir(where)
     expect(files).toContain('sample.expected.ps-orientation.tsv')
+  })
+})
+
+/**
+ * Balanced wherever the file carries weights, as the app reads it (§18.9). The
+ * flag that used to ask for it was forgotten often enough — the command then
+ * ran on raw counts under a framing line that said *balanced* — that the
+ * default is now the answer and `--no-balance` the exception. `--balance` itself
+ * is refused by name rather than read as a no-op, except as coverage's own
+ * parameter, which is off because raw coverage is the point of it.
+ */
+describe('balancing by default', () => {
+  let weighted = ''
+  beforeAll(async () => {
+    const bins = 40
+    const list: HicRecord[] = []
+    for (let x = 0; x < bins; x++) {
+      for (let y = x; y < bins; y++) list.push({ x, y, value: Math.max(1, Math.round(400 / (1 + y - x))) })
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'chrI', length: bins * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': list },
+      blockBinCount: 16,
+      norms: { 'SCALE/1/1000': new Float64Array(bins).fill(2) },
+    })
+    weighted = join(directory, 'weighted.hic')
+    await writeFile(weighted, fixture.bytes)
+  })
+
+  const header = async (where: string): Promise<string> => {
+    const tsv = (await readdir(where)).find((name) => name.endsWith('.tsv'))
+    expect(tsv).toBeDefined()
+    return readFile(join(where, tsv as string), 'utf8')
+  }
+
+  it('reads a map with weights balanced, and says so twice', async () => {
+    reset()
+    const where = join(directory, 'balanced-default')
+    expect(await main(['hicscore', weighted, '--out', where, '--quiet'])).toBe(0)
+    const text = await header(where)
+    expect(text).toMatch(/^# framing: .*, balanced, count$/m)
+    expect(text).toMatch(/^# param balance: true$/m)
+  })
+
+  it('reads the raw counts under --no-balance, framing and parameter alike', async () => {
+    reset()
+    const where = join(directory, 'balanced-off')
+    expect(await main(['hicscore', weighted, '--no-balance', '--out', where, '--quiet'])).toBe(0)
+    const text = await header(where)
+    expect(text).not.toMatch(/^# framing: .*balanced/m)
+    expect(text).toMatch(/^# param balance: false$/m)
+  })
+
+  it('refuses --balance, and says what to write instead', async () => {
+    reset()
+    expect(await main(['hicscore', weighted, '--balance', '--out', out, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--balance is the default now/)
+    expect(complained()).toMatch(/--no-balance/)
+    reset()
+    expect(await main(['circular', weighted, '--balance'])).toBe(2)
+  })
+
+  it('keeps coverage’s own --balance, which is off by default', async () => {
+    reset()
+    const where = join(directory, 'coverage-balanced')
+    expect(await main(['coverage', weighted, '--balance', '--out', where, '--quiet'])).toBe(0)
+    expect(await header(where)).toMatch(/^# param balance: true$/m)
+    reset()
+    const raw = join(directory, 'coverage-raw')
+    expect(await main(['coverage', weighted, '--out', raw, '--quiet'])).toBe(0)
+    expect(await header(raw)).toMatch(/^# param balance: false$/m)
+  })
+
+  it('lists the flag that turns it off, not the one that is gone', async () => {
+    reset()
+    expect(await main(['tasks'])).toBe(0)
+    // A task whose balancing the file decides lists the way out of it…
+    const hicscore = said().split('\n\n').find((block) => block.startsWith('hicscore\n')) ?? ''
+    expect(hicscore).toMatch(/--no-balance {2}read the raw counts/)
+    expect(hicscore).not.toMatch(/--balance /)
+    // …and coverage, whose own toggle it is, lists that.
+    const coverage = said().split('\n\n').find((block) => block.startsWith('coverage\n')) ?? ''
+    expect(coverage).toMatch(/--balance \(default false\)/)
+  })
+})
+
+/**
+ * Two ways to the eigenvectors, and one way only to choose among them (§18.8):
+ * by eigenvalue. The phasing signal signs each component and is no longer asked
+ * which of them to draw — so `--order`, which asked it, is a parameter the task
+ * does not have, and a script still passing it is told so rather than ignored.
+ */
+describe('compartments by either method', () => {
+  // A map with compartments to find — blocks of five bins alternating, each
+  // twice as likely to touch its own kind — and a reference that is GC-rich in
+  // one kind and AT-rich in the other, so the phasing has something to sign by.
+  // The shared `sample` will not do: each of its diagonals is one value, so its
+  // observed/expected is exactly one wherever it is defined, and cooltools'
+  // matrix of it is zero throughout.
+  const kind = (bin: number): number => Math.floor(bin / 5) % 2
+  let checkered = ''
+  let reference = ''
+  beforeAll(async () => {
+    const bins = 60
+    const list: HicRecord[] = []
+    for (let x = 0; x < bins; x++) {
+      for (let y = x; y < bins; y++) {
+        list.push({ x, y, value: Math.round((1000 * (kind(x) === kind(y) ? 2 : 1)) / (1 + y - x)) })
+      }
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'chrI', length: bins * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': list },
+      blockBinCount: 32,
+    })
+    checkered = join(directory, 'checkered.hic')
+    await writeFile(checkered, fixture.bytes)
+    reference = join(directory, 'checkered.fa')
+    let bases = ''
+    for (let bin = 0; bin < bins; bin++) bases += (kind(bin) === 0 ? 'GC' : 'AT').repeat(500)
+    await writeFile(reference, `>chrI\n${bases}\n`)
+  })
+
+  const components = async (where: string): Promise<{ text: string; rows: string[][] }> => {
+    const text = await readFile(join(where, 'checkered.compartments.compartment-components.tsv'), 'utf8')
+    const body = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+    expect(body[0]).toBe('sequence\tcomponent\teigenvalue\texplained\tr')
+    return { text, rows: body.slice(1).map((line) => line.split('\t')) }
+  }
+
+  it('decomposes observed/expected itself by default, as cooltools does, and says so', async () => {
+    reset()
+    const where = join(directory, 'by-cooltools')
+    expect(
+      await main([
+        'compartments', checkered, '--components', '3',
+        '--sequence', reference, '--phaseSequence', reference, '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/failed:/)
+    const { text, rows } = await components(where)
+    expect(text).toMatch(/^# param method: cooltools$/m)
+    // The default goes unnamed in the label, as the ordinary expectation does.
+    expect(text).toMatch(/^# output: Components · .*· cis$/m)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, share, r with phasing$/m)
+    expect(rows.map((row) => row[1])).toEqual(['E1', 'E2', 'E3'])
+    // By eigenvalue, largest first, whatever the sign.
+    const sizes = rows.map((row) => Math.abs(Number(row[2])))
+    for (let i = 1; i < sizes.length; i++) expect(sizes[i]).toBeLessThanOrEqual(sizes[i - 1])
+    // The first is the compartments, signed so that it rises with GC content.
+    expect(Number(rows[0][4])).toBeGreaterThan(0.9)
+  })
+
+  it('correlates under --method correlation, as Lieberman-Aiden et al. did, and signs the same way', async () => {
+    reset()
+    const where = join(directory, 'by-correlation')
+    expect(
+      await main([
+        'compartments', checkered, '--method', 'correlation', '--sequence', reference,
+        '--phaseSequence', reference, '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const { text, rows } = await components(where)
+    expect(text).toMatch(/^# param method: correlation$/m)
+    expect(text).toMatch(/^# output: Components · .*· correlation$/m)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, variance, r with phasing$/m)
+    expect(Number(rows[0][4])).toBeGreaterThan(0.9)
+  })
+
+  it('refuses the ordering it no longer offers, and a method it does not have', async () => {
+    reset()
+    expect(
+      await main(['compartments', checkered, '--order', 'phasing', '--out', out, '--quiet']),
+    ).toBe(2)
+    expect(complained()).toMatch(/has no parameter --order/)
+    reset()
+    expect(
+      await main(['compartments', checkered, '--method', 'cooltool', '--out', out, '--quiet']),
+    ).toBe(1)
+    expect(complained()).toMatch(/There is no method “cooltool”/)
   })
 })
 
@@ -643,6 +968,30 @@ describe('the framing flags', () => {
     reset()
     expect(await main(['insulation', sample, '--cell', 'c1', '--out', out, '--quiet'])).toBe(1)
     expect(complained()).toMatch(/has no cells to choose from/)
+  })
+
+  it('records an origin, 1-based as it was typed, digits grouped or not', async () => {
+    reset()
+    const where = join(directory, 'origin')
+    // Grouped as the framing line prints it, beside a second origin.
+    expect(
+      await main(['interarm', sample, '--origin', 'chrII:1,001,chrI:5', '--out', where, '--quiet']),
+    ).toBe(0)
+    const table = (await readdir(where)).find((name) => /interarm-table\.tsv$/.test(name))
+    expect(table).toBeDefined()
+    const text = await readFile(join(where, table as string), 'utf8')
+    expect(text).toMatch(/^# framing: .*origin chrII:1,001, chrI:5/m)
+  })
+
+  it('refuses an origin on a sequence the file has not got, or past its end', async () => {
+    reset()
+    expect(await main(['interarm', sample, '--origin', 'chrZ:10', '--out', out, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/--origin chrZ: .* has no sequence of that name/)
+    reset()
+    expect(
+      await main(['interarm', sample, '--origin', 'chrII:900000000', '--out', out, '--quiet']),
+    ).toBe(1)
+    expect(complained()).toMatch(/is past its end/)
   })
 })
 

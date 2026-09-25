@@ -112,6 +112,26 @@ export interface ExpectedPlan {
    * Trans cells have no separation and are never affected.
    */
   ignoreDiags: number
+  /**
+   * Bins in each sequence that is **circular**, `0` for one that is not; one
+   * entry per group, absent for a square with no circular sequence in it.
+   *
+   * On a circle the separation between two bins is the shorter of the two ways
+   * round (§8.15), and the decay curve in {@link cis} was accumulated that way —
+   * so a cis cell must be looked up at the same separation, or its numerator
+   * would be a circle's and its denominator a line's. Each group's rows are the
+   * whole sequence in order, which is what makes `|col − row|` its separation
+   * one way and the lap minus that the other.
+   */
+  laps?: Int32Array
+}
+
+/**
+ * The separation a cis cell of the square is looked up at: the straight one, or
+ * the short way round where its sequence is circular.
+ */
+export function cisSeparation(offset: number, lap: number): number {
+  return lap > 0 ? Math.min(offset, lap - offset) : offset
 }
 
 /**
@@ -163,7 +183,9 @@ export function observedOverExpected(
         out[r * m + c] = Number.NaN
         continue
       }
-      const offset = Math.abs(col - row)
+      const offset = same
+        ? cisSeparation(Math.abs(col - row), plan.laps?.[rowGroup] ?? 0)
+        : Math.abs(col - row)
       // …and the near-diagonal goes the same way, for the same reason and on the
       // same rule cooltools uses. Only in cis: a trans cell has no separation
       // for a diagonal to be measured from.
@@ -235,6 +257,114 @@ export async function correlationMatrix(
     }
   }
   return out
+}
+
+/**
+ * cooltools' ceiling on observed/expected: its 99.9th percentile, `eigs_cis`'s
+ * default `clip_percentile`.
+ */
+export const COOLTOOLS_CLIP_PERCENTILE = 99.9
+
+/**
+ * The matrix cooltools decomposes (`cooltools.api.eigdecomp.cis_eig`), made from
+ * the same observed/expected the correlation is made from.
+ *
+ * The default road to the eigenvectors (§18.8): observed/expected decomposed
+ * **as it is**, where Lieberman-Aiden et al. (2009) decomposed the Pearson
+ * correlation of its rows. The correlation did three things of its own, and
+ * each is done here the way cooltools does it:
+ *
+ * - **clipped** — at 0 and at its 99.9th percentile, NumPy's linear one — so a
+ *   handful of very bright cells cannot carry the leading component;
+ * - **one subtracted**, so each cell is its departure from expected. The
+ *   correlation centred every row and needed nothing of the kind; without it the
+ *   leading eigenvector of an all-positive matrix is its rows' overall level, not
+ *   the checkerboard;
+ * - **every gap zero** — a cell with no value, and the near diagonal
+ *   `ignoreDiags` removed — which after the subtraction reads *as expected*: a
+ *   decomposition, unlike a correlation, cannot step over one.
+ *
+ * Over the usable bins alone, like the correlation: a bin the balancer dropped is
+ * still left out rather than zeroed — cooltools zeroes it and then keeps the zero
+ * row out of its solver, which comes to the same thing. The percentile is of the
+ * cells that have a value; cooltools' also counts the dropped rows' zeros and the
+ * ignored diagonals' ones, which moves the 99.9th by a hair.
+ *
+ * `oe` is `m × m` row-major and is left as it was — the saddle reads it later.
+ */
+export function cooltoolsMatrix(
+  oe: Float64Array,
+  m: number,
+  percentile = COOLTOOLS_CLIP_PERCENTILE,
+): Float64Array {
+  const ceiling = upperPercentile(oe, percentile)
+  const out = new Float64Array(m * m)
+  for (let i = 0; i < m * m; i++) {
+    const value = oe[i]
+    out[i] = Number.isFinite(value) ? Math.min(Math.max(value, 0), ceiling) - 1 : 0
+  }
+  return out
+}
+
+/**
+ * NumPy's `percentile` of the finite values — linear between the two nearest
+ * ranks — from the top.
+ *
+ * Only the values at and above the rank are held, in a heap, rather than a sorted
+ * copy of the square: at the 8,192-bin gate the square is half a gigabyte, and the
+ * 99.9th percentile needs a thousandth of it.
+ */
+function upperPercentile(values: Float64Array, percentile: number): number {
+  let n = 0
+  for (let i = 0; i < values.length; i++) if (Number.isFinite(values[i])) n++
+  if (n === 0) return Number.NaN
+  const at = (Math.min(100, Math.max(0, percentile)) / 100) * (n - 1)
+  const rank = Math.floor(at)
+  // A min-heap of the `n − rank` largest values: its root is the value at `rank`.
+  const size = n - rank
+  const heap = new Float64Array(size)
+  let held = 0
+  const down = (from: number, count: number): void => {
+    let i = from
+    for (;;) {
+      const left = 2 * i + 1
+      const right = left + 1
+      let least = i
+      if (left < count && heap[left] < heap[least]) least = left
+      if (right < count && heap[right] < heap[least]) least = right
+      if (least === i) return
+      const swap = heap[i]
+      heap[i] = heap[least]
+      heap[least] = swap
+      i = least
+    }
+  }
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i]
+    if (!Number.isFinite(value)) continue
+    if (held < size) {
+      let slot = held++
+      heap[slot] = value
+      while (slot > 0) {
+        const parent = (slot - 1) >> 1
+        if (heap[parent] <= heap[slot]) break
+        const swap = heap[parent]
+        heap[parent] = heap[slot]
+        heap[slot] = swap
+        slot = parent
+      }
+    } else if (value > heap[0]) {
+      heap[0] = value
+      down(0, held)
+    }
+  }
+  const low = heap[0]
+  const fraction = at - rank
+  if (fraction === 0 || held < 2) return low
+  // The next rank up is the smallest of what is left once the root is gone.
+  heap[0] = heap[held - 1]
+  down(0, held - 1)
+  return low + (heap[0] - low) * fraction
 }
 
 /** What {@link correlationField} produces: a square the map can draw. */

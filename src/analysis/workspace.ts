@@ -56,7 +56,9 @@ import {
   type SyntheticFormat,
 } from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
+import { gridAt } from './context'
 import { TASKS, tasksFor } from './registry'
+import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
 import { rememberParams } from './memory'
 import type {
@@ -130,6 +132,12 @@ export interface AnalysisWorkspaceHost {
    * shell turns it into columns.
    */
   cellMeasurements?(uri: string, table: TableOutput): void
+  /**
+   * The origins an *Origin and terminus* run placed, by sequence, in base
+   * pairs — for the session to take into its declarations (§8.15), which is
+   * what every task reading a chromosome's arms reads its origin from.
+   */
+  originsFound?(uri: string, origins: Readonly<Record<string, number>>): void
 
   /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
   allTargets?(): readonly RunTarget[]
@@ -313,11 +321,12 @@ export class AnalysisWorkspace {
       // The grid is passed rather than left to be looked up, because the two
       // callers of `writeProfile` do not agree about which one is right: the
       // drawer only ever holds what this workspace has just computed, so the
-      // assembly under it now *is* the grid those values are on, while a row on
-      // the card may have been carried from another resolution and must be
-      // written over the grid it was measured on.
+      // assembly under it now *is* the one those values are on — cut at the
+      // output's own bin size ({@link gridFor}) — while a row on the card may
+      // have been carried from another resolution and must be written over the
+      // grid it was measured on.
       writeProfile: (output, provenance, format) =>
-        this.writeProfile(output, provenance, format, this.grid()),
+        this.writeProfile(output, provenance, format, this.gridFor(output.binsize)),
     })
     this.drawerEl = this.drawer.el
 
@@ -453,6 +462,15 @@ export class AnalysisWorkspace {
       }
     }
 
+    // Also before it, for the same reason: the call is an ordinary table below,
+    // and its origins are a declaration the session keeps as well.
+    if (task.id === 'oriter') {
+      const found = declaredOrigins(result.outputs)
+      if (Object.keys(found).length > 0) {
+        this.host.originsFound?.(result.provenance.framing.uri, found)
+      }
+    }
+
     const store = this.host.store()
     const profiles = result.outputs.filter(
       (output): output is ProfileOutput => output.kind === 'profile',
@@ -476,7 +494,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.grid(),
+          grid: this.gridFor(output.binsize),
         })
       }
       this.synthetic?.refresh()
@@ -506,7 +524,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
-          grid: this.grid(),
+          grid: this.gridFor(output.binsize),
         })
       }
       this.drawer.refresh()
@@ -528,6 +546,9 @@ export class AnalysisWorkspace {
         framing: result.provenance.framing.label,
       }
       const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
+      // Before `begin`, which replaces the row: a run under an id already here
+      // is new numbers for an old lane, and the caches have to be told.
+      const previous = store.byId(entry.id)?.revision ?? 0
       // How the set reads, for a set that has an opinion (§18.11) — and only for
       // a group nobody has decided about, so a reader who stacked it and ran the
       // task again gets it back stacked.
@@ -549,7 +570,7 @@ export class AnalysisWorkspace {
         style: entry.style,
       })
       this.placeOnTarget(store, entry.id, entry.placement, map)
-      const grid = this.grid()
+      const grid = this.gridFor(output.binsize)
       this.profiles.set(entry.id, {
         output,
         provenance: result.provenance,
@@ -560,6 +581,7 @@ export class AnalysisWorkspace {
       store.update(entry.id, {
         status: 'ready',
         ...(entry.fileExtent === undefined ? {} : { fileExtent: entry.fileExtent }),
+        revision: previous + 1,
       })
     }
     this.synthetic?.refresh()
@@ -773,6 +795,21 @@ export class AnalysisWorkspace {
       bins: contig.bins,
       length: contig.length,
     }))
+  }
+
+  /**
+   * The assembly a vector on bins of `binsize` is laid out over.
+   *
+   * The session's own ({@link grid}) at the session's resolution, which is where
+   * every task but one puts its values. Base composition picks its bin size
+   * (§18.8) — 10 kb in a 1D browser, any size beside a map — and its runner
+   * lays the lanes out over the same sequences in the same order, each cut from
+   * its first base into bins of that size ({@link gridAt}). Registered over the
+   * session's grid instead, every sequence after the first would take its
+   * values from the one before it.
+   */
+  private gridFor(binsize: number): BinVectorContig[] {
+    return this.host.context()?.binsize === binsize ? this.grid() : gridAt(this.host.contigs(), binsize)
   }
 
   /**
