@@ -1,6 +1,13 @@
 {
-  "latest": "19e34f8",
+  "latest": "6ac0b40",
   "versions": [
+    {
+      "commit": "6ac0b40",
+      "version": "0.13.0",
+      "date": "2026-09-25T09:14:39+02:00",
+      "subject": "Add bacterial chromosome analysis: origins, arms, and group signal (#72)",
+      "tag": ""
+    },
     {
       "commit": "19e34f8",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "c29abdb",
-      "version": "0.12.0",
-      "date": "2026-09-15T19:31:57+02:00",
-      "subject": "Give the four stores their marks, trim the picker and the Connect dialog, and stop a first visit eating a shared link (#57)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -205,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 72,
-      "commit": "a972850",
-      "title": "Add bacterial chromosome analysis: origins, arms, and group signal",
-      "branch": "js/elegant-carson-i3bt9e",
-      "date": "2026-09-25T06:58:58Z"
-    }
-  ]
+  "pulls": []
 }
