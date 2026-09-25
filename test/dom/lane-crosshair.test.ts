@@ -4,16 +4,18 @@
  *
  * The toggle is offered as *the* crosshair, beside the map and beside the
  * tracks, and it used to be the map's alone: a lane's own hairline under the
- * pointer ignored it, and a lane showed no pointer whatever it said. So a reader
- * who turned the crosshair off watched the line leave the map and stay on every
- * track. The stacks follow the preference now — the line, and the pointer that
- * stands in for it when it is off.
+ * pointer ignored it. So a reader who turned the crosshair off watched the line
+ * leave the map and stay on every track. The stacks follow the preference now
+ * (`ui/AnnotationLanes.ts` draws the line), and the pointer over them is the
+ * arrowhead either way.
  *
  * And the pointers themselves, which are stylesheet rules and are read here as
  * text, as `toggle-look.test.ts` reads the lit look: over the map a ring the
  * arrowhead's size, centred on the hand, whose ticks end exactly where the guide
  * lines stop (`LOCATE_REACH`, and `crosshair-gap.test.ts` for the lines); over a
- * lane or the 1D browser nothing, since the hairline there is the pointer.
+ * lane or the 1D browser the arrowhead, hairline or not — a stack with the line
+ * and no pointer could not say which line was the hand's, since another
+ * surface's pointer is echoed there as the same line.
  */
 
 import { readFileSync } from 'node:fs'
@@ -47,18 +49,16 @@ function lanes(): HTMLCanvasElement[] {
 }
 
 describe('a lane stack beside the map', () => {
-  it('shows no pointer while the crosshair is on, since its hairline is the pointer', () => {
+  it('keeps the arrowhead with the crosshair on, and off, and on again', () => {
     const stacks = lanes()
     expect(stacks.length).toBeGreaterThan(0)
-    for (const canvas of stacks) expect(canvas.classList.contains('is-guided')).toBe(true)
-  })
-
-  it('takes the arrowhead back when the crosshair is turned off, and gives it up again', () => {
-    const stacks = lanes()
-    setPlotOptions({ crosshair: false })
-    for (const canvas of stacks) expect(canvas.classList.contains('is-guided')).toBe(false)
-    setPlotOptions({ crosshair: true })
-    for (const canvas of stacks) expect(canvas.classList.contains('is-guided')).toBe(true)
+    // Nothing marks a stack as guided: the one rule that swaps the pointer for
+    // a guide's is the map's (below), and a stack wearing the class would be a
+    // stack a later rule could take the pointer from again.
+    for (const crosshair of [true, false, true]) {
+      setPlotOptions({ crosshair })
+      for (const canvas of stacks) expect(canvas.classList.contains('is-guided')).toBe(false)
+    }
   })
 })
 
@@ -100,8 +100,15 @@ describe('the pointers', () => {
     expect(LOCATE_REACH).toBeCloseTo(((grid / 2 - start) * size) / grid, 9)
   })
 
-  it('is nothing over a lane or the 1D browser while they are guided', () => {
-    expect(rule('.lane-canvas.is-guided, .browser-canvas.is-guided')).toMatch(/cursor:\s*none/)
+  it('is the arrowhead over a lane and the 1D browser, and nothing takes it away', () => {
+    // The map's resting pointer is theirs too, tip first on the base pair.
+    const arrow = decodeURIComponent(rule('.heatmap-canvas, .lane-canvas, .browser-canvas'))
+    expect(arrow).toMatch(/\)\s*2 2,/)
+    // …and no rule anywhere hides it over either of them.
+    for (const match of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/\.(lane|browser)-canvas/.test(match[1])) continue
+      expect(match[2], match[1].trim()).not.toMatch(/cursor:\s*none/)
+    }
   })
 })
 

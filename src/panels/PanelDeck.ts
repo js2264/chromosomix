@@ -115,6 +115,8 @@ import {
   type GrowDirection,
   type PanelRef,
   mapStarTitle,
+  readDeckLead,
+  withLead,
 } from './deck'
 import { ViewportLock, spansAgree, type LockUnit } from './lock'
 import type { PickHandlers } from '../ui/mapPick'
@@ -127,6 +129,20 @@ import { placementOn } from '../annotations/types'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
+
+/**
+ * The lead's cell, in a list of the deck's cells in reading order — where the
+ * companions are {@link Slot}s and the session's own view is not one (§16.9).
+ */
+const LEAD_CELL = 'lead-cell'
+
+/** Where the lead's place in the grid is remembered (`panels/deck.ts`'s `DeckLead`). */
+const LEAD_SCOPE = 'deck:lead'
+
+/** The element a companion's cell is, whichever of the three kinds it holds. */
+function elOf(slot: Slot): HTMLElement | undefined {
+  return slot.panel?.el ?? slot.cell?.el ?? slot.vacancy?.el
+}
 
 /**
  * What the deck's shared window counts in, for one panel (`panels/lock.ts`).
@@ -279,6 +295,12 @@ export interface PanelDeckProps {
    * it again. Absent, and the map simply leaves.
    */
   onMapHidden?(picked: PickedFile): void
+  /**
+   * The session's own cell was closed from its heading, or put back (§16.9) —
+   * the Contact maps card's eye on the first map says which, and the deck's
+   * memory has just changed under the durable record.
+   */
+  onLeadShownChange?(): void
   /**
    * The **structure** star moved: the *3D structure* card in the Aesthetics
    * column is now a different cell's, and only the session can put it there.
@@ -439,6 +461,14 @@ export interface LeadAxis {
   windows(): { rows: LocusWindow[]; cols: LocusWindow[] }
   /** Put a stretch on the axis; `false` where it could not. */
   show(range: { contig: string; start: number; end: number }): boolean
+  /**
+   * The tracks at an export dpi, for the deck's figure — its cell of it,
+   * which was left empty before the browser could be asked. `null` where the
+   * page cannot draw one.
+   */
+  exportCanvas?(dpi: number): HTMLCanvasElement | null
+  /** Hand the browser's Export card and keys to the deck's figure, or back (`null`). */
+  setDeckExport?(hook: DeckExport | null): void
 }
 
 /**
@@ -543,6 +573,27 @@ export class PanelDeck {
     size: 14,
   })
   /**
+   * The lead's grip — every cell has one (§16.9). The first map used to have
+   * none: it is the session's own view in the grid, and "which file is this
+   * session of" is not a thing a drag should change. Nor does this change it.
+   * What moves is where the picture stands; the session is of the same file
+   * afterwards, under the same breadcrumb, with the same tables.
+   */
+  private readonly leadGrip = el('span', {
+    class: 'deck-grip',
+    attrs: { draggable: 'true' },
+  })
+  /**
+   * The lead's ×: the cell leaves the screen and its view stays alive behind
+   * the grid, still what the others follow (§16.9). Only while another cell
+   * is beside it — a deck with nothing on screen is not a deck — and the eye
+   * on its row of the Contact maps card, or the deck's bar, puts it back.
+   */
+  private readonly leadClose = iconButton('x', '', () => this.hideLead(), {
+    class: 'btn-close',
+    size: 14,
+  })
+  /**
    * Where the lead view's own heading goes while a deck is on.
    *
    * The heading, the locus box, the back link and the block summary belong to
@@ -610,6 +661,18 @@ export class PanelDeck {
    * said, in the vocabulary the grid is actually in.
    */
   private columns: number | null = null
+  /**
+   * Where the lead's cell stands in reading order, among every cell the deck
+   * holds, and whether it is on screen (`panels/deck.ts`'s `DeckLead`).
+   *
+   * A place rather than a flag on a slot, because the lead is not a slot: it
+   * is the session's view, re-parented into the grid, and every piece of the
+   * deck that speaks to companions — the hash, the lock's members, a cell's
+   * seat — goes on speaking to them alone. Hidden, it keeps its place, so the
+   * eye that brings it back brings it back where it stood.
+   */
+  private leadAt = 0
+  private leadHidden = false
   /**
    * The map an analysis runs against — the star (§18.2).
    *
@@ -695,6 +758,16 @@ export class PanelDeck {
 
   constructor(private readonly props: PanelDeckProps) {
     this.columns = this.recallColumns()
+    // Where the lead was left, and whether it was on screen. Reconciled against
+    // the deck when its cells arrive: a place past their end is the end
+    // ({@link order}), and a hidden lead in a deck that comes back with no other
+    // cell is shown ({@link paintGrid}).
+    const place = readDeckLead(recall<unknown>(props.memoryKey(), LEAD_SCOPE))
+    if (place !== null) {
+      this.leadAt = place.at
+      this.leadHidden = place.hidden
+    }
+    this.wireLeadGrip()
     // A pointer on a structure cell is a place on every map (§25.4): the cell
     // publishes it and the deck, which is what knows the maps, draws the mark
     // — the lane-echo shape, on the axis that means position in every
@@ -1224,17 +1297,21 @@ export class PanelDeck {
   }
 
   /**
-   * Every map a track can be drawn on, in the order they are on screen.
+   * Every map a track can be drawn on, in the order they stand in the grid.
    *
-   * The lead first, because it is cell 0 and always is. An empty cell is not
-   * offered: a placement on a map that holds no file would be a lane waiting
-   * for a picture, and the reader can place it the moment one arrives.
+   * The lead where it stands (§16.9) — and while it is hidden too, since it
+   * is still the session's map and its eye brings it back with its lanes. An
+   * empty cell is not offered: a placement on a map that holds no file would be
+   * a lane waiting for a picture, and the reader can place it the moment one
+   * arrives.
    */
   get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> {
-    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = [
-      { id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' },
-    ]
-    for (const slot of this.slots) {
+    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = []
+    for (const slot of this.order()) {
+      if (slot === LEAD_CELL) {
+        out.push({ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' })
+        continue
+      }
       if (slot.panel === null) continue
       // The panel's **own** URI, which is neither the ref's nor the slot's id.
       // Not the id: it used to fall back to one for anything that was not a
@@ -1313,6 +1390,7 @@ export class PanelDeck {
     // A map on its own again, whose card has nothing to choose between.
     this.lead?.setCardFor(null)
     this.lead = null
+    this.leadAxis?.setDeckExport?.(null)
     this.leadAxis = null
   }
 
@@ -2062,24 +2140,29 @@ export class PanelDeck {
   }
 
   /**
-   * The grid's half of the grip gesture: every cell but the lead's is a target.
+   * The grid's half of the grip gesture: every cell on screen is a target, the
+   * lead's included (§16.9).
    *
    * Delegated to the grid rather than wired per cell, because the cells are
    * rebuilt on every change to the deck and a listener per cell is a listener
-   * per rebuild. The **lead is excluded** — it is the session's own view
-   * re-parented into cell 0, and which file a session is of is not a thing that
-   * should change by dragging (§16.9).
+   * per rebuild. The lead used to be excluded — the session's own view, in cell
+   * 0 for good — and it is a cell like the others now: what moves is where the
+   * picture stands, and the session is still of the file it was of. Only a
+   * hidden lead is no target, being nowhere on screen to aim at.
    */
   private watchArranging(): void {
     const cellAt = (target: EventTarget | null): HTMLElement | null => {
       if (!(target instanceof Node)) return null
       const node = target instanceof Element ? target : target.parentElement
       const cell = node?.closest('.deck-panel') ?? null
-      if (cell === null || cell.classList.contains('is-lead')) return null
+      if (cell === null || cell.classList.contains('is-parked')) return null
       return this.grid.contains(cell) ? (cell as HTMLElement) : null
     }
-    const indexOf = (cell: HTMLElement): number =>
-      Array.prototype.indexOf.call(this.grid.children, cell) - 1
+    // What stands in a cell of the grid, by its element: the lead's own, or a
+    // slot's. By identity rather than by position, since the lead can stand
+    // anywhere and a hidden one is in the grid's children without a place.
+    const occupant = (cell: HTMLElement): Slot | typeof LEAD_CELL | undefined =>
+      cell === this.leadCell ? LEAD_CELL : this.slots.find((slot) => elOf(slot) === cell)
     this.grid.addEventListener('dragover', (event) => {
       // Only a map. A *file* dropped on a cell is a different gesture with a
       // different answer, and it is the cell's own (`MapPanel.VacantPanel`).
@@ -2100,8 +2183,9 @@ export class PanelDeck {
         this.setArranging(false)
         if (row === null || cell === null) return
         event.preventDefault()
-        const target = this.slots[indexOf(cell)]
-        if (target !== undefined) this.putMapRow(target, row)
+        const target = occupant(cell)
+        if (target === LEAD_CELL) this.putMapRowOnLead(row)
+        else if (target !== undefined) this.putMapRow(target, row)
         return
       }
       if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true) return
@@ -2109,10 +2193,11 @@ export class PanelDeck {
       this.setArranging(false)
       if (cell === null) return
       event.preventDefault()
-      const from = this.slots.findIndex(
-        (slot) => (slot.panel ?? slot.cell)?.el.classList.contains('is-dragging') === true,
-      )
-      if (from >= 0) this.swap(from, indexOf(cell))
+      const from = this.leadCell.classList.contains('is-dragging')
+        ? LEAD_CELL
+        : this.slots.find((slot) => (slot.panel ?? slot.cell)?.el.classList.contains('is-dragging') === true)
+      const to = occupant(cell)
+      if (from !== undefined && to !== undefined) this.exchange(from, to)
     })
     this.grid.addEventListener('dragleave', (event) => {
       if (event.relatedTarget instanceof Node && this.grid.contains(event.relatedTarget)) return
@@ -2135,23 +2220,27 @@ export class PanelDeck {
   /**
    * Exchange two cells — the drop half of the grip gesture.
    *
-   * A swap rather than an insert; see {@link swapItems}. The lead is not in
-   * `slots` and cannot be either end of one, which is §16.9's rule showing
-   * through: the first map is the session's own view re-parented into cell 0,
-   * and "which file is this session of" is not a thing that should change by
-   * dragging.
+   * A swap rather than an insert; see {@link swapItems}. Either end may be the
+   * lead's cell (§16.9): it is not in `slots`, so the exchange is made on the
+   * grid's own order, and what comes back is the companions in their new order
+   * and the lead's new place. The hash is rewritten only when the companions'
+   * order moved — the lead's place is this session's memory, not the link's.
    */
-  private swap(from: number, to: number): void {
-    // Out of range as well as equal: `swapItems` answers both with a copy, so a
-    // drop that landed nowhere used to repaint the grid and rewrite the hash
-    // with the list it already had. The identity check that stood here instead
-    // could never fire — `swapItems` returns a new array unconditionally.
-    if (from === to || from < 0 || to < 0 || from >= this.slots.length || to >= this.slots.length) {
-      return
-    }
-    this.slots = swapItems(this.slots, from, to)
+  private exchange(a: Slot | typeof LEAD_CELL, b: Slot | typeof LEAD_CELL): void {
+    const order = this.order()
+    const from = order.indexOf(a)
+    const to = order.indexOf(b)
+    // A drop on itself, or on nothing: `swapItems` answers both with a copy, so
+    // this would repaint the grid and rewrite the hash with what it had.
+    if (from === to || from < 0 || to < 0) return
+    const next = swapItems(order, from, to)
+    const slots = next.filter((cell): cell is Slot => cell !== LEAD_CELL)
+    const reordered = slots.some((slot, index) => slot !== this.slots[index])
+    this.slots = slots
+    this.placeLead(next.indexOf(LEAD_CELL), this.leadHidden)
     this.paintGrid()
-    this.publish()
+    if (reordered) this.publish()
+    else this.paintBar()
   }
 
   /**
@@ -2307,8 +2396,12 @@ export class PanelDeck {
     // tracks under the same id ({@link vacateMap}), and a star on it would be a
     // Map card about a picture that has gone.
     if (this.starred !== null && this.slots.some((slot) => slot.id === this.starred && slot.panel !== null)) return
-    this.starred = LEAD_MAP
-    remember(this.props.memoryKey(), 'deck:starred', LEAD_MAP)
+    // Back to the lead — or, while the lead is hidden, to the first map still on
+    // screen, for the reason `hideLead` moves it: a *Map* card setting a picture
+    // nobody can see reads as a card that does nothing (§16.9).
+    const shown = this.leadHidden ? this.slots.find((slot) => slot.panel !== null) : undefined
+    this.starred = shown?.id ?? LEAD_MAP
+    remember(this.props.memoryKey(), 'deck:starred', this.starred)
     this.paintBar()
     this.props.onStarChange?.()
     this.props.onMapCardChange?.()
@@ -2369,6 +2462,9 @@ export class PanelDeck {
   private remove(slot: Slot): void {
     const index = this.slots.indexOf(slot)
     if (index < 0) return
+    // A cell before the lead's leaving moves the lead up one, as it moves every
+    // cell after it: the grid closes up in reading order, the lead with it.
+    if (this.order().indexOf(slot) < this.leadAt) this.placeLead(this.leadAt - 1, this.leadHidden)
     this.lock.leave(slot.id)
     slot.panel?.destroy()
     slot.vacancy?.destroy()
@@ -2554,7 +2650,7 @@ export class PanelDeck {
 
   /** {@link grow}, answering with the first cell the press opened, if it opened any. */
   private growing(direction: GrowDirection, picked?: PickedFile): Slot | undefined {
-    const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
+    const shape = { cells: Math.max(1, this.shownCells), columns: this.columnsNow() }
     const next = grownDeck(shape, direction)
     if (next.cells > MAX_PANELS) {
       // A file that came with the press is not lost with it. There is no room
@@ -2567,35 +2663,37 @@ export class PanelDeck {
     }
     this.warn('')
 
-    // Cell 0 is the lead's and is not in `slots`, so the placement is walked
-    // from 1. `grownPlacement` guarantees cell 0 keeps the lead — both growths
-    // insert only *after* a row's existing cells — which is what lets the lead
-    // stay a re-parented view rather than a panel that can be moved (§3.1 B2).
+    // Every cell on screen is re-seated, the lead's among them wherever it
+    // stands (§16.9): `grownPlacement` maps each old place to its new one, and
+    // both growths insert only *after* a row's existing cells, so no cell the
+    // reader placed changes row or column. A hidden lead is not on screen and
+    // keeps its place in the order, for when it comes back.
     const places = grownPlacement(shape, direction)
-    const held = this.slots
-    const seated: Slot[] = []
-    let opened = -1
-    for (let cell = 1; cell < places.length; cell++) {
-      const from = places[cell]
+    const held = this.shownOrder()
+    const seated: Array<Slot | typeof LEAD_CELL> = []
+    let first: Slot | undefined
+    for (const from of places) {
       if (from === null) {
         // Drawn, not left by a link, and that is all the difference amounts to:
         // the card offers to take a map, a track or a structure rather than
         // telling the reader that a map they never had used to be there
         // (`panels/MapPanel.ts`).
-        if (opened < 0) opened = seated.length
-        seated.push(this.build({ kind: 'vacant' }, undefined, 'drawn'))
+        const drawn = this.build({ kind: 'vacant' }, undefined, 'drawn')
+        first ??= drawn
+        seated.push(drawn)
       } else {
-        seated.push(held[from - 1])
+        const cell = held[from]
+        if (cell !== undefined) seated.push(cell)
       }
     }
 
     this.columns = next.columns
     remember(this.props.memoryKey(), 'deck:columns', next.columns)
-    this.slots = seated
-    // The first cell the press opened, in reading order — which for `beside` is
-    // the top of the new column and for `below` the left of the new row, both
-    // being the near end of the edge that was pressed.
-    const first = opened < 0 ? undefined : this.slots[opened]
+    this.slots = seated.filter((cell): cell is Slot => cell !== LEAD_CELL)
+    if (!this.leadHidden) this.placeLead(seated.indexOf(LEAD_CELL), false)
+    // `first` is the first cell the press opened, in reading order — which for
+    // `beside` is the top of the new column and for `below` the left of the new
+    // row, both being the near end of the edge that was pressed.
     if (picked === undefined || first === undefined) {
       this.paintGrid()
       this.publish()
@@ -2636,13 +2734,32 @@ export class PanelDeck {
     const at = this.slots.indexOf(slot)
     if (at < 0) return
     if (row.kind === 'companion') {
-      const from = this.slots.findIndex((held) => held.id === row.id)
-      if (from >= 0) this.swap(from, at)
+      const from = this.slots.find((held) => held.id === row.id)
+      if (from !== undefined) this.exchange(from, slot)
+      return
+    }
+    // The first map's row onto a cell that holds something moves the first map
+    // there, as its cell's own grip would; onto an empty one it opens a second
+    // picture of it, below.
+    if (row.kind === 'lead' && slot.ref.kind !== 'vacant' && !this.leadHidden) {
+      this.exchange(LEAD_CELL, slot)
       return
     }
     if (slot.ref.kind !== 'vacant') return
     const picked = this.mapRowPicked(row)
     if (picked !== null) this.fill(slot, picked)
+  }
+
+  /**
+   * A row of the Contact maps card dropped on the lead's own cell: a
+   * companion's row exchanges the two, as that companion's grip would. The
+   * first map's own row, and a file that is not in a cell, have nothing to do
+   * there — the cell is full, and it is not a companion's to fill.
+   */
+  private putMapRowOnLead(row: MapRow): void {
+    if (row.kind !== 'companion') return
+    const from = this.slots.find((held) => held.id === row.id)
+    if (from !== undefined) this.exchange(from, LEAD_CELL)
   }
 
   /** The file a card row names, where it is one a cell can open. */
@@ -2780,10 +2897,28 @@ export class PanelDeck {
   // -------------------------------------------------------------------------
 
   private paintGrid(): void {
+    // A hidden lead with nothing left beside it comes back: a deck of no cell
+    // on screen is a blank page, and the session is about to put the deck down
+    // and hand the view its own frame again — where it must not arrive hidden.
+    if (this.leadHidden && this.slots.length === 0) this.placeLead(this.leadAt, false)
+    // The cells in the order they stand, the lead's among them. A hidden lead
+    // stays in the grid's children, **parked** — laid out at a cell's width and
+    // out of sight rather than removed — because it is not a picture that has
+    // gone but the view the others follow: its map goes on reporting the window
+    // the lock and the cells read, and a view taken out of the document would
+    // measure nothing and report nothing (`ui/styles.css`, `.is-parked`).
+    this.leadCell.classList.toggle('is-parked', this.leadHidden)
+    this.leadCell.setAttribute('aria-hidden', String(this.leadHidden))
+    // One cell on screen and no map in its row to take a height from: the model
+    // or the tracks take the height a map would (`ui/styles.css`, `.is-alone`).
+    this.grid.classList.toggle('is-alone', this.shownCells === 1)
     this.grid.replaceChildren(
-      this.leadCell,
-      ...this.slots.map((slot) => slot.panel?.el ?? slot.cell?.el ?? slot.vacancy?.el ?? el('div')),
+      ...this.shownOrder().map((cell) => (cell === LEAD_CELL ? this.leadCell : (elOf(cell) ?? el('div')))),
+      ...(this.leadHidden ? [this.leadCell] : []),
     )
+    // Its × only with another cell beside it: closing the one cell of a deck
+    // would leave a deck of nothing.
+    this.leadClose.classList.toggle('hidden', this.slots.length === 0)
     // Every panel that has just been built needs to be told whether its star is
     // filled: which one it is belongs to the deck, and a panel has no way to
     // ask (see {@link starred}).
@@ -2806,12 +2941,17 @@ export class PanelDeck {
   }
 
   /**
-   * The heading over the session's own cell: its name, and no grip.
+   * The heading over the session's own cell: the heading every cell has — a
+   * grip, a name, its star and chain, and a × (§16.9).
    *
-   * No grip because the first map is always the lead (§16.9) — it is the
-   * session's view re-parented into cell 0, it owns the breadcrumb and the
-   * tables and the tracks, and "which file is this session of" is not a thing
-   * that should change by dragging. A name, because every other cell has one.
+   * It used to be a name alone, with no grip and no ×, because the first map
+   * is the session's view re-parented into the grid and "which file is this
+   * session of" is not a thing a drag should change. Nor does either change it:
+   * the grip moves where the picture stands and the × takes the picture off the
+   * screen, and the breadcrumb, the tables and the tracks are the same file's
+   * throughout. A deck whose first cell could not be moved or closed was a
+   * deck with a cell unlike every other, and a figure of a model beside its map
+   * — or of the model alone — could not be drawn with it.
    */
   private paintLeadHead(): void {
     const name = this.props.leadName?.()
@@ -2821,17 +2961,118 @@ export class PanelDeck {
       return
     }
     this.leadHead.classList.remove('hidden')
-    const title = `${name} — the map this session is of, and the one the others follow`
+    const browser = this.lead === null && this.leadAxis !== null
+    const title = browser
+      ? `${name} — the tracks this session is of, and the window the other cells follow`
+      : `${name} — the map this session is of, and the one the others follow`
     const rename = this.props.onRenameLead
+    this.leadGrip.title = `Drag to move ${name} to another cell of the deck`
+    this.leadGrip.setAttribute('aria-label', `Move ${name}`)
+    this.leadClose.title = browser
+      ? `Hide ${name}'s tracks — the other cells go on following its window, and the bar's show ${name} brings them back`
+      : `Hide ${name} — it stays on the Contact maps card, whose eye brings it back; the other maps go on following it`
+    this.leadClose.setAttribute('aria-label', `Hide ${name}`)
     this.leadHead.replaceChildren(
+      this.leadGrip,
       rename === undefined
         ? el('span', { class: 'deck-name', text: name, title })
         : renameBox(name, title, rename),
       this.leadStar,
       this.leadLock,
+      this.leadClose,
     )
+    this.leadClose.classList.toggle('hidden', this.slots.length === 0)
     this.paintStars()
     this.syncLeadLock()
+  }
+
+  /**
+   * The lead's grip, wired once: the same drag a companion's grip starts, with
+   * the lead's cell marked as the one on the move ({@link watchArranging}).
+   */
+  private wireLeadGrip(): void {
+    this.leadGrip.append(icon('grip-vertical', { size: 12 }))
+    this.leadGrip.addEventListener('dragstart', (event) => {
+      event.dataTransfer?.setData(DECK_DRAG_TYPE, this.props.leadName?.() ?? LEAD)
+      if (event.dataTransfer !== null) event.dataTransfer.effectAllowed = 'move'
+      this.leadCell.classList.add('is-dragging')
+      this.setArranging(true)
+    })
+    this.leadGrip.addEventListener('dragend', () => {
+      this.leadCell.classList.remove('is-dragging')
+      this.setArranging(false)
+    })
+    // The heading's own gestures are not the map's: a press on the grip must
+    // not reach a view below that would read it as the start of a pan.
+    this.leadGrip.addEventListener('pointerdown', (event) => event.stopPropagation())
+  }
+
+  /**
+   * Take the session's own cell off the screen — the × on its heading, and the
+   * eye on its row of the Contact maps card (§16.9).
+   *
+   * **Parked, not closed.** The view stays mounted behind the grid at a cell's
+   * width, so everything that follows it goes on following it: the maps' lock,
+   * the window a structure or tracks cell lights, the heading above the grid
+   * whose locus box steers the deck. The session is still of this file, and its
+   * tables, tracks and star are what they were. Refused while nothing else is
+   * in the deck, which would leave nothing on screen.
+   */
+  hideLead(): void {
+    if (this.leadHidden || this.slots.length === 0) return
+    this.placeLead(this.leadAt, true)
+    this.paintGrid()
+    // The star goes to the first map still on screen, where there is one: the
+    // *Map* card is the starred map's, and a card setting a picture nobody can
+    // see reads as a card that does nothing. Where no other map is on screen it
+    // stays — the session is still of this map, and a task still runs on it.
+    if (this.starred === LEAD_MAP) {
+      const shown = this.slots.find((slot) => slot.panel !== null)
+      if (shown !== undefined) this.setStarred(shown.id)
+    }
+    this.paintBar()
+    this.props.onLeadShownChange?.()
+  }
+
+  /** Put the session's own cell back where it stood. */
+  showLead(): void {
+    if (!this.leadHidden) return
+    this.placeLead(this.leadAt, false)
+    this.paintGrid()
+    this.paintBar()
+    this.props.onLeadShownChange?.()
+  }
+
+  /** Whether the session's own cell is on screen; see {@link hideLead}. */
+  get leadShown(): boolean {
+    return !this.leadHidden
+  }
+
+  /** Where the lead stands and whether it is on screen, kept and remembered. */
+  private placeLead(at: number, hidden: boolean): void {
+    const place = Math.max(0, Math.min(Math.floor(at), this.slots.length))
+    if (place === this.leadAt && hidden === this.leadHidden) return
+    this.leadAt = place
+    this.leadHidden = hidden
+    remember(this.props.memoryKey(), LEAD_SCOPE, { at: place, hidden })
+  }
+
+  /**
+   * Every cell in reading order, the lead's among them at its place — hidden
+   * or not, since a hidden one keeps its place for when it comes back.
+   */
+  private order(): Array<Slot | typeof LEAD_CELL> {
+    return withLead<Slot, typeof LEAD_CELL>(this.slots, LEAD_CELL, this.leadAt)
+  }
+
+  /** The cells on screen, in reading order: {@link order} without a hidden lead. */
+  private shownOrder(): Array<Slot | typeof LEAD_CELL> {
+    return this.leadHidden ? [...this.slots] : this.order()
+  }
+
+  /** How many cells are on screen: every companion, and the lead unless hidden. */
+  private get shownCells(): number {
+    return this.slots.length + (this.leadHidden ? 0 : 1)
   }
 
   /**
@@ -2860,15 +3101,17 @@ export class PanelDeck {
    */
   private syncLeadLock(): void {
     this.leadLock.replaceChildren(icon(this.leadLocked ? 'link' : 'unlink', { size: 14 }))
+    // By its name, not by its place: the first map can stand anywhere (§16.9).
+    const name = this.props.leadName?.() ?? 'This map'
     this.leadLock.title = this.leadLocked
-      ? 'The first map is driving the deck. Click to move it on its own.'
-      : 'The first map is moving on its own. Click to put it back in step.'
+      ? `${name} is driving the deck. Click to move it on its own.`
+      : `${name} is moving on its own. Click to put it back in step.`
     this.leadLock.setAttribute('aria-label', this.leadLock.title)
     setPressed(this.leadLock, this.leadLocked)
   }
 
   private applyLayout(): void {
-    const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
+    const shape = { cells: this.shownCells, columns: this.columnsNow() }
     this.grid.style.setProperty('--deck-columns', String(shape.columns))
     // Asked of the same arithmetic the press will run, rather than of the panel
     // count, so an edge is lit exactly when pressing it would do something. A
@@ -2894,7 +3137,8 @@ export class PanelDeck {
    * deck with a column fewer than it had.
    */
   private columnsNow(): number {
-    const cells = this.slots.length + 1
+    // The cells on screen: a hidden lead takes no column (§16.9).
+    const cells = Math.max(1, this.shownCells)
     // One row of everything until somebody says otherwise, which is what a deck
     // assembled a file at a time — through the palette, or from a link — has
     // always been: side by side is how a figure compares conditions.
@@ -2915,8 +3159,13 @@ export class PanelDeck {
    * addition; the panels below it are the expensive things and they are kept.
    */
   private paintBar(): void {
-    const cells = this.slots.length + 1
-    const filled = this.filled
+    const cells = Math.max(1, this.shownCells)
+    // The maps on screen, for the count in the heading: the lead's unless it is
+    // the 1D browser or hidden (§16.9), and every companion's. Not `filled`,
+    // which is the budget's divisor — a hidden lead is still holding its block
+    // — and which counted a browser lead as a map it is not.
+    const leadMap = this.leadAxis === null && !this.leadHidden ? 1 : 0
+    const maps = leadMap + this.slots.filter((slot) => isMapRef(slot.ref)).length
     // The cards with nothing in them — not `cells - filled`, which would count
     // a structure cell as a gap (§25): it holds no *file*, and a file is what
     // the budget divides by, but it is not empty.
@@ -3062,12 +3311,32 @@ export class PanelDeck {
     // bring back. The bar already speaks in words, and §5.4's own rule is that a
     // control styled unlike its neighbours is one a reader wonders about. So the
     // bare mark stays the cell's, and the deck's says what it is.
+    const leadName = this.props.leadName?.() ?? (this.lead === null ? 'the tracks' : 'this map')
+    // The browser as lead is shown as what it is: its name is the genome's —
+    // for a model that opened the session, the model's own file — and `show
+    // yeast.bed3d` over a cell drawing yeast.bed3d reads as a button for the
+    // picture already on screen.
+    const leadShown = this.lead === null && this.leadAxis !== null ? 'the 1D browser' : leadName
     const close = button('close deck', () => this.closeDeck(), {
       class: 'btn deck-close',
       title:
-        'Every other cell closes. Its maps stay on the Contact maps card, hidden, and its tracks ' +
-        'on the Tracks card; the first map, and everything drawn on it, stays.',
+        `Every cell but ${leadName}’s closes. Their maps stay on the Contact maps card, hidden, ` +
+        `and their tracks on the Tracks card; ${leadName}, and everything drawn on it, stays — ` +
+        'on screen again if it was hidden.',
     })
+
+    // The way back for a hidden lead, where the reader is looking when it has
+    // gone: the bar of the deck it left (§16.9). A map's row on the Contact maps
+    // card has an eye for the same act; the 1D browser has no row there, and
+    // this is its only road back.
+    const showLead = this.leadHidden
+      ? [
+          button(`show ${leadShown}`, () => this.showLead(), {
+            class: 'btn deck-show-lead',
+            title: `Put ${leadShown} back in the deck, in the cell it stood in`,
+          }),
+        ]
+      : []
 
     // How many maps is a fact about *what is being looked at*, so it goes in the
     // line that already says that — beside the block's size and the window's
@@ -3088,8 +3357,11 @@ export class PanelDeck {
     // The empty cells counted beside the maps and not *towards* them: it used
     // to read `2 of 3 maps`, which was a promise of a third map from a cell
     // that now takes a track or a structure as readily (§16.9).
-    const maps = `${filled} map${filled === 1 ? '' : 's'}`
-    const count = empty === 0 ? maps : `${maps} · ${empty} empty cell${empty === 1 ? '' : 's'}`
+    // No count at all for a deck of no map — a structure beside the 1D browser
+    // is not *0 maps*, and it was *1 map*, counting the browser as one.
+    const counted = maps === 0 ? '' : `${maps} map${maps === 1 ? '' : 's'}`
+    const gaps = empty === 0 ? '' : `${empty} empty cell${empty === 1 ? '' : 's'}`
+    const count = [counted, gaps].filter((part) => part !== '').join(' · ')
     this.deckNote.textContent = count
     // Two sentences (§26.4). What the deck's own controls do is on them, and
     // what a chain does is on the chain — said once, at the control, rather
@@ -3120,8 +3392,11 @@ export class PanelDeck {
     // heading beside its star, where every other cell's chain is (§16.5).
     this.toolbar.replaceChildren(
       addMap,
-      share,
-      resolutions,
+      ...showLead,
+      // Only where a map can be: a deck beside the 1D browser holds tracks and
+      // structures (§25 stage D), and a press to match maps' scales there was
+      // a button with nothing to act on.
+      ...(cellsOnly ? [] : [share, resolutions]),
       columns,
       save,
       copy,
@@ -3314,7 +3589,17 @@ export class PanelDeck {
    * lead is looking at once, since a browser reports nothing until it moves.
    */
   setLeadAxis(axis: LeadAxis | null): void {
+    if (this.leadAxis !== null && this.leadAxis !== axis) this.leadAxis.setDeckExport?.(null)
+    const changed = (this.leadAxis === null) !== (axis === null)
     this.leadAxis = axis
+    axis?.setDeckExport?.(this.deckExport)
+    // What the lead's heading and the bar say depends on which kind it is — a
+    // map is counted and hidden onto the Contact maps card, the browser is
+    // neither — so both are repainted when the kind changes.
+    if (changed) {
+      this.paintLeadHead()
+      this.paintBar()
+    }
     if (axis !== null) this.leadMoved()
   }
 
@@ -3556,10 +3841,19 @@ export class PanelDeck {
    * that cannot export at all rather than a deck that cannot.
    */
   private composeDeck(now: Date, dpi = DECK_EXPORT_DPI): HTMLCanvasElement | null {
-    const cells: Array<MatrixPanel | DeckCell | null> = [
-      this.lead,
-      ...this.slots.map((slot) => slot.panel?.map ?? slot.cell ?? null),
-    ]
+    // In the order they stand on screen, the lead's wherever it was moved to and
+    // not at all while it is hidden (§16.9): the figure is the arrangement.
+    const leadAxis = this.leadAxis
+    const cells: Array<{ exportCanvas(dpi: number, now: Date): HTMLCanvasElement | null } | null> = this.shownOrder().map((cell) =>
+      cell === LEAD_CELL
+        ? (this.lead ??
+          // The browser as lead draws its own cell (§25 stage D) — it was a gap
+          // in the figure where the tracks stood on screen.
+          (leadAxis?.exportCanvas === undefined
+            ? null
+            : { exportCanvas: (at: number) => leadAxis.exportCanvas?.(at) ?? null }))
+        : (cell.panel?.map ?? cell.cell ?? null),
+    )
     const drawn = cells.map((cell) => {
       try {
         return cell === null ? null : cell.exportCanvas(dpi, now)
@@ -3598,7 +3892,7 @@ export class PanelDeck {
 
   /** Rows the grid needs for the cells it has, at the current column count. */
   private rows(): number {
-    return Math.ceil((this.slots.length + 1) / this.columnsNow())
+    return Math.ceil(Math.max(1, this.shownCells) / this.columnsNow())
   }
 
   private setColumns(columns: number): void {

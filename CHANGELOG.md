@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The first cell of a deck moves and closes like any other (§16.9).** Its heading has a grip, and
+  dropping it on another cell exchanges the two, as every cell's grip does; another cell's grip, or a
+  companion's row of the Contact maps card, dropped on it does the same. Its × takes it off the
+  screen while another cell is beside it — parked out of sight rather than closed, so the other maps
+  go on following it and the locus box above the grid still steers the deck — and its eye on the
+  Contact maps card, or `show …` in the deck's bar, puts it back where it stood. Where it stands and
+  whether it is hidden are remembered with the column count and travel in a saved workspace.
+
+- **A structure file dropped on an empty window opens as its model (§25.3).** A lone bed3d or g3d
+  opened the 1D browser of the genome its beads name, with nothing on it and the model nowhere on
+  screen; the model now opens in its own cell, filling the view, with the empty tracks hidden behind
+  it — `show the 1D browser` in the deck's bar brings them back.
+
 - **A feature lane's rows can be expanded, squished or collapsed (§8.16).** Expanded is the rows with
   names under them, as before; squished packs many thin rows with no names, so a crowded stretch shows
   every overlapping feature; collapsed puts everything in one row across the lane. In the card, as
@@ -408,6 +421,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The first map's eye on the Contact maps card closes its cell in a deck (§16.9).** As every other
+  map's eye does. It put the map down for the 1D browser, which in a deck also took every companion
+  map away with it; outside a deck it still does that.
+
+- **A deck beside the 1D browser exports the browser too (§25.3).** The deck's figure left a gap where
+  the tracks stood, and the browser's Export card saved the tracks alone however much stood beside
+  them; the card now saves the deck's figure, as a map's does. The bar no longer offers to match maps'
+  scales and resolutions in a deck that cannot hold a map, and no longer counts the browser as a map.
+
 - **An exported 3D model is framed by its cell's edge (§25.7).** A thin rule round the model's
   picture, the weight and colour of the map's plot border, in the deck's figure, the card's PNG and
   PDF and the clipboard — so a model zoomed past its cell reads as framed rather than floating with
@@ -427,12 +449,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is no longer shrunk and re-fitted when the sequence lane lands last, and download progress
   reaches a row four times a second rather than twenty.
 
-- **The pointer over a map with the crosshair on is a ring, and over the tracks there is none (§5.8).**
-  Lucide's `locate`, twenty pixels square (the arrowhead's size) and centred on the hand, replaces
-  the small open cross, and the guide lines stop at the ends of its ticks rather than running through
-  it, so the cell under the pointer and its neighbours stay clear inside it; the gap follows the hand
-  inside a zoomed-in cell. Over a lane or the 1D browser the hairline is the pointer, and no mark is
-  drawn over it; with the crosshair off all three show the arrowhead.
+- **The pointer over a map with the crosshair on is a ring (§5.8).** Lucide's `locate`, twenty
+  pixels square (the arrowhead's size) and centred on the hand, replaces the small open cross, and
+  the guide lines stop at the ends of its ticks rather than running through it, so the cell under the
+  pointer and its neighbours stay clear inside it; the gap follows the hand inside a zoomed-in cell.
+  Over a lane or the 1D browser the arrowhead stays beside the hairline, with its tip on it — with no
+  pointer there, the line under the hand could not be told from another surface's pointer echoed as
+  the same line — and with the crosshair off all three show the arrowhead.
 
 - **The crosshair toggle reaches the tracks beside a map (§5.8).** Their own hairline under the
   pointer, and the line it carries across the map, were drawn whatever the toggle said, so turning

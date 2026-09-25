@@ -6,11 +6,12 @@
  * its two folded cards, two tracks ticked and set together from the batch box —
  * the `points` style among the settings it carries — a task's synthetic track
  * as a row of the Tracks card with its `*` and its exports, the crosshair turned
- * off and on over a lane, the pointer over the map drawn where the hand is (a
- * screenshot has no cursor in it) and again five times over, so the guide lines
- * can be seen stopping at its ticks — at rest, and in a cell wider than the
- * ring — a typed locus with no ring round the map, the 1D browser drawing
- * points, a map opened on a throttled line drawing before its tracks with their
+ * off and on over a lane with the arrowhead drawn where the hand is (a
+ * screenshot has no cursor in it) — its tip on the hairline — the pointer over
+ * the map drawn the same way and again five times over, so the guide lines can
+ * be seen stopping at its ticks — at rest, and in a cell wider than the ring —
+ * a typed locus with no ring round the map, the 1D browser drawing points and
+ * its arrowhead on the hairline, a map opened on a throttled line drawing before its tracks with their
  * room kept, a circle framed on `ori` rather than slid round, and genes drawn
  * as rounded blocks pointed the way they run — with the lane's right-click
  * menu, and the lane squished and collapsed from it. Prints what it found at
@@ -156,36 +157,20 @@ try {
   await shotOf('.ann-row.is-synthetic', 'tr06-synthetic-row')
   await shot('tr07-synthetic-beside-the-map')
 
-  // The crosshair over a lane: off, then on.
-  const lane = await page.locator('.lane-canvas:not(.hidden)').first().boundingBox()
-  const map = await page.locator('.heatmap-canvas').first().boundingBox()
-  await page.keyboard.press('x')
-  await sleep(400)
-  // Over the middle of the Pol II lane, clear of any lane's border, whose
-  // resize rule would be drawn there as well.
-  await page.mouse.move(lane.x + lane.width * 0.72, lane.y + lane.height * 0.4)
-  await sleep(600)
-  console.log('crosshair off, lane guided:', await page.evaluate(() => document.querySelector('.lane-canvas:not(.hidden)')?.classList.contains('is-guided')))
-  await page.screenshot({ path: `${OUT}/tr08-crosshair-off-over-a-lane.png`, clip: { x: map.x - 40, y: map.y - 10, width: map.width + 380, height: map.height + 260 } })
-  await page.keyboard.press('x')
-  await sleep(400)
-  await page.mouse.move(lane.x + lane.width * 0.72 + 1, lane.y + lane.height * 0.4)
-  await sleep(600)
-  console.log('crosshair on, lane guided:', await page.evaluate(() => document.querySelector('.lane-canvas:not(.hidden)')?.classList.contains('is-guided')))
-  await page.screenshot({ path: `${OUT}/tr09-crosshair-on-over-a-lane.png`, clip: { x: map.x - 40, y: map.y - 10, width: map.width + 380, height: map.height + 260 } })
-
-  // The pointer over the map. A screenshot carries no cursor, so the one the
-  // stylesheet gives the guided map is drawn where the hand is, at its own size
-  // and on its own hotspot, both read off the rule rather than restated here.
+  // The pointer. A screenshot carries no cursor, so the one the stylesheet
+  // gives the surface under the hand — the ring over a guided map, the arrowhead
+  // over a lane or the 1D browser — is drawn where the hand is, at its own size
+  // and on its own hotspot, all read off the rule rather than restated here.
   // Then the few dozen pixels round the hand are cut out of a screenshot and
   // shown five times over — the only way to see, in a picture, that the guide
   // lines stop at the ends of the ring's ticks and nothing is drawn inside it.
-  const pointerAt = async (x, y) => {
+  const pointerAt = async (x, y, under = '.heatmap-canvas') => {
     await page.mouse.move(x, y)
     await sleep(600)
-    const drawn = await page.evaluate(({ x, y }) => {
-      const canvas = document.querySelector('.heatmap-canvas')
+    const drawn = await page.evaluate(({ x, y, under }) => {
+      const canvas = document.querySelector(under)
       const cursor = getComputedStyle(canvas).cursor
+      if (cursor === 'none') return { size: 0, hotspot: [0, 0], cursor }
       const url = /url\("?(.*?)"?\)/.exec(cursor)?.[1] ?? ''
       const [hx, hy] = (/\)\s*(\d+) (\d+)/.exec(cursor) ?? ['', '0', '0']).slice(1).map(Number)
       const size = Number(/width='(\d+)'/.exec(decodeURIComponent(url))?.[1] ?? 0)
@@ -194,8 +179,8 @@ try {
       img.style.cssText = `position:fixed;left:${x - hx}px;top:${y - hy}px;width:${size}px;height:${size}px;z-index:99999;pointer-events:none`
       img.className = 'gallery-cursor'
       document.body.append(img)
-      return { size, hotspot: [hx, hy] }
-    }, { x, y })
+      return { size, hotspot: [hx, hy], shape: /circle/.test(decodeURIComponent(url)) ? 'ring' : 'arrowhead' }
+    }, { x, y, under })
     await sleep(300)
     return drawn
   }
@@ -214,6 +199,25 @@ try {
     console.log('shot', name)
   }
   const clearPointer = () => page.evaluate(() => { for (const img of document.querySelectorAll('.gallery-cursor')) img.remove() })
+  // The crosshair over a lane: off, then on.
+  const lane = await page.locator('.lane-canvas:not(.hidden)').first().boundingBox()
+  const map = await page.locator('.heatmap-canvas').first().boundingBox()
+  await page.keyboard.press('x')
+  await sleep(400)
+  // Over the middle of the Pol II lane, clear of any lane's border, whose
+  // resize rule would be drawn there as well.
+  const [lx, ly] = [lane.x + lane.width * 0.72, lane.y + lane.height * 0.4]
+  console.log('crosshair off, pointer over the lane:', await pointerAt(lx, ly, '.lane-canvas:not(.hidden)'))
+  await page.screenshot({ path: `${OUT}/tr08-crosshair-off-over-a-lane.png`, clip: { x: map.x - 40, y: map.y - 10, width: map.width + 380, height: map.height + 260 } })
+  await clearPointer()
+  await page.keyboard.press('x')
+  await sleep(400)
+  // The arrowhead stays with the hairline: its tip on the line, its body off it.
+  console.log('crosshair on, pointer over the lane:', await pointerAt(lx + 1, ly, '.lane-canvas:not(.hidden)'))
+  await page.screenshot({ path: `${OUT}/tr09-crosshair-on-over-a-lane.png`, clip: { x: map.x - 40, y: map.y - 10, width: map.width + 380, height: map.height + 260 } })
+  await magnified(lx + 1, ly, 'tr09b-lane-pointer-magnified')
+  await clearPointer()
+
   const px = map.x + map.width * 0.52
   const py = map.y + map.height * 0.52
   console.log('pointer:', await pointerAt(px, py))
@@ -257,6 +261,13 @@ try {
   await sleep(5000)
   await page.mouse.move(5, 5)
   await shot('tr12-browser-points')
+  const stage = await page.locator('.browser-canvas').first().boundingBox()
+  const [bx, by] = [stage.x + stage.width * 0.6, stage.y + Math.min(stage.height * 0.3, 140)]
+  console.log('browser pointer:', await pointerAt(bx, by, '.browser-canvas'))
+  await page.screenshot({ path: `${OUT}/tr12b-browser-pointer.png`, clip: { x: bx - 260, y: stage.y, width: 520, height: Math.min(stage.height, 420) } })
+  console.log('shot tr12b-browser-pointer')
+  await magnified(bx, by, 'tr12c-browser-pointer-magnified')
+  await clearPointer()
 
   // -------------------------------------------------------------------------
   // The same session on a throttled line: the map first, its tracks' room kept.

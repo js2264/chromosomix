@@ -1498,8 +1498,9 @@ export class AnnotationLanes {
       // option was about what the *map* draws; but the one toggle is offered as
       // *the* crosshair, beside the map and beside the tracks, and a reader who
       // turned it off watched the line go from the map and stay on every track.
-      // Off, the stack shows the arrowhead instead (`MatrixPanel.syncLaneCursors`),
-      // so a track still answers the pointer.
+      // The arrowhead stays over the stack either way (`ui/styles.css`), so a
+      // track still answers the pointer with the line off, and with it on the
+      // line under the hand is told from an echo by the tip standing on it.
       if (geometry.crosshair && geometry.guide !== null && geometry.guide.edge === edge) {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }

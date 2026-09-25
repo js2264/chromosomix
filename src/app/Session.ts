@@ -844,6 +844,12 @@ export class Session {
    * the same row, §25.6) reads as a fresh model too, and the cell draws it.
    */
   private knownStructures: Map<string, unknown> | null = null
+  /**
+   * The file that opened this browser was a **structure** alone, and its model
+   * is still to be put on screen — once the browser is mounted, which is the
+   * first moment a deck can frame it ({@link showStructureAlone}).
+   */
+  private structureAlone = false
   /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
   private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
@@ -2826,6 +2832,11 @@ export class Session {
       this.tearDown()
       this.assembly = assembly
       this.assemblySource = source
+      // A model dropped on an empty window opens as its model (§25.3), not as
+      // the axis it happens to name: the browser it makes has nothing to draw.
+      // Not on a restore — a link names its own deck, and the reader's own
+      // arrangement of it is in this session's memory.
+      this.structureAlone = !insist && result.format === 'structure'
       // The trail for a genome, built here because `tearDown` has just dropped
       // the file's (§5.8): a browser is a view like any other and says where in
       // the assembly it is.
@@ -3543,6 +3554,39 @@ export class Session {
       remeasure: () => view.remeasure(),
       focusSearch: () => view.focusSearch(),
     })
+    this.showStructureAlone()
+  }
+
+  /**
+   * A structure that opened this session on its own: its model in a cell, and
+   * nothing else on screen (§25.3).
+   *
+   * The file names sequences — its beads are on them — so the session is a
+   * browser of that genome, and the browser had nothing to draw: a structure
+   * is a row of the Structures card and a cell of the deck, never a lane. A
+   * reader who dropped one bed3d on an empty window was shown an empty axis,
+   * and the model only where they thought to look for it; the watch on the
+   * store that opens a cell for every model that arrives had noted this one as
+   * already there, since it came in with the store, before any deck could.
+   *
+   * So once the browser is mounted — the first moment a deck can frame it —
+   * each model gets its cell, and the tracks give them the screen: **hidden,
+   * not closed** (§16.9). The heading above the deck still steers which
+   * stretch of the model is lit, and the deck's bar puts the tracks back. Left
+   * on screen where anything is already drawn on them, as a session this
+   * genome's memory restored may have.
+   */
+  private showStructureAlone(): void {
+    if (!this.structureAlone) return
+    this.structureAlone = false
+    const store = this.annotations?.store
+    if (store === undefined || !this.deckIsPossible) return
+    const models = store.entries.filter((entry) => entry.kind === 'structure')
+    if (models.length === 0) return
+    const deck = this.ensureDeck()
+    for (const model of models) deck.showStructure(model.id)
+    const drawn = store.entriesOn(LEAD_MAP).some((entry) => entry.kind !== 'structure' && entry.card !== 'overlay')
+    if (!drawn) deck.hideLead()
   }
 
   /**
@@ -4360,14 +4404,16 @@ export class Session {
         else this.closeCompare(which)
       },
       onToggleShown: (which) => {
-        if (which === 1) this.toggleMap()
+        if (which === 1) this.toggleLeadShown()
         else {
           this.compareHidden = !this.compareHidden
           this.syncCompareCard()
           this.remount()
         }
       },
-      isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
+      isShown: (which) =>
+        which === 1 ? this.parkedMap === null && this.deck?.leadShown !== false : !this.compareHidden,
+      primaryInDeck: () => this.leadCellInDeck(),
       onSwap: () => void this.swapCompare(),
       // Every map this session is holding is a row here (§16.9): the deck's
       // other cells after the square's one or two, each with the grip that
@@ -4445,6 +4491,32 @@ export class Session {
   private toggleMap(): void {
     if (this.canShowMap) this.showMap()
     else this.hideMap()
+  }
+
+  /**
+   * The first map's eye: its **cell's**, in a deck with other cells (§16.9),
+   * as every other map's eye is — and the 1D browser on its own, as it has
+   * always been.
+   *
+   * In a deck the old meaning was a trap. Putting the map down for the browser
+   * re-reads the state with no map to lead, and a deck of maps cannot stand
+   * beside a browser (§25 stage D): the companions went with it. Hiding the
+   * cell keeps every map where it is and the session on its file.
+   */
+  private toggleLeadShown(): void {
+    const deck = this.deck
+    if (deck !== null && (!deck.leadShown || this.leadCellInDeck())) {
+      if (deck.leadShown) deck.hideLead()
+      else deck.showLead()
+      return
+    }
+    this.toggleMap()
+  }
+
+  /** Whether the first map stands in a deck beside other cells, where its eye is its cell's. */
+  private leadCellInDeck(): boolean {
+    const deck = this.deck
+    return deck !== null && !deck.isEmpty && this.parkedMap === null && this.deckIsPossible
   }
 
   /** The Sequences card a browser steers its axis from. */
@@ -4615,6 +4687,7 @@ export class Session {
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
     this.parkedMap = null
+    this.structureAlone = false
     // A genome browser replacing a map is a change of subject, whatever the two
     // files are called: nothing here is coming back at another bin size, so the
     // carry is spent before the drop rather than kept for an open that will
@@ -6177,6 +6250,13 @@ export class Session {
         this.holdHidden(picked)
         this.syncCompareCard()
       },
+      // The session's own cell hidden or put back (§16.9): the eye on its row
+      // of the Contact maps card follows, and the deck's memory has changed
+      // under the durable record.
+      onLeadShownChange: () => {
+        this.syncCompareCard()
+        this.host.sessionChanged(this)
+      },
       // The *3D structure* card is the starred cell's (§25.3), so the star
       // moving is the column's card changing under it — and the session is
       // what puts a card in that column.
@@ -6391,6 +6471,8 @@ export class Session {
               browser.showLocus(formatLocus(range))
               return true
             },
+            exportCanvas: (dpi) => browser.exportCanvas(dpi),
+            setDeckExport: (hook) => browser.setDeckExport(hook),
           }
         : null,
     )

@@ -59,6 +59,13 @@ export interface CompareCardProps {
   /** Whether each map is currently drawn. */
   isShown(which: 1 | 2): boolean
   /**
+   * Whether this session's own map stands in a deck beside other cells, where
+   * its eye takes its **cell** off the screen and puts it back, as every other
+   * map's eye does (§16.9), rather than putting the map down for the 1D
+   * browser. Absent is no deck.
+   */
+  primaryInDeck?(): boolean
+  /**
    * Put one of the two down and go back to a single map.
    *
    * Either one: closing the second leaves the first as it was, and closing the
@@ -329,12 +336,17 @@ export class CompareCard {
    */
   private mapRow(which: 1 | 2, label: string, paired: boolean): HTMLElement {
     const shown = this.props.isShown(which)
+    const inDeck = which === 1 && this.props.primaryInDeck?.() === true
     const eye = iconButton(
       shown ? 'eye' : 'eye-off',
       which === 1
-        ? shown
-          ? 'Hide the map and read this genome as tracks. It stays open — the eye brings it back.'
-          : 'Draw the map again, where it was left'
+        ? inDeck
+          ? shown
+            ? `Close ${label}'s cell, keeping the map here — the eye opens it again`
+            : `Open ${label}'s cell in the deck again, where it stood`
+          : shown
+            ? 'Hide the map and read this genome as tracks. It stays open — the eye brings it back.'
+            : 'Draw the map again, where it was left'
         : shown
           ? 'Take the lower-left triangle out of the picture, keeping the file open'
           : 'Draw the second map again',
@@ -344,7 +356,8 @@ export class CompareCard {
     eye.setAttribute('aria-pressed', String(shown))
     return el(
       'div',
-      { class: 'ann-row ann-ready compare-row' },
+      // Dimmed while its cell is off the screen, as a hidden companion's row is.
+      { class: `ann-row ann-ready compare-row${inDeck && !shown ? ' is-parked' : ''}` },
       el(
         'div',
         { class: 'ann-head' },

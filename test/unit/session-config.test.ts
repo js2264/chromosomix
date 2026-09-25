@@ -268,6 +268,29 @@ describe('the round trip', () => {
     expect(recall('s3|six.cool', 'deck:columns')).toBe(2)
   })
 
+  it('carries where the session’s own cell stood, and that it was hidden (§16.9)', () => {
+    const key = 'deck|lead.bed3d'
+    remember(key, 'deck:lead', { at: 1, hidden: true })
+    const config = buildConfig({
+      state: { ...STATE, maps: '3d' },
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    const read = roundTrip(config)
+    expect(read?.deck).toEqual({ lead: { at: 1, hidden: true } })
+    applyConfig(read as NonNullable<typeof read>, 's5|lead.bed3d')
+    expect(recall('s5|lead.bed3d', 'deck:lead')).toEqual({ at: 1, hidden: true })
+  })
+
+  it('says nothing of a lead nobody moved, and drops one that is no place', () => {
+    const key = 'deck|untouched.cool'
+    remember(key, 'deck:lead', { at: 0, hidden: false })
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect(config.deck).toEqual({})
+    expect(parseTab({ state: STATE, deck: { lead: { at: -2, hidden: true } } })?.deck).toEqual({})
+  })
+
   it('leaves an importing tab’s deck alone when the config predates the field', () => {
     // A session written before the deck's furniture travelled. The two keys must
     // be left as they are rather than cleared, because "this file says nothing

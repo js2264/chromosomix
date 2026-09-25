@@ -1073,11 +1073,10 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
-**Where a guide line is drawn, the pointer gives way to it**, and that is one rule across all three
-surfaces with two answers. The arrowhead is the wrong shape over a picture being measured: it points
-from one corner, so the coordinate it names is a pixel at its tip with a blunt body over everything
-below and to the right of it — which on a matrix where a cell can be one pixel is the only thing
-covering the answer.
+**Over the map, where a guide line is drawn, the pointer gives way to it.** The arrowhead is the
+wrong shape over a picture being measured: it points from one corner, so the coordinate it names is a
+pixel at its tip with a blunt body over everything below and to the right of it — which on a matrix
+where a cell can be one pixel is the only thing covering the answer.
 
 **Over the map it is a ring**: Lucide's `locate`, twenty pixels square — the arrowhead's own size —
 with its hotspot in the middle: a ring with four ticks, in blue on a white casing so it reads over
@@ -1097,15 +1096,19 @@ a large cell, clear of both lines — is not. The rays of a turned map and its s
 same way. A tap on a touch screen names a cell with no pointer on screen, and there the lines are
 drawn whole.
 
-**Over a lane or the 1D browser there is no pointer at all.** There the hairline under the hand runs
-the height of the stack and names one base pair; there is no cell whose neighbours a ring could frame,
-and any mark over the line covers the value it points at.
+**Over a lane or the 1D browser the arrowhead stays**, crosshair on or off, its tip on the hairline.
+It used to be taken away while the hairline was drawn — the line under the hand runs the height of the
+stack and names one base pair, so the line was argued to *be* the pointer — and a stack with a line
+and no pointer read as a stack the hand had left. The lanes also draw another surface's pointer as
+that same line (a cell of a map beside them, a bead in the structure cell, §25.4), so which line was
+the reader's own was the one thing the picture stopped saying. There is no cell whose neighbours a
+ring could frame; the arrowhead points from its tip, on the base pair the line names, and hangs to
+the right of the line rather than across it.
 
-So the pointer gives way exactly where the line comes, condition for condition: on the map while the
-crosshair is on and the pointer is over a cell, here while it is on and the pointer is on the axis
-rather than in the strip before it, and on a lane stack beside the map while it is on. With the
-crosshair off there is no line on any of them — the lanes' own hairline under the hand, and the line
-it carries across the map, follow the preference too, where they used to be drawn whatever it said, so
+So the ring comes exactly where the map's lines do: while the crosshair is on and the pointer is over
+a cell, and not over a label gutter, which holds no cell to draw one at. With the crosshair off there
+is no line on any of the three surfaces — the lanes' own hairline under the hand, and the line it
+carries across the map, follow the preference too, where they used to be drawn whatever it said, so
 a reader who turned the crosshair off watched it leave the map and stay on every track — and all
 three show the arrowhead.
 The transient cursors stay — the closed hand while panning, the crosshair while a selection is about
@@ -4202,8 +4205,12 @@ A deck is a **lead** and its **companions**.
 
 The lead is the session's own file. It owns the breadcrumb, the genomes and contigs tables, the
 tracks, the record card and, where there is one, the second file blended into its lower triangle. It
-is not in the companion list and it is not reorderable, because "which file is this session of" is
-not a thing that should change by dragging.
+is not in the companion list, and "which file is this session of" is not a thing that changes by
+dragging. **Its cell is a cell like the others** all the same: it moves by its grip and closes with
+its × (§16.9), and neither changes which file the session is of — only where its picture stands, and
+whether it is on screen. It used to be cell 0 for good, with no grip and no ×, and a figure of a model
+beside its map, or of the model alone, could not be drawn with a deck whose first cell could do
+neither.
 
 A companion is the smallest thing that is still a map: its own `ReaderClient` — so its own worker, its
 own h5wasm instance, its own I/O — its own colour scale, its own block, and a heading with its name
@@ -4211,8 +4218,9 @@ on it. It has no annotations, no level toggle, no score picker and no second fil
 control over something the deck *shares*, and five copies of a shared control are five ways to put
 the deck out of step with itself.
 
-The lead's element is **re-parented** into the first cell of the grid rather than rebuilt, so a
-session with companions costs the session it would have been, plus the companions.
+The lead's element is **re-parented** into a cell of the grid — the first, until the reader moves it —
+rather than rebuilt, so a session with companions costs the session it would have been, plus the
+companions.
 
 ### 16.2 What is shared, and what is not
 
@@ -4405,8 +4413,8 @@ different sizes is one the eye has to correct for.
 
 **The session's heading leaves the first cell.** The view's title, its locus box, its zoom steps and
 its block summary answer *what am I looking at*, which is one question however many pictures are on
-screen — so in a deck they are hoisted above the grid and cell 0 holds the map and its file name,
-exactly as every other cell does. Left inside, they made the first cell a head taller than the
+screen — so in a deck they are hoisted above the grid and the lead's cell holds the map and its file
+name, exactly as every other cell does, wherever it stands. Left inside, they made the first cell a head taller than the
 others and the first map was drawn smaller than the maps it is there to be compared with. The
 element is **moved**, not rebuilt, so the box keeps its caret and the summary keeps the numbers the
 last read wrote into it; it goes back when the deck is put down.
@@ -4432,12 +4440,18 @@ does not fit **scrolls sideways inside the cell** instead of being painted over 
 off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
 a cell with a stack down its left edge showed that stack and no map at all.
 
-**Rearranging is a drag, not a pair of arrows.** Every panel has a grip before its name; taking hold
-of one shows the tiling, and dropping a map on a cell **exchanges** the two. `◀` `▶` could only say
-*one place along a list*, which describes a 2 × 2 poorly: moving the bottom-left map to the top-right
-was three presses, each shuffling everything in between. The lead has a name like every other cell
-and **no grip** — it is the session's own view re-parented into cell 0, and which file a session is
-of is not a thing that should change by dragging.
+**Rearranging is a drag, not a pair of arrows.** Every cell has a grip before its name, **the first
+map's included**; taking hold of one shows the tiling, and dropping it on a cell **exchanges** the
+two. `◀` `▶` could only say *one place along a list*, which describes a 2 × 2 poorly: moving the
+bottom-left map to the top-right was three presses, each shuffling everything in between. The first
+map used to have a name and no grip, on the argument that it is the session's own view and which file
+a session is of is not a thing a drag should change. Nor does the drag change it — the breadcrumb,
+the tables and the tracks are the same file's afterwards — and a deck with one cell that could not be
+moved was a deck whose first picture was wherever it happened to start. Where the lead stands is kept
+in the session's memory beside the column count (§8.6), and not in `maps`, which lists the companions:
+it is arrangement, like the columns, and a link that moved only the lead would say nothing new. A cell
+closing before it moves it up with the rest of the grid, and a `+` re-seats it with every other cell,
+in the row and column it had.
 
 **Every cell's chain sits in its own heading, the lead's included.** Taking a cell off the shared
 navigation (§16.3) is a statement about that cell, so the control for it belongs on it, beside the
@@ -4455,7 +4469,8 @@ copied to the clipboard, which is what `⌘C` reaches while a deck is on.
 
 The Aesthetics column's **Export** card saves and copies that same figure whenever any cell beside
 the first map has a picture of its own — a map, a structure, a stack of tracks — and the first map's
-own figure, vector PDF and all, only while every other cell is empty. It used to ask for another
+own figure, vector PDF and all, only while every other cell is empty. The figure is the cells as
+they stand on screen: the first map where it was moved to, and not at all while it is hidden (§16.9). It used to ask for another
 *map*, so a deck of a map beside its 3D model exported the map alone from the card, while the bar's
 button beside it wrote both: two exports of one screen disagreeing about what was on it.
 
@@ -4699,15 +4714,37 @@ rule for the cell; a map still on screen elsewhere — another cell of the same 
 the lower triangle — is not listed twice, and one already hidden is not listed again. A hidden map is held by the session
 rather than by the deck, since a deck left with only the first map puts itself down, and it is let
 go by its × or when the session's own file closes; it is not in the link, which carries cells. Its
-eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The first map's eye and
-the compared map's keep their meanings: the 1D browser, and the lower triangle taken away (§5.7).
+eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The compared map's eye
+keeps its meaning, the lower triangle taken away (§5.7), and so does the first map's where there is
+no deck: the 1D browser. **In a deck the first map's eye is its cell's**, as every other map's is —
+it used to put the map down for the browser there too, which re-read the state with no map to lead,
+and a deck of maps cannot stand beside a browser (§25 stage D): the companions went with it.
+
+**The first cell closes like any other.** Its × is on its heading, after its star and chain, while
+another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
+is the eye's: the cell leaves the screen, and it is **parked, not closed**. Its view stays mounted
+behind the grid, at a column's width and out of sight, because it is what the rest of the deck
+follows — the maps' lock, the window a structure or tracks cell lights, the locus box above the grid,
+which goes on steering the deck — and a view taken out of the page would measure nothing and report
+nothing. The session is still of its file, and its tables and tracks are what they were; a track
+dropped while it is hidden is on it, as ever. It comes back **where it stood**: from the eye on its
+row, now dimmed, and from a `show …` in the deck's bar — the only road for the 1D browser as lead,
+which has no row on the card, and which it names as `show the 1D browser` rather than by the genome's
+name, which for a model that opened the session is the model's own file. It comes back by itself
+when the last cell beside it goes, since the deck is then put down and the view goes back to its own
+frame, which it must not reach hidden; *close deck* is that too. While it is hidden the star cannot
+stand on a map nobody can see — the *Map* card would be setting a picture off the screen — and moves
+to the first map still on screen, where there is one; the deck's count says the maps on screen, and
+its figure, its copy and the Export card's save are of the cells on screen. Hidden or not, it is
+remembered with its place, in this session's memory and in a saved workspace (§8.6).
 
 Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
 there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip
 would; a hidden map's row onto an empty cell, or onto a `+` edge, opens it there; the first map's or
-the compared map's row, the same way, opens that file there as a new companion — the first map being
-the session's own view, which is re-parented into cell 0 and never moved (§16.5). Taking hold of a
-row shows the tiling, as a cell's grip does.
+the compared map's row, the same way, opens that file there as a new companion — the plainest way to
+read one file at two windows or two colour scales. The first map's row onto a cell that holds
+something moves the first map there, as its own grip would (§16.5), and a companion's row onto the
+first map's cell exchanges the two. Taking hold of a row shows the tiling, as a cell's grip does.
 
 ### 16.10 Naming the maps
 
@@ -8485,7 +8522,17 @@ last of a batch used to get a picture and the others sat on the card as rows wit
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application. A
+model it was to be judged against — the commonest way to lose a picture in this application.
+**A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
+window names a genome — its beads are on sequences — so the session it opens is a browser of that
+genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used
+to stop there, an empty axis and the model nowhere on screen, the row having arrived with the store
+and been taken for one already there. The model now gets its cell the moment the browser is mounted,
+and the tracks give it the screen — hidden rather than closed (§16.9), so the heading above the deck
+still steers which stretch of the model is lit and `show the 1D browser` in the deck's bar puts them
+back. With nothing beside it the cell takes the height a map would, where a cell of a row with no map
+in it had the 16 rem floor. Where something is already drawn on the tracks they stay on screen, and a
+link or a restored session names its own deck. A
 row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
 eye is a model asking for a cell, the drop is a cell being given a model. The *3D structure* card
 has no picker for it: it said the second thing in the place a reader looks for which cell the card
@@ -8680,11 +8727,15 @@ cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), wh
 spreads to every other map. The chain in its heading unhooks both roads.
 
 **The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
-session's view, re-parented into cell 0 as a map's is, and the cells beside it are tracks and the
-structure. The deck learns a lead that is not a map — the browser's windows as loci, and a way to
-be taken somewhere — and the browser reports every move of its window, a link's included. A map
-may not join such a deck: the bar refuses it in words, the add row puts its map roads away, and a
-map a link names is held as the cell it would have been, under its name.
+session's view, re-parented into a cell as a map's is — moved and hidden as a map's is (§16.9) — and
+the cells beside it are tracks and the structure. The deck learns a lead that is not a map — the
+browser's windows as loci, a way to be taken somewhere, and its tracks drawn at an export's dpi, so
+the deck's figure has them in their cell where it used to leave a gap — and the browser reports every
+move of its window, a link's included. Its Export card saves and copies the deck's figure while a cell
+beside it has a picture, as the map's does (§16.5). A map may not join such a deck: the bar refuses
+it in words, the add row puts its map roads away, a map a link names is held as the cell it would
+have been, under its name, and the two presses that match maps' scales and resolutions are not
+offered, having nothing to act on. The deck's count of maps says nothing of a deck with none.
 
 ### 25.4 Hover, both ways
 

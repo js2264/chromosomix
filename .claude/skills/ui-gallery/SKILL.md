@@ -26,6 +26,7 @@ node scripts/ui-captions.mjs gallery         # figures saved with their caption 
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
+node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -126,17 +127,30 @@ arm reading, to those tasks, or to the store's script.
 The twelfth drives the **Tracks card and the lanes** (§5.8, §8.1, §8.6, §8.8, §8.15, §18.5): the
 Annotations column's foot with Metadata annotations and Bookmarks folded, two tracks ticked and set
 together from the batch box — `points` and one pair of limits — a diamond insulation run whose rows
-land on the Tracks card marked `*`, the crosshair toggled off and on over a lane, the map's ring
-pointer painted where the hand is (a screenshot carries no cursor) and a crop round it five times over
+land on the Tracks card marked `*`, the crosshair toggled off and on over a lane with the arrowhead
+painted where the hand is (a screenshot carries no cursor) — `tr09b` magnified, its tip on the
+hairline — the map's ring pointer painted the same way and a crop round it five times over
 — `tr10b` at rest and `tr11b` in a cell wider than the ring, where the guide lines must stop at its
 ticks and nothing may be drawn inside it — a typed locus with no ring round the map, the 1D browser
-drawing points, the same session on a throttled line drawing its map before
+drawing points and its arrowhead on the hairline (`tr12b`, `tr12c`), the same session on a throttled
+line drawing its map before
 its tracks with their room kept, and a circle whose pan stops at its end, framed on `ori` and zoomed
 on the join — then genes (§8.16): the rounded, pointed blocks beside the map and in the 1D browser, a
 two-exon transcript (ACT1), the lane's right-click menu opened on a gene, the lane squished and
 collapsed from that menu, and the same `rows` choice in the card. It prints what each step found. Run
 it after any change to the Tracks card, the batch box, a track style, the pointers or the crosshair,
 the order a session loads in, §8.15's frame, or how a feature is drawn.
+
+The thirteenth drives the deck's **first cell as a cell like the others** (§16.9) and a structure
+file opened on its own (§25.3): a bed3d written from the demo's model dropped on the landing page —
+which must open as the model alone, filling the column with no scroll, the empty 1D browser it names
+hidden behind it — then `show the 1D browser` in the deck's bar, the browser's heading with its grip
+and its ×, the browser moved by its grip and hidden again; and on the yeast deck the first map moved
+to the other cell, hidden by its × — the other map alone, starred, the first map's row on the
+Contact maps card dimmed with its eye dark — the locus box typed with it hidden (the map on screen
+must follow), and its eye putting it back where it stood. It prints the grid's order, the hash, the
+star and the card's eyes at each step. Run it after any change to the deck's grid, its lead, the
+Contact maps card's eyes, or what a lone structure opens as.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

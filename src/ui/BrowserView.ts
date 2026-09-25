@@ -211,7 +211,7 @@ import {
   SELECTION_PAD,
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { laneMenuFeature, openLaneMenu, readCanvasPalette } from './MatrixPanel'
+import { laneMenuFeature, openLaneMenu, readCanvasPalette, type DeckExport } from './MatrixPanel'
 import {
   PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
@@ -633,6 +633,8 @@ export class BrowserView {
   private canvasWidth = 0
   private exportDpi = 300
   private exportFormat: BrowserExportFormat = 'pdf'
+  /** Where this view's export goes while it leads a deck; see {@link setDeckExport}. */
+  private deckExport: DeckExport | null = null
   private clickTimer: number | null = null
   private reportTimer: number | null = null
   /**
@@ -1014,8 +1016,24 @@ export class BrowserView {
     void this.copy()
   }
 
+  /**
+   * Route this view's export to the deck it leads, or back to itself — the
+   * map's own hook (`MatrixPanel.setDeckExport`), for the browser as a lead
+   * (§25 stage D). With a model beside the tracks, the Export card and the
+   * keys are asked for the arrangement; with the tracks hidden and the model
+   * alone on screen (§16.9), for the one picture there is — never for the
+   * tracks the reader took off it.
+   */
+  setDeckExport(hook: DeckExport | null): void {
+    this.deckExport = hook
+  }
+
   private async copy(): Promise<void> {
     this.exportStatus.textContent = 'copying…'
+    if (this.deckExport !== null && (await this.deckExport.copy(this.exportDpi))) {
+      this.exportStatus.textContent = 'copied the deck'
+      return
+    }
     const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
     const height = this.heightOf(this.lanes)
     const now = new Date()
@@ -1918,13 +1936,6 @@ export class BrowserView {
         if (px >= this.gutter && px <= width) drawGuide(ctx, px, 0, height, CROSSHAIR_COLOR, this.dpr)
       }
     }
-    // Where the line is drawn, it *is* the pointer, and the drawn arrowhead
-    // beside it is a second, blunter mark for the same coordinate — sitting on
-    // top of the answer. So the hardware pointer goes exactly where the line
-    // comes, condition for condition: over the name column, where there is no
-    // coordinate and therefore no line, the arrowhead is still the only thing
-    // saying where the hand is (`ui/styles.css`).
-    this.canvas.classList.toggle('is-guided', guided)
     // The resize grip, where the pointer is on a lane's lower border. The
     // cursor is the drawn arrowhead everywhere here — it is what points at a
     // base pair — so an affordance that lives in the cursor would not exist.
@@ -2986,6 +2997,12 @@ export class BrowserView {
    * that is what a PNG is.
    */
   private async save(): Promise<void> {
+    // With a deck up, the figure is the deck; `false` is a deck with nothing
+    // drawn beside these tracks, which is this view's own figure.
+    if (this.deckExport !== null && (await this.deckExport.save(this.exportFormat, this.exportDpi))) {
+      this.exportStatus.textContent = 'saved the deck'
+      return
+    }
     // The whole canvas, name column included: the column is part of the figure —
     // it is where the track names are — and a page cut to the data would lose
     // every label on the left of it.

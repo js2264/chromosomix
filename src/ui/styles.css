@@ -904,8 +904,9 @@ p {
 }
 
 /* A map the eye took out of the deck (§16.9): still listed, and dimmed, as a
-   name with no picture behind it. */
-.compare-deck-row.is-parked .ann-name {
+   name with no picture behind it — the first map's own row too, while its cell
+   is hidden. */
+.compare-row.is-parked .ann-name {
   color: var(--text-dim);
 }
 
@@ -3712,24 +3713,25 @@ p {
    colour in between, and one flat colour would vanish somewhere in every
    colourmap.
 
-   **No pointer at all over a lane or the 1D browser**, while the crosshair is
-   on. There the hairline under the hand runs the whole height of the stack and
-   names one base pair; any mark over it covers the value it is pointing at,
-   and there is no cell whose neighbours a ring could frame. With the
-   crosshair off, neither is guided and all three show the resting arrowhead.
+   **Over a lane or the 1D browser the arrowhead stays**, crosshair or not, its
+   tip on the hairline. It used to be taken away while the hairline was drawn,
+   on the argument that the line *is* the pointer there — and a stack with no
+   pointer read as a stack the hand had left: the line under the hand is drawn
+   exactly as the echo of another surface's pointer is (a map's cell, a bead in
+   the structure cell), so which line was the reader's own was the one thing
+   the picture no longer said. The arrowhead points from its tip, which is on
+   the base pair the line names, and its body hangs to the right of the line
+   rather than across it.
 
    Between the resting arrowhead and the transient shapes below, deliberately:
-   each of those is one class deep, exactly as these are, so source order
-   decides and the later rule wins. A pan still shows the closed hand and a
+   each of those is one class deep, exactly as this is, so source order decides
+   and the later rule wins. A pan still shows the closed hand and a
    selection still shows its crosshair — those say what is *happening*, which no
    drawn guide line does.
 
-   `is-guided` is written by whatever owns the surface, and each owns a slightly
-   different condition because each draws its line under different ones: the map
-   while the crosshair preference is on *and* the pointer is over a cell (a
-   label gutter has no cell to draw one at), the 1D browser while it is on and
-   the pointer is on the axis rather than in the name column, and a lane stack
-   while it is on.
+   `is-guided` is written by the map (`render/heatmap.ts`), while the crosshair
+   preference is on *and* the pointer is over a cell: a label gutter has no cell
+   to draw a line at, and there the arrowhead is what says where the hand is.
 
    `crosshair` as the ring's fallback: a browser that will not take the image
    still gets a pointer of the right *kind*, which is the part that matters. */
@@ -3738,11 +3740,6 @@ p {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='3' opacity='.85'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3Cg stroke='%231f5fa9' stroke-width='1.5'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
       10 10,
     crosshair;
-}
-
-.lane-canvas.is-guided,
-.browser-canvas.is-guided {
-  cursor: none;
 }
 
 /* The arrowhead stays the resting cursor — it is the one that points *at* a
@@ -9688,6 +9685,12 @@ body.is-carrying-card * {
   content: '· ';
 }
 
+/* Nothing to count — a deck of a model and no map — is no line, and no bullet
+   before it. */
+.deck-maps:empty {
+  display: none;
+}
+
 .deck-maps {
   font-size: var(--step--1);
   font-weight: 600;
@@ -9726,6 +9729,8 @@ body.is-carrying-card * {
   display: grid;
   grid-template-columns: repeat(var(--deck-columns, 1), minmax(0, 1fr));
   gap: 0.6rem;
+  /* The box a hidden lead is parked in (`.is-parked`, below). */
+  position: relative;
   /* Stretch, not start: a cell with a height is a cell its picture can be
      pushed to the foot of, which is how the maps in a row line up when one of
      them carries a heading the others do not. */
@@ -9803,11 +9808,31 @@ body.is-carrying-card * {
 }
 
 /* The lead is the session's own view — its heading, its search box, its lanes,
-   its cards — re-parented into the first cell. Nothing about it is restyled:
+   its cards — re-parented into a cell of the grid. Nothing about it is restyled:
    a panel that looked different from the map it was a moment ago would say the
    deck had replaced it rather than framed it. */
 .deck-panel.is-lead {
   min-width: 0;
+}
+
+/* **A hidden lead is parked, not removed** (§16.9). Its view is what the rest
+   of the deck follows — the maps' lock, the window a structure or tracks cell
+   lights, the locus box above the grid — so it stays laid out, at the width of
+   one column of the grid, where it goes on measuring and reporting as it did
+   in a cell: `display: none` would give it no width, a map of no pixels and a
+   window of nothing. Out of sight and out of reach, and clipped to the grid's
+   own box, so a tall stack of tracks behind the deck does not lengthen the
+   page. The width is the grid's column arithmetic, so the window it reports is
+   the one it would have shown on screen beside the others. */
+.deck-panel.is-lead.is-parked {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc((100% - (var(--deck-columns, 1) - 1) * 0.6rem) / var(--deck-columns, 1));
+  height: 100%;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* **A cell's lanes stay in its cell.** Three or four across, the first map's
@@ -9997,16 +10022,17 @@ span.deck-name {
   color: var(--text-dim);
 }
 
-/* The lead's heading carries its name, its star and its chain — everything a
-   companion's does but the grip, because the first map is always the lead. */
+/* The lead's heading carries what every cell's does — a grip, its name, its
+   star and chain, and a × (§16.9). */
 .deck-head-lead {
   color: var(--text-dim);
 }
 
 /* The tiling, while a map is looking for a cell. The cells are only worth
    seeing as cells during the gesture; a permanent outline round every panel
-   would be a grid drawn over four pictures for nobody. */
-.deck-grid.is-arranging .deck-panel:not(.is-lead) {
+   would be a grid drawn over four pictures for nobody. Every cell on screen,
+   the lead's among them: it is a target like the others. */
+.deck-grid.is-arranging .deck-panel:not(.is-parked) {
   outline: 1px dashed var(--border-strong);
   outline-offset: 3px;
   border-radius: var(--radius);
@@ -10438,6 +10464,20 @@ span.deck-name {
   flex: 0 0 auto;
   height: var(--structure-h);
   min-height: 0;
+}
+
+/* **A cell alone on screen takes the height a map would** (§16.9) — the model
+   a lone structure file opened, or whatever is left beside a hidden first cell.
+   Its row has no map to take a height from, and the 16rem floor drew a model
+   in a strip across the top of an empty page. The window's height less what
+   stands above and below the picture — the bars, the view's heading and the
+   deck's, the cell's own, its resize bar and the `+` edge under the grid — so
+   the whole deck fits the column without a scroll; a height the reader set
+   wins. */
+.deck-grid.is-alone > .deck-panel:not(.has-height) > .structure-body > .structure-wrap,
+.deck-grid.is-alone > .deck-panel > .tracks-body > .tracks-wrap {
+  flex: 0 0 auto;
+  height: clamp(20rem, calc(100vh - 18.5rem - var(--tabstrip-h) - var(--deck-edge, 0px)), 60rem);
 }
 
 /* The bar under the picture that sets that height. Three pixels of nothing

@@ -207,6 +207,9 @@ export function forSharing(config: SessionConfig): SessionConfig {
       ...(deck.starred === undefined ? {} : { starred: deck.starred }),
       ...(deck.columns === undefined ? {} : { columns: deck.columns }),
       ...(looks.length === 0 ? {} : { looks }),
+      // Arrangement, like the columns: where the session's own cell stood and
+      // whether it was hidden names no file of anybody's (§16.9).
+      ...(deck.lead === undefined ? {} : { lead: deck.lead }),
     },
   }
   // The names of the maps a recipient can actually open, and only those: a name

@@ -429,6 +429,58 @@ export function swapItems<T>(items: readonly T[], a: number, b: number): T[] {
   return next
 }
 
+/**
+ * Where the session's own cell stands in its deck, and whether it is on screen
+ * (§16.9).
+ *
+ * The lead is the session's view re-parented into the grid rather than a
+ * companion, so it has no member in `maps` — and it used to have no place
+ * either: cell 0, always, with no grip and no ×, because "which file is this
+ * session of" is not a thing a drag should change. Nor does moving it change
+ * that: the session is of the same file afterwards, under the same breadcrumb.
+ * What a reader arranging a figure wanted was the *picture* somewhere else, or
+ * gone — a model beside the map, read alone — and a cell that could do neither
+ * was the one cell of the deck that was not like the others.
+ *
+ * Kept in the session's memory beside the column count, not in the hash, for
+ * the column count's reason: `maps` says *which* cells a deck holds, and where
+ * each one stands is arrangement.
+ */
+export interface DeckLead {
+  /** Its place in reading order among every cell of the deck, its own included. */
+  at: number
+  /**
+   * Taken off the screen by its × — alive, and still what the others follow,
+   * parked behind the grid — until its eye or the deck's bar puts it back.
+   */
+  hidden: boolean
+}
+
+/**
+ * A stored {@link DeckLead}, checked like input, or `null`.
+ *
+ * Stored state outlives the code that wrote it (§8.6). A place that is not a
+ * whole number from 0 is no place; one past the end of the deck it comes back
+ * to is clamped where the two meet ({@link withLead}), since only there is the
+ * deck's length known.
+ */
+export function readDeckLead(value: unknown): DeckLead | null {
+  if (typeof value !== 'object' || value === null) return null
+  const row = value as Record<string, unknown>
+  const at = row['at']
+  if (typeof at !== 'number' || !Number.isInteger(at) || at < 0) return null
+  return { at: Math.min(at, MAX_PANELS - 1), hidden: row['hidden'] === true }
+}
+
+/**
+ * A deck's cells in reading order: the companions, with the lead put back at
+ * its place — at the end, where a deck came back shorter than it was left.
+ */
+export function withLead<T, L>(cells: readonly T[], lead: L, at: number): Array<T | L> {
+  const place = Math.max(0, Math.min(Math.floor(at), cells.length))
+  return [...cells.slice(0, place), lead, ...cells.slice(place)]
+}
+
 // ---------------------------------------------------------------------------
 // Layout
 // ---------------------------------------------------------------------------
@@ -541,8 +593,9 @@ export function grownDeck(shape: DeckShape, direction: GrowDirection): DeckShape
 /**
  * Which cell each map moves to when the deck grows: old index per new cell.
  *
- * Indices are **flat, in reading order, lead included** — cell 0 is the lead's
- * cell, and `null` is a cell this press opened. Say a 2 × 2 deck grows beside:
+ * Indices are **flat, in reading order, lead included** — wherever the lead's
+ * cell stands (§16.9) — and `null` is a cell this press opened. Say a 2 × 2
+ * deck grows beside:
  * `[0, 1, null, 2, 3, null]`, which reads as *the first row keeps its two maps
  * and gains a cell, and so does the second*.
  *
@@ -558,8 +611,9 @@ export function grownDeck(shape: DeckShape, direction: GrowDirection): DeckShape
  * along the bottom. A new column has to be *spliced* into the end of each row,
  * which is what this computes.
  *
- * The lead never moves — it is at row 0, column 0, and both growths insert only
- * after a row's existing cells — so `out[0]` is always `0`.
+ * Nothing already placed changes row or column — both growths insert only
+ * after a row's existing cells — so `out[0]` is always `0`, and a lead that
+ * was moved stays in the cell the reader moved it to.
  */
 export function grownPlacement(shape: DeckShape, direction: GrowDirection): (number | null)[] {
   const { cells, columns } = clampShape(shape)
