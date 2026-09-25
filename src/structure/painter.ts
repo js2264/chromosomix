@@ -361,6 +361,37 @@ function paled(colour: string, background: [number, number, number], t: number):
   return `rgb(${mix(r, background[0])}, ${mix(g, background[1])}, ${mix(b, background[2])})`
 }
 
+/**
+ * The weight of the rule round a model's cell in an exported figure, in CSS
+ * pixels: the map's plot border's (`render/heatmap.ts`), so the two cells of a
+ * deck are framed alike.
+ */
+export const CELL_FRAME_WIDTH = 0.75
+
+/**
+ * The cell's edge, as a thin rule round an exported model (§25.7).
+ *
+ * A model zoomed past its cell is cut by the cell's edge, and on screen the
+ * cell's own border says where the cut is. Exported without one it floats on
+ * the page with a straight side sliced off it for no visible reason — so every
+ * export draws the edge: the deck's figure, the card's PNG and PDF and the
+ * clipboard. Inset by half its width, so the whole of the line is on the page
+ * rather than half of it cut by the page's own edge.
+ */
+export function drawCellFrame(
+  ctx: CanvasRenderingContext2D,
+  box: { width: number; height: number },
+  colour: string,
+  width: number,
+): void {
+  ctx.save()
+  ctx.setLineDash([])
+  ctx.strokeStyle = colour
+  ctx.lineWidth = width
+  ctx.strokeRect(width / 2, width / 2, box.width - width, box.height - width)
+  ctx.restore()
+}
+
 /** A neutral palette for a figure on paper. */
 export const PAPER_PALETTE: PainterPalette = {
   background: '#ffffff',

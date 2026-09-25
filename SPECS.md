@@ -9075,6 +9075,14 @@ chose rather than at a fixed one. Beads and sticks export as **paths** through
 figure takes the cell's canvas like any other, at the deck's 300 dpi (§16.5). The clipboard takes a
 PNG, as it does for a map.
 
+**An exported model is framed by its cell's edge**: a thin rule round the picture, at the weight and
+in the colour of the map's plot border (`--border-strong`, 0.75 px scaled to the export's
+resolution), so the two cells of a deck are framed alike. A model zoomed past its cell is cut by the
+cell's edge, and on screen the cell's own border says where the cut is; exported without one, the
+model floated on the page with a straight side sliced off it for no visible reason. Every export of a
+model draws it — the deck's figure, the card's PNG and PDF, the clipboard — as pixels on a raster and
+as a path on a page of paths, inset by half its width so the whole of the line is on the page.
+
 **A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
 button of its row, from the drawer's result and from the export road a computed row shares with

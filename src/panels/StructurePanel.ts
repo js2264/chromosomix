@@ -92,7 +92,13 @@ import {
   type Camera,
 } from '../structure/camera'
 import { resolveColours, type BeadColours, type StructureKey } from '../structure/colour'
-import { PAPER_PALETTE, drawStructure, type StructureView } from '../structure/painter'
+import {
+  CELL_FRAME_WIDTH,
+  PAPER_PALETTE,
+  drawCellFrame,
+  drawStructure,
+  type StructureView,
+} from '../structure/painter'
 import {
   beadsAt,
   beadsIn,
@@ -745,7 +751,19 @@ export class StructurePanel implements DeckCell {
     const scale = scaleForDpi(dpi)
     const width = Math.max(1, this.wrap.clientWidth)
     const height = Math.max(1, this.wrap.clientHeight)
-    return this.renderer.snapshot(width * scale, height * scale)
+    const out = this.renderer.snapshot(width * scale, height * scale)
+    // The cell's edge, which is what says where a model zoomed past it is cut
+    // (§25.7) — at the map's plot border's weight at this resolution.
+    const ctx = out?.getContext('2d') ?? null
+    if (out !== null && ctx !== null) {
+      drawCellFrame(
+        ctx,
+        { width: out.width, height: out.height },
+        readCanvasPalette(this.el).plotBorderColor,
+        Math.max(1, CELL_FRAME_WIDTH * scale),
+      )
+    }
+    return out
   }
 
   destroy(): void {
@@ -3346,6 +3364,9 @@ export class StructurePanel implements DeckCell {
         page.ctx.drawImage(raster, 0, 0, width, height)
       } else {
         drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+        // The raster above carries its frame from `exportCanvas`; paths get
+        // theirs as a path.
+        drawCellFrame(page.ctx, { width, height }, readCanvasPalette(this.el).plotBorderColor, CELL_FRAME_WIDTH)
       }
       const blob = await page.toBlob({ title: 'structure', created: now })
       await target.write(blob)

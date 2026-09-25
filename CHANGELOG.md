@@ -408,6 +408,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **An exported 3D model is framed by its cell's edge (§25.7).** A thin rule round the model's
+  picture, the weight and colour of the map's plot border, in the deck's figure, the card's PNG and
+  PDF and the clipboard — so a model zoomed past its cell reads as framed rather than floating with
+  one side sliced off.
+
 - **Features are rounded blocks that end in a point, and grow with their lane (§8.16).** A stranded
   feature's direction is the point on the block it ends in — a transcript's last exon — and nothing
   else: the chevrons through long boxes and along introns are gone. Corners are rounded a little, and
