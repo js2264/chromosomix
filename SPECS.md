@@ -1520,11 +1520,11 @@ per frame on the main thread and therefore belongs in a worker. It is a known
 limitation of the drawing, not of the data: the numbers behind every pixel, the
 readout, the axes and the export are all taken from the reader's grid.
 
-**Keyboard pan and zoom are supported**, so the picture takes focus — and says so: the focus ring is
-drawn on the canvas's own edge pixels (`outline-offset: -2px`) rather than around it, since a ring
-outside the figure reads as part of the figure while a reader tabbing into a map still has to be able
-to see which of two pictures the next arrow press will move. It is not in an exported figure, which
-is re-rendered rather than grabbed.
+**Keyboard pan and zoom are supported**, so the picture takes focus — and draws **no focus ring**:
+not around the map, the 1D browser's strip or a table's viewport. A ring on those surfaces is a blue
+frame around the data, which reads as part of the figure; and `:focus-visible` also matches the focus
+the app hands the picture after a typed locus and Enter, so a ring kept for the keyboard appeared
+after the commonest navigation there is. The picture has a frame of its own.
 
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
@@ -1980,6 +1980,12 @@ empty — on a file that cannot carry them. A fourth, **Bookmarks** (§8.10), si
 in this list because nothing in it is an annotation: it holds places rather than things drawn at
 them.
 
+The column reads, top to bottom: Contact maps, **Tracks**, Structures, **Manual annotations**,
+**Metadata annotations** and **Bookmarks** — the last two **folded** when they are built, since each
+is opened when a reader wants it rather than scanned past on the way to a track. The fold is the
+card's own (§26.6), is not remembered, and a view saved from the button beside `go` opens the
+Bookmarks card so the row it adds is seen.
+
 **Linear annotations** — headed **Tracks** on screen, which is also what its rows, its tooltips and
 every other surface call them; *annotation* survives as the column's name and in the two card names
 below. Three drop areas, and everything they hold is drawn *beside* the map, never on it: **one GTF**
@@ -1988,6 +1994,21 @@ below. Three drop areas, and everything they hold is drawn *beside* the map, nev
 or areas), and **bed-like files** (any number, resolved as genomic segments). Each is placed on any
 of the map's four edges — above, below, or down either side — or on several at once; each carries its
 own limits, style, colour and value scaling; and any set of tracks may share one autoscale group.
+
+**Ticking rows edits them together.** Each row of the Tracks card has a tick box (shift-click takes
+the rows between it and the last one clicked), and two or more ticked open a box above the list: the
+count and what can be done to them — *combine…* for a pair of tracks (§7.5), *hide* or *show*,
+*remove*, *clear* — over **a row's settings**, in a row's shapes and words: colour, height, style
+(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity.
+Each control **shows what the ticked rows share**, and *mixed* where they differ — an empty box saying
+so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round the swatch — and
+nothing is written until the reader picks. A pick is written to **every ticked row it means something
+to and no other**: a gene model and two bigWigs ticked together get one style picker, the pick lands on
+the two bigWigs, and the control's tooltip says how many of the ticked rows it reaches. Limits take both
+bounds before they are written, since a batch has no one range to seed the other from, and *auto*
+keeps each row's own manual pair for when it leaves auto again. The edits are one change to the store
+however many rows they reach. A new group named from the box clears the ticks, since the set now
+exists as a group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -2002,8 +2023,9 @@ feature" — and because one file is rarely wanted in both roles at once.
 **Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
 sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
 map's own cells. Discovered rather than loaded, so it is the one card whose contents nobody had to
-find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and over the marks,
-because the column descends from what came out of a file to what a reader put there by hand.
+find, and the one card a `.metacool` gets (§8.5). It sits **under the marks, folded**, with
+Bookmarks after it: what a reader loaded and drew comes first, and a column of the open map's own
+tables is reached for on purpose.
 
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
@@ -2522,8 +2544,10 @@ locus, and clamping it to one end would hand back coordinates for a region nobod
 
 ### 8.10 Bookmarks
 
-A fourth card under the marks, and the second thing in this section that comes from nobody's file:
-**places worth coming back to.** A bookmark is a region and a bin size, and nothing else.
+The last card in the column, under the marks and the Metadata annotations card, **folded** until it
+is opened — or until the button beside `go` saves a view, which opens it — and the second thing in
+this section that comes from nobody's file: **places worth coming back to.** A bookmark is a region
+and a bin size, and nothing else.
 
 Both halves are decisions. The **region** is stated in (contig, base pair) like every other
 annotation here (§8.1), so it means the same thing at 1 kb and at 20 kb. The **bin size** is carried
@@ -5107,12 +5131,15 @@ The panel's fold is a **window** preference, like the other three columns. Which
 **session** fact, because it is about this file — so switching tabs shows the drawer exactly when that
 tab had one open, and the content re-parents exactly as the other three columns' does.
 
-**The Synthetic tracks card** is the third surface and the least obvious, and it exists because of a
-mistake that was already made once and corrected: the virtual 4C profile started as a strip of its own
-and became an entry in the `AnnotationStore`, which is what gave it renaming, limits, colour, edges,
+**The Tracks card** is the third surface and the least obvious, and it is there because of a mistake
+that was already made once and corrected: the virtual 4C profile started as a strip of its own and
+became an entry in the `AnnotationStore`, which is what gave it renaming, limits, colour, edges,
 reordering, the tooltip and the exported figure for free. That lane is gone (§8.9) and the argument it
-made is not: a per-bin analysis result is the same object. It is therefore an ordinary track on an ordinary card in the **Annotations** panel — not a
-picture in the drawer — and nothing downstream of it knows it was computed rather than loaded.
+made is not: a per-bin analysis result is the same object. It is therefore an ordinary track, a row of
+the **Tracks card** in the **Annotations** panel beside the files it was computed with — not a picture
+in the drawer — and nothing downstream of it knows it was computed rather than loaded. It had a card
+of its own, *Synthetic tracks*, until that card turned out to be the second mistake of the same shape:
+a shelf with the exports on it and almost none of a track's controls (§18.5).
 
 ### 18.2 Every task is a descriptor, and every task is parametrised
 
@@ -5308,12 +5335,33 @@ been re-binned would be a list of figures that no longer describe anything.
 
 ### 18.5 A synthetic track is a track
 
-Any result that is one value per bin becomes an `AnnotationEntry` with `kind: 'track'` on a new
+Any result that is one value per bin becomes an `AnnotationEntry` with `kind: 'track'` on the
 `synthetic` card, and from that moment it is indistinguishable from a loaded bigWig: the same colour
-chip, rename, limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, hairline,
-tooltip, 1D browser and vector figure — because it is the same implementation and not a second one.
-Its `source` is a new `computed` case carrying the task and its parameters, so the row can say what made
-it.
+chip, rename, height, style, scale, flip, limits, autoscale, ceiling drag, four edges, reordering,
+autoscale groups, batch, hairline, tooltip, 1D browser and vector figure — because it is the same
+implementation and not a second one. Its `source` is a new `computed` case carrying the task and its
+parameters, so the row can say what made it.
+
+**It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
+one list whose order is the lanes' order: a task's profile, its called interval set (an overlay, with
+the overlay's shape, radius and opacity), and a comparison of two loaded tracks (§7.5). What only a
+synthetic row has rides in the places a loaded row keeps the matching facts:
+
+- **a `*` after its name** — the mark a resolution the file does not store wears (`3 kb*`, §3.3),
+  for the same fact: this is not in any file the reader gave the app. Its tooltip is the provenance;
+- **what made it, and how many**, on the line a loaded row's summary takes — *Diamond insulation*,
+  *Pattern detection · 1,204 pairs*, *Two tracks, as their ratio*;
+- **its exports and its framing**, in its settings where a loaded row's path is — bigWig, bedGraph and
+  TSV for a track, BED or BEDPE and TSV for a called set (§18.7), then the framing it was computed
+  against in the path's monospace;
+- **Recompute**, where a dropped file's row offers to re-open it, on a row that came back `detached`.
+
+There was a **Synthetic tracks** card above the Tracks card, and it is gone. It listed these rows with
+the colour, the name, the eye, the edges, the style, the scale and the exports, and nothing else — no
+height, no limits, no group, no flip, and no tick box, so an insulation track could not join a batch
+with the bigWig it was being compared against. A row that is a track in every sense below had a
+second, smaller set of controls on a second shelf, which is the one thing this section says it is
+not.
 
 Mechanically, a finished vector is **registered with the annotations worker as a bin-vector source**,
 and the lane then asks for samples over a window exactly as it does of a bigWig. One new request kind,
@@ -5548,7 +5596,7 @@ alternatives — the BED is the file a tool reads, and the TSV is the same rows 
 them, which is a header a BED consumer would choke on and a reader needs.
 
 **Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
-where — *3 tracks added to the Synthetic tracks card in the Annotations panel.* — and each row under it
+where — *3 tracks added to the Tracks card in the Annotations panel, marked \*.* — and each row under it
 is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
 three lanes drawn as three dashed boxes each repeating the same thirty words, each with a lone TSV
 under it, made a run of three exports read as a run of three paragraphs. The sentence also does not say
@@ -6524,9 +6572,9 @@ survives every scale reads as a column through the whole stack. A single-scale r
 ordinary ungrouped line — because there is no set for it to be part of, and a heatmap of one row is a
 worse picture of one track than the track.
 
-The Synthetic card carries the style control, and that is not an accident of layout: it is the **only**
-card that lists a computed row, since the Tracks card leaves them out on purpose (§18.5), so a style
-offered only there would be one a computed lane could never be given.
+A computed row is a row of the Tracks card (§18.5), so it carries the style control every loaded track
+carries — the one control this section needed a computed lane to have, since a mode offered to one kind
+of row only would be a mode the four insulation scales could never be drawn in.
 
 ### 18.12 A set of quantiles is one shape
 
@@ -8316,8 +8364,8 @@ A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
 **The Structures card.** Every model the session holds — dropped, named by URL, or computed
-(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
-Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
+(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
+`structure` rows out, computed or not. Each row carries the head every row has (colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
 computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
@@ -8328,7 +8376,7 @@ already says. There is no second control for that and no button labelled with wh
 reader who pressed the lit one expecting it to un-show got nothing. The card's own load zone names
 the three formats and, like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
-recipe in the drawer, as the Synthetic card does (§18.5).
+recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
 ### 25.3 The deck of cells
 

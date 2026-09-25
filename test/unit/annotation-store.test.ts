@@ -887,6 +887,35 @@ describe('closing a deck', () => {
  * other and `annotations/placement.ts` says an edge belongs to the lane; this is
  * the call that makes both true at once.
  */
+describe('moving a track on the lead', () => {
+  it('moves the lead’s lane before it tells anybody', () => {
+    // The edge buttons on a row read the lane, and so does the write to
+    // session storage; the lane used to be set after the announcement, so both
+    // saw the edge the track had just left.
+    const store = freshStore()
+    const entry = store.begin({ card: 'linear', kind: 'track', label: 'ATAC', source: localSource })
+    const seen: boolean[] = []
+    store.subscribe(() => seen.push(store.laneFor(entry.id, LEAD_MAP)?.placement.right === true))
+    store.placeAt(entry.id, LEAD_MAP, { bottom: true, right: true })
+    expect(seen).toEqual([true])
+  })
+
+  it('restyles several rows as one change', () => {
+    const store = freshStore()
+    const a = store.begin({ card: 'linear', kind: 'track', label: 'a', source: localSource })
+    const b = store.begin({ card: 'linear', kind: 'track', label: 'b', source: localSource })
+    let changes = 0
+    store.subscribe(() => changes++)
+    store.restyleEach([a.id, b.id, 'gone'], { size: 64 })
+    expect(changes).toBe(1)
+    expect(store.byId(a.id)?.style.size).toBe(64)
+    expect(store.byId(b.id)?.style.size).toBe(64)
+    // A patch may read each row's own style.
+    store.restyleEach([a.id, b.id], (style) => ({ size: style.size + 1 }))
+    expect(store.byId(a.id)?.style.size).toBe(65)
+  })
+})
+
 describe('moving a lane on one map', () => {
   function loaded(store: AnnotationStore, name: string, placement: Placement): string {
     const entry = store.begin({

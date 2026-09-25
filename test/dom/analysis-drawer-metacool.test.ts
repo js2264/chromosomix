@@ -3,7 +3,7 @@
  * Where a per-bin result goes on a file that has no Annotations panel.
  *
  * §18.5 says a profile is a lane rather than a picture, and on a `.cool` that is
- * exactly right: it becomes a row on the Synthetic tracks card and inherits
+ * exactly right: it becomes a row on the Tracks card, marked `*`, and inherits
  * colour, limits, edges, the tooltip and the 1D browser by being the same object
  * a bigWig is. A `.metacool` carries no annotations at all (§8.5), so it has no
  * such card — and three of the tasks offered on one produce per-bin vectors:
@@ -192,11 +192,12 @@ function open(
   }
 }
 
-describe('a profile on a file that has a Synthetic tracks card', () => {
+describe('a profile on a file that has a Tracks card for it', () => {
   it('is described rather than drawn, and points at the card it is on', () => {
     const view = open(result([profile()]), true)
     const said = view.el.querySelector('.analysis-elsewhere')?.textContent ?? ''
-    expect(said).toContain('Synthetic tracks card')
+    expect(said).toContain('Tracks card')
+    expect(said).not.toContain('Synthetic tracks card')
     expect(view.el.querySelectorAll('.analysis-figure')).toHaveLength(0)
     // TSV and nothing else: the row's own export row carries the rest.
     expect(buttonLabels(view.el)).toContain('TSV')

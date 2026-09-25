@@ -395,6 +395,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Ticked tracks are edited together (§8.1).** The box two ticks open carries a row's settings —
+  colour, height, style, scale, flip, limits, group, location, and opacity for overlays — showing what
+  the ticked rows share and *mixed* where they differ, and writing a pick to every ticked row it
+  applies to (a style picked over a gene model and two bigWigs lands on the two bigWigs). Limits take
+  both bounds; *auto* keeps each row's own pair. *same height* is the height box now, and *hide* turns
+  to *show* when every ticked row is hidden.
+
+- **Synthetic tracks are rows of the Tracks card (§18.5).** What a task computed — a profile, a
+  called set — and a comparison of two tracks are listed with the loaded tracks, marked `*` after the
+  name as a resolution the file does not store is, with the task that made them on the summary line
+  and the provenance in the mark's tooltip. They take every control a loaded track takes: height,
+  style, scale, flip, limits, group, edges, and a tick box into the batch. Their exports and framing
+  are in their settings, and a row that came back from a reload offers *recompute* where a file's
+  row offers to re-open it. The *Synthetic tracks* card is gone.
+
+- **Metadata annotations sits under Manual annotations, and it and Bookmarks start folded (§8.1).**
+  The Annotations column reads Contact maps, Tracks, Structures, Manual annotations, Metadata
+  annotations, Bookmarks; the last two are headings until pressed. Saving a view from the button
+  beside `go` opens the Bookmarks card, so the row it adds is seen.
+
 - **`metacooler-run` reads a map balanced by default (§23.1).** Wherever the file carries weights,
   as the app does — the framing and every task's *use balancing weights* alike — and `--no-balance`
   reads the raw counts. `--balance` is refused with a pointer, since it asked for the default and a
@@ -1039,6 +1059,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The blue ring round a focused map, 1D browser or table (§7.2).** It was meant for a reader
+  tabbing in, but it also lit after a typed locus and Enter, framing the data in blue after the
+  commonest navigation there is. The pictures take focus and draw no ring, as they did before.
+
 - **The companion's corner menu (§16.5).** The button in a companion's bottom-left corner and the
   menu of score, transform, ramp and clip it opened are gone: the map's *Map* card, shown in the
   Aesthetics column while it is starred, holds those and the rest.
@@ -1094,6 +1118,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A track's edge button lights on the press that sets it.** Moving a track to another edge of the
+  first map announced the move before it made it, so the row went on showing the old edge — and the
+  session remembered it — until something else changed.
 
 - **An exported P value is written as the drawer shows it, not as 0 (§18.7).** A table column that
   says its values may be very small — *Signal by group*'s P and q — was written to a TSV at its fixed

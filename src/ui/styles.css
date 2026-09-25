@@ -814,15 +814,39 @@ p {
    because under them it was below the fold: a reader who ticked two tracks at
    the top of a list of seven saw nothing appear, and read the ticks as
    highlighting rather than as a selection with a bar. */
+/* The ticked rows' settings, as one (§8.1): a line with the count and what
+   can be done to them, then a row's settings body in the same shapes. Tinted
+   and dashed, because it is not a track — it is the tracks ticked below it. */
 .ann-batch {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 0.3rem;
   padding: 0.4rem;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--accent-soft);
+}
+
+.ann-batch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ann-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+}
+
+.ann-batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  padding-top: 0.35rem;
 }
 
 .ann-batch-count {
@@ -831,8 +855,27 @@ p {
   color: var(--accent);
 }
 
-.ann-batch .select {
+.ann-batch-head .select {
   max-width: 8rem;
+}
+
+/* *Mixed*: the ticked rows disagree about this setting. A hatch rather than a
+   fill, on the edge segments and the flip — lit would say every row is on, and
+   plain that none is — and a dashed ring on the swatch, which cannot show an
+   empty value the way a box shows its placeholder. */
+.ann-place[aria-pressed='mixed'],
+.ann-flip[aria-pressed='mixed'] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--accent-soft) 0 3px,
+    var(--bg) 3px 6px
+  );
+  color: var(--accent);
+}
+
+.ann-swatch.is-mixed {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
 }
 
 .ann-batch-remove:hover {
@@ -3780,22 +3823,19 @@ p {
   cursor: pointer;
 }
 
-/* Which surface the arrow keys will drive, drawn *inside* its own frame.
+/* No focus ring on the pictures, written out so a UA default cannot put one back.
 
-   All three of these take focus so they can receive keys — the map and the
-   browser pan, a table scrolls — and all three answered a Tab with nothing at
-   all: each carried `outline: none`, on the argument that a blue rectangle
-   around the data reads as part of the figure. That is true of a ring drawn
-   *outside* the picture, so the ring is drawn on the picture's own edge pixels
-   instead (`outline-offset: -2px`). It is painted over the content, as an
-   outline is, and it is not in an exported figure, which is re-rendered rather
-   than grabbed. A keyboard reader has to be able to see which of the two
-   pictures the next arrow press will move. */
+   All three take focus so they can receive keys — the map and the browser pan,
+   a table scrolls — and for a while they drew a 2px accent ring on their own
+   edge pixels when they had it. It did not stay a keyboard reader's cue:
+   `:focus-visible` also matches a focus the app hands over after a typed locus
+   and Enter, so the ring appeared around the map and the browser after the
+   commonest navigation there is, as a blue frame round the data that read as
+   part of the figure. The picture has a frame of its own already. */
 .heatmap-canvas:focus-visible,
 .browser-canvas:focus-visible,
 .tviewport:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -11447,7 +11487,7 @@ span.deck-name {
 /* One output's name, on the row with its export buttons. `--text` and not the
    box's own dim grey: the sentence above is small print about where things went
    and these are the things — a lane's name is content, and it is what the reader
-   will look for on the Synthetic tracks card. */
+   will look for on the Tracks card, marked `*`. */
 .analysis-elsewhere-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -11533,20 +11573,41 @@ span.deck-name {
   min-width: 9rem;
 }
 
-/* --- the synthetic tracks card ------------------------------------------- */
+/* --- a synthetic track's row on the Tracks card ---------------------------
 
-.synthetic-row-source {
-  font-size: var(--step--2);
-  color: var(--text-faint);
-  line-height: 1.35;
+   The `*` a computed or derived track wears after its name (§18.5), the mark a
+   resolution the file does not store wears in the breadcrumb (`3 kb*`) and for
+   the same fact: this is not in any file the reader gave the app. Set in the
+   name's own weight and the accent, and hugging the name where the engine can
+   size a field to its text — elsewhere it stands at the end of the name's box,
+   which is still beside it. `margin-right: auto` keeps the eye, the chevron and
+   the × in the column every other row has them in. */
+.ann-synthetic {
+  flex: 0 0 auto;
+  margin-right: auto;
+  padding-inline: 0.05rem 0.15rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  cursor: help;
+  user-select: none;
 }
 
-.synthetic-exports {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  padding-top: 0.2rem;
+/* The three formats on one line with their label: at the column's default
+   width the row's ordinary gap put the last of them on a line of its own. */
+.ann-exports {
+  gap: 0.2rem 0.25rem;
+}
+
+.ann-exports > .btn {
+  padding-inline: 0.35rem;
+}
+
+@supports (field-sizing: content) {
+  .ann-row.is-synthetic .ann-name {
+    flex: 0 1 auto;
+    field-sizing: content;
+  }
 }
 
 /* --- narrow ---------------------------------------------------------------

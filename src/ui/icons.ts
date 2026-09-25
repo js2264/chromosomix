@@ -170,14 +170,43 @@ function foldCard(head: HTMLElement): void {
   const card = head.parentElement
   if (card === null) return
   if (!card.classList.contains('card') && !card.classList.contains('controls-card')) return
-  const folded = card.classList.toggle('is-folded')
-  const chevron = head.querySelector('.card-fold')
-  if (chevron === null) return
+  setFolded(card, !card.classList.contains('is-folded'))
+}
+
+/**
+ * Put a card in one fold state, chevron and all — what {@link foldCard} does on
+ * a press, for a caller that knows which way it wants the card rather than
+ * wanting it turned over. A card with no `cardTitle` heading keeps its class
+ * and has no chevron to tell.
+ */
+export function setFolded(card: HTMLElement, folded: boolean): HTMLElement {
+  card.classList.toggle('is-folded', folded)
+  const chevron = card.querySelector(':scope > .card-head > .card-fold')
+  if (!(chevron instanceof HTMLElement)) return card
   chevron.setAttribute('aria-expanded', String(!folded))
-  const label = chevron.getAttribute('aria-label') ?? ''
-  const name = label.replace(/^(Collapse|Expand) /, '')
+  const name = (chevron.getAttribute('aria-label') ?? '').replace(/^(Collapse|Expand) /, '')
   chevron.setAttribute('aria-label', `${folded ? 'Expand' : 'Collapse'} ${name}`)
-  if (chevron instanceof HTMLElement) chevron.title = folded ? 'Expand' : 'Collapse'
+  chevron.title = folded ? 'Expand' : 'Collapse'
+  return card
+}
+
+/**
+ * Build a card already folded, with its chevron saying so.
+ *
+ * `cardTitle` builds its chevron open, which is right for a card a reader came
+ * to read; this is for the ones a reader opens when they want them — the
+ * Metadata annotations and Bookmarks cards at the foot of the Annotations
+ * column, the stored JSON on the Info panel. The class goes on the card and the
+ * chevron is told what {@link foldCard} tells it on every later press, so the
+ * two never start out disagreeing: a chevron pointing down over a card with
+ * nothing under it looks broken until it is pressed twice.
+ *
+ * Not remembered, for `foldCard`'s reason: a card starts folded each time it is
+ * built — once per file — and keeps whatever the reader made of it while the
+ * element lives.
+ */
+export function startFolded(card: HTMLElement): HTMLElement {
+  return setFolded(card, true)
 }
 
 /**

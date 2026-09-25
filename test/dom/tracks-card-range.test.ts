@@ -30,7 +30,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AnnotationLoader } from '@/annotations/loader'
 import { AnnotationStore } from '@/annotations/store'
 import { AnnotationCard } from '@/ui/AnnotationCard'
-import type { ComputedSource } from '@/annotations/types'
+import type { MetadataSource } from '@/annotations/types'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -86,15 +86,19 @@ function add(store: AnnotationStore, label: string): string {
 }
 
 /** A row this card does not list (§8.9), to prove the span is over the ones it does. */
-function addComputed(store: AnnotationStore, label: string): string {
-  const source: ComputedSource = {
-    kind: 'computed',
-    name: label,
-    task: 'insulation',
-    recipe: { taskVersion: 1, params: {} },
-    framing: 'chrIV:1–1,531,933 at 1 kb',
+/**
+ * A row the store holds and this card does not list: a column of the open
+ * file's own tables, which has a card of its own (§8.12). Computed rows used to
+ * be the example, until they became rows here too (§18.5).
+ */
+function addUnlisted(store: AnnotationStore, label: string): string {
+  const source: MetadataSource = {
+    kind: 'metadata',
+    name: `contigs/${label}`,
+    table: 'contigs',
+    column: label,
   }
-  const entry = store.begin({ card: 'linear', kind: 'track', source, label })
+  const entry = store.begin({ card: 'metadata', kind: 'metadata', source, label })
   store.update(entry.id, { status: 'ready' })
   return entry.id
 }
@@ -267,16 +271,16 @@ describe('the anchor is a row, not a position', () => {
     const made = make(0)
     add(made.store, 't0')
     add(made.store, 't1')
-    // A computed lane sits between them in the store and is not a row here
-    // (§8.9), so a span counted in the store's own index space would stop one
+    // A metadata lane sits between them in the store and is not a row here
+    // (§8.12), so a span counted in the store's own index space would stop one
     // row short of where the reader clicked.
-    addComputed(made.store, 'insulation')
+    addUnlisted(made.store, 'coverage')
     add(made.store, 't2')
     add(made.store, 't3')
     expect(ticks(made.card)).toHaveLength(4)
 
     // t1 and t2 are neighbours here and two apart in the store, with the
-    // computed row between them: a span counted in the store's index space and
+    // metadata row between them: a span counted in the store's index space and
     // applied to this list would reach a row past the one that was clicked.
     clickTick(made.card, 1)
     clickTick(made.card, 2, true)

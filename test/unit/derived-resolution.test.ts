@@ -37,6 +37,7 @@ import { AnnotationStore } from '@/annotations/store'
 import type { Region, TrackSampleSet, TrackSamples } from '@/annotations/types'
 import type { AnnotationClient } from '@/annotations/worker/client'
 import { setUpDom, type DomTeardown } from '../support/dom'
+import { tracksCardOver } from '../support/tracksCard'
 
 /** One sequence, short enough that a 10 bp track over it is a readable table. */
 const CONTIG: BedGraphContig = { name: 'chrI', startBin: 0, bins: 5, length: 100_000 }
@@ -191,8 +192,13 @@ function bench(a: Span[], b: Span[]): Bench {
     carried: () => [],
     changed: () => {},
   }
-  return { workspace: new AnalysisWorkspace(host), asked }
+  const workspace = new AnalysisWorkspace(host)
+  stores.set(workspace, store)
+  return { workspace, asked }
 }
+
+/** The store each bench's workspace reads its rows from, for the card over it. */
+const stores = new WeakMap<AnalysisWorkspace, AnnotationStore>()
 
 interface Saved {
   name: string
@@ -239,7 +245,9 @@ function captureDownloads(): () => void {
 }
 
 async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved> {
-  const buttons = Array.from(workspace.syntheticEl.querySelectorAll('button'))
+  // The row's own buttons, on the Tracks card where a synthetic row lives.
+  const mounted = tracksCardOver(stores.get(workspace)!, workspace)
+  const buttons = Array.from(mounted.el.querySelectorAll('button'))
   const target = buttons.find((node) => node.textContent?.trim() === label)
   expect(target, `no ${label} button on the row`).toBeTruthy()
   const before = saved.length
@@ -248,6 +256,7 @@ async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   expect(saved, `nothing was written for ${label}`).toHaveLength(before + 1)
+  mounted.destroy()
   return saved[saved.length - 1]
 }
 

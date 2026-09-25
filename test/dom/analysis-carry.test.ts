@@ -9,7 +9,7 @@
  * (`Session.carry` → `AnnotationLoader.carry`). The one thing that did not was
  * the output of an analysis. A reader who ran compartments genome-wide, waited
  * four minutes for it, and then looked at the same region at a finer bin found
- * the Synthetic tracks card empty — the numbers having been dropped by the tab
+ * its synthetic tracks gone — the numbers having been dropped by the tab
  * that was still holding them, for no reason other than that they were held by a
  * workspace rather than by a store.
  *
@@ -37,7 +37,7 @@ import { AnnotationStore } from '@/annotations/store'
 import { defaultStyle, emptyPlacement, type ComputedSource } from '@/annotations/types'
 import type { AnnotationClient } from '@/annotations/worker/client'
 import type { BinVector } from '@/annotations/worker/binVector'
-import { syntheticEntry, syntheticId } from '@/ui/SyntheticCard'
+import { syntheticEntry, syntheticId } from '@/ui/synthetic'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown

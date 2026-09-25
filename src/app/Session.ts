@@ -631,32 +631,6 @@ export class Session {
    * is built here and the shell only lends it a slot (§18.1).
    */
   readonly drawerHost = el('div', { class: 'drawer-host' })
-  /**
-   * Where the synthetic tracks card sits, inside the Annotations column.
-   *
-   * A **marker**, never mounted, rather than a wrapper the card goes inside.
-   *
-   * The two are created at different moments — the annotation cards when a
-   * file's assembly is known, the workspace that owns the synthetic card after
-   * the *view* mounts, since it needs the framing — so the list has to be built
-   * before the card exists. The obvious answer is an empty `.panel-host` div
-   * that the card is later dropped into, and it was the answer here, and it was
-   * wrong: `.panel-host` is `display: contents`, so a card inside one inside
-   * `annotationsHost` is a *third* DOM level, and the stylesheet's
-   * `.panel-column-body > .panel-host > .card` rule stops at the second. The
-   * card lost `flex: 0 0 auto`, was squeezed to the height of its own title, and
-   * grew a scrollbar of its own — the exact bug that rule was written to fix,
-   * one level deeper, which is what a depth-counting selector always costs.
-   *
-   * So the list carries a marker and {@link renderAnnotations} substitutes the
-   * real card for it, or drops it. No wrapper, no third level, and the position
-   * of the card in the column stays where the call site put it.
-   */
-  private readonly syntheticSlot = el('div')
-  /** The analysis card, once the workspace exists. Substituted for the marker. */
-  private syntheticCard: HTMLElement | null = null
-  /** The annotation list as its call site wrote it, marker included. */
-  private annotationNodes: readonly HTMLElement[] = []
   readonly store = new ViewStore()
 
   /**
@@ -3010,16 +2984,14 @@ export class Session {
     const loader = new AnnotationLoader(store, client, assembly.contigs, (files) =>
       this.considerLengths(files),
     )
-    // A new store means the workspace that was watching the old one is stale.
-    // `SyntheticCard` subscribes to the store it was *built* with, while
-    // `adopt` writes through `host.store()` to whichever is current — so a
-    // workspace that outlived its store would go on filing results into a list
-    // nobody is looking at, which is exactly how the card came to be empty
-    // after a task had plainly run. Destroyed here rather than reconciled: a
-    // workspace is per-file, and so is a store.
+    // A new store means the workspace that was watching the old one is stale:
+    // it subscribes to the store it was *built* with, while `adopt` writes
+    // through `host.store()` to whichever is current — so a workspace that
+    // outlived its store would hold the numbers for rows the Tracks card no
+    // longer lists, and export nothing when one of them asked. Destroyed here
+    // rather than reconciled: a workspace is per-file, and so is a store.
     this.analysis?.destroy()
     this.analysis = null
-    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -3059,15 +3031,12 @@ export class Session {
     const wanted = published.length > 0 && shelfWasAsked(assembly.uri)
     this.setAnnotations([
       this.compareCard.el,
-      // Above the Tracks card, not below it: what a reader just computed is what
-      // they came back to the panel to find, and a list of eight loaded files
-      // between the Run button and its result is a scroll nobody should need.
-      this.syntheticSlot,
       new AnnotationCard({
         store,
         loader,
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
+        ...this.syntheticRowHooks(),
         ...(published.length === 0 || wanted
           ? {}
           : {
@@ -4249,6 +4218,25 @@ export class Session {
   }
 
   /**
+   * What a synthetic row on the Tracks card asks of the analysis workspace
+   * (§18.5): its exports, and its task run again.
+   *
+   * Read through `this.analysis` at the moment of the press rather than bound
+   * to a workspace here, because the Tracks card is built with the file's
+   * store and the workspace a frame or two later, once a view has mounted —
+   * and a change of resolution replaces the workspace under the same card.
+   */
+  private syntheticRowHooks(): Pick<
+    ConstructorParameters<typeof AnnotationCard>[0],
+    'onExport' | 'onRecompute'
+  > {
+    return {
+      onExport: (entry, format) => void this.analysis?.exportEntry(entry, format),
+      onRecompute: (entry) => this.analysis?.recompute(entry),
+    }
+  }
+
+  /**
    * The Structures card (§25): every model, loaded or computed, with the way
    * into the deck's cell and the way out as a bed3d.
    *
@@ -4601,12 +4589,12 @@ export class Session {
       this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
         this.compareCard.el,
-        this.syntheticSlot,
         new AnnotationCard({
           store: held.store,
           loader: held.loader,
           context: 'browser',
           onPickDropped: (event) => this.pickDropped(event),
+          ...this.syntheticRowHooks(),
         }).el,
         this.structureCardFor(held.store, held.loader),
       ])
@@ -4750,16 +4738,14 @@ export class Session {
       })),
       (files) => this.considerLengths(files),
     )
-    // A new store means the workspace that was watching the old one is stale.
-    // `SyntheticCard` subscribes to the store it was *built* with, while
-    // `adopt` writes through `host.store()` to whichever is current — so a
-    // workspace that outlived its store would go on filing results into a list
-    // nobody is looking at, which is exactly how the card came to be empty
-    // after a task had plainly run. Destroyed here rather than reconciled: a
-    // workspace is per-file, and so is a store.
+    // A new store means the workspace that was watching the old one is stale:
+    // it subscribes to the store it was *built* with, while `adopt` writes
+    // through `host.store()` to whichever is current — so a workspace that
+    // outlived its store would hold the numbers for rows the Tracks card no
+    // longer lists, and export nothing when one of them asked. Destroyed here
+    // rather than reconciled: a workspace is per-file, and so is a store.
     this.analysis?.destroy()
     this.analysis = null
-    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -4831,11 +4817,10 @@ export class Session {
     // where a reader goes to *leave* the matrix, which is not a rare thing at
     // all — and a control that turns the whole picture into a genome browser
     // does not belong under eight track rows and a list of hand-drawn marks.
-    // The file's own columns (§8.12). It goes **under the tracks and over the
-    // marks**, which is the same ordering the column already has: the cards
-    // descend from what came out of a file to what a reader put there by hand,
-    // and a column of the open map's own tables is the last thing on that side
-    // of the line.
+    // The file's own columns (§8.12). It goes **under the marks**, folded, with
+    // the Bookmarks card after it: the column opens on what a reader loaded and
+    // drew, and a column of the open map's own tables is reached for on purpose
+    // rather than scanned past on the way to a track.
     this.metadataCard = new MetadataCard({
       store,
       index: () => this.annotations?.metadata ?? null,
@@ -4857,12 +4842,11 @@ export class Session {
     // file covers, which `overlapWarning` now says.
     this.setAnnotations([
       ...(this.compareCard === null ? [] : [this.compareCard.el]),
-      // Above the Tracks card: see the browser path for why.
-      this.syntheticSlot,
       this.trackCardFor({
         store,
         loader,
         onPickDropped: (event) => this.pickDropped(event),
+        ...this.syntheticRowHooks(),
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
@@ -4884,11 +4868,11 @@ export class Session {
             }),
       }),
       this.structureCardFor(store, loader),
-      this.metadataCard.el,
       this.manualCard.el,
-      // Under the marks, because the two are the same kind of note made at
-      // opposite ends of a gesture: a mark says *look here* on the picture you
-      // have, and a bookmark says *take me back* to a picture you had.
+      this.metadataCard.el,
+      // Last, folded: a mark says *look here* on the picture you have and a
+      // bookmark says *take me back* to a picture you had, and the second is
+      // the one a reader opens when they have somewhere to keep (§8.10).
       this.bookmarksCard.el,
     ])
 
@@ -8481,8 +8465,6 @@ export class Session {
       this.analysis = null
       this.setAnalysis([])
       this.drawerHost.replaceChildren()
-      this.syntheticCard = null
-      this.renderAnnotations()
       return
     }
     if (this.analysis === null) {
@@ -8537,8 +8519,6 @@ export class Session {
     // shell's to place, which is why the two are separate hosts.
     this.setAnalysis(analysis.hasTasks ? [analysis.panelEl] : [])
     this.drawerHost.replaceChildren(analysis.drawerEl)
-    this.syntheticCard = analysis.syntheticEl
-    this.renderAnnotations()
   }
 
   /** The callbacks `AnalysisWorkspace` reads the session through. */
@@ -8629,12 +8609,6 @@ export class Session {
       // A deck the reader has left with no map starred has no file for a task
       // to run against, and none is guessed for them (§18.1).
       blocked: () => (this.deck !== null && this.deck.starredMap === null ? NO_STAR_TASKS : null),
-      // The same list the Tracks card is given, and deliberately not
-      // `allTargets` below: that one leaves out a companion whose two tables
-      // have not been read, which is right for *running* against it and wrong
-      // for *drawing* on it.
-      maps: () =>
-        this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
       /**
        * Every map on screen that can be run against **right now**, lead first.
        *
@@ -8914,29 +8888,8 @@ export class Session {
   }
 
   private setAnnotations(nodes: readonly HTMLElement[]): void {
-    this.annotationNodes = nodes
-    this.renderAnnotations()
-  }
-
-  /**
-   * The list, with the analysis card put where its marker is.
-   *
-   * Dropped rather than left empty where there is no workspace yet — a card
-   * titled *Synthetic tracks* with nothing in it and nothing on the way is a box
-   * the reader has to work out the meaning of, and the workspace arrives a frame
-   * or two later on every file.
-   */
-  private renderAnnotations(): void {
-    const out: HTMLElement[] = []
-    for (const node of this.annotationNodes) {
-      if (node !== this.syntheticSlot) {
-        out.push(node)
-        continue
-      }
-      if (this.syntheticCard !== null) out.push(this.syntheticCard)
-    }
-    this.annotationsHost.replaceChildren(...out)
-    this.setAvailability('annotations', out.length > 0)
+    this.annotationsHost.replaceChildren(...nodes)
+    this.setAvailability('annotations', nodes.length > 0)
   }
 
   /**

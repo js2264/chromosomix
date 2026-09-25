@@ -67,7 +67,7 @@
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
 import { resolutionLabel } from '../units'
-import { cardTitle, foldable, icon, iconButton } from './icons'
+import { cardTitle, foldable, icon, iconButton, startFolded } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
@@ -404,27 +404,9 @@ export class InfoPanel {
         ? el('pre', { class: 'json', text: JSON.stringify(metadata, null, 2) })
         : el('p', { class: 'hint', text: 'No metadata was stored in this file.' }),
     )
-    if (stored) startFolded(card, head)
+    if (stored) startFolded(card)
     return card
   }
-}
-
-/**
- * A card that is built already folded.
- *
- * `cardTitle` builds its chevron open, which is right for a card a reader came
- * to read; this is the one that is not. The class goes on the card and the
- * chevron is told the same thing `foldCard` tells it on every later press, so
- * the two never start out disagreeing — a chevron pointing down over a card with
- * nothing under it is a card that looks broken until it is pressed twice.
- */
-function startFolded(card: HTMLElement, head: HTMLElement): void {
-  card.classList.add('is-folded')
-  const chevron = head.querySelector('.card-fold')
-  if (!(chevron instanceof HTMLElement)) return
-  chevron.setAttribute('aria-expanded', 'false')
-  chevron.setAttribute('aria-label', 'Expand Metadata')
-  chevron.title = 'Expand'
 }
 
 function keyValue(key: string, value: string): HTMLElement[] {

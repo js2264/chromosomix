@@ -701,14 +701,19 @@ export class AnnotationStore {
     const now = sideOf(whole)
     const turned =
       was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
+    // The lead's own lane follows, because this control *is* the lead's. A
+    // companion's placement is its own — see {@link placeAt}, which is what a
+    // drag on a companion's edge goes through.
+    //
+    // **Before** the row's update, which is what announces the move: the lane
+    // was set after it, so every listener — the Tracks card's edge buttons, and
+    // the write to session storage — read the lane as it was before the press,
+    // and a pressed edge stayed unlit until something else changed.
+    this.lanes = place(this.lanes, id, LEAD_MAP, whole)
     this.update(id, {
       placement: whole,
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
     })
-    // The lead's own lane follows, because this control *is* the lead's. A
-    // companion's placement is its own — see {@link placeAt}, which is what a
-    // drag on a companion's edge goes through.
-    this.lanes = place(this.lanes, id, LEAD_MAP, whole)
   }
 
   /**
@@ -764,6 +769,36 @@ export class AnnotationStore {
     const entry = this.byId(id)
     if (entry === undefined) return
     this.update(id, { style: { ...entry.style, ...patch } })
+  }
+
+  /**
+   * The same patch into several rows' styles, announced **once**.
+   *
+   * What the Tracks card's batch box writes through (§8.1): a limit typed for
+   * twelve ticked tracks is one change, and twelve calls to {@link restyle}
+   * were twelve writes to session storage and twelve rounds of every listener
+   * — the card, the lanes and the workspace — for the reader's one gesture.
+   * Ids that have gone are skipped, as `restyle` skips one.
+   *
+   * The patch may be a function of each row's style, for a setting that keeps
+   * part of what the row had: *auto* on a batch keeps each row's own manual
+   * pair for when it leaves auto again, as a row's own button does.
+   */
+  restyleEach(
+    ids: readonly string[],
+    patch:
+      | Partial<AnnotationEntry['style']>
+      | ((style: AnnotationEntry['style']) => Partial<AnnotationEntry['style']>),
+  ): void {
+    const wanted = new Set(ids)
+    let hit = false
+    this.items = this.items.map((entry) => {
+      if (!wanted.has(entry.id)) return entry
+      hit = true
+      const change = typeof patch === 'function' ? patch(entry.style) : patch
+      return { ...entry, style: { ...entry.style, ...change } }
+    })
+    if (hit) this.changed()
   }
 
   /**

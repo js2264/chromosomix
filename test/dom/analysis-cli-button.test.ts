@@ -10,7 +10,7 @@
  * one step in the loop where the numbers in the figure and the numbers in the
  * table can quietly stop being the same numbers.
  *
- * The button is here rather than on the Synthetic tracks card because the run is
+ * The button is here rather than on a synthetic track's row because the run is
  * what it repeats, not the lane: a task that produces four outputs is one
  * command, and the drawer is the only surface that has the whole result. Its
  * source is the same {@link Provenance} `copy provenance` reads, so the two

@@ -604,16 +604,17 @@ this run now" but "can what the reader does next make it run":
 - the **Analysis drawer** — where the work happens: parameters, Run with the price beside it,
   progress, results, exports. Deliberately not a modal, because a modal takes the keyboard, dismisses
   on a stray click and answers Escape by destroying what is being read;
-- the **Synthetic tracks card** — where a per-bin result lands.
+- the **Tracks card** — where a per-bin result lands, as a row marked `*` beside the loaded tracks.
 
 Which task is open is a **session** fact; the panel's fold is a **window** preference.
 
 ### synthetic track
 
 An analysis result that became an ordinary track — an entry in the store, a bin vector the annotation
-worker can sample, and a row with somewhere for its exports to go. Nothing downstream of it knows it
-was computed rather than loaded, which is the point: it gets renaming, limits, colour, edges,
-reordering, tooltips and the exported figure for free.
+worker can sample, and a row of the Tracks card, marked `*` after its name, with its exports in its
+settings. Nothing downstream of it knows it was computed rather than loaded, which is the point: it
+gets renaming, height, style, limits, groups, colour, edges, reordering, the batch, tooltips and the
+exported figure for free. A comparison of two tracks (`derived`) is one too.
 
 ### figure spec vs figure style
 

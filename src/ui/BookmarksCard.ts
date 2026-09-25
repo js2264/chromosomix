@@ -38,7 +38,7 @@ import {
 } from '../annotations/bookmarks'
 import { button, el, fmt } from './dom'
 import { resolutionLabel } from '../units'
-import { cardTitle, icon, iconButton } from './icons'
+import { cardTitle, icon, iconButton, setFolded, startFolded } from './icons'
 
 export interface BookmarksCardProps {
   store: BookmarkStore
@@ -87,16 +87,22 @@ export class BookmarksCard {
       class: 'btn',
       title: 'Save the stretch of genome on screen, at the resolution it is open at',
     })
-    this.el = el(
-      'section',
-      { class: 'card annotation-card' },
-      cardTitle('Bookmarks', 'bookmark'),
-      // The ways in above the list, on the Tracks card's rule: with forty peaks
-      // imported, the way to add a forty-first must not be below forty rows.
-      this.addForm(),
-      this.importRow(),
-      this.note,
-      this.list,
+    // Folded until it is asked for, as the Metadata annotations card above it
+    // is (§8.10): the last card in the column, opened when a reader has a place
+    // to keep, and a heading the rest of the time. The `save` button beside
+    // `go` fills it without it being open.
+    this.el = startFolded(
+      el(
+        'section',
+        { class: 'card annotation-card' },
+        cardTitle('Bookmarks', 'bookmark'),
+        // The ways in above the list, on the Tracks card's rule: with forty peaks
+        // imported, the way to add a forty-first must not be below forty rows.
+        this.addForm(),
+        this.importRow(),
+        this.note,
+        this.list,
+      ),
     )
     this.unsubscribe = props.store.subscribe(() => this.render())
     this.render()
@@ -159,6 +165,11 @@ export class BookmarksCard {
    * and a press that appears to do nothing is the worst of the three answers.
    */
   saveFramed(): void {
+    // Opened, when it was folded: the button beside `go` answers by the row
+    // appearing here (`Session.bookmarkButton`), and a card that starts folded
+    // would take the answer with it. Opened whatever the outcome, since the
+    // refusals below are said on the card's own line too.
+    setFolded(this.el, false)
     const region = this.props.framed()
     if (region === null) {
       this.say(

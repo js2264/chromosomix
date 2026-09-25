@@ -37,8 +37,18 @@ import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
+import { batchFields } from './batchSettings'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
+import {
+  framingOf,
+  isSynthetic,
+  recomputeNote,
+  syntheticExports,
+  syntheticMark,
+  syntheticNote,
+  type SyntheticFormat,
+} from './synthetic'
 import { stepperField } from './trackControls'
 import {
   arrowsToggle,
@@ -113,6 +123,29 @@ export interface AnnotationCardProps {
    * behind it should do with one.
    */
   onPickDropped?(event: DragEvent): void
+  /**
+   * Write a synthetic row out (§18.5, §18.7) — the analysis workspace's, which
+   * holds the values a computed lane is drawn from. Absent, the row offers no
+   * exports rather than buttons that write nothing.
+   */
+  onExport?(entry: AnnotationEntry, format: SyntheticFormat): void
+  /**
+   * Run a detached computed row's task again, from the recipe it kept. Absent,
+   * the row says where to run it instead of offering a button.
+   */
+  onRecompute?(entry: AnnotationEntry): void
+}
+
+/**
+ * Whether a row is drawn as a lane beside the map — a loaded track, a feature
+ * set or a synthetic track — rather than on the matrix face (an overlay).
+ *
+ * `synthetic` is a lane exactly as `linear` is (`AnnotationStore.drawnOnMap`
+ * asks only that a row is not an overlay), so the two get one set of lane
+ * controls here: the height, the style, the scale, the flip, the edges.
+ */
+function isLaneRow(entry: AnnotationEntry): boolean {
+  return entry.card === 'linear' || entry.card === 'synthetic'
 }
 
 export class AnnotationCard {
@@ -166,10 +199,10 @@ export class AnnotationCard {
    * An **id and never a position**, which is the subtle part. A position in this
    * list is only true for as long as nobody touches the list, and touching it is
    * ordinary: the rows are reorderable by drag and by arrow key ({@link grip}),
-   * a row can be removed between the two clicks, and {@link fileRows} is a
+   * a row can be removed between the two clicks, and {@link trackRows} is a
    * *filter* over the store, so a store index is not a list index either. An
    * index remembered at the first click would name a different track by the
-   * second. The id is resolved against {@link fileRows} at the moment the span
+   * second. The id is resolved against {@link trackRows} at the moment the span
    * is taken, which is also what makes a stale anchor harmless: a row that has
    * gone is simply not found there, and the shift-click falls back to being a
    * plain one rather than selecting a span nobody asked for.
@@ -345,7 +378,7 @@ export class AnnotationCard {
     }
     this.pending = false
 
-    const entries = this.fileRows()
+    const entries = this.trackRows()
     // Rows that have gone take their tick with them, or a batch would act on
     // ids the store has never heard of.
     for (const id of [...this.ticked]) {
@@ -382,7 +415,7 @@ export class AnnotationCard {
     if (isOpen) body.replaceChildren(...this.settings(entry))
 
     const row = el('div', {
-      class: `ann-row ann-${entry.status}`,
+      class: `ann-row ann-${entry.status}${isSynthetic(entry) ? ' is-synthetic' : ''}`,
       attrs: { 'data-id': entry.id },
     })
 
@@ -413,6 +446,9 @@ export class AnnotationCard {
         ...(total > 1 ? [this.tick(entry)] : []),
         this.swatch(entry),
         this.name(entry),
+        // The `*` a resolution this file does not store wears (`3 kb*`), for
+        // the same fact: this row is not in any file the reader gave the app.
+        ...(isSynthetic(entry) ? [syntheticMark(entry)] : []),
         ...(entry.payload?.kind === 'features' ? [this.star(entry)] : []),
         this.visibility(entry),
         more,
@@ -451,6 +487,13 @@ export class AnnotationCard {
       row.appendChild(el('p', { class: 'inline-error ann-note', text: entry.error ?? 'failed' }))
     } else if (entry.status === 'detached') {
       row.appendChild(this.reattachNote(entry))
+    } else if (isSynthetic(entry)) {
+      // What made it, and how many — on the line a loaded row's summary takes,
+      // so the two kinds of row are one shape. No overlap report: a computed
+      // row was measured on this map's own grid and has nothing to disagree
+      // with it about.
+      const note = syntheticNote(entry)
+      if (note !== null) row.appendChild(el('p', { class: 'ann-note', text: note }))
     } else {
       if (entry.summary !== undefined) {
         row.appendChild(el('p', { class: 'ann-note', text: entry.summary }))
@@ -481,11 +524,12 @@ export class AnnotationCard {
    */
   private reattachNote(entry: AnnotationEntry): HTMLElement {
     if (entry.source.kind === 'computed') {
-      // There is no file to ask for. A called interval set is the answer to a
-      // task that was run against a framing, and what survives a reload is the
-      // recipe rather than the coordinates (§18.5) — so the honest note names
-      // the task and points at the panel that can run it again, instead of
-      // opening a file picker that could never be satisfied.
+      // There is no file to ask for. A computed row is the answer to a task that
+      // was run against a framing, and what survives a reload is the recipe
+      // rather than the numbers (§18.5) — so the row offers to run it again,
+      // instead of opening a file picker that could never be satisfied.
+      const recompute = this.props.onRecompute
+      if (recompute !== undefined) return recomputeNote(entry, recompute)
       return el('p', {
         class: 'ann-note ann-detached',
         text: `computed by ${entry.source.task} · run it again from the Analysis panel to redraw it`,
@@ -550,8 +594,8 @@ export class AnnotationCard {
       // every other box is undiscoverable otherwise, and this card has no room
       // for a line of help text.
       title:
-        `Include ${entry.label} in the batch below — shift-click to take every ` +
-        `row between this one and the last one you clicked`,
+        `Tick ${entry.label} to set it with the others ticked, in the box above the ` +
+        `list — shift-click to take every row between this one and the last one you clicked`,
       attrs: { 'data-tick': entry.id },
     })
     input.checked = this.ticked.has(entry.id)
@@ -576,7 +620,7 @@ export class AnnotationCard {
       // The rows **as they are now**, and the anchor found in them by id: this
       // is the resolution {@link anchor} exists to defer, and doing it here is
       // what survives a reorder, a removal or a filter between the two clicks.
-      const rows = this.fileRows()
+      const rows = this.trackRows()
       const from =
         extending && this.anchor !== null
           ? rows.findIndex((row) => row.id === this.anchor)
@@ -611,51 +655,21 @@ export class AnnotationCard {
   }
 
   /**
-   * What can be done to the ticked rows, and only while some are.
+   * The ticked rows' settings, as one — and what can be done to them — while
+   * two or more are ticked.
    *
-   * Four things, and they are the four that are meaningless one at a time:
-   * a shared autoscale group (which is a claim *about the set*), one height,
-   * one colour, and removing them together. Everything else a track has is a
-   * per-track decision and stays in the row.
+   * It was four actions: a shared autoscale group, one colour, the tallest
+   * height, hide and remove. Everything else a track has — the limits, the
+   * style, the scale, the flip, the edges — was one trip per row, and those are
+   * exactly what six replicates ticked together want set once. So the box
+   * carries a row's settings (`ui/batchSettings.ts`), showing what the ticked
+   * rows share and *mixed* where they differ, and writing each to every ticked
+   * row it means something to. The actions sit on its first line with the
+   * count: combine a pair, hide or show, remove, and clear the ticks.
    */
   private batchBar(entries: AnnotationEntry[]): HTMLElement | null {
     const chosen = entries.filter((entry) => this.ticked.has(entry.id))
     if (chosen.length < 2) return null
-    const group = el('select', { class: 'select' })
-    group.appendChild(el('option', { value: '', text: 'no group' }))
-    for (const name of this.props.store.scaleGroups().keys()) {
-      group.appendChild(el('option', { value: name, text: name }))
-    }
-    group.appendChild(el('option', { value: ' new', text: 'new group…' }))
-    group.value = ''
-    group.title = 'Resolve these tracks to one pair of limits'
-    group.addEventListener('change', () => {
-      let name = group.value
-      const coined = name === ' new'
-      if (coined) {
-        name = window.prompt('Name for the new autoscale group')?.trim() ?? ''
-        if (name === '') {
-          group.value = ''
-          return
-        }
-      }
-      for (const entry of chosen) this.props.store.restyle(entry.id, { group: name })
-      // Naming a group is the end of the gesture that selected these rows: the
-      // set now exists as a group, with a card of its own listing its members,
-      // and leaving the ticks on leaves a second selection saying the same thing
-      // — which the next batch action would silently act on. Clearing is exactly
-      // what the `clear` button beside it does, run for the reader.
-      if (coined) {
-        this.ticked.clear()
-        this.render()
-      }
-    })
-
-    const colour = el('input', { class: 'ann-swatch', type: 'color', value: chosen[0].style.colour })
-    colour.title = 'One colour for all of them'
-    colour.addEventListener('input', () => {
-      for (const entry of chosen) this.props.store.restyle(entry.id, { colour: colour.value })
-    })
 
     // Exactly two, and both of them profiles. A comparison of three tracks is
     // not a thing, and a comparison of a gene model against a bigWig is not
@@ -671,30 +685,72 @@ export class AnnotationCard {
         ? this.combineControl(chosen[0], chosen[1])
         : null
 
+    // Show when every ticked row is hidden, hide otherwise: a set with one
+    // hidden row in it is a set the reader is putting away, not bringing back.
+    const hidden = chosen.every((entry) => !entry.visible)
     return el(
       'div',
-      { class: 'ann-batch' },
-      el('span', { class: 'ann-batch-count', text: `${chosen.length} selected` }),
-      ...(pair === null ? [] : [pair]),
-      group,
-      colour,
-      button('same height', () => {
-        const tallest = Math.max(...chosen.map((entry) => entry.style.size))
-        for (const entry of chosen) this.props.store.restyle(entry.id, { size: tallest })
-      }, { class: 'btn btn-quiet', title: 'Give them all the height of the tallest' }),
-      button('hide', () => {
-        for (const entry of chosen) this.props.store.update(entry.id, { visible: false })
-      }, { class: 'btn btn-quiet', title: 'Hide them all, keeping their settings' }),
-      button('remove', () => {
-        for (const entry of chosen) {
-          this.ticked.delete(entry.id)
-          this.props.store.remove(entry.id)
-        }
-      }, { class: 'btn btn-quiet ann-batch-remove', title: 'Remove them all' }),
-      button('clear', () => {
-        this.ticked.clear()
-        this.render()
-      }, { class: 'btn btn-quiet' }),
+      {
+        class: 'ann-batch',
+        attrs: { role: 'group', 'aria-label': `Settings for the ${chosen.length} ticked tracks` },
+      },
+      el(
+        'div',
+        { class: 'ann-batch-head' },
+        el('span', { class: 'ann-batch-count', text: `${chosen.length} selected` }),
+        ...(pair === null ? [] : [pair]),
+        el(
+          'span',
+          { class: 'ann-batch-actions' },
+          button(
+            hidden ? 'show' : 'hide',
+            () => {
+              for (const entry of chosen) this.props.store.update(entry.id, { visible: hidden })
+            },
+            {
+              class: 'btn btn-quiet',
+              title: hidden ? 'Show them all again' : 'Hide them all, keeping their settings',
+            },
+          ),
+          button(
+            'remove',
+            () => {
+              for (const entry of chosen) {
+                this.ticked.delete(entry.id)
+                this.props.store.remove(entry.id)
+              }
+            },
+            { class: 'btn btn-quiet ann-batch-remove', title: 'Remove them all' },
+          ),
+          button(
+            'clear',
+            () => {
+              this.ticked.clear()
+              this.render()
+            },
+            { class: 'btn btn-quiet', title: 'Untick them, changing nothing' },
+          ),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'ann-batch-body' },
+        ...batchFields({
+          store: this.props.store,
+          rows: chosen,
+          maps: mapsOrLead(this.props.maps),
+          context: this.props.context ?? 'map',
+          groups: this.groupNames(),
+          // Naming a group is the end of the gesture that selected these rows:
+          // the set now exists as a group, and leaving the ticks on leaves a
+          // second selection saying the same thing — which the next batch action
+          // would silently act on. Clearing is exactly what `clear` does.
+          onCoined: () => {
+            this.ticked.clear()
+            this.render()
+          },
+        }),
+      ),
     )
   }
 
@@ -722,10 +778,10 @@ export class AnnotationCard {
       const op = select.value
       if (!isTrackOp(op)) return
       const entry = this.props.store.begin({
-        // **Synthetic, not linear.** A comparison is a track this app computed,
-        // and §18.5's rule is that such a track belongs on the card that carries
-        // the exports — which is the whole of what the reader wants from it once
-        // it is on screen.
+        // **Synthetic, not linear.** A comparison is a track this app computed
+        // (§18.5): it is listed here with a `*` after its name, and its settings
+        // carry the exports — which is the whole of what the reader wants from
+        // it once it is on screen and not a file.
         card: 'synthetic',
         kind: 'track',
         // Nothing to name and nothing to re-read: the values are computed from
@@ -741,11 +797,10 @@ export class AnnotationCard {
         // and a lane is drawn when it is ready.
         status: 'ready',
         // No `summary`. It said `ratio of two tracks`, which is word for word
-        // what the Synthetic card's own provenance line says about a derived
-        // row — invisible while that card showed no summary, and one line of
-        // pure repetition the moment it did. The count a summary carries on
-        // every other computed row is a fact a comparison has not got: it holds
-        // no elements, only a value wherever both its operands have one.
+        // what the row's own provenance line says about a derived row
+        // (`syntheticNote`). The count a summary carries on every other
+        // computed row is a fact a comparison has not got: it holds no
+        // elements, only a value wherever both its operands have one.
       })
       this.ticked.clear()
       this.render()
@@ -806,7 +861,7 @@ export class AnnotationCard {
       // Past the row it is swapping with, by identity: the rows on this card are
       // the store's *files*, and the store holds more than files (§8.9), so a
       // step in this list is not always a step in the store's own.
-      const neighbour = this.fileRows()[to]
+      const neighbour = this.trackRows()[to]
       const at = this.props.store.entries.findIndex((row) => row.id === neighbour?.id)
       if (neighbour === undefined || at < 0) return
       this.refocus = { attribute: 'data-grip', id: entry.id }
@@ -852,7 +907,7 @@ export class AnnotationCard {
       // is not a position in the store's own list. The row the drop landed on
       // names an entry, and the entry's place in the store is looked up, which
       // is what every other drag in the application does (`AnnotationStore.moveTo`).
-      const rows = this.fileRows()
+      const rows = this.trackRows()
       const target = rows[index]
       if (target === undefined) return
       const entries = this.props.store.entries
@@ -868,46 +923,33 @@ export class AnnotationCard {
   }
 
   /**
-   * The rows this card lists: every loaded **file**, in one list.
+   * The rows this card lists: every loaded **file**, and every **synthetic**
+   * track, in one list.
    *
    * Which of the store's cards an entry belongs to still decides where it is
    * *drawn* — a pair goes on the map, everything else beside it — but that is a
    * fact about the format and not a shelf the reader has to put it on.
    *
-   * The 4C profile shares the store and is not one of these. It is a reading of
-   * the matrix rather than a file loaded against it, so there is nothing this
-   * card could say about where it came from, nothing to put down, and nothing
-   * to re-attach after a reload; its controls are on the lane itself and in the
-   * lane's own menu (§8.9).
+   * **A synthetic row is here** (§18.5): a task's profile, its called set, and a
+   * comparison of two tracks. It had a card of its own, above this one, with
+   * the exports and the Recompute button only a computed lane has and almost
+   * none of the controls a loaded one has — so an insulation track could not be
+   * given a height, limits, a group or a flip, and could not be ticked into a
+   * batch with the bigWig it was being compared against. One list, the same
+   * controls, and a `*` after the name (`ui/synthetic.ts`); what only a
+   * synthetic row has — its provenance, its exports, Recompute — rides in the
+   * same places a loaded row's summary, origin and re-open button do.
    *
-   * **A metadata column is out on both counts** (§8.12). It came from no file —
-   * it is a column of the map that is already open — so this card's whole
-   * subject, *which file is this and can it still be read*, has no answer for
-   * it; and it has a card of its own, which is where the drop-down that adds
-   * one lives.
-   *
-   * **A synthetic track is out for the same reason and a stronger one.** It has
-   * a card of its own — with the exports and the Recompute button that only a
-   * computed lane has — and listing it here as well put every result in the
-   * panel twice, under two rows that move and rename independently while
-   * pointing at one entry. Its provenance is a recipe rather than a file, which
-   * is the one thing this card exists to show.
+   * **A metadata column is out** (§8.12). It came from no file — it is a column
+   * of the map that is already open — and it has a card of its own, which is
+   * where the drop-down that adds one lives.
    */
-  private fileRows(): AnnotationEntry[] {
-    // `derived` is here with `computed` and `metadata` because it is the same
-    // kind of row: something this app made, not something the reader gave it.
-    // A comparison of two tracks belongs beside the other things that were
-    // computed — where the exports are — rather than among the files it was
-    // computed from, which is also where a reader looks for it when they want
-    // the numbers out.
-    // …and a structure is a row of the Structures card (§25), whatever road
-    // it came by: it is never a lane and has nothing this card's controls do.
+  private trackRows(): AnnotationEntry[] {
+    // …and a structure is a row of the Structures card (§25), whatever road it
+    // came by — loaded, or computed by *Model from the map*: it is never a lane
+    // and has nothing this card's controls do.
     return this.props.store.entries.filter(
-      (entry) =>
-        entry.source.kind !== 'computed' &&
-        entry.source.kind !== 'metadata' &&
-        entry.source.kind !== 'derived' &&
-        entry.kind !== 'structure',
+      (entry) => entry.source.kind !== 'metadata' && entry.kind !== 'structure',
     )
   }
 
@@ -1037,7 +1079,7 @@ export class AnnotationCard {
   private settings(entry: AnnotationEntry): HTMLElement[] {
     const out: HTMLElement[] = []
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
-    if (entry.card === 'linear') out.push(this.laneRow(entry))
+    if (isLaneRow(entry)) out.push(this.laneRow(entry))
     // Which edge of the map — a choice a 1D browser does not have, since there
     // is one axis and everything is drawn along it. And not offered for a pile
     // either: reads are 1D-only (§8.13), so beside a map the row is there to be
@@ -1046,7 +1088,7 @@ export class AnnotationCard {
     // …nor for a structure, which is a row and not a lane (§25): its picture
     // is the deck's structure cell, not an edge of the map.
     if (
-      entry.card === 'linear' &&
+      isLaneRow(entry) &&
       entry.kind !== 'reads' &&
       entry.kind !== 'structure' &&
       this.props.context !== 'browser'
@@ -1142,6 +1184,19 @@ export class AnnotationCard {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))
       out.push(this.opacity(entry))
+    }
+    // What only a synthetic row has, where a loaded row has its path: the
+    // exports, then the framing it was computed against — the framing in the
+    // origin line's monospace, because it is looked up rather than read. A
+    // detached row has no numbers to export until it is recomputed.
+    if (isSynthetic(entry)) {
+      const exportTo = this.props.onExport
+      if (exportTo !== undefined && entry.status === 'ready') {
+        out.push(syntheticExports(entry, exportTo))
+      }
+      const framing = framingOf(entry)
+      if (framing !== null) out.push(el('p', { class: 'ann-origin', text: framing, title: framing }))
+      return out
     }
     out.push(this.origin(entry))
     return out

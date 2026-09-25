@@ -13,9 +13,9 @@
  * piece of it can: the runner produces a `TaskResult`, and a result that is one
  * value per bin has to *become a lane*. That is three steps in three different
  * subsystems — an entry in the `AnnotationStore`, a bin vector registered with
- * the annotations worker so `sample` can answer for it, and a row on the
- * synthetic card with somewhere for its exports to go — and this is the only
- * place that knows all three exist.
+ * the annotations worker so `sample` can answer for it, and the values its
+ * exports are written from, for the Tracks card's row to ask for — and this is
+ * the only place that knows all three exist.
  *
  * The values themselves are kept here rather than in the store, and that is not
  * an oversight. An `AnnotationEntry` is persisted to session storage and carried
@@ -31,8 +31,8 @@
  * a new store, a new annotations worker and a new workspace around it. Every
  * dropped track already survives that (`Session.carry`), and until this a
  * computed one did not — a reader who ran insulation at 1 kb and looked at the
- * same region at 5 kb found the Synthetic tracks card empty, having lost numbers
- * the tab was still holding for no reason other than which object held them.
+ * same region at 5 kb found its synthetic tracks gone, having lost numbers the
+ * tab was still holding for no reason other than which object held them.
  */
 
 import type { AnnotationClient } from '../annotations/worker/client'
@@ -44,17 +44,11 @@ import type { AnnotationEntry, ComputedSource } from '../annotations/types'
 import type { TrackSampleSet } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { GroupSettings } from '../annotations/groups'
-import { el, fmt } from '../ui/dom'
+import { fmt } from '../ui/dom'
 import { chooseSaveTarget, downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
-import {
-  SyntheticCard,
-  groupNameOn,
-  syntheticEntry,
-  syntheticId,
-  type SyntheticFormat,
-} from '../ui/SyntheticCard'
+import { groupNameOn, syntheticEntry, syntheticId, type SyntheticFormat } from '../ui/synthetic'
 import type { SourceSpec } from '../worker/protocol'
 import { gridAt } from './context'
 import { TASKS, tasksFor } from './registry'
@@ -151,15 +145,6 @@ export interface AnalysisWorkspaceHost {
   allTargetsReady?(): Promise<readonly RunTarget[]>
   /** How many maps a batch will end up covering, ready or not. */
   targetCount?(): number
-  /**
-   * Every map a lane may be drawn on, named — what the Tracks card is given.
-   *
-   * Not {@link allTargets}, which lists the maps an analysis can *run against*
-   * and therefore leaves out a companion whose two tables have not been read
-   * yet. Where a track may be **drawn** is a question about the grid, and a
-   * panel that is still opening its file is very much a cell of it.
-   */
-  maps?(): Array<{ id: string; label: string }>
   /** The worker a bin vector is registered with, so `sample` can answer for it. */
   annotations(): AnnotationClient | null
   /** The assembly, for the two writers that lay a vector out over it. */
@@ -233,22 +218,10 @@ export class AnalysisWorkspace {
   readonly panelEl: HTMLElement
   /** Goes in the shell's drawer slot. */
   readonly drawerEl: HTMLElement
-  /** Goes in the Annotations column, under the Tracks card. */
-  readonly syntheticEl: HTMLElement
 
   private readonly runner: AnalysisRunner
   private readonly panel: AnalysisPanelCard
   private readonly drawer: AnalysisDrawer
-  /**
-   * `null` on a file that carries no annotations at all (§8.5).
-   *
-   * A metacool has no Tracks card, so it has no card for a synthetic lane to be
-   * a row on either — and a card built against a store that does not exist would
-   * be a permanently empty box in a crowded column. A task there still produces
-   * its curves, its matrices and its tables; only the *profile* has nowhere to
-   * go, and {@link adopt} says so rather than dropping it.
-   */
-  private readonly synthetic: SyntheticCard | null
   private readonly profiles = new Map<string, HeldProfile>()
   /**
    * The interval outputs, for the same reason and with the same lifetime.
@@ -330,20 +303,11 @@ export class AnalysisWorkspace {
     })
     this.drawerEl = this.drawer.el
 
+    // The rows themselves are the Tracks card's (§18.5): it lists what this
+    // workspace adds to the store beside what the reader loaded, and asks here
+    // for the two things only a computed row has — {@link exportEntry} and
+    // {@link recompute}.
     const store = host.store()
-    this.synthetic =
-      store === null
-        ? null
-        : new SyntheticCard({
-            store,
-            // The same list the Tracks card is given, so §18.5's claim that a
-            // computed track is a track like any other holds for the one
-            // control it was still missing: which map, and which edge of it.
-            ...(host.maps === undefined ? {} : { maps: () => host.maps?.() ?? [] }),
-            onExport: (entry, format) => void this.export(entry, format),
-            onRecompute: (entry) => this.recompute(entry),
-          })
-    this.syntheticEl = this.synthetic?.el ?? el('div', { class: 'synthetic-absent' })
 
     // The panel shows a running job's state whether or not the drawer is open
     // (§18.1), so both surfaces follow the runner rather than the drawer
@@ -415,7 +379,6 @@ export class AnalysisWorkspace {
   refresh(): void {
     this.panel.refresh()
     this.drawer.refresh()
-    this.synthetic?.refresh()
   }
 
   relayout(): void {
@@ -426,7 +389,6 @@ export class AnalysisWorkspace {
     this.unsubscribe()
     this.panel.destroy()
     this.drawer.destroy()
-    this.synthetic?.destroy()
     this.runner.destroy()
     this.profiles.clear()
   }
@@ -497,7 +459,6 @@ export class AnalysisWorkspace {
           grid: this.gridFor(output.binsize),
         })
       }
-      this.synthetic?.refresh()
       this.drawer.refresh()
       this.host.changed()
       return
@@ -584,7 +545,6 @@ export class AnalysisWorkspace {
         revision: previous + 1,
       })
     }
-    this.synthetic?.refresh()
     this.host.changed()
   }
 
@@ -783,7 +743,6 @@ export class AnalysisWorkspace {
         ...(entry.fileExtent === undefined ? {} : { fileExtent: entry.fileExtent }),
       })
     }
-    this.synthetic?.refresh()
     this.host.changed()
   }
 
@@ -999,7 +958,14 @@ export class AnalysisWorkspace {
   // Exports
   // -------------------------------------------------------------------------
 
-  private async export(entry: AnnotationEntry, format: SyntheticFormat): Promise<void> {
+  /**
+   * Write one computed row out, as its row on the Tracks card asks (§18.7).
+   *
+   * Here and not on the card, because the values are here: a profile's vector
+   * and a called set's provenance are held by this workspace for as long as the
+   * tab is open, and never by the store (§18.5).
+   */
+  async exportEntry(entry: AnnotationEntry, format: SyntheticFormat): Promise<void> {
     const stamp = fileStamp(new Date())
     const base = exportBaseName(entry.label)
 

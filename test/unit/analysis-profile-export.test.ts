@@ -43,8 +43,9 @@ import {
 import { AnnotationStore } from '@/annotations/store'
 import type { AnnotationClient } from '@/annotations/worker/client'
 import type { ComputedSource } from '@/annotations/types'
-import { syntheticEntry } from '@/ui/SyntheticCard'
+import { syntheticEntry } from '@/ui/synthetic'
 import { setUpDom, type DomTeardown } from '../support/dom'
+import { tracksCardOver } from '../support/tracksCard'
 
 /**
  * Three sequences, so a wrong offset lands on a named neighbour.
@@ -192,8 +193,13 @@ function bench(binsize: number, carried: readonly CarriedResult[]): AnalysisWork
     carried: () => carried,
     changed: () => {},
   }
-  return new AnalysisWorkspace(host)
+  const workspace = new AnalysisWorkspace(host)
+  stores.set(workspace, store)
+  return workspace
 }
+
+/** The store each bench's workspace files its rows into, for the card over it. */
+const stores = new WeakMap<AnalysisWorkspace, AnnotationStore>()
 
 interface Saved {
   name: string
@@ -267,7 +273,9 @@ function captureDownloads(): () => void {
  * rather than awaited.
  */
 async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved> {
-  const buttons = Array.from(workspace.syntheticEl.querySelectorAll('button'))
+  // The row's own buttons, on the Tracks card where a synthetic row lives.
+  const mounted = tracksCardOver(stores.get(workspace)!, workspace)
+  const buttons = Array.from(mounted.el.querySelectorAll('button'))
   const target = buttons.find((button) => button.textContent?.trim() === label)
   expect(target, `no ${label} button on the row`).toBeTruthy()
   const before = saved.length
@@ -276,6 +284,7 @@ async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   expect(saved).toHaveLength(before + 1)
+  mounted.destroy()
   return saved[saved.length - 1]
 }
 

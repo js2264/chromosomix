@@ -34,7 +34,7 @@ import {
   groupNameOn,
   syntheticEntry,
   syntheticId,
-} from '../../src/ui/SyntheticCard'
+} from '../../src/ui/synthetic'
 
 /** The shape `mintAnnotationId` produces, and the one nothing else may take. */
 const MINTED = /^a\d+$/

@@ -23,7 +23,7 @@
  * so the colour, the rename, the four edges, the multi-map placement, the
  * reorder, the height, the limits, the hairline, the tooltip, the figure export
  * and the session memory are the one implementation those rows already have —
- * exactly the argument `ui/SyntheticCard.ts` makes for computed tracks (§18.5).
+ * exactly the argument `ui/synthetic.ts` makes for computed tracks (§18.5).
  * What is left for a card of its own is the drop-down, the provenance line, and
  * a TSV export of the column as the file wrote it.
  */
@@ -44,7 +44,7 @@ import {
 } from '../annotations/metadata'
 import { CATEGORY_PALETTE, categoryColour } from '../render/meta'
 import { button, el } from './dom'
-import { cardTitle, iconButton } from './icons'
+import { cardTitle, iconButton, startFolded } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { flipButton, heightField, limitsField, styleFields } from './laneSettings'
 
@@ -92,21 +92,28 @@ export class MetadataCard {
   private pending = false
 
   constructor(private readonly options: MetadataCardOptions) {
-    this.el = el(
-      'section',
-      { class: 'card annotation-card metadata-card' },
-      cardTitle('Metadata annotations', 'table'),
+    // **Folded until it is asked for** (§8.12). It sits at the foot of the
+    // column, under the marks, and what it offers — a column of the file's own
+    // tables drawn as a lane — is reached for on purpose rather than scanned
+    // past on the way to a track, so its heading is the whole of what it costs
+    // until then.
+    this.el = startFolded(
       el(
-        'div',
-        { class: 'ann-inline meta-add' },
-        this.picker,
-        button('add', () => this.add(), {
-          class: 'btn',
-          title: 'Draw this column beside the map, as a lane like any other.',
-        }),
+        'section',
+        { class: 'card annotation-card metadata-card' },
+        cardTitle('Metadata annotations', 'table'),
+        el(
+          'div',
+          { class: 'ann-inline meta-add' },
+          this.picker,
+          button('add', () => this.add(), {
+            class: 'btn',
+            title: 'Draw this column beside the map, as a lane like any other.',
+          }),
+        ),
+        this.note,
+        this.list,
       ),
-      this.note,
-      this.list,
     )
     this.picker.title =
       'Columns this file carries about its own genomes, sequences and bins. What is offered is ' +
@@ -130,9 +137,8 @@ export class MetadataCard {
    * Rebuild the drop-down and the rows, and take the whole card away when the
    * file carries no metadata at all.
    *
-   * Hidden rather than shown empty, for the reason the synthetic card is: a
-   * heading over a sentence about a feature this file cannot have is noise in a
-   * column a reader is scanning.
+   * Hidden rather than shown empty: a heading over a sentence about a feature
+   * this file cannot have is noise in a column a reader is scanning.
    */
   refresh(): void {
     if (this.holdsFocus()) {

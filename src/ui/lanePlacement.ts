@@ -4,12 +4,14 @@
  * It lived inside `ui/AnnotationCard.ts` as three private methods, which was
  * right while there was one card with tracks on it. §18.5's claim is that a
  * computed track is a track like any other — same colour chip, same limits, same
- * four edges, same reorder — and the Synthetic card was the counter-example: it
- * had the colour, the name and the eye, and no way at all to say which map an
- * eigenvector should be drawn beside or on which edge of it. A reader could drag
- * the lane, and that was the whole of it.
+ * four edges, same reorder — and the Synthetic card that listed them then was
+ * the counter-example: it had the colour, the name and the eye, and no way at
+ * all to say which map an eigenvector should be drawn beside or on which edge of
+ * it. (Those rows are the Tracks card's own now.)
  *
- * So the control moves here and both cards mount the same one. Nothing about it
+ * So the control moves here and every card with lanes mounts the same one — the
+ * Tracks card and the Metadata annotations card — and the Tracks card's batch
+ * box mounts its twin for several rows (`ui/batchSettings.ts`). Nothing about it
  * changed on the way: four edges rather than a choice of one, because a track
  * can be on several and several is a real answer; a row per map once there is
  * more than one map to choose between; and the last edge on a map turning the
