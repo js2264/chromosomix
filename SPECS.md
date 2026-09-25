@@ -3186,33 +3186,29 @@ the tick is, because a reader who typed one usually meant it.
 
 #### What the flag does to the picture
 
-The window becomes **unwrapped**. A region view on a circular sequence pans in a
-coordinate space that runs off both ends and is resolved modulo the sequence, so
-`chrom:2,900,000-3,100,000` on a 3 Mb circle is an ordinary place to be looking
+A window across the origin is read **unwrapped**. `chrom:2,900,000-100,000` on a
+3 Mb circle — or the `ori` framing below — is an extent that runs off the end of
+the sequence and is resolved modulo it, so it is an ordinary place to be looking
 and is two stored pieces: the last 100 kb and the first 100 kb. On both axes at
 once, so a square window across the junction is up to **four** stored blocks, one
 of which is that far corner. `worker/wrap.ts` says which pieces and
 `worker/wrappedMatrix.ts` reads and assembles them.
 
-Unwrapped rather than modular because it is the only space in which panning is
-*monotonic*. The alternative is a window whose start jumps from 2,999,000 to 0,
-and every `covers`, `pad` and `recentre` in `ui/refine.ts` — the whole
-zoom-and-travel policy of §2 — would have to learn about that. What those
-rules learn instead is one thing: on a circular axis **every edge of the block
-gives**, because there is no end of the world for one of them to be, and the
-answer to reaching one is the same block width rotated round to where the reader
-now is. The ceiling stops being a limit on *where* and becomes a cap on *how
-wide*: one lap, past which a bin would be drawn twice.
+**Such a window is a frame, and a map does not slide round the circle.** The
+extent is the view's ceiling: a zoom inside it refines as it does anywhere (§2),
+every read stays inside it, and a pan stops at its edges. A window that does not
+cross the origin pans as a window on a line does, to the sequence's ends. The way
+to the other side of the origin is `ori`, which frames the whole circle with the
+origin in the middle, or a window typed across it.
 
-**A circular view reads as it moves, whatever the refine setting says.** §2's
-zoom-to-refine is off until a reader turns it on, and that is the right default
-for what it was written for: a sharper picture of a place you are already at,
-bought with reads you did not ask for. A circular slide is not that — past the
-end of the sequence there is *no* block in hand, the window having left
-everything that was ever read, so with the ladder asleep the picture stops at the
-last bin, which is the exact wall the declaration was made to remove. A reader
-who ticks the box has asked for the reads that make the wrap possible. Only for a
-sequence they have declared: every other view keeps the setting's answer.
+It used to slide. Any window on a declared sequence was read with no ends: every
+edge of a block gave, a pan past one read the same width rotated round to where
+the reader now was, and the view read as it moved whatever the refine setting
+said, since past the end of the sequence there was no block in hand. It was not
+smooth — a read per stretch of drag, the picture frozen while each landed — and a
+map with no edges lost its reader, who could not tell how far round they had come.
+`ori` answers the question the slide was for in one press, and leaves a picture
+with edges.
 
 And the declaration does **not** rebuild the view. It changes how the block is
 read, so the ladder is armed again — against the block that is *drawn*, not the
@@ -3242,9 +3238,10 @@ written. Three things did have to change, and each is a place where *the first
 stretch with this name* stopped being the right answer: a window now carries the
 stretch it was cut from rather than looking one up by name, a mark is drawn at
 **every** place its locus lands rather than the first — or it would flicker in
-and out as the reader slid past the join — and the window a refine carries across
-a change of grid picks the narrowest ordered pair of landings, without which the
-panel refuses the very block the reader is sliding towards.
+and out as the reader panned across the join inside a frame — and the window a
+refine carries across a change of grid picks the narrowest ordered pair of
+landings, without which the panel refuses the very block a zoom on the join
+asks for.
 
 The turn (§17) needs nothing at all: it rotates whatever block is on screen, and
 a wrapped block has a diagonal like any other.
@@ -3288,9 +3285,9 @@ so near the junction their denominator is the curve's far tail rather than its
 near one — except where the map's O/E is taken along the arms, below, whose
 offsets from the origin are measured round the circle. A **deck companion** draws
 the sequence linearly — the declaration is the lead map's — so a deck of a
-circular chromosome shows the lead sliding and the companions standing still. Both
-are seams rather than wrong answers, and both are in the same place: the reader
-can see the junction.
+circular chromosome framed on `ori` shows the lead across the junction and the
+companions from the sequence's first base. Both are seams rather than wrong
+answers, and both are in the same place: the reader can see the junction.
 
 #### The origin, and the two arms
 
@@ -3333,16 +3330,15 @@ does not follow, rebuilds the view on the window it names. **`arms`** takes the 
 along the diagonal alone (§7.5), read from the origin in the column — the first
 base where none has been set.
 
-**The turn slides too, and it needed one gate widened.** `isTurnable` asked for
-*one run or none*, on the sound ground that a boundary between two sequences is a
-discontinuity in the x axis and the distance across it is not a distance. A
-wrapped block has two runs — the sequence's tail, then its head — so it was
-refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
-declines a block it cannot turn, so the ladder read the very block the reader was
-sliding towards and the picture simply stopped at the last bin with nothing said
-anywhere. The gate now asks *one sequence*, which is what it always meant: several
-runs are allowed when the block was read round a circle and every one of them
-carries the same name. `turnedAxis` then builds a segment per run instead of one,
+**A frame across the origin turns, and it needed one gate widened.** `isTurnable`
+asked for *one run or none*, on the sound ground that a boundary between two
+sequences is a discontinuity in the x axis and the distance across it is not a
+distance. A wrapped block has two runs — the sequence's tail, then its head — so it
+was refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
+declines a block it cannot turn, so a turned `ori` frame refined into nothing and
+stopped at the last bin with nothing said anywhere. The gate now asks *one
+sequence*, which is what it always meant: several runs are allowed when the block
+was read round a circle and every one of them carries the same name. `turnedAxis` then builds a segment per run instead of one,
 each carrying its own lap, and the turned picture reads the far side of the
 junction as the beginning of the sequence exactly as the square one does.
 

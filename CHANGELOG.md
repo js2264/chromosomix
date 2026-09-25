@@ -1083,6 +1083,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **Panning round a circular chromosome (§8.15).** A pan past the end of a declared circle no
+  longer reads its way round to the beginning: it stops at the sequence's end, as on a line. `ori`
+  is the way across the origin — it frames the whole circle with the origin in the middle — and
+  that frame, or a window typed across the origin, is zoomed and refined inside but not slid past.
+  The slide read a block per stretch of drag with the map frozen while each landed, and left no
+  edge to tell how far round the reader had come.
+
 - **The blue ring round a focused map, 1D browser or table (§7.2).** It was meant for a reader
   tabbing in, but it also lit after a typed locus and Enter, framing the data in blue after the
   commonest navigation there is. The pictures take focus and draw no ring, as they did before.

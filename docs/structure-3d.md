@@ -491,7 +491,7 @@ A bead is **one genomic place**, so it takes the lane-hover shape, not the cell 
 distinction `setLaneHoverListener`'s doc draws (`MatrixPanel.ts:6919-6929`). On the map,
 `showLaneEcho({ axis: 'cols', unit })` already draws the small guide on the diagonal (two 45° arms
 on a turned map) and a tick in every lane on that axis; a ten-line `showLocusEcho(locus)` converts
-through `locusAxes.cols.locusToUnits` — the plural, since a circular sequence panned across its
+through `locusAxes.cols.locusToUnits` — the plural, since a circular sequence framed across its
 junction is on the axis twice (§8.15). In a tracks cell and in the browser, the same guide
 `drawGuide` draws for their own pointer. In the status bar, `setReadout`. All gated on the `x`
 (crosshair) and tooltip preferences, so the app does not disagree with itself about whether
