@@ -27,6 +27,7 @@ node scripts/ui-cards.mjs gallery            # cards moved by their headings, th
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
+node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -151,6 +152,16 @@ Contact maps card dimmed with its eye dark — the locus box typed with it hidde
 must follow), and its eye putting it back where it stood. It prints the grid's order, the hash, the
 star and the card's eyes at each step. Run it after any change to the deck's grid, its lead, the
 Contact maps card's eyes, or what a lone structure opens as.
+
+The fourteenth presses **Copy this** on every right-click menu that has it (§7.2) — the map, a lane
+beside it, a lane of the 1D browser, and a 3D model after a right click that does not drag — with
+the clipboard stood in for by a `navigator.clipboard.write` that keeps the PNG it is handed, as the
+saves gallery keeps its dialog's bytes. It writes the menu as it opened and the copied PNG itself,
+which must be the data object alone: the map's cells with no axis, key, frame, overlay or pointer
+(`cp3` is the same map on screen, to hold it against); one lane with no name, range, handle or name
+column; the model with no centre of rotation, key or buttons. It prints each PNG's size and what the
+corner said. Run it after any change to a right-click menu, to what a renderer draws round its data,
+or to `copyPicture`.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

@@ -132,12 +132,14 @@ import { VectorPage } from '../ui/vector'
 import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
+  copyPicture,
   copyPngToClipboard,
   chooseSaveTarget,
   fileStamp,
   scaleForDpi,
   type ExportFormat,
 } from '../ui/export'
+import { openMenu } from '../ui/Menu'
 import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
@@ -764,6 +766,41 @@ export class StructurePanel implements DeckCell {
       )
     }
     return out
+  }
+
+  /**
+   * The cell's right-click menu: *copy this* — the model alone, as it is
+   * drawn here, onto the clipboard (§7.2).
+   */
+  private showMenu(x: number, y: number): void {
+    openMenu(x, y, [
+      { label: 'This model' },
+      {
+        label: 'Copy this',
+        hint: 'PNG',
+        title:
+          'The model as it is drawn here — the picture alone, with no key, buttons or frame — ' +
+          'onto the clipboard as a PNG, at the screen’s resolution',
+        run: () => copyPicture('model', this.modelImage()),
+      },
+    ])
+  }
+
+  /**
+   * The model as it is drawn on screen, and nothing round it: the renderer's
+   * own picture at the screen's density — its names on the model, as the
+   * overlays have them — without the centre of rotation, the key, the corner's
+   * buttons, the readout or the frame an exported figure carries (§25.7).
+   * `null` with no model.
+   */
+  private modelImage(): HTMLCanvasElement | null {
+    if (this.structure === null || this.renderer === null) return null
+    const dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
+    return this.renderer.snapshot(
+      Math.max(1, this.wrap.clientWidth) * dpr,
+      Math.max(1, this.wrap.clientHeight) * dpr,
+      { centre: false },
+    )
   }
 
   destroy(): void {
@@ -1835,6 +1872,14 @@ export class StructurePanel implements DeckCell {
       }
       if (drag.moved) {
         this.rememberCamera()
+        return
+      }
+      // A right press that did not travel is the cell's menu (§7.2). On the
+      // release rather than on `contextmenu`, which some systems send on the
+      // press — and a right drag pans the model, so the menu can only know it
+      // was asked for once the hand has let go where it began.
+      if (event.button === 2) {
+        this.showMenu(event.clientX, event.clientY)
         return
       }
       // A press that did not travel is a click: pin the bead, or with Shift

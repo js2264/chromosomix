@@ -202,6 +202,7 @@ import {
   type ExportFormat,
   canvasToPng,
   captionStamp,
+  copyPicture,
   copyPngToClipboard,
   copyTextToClipboard,
   chooseSaveTarget,
@@ -4270,7 +4271,8 @@ export class MatrixPanel {
   }
 
   /**
-   * The right-click menu on the map: place a mark exactly here.
+   * The right-click menu on the map: copy the picture, or place a mark exactly
+   * here.
    *
    * "Here" is the cell under the pointer, which is the thing a right click is
    * *for* — the two ways in that already existed are typing a coordinate you
@@ -4278,26 +4280,42 @@ export class MatrixPanel {
    * I am pointing at". The coordinates go in the menu beside the actions so the
    * reader can see what they are about to mark before they mark it.
    *
-   * Only where the file can carry marks (§8.5) and only over the data, not over
-   * the gutters: a right click on a label is the browser's menu, and taking it
-   * over to offer nothing would be worse than leaving it.
+   * **Copy this** first: the map's cells alone, as they are drawn here, onto
+   * the clipboard (§7.2). The marks only where the file can carry them (§8.5),
+   * and the menu only over the data, not over the gutters: a right click on a
+   * label is the browser's menu, and taking it over to offer nothing would be
+   * worse than leaving it.
    */
   private watchContextMenu(): void {
     const onMenu = (event: MouseEvent): void => {
-      const context = this.options.annotations
-      if (context === undefined) return
       const box = this.canvas.getBoundingClientRect()
       const cell = this.heatmap.cellAt(event.clientX - box.left, event.clientY - box.top)
       if (cell === null) return
-      const at = this.locusOf(cell)
-      if (at === null) return
       event.preventDefault()
+      const items: MenuItem[] = [
+        { label: 'This map' },
+        {
+          label: 'Copy this',
+          hint: 'PNG',
+          title:
+            'The map as it is drawn here — the cells alone, with no axis, key, frame or pointer — ' +
+            'onto the clipboard as a PNG, at the screen’s resolution',
+          run: () => copyPicture('map', this.heatmap.dataImage(readPageBackground())),
+        },
+      ]
+      const context = this.options.annotations
+      const at = this.locusOf(cell)
+      if (context === undefined || at === null) {
+        openMenu(event.clientX, event.clientY, items)
+        return
+      }
 
       const { manual } = context
       const add = (mark: Omit<ManualLine, 'id' | 'colour'> | Omit<ManualArrowhead, 'id' | 'colour'>): void => {
         manual.add({ ...mark, id: mintMarkId(), colour: manual.nextColour() } as ManualMark)
       }
       openMenu(event.clientX, event.clientY, [
+        ...items,
         { label: 'Mark this point' },
         {
           label: 'Vertical line',
@@ -5056,7 +5074,10 @@ export class MatrixPanel {
         found === null
           ? null
           : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId, feature)
+      // The lane under the pointer, alone, as this stack draws it (§7.2).
+      const copy = (): void =>
+        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.laneGeometry(), readPageBackground()))
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId, feature, copy)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -9639,6 +9660,12 @@ export function openLaneMenu(
   map: MapId = LEAD_MAP,
   /** The feature under the pointer, where there is one (§8.16). */
   feature: LaneMenuFeature | null = null,
+  /**
+   * *Copy this* (§7.2): this lane's track alone onto the clipboard, as the
+   * surface it was opened on draws it. Absent where the surface cannot draw
+   * one lane by itself.
+   */
+  copy: (() => void) | null = null,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = []
@@ -9657,6 +9684,18 @@ export function openLaneMenu(
   }
   items.push(
     { label: entry.label },
+    ...(copy === null
+      ? []
+      : [
+          {
+            label: 'Copy this',
+            hint: 'PNG',
+            title:
+              'The track as it is drawn here — the track alone, with no name, range, handle or ' +
+              'pointer — onto the clipboard as a PNG, at the screen’s resolution',
+            run: copy,
+          },
+        ]),
     {
       label: 'Colour…',
       hint: entry.style.colour,

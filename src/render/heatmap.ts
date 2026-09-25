@@ -1798,6 +1798,11 @@ export class HeatmapView {
    * left of the map for the lane stacks that go there.
    */
   private pageOrigin: { x: number; y: number } = { x: 0, y: 0 }
+  /**
+   * Draw the cells and stop — no divider, label, overlay, tick, guide, frame
+   * or spinner. Only for {@link dataImage}, and only for the one pass it asks.
+   */
+  private bare = false
 
   /** CSS pixels per matrix cell. */
   private zoom = 1
@@ -3574,6 +3579,7 @@ export class HeatmapView {
     // overlays are placed against.
     ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, offscreen.width, offscreen.height)
     ctx.restore()
+    if (this.bare) return
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, originX, originY)
     if (this.plot.dividers) this.drawSeparators()
@@ -3700,6 +3706,43 @@ export class HeatmapView {
       this.dpr = previousDpr
       this.pageOrigin = previousOrigin
     }
+  }
+
+  /**
+   * The cells as they are drawn on screen, and nothing else — *copy this* on
+   * the map's right-click menu (§7.2).
+   *
+   * The part of the plot the data fills, at the screen's own density, so what
+   * is pasted is what was looked at, pixel for pixel: no label, tick, divider,
+   * key, frame, overlay or mark, no guide line and no pointer. Drawn by the
+   * same pass the screen is ({@link draw}), stopped after the cells, rather than
+   * cut out of the screen's canvas, which carries all of that over them. The
+   * page's colour goes *under* the cells, so a cell the colormap leaves clear is
+   * the page rather than a hole in the PNG.
+   *
+   * `null` with nothing drawn: no block yet, or a plot with no data in view.
+   */
+  dataImage(background: string): HTMLCanvasElement | null {
+    if (this.matrix === null) return null
+    const data = this.dataRect
+    if (!(data.width > 0 && data.height > 0)) return null
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(data.width * this.dpr))
+    out.height = Math.max(1, Math.round(data.height * this.dpr))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    this.bare = true
+    try {
+      this.renderTo(ctx, this.dpr, { x: -data.x, y: -data.y })
+    } finally {
+      this.bare = false
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
   }
 
   /** The canvas size the export needs, in CSS pixels. */

@@ -301,6 +301,28 @@ export async function copyTextToClipboard(text: string): Promise<void> {
   await write.call(navigator.clipboard, text)
 }
 
+/**
+ * One picture onto the clipboard from a right-click menu — *copy this* (§7.2)
+ * — with a line in the corner saying what happened.
+ *
+ * The corner and not a surface's own line, for `ui/toast.ts`'s reason: the menu
+ * closes on the press and leaves nowhere nearer to answer in. The size is in
+ * the line because it is the one fact about the picture that a paste does not
+ * show until it lands. Synchronous up to the clipboard's own call, which a
+ * browser only takes inside the press that asked for it.
+ */
+export function copyPicture(what: string, canvas: HTMLCanvasElement | null): void {
+  if (canvas === null) {
+    messageToast(`There is no ${what} drawn here to copy.`)
+    return
+  }
+  copyPngToClipboard(canvasToPng(canvas)).then(
+    () => messageToast(`Copied the ${what} · ${canvas.width} × ${canvas.height} px`),
+    (err: unknown) =>
+      messageToast(`The ${what} could not be copied: ${err instanceof Error ? err.message : String(err)}`),
+  )
+}
+
 /** The canvas as a PNG blob. */
 export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))

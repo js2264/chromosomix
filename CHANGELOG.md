@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Copy this, on the right-click menus (§7.2).** On the map, on a lane beside it, on a lane of the 1D
+  browser, and on a 3D model (a right click that does not drag): the one object under the pointer
+  onto the clipboard as a PNG, as it is drawn on screen — the map's cells with no axis, key, frame,
+  overlay or pointer; the track alone with no name, range, handle or hairline; the model with no
+  centre, key or buttons. The corner says how big it was, or why the browser would not take it. The
+  map's menu now opens on any file, marks or not.
+
 - **The first cell of a deck moves and closes like any other (§16.9).** Its heading has a grip, and
   dropping it on another cell exchanges the two, as every cell's grip does; another cell's grip, or a
   companion's row of the Contact maps card, dropped on it does the same. Its × takes it off the

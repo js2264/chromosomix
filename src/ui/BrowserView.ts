@@ -123,6 +123,7 @@ import {
   gripAcross,
   gripBox,
   groupRuns,
+  laneRect,
   snapTo,
   withinGrip,
   type LaneFrame,
@@ -186,12 +187,14 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
   captionStamp,
+  copyPicture,
   copyPngToClipboard,
   copyTextToClipboard,
   chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
+  readPageBackground,
   scaleForDpi,
 } from './export'
 import { locusText, type PickHandlers } from './mapPick'
@@ -2213,6 +2216,8 @@ export class BrowserView {
     lane: Lane,
     groups: Map<string, { min: number; max: number }>,
     palette: ReturnType<typeof readCanvasPalette>,
+    /** The track alone, its name and range left off — only for {@link laneImage}. */
+    bare = false,
   ): void {
     const { entry, frame } = lane
     // What to write on the lane, decided by the branch that drew it and written
@@ -2435,9 +2440,42 @@ export class BrowserView {
       }
     }
     ctx.restore()
-    if (label !== null) {
+    if (label !== null && !bare) {
       this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
     }
+  }
+
+  /**
+   * One lane as it is drawn here, alone — *copy this* on the lane's
+   * right-click menu (§7.2).
+   *
+   * The lane's own strip of the axis, at the screen's density, by the pass the
+   * screen is drawn by with the name and range left off; the ruler, the name
+   * column, the hairline, the marks and the hover card are the view's and are
+   * drawn round the lanes rather than in them, so none of them is here either.
+   * A gene's name under its body is the track's own and stays, as the overlays
+   * switch has it on screen. The page's colour goes under the ink.
+   *
+   * `null` where no lane of that id is on screen.
+   */
+  laneImage(id: string): HTMLCanvasElement | null {
+    const lane = this.lanes.find((each) => each.entry.id === id)
+    if (lane === undefined) return null
+    const { frame } = lane
+    const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * this.dpr))
+    out.height = Math.max(1, Math.round(height * this.dpr))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, -x * this.dpr, -y * this.dpr)
+    this.paintLane(ctx, lane, this.groupRanges(), readCanvasPalette(this.canvas), true)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
   }
 
   /**
@@ -3547,7 +3585,10 @@ export class BrowserView {
       // No edge: this surface has no map for a lane to be beside, so there is
       // no location to offer and every lane reads the way a horizontal track
       // under a ruler does.
-      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null, undefined, feature)
+      const id = hit.lane.entry.id
+      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null, undefined, feature, () =>
+        copyPicture('track', this.laneImage(id)),
+      )
     }
 
     canvas.addEventListener('pointerdown', onDown)

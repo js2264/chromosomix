@@ -140,6 +140,8 @@ export class StructureRenderer {
   private centreBall: Mesh | null = null
   /** The three arms out of the ball, shaft, head and stub apiece. */
   private centreArms: Mesh[] = []
+  /** The centre left out of one frame: a *copy this* snapshot (§7.2). */
+  private withoutCentre = false
   private readonly raycaster = new Raycaster()
   private width = 1
   private height = 1
@@ -264,8 +266,11 @@ export class StructureRenderer {
    *
    * Rendered at the requested size rather than screen-grabbed, so a 300 dpi
    * export is a 300 dpi drawing (§7.2's rule, kept for the one raster here).
+   *
+   * `centre: false` leaves the centre of rotation out: it says where the
+   * model *turns*, which is a control, and *copy this* is the model alone.
    */
-  snapshot(width: number, height: number): HTMLCanvasElement | null {
+  snapshot(width: number, height: number, options: { centre?: boolean } = {}): HTMLCanvasElement | null {
     const renderer = this.contextOrNull()
     const view = this.view
     if (renderer === null || view === null) return null
@@ -278,6 +283,7 @@ export class StructureRenderer {
     const heldHeight = this.height
     const heldRatio = renderer.getPixelRatio()
     try {
+      this.withoutCentre = options.centre === false
       renderer.setPixelRatio(1)
       this.width = out.width
       this.height = out.height
@@ -285,6 +291,7 @@ export class StructureRenderer {
       this.render()
       ctx.drawImage(this.el, 0, 0)
     } finally {
+      this.withoutCentre = false
       this.width = heldWidth
       this.height = heldHeight
       renderer.setPixelRatio(heldRatio)
@@ -442,7 +449,7 @@ export class StructureRenderer {
    * identity is the model's own axes, and *replant* writes the view's there.
    */
   private placeCentre(view: StructureView): void {
-    const show = view.style.axes
+    const show = view.style.axes && !this.withoutCentre
     this.centre.visible = show
     if (!show) return
     const size = view.camera.distance * 0.12

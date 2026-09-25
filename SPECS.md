@@ -1589,6 +1589,24 @@ off in the 1D browser, and in the deck's figure, which takes the first map's (§
 own names and ranges are the picture's and are saved as they are on screen, whatever the switch
 says.
 
+**Copy this: the object under the pointer, and nothing round it.** The right-click menu on the map,
+on a lane beside it and on a lane of the 1D browser — and a right click that does not drag on a 3D
+model (§25.3) — carries **Copy this**, first on the map's and the model's menus and first under the
+track's name on a lane's. It puts that one object on the clipboard as a PNG, as it is drawn on
+screen and at the screen's own density: the map's **cells** in the part of the plot they fill, with
+no axis, tick, divider, key or frame, no loop, domain or mark drawn over them, and no guide line or
+pointer; the **lane** alone, the strip of its stack or of the browser it is drawn in, with no name
+or range, no handle, no name column, no hairline and no mark carried off the map — a gene's name
+under its body is the track's own and stays, as the overlays switch has it; the **model** as the
+renderer draws it, its names on it as the overlays have them, with no centre of rotation, key,
+buttons or frame. The page's colour goes under the ink, so a cell or a stretch the data leaves clear
+pastes as the page rather than as a hole. The Export card's copy is a *figure* — labelled,
+captioned, at the card's resolution — and this is the object, for a reader assembling a figure of
+their own in another program. Each is drawn by the same pass the screen is, stopped before
+everything round the data, rather than cut out of the screen's canvas, which carries all of that
+over it. The menu closes on the press, so what happened is said in the corner (`ui/toast.ts`): the
+size of what was copied, in pixels, or why the browser would not take it.
+
 ### 7.3 Genome × genome overview — gated, not default
 
 Available, but never automatic, because it costs a full pixel scan (§4):
@@ -3461,7 +3479,8 @@ height its reader gave it in all three; a mode that resized the lane to fit the 
 move the map every time a pan changed how many overlapped. A barChart has none of it, because its rows
 are its value axis (§8.17).
 
-The choice is offered in the card, as `rows`, and in the lane's **right-click menu**, which a feature
+The choice is offered in the card, as `rows`, and in the lane's **right-click menu** — which opens
+under the track's name with *Copy this*, the lane alone on the clipboard (§7.2) — and which a feature
 lane now fills with what a reader changes about a gene track while looking at it: the three row modes
 with a tick on the one in force, and the point as a switch with its own tick. Opened *on* a feature,
 the menu leads with that feature — named, with its card a click away (what a click on it opens), its
@@ -8686,7 +8705,8 @@ on the left and what it does on the right**, and **the live row is lit**: *drag*
 orbits, **without limit** — neither angle stops, so the model turns over the top and keeps going
 rather than hitting a wall halfway through a drag; the clamp that used to hold the horizon level was
 a turntable's convention and a structure has no horizon), *scroll* to zoom, *⇧* to move (a drag
-pans the whole model), the centre key — ⌘ on a Mac, Ctrl elsewhere — for *centre* (a click on a bead
+pans the whole model, as a drag with the right button does; a right click that does not drag opens
+the cell's menu, whose *Copy this* puts the model alone on the clipboard, §7.2), the centre key — ⌘ on a Mac, Ctrl elsewhere — for *centre* (a click on a bead
 makes it the centre of rotation), and *space* for *fog* (the wheel brings it forward or pushes it
 back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the cell always had). A
 **sticky mode** — *mark*, *loop* or *measure* (§25.4) — takes a row at the top while it runs, lit in

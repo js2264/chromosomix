@@ -56,6 +56,7 @@ import {
   groupRuns,
   laneIsHorizontal,
   laneOutward,
+  laneRect,
   laneX,
   laneY,
   withinGrip,
@@ -1010,6 +1011,42 @@ export class AnnotationLanes {
     }
   }
 
+  /**
+   * One lane as it is drawn here, alone — *copy this* on the lane's
+   * right-click menu (§7.2).
+   *
+   * The lane's own rectangle of its stack, at the density the screen was last
+   * drawn at, by the pass the screen is drawn by with everything round the
+   * track left out: the name and
+   * the range written over it, the handle beside it, the pointer's line and
+   * the marks carried off the map. A gene's name under its body is the track's
+   * own and stays, as the overlays switch has it on screen. The page's colour
+   * goes under the ink, so a lane's clear background pastes as the page.
+   *
+   * `null` where no lane of that id is on that edge.
+   */
+  laneImage(edge: LaneEdge, id: string, geometry: LaneGeometry, background: string): HTMLCanvasElement | null {
+    const dpr = this.dpr
+    const built = this.build(geometry)
+    const lane = built[edge].find((each) => each.entry.id === id)
+    if (lane === undefined) return null
+    const { frame } = lane
+    const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * dpr))
+    out.height = Math.max(1, Math.round(height * dpr))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    ctx.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr)
+    this.paintEdge(ctx, edge, geometry, [lane], built.groups, dpr, true)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
+  }
+
   // -------------------------------------------------------------------------
   // Pass one: geometry, samples, profiles
   // -------------------------------------------------------------------------
@@ -1176,6 +1213,12 @@ export class AnnotationLanes {
     lanes: Lane[],
     groups: Map<string, { min: number; max: number }>,
     dpr: number,
+    /**
+     * The tracks and nothing drawn round them — no name or range, no handle,
+     * no pointer's line, no mark carried off the map, no group bar. Only for
+     * {@link laneImage}.
+     */
+    bare = false,
   ): EdgeState {
     const state = emptyEdgeState()
     const axis = this.axisFor(edge)
@@ -1432,6 +1475,7 @@ export class AnnotationLanes {
         }
       }
       ctx.restore()
+      if (bare) continue
       if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
 
       // The handle, outside the clip because it hangs outside the lane: in the
@@ -1562,7 +1606,7 @@ export class AnnotationLanes {
     // the tracks is actually asking for: the boundaries, in the coordinate the
     // tracks are drawn in.
     const last = lanes[lanes.length - 1]
-    if (last !== undefined) {
+    if (last !== undefined && !bare) {
       for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
