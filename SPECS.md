@@ -2247,6 +2247,25 @@ the door a row comes back through is the same one a new row arrives by, and a ne
 tracks restored around it (§3.4) — so changing the resolution quietly undid a reader's "not this
 one", by way of a menu about something else entirely.
 
+**The map is drawn first, and its tracks are read after it.** A file opened with tracks — a
+workspace, a `?config=` link, a reload — seats every row at once, and the Tracks card lists them
+reading; the bytes are read once the map's first block is drawn, or four seconds after the rows were
+seated, whichever comes first, and at once for a view with no map. The first-open measurement of
+which sequences are circles (§8.15) waits the same way. They used to start in the same moment as the
+map's first read, from the same host: the demo session's twelve-megabyte FASTA and ten-megabyte gene
+model shared the connection with the picture the reader had asked for, and on a 25 Mbit/s line the map
+came in 6.7 s after its view mounted, where alone it took 3.0 s; held, it takes 2.5 s. Nothing about
+the FASTA is parsed on the main thread — the worker reads and parses it — so what made the map look
+as though it waited for the sequence was this contention, and the relayout below.
+
+**A lane stack is laid out for the rows still reading.** Its room is planned over the rows that are
+drawn *and* those on their way, so the map beside it is laid out once rather than shrunk again as
+each lands: the sequence lane is the last of seven to arrive and sits on two edges, and its arrival
+re-fitted the whole picture. A row still reading is a blank band at the far end of its stack; a row
+that fails gives its room back. Download progress reaches a row at most four times a second — each
+tick was a write of every row to session storage and a rebuild of the card, forty a second for two
+large files, on the thread the map is panned on.
+
 ### 8.11 bedGraph and wig, and reading part of a file
 
 Two additions to §8.3's list of text formats, and one to how any of them is read.

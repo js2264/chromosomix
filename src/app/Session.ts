@@ -2502,7 +2502,9 @@ export class Session {
       // the *state* names: asked before it, the store was the previous file's,
       // so a file opened over one already measured was never measured, and one
       // opened over a measurement still running had its ticks written there.
-      void this.detectCircular(uri)
+      // And after the map's first block: fifty corner reads queued in the same
+      // reader as the picture's first read are fifty reads it waited behind.
+      void this.firstPicture().then(() => this.detectCircular(uri))
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -4877,7 +4879,10 @@ export class Session {
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
-    // the cards are mounted, so the restored rows land in a list that exists.
+    // the cards are mounted, so the restored rows land in a list that exists —
+    // seated now, and read once the map has drawn its first block, so the map
+    // does not share its first read with every track download (`holdUntil`).
+    loader.holdUntil(this.firstPicture())
     loader.restore(AnnotationStore.stored(scope))
     // The tracks the reader asked for, put on. After the cards are mounted and
     // after `restore`, for `restore`'s own reason: a row landing in a list that
@@ -8312,6 +8317,35 @@ export class Session {
     else this.navigate(null)
   }
 
+  /**
+   * What is held behind the next mounted view's first picture: a file's track
+   * reads and its circularity measurement (§8.6, §8.15).
+   */
+  private pictureWaiters: Array<() => void> = []
+
+  /**
+   * Settles once the next view mounted has drawn its first block — at once for
+   * a view with no map to draw — or after {@link MAP_FIRST_CAP_MS}, whichever
+   * comes first.
+   *
+   * The map is the picture the reader opened, and until it is drawn nothing
+   * else a file brings with it should be competing for the connection or the
+   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, and
+   * up to fifty corner reads measuring which sequences are circles, all used to
+   * start in the same moment as the map's first read.
+   */
+  private firstPicture(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let timer = 0
+      const done = (): void => {
+        window.clearTimeout(timer)
+        resolve()
+      }
+      timer = window.setTimeout(done, MAP_FIRST_CAP_MS)
+      this.pictureWaiters.push(done)
+    })
+  }
+
   private showContent(
     node: HTMLElement,
     view?: {
@@ -8329,6 +8363,15 @@ export class Session {
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
+    // What was held behind the first picture goes once this view has drawn
+    // one, or now for a view with nothing to draw. A screen that is not a view
+    // — a loading line, the picker — releases nothing; the cap does.
+    if (view !== undefined && this.pictureWaiters.length > 0) {
+      const waiting = this.pictureWaiters.splice(0)
+      void (view.panel?.firstData ?? Promise.resolve()).then(() => {
+        for (const done of waiting) done()
+      })
+    }
     // Whichever stop of the map/tracks cycle we are at, applied to the panel
     // that has just been built. Here rather than in the four views that own a
     // panel: they are handed a picture to draw, and which furniture goes round
@@ -9492,6 +9535,15 @@ interface LevelChoice {
 
 /** Why `bin × bin` is greyed out, once this tab could not hold it. */
 const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
+
+/**
+ * The longest a file's tracks wait for its map's first block (§8.6).
+ *
+ * Long enough for a region's first read on an ordinary line — three seconds
+ * for the demo's at 25 Mbit/s — and short enough that a map whose first
+ * picture is a minute's scan does not hold every track for that minute.
+ */
+const MAP_FIRST_CAP_MS = 4000
 
 /**
  * Which levels the view on screen can draw, or `null` for none (§7.3).

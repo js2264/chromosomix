@@ -90,3 +90,47 @@ describe('the pointers', () => {
     expect(rule('.lane-canvas.is-guided, .browser-canvas.is-guided')).toMatch(/cursor:\s*none/)
   })
 })
+
+/**
+ * What the session holds a file's tracks behind (§8.6): the panel says when it
+ * has its first block, and says so on the way out too, so a hold on a map that
+ * never drew does not last for ever.
+ */
+describe('a panel’s first block', () => {
+  function block(bins: number): import('@/worker/protocol').MatrixResult {
+    return {
+      nrows: bins,
+      ncols: bins,
+      values: new Float32Array(bins * bins),
+      rowExtent: [0, bins],
+      colExtent: [0, bins],
+      rowGroups: [{ label: 'IV', start: 0, end: bins, unitStart: 0 }],
+      colGroups: [{ label: 'IV', start: 0, end: bins, unitStart: 0 }],
+      level: 'bin',
+      binsPerCell: 1,
+    } as unknown as import('@/worker/protocol').MatrixResult
+  }
+
+  async function settled(promise: Promise<void>): Promise<boolean> {
+    let done = false
+    void promise.then(() => (done = true))
+    for (let turn = 0; turn < 4; turn++) await Promise.resolve()
+    return done
+  }
+
+  it('settles when the panel is handed its first block, and not before', async () => {
+    const panel = new MatrixPanel({ binsize: 1000, detachedControls: true, hideTitle: true })
+    built.push(panel)
+    document.body.append(panel.el)
+    expect(await settled(panel.firstData)).toBe(false)
+    panel.setData(block(8), 'IV')
+    expect(await settled(panel.firstData)).toBe(true)
+  })
+
+  it('settles when the panel goes away without one', async () => {
+    const panel = new MatrixPanel({ binsize: 1000, detachedControls: true, hideTitle: true })
+    const first = panel.firstData
+    panel.destroy()
+    expect(await settled(first)).toBe(true)
+  })
+})

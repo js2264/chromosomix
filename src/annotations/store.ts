@@ -478,6 +478,23 @@ export class AnnotationStore {
   }
 
   /**
+   * The rows a map will draw on `edge` once they have loaded: {@link drawnOnMap}'s
+   * rows and those still reading, in list order — or on any edge, for `null`,
+   * as {@link drawnAnywhereOn} asks. What a lane stack reserves its room from,
+   * so the picture beside it is laid out once rather than each time a track
+   * lands (§8.6).
+   */
+  drawnOrLoadingOn(map: MapId, edge: LaneEdge | null): AnnotationEntry[] {
+    return this.entriesOn(map).filter(
+      (entry) =>
+        entry.card !== 'overlay' &&
+        entry.visible &&
+        (entry.status === 'ready' || entry.status === 'loading') &&
+        (edge === null ? LANE_EDGES.some((side) => entry.placement[side]) : entry.placement[edge]),
+    )
+  }
+
+  /**
    * The feature set the browser's search reads.
    *
    * The one marked, or — until anything is marked — the first loaded, which is

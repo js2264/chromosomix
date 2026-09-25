@@ -634,7 +634,12 @@ export class AnnotationLanes {
    * shares one pair of limits, the two are directly comparable by construction.
    */
   private slotsFor(edge: LaneEdge): Slot[] {
-    return planStack(this.drawnOn(edge), {
+    return this.plan(this.drawnOn(edge))
+  }
+
+  /** {@link slotsFor}'s arithmetic over any list of rows. */
+  private plan(entries: AnnotationEntry[]): Slot[] {
+    return planStack(entries, {
       groupOf: (entry) => entry.style.group,
       modeOf: (group) => this.groups.modeOf(group),
       sizeOf: (entry) => entry.style.size,
@@ -659,7 +664,7 @@ export class AnnotationLanes {
    * profile was columns of the block itself; it is gone (§18.9), and with it the
    * only reason this could ever answer with a non-empty list.
    */
-  private drawnOn(edge: LaneEdge): AnnotationEntry[] {
+  private drawnOn(edge: LaneEdge, loading = false): AnnotationEntry[] {
     const map = this.options.map ?? LEAD_MAP
     // The map on its own; see {@link setBare}.
     if (this.bare) return []
@@ -671,9 +676,11 @@ export class AnnotationLanes {
     // be the picture editing their settings behind them. Which means "back
     // where it came from on the way home" costs nothing — the store never moved.
     if (this.turned && edge !== 'bottom') return []
-    const entries = this.turned
-      ? this.options.store.drawnAnywhereOn(map)
-      : this.options.store.drawnOnMap(map, edge)
+    const entries = loading
+      ? this.options.store.drawnOrLoadingOn(map, this.turned ? null : edge)
+      : this.turned
+        ? this.options.store.drawnAnywhereOn(map)
+        : this.options.store.drawnOnMap(map, edge)
     // No axis on this edge, no lane — with one exception, which is the whole of
     // §8.12. Every *loaded* kind draws against genomic coordinates, so a
     // contig-level or genome-level block leaves them nothing to place their
@@ -775,7 +782,15 @@ export class AnnotationLanes {
 
   /** Total thickness one edge needs, or `0` when it has no lanes. */
   thicknessOf(edge: LaneEdge): number {
-    const slots = this.slotsFor(edge)
+    // Planned over the rows still **reading** as well as the ones drawn, so
+    // the stack — and the map it shares the grid with — is laid out once for
+    // the tracks a session opened with, rather than shrunk again each time one
+    // lands. The demo's FASTA is the last of seven to arrive, twelve megabytes
+    // after the map is drawn, and its lane on two edges re-fitted the whole
+    // picture when it did. A row still reading is a band nothing is drawn in
+    // yet, at the far end of the stack from the map: the rows are drawn from
+    // the map outward and every coordinate here is measured from the map.
+    const slots = this.plan(this.drawnOn(edge, true))
     if (slots.length === 0) return 0
     const last = slots[slots.length - 1]
     return last.acrossFrom + last.thickness + this.anchorBand()
@@ -823,14 +838,18 @@ export class AnnotationLanes {
       const canvas = this.canvases[edge]
       const lanes = built[edge]
       this.state[edge] = emptyEdgeState()
-      canvas.classList.toggle('hidden', lanes.length === 0)
-      if (lanes.length === 0) continue
+      // Hidden only where nothing is drawn **or reading**: a stack whose tracks
+      // are all still on their way holds its room, blank, so the map beside it
+      // is laid out once rather than moved over when the first of them lands
+      // ({@link thicknessOf}).
+      const total = this.thicknessOf(edge)
+      canvas.classList.toggle('hidden', total === 0)
+      if (total === 0) continue
 
       // The lane canvas matches the heatmap canvas on the shared axis exactly,
       // so the two are drawn in one coordinate system rather than in two that
       // agree by arrangement — plus whatever tail a vertical stack's handles
       // need, which is added *after* the data and so moves nothing.
-      const total = this.thicknessOf(edge)
       const horizontal = laneIsHorizontal(edge)
       const cssAlong =
         (horizontal ? geometry.cssWidth : geometry.cssHeight) + this.tailFor(edge, geometry)
@@ -847,6 +866,7 @@ export class AnnotationLanes {
       if (ctx === null) continue
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
       ctx.clearRect(0, 0, cssWidth, cssHeight)
+      if (lanes.length === 0) continue
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
   }

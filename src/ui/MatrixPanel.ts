@@ -3290,7 +3290,26 @@ export class MatrixPanel {
   }
 
   /** Release the resize observer, the canvas listeners and the subscription. */
+  // Before the promise below, which replaces it: fields are set in the order
+  // they are written, and the other way round this no-op would overwrite the
+  // resolver the promise had just handed over.
+  private markFirstData: () => void = () => {}
+
+  /**
+   * Settles when this panel is handed its first block — or goes away without
+   * one, so nothing waiting on it waits for ever.
+   *
+   * What the session holds a file's tracks behind (§8.6): the map is the
+   * picture a reader opened, and the track downloads it used to race for the
+   * same connection — a twelve-megabyte FASTA among them — are held until it
+   * is drawn.
+   */
+  readonly firstData: Promise<void> = new Promise((resolve) => {
+    this.markFirstData = resolve
+  })
+
   destroy(): void {
+    this.markFirstData()
     this.stopRefineWatch?.()
     this.stopRefineWatch = null
     // A correlation running for a panel that is going away is seconds of a
@@ -5268,6 +5287,7 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    this.markFirstData()
     this.syncCardsShown()
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader

@@ -401,6 +401,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map opened with its tracks is drawn first, and laid out once (§8.6).** The tracks' rows are
+  seated at once and their files read once the map's first block is drawn (at most four seconds
+  later), as is the circularity measurement; they used to share the map's first read with a 12 MB
+  FASTA and a 10 MB gene model, so on a 25 Mbit/s line the demo session's map came 6.7 s after its
+  view mounted and now comes in 2.5 s. The lane stacks keep room for rows still reading, so the map
+  is no longer shrunk and re-fitted when the sequence lane lands last, and download progress
+  reaches a row four times a second rather than twenty.
+
 - **The pointer over a map with the crosshair on is a ring, and over the tracks there is none (§5.8).**
   Lucide's `locate`, forty pixels across and centred on the hand, replaces the small open cross, so
   the cell under the pointer and its neighbours stay visible inside it. Over a lane or the 1D browser
