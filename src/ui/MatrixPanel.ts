@@ -158,7 +158,7 @@ import {
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
-import type { AnalysisFraming } from '../analysis/types'
+import type { AnalysisFraming, MapReading } from '../analysis/types'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
@@ -4103,6 +4103,33 @@ export class MatrixPanel {
       normalise,
       level: data.level,
       label: parts.join(' · '),
+      reading: this.mapReading(),
+    }
+  }
+
+  /**
+   * What the picture is drawn as beyond its score, for a task that measures it
+   * as drawn (`AnalysisFraming.reading`).
+   *
+   * The correlation is read as the ratio it is a correlation of, since that is
+   * the matrix on screen before the correlation is taken of it — and on the
+   * ratio's own scale, `log2`, since the linear one on screen is the
+   * coefficient's, which it has to be, and nobody chose it for the ratio. The
+   * baseline as the counts, having nothing to divide them by. Along the arms
+   * only where the arms are actually in force on this view — on, and not
+   * refused.
+   */
+  private mapReading(): MapReading {
+    const derive = this.options.derive
+    const held = derive?.arms
+    const arms = held !== undefined && held.refusal === null && armsKey(held) !== ''
+    const plain = derive?.baseline !== true
+    const correlated = plain && derive?.correlate === true
+    const divided = correlated || (plain && derive?.expected === true)
+    return {
+      expected: divided ? (arms ? 'arms' : 'decay') : 'none',
+      window: arms ? (held?.window ?? 0) : 0,
+      transform: correlated ? (preferredTransform(1) ?? 'log2') : this.transform,
     }
   }
 

@@ -34,6 +34,7 @@ node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor regi
 node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchors' hairlines, cells renamed, a lane out of a tracks cell, one side of two carried, the Structures eye, a track beside the map in a tracks cell, the height bars: dc1 … dc24
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
+node scripts/ui-interarm.mjs gallery         # Inter-arm alignment read as the map is drawn — counts on log10, O/E on log2, O/E along the arms, the ratio under a correlation — with each run's line and table printed: ia1 … ia7
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

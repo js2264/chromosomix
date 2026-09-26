@@ -7477,6 +7477,7 @@ export class Session {
       this.current.applyScale?.(this.scaleOf(state))
       if (scoreOnly) this.current.panel?.syncScoreChoice(this.scoreOf(state).id)
       this.rederive()
+      this.syncAnalysisReading(state)
       // …and stand back on the saved place, if the view is at one. Turning a map
       // re-cuts it and therefore refits it — which the reader asked for, and which
       // on a focused view meant pressing the turn toggle at a bookmark threw you
@@ -8667,6 +8668,31 @@ export class Session {
   // -------------------------------------------------------------------------
   // Analysis (§18)
   // -------------------------------------------------------------------------
+
+  /** The picture's reading the Analysis column last heard of — see {@link syncAnalysisReading}. */
+  private analysisReading = ''
+
+  /**
+   * Tell the Analysis column the picture is drawn as something else.
+   *
+   * A task that measures the map as drawn (§18.8's inter-arm alignment) takes
+   * its reading from the picture, and says it in the drawer's line; a change of
+   * score, O/E, arms or scale mounts nothing, so nothing else would refresh
+   * that line. Only on those — not on each tick of a colour drag, which also
+   * comes this way, and which would refill every control in the column.
+   */
+  private syncAnalysisReading(state: ViewState): void {
+    const reading = [
+      state.score ?? '',
+      String(this.balanceOf(state)),
+      String(state.oe === true),
+      String(state.arms ?? ''),
+      this.scaleOf(state).transform,
+    ].join('|')
+    if (reading === this.analysisReading) return
+    this.analysisReading = reading
+    this.analysis?.refresh()
+  }
 
   /**
    * Build, refresh or drop the analysis surfaces to match what is open.

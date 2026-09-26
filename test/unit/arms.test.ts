@@ -15,6 +15,7 @@ import {
   armOffsets,
   interArmProfile,
   interArmSummary,
+  interArmSummaryOf,
   type ArmFrame,
 } from '../../src/analysis/arms'
 
@@ -166,6 +167,21 @@ describe('the secondary diagonal', () => {
     const oe = build(line, (kind, delta) => (kind === 1 && delta <= 1 ? 4 : 1))
     const { byDistance } = interArmProfile(oe, line, 1)
     expect(byDistance.length).toBe(70)
+  })
+
+  it('reads the contacts’ reach from the origin, not from where a circle’s arms meet again', () => {
+    // The contacts themselves, on a log scale: they fall away from the origin
+    // with the distance along the DNA, lie flat, and rise again towards the
+    // terminus — higher than at the origin — where the mirror images close in
+    // on each other round the circle. Walked from that peak, the reach was the
+    // whole arm; from the origin's level it is where they fall half-way.
+    const byDistance = new Float64Array(100)
+    for (let d = 0; d < 100; d++) byDistance[d] = d < 30 ? 3 - d / 10 : d < 80 ? 0 : (d - 80) / 4
+    const summary = interArmSummaryOf(byDistance, null)
+    expect(summary.reach).toBeGreaterThanOrEqual(13)
+    expect(summary.reach).toBeLessThanOrEqual(17)
+    // The peak is still the highest the running mean gets, wherever it is.
+    expect(summary.peak).toBeGreaterThan(4)
   })
 
   it('scores a chromosome whose arms are not aligned at zero, with no reach', () => {

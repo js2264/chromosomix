@@ -271,45 +271,83 @@ const SUMMARY_SMOOTHING = 0.02
  * are not aligned at all, was reported as aligned to within a few bins of its
  * terminus.
  *
- * `NaN` for the reach where there is no enrichment to measure.
+ * `NaN` for the reach where there is no enrichment to measure. The ratio on
+ * `log2` — {@link interArmSummaryOf} with its neutral at zero.
  */
 export function interArmSummary(byDistance: ArrayLike<number>): { score: number; reach: number; peak: number } {
-  let total = 0
-  let seen = 0
-  const n = byDistance.length
-  const logs = new Float64Array(n)
-  for (let d = 0; d < n; d++) {
+  const logs = new Float64Array(byDistance.length)
+  for (let d = 0; d < logs.length; d++) {
     const value = byDistance[d]
     logs[d] = value > 0 ? Math.log2(value) : Number.NaN
-    if (!Number.isFinite(logs[d])) continue
-    total += logs[d]
+  }
+  return interArmSummaryOf(logs, 0)
+}
+
+/**
+ * {@link interArmSummary} of a profile on any scale, which is what the task
+ * reports now that it reads the map as it is drawn (§18.8).
+ *
+ * `profile` is already on that scale — the mean near the secondary diagonal at
+ * each distance, then its `log2`, its `log10` or itself — and `neutral` is what
+ * *no alignment* reads as there: `0` for the ratio on a log scale, `1` for the
+ * ratio itself, `log1p(1)` for the ratio on `log1p`. The reach is then how far
+ * the running mean holds above half-way from that neutral to the peak, which
+ * on `log2` is half the peak, as it always was.
+ *
+ * `null` where there is no neutral, which is the counts themselves: they fall
+ * with distance along the DNA whatever the arms do, and no value of theirs says
+ * *as close as expected*. The reach is then walked from the **origin**, and the
+ * half-way is from the running mean there to the profile's own lowest — how far
+ * from the origin the contacts between the arms stay nearer their level there
+ * than their weakest. Not from the peak: round a circle the contacts rise again
+ * towards the terminus, where the mirror images close in on each other along the
+ * DNA, and a peak there carried the reach to the end of the arm. The peak is
+ * still the highest the running mean gets, wherever that is.
+ */
+export function interArmSummaryOf(
+  profile: ArrayLike<number>,
+  neutral: number | null,
+): { score: number; reach: number; peak: number } {
+  let total = 0
+  let seen = 0
+  const n = profile.length
+  for (let d = 0; d < n; d++) {
+    if (!Number.isFinite(profile[d])) continue
+    total += profile[d]
     seen++
   }
   if (seen === 0) return { score: Number.NaN, reach: Number.NaN, peak: Number.NaN }
   const k = Math.max(1, Math.round(n * SUMMARY_SMOOTHING))
   const smoothed = new Float64Array(n).fill(Number.NaN)
   let peak = Number.NEGATIVE_INFINITY
+  let lowest = Number.POSITIVE_INFINITY
   let at = -1
   for (let d = 0; d < n; d++) {
     let sum = 0
     let count = 0
     for (let e = Math.max(0, d - k); e <= Math.min(n - 1, d + k); e++) {
-      if (!Number.isFinite(logs[e])) continue
-      sum += logs[e]
+      if (!Number.isFinite(profile[e])) continue
+      sum += profile[e]
       count++
     }
     if (count === 0) continue
     smoothed[d] = sum / count
+    lowest = Math.min(lowest, smoothed[d])
     if (smoothed[d] > peak) {
       peak = smoothed[d]
       at = d
     }
   }
-  if (!(peak > 0)) return { score: total / seen, reach: Number.NaN, peak }
-  let reach = at
-  for (let d = at + 1; d < n; d++) {
+  const floor = neutral ?? lowest
+  // The counts' reach runs from the origin's level, the ratio's from its peak.
+  const from = neutral === null ? smoothed.findIndex(Number.isFinite) : at
+  const top = neutral === null ? smoothed[from] : peak
+  if (!(top > floor)) return { score: total / seen, reach: Number.NaN, peak }
+  const half = floor + (top - floor) / 2
+  let reach = from
+  for (let d = from + 1; d < n; d++) {
     if (!Number.isFinite(smoothed[d])) continue
-    if (smoothed[d] < peak / 2) break
+    if (smoothed[d] < half) break
     reach = d
   }
   return { score: total / seen, reach, peak }

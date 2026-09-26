@@ -5551,7 +5551,12 @@ which would neuter the array the heatmap is drawing from.
 
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
-is on.
+is on — and **what the picture is drawn as** beyond its score: whether its counts are divided by the
+distance decay or by the decay along the arms, and the scale they are drawn on. Every task reads the
+first part; only one that measures the map as it is drawn reads the second (§18.8's inter-arm
+alignment), through parameters the picture answers rather than the reader, which the form never shows
+and which are written into the provenance, the TSV header and the command a run is copied as like any
+other parameter. For such a task a change of O/E or scale is a change of view, and its result says so.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -6218,17 +6223,37 @@ refused rather than read as the default.
 rather than an impression of a picture: the secondary diagonal is the mark SMC leaves when it is loaded
 at parS and zips the arms together as it travels (Wang et al. 2017), present in *Bacillus subtilis*,
 lost without ParB or SMC, and absent from *Escherichia coli*, whose MukBEF does not align them. It is
-the mean `log2` observed/expected within `band` bins of the secondary diagonal, over the sequence's own
-decay — the ordinary one, which is what makes the secondary diagonal stand out — read from the declared
-origin and round the circle on a declared circle. **Only where the two diagonals are apart**: near the
+the mean within `band` bins of the secondary diagonal of **the map as it is drawn** — read from the
+declared origin, round the circle on a declared circle. The reading is the picture's, and never a
+control: its balancing and column, which every task takes from the framing, and — from the framing's
+`reading`, through parameters the picture answers (`fromView`) — its normalisation, what its counts are
+divided by and the scale they are on. So balanced O/E on `log2`, the default and a shell's, reads the
+secondary diagonal over the sequence's own decay, which is what makes it stand out; balanced counts on
+`log10` read how often the mirror images touch at all; and the O/E along both arms reads what is left
+once the arms' own alignment is the expectation, which is a check on that model rather than a measure of
+the alignment. A correlation on screen is read as the ratio it is taken of, on the ratio's own `log2`:
+the linear scale it is drawn on is the coefficient's, which it has to be, and nobody chose it for the
+ratio. The scale goes on the band's **mean**, not on its cells: `log2` of the mean ratio, as
+the task always reported, which an empty pixel counts towards as the zero it is where a mean of the
+cells' own logarithms would have to leave it out and report a sparse band richer than it is. The drawer
+says the reading after the framing it runs on — *will run on chr at 1 kb · balanced · O/E along the arms,
+50 bins · log2* — and a result whose reading the picture has since left is marked as having moved, as
+one whose window has; the command a run is copied as writes the reading as its flags. **Only where the
+two diagonals are apart**: near the
 origin and the terminus they run into each other and a cell there is a pair a few bins apart along the
 DNA, whose ratio says how compact the stretch is rather than whether the arms are aligned, so a cell
 nearer the main diagonal than `2 × band + 2` bins is left out. Three shapes of one reading: a
 **curve** against distance from the origin, the figure the literature draws; a **track**, how much
-each locus touches its mirror image; and a **table** of the mean enrichment over the arms, its peak,
-and its **reach** — outwards from the peak, how far it holds above half of it, both read from a
+each locus touches its mirror image; and a **table** of the mean over the arms, its peak, and its
+**reach** — outwards from the peak, how far it holds above half-way back to *no alignment*, which is a
+ratio of one on whatever scale (half the peak, on `log2`); where the counts are read, which have no such
+value, outwards from the origin, how far they hold above half-way from their level there to their own
+lowest, since round a circle they rise again towards the terminus where the mirror images close in along
+the DNA, and a peak there would carry the reach to the end of the arm; and none along the arms, whose
+expectation is the alignment itself, so that nothing is left to follow outwards — both read from a
 running mean over 2% of the arm so that one noisy distance neither sets the peak nor carries the reach
-to the terminus of a flat profile. It separates what it should, at every rung: 1.6 on *P. aeruginosa*
+to the terminus of a flat profile. The track is drawn as a line where it is a logarithm of the counts,
+all of it under the lane's zero, which an area would fill down from as a solid block. It separates what it should, at every rung: 1.6 on *P. aeruginosa*
 PAK, reaching 2.7 of its 3.2 Mb arms; 0.37 on *B. subtilis* 168; 0.07 on *E. coli* MG1655. Absent on a
 metacool, whose MAGs have no declared origins.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
