@@ -207,6 +207,13 @@
   ],
   "pulls": [
     {
+      "number": 76,
+      "commit": "6867fb0",
+      "title": "Inter-arm alignment's table gives the enrichment, as a fold",
+      "branch": "js/interarm-enrichment",
+      "date": "2026-09-26T20:35:49Z"
+    },
+    {
       "number": 75,
       "commit": "7814225",
       "title": "Add peak calling task with yapc and IDR implementations",
