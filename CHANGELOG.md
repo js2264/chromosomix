@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The Compartments table says how much of the contacts each component accounts for (§18.8).** Its
+  *of contacts* column is the share of the map's departure from expected — observed/expected as
+  cooltools prepares it — that the component's checkerboard carries, the same measure under either
+  method, adding up across components. Under cooltools' method it is the number the table called
+  *share*, now named for what it is (`contacts` in a TSV, where it was `explained`); under the
+  correlation it stands beside the correlation matrix's own *variance*, which is a share of how alike
+  the rows are and not of the map.
+
 - **A tracks cell has the structure cell's height bar (§25.3).** Drag the bar under the stack to make
   the cell taller or shorter, nudge it with the arrow keys, double-click it to fit the row again; each
   tracks cell keeps its height across a reload.

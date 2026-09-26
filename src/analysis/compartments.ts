@@ -332,11 +332,64 @@ export function cooltoolsMatrix(
 ): Float64Array {
   const ceiling = upperPercentile(oe, percentile)
   const out = new Float64Array(m * m)
-  for (let i = 0; i < m * m; i++) {
-    const value = oe[i]
-    out[i] = Number.isFinite(value) ? Math.min(Math.max(value, 0), ceiling) - 1 : 0
-  }
+  for (let i = 0; i < m * m; i++) out[i] = departure(oe[i], ceiling)
   return out
+}
+
+/** One cell of {@link cooltoolsMatrix}: clipped, less one, and a gap as expected. */
+function departure(value: number, ceiling: number): number {
+  return Number.isFinite(value) ? Math.min(Math.max(value, 0), ceiling) - 1 : 0
+}
+
+/**
+ * How much of the contacts each component accounts for: the share of the map's
+ * departure from expected that its checkerboard explains (§18.8).
+ *
+ * The departure is {@link cooltoolsMatrix}'s — every cell's observed/expected,
+ * clipped, less one, a gap reading as expected — which is what the contacts say
+ * once the distance decay is out of them. A unit vector `v` draws the
+ * checkerboard `v vᵀ`, and the most of the departure `A` that checkerboard can
+ * carry is `(vᵀ A v) v vᵀ`: so its share is `(vᵀ A v)²` over the sum of `A`'s
+ * cells squared.
+ *
+ * **One measure whichever matrix the components came from.** Under cooltools'
+ * method they are `A`'s own eigenvectors, `vᵀ A v` is the eigenvalue, and this
+ * is the eigenvalue squared over the sum of squares that the method has always
+ * reported. Under the correlation it is the one number about the contacts the
+ * table had not got: a correlation matrix's eigenvalue is a share of *its*
+ * variance, the similarity of rows to rows, and says nothing of how much of the
+ * map the pattern is. Orthogonal components' checkerboards are orthogonal too,
+ * so the shares of several add up to what they carry together, and never past
+ * the whole.
+ *
+ * Summed a row at a time from `oe` itself rather than from the prepared matrix,
+ * which at the task's 8,192 bins would be another half gigabyte for a few
+ * numbers.
+ */
+export function contactShares(
+  oe: Float64Array,
+  m: number,
+  vectors: readonly Float64Array[],
+  percentile = COOLTOOLS_CLIP_PERCENTILE,
+): number[] {
+  const ceiling = upperPercentile(oe, percentile)
+  const fit = new Float64Array(vectors.length)
+  const row = new Float64Array(m)
+  let whole = 0
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < m; j++) {
+      const a = departure(oe[i * m + j], ceiling)
+      row[j] = a
+      whole += a * a
+    }
+    for (let k = 0; k < vectors.length; k++) {
+      const v = vectors[k]
+      let dot = 0
+      for (let j = 0; j < m; j++) dot += row[j] * v[j]
+      fit[k] += v[i] * dot
+    }
+  }
+  return Array.from(fit, (c) => (whole > 0 ? (c * c) / whole : Number.NaN))
 }
 
 /**

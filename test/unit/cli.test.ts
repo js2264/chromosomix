@@ -822,10 +822,10 @@ describe('compartments by either method', () => {
     await writeFile(reference, `>chrI\n${bases}\n`)
   })
 
-  const components = async (where: string): Promise<{ text: string; rows: string[][] }> => {
+  const components = async (where: string, header: string): Promise<{ text: string; rows: string[][] }> => {
     const text = await readFile(join(where, 'checkered.compartments.compartment-components.tsv'), 'utf8')
     const body = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
-    expect(body[0]).toBe('sequence\tcomponent\teigenvalue\texplained\tr')
+    expect(body[0]).toBe(header)
     return { text, rows: body.slice(1).map((line) => line.split('\t')) }
   }
 
@@ -839,12 +839,17 @@ describe('compartments by either method', () => {
       ]),
     ).toBe(0)
     expect(complained()).not.toMatch(/failed:/)
-    const { text, rows } = await components(where)
+    const { text, rows } = await components(where, 'sequence\tcomponent\teigenvalue\tcontacts\tr')
     expect(text).toMatch(/^# param method: cooltools$/m)
     // The default goes unnamed in the label, as the ordinary expectation does.
     expect(text).toMatch(/^# output: Components · .*· cis$/m)
-    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, share, r with phasing$/m)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, of contacts, r with phasing$/m)
     expect(rows.map((row) => row[1])).toEqual(['E1', 'E2', 'E3'])
+    // How much of the contacts each accounts for: the checkerboard is most of
+    // this map's departure from expected, and the three share no more than all.
+    const shares = rows.map((row) => Number(row[3]))
+    expect(shares[0]).toBeGreaterThan(0.3)
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeLessThanOrEqual(1)
     // By eigenvalue, largest first, whatever the sign.
     const sizes = rows.map((row) => Math.abs(Number(row[2])))
     for (let i = 1; i < sizes.length; i++) expect(sizes[i]).toBeLessThanOrEqual(sizes[i - 1])
@@ -861,11 +866,13 @@ describe('compartments by either method', () => {
         '--phaseSequence', reference, '--out', where, '--quiet',
       ]),
     ).toBe(0)
-    const { text, rows } = await components(where)
+    const { text, rows } = await components(where, 'sequence\tcomponent\teigenvalue\texplained\tcontacts\tr')
     expect(text).toMatch(/^# param method: correlation$/m)
     expect(text).toMatch(/^# output: Components · .*· correlation$/m)
-    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, variance, r with phasing$/m)
-    expect(Number(rows[0][4])).toBeGreaterThan(0.9)
+    expect(text).toMatch(/^# columns: sequence, component, eigenvalue, variance, of contacts, r with phasing$/m)
+    // The correlation's own share and the map's are two numbers, both reported.
+    expect(Number(rows[0][4])).toBeGreaterThan(0.3)
+    expect(Number(rows[0][5])).toBeGreaterThan(0.9)
   })
 
   it('refuses the ordering it no longer offers, and a method it does not have', async () => {

@@ -6177,7 +6177,8 @@ largest, E2 the next. The phasing signal *signs* each one — positive where it 
 once their correlation reaches `minR` — and never chooses among them, because a component chosen for
 following GC content would make any later comparison of GC content between the compartments it
 calls a comparison of GC content with itself. A *components* table says what each one is: its
-eigenvalue, the share of the whole it explains, and its Pearson r with the phasing signal as drawn. The
+eigenvalue, **how much of the contacts it accounts for** — *of contacts*, below — and its Pearson r
+with the phasing signal as drawn. The
 phasing signal is a gene model, else **a track** — any loaded or computed lane, chosen and never
 assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
 the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone and
@@ -6200,8 +6201,14 @@ bin more than 0.03 apart on a track reaching ±0.74. What remains is cooltools' 
 averages the diagonals past about the thirtieth in logarithmic groups, and its percentile, which also
 counts the dropped rows' zeros and the ignored diagonals' ones. The two methods agree where a
 chromosome has compartments to find and part where it has none: E1 against E1, r = 0.94 on PAK and
-0.58 on *E. coli*. Under cooltools the table's share is the eigenvalue squared over the sum of every
-cell squared, which is what a matrix that is not a correlation's has in place of a variance. It
+0.58 on *E. coli*. **Of contacts** is one measure under both: the share of the map's departure from
+expected — cooltools' prepared matrix, observed/expected clipped and less one, a gap as expected —
+that a component's checkerboard carries, `(vᵀAv)²` over the sum of every cell squared. Under
+cooltools `vᵀAv` is the eigenvalue, so this is the share its table has always reported; under the
+correlation it is the one number about the map the table lacked, since a correlation matrix's
+eigenvalue over its rows — the table's *variance*, kept beside it — is a share of how alike the rows
+are rather than of the contacts, and cannot be set beside a cooltools run's. Orthogonal components'
+checkerboards are orthogonal, so the shares add up to what several carry together. cooltools' road
 skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
 about the cube — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds, where the
 correlation of the same square is four more on one core (§7.5). A method the task does not have is
