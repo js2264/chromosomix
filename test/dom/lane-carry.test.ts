@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GroupSettings } from '@/annotations/groups'
 import { ManualStore } from '@/annotations/manual'
-import { LEAD_MAP, laneOf, mapsOf, type MapId } from '@/annotations/placement'
+import { LEAD_MAP, laneOf, mapsOf, resolveStyle, type MapId } from '@/annotations/placement'
 import { AnnotationStore } from '@/annotations/store'
 import { placementOn } from '@/annotations/types'
 import { assemblyOf } from '@/genome/assembly'
@@ -35,6 +35,7 @@ import {
   type LaneSurface,
 } from '@/ui/laneCarry'
 import { MatrixPanel } from '@/ui/MatrixPanel'
+import { gripBox, type LaneFrame } from '@/render/lane'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
 class DeadWorker {
@@ -106,7 +107,7 @@ describe('the places a lane can land', () => {
   it('are all told when a lane is taken up, and when it is put down', () => {
     const one = surface()
     const two = surface()
-    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP, edge: 'bottom' }
     startCarry(carry)
     expect(carried()).toBe(carry)
     endCarry()
@@ -116,7 +117,7 @@ describe('the places a lane can land', () => {
   })
 
   it('include one offered while the lane is in the air — a cell the drop is opening', () => {
-    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP, edge: 'bottom' }
     startCarry(carry)
     const late = surface()
     expect(late.told).toEqual([carry])
@@ -124,7 +125,7 @@ describe('the places a lane can land', () => {
 
   it('answer a point from any surface but the one the lane is leaving', () => {
     const source = surface('here')
-    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: ['t1'], from: LEAD_MAP, edge: 'bottom' }
     // The source answers its own edges itself, from its own drag.
     expect(landingAt(5, 5, carry, source.offered)).toBeNull()
     surface('here')
@@ -134,9 +135,9 @@ describe('the places a lane can land', () => {
   it('stop answering once taken off offer', () => {
     const offered: LaneSurface = { landingAt: () => ({ light: () => {}, take: () => {} }) }
     const stop = offerLanding(offered)
-    expect(landingAt(0, 0, { ids: [], from: LEAD_MAP })).not.toBeNull()
+    expect(landingAt(0, 0, { ids: [], from: LEAD_MAP, edge: 'bottom' })).not.toBeNull()
     stop()
-    expect(landingAt(0, 0, { ids: [], from: LEAD_MAP })).toBeNull()
+    expect(landingAt(0, 0, { ids: [], from: LEAD_MAP, edge: 'bottom' })).toBeNull()
   })
 
   it('measure a point against a box, and nothing against a box that is not drawn', () => {
@@ -184,7 +185,7 @@ describe('another map’s edges', () => {
     const lead = mapOf(store, LEAD_MAP)
     const other = mapOf(store, 'p1')
     const grid = (panel: MatrixPanel) => panel.el.querySelector('.panel-grid')
-    startCarry({ ids: ['x'], from: LEAD_MAP })
+    startCarry({ ids: ['x'], from: LEAD_MAP, edge: 'bottom' })
     expect(grid(other)?.classList.contains('is-dropping')).toBe(true)
     // The map the lane is leaving shows its own rectangles from its own drag.
     expect(grid(lead)?.classList.contains('is-dropping')).toBe(false)
@@ -198,7 +199,7 @@ describe('another map’s edges', () => {
     const other = mapOf(store, 'p1')
     const top = zone(other, 'top')
     boxAt(top, 100, 0, 300, 30)
-    const carry: LaneCarry = { ids: [id], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: [id], from: LEAD_MAP, edge: 'bottom' }
     startCarry(carry)
     const landing = landingAt(250, 15, carry)
     expect(landing).not.toBeNull()
@@ -211,11 +212,30 @@ describe('another map’s edges', () => {
     expect(laneOf(store.placements, id, 'p1')?.placement).toEqual(placementOn('top'))
   })
 
+  it('take one edge of a track drawn on two, leaving it on the other side of the map it left', () => {
+    const { store, id } = trackStore()
+    store.place(id, { ...placementOn('bottom'), left: true })
+    mapOf(store, LEAD_MAP)
+    const other = mapOf(store, 'p1')
+    boxAt(zone(other, 'top'), 100, 0, 300, 30)
+    const carry: LaneCarry = { ids: [id], from: LEAD_MAP, edge: 'bottom' }
+    landingAt(250, 15, carry)?.take(carry)
+    expect(laneOf(store.placements, id, 'p1')?.placement).toEqual(placementOn('top'))
+    expect(laneOf(store.placements, id, LEAD_MAP)?.placement).toEqual(placementOn('left'))
+    // Each reads the way its edge does. The lane left behind turns to grow
+    // away from the map; the one that arrived is not turned with it.
+    const entry = store.byId(id)
+    const arrived = laneOf(store.placements, id, 'p1')
+    if (entry === undefined || arrived === undefined) throw new Error('the track, on both maps')
+    expect(entry.style.flip).toBe(true)
+    expect(resolveStyle(entry.style, arrived).flip).toBe(false)
+  })
+
   it('do not answer a lane of their own map, whose own drag knows the edge it came from', () => {
     const { store, id } = trackStore()
     const other = mapOf(store, 'p1')
     boxAt(zone(other, 'top'), 100, 0, 300, 30)
-    expect(landingAt(250, 15, { ids: [id], from: 'p1' })).toBeNull()
+    expect(landingAt(250, 15, { ids: [id], from: 'p1', edge: 'bottom' })).toBeNull()
   })
 })
 
@@ -235,7 +255,13 @@ describe('the deck', () => {
         origin: 'cooler',
       }),
       store,
-      client: { request: () => Promise.resolve(null), drop: () => {} } as never,
+      // A read that never comes back: the lanes are drawn empty, which is all
+      // a grip needs to be found.
+      client: {
+        request: () => new Promise(() => {}),
+        cancellable: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
+        drop: () => {},
+      } as never,
       groups: new GroupSettings(`lane-carry-deck-groups-${Math.random()}`),
     }
     const published: Array<string | undefined> = []
@@ -255,13 +281,24 @@ describe('the deck', () => {
     return { deck, store, id, published }
   }
 
+  /**
+   * The browser inside the deck's first tracks cell, opened up: jsdom lays
+   * nothing out, so the test draws it and reads where a lane's grip is.
+   */
+  const browserOf = (deck: PanelDeck) => {
+    const slots = (deck as unknown as { slots: Array<{ cell: { kind?: string; browser?: unknown } | null }> }).slots
+    const view = slots.find((slot) => slot.cell?.kind === 'tracks')?.cell?.browser
+    if (view === undefined) throw new Error('no browser in the tracks cell')
+    return view as unknown as { draw(): void; lanes: Array<{ frame: LaneFrame }>; gripRow(lane: { frame: LaneFrame }): number }
+  }
+
   /** The tracks cells, as the placement control lists them: `tracks`, `tracks 2`… */
   const tracksCells = (deck: PanelDeck) => deck.mapList.filter((map) => map.label.startsWith('tracks'))
 
   it('opens a tracks cell for a lane let go on a `+`, and writes the link once, filled', () => {
     const { deck, store, id, published } = deckWithTracks()
     const before = published.length
-    deck.landLaneGrowing('beside', { ids: [id], from: LEAD_MAP })
+    deck.landLaneGrowing('beside', { ids: [id], from: LEAD_MAP, edge: 'bottom' })
     const cells = tracksCells(deck)
     expect(cells).toHaveLength(1)
     expect(mapsOf(store.placements, id)).toEqual([cells[0]?.id])
@@ -278,7 +315,7 @@ describe('the deck', () => {
     const edge = deck.el.querySelector('.deck-grow.is-beside')
     if (edge === null) throw new Error('no + beside')
     boxAt(edge, 900, 0, 24, 600)
-    const carry: LaneCarry = { ids: [id], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: [id], from: LEAD_MAP, edge: 'bottom' }
     startCarry(carry)
     const landing = landingAt(910, 300, carry)
     expect(landing).not.toBeNull()
@@ -297,12 +334,69 @@ describe('the deck', () => {
     const empty = deck.el.querySelector('.deck-grid > .is-vacant')
     if (empty === null) throw new Error('no empty cell')
     boxAt(empty, 0, 600, 400, 400)
-    const carry: LaneCarry = { ids: [id], from: LEAD_MAP }
+    const carry: LaneCarry = { ids: [id], from: LEAD_MAP, edge: 'bottom' }
     landingAt(200, 800, carry)?.take(carry)
     expect(all(deck.el, '.deck-grid > .is-vacant')).toHaveLength(0)
     const cells = tracksCells(deck)
     expect(cells).toHaveLength(1)
     expect(mapsOf(store.placements, id)).toEqual([cells[0]?.id])
+  })
+
+  it('opens a cell for one edge of a track drawn on two, and leaves it on the other', () => {
+    // The track along the bottom and the left of the first map, its bottom
+    // lane carried to a `+`: a cell of its own, and still along the left.
+    const { deck, store, id } = deckWithTracks()
+    store.place(id, { ...placementOn('bottom'), left: true })
+    deck.landLaneGrowing('beside', { ids: [id], from: LEAD_MAP, edge: 'bottom' })
+    const [cell] = tracksCells(deck)
+    if (cell === undefined) throw new Error('no tracks cell')
+    expect(laneOf(store.placements, id, cell.id)?.placement).toEqual(placementOn('bottom'))
+    expect(laneOf(store.placements, id, LEAD_MAP)?.placement).toEqual(placementOn('left'))
+    const arrived = laneOf(store.placements, id, cell.id)
+    const entry = store.byId(id)
+    if (entry === undefined || arrived === undefined) throw new Error('the track, on both')
+    expect(resolveStyle(entry.style, arrived).flip).toBe(false)
+  })
+
+  it('carries a lane off a tracks cell by its grip, to wherever it is let go', () => {
+    // The grip on a tracks cell's lane only ever reordered the stack, so a
+    // track sent to a cell of its own could not be carried on to a map's edge
+    // from there: the drag did nothing past the cell's own border (§16.9).
+    const { deck, store, id } = deckWithTracks()
+    deck.add({ kind: 'tracks' })
+    const [cell] = tracksCells(deck)
+    if (cell === undefined) throw new Error('no tracks cell')
+    store.placeAt(id, cell.id, placementOn('bottom'))
+    store.unplaceFrom(id, LEAD_MAP)
+    // Somewhere to land, right of the cell — what a map's edge offers.
+    const taken: LaneCarry[] = []
+    const lit: boolean[] = []
+    cleanups.push(
+      offerLanding({
+        landingAt: (x) => (x > 1000 ? { light: (on) => lit.push(on), take: (carry) => taken.push(carry) } : null),
+      }),
+    )
+    const view = browserOf(deck)
+    view.draw()
+    const lane = view.lanes[0]
+    if (lane === undefined) throw new Error('no lane in the cell')
+    const [bx, by, bw, bh] = gripBox(lane.frame, view.gripRow(lane))
+    const canvas = deck.el.querySelector<HTMLCanvasElement>('.deck-tracks .browser-canvas')
+    if (canvas === null) throw new Error('no tracks canvas')
+    boxAt(canvas, 0, 0, 800, 400)
+    Object.assign(canvas, { setPointerCapture: () => {}, releasePointerCapture: () => {} })
+    const press = (type: string, x: number, y: number) =>
+      canvas.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }))
+
+    press('pointerdown', bx + bw / 2, by + bh / 2)
+    const carry = { ids: [id], from: cell.id, edge: 'bottom' }
+    expect(carried()).toEqual(carry)
+    press('pointermove', 1100, 50)
+    expect(lit).toEqual([true])
+    press('pointerup', 1100, 50)
+    expect(taken).toEqual([carry])
+    expect(lit).toEqual([true, false])
+    expect(carried()).toBeNull()
   })
 
   it('draws the lane in a tracks cell it is let go on — and not in the one it came from', () => {
@@ -317,7 +411,7 @@ describe('the deck', () => {
     if (first === undefined || second === undefined) throw new Error('two tracks cells on screen')
     boxAt(first, 0, 0, 400, 400)
     boxAt(second, 400, 0, 400, 400)
-    const carry: LaneCarry = { ids: [id], from: from.id }
+    const carry: LaneCarry = { ids: [id], from: from.id, edge: 'bottom' }
     expect(landingAt(200, 200, carry)).toBeNull()
     landingAt(600, 200, carry)?.take(carry)
     expect(mapsOf(store.placements, id)).toEqual([to.id])

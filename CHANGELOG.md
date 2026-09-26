@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Structure and tracks cells are renamed from their heading (§25.3).** A name typed into a
+  structure cell's heading renames its model, on the Structures card and everywhere else it is named;
+  a tracks cell's heading renames the cell alone — its name in the location control, remembered per
+  cell across a reload — and no track on it. Emptied, a tracks cell's box goes back to its default,
+  and a model's keeps the name it had. A tracks cell nobody named is headed as the location control
+  lists it, `tracks 2` and `tracks 3` after the first, where every one of them said `tracks`.
+
 - **A lane dragged by its grip moves to another map, or into a cell of its own (§16.9).** Let go on a
   rectangle round another map — they light up on every map while a lane is carried — it is drawn on
   that edge of that map; on a `+` edge, a tracks cell opens there drawing it; on an empty cell, the
@@ -446,13 +453,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A tracks cell of the deck is its axis and its lanes (§25.3).** Its locus box, zoom steps and summary
+  line are gone: where to look is asked in the lead's bar above the grid, and the cell still pans and
+  zooms in place.
+
+- **A track's lane carried off one side of a map leaves it on the others (§16.9).** Carrying the lane
+  under a map to a `+` used to take the track off every side of that map; the lane beside it stays.
+  The same for a lane moved between two of one map's sides: a third side keeps its lane.
+
 - **A track to the left of a map grows away from it (§8.9).** Left-hand lanes grew towards the matrix,
   pointing a profile's peaks into the map where the same track above it points them away; they now
   mirror the top stack across the diagonal, as the right-hand stack mirrors the bottom one. A file
   dropped there, a computed track (which opens on the left) and a row placed there all start that
-  way; a lane saved before keeps its direction. A track placed on a map it was not on now arrives
-  turned for its edge, rather than growing into the map beside lanes that grew away, and so does one
-  moved by two presses of its location marks — the new edge on, the old one off.
+  way; a lane saved before keeps its direction. A track placed on a map it was not on starts as the
+  lanes on that edge start where it crosses the diagonal — rather than growing into the map beside
+  lanes that grew away, or hanging upside down in a tracks cell — and keeps its own reading on an edge
+  that reads like its own. A track moved by two presses of its location marks — the new edge on, the
+  old one off — is turned as one moved in one.
 
 - **A track's location is four marks on its map's line (§8.1).** The four words — top, right,
   bottom, left — are four marks of the map with one edge drawn solid, beside the label with one map,
@@ -1237,6 +1254,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A lane in a tracks cell can be carried out of it by its grip (§16.9).** The grip only reordered the
+  cell's own stack, so a track sent to a cell of its own could not be put back beside a map: it now
+  moves to a map's side, a `+`, an empty cell or another tracks cell like any lane.
+
+- **A tracks cell marks both ends of the map's cell under the pointer (§25.4).** It drew one hairline,
+  at the first of the two anchors, where the lanes beside the map mark both.
+
+- **The Structures card's eye follows the deck (§25.3).** A structure cell closed from its heading left
+  its row's eye lit, and a model dropped on a `+` or an empty cell left it dark, until the eye itself
+  was pressed.
 
 - **A Tracks card row dropped on an empty cell of the deck opens the 1D browser of it (§16.9).** The
   browser refused the drop without a word: the row allowed only a *move* and the cell answered with

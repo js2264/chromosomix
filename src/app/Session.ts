@@ -5740,6 +5740,8 @@ export class Session {
     remember(key, MAP_NAMES_SCOPE, next)
     this.compareCard?.sync()
     this.deck?.renamed()
+    // The location rows name the maps too (§16.10: one name, everywhere).
+    this.trackCard?.renamed()
     // Written into the mounted panel rather than through {@link remount}: a
     // rename changes what the picture is *called* and nothing about what is in
     // it, and rebuilding the view would put a gated whole-genome scan (§7.3)
@@ -6193,6 +6195,8 @@ export class Session {
     if (!deck.isEmpty) return
     deck.destroy()
     this.deck = null
+    // Its models went with it, and their eyes on the Structures card go dark.
+    this.structureCard?.refresh()
     // The frame has gone with it, so the mounted view has to be put back on its
     // own — back inside the `+` edges, which is where it was before anybody
     // pressed one. Directly rather than through a re-render: the view is intact
@@ -6306,6 +6310,14 @@ export class Session {
       onMapCardChange: () => {
         this.refreshAesthetics()
       },
+      // The Structures card's eyes say which models the deck draws, so they
+      // follow every change to that — a cell's × and a row dropped on a `+`
+      // among them, which the card's own eye does not see.
+      onStructuresChange: () => {
+        this.structureCard?.refresh()
+      },
+      // A tracks cell renamed: the location rows name it (§25.3).
+      onCellRenamed: () => this.trackCard?.renamed(),
       // A track dropped on an empty cell, loaded onto the tracks cell the deck
       // opened there: the same road a file aimed at a map's edge takes, with
       // the cell's own id as the map (§16.9).

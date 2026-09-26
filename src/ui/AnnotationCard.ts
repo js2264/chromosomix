@@ -304,6 +304,15 @@ export class AnnotationCard {
    * screen saying "put it here" was the thing that did not react. Now the zone
    * lights the moment a file crosses the card, wherever on it the pointer is.
    */
+  /**
+   * A map or a tracks cell was renamed (§16.10, §25.3). The location rows name
+   * every place a track can be drawn, so they are drawn again — a name changes
+   * nothing in the store this card otherwise redraws on.
+   */
+  renamed(): void {
+    this.render()
+  }
+
   /** Whether the lanes are put away under the map-only view; see {@link mapOnlyNote}. */
   setMapOnly(on: boolean): void {
     this.mapOnlyNote.classList.toggle('hidden', !on)

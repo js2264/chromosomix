@@ -790,13 +790,15 @@ or one press past the locus — and they are ordinary bordered buttons like ever
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
 
-**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's, the
-1D browser's and a deck's tracks cell's (§26.6). The browser's carried two unlabelled magnifiers at
-1.8× instead, which is a factor nobody can predict or undo, so a reader who had learnt that one
-press is 3× on the map got something else on the tracks beside it; and the `−` / `+` keys drive the
-3× pair rather than a factor of their own. In a tracks cell the bar is the box and the four steps
-alone: no `go`, since Enter submits and the lead's bar above the grid carries the button, and no `/`
-badge, since one key cannot open two boxes and the lead's is the one it opens.
+**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's and
+the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
+a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
+something else on the tracks beside it; and the `−` / `+` keys drive the 3× pair rather than a
+factor of their own. **A deck's tracks cell has no bar** — no locus box, no steps, no summary line —
+only its axis, the chromosome's bar and ruler drawn at the top of its picture (§25.3). It had the box
+and the four steps, which were a second place to ask the question the lead's bar above the grid
+answers, in every tracks cell, and the one road there was to moving one cell out of step with the
+maps it follows.
 
 Every press moves the window about its own **centre**, which leaves what you were looking at in the
 middle of what comes back. Against an end of the sequence the window slides in rather than asking
@@ -2545,9 +2547,14 @@ the edge it was last on *alone*. That is the move the location marks make — th
 old one off — and read from its placement alone the second press came from neither edge and turned
 nothing, so a track moved from under the map to its left arrived growing into it. Which edge that was
 is remembered for the session; after a reload a lane on two edges keeps its flip, as it did before. A lane arriving on a **map it was not
-on** — a row placed on a companion's edge, a lane carried there by its grip (§16.9) — is turned from
-the edge the *track* reads for: its `flip` is a fact about that edge. It used to arrive unturned,
-growing into the map beside lanes that grew away from it.
+on** — a row placed on a companion's edge or a tracks cell, a lane carried there by its grip (§16.9)
+— keeps the track's `flip` on an edge that reads the way the track's own edge does, above or below
+the map for a track above or below one and beside it for beside, so a profile hung from its ceiling
+still hangs; **across the diagonal it starts as that edge's lanes start**. It used to arrive
+unturned, growing into the map beside lanes that grew away from it; and then turned from the track's
+edge, which carried a deviation over the diagonal that was more often a saved lane's than a
+reader's — the yeast demo's Pol II, growing away from the map on its right, hung upside down in a
+tracks cell.
 
 #### The lane that used to be here
 
@@ -4770,17 +4777,25 @@ Closing it closed the grid up in reading order, and the new cell slid into the p
 just left, so the drop read as two empty cells and nothing else.
 
 **A lane carried by its grip goes anywhere a track can be drawn, and it is a move**: drawn where it
-is let go, and taken off the map it came from. Onto a rectangle round **another map** — they light
+is let go, and taken off the edge it came from. Onto a rectangle round **another map** — they light
 on every map while a lane is in the air, not only on the map it is leaving — it is drawn on that edge
 of that map. Onto a `+`, it opens the cells with a tracks cell drawing it in the one nearest the edge;
 onto an **empty cell**, that cell becomes a tracks cell — the 1D browser of it; onto a **tracks
-cell**, that cell draws it. The cells show their tiling while a lane is carried, as they do while a
+cell**, that cell draws it. **A lane in a tracks cell is carried the same way**, by the same grip
+that reorders the cell's stack: over the cell itself it goes on moving up and down the stack, and
+past the cell's border it is a carry like any other, lighting every map's rectangles, the `+` edges
+and the other cells. It used to reorder and nothing else, so a track sent to a cell of its own could
+not be carried on from there. The cells show their tiling while a lane is carried, as they do while a
 cell is. An overlay group travels as the one lane it is on screen; a lane arriving on a map it was not
 on is turned for the edge it lands on (§8.9); and what it held of its own on the map it left — a
-ceiling, set on that library's depth — stays behind with that map. The Tracks card is where a track
-is put somewhere *as well*. The grip drag is a pointer drag captured by the lane it began on, so
-nothing else on the page hears it as a drag: the places a lane can land answer where the pointer is
-through one registry instead (`ui/laneCarry.ts`).
+ceiling, set on that library's depth — stays behind with that map. **The lane is one edge's**: a
+track drawn along two sides of a map, one of them carried away, is still drawn along the other — the
+carry used to take it off the map altogether — and a grip let go on another of the same map's
+rectangles moves that lane there and leaves the track's lane on a third side where it is. Whatever
+stays behind is turned for the edge it is left on before the lane lands, so the lane that left is not
+turned with it. The Tracks card is where a track is put somewhere *as well*. The grip drag is a
+pointer drag captured by the lane it began on, so nothing else on the page hears it as a drag: the
+places a lane can land answer where the pointer is through one registry instead (`ui/laneCarry.ts`).
 
 **A `+` that fills the cell it opens writes the deck once, filled.** The deck is written into the
 link and the session reads the link back a moment later, so two writes in one gesture — the empty
@@ -4892,7 +4907,8 @@ cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
 maps and the `~` of a vacancy are. A deck holds **a structure cell per model** — a second `3d` opens
-a second cell — and as many tracks cells as the reader opens, named apart in the location control.
+a second cell — and as many tracks cells as the reader opens, named apart in the location control:
+by the name the reader gave the cell (§25.3), or numbered where they gave none.
 
 **A `~` is resolved against the cells the deck is already holding, before the record.** The hash can
 say no more than `~` about a local map (§16.6), and what it is resolved against was the *stored*
@@ -8637,7 +8653,14 @@ back. With nothing beside it the cell takes the height a map would, where a cell
 in it had the 16 rem floor. Where something is already drawn on the tracks they stay on screen, and a
 link or a restored session names its own deck. A
 row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
-eye is a model asking for a cell, the drop is a cell being given a model. The *3D structure* card
+eye is a model asking for a cell, the drop is a cell being given a model. **The eye follows the
+deck, however the deck changed**: a cell closed from its own heading darkens its row's eye, and a
+row dropped on a `+` or an empty cell lights it, the moment the cell is drawn. The card used to ask
+the deck only when its own eye was pressed, so a closed cell left its row lit and a dropped model
+left it dark. **A structure cell's heading is its model's name**, and it is edited there: a name
+typed into it renames the row on the Structures card and every other place the model is named, as a
+map's heading renames the map (§16.10); an empty box keeps the name it had, since a model with
+no name is a row the card cannot tell from its neighbours. The *3D structure* card
 has no picker for it: it said the second thing in the place a reader looks for which cell the card
 sets, which its title line says instead (below). And **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
@@ -8828,7 +8851,20 @@ it beside the maps, with its one edge live and the other three greyed and saying
 the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
 deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
 cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
-spreads to every other map. The chain in its heading unhooks both roads.
+spreads to every other map. The chain in its heading unhooks both roads. **It is its axis and its
+lanes**, with no locus box, zoom steps or summary line of its own: where to look is the maps'
+question, asked in the lead's bar above the grid, and it is still panned and zoomed in place — by a
+drag, the wheel and the keys — like any 1D browser. **Its heading is a name the reader can change**,
+and the change is the cell's alone: it names the stack in its heading and in the location control's
+list of places, and renames no track on it — the tracks are the session's, named on the Tracks card,
+and a cell is where they are drawn. Until then it is `tracks`, and `tracks 2`, `tracks 3` for the
+ones after it counting from the left, in the heading as in the control — two headings both saying
+`tracks` over a list saying `tracks` and `tracks 2` left a reader guessing which line was which
+cell — renumbered as cells come and go. Two stacks side by side are what a name is for, *G1*
+beside *G2M*; an empty box, or the default typed back, hands the cell back to its default. The names are remembered by **seat**, a
+tracks cell's place among the tracks cells counting from the left, written from the live cells on
+every change to the deck, so a reload names each cell as it was and a cell moved or closed takes its
+name with it rather than leaving it on a seat.
 
 **The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
 session's view, re-parented into a cell as a map's is — moved and hidden as a map's is (§16.9) — and
@@ -8890,9 +8926,11 @@ stopped naming a contact, so a model still joining two beads would be the one su
 a question the pointer stopped asking. The one place is the position along the diagonal, which is
 what the line is drawn at and what the readout names. Each saying which surface it came from, every
 subscriber ignoring its own.
-A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
-bead is a mark on every map's column axis and a guide on every tracks cell; a pointer on a tracks
-cell is the same on the maps and the structure. The deck's own cell-to-cell echo between maps is
+A pointer on a map lights the bead at each end and joins the two with a chord, and puts **a guide
+at each end** on every tracks cell — the pair the lanes beside that map mark, where a tracks cell
+marked the first of the two and left the other anchor with no line; a pointer on a bead is a mark on
+every map's column axis and a guide on every tracks cell; a pointer on a tracks cell is the same on
+the maps and the structure. The deck's own cell-to-cell echo between maps is
 untouched, and a map's hover is not relayed to the maps twice.
 
 What the maps are looking at reaches the cell as loci on every pan; beads outside the window are

@@ -4866,6 +4866,7 @@ export class MatrixPanel {
         const carry: LaneCarry = {
           ids: lanes.membersOf(edge, handle.entry.id).map((member) => member.id),
           from: this.mapId,
+          edge,
         }
         if (drag !== null) drag.carry = carry
         startCarry(carry)
@@ -5124,8 +5125,9 @@ export class MatrixPanel {
           // it is about that picture: `place` writes the *track's* default and
           // the lead's lane with it, so a drag on a companion moved the track
           // out from under the first map and left the one the hand was over
-          // exactly as it was (`annotations/store.ts`'s `placeAt`).
-          store.placeAt(member.id, this.mapId, placementOn(target))
+          // exactly as it was (`annotations/store.ts`'s `placeAt`). And **this
+          // edge** to that one: a track also drawn on a third side keeps it.
+          store.moveEdge(member.id, this.mapId, edge, target)
         }
       }
       // Let go off this map, on a place another offered: the lane goes there
@@ -5200,8 +5202,15 @@ export class MatrixPanel {
    */
   private takeLane(carry: LaneCarry, edge: LaneEdge): void {
     for (const id of carry.ids) {
-      this.laneStore.placeAt(id, this.mapId, placementOn(edge))
-      if (carry.from !== this.mapId) this.laneStore.unplaceFrom(id, carry.from)
+      // Off the edge it left **first**. Where that map keeps the track on
+      // another side, what is left there may turn to grow away from it, and a
+      // lane here that had not yet been given a turn of its own would turn
+      // with it — a lane put under this map, drawn upside down.
+      if (carry.from !== this.mapId) this.laneStore.unplaceEdge(id, carry.from, carry.edge)
+      // Beside whatever edges it already has here: a track already under this
+      // map, carried onto its left, is on both.
+      const held = this.laneStore.laneFor(id, this.mapId)?.placement
+      this.laneStore.placeAt(id, this.mapId, { ...(held ?? {}), [edge]: true })
     }
   }
 

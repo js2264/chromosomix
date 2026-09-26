@@ -11,17 +11,25 @@
  * by move, and hands the lane to whatever answered when the hand lets go.
  *
  * What a landing does is its own business; what every one of them does is
- * **move** the lane: it is drawn where it landed and taken off the map it came
- * from. A lane dragged to another cell is a reader saying *there, not here*,
- * and the Tracks card is where a track is put somewhere *as well*.
+ * **move** the lane: it is drawn where it landed and taken off the edge it came
+ * from — off that edge only, so a track on two sides of a map keeps the side
+ * nobody touched. A lane dragged to another cell is a reader saying *there, not
+ * here*, and the Tracks card is where a track is put somewhere *as well*.
  */
 
 import type { MapId } from '../annotations/placement'
+import type { LaneEdge } from '../annotations/types'
 
-/** The lane in the hand: its tracks — an overlay group moves as one — and the map they are on. */
+/**
+ * The lane in the hand: its tracks — an overlay group moves as one — the map
+ * they are on, and **which edge** of it, since a track drawn along two sides of
+ * one map is carried off the one the hand took hold of and stays on the other.
+ * A tracks cell's lanes are on its one edge, the bottom.
+ */
 export interface LaneCarry {
   ids: readonly string[]
   from: MapId
+  edge: LaneEdge
 }
 
 /** One place a carried lane can land. */

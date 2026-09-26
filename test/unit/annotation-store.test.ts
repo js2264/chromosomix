@@ -18,7 +18,7 @@ import {
   parseSpan,
   type ManualMark,
 } from '../../src/annotations/manual'
-import { LEAD_MAP } from '../../src/annotations/placement'
+import { LEAD_MAP, resolveStyle } from '../../src/annotations/placement'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { remember } from '../../src/state/UiMemory'
@@ -1015,6 +1015,67 @@ describe('moving a lane on one map', () => {
     // Nothing was turned: the track reads up the page under the lead, and the
     // top edge reads the same way.
     expect(store.placements.find((each) => each.map === 'slot-2')?.style).toBeUndefined()
+  })
+
+  it('starts a lane across the diagonal as its edge starts, whichever way the track reads there', () => {
+    // A track that grows away from the map on its right — a lane written before
+    // the convention it breaks, as the yeast demo's Pol II is — put in a tracks
+    // cell: it reads up the page, as every other lane under a ruler does. It was
+    // turned from the right edge, and hung upside down.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'Pol II', placementOn('right'))
+    // Begun there it starts turned, towards the map; the demo's session says
+    // otherwise, and a saved lane keeps what it was saved with.
+    expect(store.byId(id)?.style.flip).toBe(true)
+    store.restyle(id, { flip: false })
+    store.placeAt(id, 'tracks-cell', placementOn('bottom'))
+    const lane = store.placements.find((each) => each.track === id && each.map === 'tracks-cell')
+    const entry = store.byId(id)
+    if (lane === undefined || entry === undefined) throw new Error('the track, and its lane in the cell')
+    expect(resolveStyle(entry.style, lane).flip).toBe(false)
+  })
+
+  it('keeps a hanging track hanging on another map’s edge that reads the same way', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.restyle(id, { flip: true })
+    store.placeAt(id, 'slot-2', placementOn('top'))
+    const lane = store.placements.find((each) => each.track === id && each.map === 'slot-2')
+    const entry = store.byId(id)
+    if (lane === undefined || entry === undefined) throw new Error('the track, and its lane on slot-2')
+    expect(resolveStyle(entry.style, lane).flip).toBe(true)
+  })
+
+  it('takes a track off one edge of a map and leaves it on the others there', () => {
+    // A lane carried away by its grip is one edge's (§16.9): the track along
+    // the bottom and the left of the third replicate, its bottom lane carried
+    // to a `+`, is still along the left.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeAt(id, 'slot-2', { ...placementOn('bottom'), left: true })
+
+    store.unplaceEdge(id, 'slot-2', 'bottom')
+
+    expect(store.drawnOnMap('slot-2', 'bottom')).toHaveLength(0)
+    expect(store.drawnOnMap('slot-2', 'left')).toHaveLength(1)
+    // Its last edge there takes it off that map, and off nothing else.
+    store.unplaceEdge(id, 'slot-2', 'left')
+    expect(store.placements.some((lane) => lane.track === id && lane.map === 'slot-2')).toBe(false)
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+  })
+
+  it('moves one edge of a map to another and leaves a third where it is', () => {
+    // A grip dropped on another of the same map's rectangles. It used to
+    // replace the whole placement, so the left-hand lane went with the bottom.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', { ...placementOn('bottom'), left: true })
+    store.moveEdge(id, LEAD_MAP, 'bottom', 'top')
+    expect(store.byId(id)?.placement).toEqual({ ...placementOn('top'), left: true })
+    store.placeAt(id, 'slot-2', { ...placementOn('bottom'), right: true })
+    store.moveEdge(id, 'slot-2', 'right', 'left')
+    expect(store.drawnOnMap('slot-2', 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'left')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'right')).toHaveLength(0)
   })
 
   it('turns a track new to a map for the edge it lands on, from the edge the track reads for', () => {

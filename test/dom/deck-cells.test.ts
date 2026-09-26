@@ -11,7 +11,7 @@
  * that sentence is asserted too.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PanelDeck } from '@/panels/PanelDeck'
 import { parseG3d } from '@/annotations/g3d'
@@ -22,6 +22,7 @@ import { assemblyOf } from '@/genome/assembly'
 import type { TracksContext } from '@/panels/TracksPanel'
 import type { AnnotationEntry, AnnotationStyle } from '@/annotations/types'
 import { defaultStyle } from '@/annotations/types'
+import { BrowserView } from '@/ui/BrowserView'
 import type { MatrixPanel } from '@/ui/MatrixPanel'
 import type { LocusWindow } from '@/render/locus'
 import { setHoverPlace } from '@/ui/hoverLocus'
@@ -66,6 +67,7 @@ const G3D = Array.from({ length: 12 }, (_, i) => `chr1\t${i * 5000}\t${i * 0.9}\
 function fakeStore(entries: AnnotationEntry[]) {
   const listeners = new Set<() => void>()
   const restyled: Array<{ id: string; patch: Partial<AnnotationStyle> }> = []
+  const updated: Array<{ id: string; patch: Partial<AnnotationEntry> }> = []
   const store = {
     entries,
     subscribe: (listener: () => void) => {
@@ -75,10 +77,14 @@ function fakeStore(entries: AnnotationEntry[]) {
     restyle: (id: string, patch: Partial<AnnotationStyle>) => {
       restyled.push({ id, patch })
     },
+    update: (id: string, patch: Partial<AnnotationEntry>) => {
+      updated.push({ id, patch })
+    },
     notify: () => {
       for (const listener of listeners) listener()
     },
     restyled,
+    updated,
   }
   return store
 }
@@ -184,7 +190,12 @@ function tracksContext(): TracksContext {
 function make(
   store: ReturnType<typeof fakeStore> | undefined,
   tracks?: TracksContext,
-  options: { mapsAllowed?: boolean; sharedElsewhere?: readonly PlotOptionKey[] } = {},
+  options: {
+    mapsAllowed?: boolean
+    sharedElsewhere?: readonly PlotOptionKey[]
+    onCellRenamed?: () => void
+    onStructuresChange?: () => void
+  } = {},
 ) {
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
@@ -208,6 +219,8 @@ function make(
       onDropUrl: (url) => dropped.push(url),
     },
     tracks: { context: () => tracks },
+    ...(options.onCellRenamed === undefined ? {} : { onCellRenamed: options.onCellRenamed }),
+    ...(options.onStructuresChange === undefined ? {} : { onStructuresChange: options.onStructuresChange }),
   })
   document.body.appendChild(deck.el)
   const view = document.createElement('div')
@@ -218,6 +231,22 @@ function make(
 
 function state(maps: string | undefined): ViewState {
   return { uri: 'lead.cool', view: 'region', region: 'chr1', ...(maps === undefined ? {} : { maps }) } as unknown as ViewState
+}
+
+/** The window a deck's first tracks cell is showing, as its view says. */
+function windowOf(deck: PanelDeck): string | undefined {
+  return deck.el.querySelector<HTMLElement>('.deck-grid > .deck-tracks .view-browser')?.dataset.locus
+}
+
+/**
+ * Move a tracks cell a fifth of its window to the right, as the reader's arrow
+ * key does, and wait for the move to be reported (`BrowserView`'s own delay).
+ */
+async function pan(cell: Element | undefined): Promise<void> {
+  const canvas = cell?.querySelector('.browser-canvas')
+  if (canvas === null || canvas === undefined) throw new Error('no tracks canvas')
+  canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+  await new Promise((done) => setTimeout(done, 300))
 }
 
 function structureCells(deck: PanelDeck): HTMLElement[] {
@@ -299,7 +328,7 @@ describe('a structure cell in the deck', () => {
     cells[1].querySelector('.structure-wrap')?.dispatchEvent(drop)
     expect(deck.shownStructures()).toEqual(['a1'])
     // Both cells name it, which is what `shownStructures` de-duplicates away.
-    const named = structureCells(deck).map((cell) => cell.querySelector('.deck-name')?.textContent)
+    const named = structureCells(deck).map((cell) => cell.querySelector<HTMLInputElement>('.deck-name')?.value)
     expect(named).toEqual(['model.g3d', 'model.g3d'])
   })
 
@@ -341,6 +370,22 @@ describe('a structure cell in the deck', () => {
     expect(published.at(-1)).toBeUndefined()
   })
 
+  it('tells the session what it draws whenever that changes, so the Structures card’s eye follows', () => {
+    // The eye on a Structures row says whether the model is on screen. It was
+    // asked only when the eye itself was pressed, so a cell closed from its
+    // own heading left its row lit (§25.3).
+    const seen: string[][] = []
+    let deck: PanelDeck | null = null
+    const made = make(fakeStore([structureEntry()]), undefined, {
+      onStructuresChange: () => seen.push(deck?.shownStructures() ?? []),
+    })
+    deck = made.deck
+    deck.add({ kind: 'structure' })
+    expect(seen.at(-1)).toEqual(['a1'])
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.btn-close')?.click()
+    expect(seen.at(-1)).toEqual([])
+  })
+
   it('is part of the figure the lead’s Export card saves and copies', async () => {
     const lead = leadPanel()
     const { deck } = make(fakeStore([structureEntry()]))
@@ -371,15 +416,35 @@ describe('what the cell says', () => {
     const { deck } = make(empty)
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
-    // A span and not an `<input>`: this name is the row's, changed on the
-    // Structures card, and a box that framed itself on hover then refused every
-    // keystroke was inviting a rename it cannot do.
-    expect(cell?.querySelector('.deck-name')?.textContent).toBe('structure')
+    const name = cell?.querySelector<HTMLInputElement>('.deck-name')
+    expect(name?.value).toBe('structure')
+    // Nothing to rename until there is a model.
+    expect(name?.readOnly).toBe(true)
     expect(cell?.querySelector('.structure-note')?.textContent).toMatch(/No structure loaded/)
     // The row arrives.
     empty.entries.push(structureEntry())
     empty.notify()
-    expect(cell?.querySelector('.deck-name')?.textContent).toBe('model.g3d')
+    expect(name?.value).toBe('model.g3d')
+    expect(name?.readOnly).toBe(false)
+  })
+
+  it('renames its model — the row on the Structures card — when renamed here', () => {
+    // One name for one model, wherever it is named (§16.10): the heading used
+    // to be a label to be renamed on the card, and now it is the same box a
+    // map's heading is.
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const name = structureCells(deck)[0]?.querySelector<HTMLInputElement>('.deck-name')
+    if (name === null || name === undefined) throw new Error('no name box')
+    name.value = 'nucleus, G1'
+    name.dispatchEvent(new Event('change'))
+    expect(store.updated).toEqual([{ id: 'a1', patch: { label: 'nucleus, G1' } }])
+    // An emptied box is no name: the model keeps the one it had.
+    name.value = '   '
+    name.dispatchEvent(new Event('change'))
+    expect(store.updated).toHaveLength(1)
+    expect(name.value).toBe('model.g3d')
   })
 
   it('reports a row that is still reading, or refused, in its own words', () => {
@@ -661,31 +726,43 @@ describe('a tracks cell in the deck', () => {
     const { deck } = make(undefined, tracksContext())
     deck.setLead(lead.panel)
     deck.add({ kind: 'tracks' })
-    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
-    expect(box?.value).toBe('chr1:10,001-30,000')
+    expect(windowOf(deck)).toBe('chr1:10,001-30,000')
     expect(lead.state.followed).toEqual([])
   })
 
-  it('takes the maps with it when the reader moves it, and stops when unhooked', () => {
+  it('carries no locus box or zoom steps of its own — only its axis', () => {
+    // Where to look is the maps' question, asked in the box above the grid;
+    // a second box and four buttons in every tracks cell were a second way of
+    // asking it (§25.3).
+    const { deck } = make(undefined, tracksContext())
+    deck.add({ kind: 'tracks' })
+    const cell = tracksCells(deck)[0]
+    expect(cell?.querySelector('.view-browser')).not.toBeNull()
+    expect(cell?.querySelector('.input-region')).toBeNull()
+    expect(cell?.querySelector('.zoom-steps')).toBeNull()
+    expect(cell?.querySelector('.view-head')).toBeNull()
+    expect(cell?.querySelector('.browser-canvas')).not.toBeNull()
+  })
+
+  it('takes the maps with it when the reader moves it, and stops when unhooked', async () => {
     const lead = leadPanel()
     const { deck } = make(undefined, tracksContext())
     deck.setLead(lead.panel)
     deck.add({ kind: 'tracks' })
     const cell = tracksCells(deck)[0]
-    const box = cell?.querySelector<HTMLInputElement>('.input-region')
-    if (box === null || box === undefined) throw new Error('no locus box')
-    box.value = 'chr2:50,001-60,000'
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    expect(lead.state.followed.at(-1)).toEqual({ contig: 'chr2', start: 50000, end: 60000 })
+    // A fifth of the window to the right, from the keyboard: 10,001–30,000 is
+    // 20 kb, so 14,001–34,000.
+    await pan(cell)
+    expect(lead.state.followed.at(-1)).toEqual({ contig: 'chr1', start: 14000, end: 34000 })
     // Unhooked: the cell keeps its own window and the maps keep theirs.
     cell?.querySelector<HTMLButtonElement>('.deck-lock')?.click()
     expect(cell?.classList.contains('is-unlocked')).toBe(true)
     const before = lead.state.followed.length
-    box.value = 'chr2:1-20,000'
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await pan(cell)
     expect(lead.state.followed.length).toBe(before)
+    const own = windowOf(deck)
     lead.state.viewport?.([0, 100], [0, 100])
-    expect(box.value).toBe('chr2:1-20,000')
+    expect(windowOf(deck)).toBe(own)
   })
 
   it('has its pointer echoed onto the maps, like a structure cell’s', () => {
@@ -703,6 +780,96 @@ describe('a tracks cell in the deck', () => {
     const [cell] = tracksCells(deck)
     deck.apply(state('https://x.example.org/b.cool|tracks'))
     expect(tracksCells(deck)[0]).toBe(cell)
+  })
+
+  it('marks both ends of a map’s cell under the pointer, as the lanes beside the map do', () => {
+    // A cell of a map is a contact between two places, and the lanes under
+    // that map put a hairline at each. The tracks cell marked the first alone,
+    // so one anchor of the pair had no line in it (§25.4).
+    const echoed = vi.spyOn(BrowserView.prototype, 'showLocusEcho')
+    const { deck } = make(undefined, tracksContext())
+    deck.add({ kind: 'tracks' })
+    const pair = [
+      { contig: 'chr1', bp: 12500 },
+      { contig: 'chr1', bp: 31500 },
+    ] as const
+    setHoverPlace({ loci: pair, source: 'map' })
+    expect(echoed.mock.calls.at(-1)?.[0]).toEqual(pair)
+    // Both, on the view's own axis, and neither once the hand has left.
+    const view = echoed.mock.instances.at(-1) as unknown as { echo: ReadonlyArray<{ contig: string; bp: number }> }
+    expect(view.echo).toEqual(pair)
+    setHoverPlace(null)
+    expect(view.echo).toEqual([])
+    echoed.mockRestore()
+  })
+
+  it('is renamed from its heading — the cell, and none of the tracks on it', () => {
+    const tracks = tracksContext()
+    const { id } = tracks.store.begin({
+      card: 'linear',
+      kind: 'track',
+      label: 'ATAC',
+      source: { kind: 'remote', url: 'atac.bw', name: 'atac.bw' },
+    })
+    let told = 0
+    const { deck } = make(undefined, tracks, { onCellRenamed: () => told++ })
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'tracks' })
+    const box = tracksCells(deck)[1]?.querySelector<HTMLInputElement>('.deck-name')
+    if (box === null || box === undefined) throw new Error('no name box')
+    expect(box.readOnly).toBe(false)
+    expect(box.value).toBe('tracks 2')
+    box.value = '  G2M  '
+    box.dispatchEvent(new Event('change'))
+    expect(box.value).toBe('G2M')
+    expect(told).toBe(1)
+    // Named so in the location control's list of places, the other still
+    // numbered where it stands; the track keeps its own name.
+    expect(deck.mapList.map((row) => row.label)).toEqual(['lead.cool', 'tracks', 'G2M'])
+    expect(tracks.store.byId(id)?.label).toBe('ATAC')
+    // An empty box hands it back to the words it opened with.
+    box.value = ''
+    box.dispatchEvent(new Event('change'))
+    expect(box.value).toBe('tracks 2')
+    expect(deck.mapList.map((row) => row.label)).toEqual(['lead.cool', 'tracks', 'tracks 2'])
+    expect(told).toBe(2)
+  })
+
+  it('numbers the headings of cells nobody named as the location control lists them', () => {
+    // Two cells both headed `tracks`, listed as `tracks` and `tracks 2`: a
+    // reader could not tell which line was which cell.
+    const { deck } = make(undefined, tracksContext())
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'tracks' })
+    deck.add({ kind: 'tracks' })
+    const names = () => tracksCells(deck).map((cell) => cell.querySelector<HTMLInputElement>('.deck-name')?.value)
+    expect(names()).toEqual(['tracks', 'tracks 2', 'tracks 3'])
+    expect(deck.mapList.slice(1).map((row) => row.label)).toEqual(['tracks', 'tracks 2', 'tracks 3'])
+    // The first closed, the others move up a seat and are renumbered with it.
+    tracksCells(deck)[0]?.querySelector<HTMLButtonElement>('.btn-close')?.click()
+    expect(names()).toEqual(['tracks', 'tracks 2'])
+    expect(deck.mapList.slice(1).map((row) => row.label)).toEqual(['tracks', 'tracks 2'])
+  })
+
+  it('keeps its name across a reload, by where it sits among the tracks cells', () => {
+    const first = make(undefined, tracksContext())
+    first.deck.apply(state('tracks|https://x.example.org/b.cool|tracks'))
+    const box = tracksCells(first.deck)[1]?.querySelector<HTMLInputElement>('.deck-name')
+    if (box === null || box === undefined) throw new Error('no name box')
+    box.value = 'reverse strand'
+    box.dispatchEvent(new Event('change'))
+    first.deck.destroy()
+    // The same session opened again, from the same link.
+    const again = make(undefined, tracksContext())
+    again.deck.apply(state('tracks|https://x.example.org/b.cool|tracks'))
+    const names = tracksCells(again.deck).map((cell) => cell.querySelector<HTMLInputElement>('.deck-name')?.value)
+    expect(names).toEqual(['tracks', 'reverse strand'])
+    // Closing the first moves the second into its seat, name and all.
+    tracksCells(again.deck)[0]?.querySelector<HTMLButtonElement>('.btn-close')?.click()
+    again.deck.destroy()
+    const third = make(undefined, tracksContext())
+    third.deck.apply(state('https://x.example.org/b.cool|tracks'))
+    expect(tracksCells(third.deck)[0]?.querySelector<HTMLInputElement>('.deck-name')?.value).toBe('reverse strand')
   })
 })
 
@@ -744,23 +911,19 @@ describe('the deck beside the browser', () => {
     const { deck } = make(undefined, tracksContext())
     deck.setLeadAxis(lead.axis)
     deck.add({ kind: 'tracks' })
-    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
-    expect(box?.value).toBe('chr1:100,001-120,000')
+    expect(windowOf(deck)).toBe('chr1:100,001-120,000')
     lead.state.window = { contig: 'chr2', start: 0, end: 50_000 }
     deck.leadMoved()
-    expect(box?.value).toBe('chr2:1-50,000')
+    expect(windowOf(deck)).toBe('chr2:1-50,000')
   })
 
-  it('takes the browser where a tracks cell was panned', () => {
+  it('takes the browser where a tracks cell was panned', async () => {
     const lead = browserLead()
     const { deck } = make(undefined, tracksContext())
     deck.setLeadAxis(lead.axis)
     deck.add({ kind: 'tracks' })
-    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
-    if (box === null || box === undefined) throw new Error('no locus box')
-    box.value = 'chr2:10,001-20,000'
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    expect(lead.state.shown.at(-1)).toEqual({ contig: 'chr2', start: 10000, end: 20000 })
+    await pan(tracksCells(deck)[0])
+    expect(lead.state.shown.at(-1)).toEqual({ contig: 'chr1', start: 104000, end: 124000 })
   })
 
   it('refuses a map in its bar, and holds one a link names as the cell it would have been', () => {
@@ -954,6 +1117,17 @@ describe('a Structures row dropped on a `+` (§16.9)', () => {
     expect(deck.shownStructures()).toEqual(['a1'])
     // One write, filled: see `PanelDeck.growFilled`.
     expect(published.length - before).toBe(1)
+  })
+
+  it('tells the session the model is on screen, so its row’s eye lights', () => {
+    const seen: string[][] = []
+    let deck: PanelDeck | null = null
+    const made = make(fakeStore([structureEntry()]), tracksContext(), {
+      onStructuresChange: () => seen.push(deck?.shownStructures() ?? []),
+    })
+    deck = made.deck
+    deck.growWithStructure('beside', 'a1')
+    expect(seen.at(-1)).toEqual(['a1'])
   })
 
   it('fills the new row, not the hole a short last row leaves above it', () => {

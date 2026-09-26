@@ -210,6 +210,11 @@ export interface StructurePanelProps {
   /** The grip before the name was taken hold of, or let go. */
   onDragChange(dragging: boolean): void
   /**
+   * The model this cell draws changed — chosen, fallen to, or emptied — so the
+   * Structures card's eye on each row can say which models are on screen.
+   */
+  onShownChange?(): void
+  /**
    * The star pressed: make this the cell the settings card is about (§25.3).
    *
    * Absent for a cell with no deck around it, which has no sibling to be
@@ -362,7 +367,7 @@ type StructureMode = 'none' | 'mark' | 'loop' | 'measure'
 export class StructurePanel implements DeckCell {
   readonly kind = 'structure' as const
   readonly el: HTMLElement
-  private readonly nameEl: HTMLElement
+  private readonly nameEl: HTMLInputElement
   /**
    * The star (§25.3): which cell the *3D structure* card in the Aesthetics
    * column is about.
@@ -528,15 +533,11 @@ export class StructurePanel implements DeckCell {
 
   constructor(private readonly props: StructurePanelProps) {
     this.camera = cameraOf(recall<unknown>(props.memoryKey(), seatScope(CAMERA_SCOPE, props.seat?.() ?? 0)))
-    // A span, not a read-only box. `.deck-name` frames itself on hover and
-    // takes a caret on click, which is the rename control a map's name is
-    // (§16.10) — and this name is the row's, changed on the Structures card.
-    // Drawn as a box it invited a rename and then refused every keystroke.
-    this.nameEl = el('span', {
-      class: 'deck-name',
-      text: 'structure',
-      title: 'The session’s 3D model — renamed on its row in the Structures card',
-    })
+    // The rename control a map's name is (§16.10): a box that reads as text
+    // until it has the caret. The name is the **row's** — the model's label on
+    // the Structures card — so a rename here renames it there, and there here:
+    // one name for one model, wherever it is named.
+    this.nameEl = this.nameBox()
     this.starButton = iconButton('star', '', () => props.onStar?.(), {
       class: 'btn btn-icon deck-star structure-star',
       size: 14,
@@ -744,8 +745,49 @@ export class StructurePanel implements DeckCell {
   }
 
   syncName(): void {
+    // Not under a reader mid-word: the cell re-syncs on every change to the
+    // store, and a rename of another row is one.
+    if (document.activeElement === this.nameEl) return
     const label = this.entry?.label ?? 'structure'
-    if (this.nameEl.textContent !== label) this.nameEl.textContent = label
+    if (this.nameEl.value !== label) this.nameEl.value = label
+    this.nameEl.title = `${label} — click to rename; the Structures card’s row is renamed with it`
+    this.nameEl.readOnly = this.entry === null
+  }
+
+  /**
+   * The heading's name as a rename control, on the map's rules (§16.10): Enter
+   * commits, Escape abandons, and an empty box keeps the name it had — a model
+   * with no name is a row the card cannot tell from its neighbours.
+   */
+  private nameBox(): HTMLInputElement {
+    const input = el('input', { class: 'input deck-name', type: 'text', value: 'structure' })
+    const revert = (): void => {
+      input.value = this.entry?.label ?? 'structure'
+    }
+    input.addEventListener('change', () => {
+      const entry = this.entry
+      const typed = input.value.trim()
+      if (entry === null || typed === '' || typed === entry.label) {
+        revert()
+        return
+      }
+      this.props.store()?.update(entry.id, { label: typed })
+    })
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        input.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        revert()
+        input.blur()
+      }
+      event.stopPropagation()
+    })
+    // The heading is a *deck* heading: a drag that begins in the box is a
+    // selection, not the cell being taken by its grip or the model turned.
+    input.addEventListener('pointerdown', (event) => event.stopPropagation())
+    return input
   }
 
   exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
@@ -924,6 +966,9 @@ export class StructurePanel implements DeckCell {
     }
     this.entry = entry
     this.syncName()
+    // Said once the model is settled, whatever settled it: the row's eye in
+    // the Structures card lights or goes dark with it.
+    if ((shown?.id ?? null) !== (entry?.id ?? null)) this.props.onShownChange?.()
     const payload = entry?.payload
     if (entry === null) {
       this.say(rows.length > 0 ? WAITING.removed : WAITING.none)

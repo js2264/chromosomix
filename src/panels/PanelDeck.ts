@@ -88,7 +88,7 @@ import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
 import type { LocusWindow } from '../render/locus'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
-import { TracksPanel, type TracksCellProps } from './TracksPanel'
+import { TRACKS_CELL_NAME, TracksPanel, type TracksCellProps } from './TracksPanel'
 import type { LaneEdge } from '../annotations/types'
 import { subscribeHoverPlace } from '../ui/hoverLocus'
 import { isStructureName } from '../annotations/g3d'
@@ -302,6 +302,20 @@ export interface PanelDeckProps {
    * memory has just changed under the durable record.
    */
   onLeadShownChange?(): void
+  /**
+   * Which models the deck's structure cells draw may have changed — a cell
+   * opened or closed, a model shown in one, a cell's own fallback settling —
+   * so the Structures card's eyes can be asked again. They used to be asked
+   * only after the card's own eye was pressed, so a cell closed from its
+   * heading left its row's eye lit, and a model dropped on a `+` left it dark.
+   */
+  onStructuresChange?(): void
+  /**
+   * A tracks cell was renamed from its heading (§25.3). The Tracks card's
+   * location rows name the cells a track can be put on, so the session has
+   * them drawn again; nothing else is renamed.
+   */
+  onCellRenamed?(): void
   /**
    * The **structure** star moved: the *3D structure* card in the Aesthetics
    * column is now a different cell's, and only the session can put it there.
@@ -781,10 +795,13 @@ export class PanelDeck {
     this.unsubscribeHover = subscribeHoverPlace((place) => {
       const locus = place === null ? null : place.loci[0]
       // Onto the cells that draw an axis, whoever is pointing — bar the one
-      // pointing. The structure cell listens for itself and has no relay.
+      // pointing — and **every** place the pointer names: a cell of a map is a
+      // pair, and the lanes under that map mark both ends of it, so a tracks
+      // cell marking only the first put one of the two anchors nowhere. The
+      // structure cell listens for itself and has no relay.
       for (const slot of this.slots) {
         if (slot.cell === null || place?.source === `${slot.cell.kind}:${slot.id}`) continue
-        slot.cell.showLocusEcho?.(locus)
+        slot.cell.showLocusEcho?.(place === null ? null : place.loci)
       }
       // Onto the maps only from a cell: the maps already echo between
       // themselves, through cells and converted, and a second mark for the
@@ -1350,13 +1367,12 @@ export class PanelDeck {
       })
     }
     // A tracks cell is a place a track can be put, with one edge (§25.3).
-    // After the maps, and numbered, since two stacks of tracks would
-    // otherwise be two rows with one name.
-    let stacks = 0
+    // After the maps, under the name on its heading: the reader's, or numbered
+    // where there is none, since two stacks of tracks would otherwise be two
+    // rows with one name.
     for (const slot of this.slots) {
-      if (slot.cell?.kind !== 'tracks') continue
-      stacks++
-      out.push({ id: slot.id, label: stacks === 1 ? 'tracks' : `tracks ${stacks}`, edges: ['bottom'] })
+      const cell = tracksIn(slot)
+      if (cell !== null) out.push({ id: slot.id, label: cell.label, edges: ['bottom'] })
     }
     return out
   }
@@ -1672,6 +1688,16 @@ export class PanelDeck {
       slot.cell?.destroy()
     }
     this.slots = next
+    // A tracks cell built here takes the name its seat was left with — before
+    // `paintGrid`, whose publish writes the names back from the live cells and
+    // would otherwise write this deck's unnamed ones over the memory it is
+    // restoring from. A cell kept from the deck before keeps its own.
+    const names = this.recallTracksNames()
+    next
+      .filter((slot) => slot.ref.kind === 'tracks')
+      .forEach((slot, seat) => {
+        if (!reused.has(slot)) tracksIn(slot)?.setName(names[seat] ?? null)
+      })
     // A link, or a restored session, can name fewer maps than the star knew
     // about — and a star on a slot that was not rebuilt would leave the Analysis
     // column pointed at a picture that is not on screen. Reconciled by
@@ -1779,6 +1805,7 @@ export class PanelDeck {
         onDrop: (file) => shared?.onDrop(file),
         onDropUrl: (url) => shared?.onDropUrl(url),
         onDragChange: (dragging) => this.setArranging(dragging),
+        onShownChange: () => this.props.onStructuresChange?.(),
       })
       // What the maps are looking at, from the moment the cell exists rather
       // than from the lead's next pan: the lead's window is where it was.
@@ -1795,6 +1822,11 @@ export class PanelDeck {
         onFollow: (range) => this.followColumns(range),
         onDragChange: (dragging) => this.setArranging(dragging),
         leadSampleWidth: () => this.lead?.laneAcrossPixels() ?? 0,
+        defaultName: () => this.tracksDefaultName(slot),
+        onRename: () => {
+          this.rememberTracksNames()
+          this.props.onCellRenamed?.()
+        },
       })
       const windows = this.leadWindows()
       if (windows !== null) slot.cell.applyWindow(windows)
@@ -2870,13 +2902,17 @@ export class PanelDeck {
     if (built !== null) this.moveLane(carry, built.id)
   }
 
-  /** Draw a carried lane on `to`, and take it off the map it came from. */
+  /** Draw a carried lane on `to`, and take it off the edge it came from. */
   private moveLane(carry: LaneCarry, to: MapId): void {
     const store = this.props.annotations?.(LEAD_MAP)?.store
     if (store === undefined) return
     for (const id of carry.ids) {
+      // That edge only: a track on two sides of a map, one of them carried to a
+      // cell of its own, is still on the other (§16.9). Taken off first, as
+      // `MatrixPanel.takeLane` does and for its reason: what stays behind may
+      // turn, and the lane here must not turn with it.
+      if (carry.from !== to) store.unplaceEdge(id, carry.from, carry.edge)
       store.placeAt(id, to, placementOn('bottom'))
-      if (carry.from !== to) store.unplaceFrom(id, carry.from)
     }
   }
 
@@ -3049,8 +3085,42 @@ export class PanelDeck {
     // a save, for the reason every other scope here is: what storage holds *is*
     // the session, so a reload and an exported workspace restore the same deck.
     remember(this.props.memoryKey(), 'deck:locals', localCompanions(refs))
+    this.rememberTracksNames()
     this.paintBar()
     this.props.onMapsChange(value)
+    // A structure cell opened or closed is a change to which models are on
+    // screen, told after the maps so the card is asked about the deck it sees.
+    this.props.onStructuresChange?.()
+  }
+
+  /**
+   * Every tracks cell's name, into this session's memory by **seat** — which
+   * tracks cell it is, counting from the left: the structure cells' rule, for
+   * their reason, since a slot's id is minted per build and would name nothing
+   * after a reload. Written from the live cells on every publish as well as on
+   * a rename, so a cell moved, closed or opened takes its name with it rather
+   * than leaving it on a seat for whichever cell sits there next.
+   */
+  private rememberTracksNames(): void {
+    const names = this.slots
+      .filter((slot) => slot.ref.kind === 'tracks')
+      .map((slot) => tracksIn(slot)?.customName() ?? '')
+    remember(this.props.memoryKey(), TRACKS_NAMES_SCOPE, names.some((name) => name !== '') ? names : null)
+  }
+
+  /**
+   * What a tracks cell nobody named is called: `tracks`, and `tracks 2`, `tracks 3`
+   * for the ones after it, counting from the left — the seat again.
+   */
+  private tracksDefaultName(slot: Slot): string {
+    const seat = this.slots.filter((held) => held.ref.kind === 'tracks').indexOf(slot)
+    return seat <= 0 ? TRACKS_CELL_NAME : `${TRACKS_CELL_NAME} ${seat + 1}`
+  }
+
+  /** The names {@link rememberTracksNames} wrote, by seat; `''` for a cell nobody named. */
+  private recallTracksNames(): string[] {
+    const stored = recall<unknown>(this.props.memoryKey(), TRACKS_NAMES_SCOPE)
+    return Array.isArray(stored) ? stored.map((name) => (typeof name === 'string' ? name : '')) : []
   }
 
   // -------------------------------------------------------------------------
@@ -3097,6 +3167,9 @@ export class PanelDeck {
     this.keepStarPresent()
     this.paintStars()
     this.paintStructureStars()
+    // A tracks cell nobody named is numbered by where it stands among the
+    // others, so a cell arriving, leaving or moving can renumber the rest.
+    for (const slot of this.slots) tracksIn(slot)?.syncName()
     this.keepLanesOnLiveMaps()
     this.applyLayout()
   }
@@ -4147,6 +4220,14 @@ export class PanelDeck {
     remember(this.props.memoryKey(), LOOKS_SCOPE, this.looks)
     this.props.onLooksChange?.()
   }
+}
+
+/** Where the tracks cells' names live in this session's memory, by seat (§25.3). */
+const TRACKS_NAMES_SCOPE = 'deck:tracksNames'
+
+/** The tracks cell a slot holds, or `null` for a map, a structure or a gap. */
+function tracksIn(slot: Slot): TracksPanel | null {
+  return slot.cell instanceof TracksPanel ? slot.cell : null
 }
 
 /** Where a deck's per-companion presentation lives in this session's memory. */

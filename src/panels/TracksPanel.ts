@@ -71,7 +71,36 @@ export interface TracksPanelProps {
    * which case there is nothing to agree with and the floor decides.
    */
   leadSampleWidth?(): number
+  /**
+   * What the reader called this cell, as it is built: restored by the deck,
+   * which is what knows which of its tracks cells this is. Absent for a cell
+   * nobody has named, which reads {@link defaultName}.
+   */
+  name?: string
+  /**
+   * What the cell is called while nobody has named it: {@link TRACKS_CELL_NAME},
+   * or `tracks 2` for the second of several — the words the location control
+   * lists it under, so the heading and the list agree. Asked, because it is
+   * the deck that knows which tracks cell this is, and a cell closed before it
+   * renumbers it.
+   */
+  defaultName?(): string
+  /**
+   * The reader typed a name into the heading, or emptied the box — `null`,
+   * which hands the cell back to its {@link defaultName} and is what makes a
+   * rename undoable, the rule a map's heading follows. The **cell** is
+   * renamed and nothing else: the tracks on it are the session's, named on the
+   * Tracks card, and a cell's name is where they are drawn rather than what
+   * they are (§25.3).
+   */
+  onRename?(name: string | null): void
 }
+
+/** What a tracks cell is called until the reader calls it something else. */
+export const TRACKS_CELL_NAME = 'tracks'
+
+/** How long a cell's name may be — `ui/mapNames.ts`'s limit, for its reason. */
+const NAME_LIMIT = 200
 
 /** The part of the props the session supplies; the deck adds the rest. */
 export type TracksCellProps = Pick<TracksPanelProps, 'context'>
@@ -92,16 +121,12 @@ export class TracksPanel implements DeckCell {
   /** Set while this cell is being *told* where to look, so it does not tell back. */
   private adopting = false
   private destroyed = false
+  /** What the reader called this cell, or `null` for its default. */
+  private named: string | null
 
   constructor(private readonly props: TracksPanelProps) {
-    this.nameEl = el('input', {
-      class: 'input deck-name',
-      type: 'text',
-      value: 'tracks',
-      title: 'The session’s tracks, those placed on this cell',
-    })
-    this.nameEl.readOnly = true
-    this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
+    this.named = tracksCellName(props.name)
+    this.nameEl = this.nameBox()
     this.chain = iconButton('link', '', () => this.toggleLink(), { class: 'btn btn-icon deck-lock', size: 14 })
     this.el = el(
       'section',
@@ -154,18 +179,47 @@ export class TracksPanel implements DeckCell {
     this.browser?.remeasure()
   }
 
+  /** The name on the heading — the reader's, or the one the deck numbers it by. */
+  get label(): string {
+    return this.named ?? this.fallback
+  }
+
+  /** `tracks`, or `tracks 2` for the second of several: the name of a cell nobody named. */
+  private get fallback(): string {
+    return this.props.defaultName?.() ?? TRACKS_CELL_NAME
+  }
+
+  /** The reader's name for this cell, or `null` for none. */
+  customName(): string | null {
+    return this.named
+  }
+
+  /**
+   * Name this cell from the deck's memory — a reload, a link — which is not a
+   * rename: nobody typed it, so nobody is told.
+   */
+  setName(name: string | null): void {
+    this.named = tracksCellName(name)
+    this.syncName()
+  }
+
+  /**
+   * Put the name back in the box. Skipped while the caret is in it, for the
+   * reason a map's heading skips it: a box rewritten under a reader mid-word
+   * is the one way an editable heading is worse than a printed one.
+   */
   syncName(): void {
-    // Named for what it is rather than for a file: the cell holds the
-    // session's tracks, and the session has one name for those already.
+    if (document.activeElement === this.nameEl) return
+    if (this.nameEl.value !== this.label) this.nameEl.value = this.label
   }
 
   exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
     return this.browser?.exportCanvas(dpi) ?? null
   }
 
-  /** Another surface's pointer, as a guide on this axis (§25.4). */
-  showLocusEcho(locus: { contig: string; bp: number } | null): void {
-    this.browser?.showLocusEcho(locus)
+  /** Another surface's pointer, as a guide on this axis at each place it names (§25.4). */
+  showLocusEcho(loci: ReadonlyArray<{ contig: string; bp: number }> | null): void {
+    this.browser?.showLocusEcho(loci)
   }
 
   destroy(): void {
@@ -217,6 +271,50 @@ export class TracksPanel implements DeckCell {
     this.wrap.append(view.el)
     this.say('')
     this.follow()
+  }
+
+  /**
+   * The heading's name, editable in place (§25.3): two stacks of tracks side
+   * by side are two cells a reader wants to tell apart — *G1* and *G2M*, the
+   * forward strand and the reverse — and `tracks` twice tells them nothing.
+   *
+   * The pointer events are stopped because the heading is a *deck* heading: the
+   * grip beside this makes the cell draggable, and a browser reads a drag that
+   * begins in a text box as a drag of the cell rather than as a selection.
+   */
+  private nameBox(): HTMLInputElement {
+    const input = el('input', {
+      class: 'input deck-name',
+      type: 'text',
+      value: this.label,
+      title: 'The session’s tracks placed on this cell. Click to rename the cell — its tracks keep their names',
+    })
+    const revert = (): void => {
+      input.value = this.label
+    }
+    input.addEventListener('change', () => {
+      const next = tracksCellName(input.value, this.fallback)
+      if (next === this.named) {
+        revert()
+        return
+      }
+      this.named = next
+      revert()
+      this.props.onRename?.(next)
+    })
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        input.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        revert()
+        input.blur()
+      }
+      event.stopPropagation()
+    })
+    input.addEventListener('pointerdown', (event) => event.stopPropagation())
+    return input
   }
 
   private say(message: string): void {
@@ -281,4 +379,16 @@ export class TracksPanel implements DeckCell {
     })
     return node
   }
+}
+
+/**
+ * A cell's name from something that claims to be one: trimmed, bounded, and
+ * `null` for an empty box or the words the cell has anyway — a name that is
+ * {@link TRACKS_CELL_NAME}, or the cell's own numbered default, is no name, so
+ * emptying the box and typing the default land in the same place.
+ */
+export function tracksCellName(value: unknown, fallback: string = TRACKS_CELL_NAME): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim().slice(0, NAME_LIMIT)
+  return trimmed === '' || trimmed === TRACKS_CELL_NAME || trimmed === fallback ? null : trimmed
 }
