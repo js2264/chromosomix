@@ -157,12 +157,6 @@ export interface NumberParam extends ParamBase {
    * what a caller with no context — a shell — falls back on.
    */
   seed?(context: AnalysisContext): number
-  /**
-   * The picture's answer, for a number that is read off what the map shows
-   * rather than asked — see {@link ChoiceParam.fromView}. `undefined` leaves the
-   * value as it was.
-   */
-  fromView?(context: AnalysisContext): number | undefined
 }
 
 /**
@@ -211,20 +205,6 @@ export interface ChoiceParam extends ParamBase {
   kind: 'choice'
   default: string
   options: ReadonlyArray<ChoiceOption>
-  /**
-   * The picture's answer, for a task that measures the map **as it is drawn**.
-   *
-   * The sibling of {@link ToggleParam.derive}, which answers from the *file*:
-   * this answers from the *view* — its normalisation, whether the counts were
-   * divided by an expectation, the scale they are drawn on — read off the
-   * framing the form is resolved against ({@link AnalysisFraming.reading}). The
-   * control is never built and the value is written on every resolution, so it
-   * follows the picture; it is still a parameter in every other sense, so the
-   * provenance, a TSV header and the command a run is copied as all say it, and
-   * a shell, which has no picture, is asked for it as a flag and otherwise runs
-   * on the default. `undefined` leaves the value as it was.
-   */
-  fromView?(context: AnalysisContext): string | undefined
 }
 
 export interface ToggleParam extends ParamBase {
@@ -256,11 +236,6 @@ export interface ToggleParam extends ParamBase {
 /** Whether this control is answered from the file rather than by the reader. */
 export function paramDerived(spec: ParamSpec): boolean {
   return spec.kind === 'toggle' && spec.derive !== undefined
-}
-
-/** Whether this control is answered from the picture rather than by the reader. */
-export function paramFromView(spec: ParamSpec): boolean {
-  return (spec.kind === 'choice' || spec.kind === 'number') && spec.fromView !== undefined
 }
 
 /**
@@ -503,18 +478,11 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
 /**
  * The parameters with every context-seeded number answered (see
  * {@link NumberParam.seed}) — what a run is handed, so its record names the
- * number that was read rather than the absence of one — and every answer that
- * is the picture's taken from it as it is now ({@link ChoiceParam.fromView}),
- * so a run reads the map the reader is looking at when they press Run.
+ * number that was read rather than the absence of one.
  */
 export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisContext, params: Params): Params {
   const out: Record<string, ParamValue> = { ...params }
   for (const spec of specs) {
-    if ((spec.kind === 'choice' || spec.kind === 'number') && spec.fromView !== undefined) {
-      const answered = spec.fromView(context)
-      if (answered !== undefined) out[spec.key] = answered
-      continue
-    }
     if (spec.kind !== 'number' || spec.seed === undefined) continue
     const held = out[spec.key]
     if (typeof held === 'number' && Number.isFinite(held)) continue
@@ -629,27 +597,6 @@ export interface AnalysisFraming {
    * one on, and shown in the Chromosomes table.
    */
   origins?: Readonly<Record<string, number>>
-  /**
-   * What the picture was drawn as, beyond the score: whether its counts were
-   * divided by an expectation — the distance decay, or the decay along a
-   * bacterial chromosome's two arms (§8.15) — and on what scale.
-   *
-   * A fact about the view, as the balancing is, and read only by a task that
-   * measures the map as it is drawn, through parameters answered from it
-   * ({@link ChoiceParam.fromView}). Absent on a framing with no picture behind
-   * it — a shell's, a tracks-only run's, a session written before it existed.
-   */
-  reading?: MapReading
-}
-
-/** The derivation and the scale a map was drawn with (§7.5). */
-export interface MapReading {
-  /** What the counts were divided by: nothing, the distance decay, or the decay along the arms. */
-  expected: 'none' | 'decay' | 'arms'
-  /** Along the arms, the half-width of the window the expectation follows, in bins; `0` the whole sequence. */
-  window: number
-  /** The scale it was drawn on: `none`, `log2`, `log10` or `log1p`. */
-  transform: string
 }
 
 // ---------------------------------------------------------------------------
@@ -1354,11 +1301,4 @@ export interface AnalysisTask {
   /** Ids of tasks whose results are inputs to this one (§18.2's composites). */
   requires?: readonly string[]
   estimate(context: AnalysisContext, params: Params): CostEstimate
-  /**
-   * What this task reads the map as, in words, where it reads it as drawn —
-   * `O/E along the arms, 50 bins · log2` — for the drawer to put after the
-   * framing it runs on. Absent on the tasks that read the counts whatever the
-   * picture shows, which is all but the ones with {@link ChoiceParam.fromView}.
-   */
-  asRead?(params: Params): string
 }

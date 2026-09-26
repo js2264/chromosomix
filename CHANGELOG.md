@@ -465,19 +465,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **Inter-arm alignment reads the map as it is drawn (§18.8).** Its score, whether it is divided by
-  the distance decay or by the decay along both arms, and the scale it is drawn on are the picture's:
-  balanced O/E on `log2` as before, balanced counts on `log10`, or the O/E along the arms, which divides
-  the secondary diagonal out; under a correlation, the ratio it is taken of on `log2`. The balancing is the view's, not the file's default, and a VC or ICE
-  score is applied. The scale goes on each band's mean, as `log2` always did, and the reach is read
-  half-way back to *no alignment* on that scale; counts have none, so theirs is read from the origin,
-  half-way from their level there to their lowest, rather than from a peak that round a circle is where
-  the arms meet again at the terminus, and the O/E along the arms gives none, its expectation being the
-  alignment itself. A logarithm of the counts is drawn as a line on its track. The drawer's line says the reading — *will run on … · O/E along the arms, 50 bins · log2* — and
-  a result whose reading the picture has left is marked as having moved; the command a run is copied as
-  writes it as `--expected`, `--window`, `--transform` and `--normalise`, whose defaults are the old
-  reading. Task version 2.
-
 - **The map's correlation reaches 4,096 bins a side, and takes seconds there (§7.5).** Any square
   block the map can read can now be correlated, where it was capped at 1,500 bins: a whole bacterial
   genome at 1 kb, a human chromosome at 50 kb. All the pairs are one matrix product in WebAssembly,

@@ -292,37 +292,6 @@ describe('the shape of the command', () => {
   })
 })
 
-/**
- * The inter-arm alignment reads the map as it is drawn (§18.8), and a shell has
- * no picture: so the reading it read is written as the task's own flags, and
- * the balancing as the view's, which is what the task read.
- */
-describe('a run that read the map as drawn', () => {
-  const interarm = taskById('interarm') as AnalysisTask
-
-  it('writes the reading as flags, so the shell reads what the picture showed', () => {
-    const flags = flagsOf(
-      commandOf(
-        cliCommandFor({
-          task: interarm,
-          provenance: provenance(
-            'interarm',
-            { ...defaultsOf(interarm), normalise: 'vc', expected: 'arms', window: 30, transform: 'log10' },
-            { balance: false },
-          ),
-          context: context(),
-        }).text,
-      ),
-    )
-    expect(flags.get('normalise')).toBe('vc')
-    expect(flags.get('expected')).toBe('arms')
-    expect(flags.get('window')).toBe('30')
-    expect(flags.get('transform')).toBe('log10')
-    // The view's balancing, from the framing: this task has no balance of its own.
-    expect(flags.get('no-balance')).toBe(true)
-  })
-})
-
 describe('the window', () => {
   it('is left out when the view is the whole file', () => {
     const flags = flagsOf(

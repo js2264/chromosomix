@@ -68,7 +68,6 @@
 import { sameRecipe, type AnalysisRunner, type JobState } from '../analysis/runner'
 import {
   defaultParams,
-  paramFromView,
   resolveSeeds,
   type AnalysisContext,
   type AnalysisFraming,
@@ -1247,48 +1246,22 @@ export class AnalysisDrawer {
    */
   private syncFraming(result: TaskResult | null): void {
     const current = this.options.framing()
-    const task = this.current
-    // What a task that measures the map *as drawn* reads it as, after the
-    // framing it reads it on: the framing names the score, and this names the
-    // rest of the picture — `O/E along the arms, 50 bins · log2` (`asRead`).
-    const asRead = (params: Params): string => {
-      const words = task?.asRead?.(params)
-      return words === undefined ? '' : ` · ${words}`
-    }
     if (result !== null) {
       const provenance = result.provenance
-      const stale = current !== null && (!framingHolds(provenance, current) || this.readingMoved(provenance))
-      const label = `${provenance.framing.label}${asRead(provenance.params)}`
+      const stale = current !== null && !framingHolds(provenance, current)
       this.framingEl.className = stale ? 'analysis-framing is-stale' : 'analysis-framing'
-      this.framingEl.textContent = stale ? `from ${label} — the view has moved since` : `from ${label}`
-      this.framingEl.title = label
+      this.framingEl.textContent = stale
+        ? `from ${provenance.framing.label} — the view has moved since`
+        : `from ${provenance.framing.label}`
+      this.framingEl.title = provenance.framing.label
       this.recomputeButton.classList.toggle('hidden', !stale)
       return
     }
-    const label = current === null || task === null ? (current?.label ?? '') : `${current.label}${asRead(this.seeded(task))}`
     this.framingEl.className = 'analysis-framing'
-    this.framingEl.textContent = current === null ? 'no contact map in this view' : `will run on ${label}`
-    this.framingEl.title = label
+    this.framingEl.textContent =
+      current === null ? 'no contact map in this view' : `will run on ${current.label}`
+    this.framingEl.title = current?.label ?? ''
     this.recomputeButton.classList.add('hidden')
-  }
-
-  /**
-   * Whether the picture has been redrawn as something else since a result that
-   * measured it as drawn: its O/E, its arms, its scale (`ChoiceParam.fromView`).
-   * The framing's own comparison does not see these — every other task reads
-   * the counts whatever the picture shows, and would be told it had moved by a
-   * change of colour scale.
-   */
-  private readingMoved(provenance: Provenance): boolean {
-    const task = this.current
-    const context = this.options.context()
-    if (task === null || context === null) return false
-    for (const spec of task.params) {
-      if (!paramFromView(spec) || (spec.kind !== 'choice' && spec.kind !== 'number')) continue
-      const now = spec.fromView?.(context)
-      if (now !== undefined && !Object.is(now, provenance.params[spec.key])) return true
-    }
-    return false
   }
 
   // -------------------------------------------------------------------------

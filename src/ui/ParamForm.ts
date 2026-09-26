@@ -30,7 +30,7 @@
  */
 
 import { makeRandom } from '../analysis/random'
-import { paramDerived, paramFromView, paramVisible } from '../analysis/types'
+import { paramDerived, paramVisible } from '../analysis/types'
 import type {
   AnalysisContext,
   ChoiceOption,
@@ -437,14 +437,6 @@ export function resolveEntryDefaults(
   for (const spec of specs) {
     if (spec.kind === 'toggle' && spec.derive !== undefined) out[spec.key] = spec.derive(context)
   }
-  // …and the ones that are the picture's: what the map is drawn as, for a task
-  // that measures it as drawn. Written on every resolution for the same reason,
-  // so a run follows the picture rather than the one the form was opened on.
-  for (const spec of specs) {
-    if (!paramFromView(spec)) continue
-    const answered = spec.kind === 'choice' || spec.kind === 'number' ? spec.fromView?.(context) : undefined
-    if (answered !== undefined) out[spec.key] = answered
-  }
   // And the controls this file is not asked about at all: they keep a value,
   // that value is written into the provenance of the run and into the header of
   // every table exported from it, and a default left sitting there says the run
@@ -615,9 +607,8 @@ export class ParamForm {
       // A derived parameter has no control at all — not a disabled one and not a
       // hidden one. It is the file's answer rather than a question, and a
       // greyed-out tickbox saying "balanced, and you may not change it" is a
-      // control whose whole content is an apology. A parameter the picture
-      // answers is the same, the answer being the view's (`ChoiceParam.fromView`).
-      if (paramDerived(spec) || paramFromView(spec)) continue
+      // control whose whole content is an apology.
+      if (paramDerived(spec)) continue
       const control = this.build(spec)
       this.controls.push(control)
       this.groups.get(spec.section ?? '')?.appendChild(control.wrapper)
@@ -707,7 +698,7 @@ export class ParamForm {
   private sections(): string[] {
     // Derived specs are not counted, or a section whose only member is one would
     // be an empty card with a heading over it.
-    const shown = this.specs.filter((spec) => !paramDerived(spec) && !paramFromView(spec))
+    const shown = this.specs.filter((spec) => !paramDerived(spec))
     const out = ['']
     for (const spec of shown) {
       const section = spec.section ?? ''

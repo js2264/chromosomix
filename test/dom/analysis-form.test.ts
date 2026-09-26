@@ -48,7 +48,6 @@ import {
 } from '@/analysis/types'
 import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { ORITER_TASK } from '@/analysis/tasks/oriter'
-import { INTERARM_TASK } from '@/analysis/tasks/interarm'
 import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
 import { ParamForm, resolveEntryDefaults } from '@/ui/ParamForm'
 import { pickLocus, resetPick } from '@/ui/mapPick'
@@ -187,57 +186,6 @@ describe('balancing', () => {
     expect(asks(view, 'balancing weights')).toBe(true)
     expect(view.value.balance).toBe(false)
     view.destroy()
-  })
-})
-
-/**
- * **The inter-arm alignment reads the map as it is drawn** (§18.8), so its
- * reading is the picture's and never a control: the normalisation, what the
- * counts are divided by, the window along the arms and the scale are answered
- * from the framing's `reading`, on every resolution and again when a run is
- * handed its parameters — and a context with no picture, a shell's, leaves the
- * defaults a shell runs on.
- */
-describe('a task that reads the map as drawn', () => {
-  function drawn(reading: { expected: 'none' | 'decay' | 'arms'; window: number; transform: string }, normalise: string | null = null): AnalysisContext {
-    const base = context({ hasWeights: true })
-    return { ...base, framing: { ...base.framing!, balance: true, normalise, reading } }
-  }
-
-  it('asks nothing about the reading, and takes it from the picture', () => {
-    const view = form(INTERARM_TASK, drawn({ expected: 'arms', window: 30, transform: 'log2' }, 'vc'))
-    for (const text of ['divided by', 'scale', 'window along the arms', 'normalisation']) {
-      expect(asks(view, text), text).toBe(false)
-    }
-    expect(view.value).toMatchObject({ normalise: 'vc', expected: 'arms', window: 30, transform: 'log2' })
-    view.destroy()
-  })
-
-  it('follows the picture when it is redrawn as something else', () => {
-    const view = form(INTERARM_TASK, drawn({ expected: 'decay', window: 0, transform: 'log2' }))
-    expect(view.value).toMatchObject({ expected: 'decay', transform: 'log2' })
-    view.setContext(drawn({ expected: 'none', window: 0, transform: 'log10' }))
-    expect(view.value).toMatchObject({ expected: 'none', transform: 'log10' })
-    view.destroy()
-  })
-
-  it('reads the picture again when a run is handed its parameters', () => {
-    const stale = { ...defaultParams(INTERARM_TASK.params), expected: 'decay', transform: 'log2' }
-    const handed = resolveSeeds(INTERARM_TASK.params, drawn({ expected: 'arms', window: 12, transform: 'none' }), stale)
-    expect(handed).toMatchObject({ expected: 'arms', window: 12, transform: 'none' })
-  })
-
-  it('leaves a shell’s defaults where there is no picture to read', () => {
-    const view = form(INTERARM_TASK, context({ hasWeights: true }))
-    expect(view.value).toMatchObject({ normalise: 'none', expected: 'decay', window: 50, transform: 'log2' })
-    view.destroy()
-  })
-
-  it('names the reading it will measure', () => {
-    expect(INTERARM_TASK.asRead?.({ expected: 'arms', window: 50, transform: 'log2', normalise: 'none' })).toBe(
-      'O/E along the arms, 50 bins · log2',
-    )
-    expect(INTERARM_TASK.asRead?.({ expected: 'none', transform: 'log10', normalise: 'ice' })).toBe('ICE · contacts · log10')
   })
 })
 
