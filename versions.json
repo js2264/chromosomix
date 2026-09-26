@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 74,
-      "commit": "1ce7031",
+      "commit": "4e09db9",
       "title": "Move synthetic tracks to Tracks card, add points style",
       "branch": "js/gallant-ride-14ib9t",
-      "date": "2026-09-25T11:30:49Z"
+      "date": "2026-09-26T08:26:28Z"
     }
   ]
 }
