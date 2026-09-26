@@ -18,12 +18,13 @@
  * literature draws; a **track** along the chromosome, how much each locus
  * touches its mirror image; and a **table** of two numbers per sequence for a
  * comparison across maps — how far from the origin the enrichment holds before
- * falling below half its peak, and its mean `log2` from the origin out to there.
+ * falling half-way back from its peak, and how strong it is from the origin out
+ * to there, as a fold over expected.
  *
  * Each sequence has a **second row** of the same numbers over the O/E along both
  * arms — the expectation the map's arms and Compartments divide by, which takes
  * the secondary diagonal into itself. It is a control on that detrending rather
- * than a second measure: where the detrending works, its score is near zero.
+ * than a second measure: where the detrending works, its enrichment is near 1.
  *
  * The arms are read from each sequence's origin — the Origin and terminus task
  * fills it in, a reader types it, and it is the first base until either has —
@@ -100,7 +101,9 @@ export const INTERARM_TASK: AnalysisTask = {
   venue: 'analysis',
   // 2: a second row per sequence, over the O/E along both arms; and the score is
   // the mean from the origin out to the reach, where it was over the whole arm.
-  version: 2,
+  // 3: the table's score is its enrichment, and it and the peak are folds over
+  // expected rather than log2.
+  version: 3,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>

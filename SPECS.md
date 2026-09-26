@@ -6226,23 +6226,27 @@ DNA, whose ratio says how compact the stretch is rather than whether the arms ar
 nearer the main diagonal than `2 × band + 2` bins is left out. Three shapes of one reading: a
 **curve** against distance from the origin, the figure the literature draws; a **track**, how much
 each locus touches its mirror image; and a **table** of its peak, its **reach** — outwards from the
-peak, how far it holds above half of it, both read from a running mean over 2% of the arm so that one
-noisy distance neither sets the peak nor carries the reach to the terminus of a flat profile — and its
-**score**, the mean enrichment **from the origin out to the reach**. So the reach says how far the arms
-are held and the score how strongly where they are, where a mean over the whole arm said both at once
-and read an alignment confined round parS like a weak one that runs to the terminus. Read over the
-stretch that holds above half the peak, a chromosome whose arms are not aligned scores its noise's
-highest stretch rather than zero; where nothing reaches, the score is the whole arm's mean. Each
-sequence has **a second row** of the same numbers over the decay along both arms — the expectation the
-map's arms and Compartments divide by (§8.15), within `armWindow` bins along them, 50 as theirs is —
-which takes the secondary diagonal into itself: a control on that detrending, not a second measure,
-its score read over the first row's stretch so that both rows average the same distances. It
-separates what it should: 1.7 on *P. aeruginosa* PAK from 2 to 16 kb, reaching 2.6–2.7 of its 3.2 Mb
-arms, against 0.23–0.28 on *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and along
-both arms PAK's 1.7 is −0.03 to −0.08. The control's own peak is at the terminus, where the two
-diagonals cross and the arms' expectation is at its weakest, and it grows with the bin — 0.08 at 2 kb,
-1.2 at 16 kb on PAK — because the window is counted in bins, and fifty of 16 kb are too wide to follow
-the crossing. Absent on a metacool, whose MAGs have no declared origins.
+peak, how far it holds above half of it on `log2`, the square root of it as a fold, both read from a
+running mean over 2% of the arm so that one noisy distance neither sets the peak nor carries the reach
+to the terminus of a flat profile — and its **enrichment**, the mean **from the origin out to the
+reach**. So the reach says how far the arms are held and the enrichment how strongly where they are,
+where a mean over the whole arm said both at once and read an alignment confined round parS like a
+weak one that runs to the terminus. **The table is linear** where the curve and the track are `log2`:
+the enrichment and the peak are folds over expected — how many times as often the mirror images touch
+as two loci as far apart along the DNA, 1 being no alignment — two to the mean `log2`, so that
+enrichment and depletion still weigh alike in the averaging. Read over the stretch that holds above
+half the peak, a chromosome whose arms are not aligned shows its noise's highest stretch rather than 1;
+where nothing reaches, the enrichment is the whole arm's. Each sequence has **a second row** of the
+same numbers over the decay along both arms — the expectation the map's arms and Compartments divide by
+(§8.15), within `armWindow` bins along them, 50 as theirs is — which takes the secondary diagonal into
+itself: a control on that detrending, not a second measure, its enrichment read over the first row's
+stretch so that both rows average the same distances. It separates what it should: 3.3–3.4× on
+*P. aeruginosa* PAK from 2 to 16 kb, reaching 2.6–2.7 of its 3.2 Mb arms, against 1.17–1.22× on
+*E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and along both arms PAK's is 0.95–0.98×.
+The control's own peak is at the terminus, where the two diagonals cross and the arms' expectation is
+at its weakest, and it grows with the bin — 1.06× at 2 kb, 2.3× at 16 kb on PAK — because the window
+is counted in bins, and fifty of 16 kb are too wide to follow the crossing. Absent on a metacool, whose
+MAGs have no declared origins.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter

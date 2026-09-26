@@ -282,7 +282,9 @@ const SUMMARY_SMOOTHING = 0.02
  * are not aligned at all, was reported as aligned to within a few bins of its
  * terminus.
  *
- * `NaN` for the reach where there is no enrichment to measure.
+ * `NaN` for the reach where there is no enrichment to measure. The score and the
+ * peak are `log2`; the task's table gives them as folds over expected, two to
+ * these (§18.8).
  */
 export function interArmSummary(
   byDistance: ArrayLike<number>,
