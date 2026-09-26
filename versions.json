@@ -1,6 +1,13 @@
 {
-  "latest": "3da40d6",
+  "latest": "de7985a",
   "versions": [
+    {
+      "commit": "de7985a",
+      "version": "0.13.0",
+      "date": "2026-09-26T22:40:50+02:00",
+      "subject": "Inter-arm alignment's table gives the enrichment, as a fold (#76)",
+      "tag": ""
+    },
     {
       "commit": "3da40d6",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "cca552b",
-      "version": "0.12.0",
-      "date": "2026-09-15T23:54:30+02:00",
-      "subject": "Draw a whole chart inside one feature: barChart and bigBarChart (§8.17) (#60)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -206,13 +206,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 76,
-      "commit": "6867fb0",
-      "title": "Inter-arm alignment's table gives the enrichment, as a fold",
-      "branch": "js/interarm-enrichment",
-      "date": "2026-09-26T20:35:49Z"
-    },
     {
       "number": 75,
       "commit": "7814225",
