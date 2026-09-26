@@ -65,6 +65,7 @@ import {
   laneMove,
   laneRect,
   laneText,
+  OUTLINE_WIDTH,
   valueAcross,
   type LaneFrame,
 } from './lane'
@@ -377,6 +378,15 @@ export interface FeaturePaint {
   /** Write feature names where they fit. */
   labels: boolean
   /**
+   * Edge each block in {@link guideColour}, the plot's ink: the `outline`
+   * preference, which is the rule along the top of a coverage track (§8.16).
+   *
+   * Required rather than defaulted, as it is on a track's paint, so that a new
+   * surface has to decide — one that forgot would draw its boxes unedged under
+   * tracks that are outlined, and one picture would say two things.
+   */
+  outline: boolean
+  /**
    * Put the name *under* the feature rather than inside it.
    *
    * What a genome browser does, and what a lane beside a contact map has no
@@ -467,7 +477,9 @@ export const LABEL_BAND = 11
  * saying the same thing, laid over the one thing the glyph exists to show.
  *
  * Blocks have their corners rounded a little, and they take most of their row:
- * a lane made taller draws its features thicker, up to {@link MAX_THICK}.
+ * a lane made taller draws its features thicker, up to {@link MAX_THICK}. With
+ * the outline on, each is edged in the plot's ink — the hairline along the top of
+ * a coverage track — down to {@link OUTLINE_MIN}.
  * Variants stay square — a mark on a base is a mark, not a box to be shaped —
  * and so does anything too narrow for a corner to be a corner.
  */
@@ -505,15 +517,33 @@ function drawModels(
       intronPath(ctx, frame, set, placement, centre, sizes.line)
     }
     ctx.fill()
+    // The blocks that are edged, five numbers each, kept from the fill rather
+    // than walked again: the rule is then exactly the boundary of the ink under it.
+    const edged: number[] = []
     ctx.beginPath()
     for (const placement of placements) {
       const centre = placement.row * rowHeight + room / 2
       forEachBlock(set, placement, (along0, along1, coding, point) => {
         const height = coding ? sizes.thick : sizes.thin
-        blockPath(ctx, frame, along0, along1, centre - height / 2, height, pointed ? point : 0, round)
+        const top = centre - height / 2
+        const tip = pointed ? point : 0
+        blockPath(ctx, frame, along0, along1, top, height, tip, round)
+        if (paint.outline && Math.abs(along1 - along0) >= OUTLINE_MIN && height >= OUTLINE_MIN) {
+          edged.push(along0, along1, top, height, tip)
+        }
       })
     }
     ctx.fill()
+    if (edged.length > 0) {
+      ctx.beginPath()
+      for (let i = 0; i < edged.length; i += 5) {
+        blockPath(ctx, frame, edged[i], edged[i + 1], edged[i + 2], edged[i + 3], edged[i + 4], round)
+      }
+      ctx.strokeStyle = paint.guideColour
+      ctx.lineWidth = OUTLINE_WIDTH
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+    }
   }
   if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   ctx.restore()
@@ -875,6 +905,16 @@ const ARROW_MIN_HEAD = 2
 
 /** The roundest a block's corner is, in pixels, however big the block. */
 const MAX_RADIUS = 3
+
+/**
+ * The smallest block that is edged when the outline is on, in pixels along the
+ * lane and across it.
+ *
+ * Under four a block is a tick, and a hairline round a tick is most of its ink:
+ * the colour that says which strand or which class would be lost to the plot's
+ * ink, on exactly the features too small to say it any other way.
+ */
+export const OUTLINE_MIN = 4
 
 /**
  * Walk one placed feature's blocks, in axis order: where each one runs, whether

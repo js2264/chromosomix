@@ -2427,6 +2427,8 @@ export class BrowserView {
         // A squished lane is names-free by definition: its rows are too thin
         // to hold one under anything (§8.16).
         labels: this.text && features.display !== 'squished',
+        // The rule along the top of the tracks, round the blocks too (§8.16).
+        outline: this.outline,
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,

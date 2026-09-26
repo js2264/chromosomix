@@ -294,6 +294,18 @@ export function snapTo(value: number, dpr: number): number {
   return (Math.round(value * dpr - 0.5) + 0.5) / dpr
 }
 
+/**
+ * How wide an outline is: a hairline, the floor rule's own width — the rule along
+ * the top of a coverage track, and the edge round a feature's block.
+ *
+ * Sub-pixel deliberately. An outline describes the edge of a shape that is
+ * already there rather than adding a mark of its own, and at a full pixel over a
+ * saturated area it reads as a border drawn round the track — which is a second
+ * thing on the lane, not a clearer view of the first. Round a block it is the
+ * block's own edge for the same reason, not a frame put round it.
+ */
+export const OUTLINE_WIDTH = 0.75
+
 /** Restrict drawing to one lane's rectangle. The caller must `ctx.restore()`. */
 export function clipLane(ctx: CanvasRenderingContext2D, frame: LaneFrame): void {
   ctx.save()

@@ -3538,6 +3538,18 @@ block takes all of its row but a pixel either side, up to 22 pixels: a lane made
 features thicker, where a gene used to stop at nine and thirteen pixels however tall its lane was
 made. Variants stay square: a mark on a base is a mark, not a box to be shaped (§8.14).
 
+**A block is edged in the plot's ink** while the *outline* preference is on: the hairline — three
+quarters of a pixel, in the guide colour — that runs along the top of a coverage track, under the one
+switch for both. The argument is the track's. The boundary between a block's colour and the paper is
+where the feature starts and ends, and in the block's own colour it is the one edge that does not
+stand out from it, so two blocks that abut, a pale colour on the page or an untranslated end against
+its coding span read as one patch of ink rather than as shapes. Only a block at least **four pixels**
+along and across is edged: under that it is a tick, and a rule round a tick is most of its ink — the
+colour that says which strand or which class, lost on exactly the features too small to say it any
+other way. The intron is a hairline already, and a barChart's bars and the zoomed-out density are
+measurements rather than boxes, so none of them is edged. The edge is traced from the outlines the
+fill drew, so it is the shape's boundary and not a second shape, and a saved figure carries it.
+
 **How the rows are spent is the reader's choice**, among the three every genome browser offers under
 the names it is known by: **expanded**, the default, gives each row room for a glyph and the name under
 it and bands the strands; **squished** packs rows eight pixels tall, as many as the lane holds up to

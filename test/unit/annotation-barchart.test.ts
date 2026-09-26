@@ -493,6 +493,7 @@ function drawn(
     haloColour: '#ffffff',
     font: '10px sans-serif',
     opacity: 1,
+    outline: false,
     labels: false,
     barScale,
     ...(barLimits === undefined ? {} : { barLimits }),

@@ -487,6 +487,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A feature's box is edged like a coverage track's top (§8.16).** With the *track outline*
+  preference on — the default — every block of a BED, a peak set, a gene or a call is drawn with the
+  hairline in the plot's ink that runs along the top of a coverage track: beside the map, in the 1D
+  browser and in a saved figure. Blocks that abut, a pale colour and an untranslated end against its
+  coding span now read as shapes. A block under four pixels either way keeps its colour unedged, and
+  the one switch turns the rule off on the tracks and the boxes together.
+
 - **Inter-arm alignment's table gives the enrichment, as a fold, from the origin out to the reach
   (§18.8),** where its score was the mean `log2` over the whole arm: the reach says how far the arms
   are held, and the enrichment how strongly within that, rather than both at once. It and the peak

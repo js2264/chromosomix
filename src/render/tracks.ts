@@ -17,7 +17,7 @@
  * because it says what the average hid.
  */
 
-import { valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
+import { OUTLINE_WIDTH, valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import type { LocusAxis, LocusSegment } from './locus'
 import {
   onScale,
@@ -377,16 +377,6 @@ export function drawTrackScaling(
     baseline: false,
   })
 }
-
-/**
- * How wide the outline rule is: a hairline, the floor rule's own width.
- *
- * Sub-pixel deliberately. The outline is describing the edge of a shape that is
- * already there rather than adding a mark of its own, and at a full pixel over a
- * saturated area it reads as a border drawn round the track — which is a second
- * thing on the lane, not a clearer view of the first.
- */
-const OUTLINE_WIDTH = 0.75
 
 /** How much of itself the standing-still copy keeps while a ceiling is dragged. */
 const SCALING_GHOST = 0.28

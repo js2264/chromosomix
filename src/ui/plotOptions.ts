@@ -182,8 +182,8 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   outline: {
     label: 'track outline',
     hint:
-      'A dark rule along the top of every track, over its own colour — what makes four ' +
-      'stacked areas four legible shapes rather than four blocks of ink.',
+      'A dark rule along the top of every track and round every feature’s box, over its own ' +
+      'colour — what makes four stacked areas four legible shapes rather than four blocks of ink.',
   },
   gutter: {
     label: 'name column',
