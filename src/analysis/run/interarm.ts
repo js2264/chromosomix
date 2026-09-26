@@ -83,14 +83,19 @@ function observedOverArms(values: Float32Array, n: number, frame: ArmFrame, wind
   return out
 }
 
-/** What a row says of a summary: the reach in base pairs. */
+/**
+ * What a row says of a summary, on the table's linear scale: the enrichment and
+ * the peak as folds over expected — two to the `log2` means the summary is
+ * read in, so enrichment and depletion still weigh alike in the averaging — and
+ * the reach in base pairs. The curve and the track stay on `log2`.
+ */
 function rowNumbers(
   summary: { score: number; reach: number; peak: number },
   binsize: number,
-): { score: number; peak: number; reach: number } {
+): { enrichment: number; peak: number; reach: number } {
   return {
-    score: summary.score,
-    peak: summary.peak,
+    enrichment: 2 ** summary.score,
+    peak: 2 ** summary.peak,
     reach: Number.isFinite(summary.reach) ? summary.reach * binsize : Number.NaN,
   }
 }
@@ -160,8 +165,8 @@ export const runInterArm: TaskRunner = async (job) => {
 
     // The control: the same cells over the decay along both arms, which has the
     // secondary diagonal in it — so what the first row measured should be gone.
-    // Its score is read over the measurement's stretch, so the two rows average
-    // the same distances; its peak and reach are its own.
+    // Its enrichment is read over the measurement's stretch, so the two rows
+    // average the same distances; its peak and reach are its own.
     await job.breathe()
     job.throwIfCancelled()
     const detrended = interArmSummary(
@@ -197,7 +202,7 @@ export const runInterArm: TaskRunner = async (job) => {
         : `, within ${armWindow.toLocaleString()} ${armWindow === 1 ? 'bin' : 'bins'} ` +
           `(${(armWindow * binsize).toLocaleString()} bp) of each cell along them`) +
       ' — the expectation the map’s arms and Compartments divide by, which takes the secondary ' +
-      'diagonal in. Its score, read over the first row’s stretch, is near 0 where that works: it is a ' +
+      'diagonal in. Its enrichment, read over the first row’s stretch, is near 1 where that works: it is a ' +
       'control on the detrending, not a second measure of the alignment. Its peak and reach are its ' +
       'own, and a peak at the terminus — where the two diagonals cross and that expectation is at its ' +
       'weakest — is the model’s edge rather than alignment left over.',
@@ -241,27 +246,30 @@ export const runInterArm: TaskRunner = async (job) => {
             'map’s arms and Compartments do — the control on that detrending.',
         },
         {
-          key: 'score',
-          label: 'score',
+          key: 'enrichment',
+          label: 'enrichment',
           kind: 'number',
           digits: 3,
           hint:
-            'Mean log2 enrichment of the secondary diagonal from the origin out to the reach — how ' +
-            'strong the alignment is where it holds — or over the whole arm where nothing reaches. The ' +
-            'detrended row is read over the first row’s stretch; 0 there is none left over.',
+            'How many times as often mirror images touch as expected, from the origin out to the reach — ' +
+            'how strong the alignment is where it holds — or over the whole arm where nothing reaches: 1 ' +
+            'is no alignment, 2 twice as often. Two to the mean log2, so enrichment and depletion weigh ' +
+            'alike. The detrended row is read over the first row’s stretch; 1 there is none left over.',
         },
         {
           key: 'peak',
           label: 'peak',
           kind: 'number',
           digits: 3,
-          hint: 'Its highest log2 enrichment, averaged over 2% of the arm.',
+          hint: 'Its highest enrichment, as a fold over expected, averaged over 2% of the arm.',
         },
         {
           key: 'reach',
           label: 'reach',
           kind: 'number',
-          hint: 'How far from the origin, in bp, the enrichment holds before it falls below half its peak.',
+          hint:
+            'How far from the origin, in bp, the enrichment holds before it falls below the square root ' +
+            'of its peak — half-way back to 1 on a log scale.',
         },
         { key: 'armLength', label: 'arm', kind: 'number', hint: 'Length of the longer arm, in bp.' },
       ],

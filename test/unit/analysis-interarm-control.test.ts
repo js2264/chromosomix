@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
 import { armOffsets } from '@/analysis/arms'
 import type { JobContext } from '@/analysis/job'
 import { runInterArm } from '@/analysis/run/interarm'
-import type { AnalysisFraming, Params, TableOutput, TaskOutput } from '@/analysis/types'
+import type { AnalysisFraming, CurveOutput, Params, TableOutput, TaskOutput } from '@/analysis/types'
 
 const BINSIZE = 1000
 const N = 160
@@ -90,7 +90,8 @@ async function run(params: Params) {
   const { job: context, notes } = job(params)
   const outputs: TaskOutput[] = await runInterArm(context)
   const table = outputs.find((output): output is TableOutput => output.kind === 'table')!
-  return { table, measured: table.rows[0], control: table.rows[1], notes }
+  const curve = outputs.find((output): output is CurveOutput => output.kind === 'curve')!
+  return { table, curve, measured: table.rows[0], control: table.rows[1], notes }
 }
 
 describe('inter-arm alignment’s control row', () => {
@@ -102,18 +103,37 @@ describe('inter-arm alignment’s control row', () => {
     for (const key of ['sequence', 'topology', 'origin', 'armLength']) expect(control[key]).toBe(measured[key])
     // Said beside the numbers, so a reader of the table knows which row is which.
     const keys = table.columns.map((column) => column.key)
-    expect(keys.indexOf('expected')).toBeLessThan(keys.indexOf('score'))
+    expect(keys.indexOf('expected')).toBeLessThan(keys.indexOf('enrichment'))
+    expect(keys).not.toContain('score')
+  })
+
+  it('gives the enrichment as a fold: two to the curve’s mean from the origin out to the reach', async () => {
+    const { curve, measured } = await run({})
+    // The curve stays on log2, and the table is its linear reading.
+    const logs = curve.series[0].y
+    const last = Math.floor(Number(measured.reach) / BINSIZE)
+    let total = 0
+    let counted = 0
+    for (let d = 0; d <= last; d++) {
+      if (!Number.isFinite(logs[d])) continue
+      total += logs[d]
+      counted++
+    }
+    expect(Number(measured.enrichment)).toBeCloseTo(2 ** (total / counted), 9)
+    // Enriched, on a scale where 1 is as expected.
+    expect(Number(measured.enrichment)).toBeGreaterThan(1)
+    expect(Number(measured.peak)).toBeGreaterThan(1)
   })
 
   it('leaves the measurement as it was, whatever the control’s window', async () => {
     const wide = await run({ armWindow: 0 })
     const narrow = await run({ armWindow: 5 })
-    for (const key of ['score', 'peak', 'reach']) expect(narrow.measured[key]).toBe(wide.measured[key])
+    for (const key of ['enrichment', 'peak', 'reach']) expect(narrow.measured[key]).toBe(wide.measured[key])
     // The arms are held together, so the enrichment is there to find.
-    expect(Number(wide.measured.score)).toBeGreaterThan(0.5)
+    expect(Number(wide.measured.enrichment)).toBeGreaterThan(Math.SQRT2)
     expect(Number(wide.measured.reach)).toBeGreaterThan(0)
     // The window is the control's, and it moves it.
-    expect(narrow.control.score).not.toBe(wide.control.score)
+    expect(narrow.control.enrichment).not.toBe(wide.control.enrichment)
   })
 
   it('divides the secondary diagonal out along both arms, leaving little of it', async () => {
@@ -121,8 +141,11 @@ describe('inter-arm alignment’s control row', () => {
     // whole sequence's (`0`) is one mean per distance along the arms, and keeps
     // the decay from the origin out to the terminus that this circle is built on.
     const { measured, control, notes } = await run({ armWindow: 5 })
-    expect(Math.abs(Number(control.score))).toBeLessThan(0.1 * Number(measured.score))
-    expect(Number(control.peak)).toBeLessThan(0.2 * Number(measured.peak))
+    // On the log scale the folds are read on, so that a depletion counts as
+    // far from 1 as the enrichment it mirrors.
+    const log = (value: unknown) => Math.log2(Number(value))
+    expect(Math.abs(log(control.enrichment))).toBeLessThan(0.1 * log(measured.enrichment))
+    expect(log(control.peak)).toBeLessThan(0.2 * log(measured.peak))
     expect(notes.join(' ')).toMatch(/second row is the same cells over the decay along both arms, within 5 bins/)
   })
 })

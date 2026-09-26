@@ -94,11 +94,15 @@ const table = () => page.evaluate(() => {
 })
 const notes = () =>
   page.evaluate(() => [...document.querySelectorAll('.analysis-drawer-body li')].map((li) => li.innerText).join('\n'))
-const toTable = () => page.evaluate(() => {
-  const body = document.querySelector('.analysis-drawer-body')
-  const hit = [...(body?.querySelectorAll('*') ?? [])].find((el) => el.childElementCount === 0 && /Inter-arm alignment per sequence/.test(el.textContent ?? ''))
-  hit?.scrollIntoView({ block: 'center' })
-})
+const toTable = async () => {
+  await page.evaluate(() => {
+    const body = document.querySelector('.analysis-drawer-body')
+    const hit = [...(body?.querySelectorAll('*') ?? [])].find((el) => el.childElementCount === 0 && /Inter-arm alignment per sequence/.test(el.textContent ?? ''))
+    hit?.scrollIntoView({ block: 'center' })
+  })
+  // Shot at once, the table's head was caught before its buttons were painted.
+  await sleep(500)
+}
 /** The map, with the origin typed into the Chromosomes table first, as a reader would. */
 const openWithOrigin = async (map, sequence, origin) => {
   await page.goto(`${BASE}/#uri=${encodeURIComponent(map)}&view=contigs`, { waitUntil: 'domcontentloaded', timeout: 120000 })
