@@ -258,7 +258,7 @@ metacooler-run tasks
 ##       --limit (default 500000)  Most sites
 ## 
 ## peaks
-##     Call peaks
+##     Peak calling
 ##       --signal  Track
 ##       --replicate  Replicate
 ##       --idr (default "0.05")  IDR threshold

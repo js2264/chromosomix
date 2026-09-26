@@ -171,8 +171,8 @@ column; the model with no centre of rotation, key or buttons. It prints each PNG
 corner said. Run it after any change to a right-click menu, to what a renderer draws round its data,
 or to `copyPicture`.
 
-`scripts/ui-peaks.mjs` calls **peaks** on the 1D browser demo's ATAC bigWig (§18.8): the task on the
-1D card, its form, a run on the one track — the note that says no test was made, the violin of every
+`scripts/ui-peaks.mjs` drives **Peak calling** on the 1D browser demo's ATAC bigWig (§18.8): the task
+on the 1D card, its form, a run on the one track — the note that says no test was made, the violin of every
 candidate's curvature on a log axis — then the strongest 5,000 with the cut drawn as a second violin
 and the table per sequence, the new lane under the MACS2 peaks of the same reads at the demo's locus
 and at 8 kb, where they can be compared peak for peak; then Pol II as the replicate, shot mid-fit

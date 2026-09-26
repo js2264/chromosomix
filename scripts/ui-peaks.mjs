@@ -1,5 +1,5 @@
 /**
- * Drive *Call peaks* in headless Chromium and write one screenshot a step.
+ * Drive *Peak calling* in headless Chromium and write one screenshot a step.
  *
  * The 1D browser demo holds exactly what the task is for — an ATAC bigWig, and
  * beside it the MACS2 peaks called from the same reads — so the gallery calls
@@ -124,12 +124,12 @@ try {
   // The 1D card, with the task that makes a peak set second, beside the motif search.
   await fold('Show the Analysis panel')
   await sleep(1200)
-  await page.locator('.analysis-row-title', { hasText: 'Call peaks' }).first().scrollIntoViewIfNeeded()
+  await page.locator('.analysis-row-title', { hasText: 'Peak calling' }).first().scrollIntoViewIfNeeded()
   await sleep(600)
   await shot('p01-analysis-1d-card')
 
   // The form: a track to call on, no replicate, and the price of a scan.
-  await openTask('Call peaks')
+  await openTask('Peak calling')
   await choose('signal', 'ATAC')
   await shot('p02-form-one-track')
 
@@ -171,7 +171,7 @@ try {
   // ATAC, so the fit ends at its box's edge and the run says so.
   await fold('Show the Analysis panel')
   await sleep(1000)
-  await openTask('Call peaks')
+  await openTask('Peak calling')
   await choose('signal', 'ATAC')
   await choose('replicate', 'Pol II')
   await keep.fill('100000')

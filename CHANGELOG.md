@@ -14,7 +14,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Call peaks, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
+- **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
   coverage track's smoothed second derivative turns negative — where the signal curves down — found by
   its shape rather than its height, so it needs no background model of normalised signal and splits
   two summits on one shoulder. Choose a replicate and IDR (Boley's `idr` 2.0.3, the implementation

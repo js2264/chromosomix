@@ -5897,7 +5897,7 @@ an argued reading order). A group whose every task is *absent* for the file in h
 all**, which is how the Metagenome card stays away from a file with no genomes. Within a card the
 task that **makes** the thing the others read comes first: *model from the map* opens the 3D card,
 because a reader with no structure loaded has exactly one thing to do in it; *find a motif* and
-*call peaks* open the 1D card for the same reason, one making an interval set from the sequence and
+*peak calling* open the 1D card for the same reason, one making an interval set from the sequence and
 the other from a track.
 
 **2D.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
@@ -6368,7 +6368,7 @@ sequence the reader has not declared one on (§8.15). A call whose terminus disa
 skew alone would put it is said, and so is a sequence read as a line, on which an origin at the
 first base is split between the two ends.
 
-**Calling peaks on a track.** *Call peaks* is **yapc** (Jänes et al. 2018), ported (§18.9): a peak is a
+**Calling peaks on a track.** *Peak calling* is **yapc** (Jänes et al. 2018), ported (§18.9): a peak is a
 stretch where the smoothed signal **curves down**. The track — or its mean with a replicate — is
 convolved with yapc's composite kernel, the nine-point second difference smoothed three times by a
 150 bp rolling mean (456 taps), and every run of bases where that second derivative is below
@@ -6661,7 +6661,7 @@ frame rules and the sub-diagonal band of `NaN` are all reproduced, including whe
 takes them for oversights, because changing one is changing what the score means and the agreement is
 the entire value of having it.
 
-**Peak calling is the second caller, admitted on exactly those terms.** *Call peaks* is yapc 0.1 with
+**Peak calling is the second caller, admitted on exactly those terms.** *Peak calling* is yapc 0.1 with
 the IDR 2.0.3 it thresholds by, both ported rather than approximated, and its goldens are those
 programs' own output over `demo/yeast/` — yapc's functions and its `main()` loaded as they are, IDR's
 fit at the commit yapc cites — compared region for region, summit for summit and cut for cut

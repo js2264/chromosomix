@@ -174,7 +174,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
 export const PEAKS_TASK: AnalysisTask = {
   id: 'peaks',
-  title: 'Call peaks',
+  title: 'Peak calling',
   blurb: 'Narrow peaks from a coverage track, where its smoothed signal curves down (yapc).',
   group: '1d',
   // The bigWig handles are in the annotations worker, and a peak caller reads
