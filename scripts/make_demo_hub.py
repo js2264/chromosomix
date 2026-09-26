@@ -363,7 +363,11 @@ def write_genepred() -> int:
             if len(row) < 9:
                 continue
             kind = row[2]
-            if kind not in ("exon", "CDS"):
+            # The stop codon is coding: the Sequence Ontology's CDS ends with it
+            # and UCSC's own genePred tables count it in `cdsEnd`, but a GTF
+            # writes it on a row of its own outside the last CDS row. Leaving it
+            # out drew every gene three bases short of its stop (SPECS §8.16).
+            if kind not in ("exon", "CDS", "stop_codon"):
                 continue
             name = attribute(row[8], "transcript_id")
             if name == "":

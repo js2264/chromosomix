@@ -34,7 +34,15 @@ import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { FIGURES_SCOPE, type FigureMemory } from '../figures/style'
 import { formatUri, parseUri } from '../uri'
-import { parseMaps, readDeckLook, serialiseMaps, type DeckLocal, type DeckLook } from '../panels/deck'
+import {
+  parseMaps,
+  readDeckLead,
+  readDeckLook,
+  serialiseMaps,
+  type DeckLead,
+  type DeckLocal,
+  type DeckLook,
+} from '../panels/deck'
 import type { PanelLayout } from '../ui/SidePanel'
 import { COMMIT, PRODUCER } from '../version'
 import type { StoredEntry } from '../annotations/types'
@@ -220,8 +228,13 @@ export interface SessionConfig {
    * a star naming a slot this deck did not build back onto the lead
    * (`keepStarPresent`). A second copy of those two rules here would be a second
    * place to keep them in step with the deck they are about.
+   *
+   * `lead` is where the session's own cell stood and whether it was hidden
+   * (§16.9), read back through the deck's own reader (`readDeckLead`): a figure
+   * of a model with the tracks it was opened from taken off the screen is an
+   * arrangement too, and one the importing window would otherwise put back.
    */
-  deck: { starred?: string; columns?: number; locals?: DeckLocal[]; looks?: DeckLook[] }
+  deck: { starred?: string; columns?: number; locals?: DeckLocal[]; looks?: DeckLook[]; lead?: DeckLead }
   /**
    * The local second file, which the hash has never carried (§11, §5.7).
    *
@@ -311,14 +324,19 @@ function tableOf(
   return value === null || value === undefined ? {} : { [which]: value }
 }
 
-/** `{ starred: … }` for whichever of the four the deck actually wrote. */
+/** `{ starred: … }` for whichever of the five the deck actually wrote. */
 function deckOf(
   starred: string | null | undefined,
   columns: number | null | undefined,
   locals?: DeckLocal[] | null,
   looks?: DeckLook[] | null,
+  lead?: DeckLead | null,
 ): SessionConfig['deck'] {
   return {
+    // Only a lead somebody moved or hid: one first and on screen is what every
+    // deck does untouched, and saying so would tell an importing tab to undo
+    // whatever its own reader had done with theirs.
+    ...(lead !== null && lead !== undefined && (lead.at !== 0 || lead.hidden) ? { lead } : {}),
     ...(Array.isArray(locals) && locals.length > 0 ? { locals } : {}),
     // An empty list is no list: a deck nobody has recoloured writes nothing
     // rather than an empty array, so `applyConfig` can tell "this session says
@@ -436,6 +454,7 @@ const SCOPES = {
   mapNames: MAP_NAMES_SCOPE,
   lanes: 'deck:lanes',
   looks: 'deck:looks',
+  lead: 'deck:lead',
   name: SESSION_NAME_SCOPE,
 } as const
 
@@ -503,6 +522,7 @@ export function buildConfig(options: {
       recall<number>(key, SCOPES.columns),
       recall<DeckLocal[]>(key, SCOPES.locals),
       recall<DeckLook[]>(key, SCOPES.looks),
+      readDeckLead(recall<unknown>(key, SCOPES.lead)),
     ),
     ...compareOf(recall<string>(key, SCOPES.compareLocal)),
     ...namesOf(readMapNames(key)),
@@ -611,6 +631,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   if (config.deck?.columns !== undefined) remember(key, SCOPES.columns, config.deck.columns)
   if (config.deck?.locals !== undefined) remember(key, SCOPES.locals, config.deck.locals)
   if (config.deck?.looks !== undefined) remember(key, SCOPES.looks, config.deck.looks)
+  if (config.deck?.lead !== undefined) remember(key, SCOPES.lead, config.deck.lead)
   if (config.compare !== undefined) remember(key, SCOPES.compareLocal, config.compare)
   // On the same rule as the three lines above: a config written before maps
   // could be named must leave the names this tab already has alone rather than
@@ -797,6 +818,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       typeof deck['columns'] === 'number' ? deck['columns'] : undefined,
       localsOf(deck['locals']),
       looksOf(deck['looks']),
+      readDeckLead(deck['lead']),
     ),
     ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
     // Through `ui/mapNames.ts`'s own reader rather than a second one here, on

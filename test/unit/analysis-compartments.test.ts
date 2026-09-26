@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COOLTOOLS_CLIP_PERCENTILE,
+  contactShares,
   cooltoolsMatrix,
   correlationMatrix,
   observedOverExpected,
@@ -169,6 +170,67 @@ describe('cooltoolsMatrix', () => {
     for (let i = 0; i < index.length; i++) {
       expect(Math.sign(first[i])).toBe(compartmentOf(index[i]) === 0 ? sign : -sign)
     }
+  })
+})
+
+describe('contactShares', () => {
+  /** The two-compartment square's observed/expected over its usable bins. */
+  function oeOf(n: number): { oe: Float64Array; m: number } {
+    const values = blocks(n)
+    const accumulator = new ExpectedAccumulator(n)
+    accumulator.addBlock({ nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] })
+    const index = usableBins(values, n, 0.1)
+    return { oe: observedOverExpected(values, n, index, singleGroupPlan(n, accumulator.finish())), m: index.length }
+  }
+
+  /** The sum of the prepared matrix's cells squared, the whole the shares are of. */
+  function wholeOf(oe: Float64Array, m: number): number {
+    let whole = 0
+    for (const value of cooltoolsMatrix(oe, m)) whole += value * value
+    return whole
+  }
+
+  it('is the eigenvalue squared over the sum of squares for cooltools’ own components', () => {
+    const { oe, m } = oeOf(40)
+    const pairs = leadingEigenpairs(cooltoolsMatrix(oe, m), m, 3)
+    const shares = contactShares(oe, m, pairs.map((pair) => pair.vector))
+    const whole = wholeOf(oe, m)
+    // To the solver's own convergence: its eigenvalue is the last iterate's.
+    for (let k = 0; k < pairs.length; k++) expect(shares[k]).toBeCloseTo(pairs[k].value ** 2 / whole, 7)
+  })
+
+  it('measures the correlation’s components against the same map, and they add up to no more than it', async () => {
+    const { oe, m } = oeOf(40)
+    const pairs = leadingEigenpairs(await correlationMatrix(oe, m), m, 3)
+    const shares = contactShares(oe, m, pairs.map((pair) => pair.vector))
+    // The planted checkerboard is most of this map's departure from expected,
+    // and the first component is that checkerboard.
+    expect(shares[0]).toBeGreaterThan(0.3)
+    for (const share of shares.slice(1)) expect(share).toBeLessThan(shares[0])
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeLessThanOrEqual(1 + 1e-12)
+    // …and a correlation eigenvalue's own share is another quantity altogether.
+    expect(pairs[0].value / m).not.toBeCloseTo(shares[0], 2)
+  })
+
+  it('reads a gap as expected, and leaves the observed/expected as it was', () => {
+    const nan = Number.NaN
+    // One checkerboard of departures, and a gap where it would have been largest.
+    const oe = Float64Array.from([
+      nan, 0.5, 1.5, 0.5,
+      0.5, nan, 0.5, 1.5,
+      1.5, 0.5, nan, 0.5,
+      0.5, 1.5, 0.5, nan,
+    ])
+    const v = Float64Array.from([0.5, 0.5, 0.5, 0.5])
+    const w = Float64Array.from([0.5, -0.5, 0.5, -0.5])
+    const [flat, board] = contactShares(oe, 4, [v, w])
+    // Every departure is ±0.5 off the gaps, so the whole is 12 × 0.25 = 3.
+    // `w wᵀ` matches all twelve: its fit is 12 × 0.5 × 0.25 = 1.5, so 1.5² / 3.
+    expect(board).toBeCloseTo(0.75, 12)
+    // `v vᵀ` sees four above and eight below: (4 − 8) × 0.5 × 0.25 = −0.5, so 0.25 / 3.
+    expect(flat).toBeCloseTo(0.25 / 3, 12)
+    expect(Number.isNaN(oe[0])).toBe(true)
+    expect(oe[2]).toBe(1.5)
   })
 })
 

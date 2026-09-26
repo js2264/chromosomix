@@ -17,7 +17,7 @@
  * or pretending the data is still loaded.
  */
 
-import { laneStartsFlipped } from '../render/lane'
+import { laneIsHorizontal, laneStartsFlipped } from '../render/lane'
 import {
   laneOf,
   mapsOf,
@@ -45,6 +45,7 @@ import {
   ANNOTATION_KINDS,
   LANE_EDGES,
   defaultStyle,
+  emptyPlacement,
   hasTrackControls,
   normalisePlacement,
   placementOn,
@@ -196,6 +197,8 @@ export class AnnotationStore {
    * today would name nothing tomorrow.
    */
   private homes: StoredLane[] = []
+  /** Each lane's last lone edge, by `track map` — see {@link readingEdge}. */
+  private readonly alone = new Map<string, LaneEdge>()
 
   /** Every placement, for the card that lists where a track is drawn. */
   get placements(): readonly Lane[] {
@@ -240,6 +243,41 @@ export class AnnotationStore {
   placeOn(track: string, map: MapId, placement: Placement): void {
     this.lanes = place(this.lanes, track, map, placement)
     this.changed()
+  }
+
+  /**
+   * Take a track off **one edge** of one map, leaving it on the others there —
+   * and off the map altogether where that was its last edge on it.
+   *
+   * What a lane carried away by its grip does to the map it leaves (§16.9): the
+   * lane under the hand is one edge's, and a track drawn along two sides of a
+   * map whose bottom lane was carried to a `+` is still meant to be on the
+   * side nobody touched.
+   */
+  unplaceEdge(track: string, map: MapId, edge: LaneEdge): void {
+    const lane = laneOf(this.lanes, track, map)
+    if (lane === undefined || !lane.placement[edge]) return
+    const next = { ...lane.placement, [edge]: false }
+    if (LANE_EDGES.every((side) => !next[side])) {
+      this.unplaceFrom(track, map)
+      return
+    }
+    this.placeAt(track, map, next)
+  }
+
+  /**
+   * Move a track from one edge of a map to another, leaving any other edge it
+   * is on there where it is.
+   *
+   * The grip dropped on another of the same map's rectangles: *this lane there
+   * instead*, which says nothing about a lane of the same track on a third
+   * side. It used to replace the whole placement with the one edge, so a track
+   * along the bottom and the left dragged from the bottom to the top lost its
+   * left-hand lane as well.
+   */
+  moveEdge(track: string, map: MapId, from: LaneEdge, to: LaneEdge): void {
+    const placement = laneOf(this.lanes, track, map)?.placement ?? emptyPlacement()
+    this.placeAt(track, map, { ...placement, [from]: false, [to]: true })
   }
 
   /** Take a track off one map, keeping the import and every other placement. */
@@ -478,6 +516,23 @@ export class AnnotationStore {
   }
 
   /**
+   * The rows a map will draw on `edge` once they have loaded: {@link drawnOnMap}'s
+   * rows and those still reading, in list order — or on any edge, for `null`,
+   * as {@link drawnAnywhereOn} asks. What a lane stack reserves its room from,
+   * so the picture beside it is laid out once rather than each time a track
+   * lands (§8.6).
+   */
+  drawnOrLoadingOn(map: MapId, edge: LaneEdge | null): AnnotationEntry[] {
+    return this.entriesOn(map).filter(
+      (entry) =>
+        entry.card !== 'overlay' &&
+        entry.visible &&
+        (entry.status === 'ready' || entry.status === 'loading') &&
+        (edge === null ? LANE_EDGES.some((side) => entry.placement[side]) : entry.placement[edge]),
+    )
+  }
+
+  /**
    * The feature set the browser's search reads.
    *
    * The one marked, or — until anything is marked — the first loaded, which is
@@ -689,26 +744,36 @@ export class AnnotationStore {
    * Toggling preserves it: a pre-flipped bottom track becomes an unflipped
    * right-hand one, and moving it home restores exactly what was there.
    *
-   * Only between one edge and one other. A track drawn on *two* has one `flip`
-   * and two readings, so there is no answer that is right for both stacks — it
-   * keeps whatever it had, and the reader decides.
+   * A track drawn on *two* has one `flip` and two readings, so there is no
+   * answer that is right for both stacks — on the way to two it keeps whatever
+   * it had, and the reader decides. On the way back to one it is turned from the
+   * edge it was last on alone ({@link readingEdge}), which is what makes a move
+   * in two presses — the new edge on, the old one off — arrive the way a move in
+   * one does.
    */
   place(id: string, placement: Partial<Placement>): void {
     const entry = this.byId(id)
     if (entry === undefined) return
     const whole = normalisePlacement(placement)
-    const was = sideOf(entry.placement)
+    const was = this.readingEdge(id, LEAD_MAP, entry.placement)
     const now = sideOf(whole)
+    this.remember(id, LEAD_MAP, was)
+    this.remember(id, LEAD_MAP, now)
     const turned =
       was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
+    // The lead's own lane follows, because this control *is* the lead's. A
+    // companion's placement is its own — see {@link placeAt}, which is what a
+    // drag on a companion's edge goes through.
+    //
+    // **Before** the row's update, which is what announces the move: the lane
+    // was set after it, so every listener — the Tracks card's edge buttons, and
+    // the write to session storage — read the lane as it was before the press,
+    // and a pressed edge stayed unlit until something else changed.
+    this.lanes = place(this.lanes, id, LEAD_MAP, whole)
     this.update(id, {
       placement: whole,
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
     })
-    // The lead's own lane follows, because this control *is* the lead's. A
-    // companion's placement is its own — see {@link placeAt}, which is what a
-    // drag on a companion's edge goes through.
-    this.lanes = place(this.lanes, id, LEAD_MAP, whole)
   }
 
   /**
@@ -726,8 +791,8 @@ export class AnnotationStore {
    *
    * A track not drawn on that map yet gets a lane, which is the same gesture
    * arriving from the other direction: a row carried from the Tracks card onto
-   * the third replicate's edge is a reader saying *put it there*, and there is
-   * nothing to turn because there is no edge it is coming from.
+   * the third replicate's edge, or a lane carried off another map by its grip,
+   * is a reader saying *put it there*. How it reads there is {@link arrive}'s.
    *
    * The turn {@link place} performs is performed here too, and as a **lane
    * override** — `flip` is one of the two fields a lane may differ on precisely
@@ -743,12 +808,18 @@ export class AnnotationStore {
     if (entry === undefined) return
     const lane = laneOf(this.lanes, id, map)
     const whole = normalisePlacement(placement)
-    const was = lane === undefined ? 'neither' : sideOf(lane.placement)
     const now = sideOf(whole)
+    if (lane === undefined) {
+      this.arrive(entry, map, whole, now)
+      return
+    }
+    const was = this.readingEdge(id, map, lane.placement)
+    this.remember(id, map, was)
+    this.remember(id, map, now)
     const turned =
       was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
     this.lanes = place(this.lanes, id, map, whole)
-    if (!turned || lane === undefined) {
+    if (!turned) {
       this.changed()
       return
     }
@@ -759,11 +830,107 @@ export class AnnotationStore {
     this.overrideOn(id, map, { flip: !flip })
   }
 
+  /**
+   * A track put on a map it was not drawn on (§8.9, §16.9): which way its new
+   * lane reads.
+   *
+   * On an edge that reads **the way the track's own edge does** — above or
+   * below the map for a track above or below one, beside it for a track beside
+   * one — it takes the track's `flip` as it is, a profile the reader hung from
+   * its ceiling still hanging: the two edges start alike, so the flip means
+   * the same on both. On an edge that reads **the other way** it starts as
+   * every lane on that edge starts, so a bottom track put on a companion's left
+   * grows away from that map as the lanes beside it do.
+   *
+   * Across the diagonal it used to be turned from the track's edge instead,
+   * carrying a deviation over — right for one a reader made, and wrong for the
+   * commoner kind, a lane saved or written before the convention it breaks. The
+   * yeast demo's Pol II grows away from the map on its right; put in a tracks
+   * cell, it hung upside down under the ruler.
+   */
+  private arrive(entry: AnnotationEntry, map: MapId, whole: Placement, now: LaneEdge | 'neither'): void {
+    const flip = entry.style.flip === true
+    const from = this.readingEdge(entry.id, LEAD_MAP, entry.placement)
+    // The edge it reads for, then the edge it is on: a lane new to this map
+    // reads for the track's own edge until it is on one of its own alone.
+    this.remember(entry.id, map, from)
+    this.remember(entry.id, map, now)
+    this.lanes = place(this.lanes, entry.id, map, whole)
+    // Which way the track reads: its edge's — or, on two edges and nothing
+    // remembered, the way whose lanes start as its flip is, an edge above or
+    // below the map for a flip that is off and one beside it for one that is on.
+    const across = from === 'neither' ? flip === laneStartsFlipped('bottom') : laneIsHorizontal(from)
+    const start = now === 'neither' ? flip : laneStartsFlipped(now)
+    if (now === 'neither' || laneIsHorizontal(now) === across || start === flip) {
+      this.changed()
+      return
+    }
+    // Announces on its own, which is why nothing follows it.
+    this.overrideOn(entry.id, map, { flip: start })
+  }
+
+  /**
+   * The edge a lane's `flip` reads for: the one edge it is on — or, on two, the
+   * one it was last on **alone**.
+   *
+   * A lane on two edges has one `flip` and two readings, so which of them the
+   * flip was set for is history rather than state. And the history is what the
+   * commonest move there is needs: the location marks move a track in two
+   * presses — the new edge on, then the old one off — and between them the
+   * track is on both. Read from its placement alone, that step came from
+   * *neither* edge, nothing was turned, and a track moved from under the map to
+   * its left arrived growing into the map where one moved in a single gesture
+   * grew away from it (§8.9).
+   *
+   * Kept for the session only: after a reload a lane on two edges keeps its
+   * flip through a move off one of them, as it always did.
+   */
+  private readingEdge(track: string, map: MapId, placement: Placement): LaneEdge | 'neither' {
+    const side = sideOf(placement)
+    if (side !== 'neither') return side
+    return this.alone.get(`${track} ${map}`) ?? 'neither'
+  }
+
+  /** Note the one edge a lane is on alone, for {@link readingEdge}; a lane on several is not noted. */
+  private remember(track: string, map: MapId, side: LaneEdge | 'neither'): void {
+    if (side !== 'neither') this.alone.set(`${track} ${map}`, side)
+  }
+
   /** Merge a patch into one row's style. */
   restyle(id: string, patch: Partial<AnnotationEntry['style']>): void {
     const entry = this.byId(id)
     if (entry === undefined) return
     this.update(id, { style: { ...entry.style, ...patch } })
+  }
+
+  /**
+   * The same patch into several rows' styles, announced **once**.
+   *
+   * What the Tracks card's batch box writes through (§8.1): a limit typed for
+   * twelve ticked tracks is one change, and twelve calls to {@link restyle}
+   * were twelve writes to session storage and twelve rounds of every listener
+   * — the card, the lanes and the workspace — for the reader's one gesture.
+   * Ids that have gone are skipped, as `restyle` skips one.
+   *
+   * The patch may be a function of each row's style, for a setting that keeps
+   * part of what the row had: *auto* on a batch keeps each row's own manual
+   * pair for when it leaves auto again, as a row's own button does.
+   */
+  restyleEach(
+    ids: readonly string[],
+    patch:
+      | Partial<AnnotationEntry['style']>
+      | ((style: AnnotationEntry['style']) => Partial<AnnotationEntry['style']>),
+  ): void {
+    const wanted = new Set(ids)
+    let hit = false
+    this.items = this.items.map((entry) => {
+      if (!wanted.has(entry.id)) return entry
+      hit = true
+      const change = typeof patch === 'function' ? patch(entry.style) : patch
+      return { ...entry, style: { ...entry.style, ...change } }
+    })
+    if (hit) this.changed()
   }
 
   /**
@@ -786,7 +953,7 @@ export class AnnotationStore {
   turnAxesForBrowser(): void {
     let hit = false
     this.items = this.items.map((entry) => {
-      const side = sideOf(entry.placement)
+      const side = this.readingEdge(entry.id, LEAD_MAP, entry.placement)
       if (side === 'neither' || !laneStartsFlipped(side)) return entry
       hit = true
       return { ...entry, style: { ...entry.style, flip: !entry.style.flip } }

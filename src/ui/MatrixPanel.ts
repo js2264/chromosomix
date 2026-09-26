@@ -39,17 +39,19 @@ import {
 import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { KEYS, withKey } from './commands'
+import { KEYS, keyLabel, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
   LANE_EDGES,
   drawsAProfile,
   hasAMovableAxis,
+  hasFeatureRows,
   placementOn,
   type AnnotationEntry,
   type FeatureSet,
 } from '../annotations/types'
+import { FEATURE_DISPLAYS, featuresOf } from '../annotations/fields'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import {
@@ -91,6 +93,7 @@ import {
 } from '../render/compare'
 import {
   deriveBlock,
+  paperZeros,
   preferredTransform,
   type AxisRun,
   type DerivedValues,
@@ -200,6 +203,7 @@ import {
   type ExportFormat,
   canvasToPng,
   captionStamp,
+  copyPicture,
   copyPngToClipboard,
   copyTextToClipboard,
   chooseSaveTarget,
@@ -210,6 +214,17 @@ import {
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
+import {
+  endCarry,
+  landingAt,
+  offerLanding,
+  startCarry,
+  within,
+  type LaneCarry,
+  type LaneLanding,
+  type LaneSurface,
+} from './laneCarry'
+import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
 import { setHoverPlace, type HoverPlace } from './hoverLocus'
@@ -307,11 +322,12 @@ const TURN_HINT =
 const DIAGONAL_ICON = 'diagonal'
 
 const DIAGONAL_HINT =
-  'Recentre on the diagonal. Slides the view onto the nearest on-diagonal window at the zoom ' +
-  'it is already at, without changing the region or the resolution. Every gesture that lands ' +
-  'off the diagonal — a pan, a box, a zoom around the pointer — takes several more to come ' +
-  'back from, and no drag can say “here, but on the diagonal”. Greyed on a block that has no ' +
-  'diagonal, and while the map is turned, where the picture already is one.'
+  `Recentre on the diagonal (${keyLabel(KEYS.diagonal)}). Slides the view onto the nearest ` +
+  'on-diagonal window at the zoom it is already at, without changing the region or the ' +
+  'resolution. Every gesture that lands off the diagonal — a pan, a box, a zoom around the ' +
+  'pointer — takes several more to come back from, and no drag can say “here, but on the ' +
+  'diagonal”. Greyed on a block that has no diagonal, and while the map is turned, where the ' +
+  'picture already is one.'
 
 /** The band, as an ordinary dense block the renderer can be handed. */
 function turnedDense(turned: RotatedBlock): DenseMatrix {
@@ -814,39 +830,41 @@ export interface DerivePresentation {
 }
 
 /**
- * The largest square the map will correlate, per axis.
+ * The largest square the map will correlate, per axis: the block cap, so any
+ * square block the map can read, it can correlate.
  *
- * The correlation is `m²` correlations of `m` cells each — the one **cubic**
+ * The correlation is `m²/2` correlations of `m` cells each — the one **cubic**
  * step in the viewer, where everything else it draws is linear in the cells on
- * screen. That changes what a limit is for: the other budgets in this file trade
- * detail against milliseconds, and this one is the difference between a wait and
- * a coffee break.
+ * screen. It was capped at 1,500 when each pair was computed on its own, at
+ * 2.8 s for 929 bins and a projected four minutes at 4,096: a limit that was
+ * the difference between a wait and a coffee break.
  *
- * Measured on an *E. coli* square, which is the shape the arithmetic cares about
- * and not the organism: **232 bins in 32 ms, 464 in 232 ms, 929 in 2.8 s**. That
- * is the clean eightfold per doubling the exponent promises, and extrapolating
- * it puts this cap at about **twelve seconds** — the most a reader will ever be
- * asked to wait, and only at the very top of the range.
+ * `analysis/pearsonRows.ts` computes all the pairs as one matrix product in
+ * WebAssembly with SIMD, and `analysis/pearsonThreads.ts` shares it across the
+ * cores. Measured in Chromium with four cores, from picking the score to the
+ * picture: **a thousand bins in under half a second, 2,048 in under one, 4,096 in
+ * two and a half** — of which the analysis thread's part is a tenth of a second,
+ * a third of one and under two. On one core 4,096 is about four seconds. So the
+ * cap is the block cap rather than a budget of its own, and a whole bacterial
+ * genome at 1–2 kb, or a human chromosome at 50 kb, correlates about as fast as
+ * it reads.
  *
- * Twelve is tolerable here and would not be for a toggle that blocked: the job
- * is on the analysis thread, it reports a percentage, and unticking the box
- * cancels it. What the cap is really protecting against is the other end of the
- * curve — the block cap is 4,096 a side, which is **four minutes**, and a reader
- * who flipped a switch has not agreed to that.
+ * Two things around the product mattered as much as the product. The square is
+ * the O/E with an **empty pixel as the zero it is** — the matrix the compartment
+ * call correlates — where the picture's own ratio blanks it (`render/derive.ts`'s
+ * `keepZeros`): blanked, a sparse map at 1 kb had a few hundred missing cells a
+ * row, each pair's arithmetic was an exception to correct for, and the job was
+ * eight times slower than the product. And picking the score **reads nothing**:
+ * the block on screen is the block correlated (`Session.render`).
  *
- * The number itself comes from what the picture is *for*. A compartment is a
- * megabase-scale object read at 50–500 kb bins, where a whole human chromosome
- * is 500–5,000 bins and a bacterial genome is well under a thousand; nobody
- * reads compartments at the resolution where this would be slow. Above the cap
- * the control is greyed **and says why**, which is a better answer than a
- * progress bar that never ends.
+ * The job still runs on the analysis thread, reports a percentage and is
+ * cancelled by picking another score, as it was when a wait was expected.
  *
  * `MAX_CORRELATION_BINS` in the compartments task is 8,192 for the same
- * quantity, and the difference is not an inconsistency: there a reader has
- * asked for a number and is waiting for it on purpose, and here they have
- * flipped a switch on a map they were reading.
+ * quantity: there a reader has asked for a number and waits for it on purpose,
+ * and the square is read for it rather than being a block already on screen.
  */
-export const MAP_CORRELATION_BINS = 1500
+export const MAP_CORRELATION_BINS = 4096
 
 /** What identifies an arms setting, for the caches a derivation is keyed on. */
 function armsKey(arms: ArmsPresentation | undefined): string {
@@ -925,7 +943,7 @@ const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
   'A/B compartments — the same matrix the Compartments task solves. Implies O/E and balanced ' +
   'counts; one file, square blocks, up to ' +
-  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side, and about 3 seconds at a thousand.`
+  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side — a fraction of a second at a thousand, a few at the most.`
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
@@ -1256,6 +1274,8 @@ export class MatrixPanel {
   private turnButton: HTMLElement | null = null
   /** The recentre control, greyed where there is no diagonal to go to. */
   private diagonalButton: HTMLElement | null = null
+  /** Whether there is a diagonal to go to: one in the block, and no turn. */
+  private diagonalPossible = false
   /** The adaptive-resolution switch, and its unsubscribe. */
   private refineButton: HTMLElement | null = null
   private stopRefineWatch: (() => void) | null = null
@@ -1286,11 +1306,27 @@ export class MatrixPanel {
    */
   private blockGeneration = 0
 
-  /** The last correlation computed, and the key it answers. */
-  private correlation: { key: string; field: CorrelationField } | null = null
+  /**
+   * The last correlation computed, the key it answers, and what it was a
+   * correlation *of* — the derivation's label and scope when it was sent.
+   */
+  private correlation: {
+    key: string
+    field: CorrelationField
+    label: string
+    scope: string | null
+  } | null = null
 
-  /** The one in flight, if any, and the key it will answer. */
-  private correlating: { key: string; job: Cancellable<CorrelationField> } | null = null
+  /**
+   * The one in flight, if any, the key it will answer, and the picture drawn
+   * under the veil meanwhile — kept so a redraw before the answer does not
+   * derive the block again.
+   */
+  private correlating: {
+    key: string
+    job: Cancellable<CorrelationField>
+    operand: DerivedValues
+  } | null = null
 
   /**
    * The veil's text while a correlation runs, or `null`.
@@ -1425,6 +1461,32 @@ export class MatrixPanel {
    * annotations and therefore no lanes.
    */
   private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
+  /**
+   * This map's edge rectangles as places a lane carried from **another** map
+   * can land (§16.9, `ui/laneCarry.ts`). A lane of this map's own is answered
+   * by its own drag, which knows the edge it came from and puts it out.
+   */
+  private readonly laneSurface: LaneSurface = {
+    landingAt: (x, y, carry) => {
+      if (carry.from === this.mapId) return null
+      for (const [edge, zone] of this.edgeZones) {
+        if (!within(zone, x, y)) continue
+        return {
+          light: (on) => zone.classList.toggle('over', on),
+          take: (moved) => this.takeLane(moved, edge),
+        }
+      }
+      return null
+    },
+    // Every map shows its rectangles while a lane from another is in the air,
+    // as the map it came from shows its own: a place that only appears once
+    // the hand is on it is a place nobody finds.
+    carrying: (carry) => {
+      if (carry !== null && carry.from === this.mapId) return
+      this.grid.classList.toggle('is-dropping', carry !== null)
+      if (carry === null) for (const zone of this.edgeZones.values()) zone.classList.remove('over')
+    },
+  }
   /**
    * The layer of controls over each lane stack, and the caret that opens in one.
    *
@@ -2166,14 +2228,10 @@ export class MatrixPanel {
       // An action rather than a toggle — there is no state to read off it — so
       // it takes neither `btn-toggle` nor a lit state, and it is the one mark in
       // these rows that means "do this" instead of "this is on".
-      const diagonalButton = iconButton(
-        DIAGONAL_ICON,
-        DIAGONAL_HINT,
-        () => {
-          this.heatmap.centreOnDiagonal()
-        },
-        { class: 'btn btn-icon', size: 15 },
-      )
+      const diagonalButton = iconButton(DIAGONAL_ICON, DIAGONAL_HINT, () => this.centreOnDiagonal(), {
+        class: 'btn btn-icon',
+        size: 15,
+      })
       this.diagonalButton = diagonalButton
       // Disabled until a block says otherwise: the panel is built before
       // anything is read, and a control that is live before there is a picture
@@ -2381,21 +2439,9 @@ export class MatrixPanel {
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
     })
-    for (const edge of LANE_EDGES) {
-      const canvas = this.lanes.canvasFor(edge)
-      // No drawn pointer on a stack, ever, and unconditionally rather than under
-      // the crosshair preference. A lane puts a hairline under the pointer the
-      // moment it is over the canvas at all — its own, not the map's echo, and
-      // deliberately not under that preference, because it is the direct answer
-      // to a gesture being made right now (`ui/AnnotationLanes.ts`). So there is
-      // always a line here saying where the hand is, and the arrowhead over it
-      // is a second mark for the same base pair. The map is the conditional one:
-      // it has gutters, and a gutter holds no cell to draw a crosshair at
-      // (`render/heatmap.ts`'s `syncGuidedCursor`).
-      canvas.classList.add('is-guided')
-      this.watchLane(edge, canvas)
-    }
+    for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
     this.watchEdgeDrops()
+    this.laneListeners.push(offerLanding(this.laneSurface))
     // A restyle, a rename or a move of any lane is a different picture. Taken
     // on the store this panel was built against, which on a file with no
     // annotation machinery is the empty one — it never fires, and that costs
@@ -2846,6 +2892,20 @@ export class MatrixPanel {
     this.remeasure()
   }
 
+  /** Whether {@link centreOnDiagonal} has somewhere to go: a diagonal in the block, and no turn. */
+  get canCentreOnDiagonal(): boolean {
+    return this.diagonalPossible
+  }
+
+  /**
+   * The recentre button's press, and Space's (§7.2): the view slid onto the
+   * diagonal at the zoom it is at. Nothing where the button is greyed — a block
+   * with no diagonal, or a turned map, whose picture already is one.
+   */
+  centreOnDiagonal(): void {
+    if (this.diagonalPossible) this.heatmap.centreOnDiagonal()
+  }
+
   fitTracks(): void {
     const box = this.grid.getBoundingClientRect()
     // Per axis rather than per edge: the stacks above and below the map take
@@ -2930,6 +2990,7 @@ export class MatrixPanel {
    * button would be offering to move the view to where it already is.
    */
   private paintDiagonal(possible: boolean): void {
+    this.diagonalPossible = possible
     const button = this.diagonalButton
     if (button === null) return
     button.classList.toggle('is-disabled', !possible)
@@ -3099,8 +3160,25 @@ export class MatrixPanel {
    * The alternative — blank until it lands — throws away a real picture of the
    * same region for several seconds to avoid showing the reader the thing their
    * correlation is *of*, and the veil already says what is happening.
+   *
+   * **It derives what it needs itself**, which is why the caller hands it the
+   * recipe rather than a derived block. A held correlation replaces the whole
+   * field, so the O/E under it is not computed at all — a pass over every cell,
+   * half a second at 4,096 bins, spent on the redraw that lands the answer for a
+   * picture nobody would see. A job to start takes the ratio with an empty pixel
+   * as the zero it is ({@link Derivation.keepZeros}), and it is sent before the
+   * picture under the veil is made — from that same ratio, the empty pixels
+   * blanked, which is all that separates the two.
+   *
+   * A despeckle still to come is waited for rather than raced: a correlation of
+   * the unsmoothed field would be drawn under a caption naming the smoothing,
+   * and then computed again once the smoothing landed.
    */
-  private correlated(data: MatrixResult, derivation: Derivation, mine: DerivedValues): DerivedValues {
+  private correlated(
+    data: MatrixResult,
+    derivation: Derivation,
+    runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
+  ): DerivedValues {
     const key = this.correlationKey(data, derivation)
     const held = this.correlation
     if (held !== null && held.key === key) {
@@ -3112,35 +3190,48 @@ export class MatrixPanel {
         // the values linear, which is right — a coefficient on `log2` would be
         // undefined over half its own range.
         neutral: 0,
-        label: `${mine.label} · correlation`,
+        label: `${held.label} · correlation`,
         // What a reader has to know to believe the picture, and the one thing
         // the map itself cannot show: a dropped bin is drawn blank, and blank is
         // also what a sparse corner looks like.
         scope:
           field.dropped > 0
             ? `${field.dropped.toLocaleString()} of ${(field.kept + field.dropped).toLocaleString()} bins had too little data to correlate`
-            : mine.scope,
+            : held.scope,
       }
     }
-    this.startCorrelation(key, mine.values, data.nrows)
-    return mine
+    const running = this.correlating
+    if (running !== null && running.key === key) return running.operand
+    // Of the ratio with an empty pixel as the zero it is, not the paper it is
+    // drawn as: the matrix the compartment call correlates.
+    const input = deriveBlock(data, { ...derivation, keepZeros: true }, runs)
+    const operand = { ...input, values: paperZeros(input.values, derivation) }
+    if (input.pending !== undefined) {
+      // The caller starts the smoothing from the operand's `pending`; this
+      // comes back through here once it has landed.
+      this.forgetCorrelation()
+      return operand
+    }
+    this.startCorrelation(key, input, operand, data.nrows)
+    return operand
   }
 
-  /** Ask for one, unless the same one is already on its way. */
-  private startCorrelation(key: string, values: Float32Array, n: number): void {
-    if (this.correlating?.key === key) return
+  /** Ask for one, with the operand drawn meanwhile. */
+  private startCorrelation(key: string, input: DerivedValues, operand: DerivedValues, n: number): void {
     const run = this.options.derive?.correlateBlock
     if (run === undefined) return
     // The block moved under a job that is still running, so its answer is about
     // a square nobody is looking at.
     this.correlating?.job.cancel()
 
-    const job = run(values, n, (done, total) => {
+    const job = run(input.values, n, (done, total) => {
       if (this.correlating?.key !== key) return
       this.showCorrelating(`correlating… ${Math.round((100 * done) / Math.max(1, total))}%`)
     })
-    this.correlating = { key, job }
+    this.correlating = { key, job, operand }
     this.showCorrelating('correlating…')
+    // What was correlated, said by the derivation that made it.
+    const { label, scope } = input
 
     job.promise.then(
       (field) => {
@@ -3149,7 +3240,7 @@ export class MatrixPanel {
         // would mean the cache answered for a block that is no longer read.
         if (this.correlating?.key !== key) return
         this.correlating = null
-        this.correlation = { key, field }
+        this.correlation = { key, field, label, scope }
         this.showCorrelating(null)
         this.redraw()
       },
@@ -3301,7 +3392,26 @@ export class MatrixPanel {
   }
 
   /** Release the resize observer, the canvas listeners and the subscription. */
+  // Before the promise below, which replaces it: fields are set in the order
+  // they are written, and the other way round this no-op would overwrite the
+  // resolver the promise had just handed over.
+  private markFirstData: () => void = () => {}
+
+  /**
+   * Settles when this panel is handed its first block — or goes away without
+   * one, so nothing waiting on it waits for ever.
+   *
+   * What the session holds a file's tracks behind (§8.6): the map is the
+   * picture a reader opened, and the track downloads it used to race for the
+   * same connection — a twelve-megabyte FASTA among them — are held until it
+   * is drawn.
+   */
+  readonly firstData: Promise<void> = new Promise((resolve) => {
+    this.markFirstData = resolve
+  })
+
   destroy(): void {
+    this.markFirstData()
     this.stopRefineWatch?.()
     this.stopRefineWatch = null
     // A correlation running for a panel that is going away is seconds of a
@@ -4144,7 +4254,10 @@ export class MatrixPanel {
    */
   private paintLaneGuide(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
     const guide = this.laneHover
-    if (guide === null) return
+    // Under the crosshair preference, as the lane's own hairline is: the two
+    // are one line, the hand's place on a track carried across the map, and a
+    // reader who turned the crosshair off should not find half of it still on.
+    if (guide === null || !getPlotOptions().crosshair) return
     const { data, dpr } = frame
     const at = (Math.round(guide.along * dpr - 0.5) + 0.5) / dpr
     if (guide.edge === 'bottom') {
@@ -4258,7 +4371,8 @@ export class MatrixPanel {
   }
 
   /**
-   * The right-click menu on the map: place a mark exactly here.
+   * The right-click menu on the map: copy the picture, or place a mark exactly
+   * here.
    *
    * "Here" is the cell under the pointer, which is the thing a right click is
    * *for* — the two ways in that already existed are typing a coordinate you
@@ -4266,26 +4380,42 @@ export class MatrixPanel {
    * I am pointing at". The coordinates go in the menu beside the actions so the
    * reader can see what they are about to mark before they mark it.
    *
-   * Only where the file can carry marks (§8.5) and only over the data, not over
-   * the gutters: a right click on a label is the browser's menu, and taking it
-   * over to offer nothing would be worse than leaving it.
+   * **Copy this** first: the map's cells alone, as they are drawn here, onto
+   * the clipboard (§7.2). The marks only where the file can carry them (§8.5),
+   * and the menu only over the data, not over the gutters: a right click on a
+   * label is the browser's menu, and taking it over to offer nothing would be
+   * worse than leaving it.
    */
   private watchContextMenu(): void {
     const onMenu = (event: MouseEvent): void => {
-      const context = this.options.annotations
-      if (context === undefined) return
       const box = this.canvas.getBoundingClientRect()
       const cell = this.heatmap.cellAt(event.clientX - box.left, event.clientY - box.top)
       if (cell === null) return
-      const at = this.locusOf(cell)
-      if (at === null) return
       event.preventDefault()
+      const items: MenuItem[] = [
+        { label: 'This map' },
+        {
+          label: 'Copy this',
+          hint: 'PNG',
+          title:
+            'The map as it is drawn here — the cells alone, with no axis, key, frame or pointer — ' +
+            'onto the clipboard as a PNG, at the screen’s resolution',
+          run: () => copyPicture('map', this.heatmap.dataImage(readPageBackground())),
+        },
+      ]
+      const context = this.options.annotations
+      const at = this.locusOf(cell)
+      if (context === undefined || at === null) {
+        openMenu(event.clientX, event.clientY, items)
+        return
+      }
 
       const { manual } = context
       const add = (mark: Omit<ManualLine, 'id' | 'colour'> | Omit<ManualArrowhead, 'id' | 'colour'>): void => {
         manual.add({ ...mark, id: mintMarkId(), colour: manual.nextColour() } as ManualMark)
       }
       openMenu(event.clientX, event.clientY, [
+        ...items,
         { label: 'Mark this point' },
         {
           label: 'Vertical line',
@@ -4675,7 +4805,9 @@ export class MatrixPanel {
      * Three gestures on one surface, told apart by *where* the press lands.
      *
      * The **handle** moves the track: up and down its own stack to reorder, out
-     * onto either rectangle in the map to change which edge it is drawn on. The
+     * onto a rectangle in the map to change which edge it is drawn on — or off
+     * this map altogether, onto another's rectangles, a `+` or a cell of the
+     * deck (`ui/laneCarry.ts`), which moves it there. The
      * **border** resizes, because that is the only thing a border can be dragged
      * for. Everything else is a **pan**, which is what dragging a track beside a
      * map has always meant.
@@ -4707,6 +4839,10 @@ export class MatrixPanel {
           to: LaneEdge | null
           /** The slot last dropped into, so a reorder fires once per crossing. */
           over: number
+          /** For a handle drag: the lane in the hand, as other surfaces see it. */
+          carry: LaneCarry | null
+          /** …and the place off this map it would land on, if it is over one. */
+          landing: LaneLanding | null
         }
       | null = null
 
@@ -4732,6 +4868,8 @@ export class MatrixPanel {
         members,
         to: null,
         over: -1,
+        carry: null,
+        landing: null,
       }
       canvas.setPointerCapture(event.pointerId)
       event.preventDefault()
@@ -4772,6 +4910,15 @@ export class MatrixPanel {
         start(handle.entry.id, 'grip', event, handle.entry.style.size)
         canvas.classList.add('grabbing')
         this.laneGripping = true
+        // In the hand, as every other map and the deck see it: they light the
+        // places it can go (§16.9, `ui/laneCarry.ts`).
+        const carry: LaneCarry = {
+          ids: lanes.membersOf(edge, handle.entry.id).map((member) => member.id),
+          from: this.mapId,
+          edge,
+        }
+        if (drag !== null) drag.carry = carry
+        startCarry(carry)
         this.tooltip.classList.add('hidden')
         // The rectangle comes up with the gesture, because it is where the
         // gesture can end: a drag whose target only appears once you are on it
@@ -4925,7 +5072,19 @@ export class MatrixPanel {
         const over = this.edgeUnder(event.clientX, event.clientY)
         drag.to = over
         for (const [name, zone] of this.edgeZones) zone.classList.toggle('over', name === over)
-        if (over !== null) return
+        // Off this map: another map's edge, a cell of the deck, a `+` — the
+        // places the others offer (§16.9). Asked only where this map's own
+        // rectangles did not answer.
+        const away =
+          over === null && drag.carry !== null
+            ? landingAt(event.clientX, event.clientY, drag.carry, this.laneSurface)
+            : null
+        if (away !== drag.landing) {
+          drag.landing?.light(false)
+          away?.light(true)
+          drag.landing = away
+        }
+        if (over !== null || away !== null) return
         // Otherwise it is a reorder, and only while the pointer is actually
         // beside the stack: past either end there is no slot being pointed at,
         // and answering anyway would fling the track to the top of the order on
@@ -5015,14 +5174,23 @@ export class MatrixPanel {
           // it is about that picture: `place` writes the *track's* default and
           // the lead's lane with it, so a drag on a companion moved the track
           // out from under the first map and left the one the hand was over
-          // exactly as it was (`annotations/store.ts`'s `placeAt`).
-          store.placeAt(member.id, this.mapId, placementOn(target))
+          // exactly as it was (`annotations/store.ts`'s `placeAt`). And **this
+          // edge** to that one: a track also drawn on a third side keeps it.
+          store.moveEdge(member.id, this.mapId, edge, target)
         }
       }
+      // Let go off this map, on a place another offered: the lane goes there
+      // and leaves this map (§16.9).
+      if (drag.kind === 'grip' && drag.to === null && drag.landing !== null && drag.carry !== null) {
+        drag.landing.light(false)
+        drag.landing.take(drag.carry)
+      }
       if (drag.kind === 'grip') {
+        drag.landing?.light(false)
         this.grid.classList.remove('is-dropping')
         for (const zone of this.edgeZones.values()) zone.classList.remove('over', 'away')
         this.laneGripping = false
+        if (drag.carry !== null) endCarry()
       }
       drag = null
       canvas.style.cursor = ''
@@ -5032,10 +5200,22 @@ export class MatrixPanel {
 
     const onMenu = (event: MouseEvent): void => {
       const box = canvas.getBoundingClientRect()
-      const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+      const x = event.clientX - box.left
+      const y = event.clientY - box.top
+      const hit = lanes.laneAt(edge, x, y)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId)
+      // The feature under the pointer, which a map can open and not frame: its
+      // view is a region on two axes (see the press above).
+      const found = lanes.featureAt(edge, x, y)
+      const feature =
+        found === null
+          ? null
+          : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
+      // The lane under the pointer, alone, as this stack draws it (§7.2).
+      const copy = (): void =>
+        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.laneGeometry(), readPageBackground()))
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId, feature, copy)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -5047,6 +5227,8 @@ export class MatrixPanel {
     const onCancel = (event: PointerEvent): void => {
       if (drag === null) return
       drag.to = null
+      drag.landing?.light(false)
+      drag.landing = null
       onUp(event)
     }
     canvas.addEventListener('pointerup', onUp)
@@ -5059,6 +5241,26 @@ export class MatrixPanel {
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('contextmenu', onMenu)
     })
+  }
+
+  /**
+   * A lane carried from another map, let go on this map's `edge` (§16.9): drawn
+   * here on that edge, and taken off the map it came from — a move, as a drag
+   * between two places is. Every track of an overlay group, which travels as
+   * the one lane it is on screen.
+   */
+  private takeLane(carry: LaneCarry, edge: LaneEdge): void {
+    for (const id of carry.ids) {
+      // Off the edge it left **first**. Where that map keeps the track on
+      // another side, what is left there may turn to grow away from it, and a
+      // lane here that had not yet been given a turn of its own would turn
+      // with it — a lane put under this map, drawn upside down.
+      if (carry.from !== this.mapId) this.laneStore.unplaceEdge(id, carry.from, carry.edge)
+      // Beside whatever edges it already has here: a track already under this
+      // map, carried onto its left, is on both.
+      const held = this.laneStore.laneFor(id, this.mapId)?.placement
+      this.laneStore.placeAt(id, this.mapId, { ...(held ?? {}), [edge]: true })
+    }
   }
 
   /**
@@ -5259,6 +5461,7 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    this.markFirstData()
     this.syncCardsShown()
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader
@@ -5911,7 +6114,9 @@ export class MatrixPanel {
     if (this.smoothed !== null && this.smoothed.key !== smoothKey) this.smoothed = null
     if (this.smoothed?.key === smoothKey) derivation.smoothed = this.smoothed.field
 
-    const derived = deriveBlock(data, derivation, runs)
+    // Where a correlation is to be drawn it derives what it needs, and a held one
+    // needs nothing — see `correlated`.
+    const derived = correlating ? this.correlated(data, derivation, runs) : deriveBlock(data, derivation, runs)
     // Wanted and not held: start one, and draw the unsmoothed field meanwhile.
     // Exactly the correlation's arrangement — the operand is a real picture of
     // the same region, and the caption does not claim it is the smoothed one.
@@ -5922,7 +6127,7 @@ export class MatrixPanel {
     // this one is not, so the panel is the only place that can hold the answer
     // between the request and the frame that draws it.
     const mine = correlating
-      ? this.correlated(data, derivation, derived)
+      ? derived
       : refusal === null
         ? derived
         : // Said in the caption, which is the only place that survives an export.
@@ -7575,13 +7780,25 @@ export class MatrixPanel {
    *
    * Assignment fires no `change` event, so this cannot loop back through the
    * listener — the same property {@link applyScale} relies on.
+   *
+   * **And the panel's own idea of the score with it**, which is more than the
+   * dropdown: the key's first word and the framing every analysis of this map
+   * runs on are read from it. A score that reads the same cells no longer
+   * rebuilds the panel (`Session.render`), so this is where it learns of one —
+   * even when the dropdown already shows it, because the reader picked it
+   * there.
    */
   syncScoreChoice(id: string): void {
-    const select = this.scoreSelect
-    if (select === null || select.value === id) return
-    // Only to an option it has: a file that fell back to counts because it has
+    const scores = this.options.scores
+    // Only to a choice it has: a file that fell back to counts because it has
     // no such column would otherwise be left with a blank picker.
-    if (Array.from(select.options).some((option) => option.value === id)) select.value = id
+    if (scores === undefined || !scores.choices.some((choice) => choice.id === id)) return
+    if (scores.current !== id) {
+      this.options.scores = { ...scores, current: id }
+      this.painted = null
+    }
+    const select = this.scoreSelect
+    if (select !== null && select.value !== id) select.value = id
   }
 
   /**
@@ -9514,6 +9731,62 @@ export function toDense(data: MatrixResult): DenseMatrix {
 }
 
 
+/**
+ * A feature a lane's menu was opened on, and what may be done with it from there.
+ *
+ * Built by the surface that owns the pointer, because it is the one that knows
+ * what *opening* and *framing* a feature mean on it: the 1D browser frames one
+ * on its single axis, and a map has no such gesture — its view is a region on
+ * two axes, and framing the gene on one would leave the other wherever it was.
+ */
+export interface LaneMenuFeature {
+  /** What the feature is called, or its accession where it has no name. */
+  name: string
+  /** Where it is, as the locus box writes a window, so it can be pasted into one. */
+  locus: string
+  /** Open its card — what a click on it does. */
+  open: () => void
+  /** Frame it, on a surface with one axis to frame it on. */
+  zoom?: () => void
+}
+
+/**
+ * What a lane's menu says about the feature at an index of a set.
+ *
+ * The name a reader searches for — the symbol, else the accession, else the
+ * place itself — and the window `formatLocus` writes, which is what the locus
+ * box accepts back.
+ */
+export function laneMenuFeature(
+  set: FeatureSet,
+  index: number,
+  actions: { open: () => void; zoom?: () => void },
+): LaneMenuFeature {
+  const locus = formatLocus({
+    contig: set.contigs[set.contig[index]] ?? '',
+    start: set.start[index],
+    end: set.end[index],
+  })
+  const name = set.name[index] !== '' ? set.name[index] : set.id[index] !== '' ? set.id[index] : locus
+  return { name, locus, ...actions }
+}
+
+/** The first letter up, for a menu row built from a word the card writes lower-case. */
+function capitalised(word: string): string {
+  return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1)
+}
+
+/**
+ * Put text on the clipboard, or — where the browser will not allow it, as in an
+ * insecure context — hand it to the reader to copy by hand: a menu row that
+ * silently did nothing would be a row that lied.
+ */
+function copyOrShow(text: string): void {
+  void copyTextToClipboard(text).catch(() => {
+    window.prompt('This browser would not copy it. Here it is to copy by hand:', text)
+  })
+}
+
 /** What each edge is called, wherever one has to be named to a reader. */
 const EDGE_WORDS: Record<LaneEdge, string> = {
   top: 'above the map',
@@ -9559,10 +9832,44 @@ export function openLaneMenu(
    * deck behind it — see `annotations/store.ts`'s `placeAt`.
    */
   map: MapId = LEAD_MAP,
+  /** The feature under the pointer, where there is one (§8.16). */
+  feature: LaneMenuFeature | null = null,
+  /**
+   * *Copy this* (§7.2): this lane's track alone onto the clipboard, as the
+   * surface it was opened on draws it. Absent where the surface cannot draw
+   * one lane by itself.
+   */
+  copy: (() => void) | null = null,
 ): void {
   const limits = entry.style.limits
-  const items: MenuItem[] = [
+  const items: MenuItem[] = []
+  // The thing under the pointer first, and the track it is on after it: a menu
+  // opened on a gene is most often about the gene.
+  if (feature !== null) {
+    items.push(
+      { label: feature.name },
+      { label: 'About it…', run: feature.open },
+      ...(feature.zoom === undefined
+        ? []
+        : [{ label: 'Zoom to it', hint: feature.locus, run: feature.zoom }]),
+      { label: 'Copy its name', hint: feature.name, run: () => copyOrShow(feature.name) },
+      { label: 'Copy its position', hint: feature.locus, run: () => copyOrShow(feature.locus) },
+    )
+  }
+  items.push(
     { label: entry.label },
+    ...(copy === null
+      ? []
+      : [
+          {
+            label: 'Copy this',
+            hint: 'PNG',
+            title:
+              'The track as it is drawn here — the track alone, with no name, range, handle or ' +
+              'pointer — onto the clipboard as a PNG, at the screen’s resolution',
+            run: copy,
+          },
+        ]),
     {
       label: 'Colour…',
       hint: entry.style.colour,
@@ -9581,7 +9888,31 @@ export function openLaneMenu(
         swatch.click()
       },
     },
-  ]
+  )
+
+  // How the rows are spent, and whether a feature points the way it runs
+  // (§8.16) — the two things a reader changes about a gene track while looking
+  // at it, and both as a tick on the one in force rather than as a toggle that
+  // names the state it would leave.
+  if (hasFeatureRows(entry.kind)) {
+    const features = featuresOf(entry.style, entry.kind)
+    items.push(
+      { label: 'Rows' },
+      ...FEATURE_DISPLAYS.map((display) => ({
+        label: capitalised(FEATURE_DISPLAY_WORDS[display].label),
+        title: FEATURE_DISPLAY_WORDS[display].hint,
+        checked: features.display === display,
+        run: () => patchFeatures(store, entry, { display }),
+      })),
+    )
+    if (entry.kind !== 'variants') {
+      items.push({
+        label: 'Point the way each runs',
+        checked: features.arrows,
+        run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
+      })
+    }
+  }
 
   if (hasAMovableAxis(entry.kind)) {
     items.push(

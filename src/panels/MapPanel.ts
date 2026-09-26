@@ -74,6 +74,7 @@ import {
   dragHasMapRow,
   dragHasStructure,
   dragHasTrack,
+  dropEffectFor,
   el,
   fmt,
   readMapRow,
@@ -506,6 +507,15 @@ export class MapPanel {
    * again is free but asynchronous, and the deck prices its toggles on a repaint.
    */
   private opened: OpenResult | null = null
+
+  /**
+   * What this panel's file said when it opened — its facts, for the General
+   * column's File card while this map is starred (§16.5) — or `null` before
+   * the first open has answered.
+   */
+  get openInfo(): OpenResult | null {
+    return this.opened
+  }
   /**
    * A bin size the deck asked for **before this panel had opened**, held until
    * it can be answered.
@@ -1968,7 +1978,10 @@ export class VacantPanel {
         return
       }
       event.preventDefault()
-      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'copy'
+      // A copy where the drag allows one — a file is opened, a row is placed —
+      // and whatever it does allow otherwise, since an effect the source did not
+      // allow is a drop the browser refuses (`dropEffectFor`).
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer, 'copy')
       zone.classList.add('over')
     })
     zone.addEventListener('dragleave', () => zone.classList.remove('over'))

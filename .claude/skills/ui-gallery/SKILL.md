@@ -25,6 +25,16 @@ node scripts/ui-marks.mjs gallery            # marks on the card and the model's
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
+node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
+node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
+node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
+node scripts/ui-lane-carry.mjs gallery       # a lane's grip carried to another map, a +, a tracks cell, an empty cell; a model's row on a +: lc1 … lc14
+node scripts/ui-track-location.mjs gallery   # the location marks, a left lane growing away, Space, the File card and the star, card rows on a + and an empty cell: tl1 … tl13
+node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor region, and the profile with and without the anchor: fc1 … fc4
+node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchors' hairlines, cells renamed, a lane out of a tracks cell, one side of two carried, the Structures eye, a track beside the map in a tracks cell, the height bars: dc1 … dc24
+node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
+node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
+node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -122,6 +132,44 @@ name the folder's address in `GALLERY_DATA`; for the store part, serve a store t
 name its `store.json` in `GALLERY_STORE`. Run it after any change to §8.15's declarations, to the
 arm reading, to those tasks, or to the store's script.
 
+The twelfth drives the **Tracks card and the lanes** (§5.8, §8.1, §8.6, §8.8, §8.15, §18.5): the
+Annotations column's foot with Metadata annotations and Bookmarks folded, two tracks ticked and set
+together from the batch box — `points` and one pair of limits — a diamond insulation run whose rows
+land on the Tracks card marked `*`, the crosshair toggled off and on over a lane with the arrowhead
+painted where the hand is (a screenshot carries no cursor) — `tr09b` magnified, its tip on the
+hairline — the map's ring pointer painted the same way and a crop round it five times over
+— `tr10b` at rest and `tr11b` in a cell wider than the ring, where the guide lines must stop at its
+ticks and nothing may be drawn inside it — a typed locus with no ring round the map, the 1D browser
+drawing points and its arrowhead on the hairline (`tr12b`, `tr12c`), the same session on a throttled
+line drawing its map before
+its tracks with their room kept, and a circle whose pan stops at its end, framed on `ori` and zoomed
+on the join — then genes (§8.16): the rounded, pointed blocks beside the map and in the 1D browser, a
+two-exon transcript (ACT1), the lane's right-click menu opened on a gene, the lane squished and
+collapsed from that menu, and the same `rows` choice in the card. It prints what each step found. Run
+it after any change to the Tracks card, the batch box, a track style, the pointers or the crosshair,
+the order a session loads in, §8.15's frame, or how a feature is drawn.
+
+The thirteenth drives the deck's **first cell as a cell like the others** (§16.9) and a structure
+file opened on its own (§25.3): a bed3d written from the demo's model dropped on the landing page —
+which must open as the model alone, filling the column with no scroll, the empty 1D browser it names
+hidden behind it — then `show the 1D browser` in the deck's bar, the browser's heading with its grip
+and its ×, the browser moved by its grip and hidden again; and on the yeast deck the first map moved
+to the other cell, hidden by its × — the other map alone, starred, the first map's row on the
+Contact maps card dimmed with its eye dark — the locus box typed with it hidden (the map on screen
+must follow), and its eye putting it back where it stood. It prints the grid's order, the hash, the
+star and the card's eyes at each step. Run it after any change to the deck's grid, its lead, the
+Contact maps card's eyes, or what a lone structure opens as.
+
+The fourteenth presses **Copy this** on every right-click menu that has it (§7.2) — the map, a lane
+beside it, a lane of the 1D browser, and a 3D model after a right click that does not drag — with
+the clipboard stood in for by a `navigator.clipboard.write` that keeps the PNG it is handed, as the
+saves gallery keeps its dialog's bytes. It writes the menu as it opened and the copied PNG itself,
+which must be the data object alone: the map's cells with no axis, key, frame, overlay or pointer
+(`cp3` is the same map on screen, to hold it against); one lane with no name, range, handle or name
+column; the model with no centre of rotation, key or buttons. It prints each PNG's size and what the
+corner said. Run it after any change to a right-click menu, to what a renderer draws round its data,
+or to `copyPicture`.
+
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
 the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
@@ -132,6 +180,18 @@ slot that is emptied and refilled rather than removed.
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
 Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL
 (`--use-angle=swiftshader`) so the structure cell renders in a container with no GPU.
+
+The three after *Copy this* drive the gestures a gallery of arrivals cannot show. **Lane carry**
+takes a lane by its grip with real pointer moves — a pointer drag captured on the lane's canvas,
+which no `dragover` hears — and lets go on another map's rectangle, on a `+`, on a tracks cell and
+on an empty cell, printing each cell's lane stacks before and after, so a lane that landed but did
+not *leave* is a line in the log; it finds the grip by hunting the lane canvas for the `is-grab`
+hand. **Track location** drives the four location marks on one map and on a deck, a left-hand lane
+(which must grow away from the map), a pan off the diagonal put back by Space, the General
+column's File card before and after the star moves to Hi-C, and a Tracks card row dragged — a real
+HTML5 drag, not dispatched events, since a cell that refuses `dragover` never gets a drop — onto a
+`+` and onto an empty cell. **4C** fills the anchor, runs the task with *exclude anchor region*
+off and on, and shoots the left-hand lane each time.
 
 ## What it drives
 

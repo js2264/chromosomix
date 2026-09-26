@@ -18,7 +18,7 @@ import {
   parseSpan,
   type ManualMark,
 } from '../../src/annotations/manual'
-import { LEAD_MAP } from '../../src/annotations/placement'
+import { LEAD_MAP, resolveStyle } from '../../src/annotations/placement'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { remember } from '../../src/state/UiMemory'
@@ -561,12 +561,13 @@ describe('the annotations published beside a demo map', () => {
  * A **horizontal** lane grows up the page wherever it is: every browser ever
  * built draws coverage rising from a floor under a ruler, and a profile above a
  * contact map hanging from its ceiling is one a reader has to mirror in their
- * head before they can compare it with the one below. A **vertical** lane has no
- * such convention, so what decides is the corner: it grows towards the matrix,
- * which beside the map's right edge means turning it round.
+ * head before they can compare it with the one below. A **vertical** lane is a
+ * horizontal one mirrored in the diagonal: the left stack is the top one turned
+ * over it, growing away from the matrix, and the right stack the bottom one,
+ * growing towards it — both leftward, which is turned round on both edges.
  *
- * So one edge turns, and moving a track between two edges that give different
- * answers turns it on the way. The turn is a toggle — a reader who deliberately
+ * So the two edges beside the map turn, and moving a track between an edge
+ * above or below it and one beside it turns it on the way. The turn is a toggle — a reader who deliberately
  * hung a bottom track from its ceiling has said something about it, and setting
  * `flip` from the edge would throw that away on the way across.
  */
@@ -589,17 +590,19 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
-  // Three of the four edges read the same way, so a move between any two of them
-  // turns nothing: a track under the map, over it, or to its left all grow the
-  // way a track under a ruler does.
+  // The edges pair up, so a move within a pair turns nothing: a track under
+  // the map or over it grows up the page, and one to its left or its right
+  // grows leftward.
   it('turns nothing on a move between two edges that read the same way', () => {
     const store = freshStore(`flip-pair-${Math.random()}.cool`)
     const entry = track(store)
-    for (const edge of ['top', 'left', 'bottom', 'top'] as const) {
+    for (const edge of ['top', 'bottom', 'top'] as const) {
       store.place(entry.id, placementOn(edge))
       expect(store.byId(entry.id)?.style.flip).toBe(false)
     }
-    // …and only the one that does not turns it, in either direction.
+    // …and a move across the pairs turns it, in either direction.
+    store.place(entry.id, placementOn('left'))
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
     store.place(entry.id, placementOn('right'))
     expect(store.byId(entry.id)?.style.flip).toBe(true)
     store.place(entry.id, placementOn('top'))
@@ -619,13 +622,45 @@ describe('the edge a track is drawn on, and which way it grows', () => {
   })
 
   // A track drawn on two edges has one `flip` and two readings, so there is no
-  // answer that is right for both stacks: it keeps what it had.
+  // answer that is right for both stacks: on the way to two it keeps what it had.
   it('leaves a track drawn on two edges alone', () => {
     const store = freshStore(`flip3-${Math.random()}.cool`)
     const entry = track(store)
     store.place(entry.id, { bottom: true, right: true })
     expect(store.byId(entry.id)?.style.flip).toBe(false)
-    store.place(entry.id, placementOn('right'))
+  })
+
+  // …and on the way back to one it is turned from the edge it was last on
+  // alone: the location marks move a track in two presses, the new edge on and
+  // then the old one off, and that has to arrive the way one gesture does.
+  it('turns a track moved in two presses as it turns one moved in one', () => {
+    const store = freshStore(`flip6-${Math.random()}.cool`)
+    const entry = track(store)
+    store.place(entry.id, { bottom: true, left: true })
+    store.place(entry.id, placementOn('left'))
+    // Away from the map on its left, as a track moved there in one gesture.
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+  })
+
+  it('leaves a track alone that goes back to the edge it was on', () => {
+    const store = freshStore(`flip7-${Math.random()}.cool`)
+    const entry = track(store, placementOn('left'))
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+    // The bottom on, and off again: it never left the left.
+    store.place(entry.id, { left: true, bottom: true })
+    store.place(entry.id, placementOn('left'))
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+  })
+
+  it('does the same for a companion’s own lane', () => {
+    const store = freshStore(`flip8-${Math.random()}.cool`)
+    const entry = track(store)
+    store.placeAt(entry.id, 'p2', placementOn('bottom'))
+    store.placeAt(entry.id, 'p2', { bottom: true, left: true })
+    store.placeAt(entry.id, 'p2', placementOn('left'))
+    const lane = store.placements.find((each) => each.track === entry.id && each.map === 'p2')
+    expect(lane?.style?.flip).toBe(true)
+    // The track's own flip, and so its lane under the first map, untouched.
     expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
@@ -636,8 +671,9 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     // Up the page, above the map and below it alike.
     expect(track(store, placementOn('top')).style.flip).toBe(false)
     expect(track(store, placementOn('bottom')).style.flip).toBe(false)
-    // Towards the matrix, which on the left is already which way it grows.
-    expect(track(store, placementOn('left')).style.flip).toBe(false)
+    // Leftward beside it: away from the matrix on its left, towards it on its
+    // right — both turned from a plot's own "values grow right".
+    expect(track(store, placementOn('left')).style.flip).toBe(true)
     expect(track(store, placementOn('right')).style.flip).toBe(true)
   })
 
@@ -647,12 +683,15 @@ describe('the edge a track is drawn on, and which way it grows', () => {
   it('turns the axes the browser would read backwards, and only those', () => {
     const store = freshStore(`flip5-${Math.random()}.cool`)
     const right = track(store, placementOn('right'))
+    const left = track(store, placementOn('left'))
     const top = track(store, placementOn('top'))
     store.turnAxesForBrowser()
     expect(store.byId(right.id)?.style.flip).toBe(false)
+    expect(store.byId(left.id)?.style.flip).toBe(false)
     expect(store.byId(top.id)?.style.flip).toBe(false)
     store.turnAxesForBrowser()
     expect(store.byId(right.id)?.style.flip).toBe(true)
+    expect(store.byId(left.id)?.style.flip).toBe(true)
     expect(store.byId(top.id)?.style.flip).toBe(false)
   })
 })
@@ -887,6 +926,35 @@ describe('closing a deck', () => {
  * other and `annotations/placement.ts` says an edge belongs to the lane; this is
  * the call that makes both true at once.
  */
+describe('moving a track on the lead', () => {
+  it('moves the lead’s lane before it tells anybody', () => {
+    // The edge buttons on a row read the lane, and so does the write to
+    // session storage; the lane used to be set after the announcement, so both
+    // saw the edge the track had just left.
+    const store = freshStore()
+    const entry = store.begin({ card: 'linear', kind: 'track', label: 'ATAC', source: localSource })
+    const seen: boolean[] = []
+    store.subscribe(() => seen.push(store.laneFor(entry.id, LEAD_MAP)?.placement.right === true))
+    store.placeAt(entry.id, LEAD_MAP, { bottom: true, right: true })
+    expect(seen).toEqual([true])
+  })
+
+  it('restyles several rows as one change', () => {
+    const store = freshStore()
+    const a = store.begin({ card: 'linear', kind: 'track', label: 'a', source: localSource })
+    const b = store.begin({ card: 'linear', kind: 'track', label: 'b', source: localSource })
+    let changes = 0
+    store.subscribe(() => changes++)
+    store.restyleEach([a.id, b.id, 'gone'], { size: 64 })
+    expect(changes).toBe(1)
+    expect(store.byId(a.id)?.style.size).toBe(64)
+    expect(store.byId(b.id)?.style.size).toBe(64)
+    // A patch may read each row's own style.
+    store.restyleEach([a.id, b.id], (style) => ({ size: style.size + 1 }))
+    expect(store.byId(a.id)?.style.size).toBe(65)
+  })
+})
+
 describe('moving a lane on one map', () => {
   function loaded(store: AnnotationStore, name: string, placement: Placement): string {
     const entry = store.begin({
@@ -915,16 +983,16 @@ describe('moving a lane on one map', () => {
   })
 
   it('turns the axis on that lane alone, as an override', () => {
-    // A vertical lane grows towards the matrix and a horizontal one grows up the
-    // page, so a lane crossing between them is turned on the way — and on a
-    // companion that turn is the *lane's*, which is exactly why `flip` is one of
-    // the two fields a lane may differ on.
+    // A vertical lane grows leftward and a horizontal one grows up the page, so
+    // a lane crossing between them is turned on the way — and on a companion
+    // that turn is the *lane's*, which is exactly why `flip` is one of the two
+    // fields a lane may differ on.
     const store = freshStore(`deck-${Math.random()}.cool`)
     const id = loaded(store, 'coverage', placementOn('bottom'))
-    store.placeOn(id, 'slot-2', placementOn('left'))
+    store.placeOn(id, 'slot-2', placementOn('top'))
     const before = store.byId(id)?.style.flip
 
-    store.placeAt(id, 'slot-2', placementOn('right'))
+    store.placeAt(id, 'slot-2', placementOn('left'))
 
     expect(store.byId(id)?.style.flip).toBe(before)
     const lane = store.placements.find((each) => each.track === id && each.map === 'slot-2')
@@ -944,8 +1012,83 @@ describe('moving a lane on one map', () => {
     const id = loaded(store, 'coverage', placementOn('bottom'))
     store.placeAt(id, 'slot-2', placementOn('top'))
     expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(1)
-    // Nothing was turned: there is no edge it came from.
+    // Nothing was turned: the track reads up the page under the lead, and the
+    // top edge reads the same way.
     expect(store.placements.find((each) => each.map === 'slot-2')?.style).toBeUndefined()
+  })
+
+  it('starts a lane across the diagonal as its edge starts, whichever way the track reads there', () => {
+    // A track that grows away from the map on its right — a lane written before
+    // the convention it breaks, as the yeast demo's Pol II is — put in a tracks
+    // cell: it reads up the page, as every other lane under a ruler does. It was
+    // turned from the right edge, and hung upside down.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'Pol II', placementOn('right'))
+    // Begun there it starts turned, towards the map; the demo's session says
+    // otherwise, and a saved lane keeps what it was saved with.
+    expect(store.byId(id)?.style.flip).toBe(true)
+    store.restyle(id, { flip: false })
+    store.placeAt(id, 'tracks-cell', placementOn('bottom'))
+    const lane = store.placements.find((each) => each.track === id && each.map === 'tracks-cell')
+    const entry = store.byId(id)
+    if (lane === undefined || entry === undefined) throw new Error('the track, and its lane in the cell')
+    expect(resolveStyle(entry.style, lane).flip).toBe(false)
+  })
+
+  it('keeps a hanging track hanging on another map’s edge that reads the same way', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.restyle(id, { flip: true })
+    store.placeAt(id, 'slot-2', placementOn('top'))
+    const lane = store.placements.find((each) => each.track === id && each.map === 'slot-2')
+    const entry = store.byId(id)
+    if (lane === undefined || entry === undefined) throw new Error('the track, and its lane on slot-2')
+    expect(resolveStyle(entry.style, lane).flip).toBe(true)
+  })
+
+  it('takes a track off one edge of a map and leaves it on the others there', () => {
+    // A lane carried away by its grip is one edge's (§16.9): the track along
+    // the bottom and the left of the third replicate, its bottom lane carried
+    // to a `+`, is still along the left.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeAt(id, 'slot-2', { ...placementOn('bottom'), left: true })
+
+    store.unplaceEdge(id, 'slot-2', 'bottom')
+
+    expect(store.drawnOnMap('slot-2', 'bottom')).toHaveLength(0)
+    expect(store.drawnOnMap('slot-2', 'left')).toHaveLength(1)
+    // Its last edge there takes it off that map, and off nothing else.
+    store.unplaceEdge(id, 'slot-2', 'left')
+    expect(store.placements.some((lane) => lane.track === id && lane.map === 'slot-2')).toBe(false)
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+  })
+
+  it('moves one edge of a map to another and leaves a third where it is', () => {
+    // A grip dropped on another of the same map's rectangles. It used to
+    // replace the whole placement, so the left-hand lane went with the bottom.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', { ...placementOn('bottom'), left: true })
+    store.moveEdge(id, LEAD_MAP, 'bottom', 'top')
+    expect(store.byId(id)?.placement).toEqual({ ...placementOn('top'), left: true })
+    store.placeAt(id, 'slot-2', { ...placementOn('bottom'), right: true })
+    store.moveEdge(id, 'slot-2', 'right', 'left')
+    expect(store.drawnOnMap('slot-2', 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'left')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'right')).toHaveLength(0)
+  })
+
+  it('turns a track new to a map for the edge it lands on, from the edge the track reads for', () => {
+    // A bottom track carried onto a companion's left edge — by a row of the
+    // card, or by its lane's grip — grows away from that map as every lane on
+    // its left does. It used to arrive unturned, growing into the map.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeAt(id, 'slot-2', placementOn('left'))
+    const lane = store.placements.find((each) => each.track === id && each.map === 'slot-2')
+    expect(lane?.style?.flip).toBe(true)
+    // The track itself, and so its lane under the lead, is as it was.
+    expect(store.byId(id)?.style.flip).toBe(false)
   })
 })
 

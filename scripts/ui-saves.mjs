@@ -13,8 +13,11 @@
  * Presses the map's Export card, the Manual annotations card's save (after
  * typing a line), the deck's own save once a structure has made a deck, and
  * the Export card again with the deck up — which must write the deck's figure;
- * then, in a page with no dialog at all, the map's save once more, which must
- * arrive as the plain download it always was.
+ * then, with the model zoomed past its cell, the deck's figure as a small PNG,
+ * which it writes out as `x4-deck-figure.png` so the figure itself — the model
+ * framed by its cell's edge (§25.7) — can be looked at; then, in a page with no
+ * dialog at all, the map's save once more, which must arrive as the plain
+ * download it always was.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-saves.mjs [out-dir]
@@ -22,7 +25,7 @@
 
 import { createRequire } from 'node:module'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -58,6 +61,14 @@ await context.addInitScript(() => {
       name: record.chosen,
       createWritable: async () => ({
         write: async (blob) => {
+          // A picture is kept whole, so the figure itself can be looked at.
+          if (blob.type === 'image/png') {
+            record.data = await new Promise((resolve) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result)
+              reader.readAsDataURL(blob)
+            })
+          }
           record.bytes = blob.size
         },
         close: async () => {},
@@ -136,6 +147,30 @@ try {
   console.log('deck, from the Export card:', JSON.stringify(fromCard), '· the deck’s figure:', /^deck-/.test(fromCard?.suggested ?? ''))
   await sleep(500)
   await shot('x3-deck-saved-from-card')
+
+  // The deck's figure itself, with the model zoomed past its cell — the case
+  // an export must frame (§25.7). Saved as a small PNG so it can be looked at,
+  // and written out whole.
+  const model = await page.locator('.deck-structure canvas').first().boundingBox()
+  if (model !== null) {
+    await page.mouse.move(model.x + model.width / 2, model.y + model.height / 2)
+    for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, -240); await sleep(150) }
+    await page.mouse.move(5, 5)
+    await sleep(1200)
+  }
+  await exportCard().locator('select').filter({ has: page.locator('option[value="96"]') }).first().selectOption('96')
+  await exportCard().locator('select').filter({ has: page.locator('option[value="png"]') }).first().selectOption('png')
+  await sleep(300)
+  await exportSave().click()
+  const figure = await lastSave(5)
+  console.log('deck figure:', JSON.stringify(figure))
+  const data = await page.evaluate(() => window.__saves.at(-1)?.data ?? null)
+  if (typeof data === 'string' && data.startsWith('data:image/png;base64,')) {
+    writeFileSync(`${OUT}/x4-deck-figure.png`, Buffer.from(data.slice('data:image/png;base64,'.length), 'base64'))
+    console.log('wrote x4-deck-figure')
+  } else {
+    console.log('no picture came back from the deck’s save')
+  }
 
   console.log('plain downloads (should be none):', downloads)
 

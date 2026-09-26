@@ -443,6 +443,21 @@ export interface FeatureStyle {
    * `drawBarCharts` reads it.
    */
   bars: BarScale
+  /**
+   * How the lane spends its height on rows (§8.16) — the three every genome
+   * browser offers, under the names they are known by.
+   *
+   * `expanded` gives each row room for a glyph and the name under it, and is
+   * the default because a feature lane is read by its names. `squished` packs
+   * thin rows with no names, so a crowded region shows every overlapping
+   * feature in the height `expanded` needs for a few of them. `collapsed` puts
+   * everything in one row across the whole lane — overlaps drawn over each
+   * other and the strand left to the point and the colour — which is the
+   * picture of *where* there are features rather than of each one.
+   *
+   * A barChart lane reads none of it: its rows are its value axis (§8.17).
+   */
+  display: FeatureDisplay
 }
 
 /**
@@ -450,6 +465,12 @@ export interface FeatureStyle {
  * {@link FeatureStyle.bars}.
  */
 export type BarScale = 'file' | 'feature'
+
+/** How a feature lane spends its height; see {@link FeatureStyle.display}. */
+export type FeatureDisplay = 'expanded' | 'squished' | 'collapsed'
+
+/** Every {@link FeatureDisplay}, in the order a menu offers them. */
+export const FEATURE_DISPLAYS: readonly FeatureDisplay[] = ['expanded', 'squished', 'collapsed']
 
 /**
  * What a feature lane starts on.
@@ -471,6 +492,7 @@ export function defaultFeatureStyle(kind: AnnotationKind): FeatureStyle {
     // Comparable before legible: a lane whose glyphs cannot be compared is a
     // row of shapes, and a reader who wants the shapes can ask for them.
     bars: 'file',
+    display: 'expanded',
   }
 }
 
@@ -515,5 +537,7 @@ export function featureStyleOf(value: unknown, kind: AnnotationKind): FeatureSty
     // string that names the other reading may move a restored lane off the
     // default.
     bars: row['bars'] === 'feature' ? 'feature' : 'file',
+    // The same again: a stored string is kept only if it is one of the three.
+    display: FEATURE_DISPLAYS.find((one) => one === row['display']) ?? fallback.display,
   }
 }

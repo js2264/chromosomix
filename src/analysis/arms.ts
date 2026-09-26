@@ -256,13 +256,24 @@ const SUMMARY_SMOOTHING = 0.02
 /**
  * Two numbers for comparing one chromosome's arm alignment with another's.
  *
- * - **score** — the mean `log2` enrichment of the secondary diagonal over the
- *   arms: zero where the arms touch each other no more than any two loci as far
- *   apart along the DNA do, positive where they are held together.
- * - **reach** — how far from the origin that enrichment holds: going outwards
+ * - **reach** — how far from the origin the enrichment holds: going outwards
  *   from its peak, the last distance before it first falls below half of it, in
  *   bins. A species whose arms are zipped from origin to terminus reaches most
  *   of the arm; one whose alignment is confined round parS reaches a fraction.
+ * - **score** — how strong it is **over that stretch**: the mean `log2`
+ *   enrichment of the secondary diagonal from the origin out to the reach. So
+ *   the two say different things — how far, and how strongly within it — where a
+ *   mean over the whole arm is both at once, and a strong alignment confined
+ *   round parS reads there like a weak one that runs to the terminus. It is
+ *   read over the stretch that holds above half the peak, so on a chromosome
+ *   whose arms are not aligned it is the mean of the noise's highest stretch and
+ *   reads above zero: 0.23 on *E. coli* at 5 kb, where the whole arm's mean is
+ *   0.08. Where nothing reaches — no stretch above zero at all — it is the mean
+ *   over the whole arm.
+ *
+ * `over`, where given, is the stretch to average over in place of this
+ * profile's own reach: another profile's, so that a control is read over the
+ * same distances as the measurement it controls. `NaN` there is the whole arm.
  *
  * The peak and the reach are read from a **running mean over 2% of the arm**
  * either side. Read cell by cell, one noisy distance set the peak, and the last
@@ -273,17 +284,17 @@ const SUMMARY_SMOOTHING = 0.02
  *
  * `NaN` for the reach where there is no enrichment to measure.
  */
-export function interArmSummary(byDistance: ArrayLike<number>): { score: number; reach: number; peak: number } {
-  let total = 0
+export function interArmSummary(
+  byDistance: ArrayLike<number>,
+  over?: number,
+): { score: number; reach: number; peak: number } {
   let seen = 0
   const n = byDistance.length
   const logs = new Float64Array(n)
   for (let d = 0; d < n; d++) {
     const value = byDistance[d]
     logs[d] = value > 0 ? Math.log2(value) : Number.NaN
-    if (!Number.isFinite(logs[d])) continue
-    total += logs[d]
-    seen++
+    if (Number.isFinite(logs[d])) seen++
   }
   if (seen === 0) return { score: Number.NaN, reach: Number.NaN, peak: Number.NaN }
   const k = Math.max(1, Math.round(n * SUMMARY_SMOOTHING))
@@ -305,12 +316,25 @@ export function interArmSummary(byDistance: ArrayLike<number>): { score: number;
       at = d
     }
   }
-  if (!(peak > 0)) return { score: total / seen, reach: Number.NaN, peak }
-  let reach = at
-  for (let d = at + 1; d < n; d++) {
-    if (!Number.isFinite(smoothed[d])) continue
-    if (smoothed[d] < peak / 2) break
-    reach = d
+  let reach = Number.NaN
+  if (peak > 0) {
+    reach = at
+    for (let d = at + 1; d < n; d++) {
+      if (!Number.isFinite(smoothed[d])) continue
+      if (smoothed[d] < peak / 2) break
+      reach = d
+    }
   }
-  return { score: total / seen, reach, peak }
+  // From the origin out to the reach — this profile's own, or the stretch handed
+  // in — and over the whole arm where there is none.
+  const stretch = over === undefined ? reach : over
+  const last = Number.isFinite(stretch) ? Math.min(n - 1, Math.max(0, Math.floor(stretch))) : n - 1
+  let total = 0
+  let counted = 0
+  for (let d = 0; d <= last; d++) {
+    if (!Number.isFinite(logs[d])) continue
+    total += logs[d]
+    counted++
+  }
+  return { score: counted > 0 ? total / counted : Number.NaN, reach, peak }
 }

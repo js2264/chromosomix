@@ -160,6 +160,10 @@ const LUCIDE = [
   // for a count at every crossing of two facets.
   'library',
   'grid-3x3',
+  // Which edge of a map a track is drawn on, in a track's settings (§8.1): the
+  // map as a dashed square with that one edge drawn solid. Upstream has the top
+  // one only; the other three are it turned, below in `HAND`.
+  'square-dashed-top-solid',
 ]
 
 /**
@@ -172,7 +176,7 @@ const LUCIDE = [
 const BRANDS = ['github', 'googledrive', 'dropbox']
 
 /**
- * The one shape upstream does not have.
+ * The shapes upstream does not have.
  *
  * `icons.ts` says nothing is drawn by hand any more, and the reason it gives is
  * drift: a sketched icon ends up with different corner radii, a different
@@ -232,6 +236,48 @@ const HAND = {
    * also most of the ink, so what the mark chiefly showed was arrows.
    */
   diagonal: [['path', { d: 'm5 5 14 14' }]],
+  /**
+   * The other three edges of `square-dashed-top-solid`: the fourth exception,
+   * and not a drawing at all. Each is that icon's own nine strokes reflected on
+   * its own grid — in the horizontal midline for the bottom, in the diagonal
+   * for the left, and the left in the vertical midline for the right — with a
+   * reflected arc's sweep turned as a reflection turns it, and a corner written
+   * back in the direction Lucide writes its corners. Same dashes, same radii,
+   * same inset; only which edge is solid moves.
+   */
+  'square-dashed-right-solid': [
+    ['path', { d: 'M3 14v1' }],
+    ['path', { d: 'M9 21h1' }],
+    ['path', { d: 'M5 21a2 2 0 0 1-2-2' }],
+    ['path', { d: 'M14 21h1' }],
+    ['path', { d: 'M9 3h1' }],
+    ['path', { d: 'M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2' }],
+    ['path', { d: 'M14 3h1' }],
+    ['path', { d: 'M3 5a2 2 0 0 1 2-2' }],
+    ['path', { d: 'M3 9v1' }],
+  ],
+  'square-dashed-bottom-solid': [
+    ['path', { d: 'M14 3h1' }],
+    ['path', { d: 'M21 14v1' }],
+    ['path', { d: 'M19 3a2 2 0 0 1 2 2' }],
+    ['path', { d: 'M21 9v1' }],
+    ['path', { d: 'M3 9v1' }],
+    ['path', { d: 'M3 19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2' }],
+    ['path', { d: 'M3 14v1' }],
+    ['path', { d: 'M3 5a2 2 0 0 1 2-2' }],
+    ['path', { d: 'M9 3h1' }],
+  ],
+  'square-dashed-left-solid': [
+    ['path', { d: 'M21 14v1' }],
+    ['path', { d: 'M14 21h1' }],
+    ['path', { d: 'M21 19a2 2 0 0 1-2 2' }],
+    ['path', { d: 'M9 21h1' }],
+    ['path', { d: 'M14 3h1' }],
+    ['path', { d: 'M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2' }],
+    ['path', { d: 'M9 3h1' }],
+    ['path', { d: 'M19 3a2 2 0 0 1 2 2' }],
+    ['path', { d: 'M21 9v1' }],
+  ],
 }
 
 /** Pull the drawable children out of an SVG, in document order. */

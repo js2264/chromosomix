@@ -124,7 +124,7 @@ try {
     let n = 0
     for (const row of document.querySelectorAll('.annotation-card .ann-place-map')) {
       if (row.querySelector('.ann-place-name')?.textContent !== 'tracks') continue
-      const bottom = Array.from(row.querySelectorAll('button.ann-place')).find((x) => x.textContent === 'bottom')
+      const bottom = Array.from(row.querySelectorAll('button.ann-place')).find((x) => x.dataset.edge === 'bottom')
       if (bottom && !bottom.disabled && bottom.getAttribute('aria-pressed') !== 'true' && n < 2) { bottom.click(); n++ }
     }
   })

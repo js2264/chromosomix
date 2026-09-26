@@ -14,6 +14,85 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Inter-arm alignment gives each sequence a control row (§18.8).** Beside the numbers read over
+  the sequence's own distance decay, a second row gives the same four — score, peak, reach, arm —
+  over the decay along both arms, the expectation the map's arms and Compartments divide by, which
+  takes the secondary diagonal in. Where that detrending works, its score is near zero: on
+  *P. aeruginosa* PAK the alignment's 1.7 is −0.03 to −0.08 along both arms. Its peak sits at the
+  terminus, where the arms' expectation is weakest, and grows with the bin size. The new *expected*
+  column says which row is which, and *window along the arms* (`--armWindow` in a shell; 50 bins,
+  the map's and Compartments' default) sets the control's. Task version 2.
+
+- **The Compartments table says how much of the contacts each component accounts for (§18.8).** Its
+  *of contacts* column is the share of the map's departure from expected — observed/expected as
+  cooltools prepares it — that the component's checkerboard carries, the same measure under either
+  method, adding up across components. Under cooltools' method it is the number the table called
+  *share*, now named for what it is (`contacts` in a TSV, where it was `explained`); under the
+  correlation it stands beside the correlation matrix's own *variance*, which is a share of how alike
+  the rows are and not of the map.
+
+- **A tracks cell has the structure cell's height bar (§25.3).** Drag the bar under the stack to make
+  the cell taller or shorter, nudge it with the arrow keys, double-click it to fit the row again; each
+  tracks cell keeps its height across a reload.
+
+- **Structure and tracks cells are renamed from their heading (§25.3).** A name typed into a
+  structure cell's heading renames its model, on the Structures card and everywhere else it is named;
+  a tracks cell's heading renames the cell alone — its name in the location control, remembered per
+  cell across a reload — and no track on it. Emptied, a tracks cell's box goes back to its default,
+  and a model's keeps the name it had. A tracks cell nobody named is headed as the location control
+  lists it, `tracks 2` and `tracks 3` after the first, where every one of them said `tracks`.
+
+- **A lane dragged by its grip moves to another map, or into a cell of its own (§16.9).** Let go on a
+  rectangle round another map — they light up on every map while a lane is carried — it is drawn on
+  that edge of that map; on a `+` edge, a tracks cell opens there drawing it; on an empty cell, the
+  cell becomes the 1D browser of it; on a tracks cell, that cell draws it. Each is a move: the lane
+  leaves the map it came from.
+
+- **Rows of the Tracks and Structures cards open a cell on a `+` edge (§16.9).** A track's row opens a
+  tracks cell drawing it, in the cell nearest the edge; a model's row opens its model there and moves
+  it, the cell it was in left empty where it stood.
+
+- **The 4C task can leave the anchor out (§18.8).** *Exclude anchor region* empties the anchor's own
+  bins and one either side, so the diagonal's spike no longer sets the scale the rest of the profile
+  is read on.
+
+- **Space recentres the map on its diagonal (§7.2).** The recentre button's press, from anywhere the
+  keyboard is not a focused button's, tickbox's or field's; it is in the shortcuts dialog, the
+  palette and the button's tooltip.
+
+- **Copy this, on the right-click menus (§7.2).** On the map, on a lane beside it, on a lane of the 1D
+  browser, and on a 3D model (a right click that does not drag): the one object under the pointer
+  onto the clipboard as a PNG, as it is drawn on screen — the map's cells with no axis, key, frame,
+  overlay or pointer; the track alone with no name, range, handle or hairline; the model with no
+  centre, key or buttons. The corner says how big it was, or why the browser would not take it. The
+  map's menu now opens on any file, marks or not.
+
+- **The first cell of a deck moves and closes like any other (§16.9).** Its heading has a grip, and
+  dropping it on another cell exchanges the two, as every cell's grip does; another cell's grip, or a
+  companion's row of the Contact maps card, dropped on it does the same. Its × takes it off the
+  screen while another cell is beside it — parked out of sight rather than closed, so the other maps
+  go on following it and the locus box above the grid still steers the deck — and its eye on the
+  Contact maps card, or `show …` in the deck's bar, puts it back where it stood. Where it stands and
+  whether it is hidden are remembered with the column count and travel in a saved workspace.
+
+- **A structure file dropped on an empty window opens as its model (§25.3).** A lone bed3d or g3d
+  opened the 1D browser of the genome its beads name, with nothing on it and the model nowhere on
+  screen; the model now opens in its own cell, filling the view, with the empty tracks hidden behind
+  it — `show the 1D browser` in the deck's bar brings them back.
+
+- **A feature lane's rows can be expanded, squished or collapsed (§8.16).** Expanded is the rows with
+  names under them, as before; squished packs many thin rows with no names, so a crowded stretch shows
+  every overlapping feature; collapsed puts everything in one row across the lane. In the card, as
+  `rows`, and in the lane's right-click menu, which now also carries the strand points as a switch —
+  both ticked where they are in force — and, opened on a feature, that feature: its card, its name
+  and position to copy, and in the 1D browser a zoom that frames it.
+
+- **A `points` style for tracks (§8.8).** A dot per value and nothing between them — a Manhattan
+  plot's picture, for p-values, sparse scores and anything whose outliers are the reading. From each
+  pixel's mean like the other styles, so the same limits, groups and flip apply; one dot per run of
+  equal values, so a zoomed-in bin is one point at its middle. In the style picker of every track, in
+  the batch box, beside the map, in the 1D browser and in figures.
+
 - **A file's first open proposes which sequences are circular (§8.15).** Each of the fifty longest
   sequences is read at its two ends and its corner, and scored as the contacts across the junction
   over the contacts along the diagonal at the same separation — about one on a circle, about zero on
@@ -394,6 +473,119 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **Inter-arm alignment's score is the mean from the origin out to the reach (§18.8),** where it was
+  over the whole arm: the reach says how far the arms are held, and the score now how strongly
+  within that, rather than both at once. The figures move — *P. aeruginosa* PAK 1.56 → 1.71 at 8 kb,
+  *E. coli* 0.08 → 0.23 at 5 kb — and a chromosome whose arms are not aligned now scores its noise's
+  highest stretch rather than zero. Where nothing reaches, the score is still the whole arm's mean.
+
+- **The map's correlation reaches 4,096 bins a side, and takes seconds there (§7.5).** Any square
+  block the map can read can now be correlated, where it was capped at 1,500 bins: a whole bacterial
+  genome at 1 kb, a human chromosome at 50 kb. All the pairs are one matrix product in WebAssembly,
+  shared across the cores — from picking the score to the picture, a thousand bins in under half a
+  second, 2,048 in under one and 4,096 in about two and a half, in Chromium on four cores. The
+  Compartments task's correlation is the same arithmetic and as much faster.
+
+- **The map's correlation counts an empty pixel as zero contacts (§7.5).** It left them out, as the
+  O/E picture draws them, so it correlated each pair of rows over the cells both happened to have — not
+  the matrix the Compartments task solves, though its note said so, and on a sparse map several times
+  slower. The picture under the veil still draws them as paper.
+
+- **Picking a score computed from the block reads nothing (§7.5).** `VC`, `ICE`, the baseline and the
+  correlation repaint the map, where picking one re-read the whole block first; only another column
+  of the file, or balancing, is a new read.
+
+- **A tracks cell of the deck is its axis and its lanes (§25.3).** Its locus box, zoom steps and summary
+  line are gone: where to look is asked in the lead's bar above the grid, and the cell still pans and
+  zooms in place.
+
+- **A track's lane carried off one side of a map leaves it on the others (§16.9).** Carrying the lane
+  under a map to a `+` used to take the track off every side of that map; the lane beside it stays.
+  The same for a lane moved between two of one map's sides: a third side keeps its lane.
+
+- **A track to the left of a map grows away from it (§8.9).** Left-hand lanes grew towards the matrix,
+  pointing a profile's peaks into the map where the same track above it points them away; they now
+  mirror the top stack across the diagonal, as the right-hand stack mirrors the bottom one. A file
+  dropped there, a computed track (which opens on the left) and a row placed there all start that
+  way; a lane saved before keeps its direction. A track placed on a map it was not on starts as the
+  lanes on that edge start where it crosses the diagonal — rather than growing into the map beside
+  lanes that grew away, or hanging upside down in a tracks cell — and keeps its own reading on an edge
+  that reads like its own. A track moved by two presses of its location marks — the new edge on, the
+  old one off — is turned as one moved in one.
+
+- **A track's location is four marks on its map's line (§8.1).** The four words — top, right,
+  bottom, left — are four marks of the map with one edge drawn solid, beside the label with one map,
+  and at the end of each map's own line in a deck, where the words took a line of their own under
+  every name. The same in the box that edits ticked tracks together.
+
+- **The General column's File card follows the star (§16.5).** It describes the starred map's file,
+  named under its heading with the star as the Map card is, where it went on describing the first map
+  whatever was starred.
+
+- **A file dropped on a `+` lands at the near end of the edge (§16.9).** Below a short last row it
+  went into the hole the press squared up, a row above the one the reader aimed at.
+
+- **The first map's eye on the Contact maps card closes its cell in a deck (§16.9).** As every other
+  map's eye does. It put the map down for the 1D browser, which in a deck also took every companion
+  map away with it; outside a deck it still does that.
+
+- **A deck beside the 1D browser exports the browser too (§25.3).** The deck's figure left a gap where
+  the tracks stood, and the browser's Export card saved the tracks alone however much stood beside
+  them; the card now saves the deck's figure, as a map's does. The bar no longer offers to match maps'
+  scales and resolutions in a deck that cannot hold a map, and no longer counts the browser as a map.
+
+- **An exported 3D model is framed by its cell's edge (§25.7).** A thin rule round the model's
+  picture, the weight and colour of the map's plot border, in the deck's figure, the card's PNG and
+  PDF and the clipboard — so a model zoomed past its cell reads as framed rather than floating with
+  one side sliced off.
+
+- **Features are rounded blocks that end in a point, and grow with their lane (§8.16).** A stranded
+  feature's direction is the point on the block it ends in — a transcript's last exon — and nothing
+  else: the chevrons through long boxes and along introns are gone. Corners are rounded a little, and
+  a block takes its whole row up to 22 pixels, so a taller lane draws thicker genes where they used to
+  stop at nine and thirteen. Variants stay square.
+
+- **A map opened with its tracks is drawn first, and laid out once (§8.6).** The tracks' rows are
+  seated at once and their files read once the map's first block is drawn (at most four seconds
+  later), as is the circularity measurement; they used to share the map's first read with a 12 MB
+  FASTA and a 10 MB gene model, so on a 25 Mbit/s line the demo session's map came 6.7 s after its
+  view mounted and now comes in 2.5 s. The lane stacks keep room for rows still reading, so the map
+  is no longer shrunk and re-fitted when the sequence lane lands last, and download progress
+  reaches a row four times a second rather than twenty.
+
+- **The pointer over a map with the crosshair on is a ring (§5.8).** Lucide's `locate`, twenty
+  pixels square (the arrowhead's size) and centred on the hand, replaces the small open cross, and
+  the guide lines stop at the ends of its ticks rather than running through it, so the cell under the
+  pointer and its neighbours stay clear inside it; the gap follows the hand inside a zoomed-in cell.
+  Over a lane or the 1D browser the arrowhead stays beside the hairline, with its tip on it — with no
+  pointer there, the line under the hand could not be told from another surface's pointer echoed as
+  the same line — and with the crosshair off all three show the arrowhead.
+
+- **The crosshair toggle reaches the tracks beside a map (§5.8).** Their own hairline under the
+  pointer, and the line it carries across the map, were drawn whatever the toggle said, so turning
+  the crosshair off took it off the map and left it on every track; a deck's tracks cell went on
+  following the map's pointer the same way.
+
+- **Ticked tracks are edited together (§8.1).** The box two ticks open carries a row's settings —
+  colour, height, style, scale, flip, limits, group, location, and opacity for overlays — showing what
+  the ticked rows share and *mixed* where they differ, and writing a pick to every ticked row it
+  applies to (a style picked over a gene model and two bigWigs lands on the two bigWigs). Limits take
+  both bounds; *auto* keeps each row's own pair. *same height* is the height box now, and *hide* turns
+  to *show* when every ticked row is hidden.
+
+- **Synthetic tracks are rows of the Tracks card (§18.5).** What a task computed — a profile, a
+  called set — and a comparison of two tracks are listed with the loaded tracks, marked `*` after the
+  name as a resolution the file does not store is, with the task that made them on the summary line
+  and the provenance in the mark's tooltip. They take every control a loaded track takes: height,
+  style, scale, flip, limits, group, edges, and a tick box into the batch. Their exports and framing
+  are in their settings, and a row that came back from a reload offers *recompute* where a file's
+  row offers to re-open it. The *Synthetic tracks* card is gone.
+
+- **Metadata annotations sits under Manual annotations, and it and Bookmarks start folded (§8.1).**
+  The Annotations column reads Contact maps, Tracks, Structures, Manual annotations, Metadata
+  annotations, Bookmarks; the last two are headings until pressed. Saving a view from the button
+  beside `go` opens the Bookmarks card, so the row it adds is seen.
 
 - **`metacooler-run` reads a map balanced by default (§23.1).** Wherever the file carries weights,
   as the app does — the framing and every task's *use balancing weights* alike — and `--no-balance`
@@ -1039,6 +1231,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **Panning round a circular chromosome (§8.15).** A pan past the end of a declared circle no
+  longer reads its way round to the beginning: it stops at the sequence's end, as on a line. `ori`
+  is the way across the origin — it frames the whole circle with the origin in the middle — and
+  that frame, or a window typed across the origin, is zoomed and refined inside but not slid past.
+  The slide read a block per stretch of drag with the map frozen while each landed, and left no
+  edge to tell how far round the reader had come.
+
+- **The blue ring round a focused map, 1D browser or table (§7.2).** It was meant for a reader
+  tabbing in, but it also lit after a typed locus and Enter, framing the data in blue after the
+  commonest navigation there is. The pictures take focus and draw no ring, as they did before.
+
 - **The companion's corner menu (§16.5).** The button in a companion's bottom-left corner and the
   menu of score, transform, ramp and clip it opened are gone: the map's *Map* card, shown in the
   Aesthetics column while it is starred, holds those and the rest.
@@ -1094,6 +1297,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **Closing the share dialog before its link is ready no longer copies the link.** The copy that
+  follows the link's arrival went ahead for a dialog already dismissed, writing over whatever the reader
+  had put on the clipboard since.
+
+- **A lane in a tracks cell can be carried out of it by its grip (§16.9).** The grip only reordered the
+  cell's own stack, so a track sent to a cell of its own could not be put back beside a map: it now
+  moves to a map's side, a `+`, an empty cell or another tracks cell like any lane.
+
+- **A tracks cell marks both ends of the map's cell under the pointer (§25.4).** It drew one hairline,
+  at the first of the two anchors, where the lanes beside the map mark both.
+
+- **The Structures card's eye follows the deck (§25.3).** A structure cell closed from its heading left
+  its row's eye lit, and a model dropped on a `+` or an empty cell left it dark, until the eye itself
+  was pressed.
+
+- **A Tracks card row dropped on an empty cell of the deck opens the 1D browser of it (§16.9).** The
+  browser refused the drop without a word: the row allowed only a *move* and the cell answered with
+  a *copy*, and an effect the drag does not allow is a drop that never happens. The row now allows
+  either, and every empty cell answers with an effect the drag allows.
+
+- **A `+` that fills the cell it opens writes the deck once (§16.9).** The link was written twice in
+  one gesture, and the first write, read back a moment later, rebuilt the cell empty: a map's row, a
+  model's or a lane dropped on a `+` could land in a cell that was then emptied again.
+
+- **A BED12 or bigBed of transcripts draws its exons (§8.16).** The glyph followed the lane's kind, and
+  a BED is a `segments` lane, so a gene set in BED12 came out as one plain box per gene: its blocks
+  and its thick span were read and never drawn. Every feature is now drawn by its own structure, so
+  the same gene draws the same blocks from a GTF, a genePred and a BED12.
+
+- **A GTF's coding span reaches its stop codon (§8.16).** The stop codon is a row of its own in
+  Ensembl's GTFs, outside the last CDS row, and was left out — so every coding gene drew three bases
+  short of its stop, and differently from the same gene in a genePred or BED12. The demo's genePred
+  is regenerated the same way. A GFF3 transcript written as CDS and UTR rows with no `exon` rows now
+  draws its exons and introns rather than one box.
+
+- **A full circle is drawn in a vector figure.** The PDF page flattened an arc of exactly one turn to
+  a path of zero length, so a loop drawn as a ring on screen was missing from the saved figure.
+
+- **A track's edge button lights on the press that sets it.** Moving a track to another edge of the
+  first map announced the move before it made it, so the row went on showing the old edge — and the
+  session remembered it — until something else changed.
 
 - **An exported P value is written as the drawer shows it, not as 0 (§18.7).** A table column that
   says its values may be very small — *Signal by group*'s P and q — was written to a TSV at its fixed

@@ -96,20 +96,26 @@ export function laneGrowsInward(edge: LaneEdge): boolean {
  * a contact map hanging from its ceiling is a profile a reader has to mirror in
  * their head before they can compare it with the one below.
  *
- * **A vertical lane grows towards the matrix.** There is no such convention for
- * a track turned a quarter turn, so what decides is the corner: the stacks
- * meeting at one have to agree about which way is more, and a lane growing
- * outward from the map's own edge reads as pointing away from the thing it is
- * beside. That is why the right-hand stack has always been turned and the
- * left-hand one has not — on the left, growing right *is* growing towards it.
+ * **A vertical lane is a horizontal one mirrored in the diagonal**, which is
+ * what it is: the rows are the same genome as the columns, and a contact map is
+ * read across that line. The stack on the left is the stack on top turned over
+ * it, so it grows *away* from the matrix as the top one does; the stack on the
+ * right is the bottom one turned, so it grows *towards* the matrix as the
+ * bottom one does. Both of them grow leftward, then — the vertical "up the
+ * page" — and both are turned from a plot's own "values grow right".
  *
- * So exactly one edge turns, which is what it has always been. Moving a lane
- * between two edges turns its axis exactly when this answer changes, which is
- * what keeps a reader's own deviation from the default through the move
- * (`AnnotationStore.place`).
+ * The left-hand stack used to grow towards the matrix, on the argument that
+ * the stacks meeting at a corner should agree about which way is more. It
+ * pointed a profile's peaks *into* the map beside it, where the same profile
+ * above the map points them away, so the two copies of one track either side
+ * of the diagonal read as two different shapes.
+ *
+ * Moving a lane between two edges turns its axis exactly when this answer
+ * changes, which is what keeps a reader's own deviation from the default
+ * through the move (`AnnotationStore.place`).
  */
 export function laneStartsFlipped(edge: LaneEdge): boolean {
-  return !laneIsHorizontal(edge) && !laneGrowsInward(edge)
+  return !laneIsHorizontal(edge)
 }
 
 /** Canvas coordinate of an across-offset, on the axis the lane is thick in. */
@@ -221,6 +227,30 @@ export function laneLine(
   across: number,
 ): void {
   ctx.lineTo(laneX(frame, along, across), laneY(frame, along, across))
+}
+
+/**
+ * `ctx.quadraticCurveTo` in lane coordinates: a curve bent towards the control
+ * point, which is how a glyph's corners are rounded.
+ *
+ * A quadratic rather than `arcTo`, because the PDF export's context has the one
+ * and not the other (`ui/vector.ts` raises a quadratic to PDF's cubic exactly),
+ * and at a corner of two or three pixels the two are the same curve.
+ */
+export function laneCurve(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  controlAlong: number,
+  controlAcross: number,
+  along: number,
+  across: number,
+): void {
+  ctx.quadraticCurveTo(
+    laneX(frame, controlAlong, controlAcross),
+    laneY(frame, controlAlong, controlAcross),
+    laneX(frame, along, across),
+    laneY(frame, along, across),
+  )
 }
 
 /**

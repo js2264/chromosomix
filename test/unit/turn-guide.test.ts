@@ -186,7 +186,7 @@ function harness(size = 400): Harness {
     guide: () => {
       segments.length = 0
       heatmap.draw()
-      return segments.filter((segment) => segment.colour === CROSSHAIR_COLOR)
+      return joined(segments.filter((segment) => segment.colour === CROSSHAIR_COLOR))
     },
     told: () => hover,
     boxes,
@@ -224,6 +224,36 @@ function dragOn(fit: Harness, from: [number, number], to: [number, number], shif
   // after the file's `afterAll` has taken the canvas stubs away, and a raster
   // built against jsdom's own canvas throws.
   fit.heatmap.draw()
+}
+
+/**
+ * The guide's lines, each one whole however many pieces it was stroked in.
+ *
+ * A line through the hand is stroked in two, stopping short of the pointer on
+ * either side (`HeatmapView.guideFor`, pinned in `crosshair-gap.test.ts`). These
+ * tests are about which lines there are, so the pieces of one line — stroked
+ * one after the other, and all on it — count as the line.
+ */
+function joined(segments: Segment[]): Segment[] {
+  const lines: Segment[] = []
+  for (const piece of segments) {
+    const last = lines[lines.length - 1]
+    if (last !== undefined && onLine(last, piece.from) && onLine(last, piece.to)) {
+      lines[lines.length - 1] = { colour: last.colour, from: last.from, to: piece.to }
+    } else {
+      lines.push(piece)
+    }
+  }
+  return lines
+}
+
+/** Whether a point is on the line through a segment, to a hundredth of a pixel. */
+function onLine(segment: Segment, point: [number, number]): boolean {
+  const [x0, y0] = segment.from
+  const [x1, y1] = segment.to
+  const length = Math.hypot(x1 - x0, y1 - y0)
+  if (length === 0) return false
+  return Math.abs((x1 - x0) * (point[1] - y0) - (y1 - y0) * (point[0] - x0)) / length < 0.01
 }
 
 /** A segment at 45°, which is what a ray off a turned contact is. */

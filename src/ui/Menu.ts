@@ -29,9 +29,21 @@ export interface MenuItem {
   label: string
   /** Shown in the row, quietly, where the label alone is not the whole answer. */
   hint?: string
+  /**
+   * What the row does, in a sentence, for the pointer that rests on it — too
+   * long for the hint column, which is for a value the row acts on (a
+   * coordinate, a colour) and cuts anything longer at the menu's edge.
+   */
+  title?: string
   /** Absent for a heading — a row that names the group under it and does not act. */
   run?: () => void
   disabled?: boolean
+  /**
+   * A choice or a switch, and whether it is the one in force: the row carries
+   * a tick when `true` and the room for one when `false`, so a group of choices
+   * lines up, and it is announced as checked or not. Absent for an action.
+   */
+  checked?: boolean
 }
 
 let open: (() => void) | null = null
@@ -67,13 +79,29 @@ export function openMenu(x: number, y: number, items: readonly MenuItem[]): void
       )
       continue
     }
+    const choice = item.checked !== undefined
     const node = el('button', {
       class: `crumb-menu-item${item.disabled === true ? ' disabled' : ''}`,
       type: 'button',
-      attrs: { role: 'menuitem' },
-      ...(item.hint === undefined ? {} : { title: item.hint }),
+      attrs: choice
+        ? { role: 'menuitemcheckbox', 'aria-checked': String(item.checked) }
+        : { role: 'menuitem' },
+      ...(item.title !== undefined
+        ? { title: item.title }
+        : item.hint === undefined
+          ? {}
+          : { title: item.hint }),
     })
     if (item.disabled !== true) rows.push(node)
+    if (choice) {
+      node.appendChild(
+        el('span', {
+          class: 'context-menu-check',
+          text: item.checked === true ? '✓' : '',
+          attrs: { 'aria-hidden': 'true' },
+        }),
+      )
+    }
     node.appendChild(el('span', { text: item.label }))
     if (item.hint !== undefined) {
       node.appendChild(el('span', { class: 'context-menu-hint', text: item.hint }))

@@ -48,6 +48,7 @@ import { browsingBinsize } from '@/genome/assembly'
 import type { Region, TrackSampleSet, TrackSamples } from '@/annotations/types'
 import type { AnnotationClient } from '@/annotations/worker/client'
 import { setUpDom, type DomTeardown } from '../support/dom'
+import { tracksCardOver } from '../support/tracksCard'
 
 /**
  * Three sequences, so a value written onto the wrong one lands on a named
@@ -229,8 +230,13 @@ function bench(options: {
     carried: () => [],
     changed: () => {},
   }
-  return { workspace: new AnalysisWorkspace(host), binsize }
+  const workspace = new AnalysisWorkspace(host)
+  stores.set(workspace, store)
+  return { workspace, binsize }
 }
+
+/** The store each bench's workspace reads its rows from, for the card over it. */
+const stores = new WeakMap<AnalysisWorkspace, AnnotationStore>()
 
 interface Saved {
   name: string
@@ -288,7 +294,9 @@ function captureDownloads(): () => void {
 
 /** Press one of the row's export buttons and wait for the file. */
 async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved> {
-  const buttons = Array.from(workspace.syntheticEl.querySelectorAll('button'))
+  // The row's own buttons, on the Tracks card where a synthetic row lives.
+  const mounted = tracksCardOver(stores.get(workspace)!, workspace)
+  const buttons = Array.from(mounted.el.querySelectorAll('button'))
   const target = buttons.find((button) => button.textContent?.trim() === label)
   expect(target, `no ${label} button on the row`).toBeTruthy()
   const before = saved.length
@@ -297,6 +305,7 @@ async function press(workspace: AnalysisWorkspace, label: string): Promise<Saved
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   expect(saved, `nothing was written for ${label}`).toHaveLength(before + 1)
+  mounted.destroy()
   return saved[saved.length - 1]
 }
 

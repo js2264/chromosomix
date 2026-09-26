@@ -61,6 +61,7 @@ const SET_FROM_SCRIPT = [
   '--strength',
   '--structure-h',
   '--text-scale',
+  '--tracks-h',
   '--turn-height',
   '--turn-width',
 ] as const

@@ -32,6 +32,8 @@ import {
   withLocalCompanions,
   readDeckLook,
   withLook,
+  readDeckLead,
+  withLead,
   type PanelRef,
 } from '../../src/panels/deck'
 import { planFor } from '../../src/panels/MapPanel'
@@ -323,6 +325,33 @@ describe('swapItems', () => {
     expect(swapItems(['a', 'b'], 0, -1)).toEqual(['a', 'b'])
     expect(swapItems(['a', 'b'], 1, 2)).toEqual(['a', 'b'])
     expect(swapItems(['a', 'b'], 1, 1)).toEqual(['a', 'b'])
+  })
+})
+
+describe('where the session’s own cell stands (§16.9)', () => {
+  /**
+   * The lead is not a companion and has no member in `maps`; its place is a
+   * number in this session's memory, beside the column count, and it is read
+   * back as input — stored state outlives the code that wrote it.
+   */
+  it('is put back among the companions at its place, or at the end of a deck that came back shorter', () => {
+    expect(withLead(['a', 'b', 'c'], 'L', 0)).toEqual(['L', 'a', 'b', 'c'])
+    expect(withLead(['a', 'b', 'c'], 'L', 2)).toEqual(['a', 'b', 'L', 'c'])
+    expect(withLead(['a', 'b', 'c'], 'L', 3)).toEqual(['a', 'b', 'c', 'L'])
+    expect(withLead(['a'], 'L', 5)).toEqual(['a', 'L'])
+    expect(withLead([], 'L', 2)).toEqual(['L'])
+  })
+
+  it('reads a stored place and whether it was hidden, and refuses anything else', () => {
+    expect(readDeckLead({ at: 2, hidden: true })).toEqual({ at: 2, hidden: true })
+    // Hidden only when it says so.
+    expect(readDeckLead({ at: 1 })).toEqual({ at: 1, hidden: false })
+    expect(readDeckLead({ at: 1, hidden: 'yes' })).toEqual({ at: 1, hidden: false })
+    for (const bad of [null, 3, 'lead', {}, { at: -1 }, { at: 1.5 }, { at: Number.NaN }, { at: '2' }]) {
+      expect(readDeckLead(bad)).toBeNull()
+    }
+    // Never past the backstop, whatever a hand-edited record says.
+    expect(readDeckLead({ at: 10_000 })?.at).toBe(MAX_PANELS - 1)
   })
 })
 

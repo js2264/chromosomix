@@ -157,15 +157,16 @@ describe('which way an unflipped lane grows', () => {
    *
    * A horizontal lane keeps the conventional reading of a track under a ruler —
    * up from a floor — above the map and below it alike, because that convention
-   * is universal and beats the picture's own symmetry. A vertical lane has no
-   * such convention, so the corner decides and it faces the matrix. Exactly one
-   * edge therefore turns, which is what it was when there were only two.
+   * is universal and beats the picture's own symmetry. A vertical lane is a
+   * horizontal one mirrored in the diagonal: the left stack is the top one
+   * turned over it, growing away from the map, and the right stack the bottom
+   * one, growing towards it — both leftward, so both edges beside the map turn.
    */
-  it('starts a lane turned round on the right edge and nowhere else', () => {
+  it('starts a lane turned round on the two edges beside the map, and not above or below it', () => {
     expect(laneStartsFlipped('right')).toBe(true)
-    for (const edge of ['top', 'bottom', 'left'] as const) {
-      expect(laneStartsFlipped(edge)).toBe(false)
-    }
+    expect(laneStartsFlipped('left')).toBe(true)
+    expect(laneStartsFlipped('top')).toBe(false)
+    expect(laneStartsFlipped('bottom')).toBe(false)
   })
 
   it('starts every horizontal lane growing up the page', () => {
@@ -178,14 +179,19 @@ describe('which way an unflipped lane grows', () => {
     }
   })
 
-  it('starts every vertical lane growing towards the map', () => {
+  it('starts every vertical lane growing leftward: away from the map on its left, towards it on its right', () => {
     for (const edge of ['left', 'right'] as const) {
       const frame = frameOf(edge)
       const flip = laneStartsFlipped(edge)
-      // Towards the map is `across` decreasing, whichever canvas direction that
-      // is: `across` runs outward by construction.
-      expect(valueAcross(frame, flip ? 0 : 1)).toBeLessThan(valueAcross(frame, flip ? 1 : 0))
+      // Canvas x, not lane across: the claim is about the picture.
+      const full = acrossToCanvas(frame, valueAcross(frame, flip ? 0 : 1))
+      const floor = acrossToCanvas(frame, valueAcross(frame, flip ? 1 : 0))
+      expect(full).toBeLessThan(floor)
     }
+    // …which on the left is *away* from the map: `across` runs outward by
+    // construction, so away is `across` increasing.
+    const left = frameOf('left')
+    expect(valueAcross(left, 0)).toBeGreaterThan(valueAcross(left, 1))
   })
 
   it('draws a full value up the page on both horizontal edges', () => {

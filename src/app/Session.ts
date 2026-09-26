@@ -50,6 +50,7 @@ import {
   ViewStore,
   differsOnlyInFocus,
   differsOnlyInPresentation,
+  differsOnlyInPresentationOrScore,
   cellsOf,
   cellsPatch,
   landingState,
@@ -155,6 +156,7 @@ import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
+import { offerLanding, type LaneSurface } from '../ui/laneCarry'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
@@ -631,32 +633,6 @@ export class Session {
    * is built here and the shell only lends it a slot (§18.1).
    */
   readonly drawerHost = el('div', { class: 'drawer-host' })
-  /**
-   * Where the synthetic tracks card sits, inside the Annotations column.
-   *
-   * A **marker**, never mounted, rather than a wrapper the card goes inside.
-   *
-   * The two are created at different moments — the annotation cards when a
-   * file's assembly is known, the workspace that owns the synthetic card after
-   * the *view* mounts, since it needs the framing — so the list has to be built
-   * before the card exists. The obvious answer is an empty `.panel-host` div
-   * that the card is later dropped into, and it was the answer here, and it was
-   * wrong: `.panel-host` is `display: contents`, so a card inside one inside
-   * `annotationsHost` is a *third* DOM level, and the stylesheet's
-   * `.panel-column-body > .panel-host > .card` rule stops at the second. The
-   * card lost `flex: 0 0 auto`, was squeezed to the height of its own title, and
-   * grew a scrollbar of its own — the exact bug that rule was written to fix,
-   * one level deeper, which is what a depth-counting selector always costs.
-   *
-   * So the list carries a marker and {@link renderAnnotations} substitutes the
-   * real card for it, or drops it. No wrapper, no third level, and the position
-   * of the card in the column stays where the call site put it.
-   */
-  private readonly syntheticSlot = el('div')
-  /** The analysis card, once the workspace exists. Substituted for the marker. */
-  private syntheticCard: HTMLElement | null = null
-  /** The annotation list as its call site wrote it, marker included. */
-  private annotationNodes: readonly HTMLElement[] = []
   readonly store = new ViewStore()
 
   /**
@@ -847,7 +823,33 @@ export class Session {
     onGrowWithMap: (direction, row) => {
       if (this.deckIsPossible) this.ensureDeck().growWithMap(direction, row)
     },
+    // A model or a track off the Annotations panel, the same way: the deck,
+    // with that one in the new cell (§16.9).
+    onGrowWithStructure: (direction, id) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithStructure(direction, id)
+    },
+    onGrowWithTrack: (direction, id) => {
+      if (this.deckIsPossible) this.ensureDeck().growWithTrack(direction, id)
+    },
   })
+  /**
+   * Those edges as places a lane carried off the map by its grip can land
+   * (`ui/laneCarry.ts`): the deck, with the lane moved into its new cell. Only
+   * while they are round a lone map — once there is a deck, its own edges are
+   * the ones on screen, and it answers for them.
+   */
+  private readonly edgeLanding: LaneSurface = {
+    landingAt: (x, y) => {
+      if (this.deck !== null || !this.deckIsPossible) return null
+      const direction = this.deckEdges.edgeAt(x, y)
+      if (direction === null) return null
+      return {
+        light: (on) => this.deckEdges.lightEdge(direction, on),
+        take: (carry) => this.ensureDeck().landLaneGrowing(direction, carry),
+      }
+    },
+  }
+  private readonly stopEdgeLanding = offerLanding(this.edgeLanding)
   /**
    * The genome this session is browsing, when there is no contact map.
    *
@@ -870,6 +872,12 @@ export class Session {
    * the same row, §25.6) reads as a fresh model too, and the cell draws it.
    */
   private knownStructures: Map<string, unknown> | null = null
+  /**
+   * The file that opened this browser was a **structure** alone, and its model
+   * is still to be put on screen — once the browser is mounted, which is the
+   * first moment a deck can frame it ({@link showStructureAlone}).
+   */
+  private structureAlone = false
   /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
   private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
@@ -1304,6 +1312,7 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.stopEdgeLanding()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
     // navigation back to it.
@@ -1598,6 +1607,20 @@ export class Session {
         keys: KEYS.autoscale,
         enabled: this.current?.panel !== undefined && this.annotations !== null,
         run: () => this.current?.panel?.autoscaleTracks(),
+      },
+      {
+        id: 'map-diagonal',
+        group: 'View',
+        title: 'Recentre on the diagonal',
+        // The first map's, which in a deck is every map's: their windows are
+        // locked together, so one of them going to the diagonal takes the rest.
+        hint:
+          'The view slid onto the nearest on-diagonal window, at the zoom it is at — the button ' +
+          'beside the turn. A focused button or tickbox keeps Space for itself.',
+        keys: KEYS.diagonal,
+        yieldsToControls: true,
+        enabled: this.current?.panel?.canCentreOnDiagonal === true,
+        run: () => this.current?.panel?.centreOnDiagonal(),
       },
       {
         // One command and one key for the file's own landing table, whichever
@@ -2466,6 +2489,7 @@ export class Session {
       // it, and the read that fills it is the one the annotation gate has just
       // paid for. A metacool never reaches it (see {@link paintSequences}).
       this.paintSequences()
+      this.syncFileCard()
       this.setGeneral([this.infoPanel.el])
       this.host.activity(this)
       // Destroyed, not merely dropped: a scan of the *previous* file may still
@@ -2528,7 +2552,9 @@ export class Session {
       // the *state* names: asked before it, the store was the previous file's,
       // so a file opened over one already measured was never measured, and one
       // opened over a measurement still running had its ticks written there.
-      void this.detectCircular(uri)
+      // And after the map's first block: fifty corner reads queued in the same
+      // reader as the picture's first read are fifty reads it waited behind.
+      void this.firstPicture().then(() => this.detectCircular(uri))
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -2850,6 +2876,11 @@ export class Session {
       this.tearDown()
       this.assembly = assembly
       this.assemblySource = source
+      // A model dropped on an empty window opens as its model (§25.3), not as
+      // the axis it happens to name: the browser it makes has nothing to draw.
+      // Not on a restore — a link names its own deck, and the reader's own
+      // arrangement of it is in this session's memory.
+      this.structureAlone = !insist && result.format === 'structure'
       // The trail for a genome, built here because `tearDown` has just dropped
       // the file's (§5.8): a browser is a view like any other and says where in
       // the assembly it is.
@@ -3010,16 +3041,14 @@ export class Session {
     const loader = new AnnotationLoader(store, client, assembly.contigs, (files) =>
       this.considerLengths(files),
     )
-    // A new store means the workspace that was watching the old one is stale.
-    // `SyntheticCard` subscribes to the store it was *built* with, while
-    // `adopt` writes through `host.store()` to whichever is current — so a
-    // workspace that outlived its store would go on filing results into a list
-    // nobody is looking at, which is exactly how the card came to be empty
-    // after a task had plainly run. Destroyed here rather than reconciled: a
-    // workspace is per-file, and so is a store.
+    // A new store means the workspace that was watching the old one is stale:
+    // it subscribes to the store it was *built* with, while `adopt` writes
+    // through `host.store()` to whichever is current — so a workspace that
+    // outlived its store would hold the numbers for rows the Tracks card no
+    // longer lists, and export nothing when one of them asked. Destroyed here
+    // rather than reconciled: a workspace is per-file, and so is a store.
     this.analysis?.destroy()
     this.analysis = null
-    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -3059,15 +3088,12 @@ export class Session {
     const wanted = published.length > 0 && shelfWasAsked(assembly.uri)
     this.setAnnotations([
       this.compareCard.el,
-      // Above the Tracks card, not below it: what a reader just computed is what
-      // they came back to the panel to find, and a list of eight loaded files
-      // between the Run button and its result is a scroll nobody should need.
-      this.syntheticSlot,
       new AnnotationCard({
         store,
         loader,
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
+        ...this.syntheticRowHooks(),
         ...(published.length === 0 || wanted
           ? {}
           : {
@@ -3572,6 +3598,39 @@ export class Session {
       remeasure: () => view.remeasure(),
       focusSearch: () => view.focusSearch(),
     })
+    this.showStructureAlone()
+  }
+
+  /**
+   * A structure that opened this session on its own: its model in a cell, and
+   * nothing else on screen (§25.3).
+   *
+   * The file names sequences — its beads are on them — so the session is a
+   * browser of that genome, and the browser had nothing to draw: a structure
+   * is a row of the Structures card and a cell of the deck, never a lane. A
+   * reader who dropped one bed3d on an empty window was shown an empty axis,
+   * and the model only where they thought to look for it; the watch on the
+   * store that opens a cell for every model that arrives had noted this one as
+   * already there, since it came in with the store, before any deck could.
+   *
+   * So once the browser is mounted — the first moment a deck can frame it —
+   * each model gets its cell, and the tracks give them the screen: **hidden,
+   * not closed** (§16.9). The heading above the deck still steers which
+   * stretch of the model is lit, and the deck's bar puts the tracks back. Left
+   * on screen where anything is already drawn on them, as a session this
+   * genome's memory restored may have.
+   */
+  private showStructureAlone(): void {
+    if (!this.structureAlone) return
+    this.structureAlone = false
+    const store = this.annotations?.store
+    if (store === undefined || !this.deckIsPossible) return
+    const models = store.entries.filter((entry) => entry.kind === 'structure')
+    if (models.length === 0) return
+    const deck = this.ensureDeck()
+    for (const model of models) deck.showStructure(model.id)
+    const drawn = store.entriesOn(LEAD_MAP).some((entry) => entry.kind !== 'structure' && entry.card !== 'overlay')
+    if (!drawn) deck.hideLead()
   }
 
   /**
@@ -4249,6 +4308,25 @@ export class Session {
   }
 
   /**
+   * What a synthetic row on the Tracks card asks of the analysis workspace
+   * (§18.5): its exports, and its task run again.
+   *
+   * Read through `this.analysis` at the moment of the press rather than bound
+   * to a workspace here, because the Tracks card is built with the file's
+   * store and the workspace a frame or two later, once a view has mounted —
+   * and a change of resolution replaces the workspace under the same card.
+   */
+  private syntheticRowHooks(): Pick<
+    ConstructorParameters<typeof AnnotationCard>[0],
+    'onExport' | 'onRecompute'
+  > {
+    return {
+      onExport: (entry, format) => void this.analysis?.exportEntry(entry, format),
+      onRecompute: (entry) => this.analysis?.recompute(entry),
+    }
+  }
+
+  /**
    * The Structures card (§25): every model, loaded or computed, with the way
    * into the deck's cell and the way out as a bed3d.
    *
@@ -4370,14 +4448,16 @@ export class Session {
         else this.closeCompare(which)
       },
       onToggleShown: (which) => {
-        if (which === 1) this.toggleMap()
+        if (which === 1) this.toggleLeadShown()
         else {
           this.compareHidden = !this.compareHidden
           this.syncCompareCard()
           this.remount()
         }
       },
-      isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
+      isShown: (which) =>
+        which === 1 ? this.parkedMap === null && this.deck?.leadShown !== false : !this.compareHidden,
+      primaryInDeck: () => this.leadCellInDeck(),
       onSwap: () => void this.swapCompare(),
       // Every map this session is holding is a row here (§16.9): the deck's
       // other cells after the square's one or two, each with the grip that
@@ -4449,12 +4529,63 @@ export class Session {
   /** Redraw the Contact maps card's eyes from what this session is showing. */
   private syncCompareCard(): void {
     this.compareCard?.sync()
+    // Every change that card follows — a map in or out of the deck, a map
+    // renamed, the first map hidden — is one the File card's line can name.
+    this.syncFileCard()
+  }
+
+  /**
+   * The General column's File card follows the star (§16.5): the starred
+   * companion's file, once its panel has opened it, and the session's own file
+   * while the star is on the first map or on no map — named under the heading
+   * whenever a deck is up, as the Aesthetics column's *Map* card is.
+   */
+  private syncFileCard(): void {
+    const panel = this.infoPanel
+    if (panel === null) return
+    const deck = this.deck
+    if (deck === null || deck.isEmpty || this.file === null) {
+      panel.setShown(null)
+      return
+    }
+    const companion = deck.starredPanel
+    if (companion !== null) {
+      panel.setShown({ kind: 'other', name: this.mapLabel(companion.uri), info: companion.openInfo })
+      return
+    }
+    panel.setShown({ kind: 'own', name: this.mapLabel(this.file.uri), starred: deck.starredMap === LEAD_MAP })
   }
 
   /** The map's eye, in the card that lists it: hide it, or bring it back. */
   private toggleMap(): void {
     if (this.canShowMap) this.showMap()
     else this.hideMap()
+  }
+
+  /**
+   * The first map's eye: its **cell's**, in a deck with other cells (§16.9),
+   * as every other map's eye is — and the 1D browser on its own, as it has
+   * always been.
+   *
+   * In a deck the old meaning was a trap. Putting the map down for the browser
+   * re-reads the state with no map to lead, and a deck of maps cannot stand
+   * beside a browser (§25 stage D): the companions went with it. Hiding the
+   * cell keeps every map where it is and the session on its file.
+   */
+  private toggleLeadShown(): void {
+    const deck = this.deck
+    if (deck !== null && (!deck.leadShown || this.leadCellInDeck())) {
+      if (deck.leadShown) deck.hideLead()
+      else deck.showLead()
+      return
+    }
+    this.toggleMap()
+  }
+
+  /** Whether the first map stands in a deck beside other cells, where its eye is its cell's. */
+  private leadCellInDeck(): boolean {
+    const deck = this.deck
+    return deck !== null && !deck.isEmpty && this.parkedMap === null && this.deckIsPossible
   }
 
   /** The Sequences card a browser steers its axis from. */
@@ -4601,12 +4732,12 @@ export class Session {
       this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
         this.compareCard.el,
-        this.syntheticSlot,
         new AnnotationCard({
           store: held.store,
           loader: held.loader,
           context: 'browser',
           onPickDropped: (event) => this.pickDropped(event),
+          ...this.syntheticRowHooks(),
         }).el,
         this.structureCardFor(held.store, held.loader),
       ])
@@ -4625,6 +4756,7 @@ export class Session {
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
     this.parkedMap = null
+    this.structureAlone = false
     // A genome browser replacing a map is a change of subject, whatever the two
     // files are called: nothing here is coming back at another bin size, so the
     // carry is spent before the drop rather than kept for an open that will
@@ -4750,16 +4882,14 @@ export class Session {
       })),
       (files) => this.considerLengths(files),
     )
-    // A new store means the workspace that was watching the old one is stale.
-    // `SyntheticCard` subscribes to the store it was *built* with, while
-    // `adopt` writes through `host.store()` to whichever is current — so a
-    // workspace that outlived its store would go on filing results into a list
-    // nobody is looking at, which is exactly how the card came to be empty
-    // after a task had plainly run. Destroyed here rather than reconciled: a
-    // workspace is per-file, and so is a store.
+    // A new store means the workspace that was watching the old one is stale:
+    // it subscribes to the store it was *built* with, while `adopt` writes
+    // through `host.store()` to whichever is current — so a workspace that
+    // outlived its store would hold the numbers for rows the Tracks card no
+    // longer lists, and export nothing when one of them asked. Destroyed here
+    // rather than reconciled: a workspace is per-file, and so is a store.
     this.analysis?.destroy()
     this.analysis = null
-    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -4831,11 +4961,10 @@ export class Session {
     // where a reader goes to *leave* the matrix, which is not a rare thing at
     // all — and a control that turns the whole picture into a genome browser
     // does not belong under eight track rows and a list of hand-drawn marks.
-    // The file's own columns (§8.12). It goes **under the tracks and over the
-    // marks**, which is the same ordering the column already has: the cards
-    // descend from what came out of a file to what a reader put there by hand,
-    // and a column of the open map's own tables is the last thing on that side
-    // of the line.
+    // The file's own columns (§8.12). It goes **under the marks**, folded, with
+    // the Bookmarks card after it: the column opens on what a reader loaded and
+    // drew, and a column of the open map's own tables is reached for on purpose
+    // rather than scanned past on the way to a track.
     this.metadataCard = new MetadataCard({
       store,
       index: () => this.annotations?.metadata ?? null,
@@ -4857,12 +4986,11 @@ export class Session {
     // file covers, which `overlapWarning` now says.
     this.setAnnotations([
       ...(this.compareCard === null ? [] : [this.compareCard.el]),
-      // Above the Tracks card: see the browser path for why.
-      this.syntheticSlot,
       this.trackCardFor({
         store,
         loader,
         onPickDropped: (event) => this.pickDropped(event),
+        ...this.syntheticRowHooks(),
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
@@ -4884,16 +5012,19 @@ export class Session {
             }),
       }),
       this.structureCardFor(store, loader),
-      this.metadataCard.el,
       this.manualCard.el,
-      // Under the marks, because the two are the same kind of note made at
-      // opposite ends of a gesture: a mark says *look here* on the picture you
-      // have, and a bookmark says *take me back* to a picture you had.
+      this.metadataCard.el,
+      // Last, folded: a mark says *look here* on the picture you have and a
+      // bookmark says *take me back* to a picture you had, and the second is
+      // the one a reader opens when they have somewhere to keep (§8.10).
       this.bookmarksCard.el,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
-    // the cards are mounted, so the restored rows land in a list that exists.
+    // the cards are mounted, so the restored rows land in a list that exists —
+    // seated now, and read once the map has drawn its first block, so the map
+    // does not share its first read with every track download (`holdUntil`).
+    loader.holdUntil(this.firstPicture())
     loader.restore(AnnotationStore.stored(scope))
     // The tracks the reader asked for, put on. After the cards are mounted and
     // after `restore`, for `restore`'s own reason: a row landing in a list that
@@ -5610,6 +5741,8 @@ export class Session {
     remember(key, MAP_NAMES_SCOPE, next)
     this.compareCard?.sync()
     this.deck?.renamed()
+    // The location rows name the maps too (§16.10: one name, everywhere).
+    this.trackCard?.renamed()
     // Written into the mounted panel rather than through {@link remount}: a
     // rename changes what the picture is *called* and nothing about what is in
     // it, and rebuilding the view would put a gated whole-genome scan (§7.3)
@@ -6063,6 +6196,8 @@ export class Session {
     if (!deck.isEmpty) return
     deck.destroy()
     this.deck = null
+    // Its models went with it, and their eyes on the Structures card go dark.
+    this.structureCard?.refresh()
     // The frame has gone with it, so the mounted view has to be put back on its
     // own — back inside the `+` edges, which is where it was before anybody
     // pressed one. Directly rather than through a re-render: the view is intact
@@ -6166,6 +6301,9 @@ export class Session {
        */
       onStarChange: () => {
         this.analysis?.refresh()
+        // The File card is the starred map's too, and this is also the call
+        // that says its file has opened (`MapPanel.prepareAnalysis`).
+        this.syncFileCard()
       },
       // The column's *Map* card is the starred map's (§16.5), so the star
       // moving, or the starred companion's card being built, changes the card
@@ -6173,6 +6311,14 @@ export class Session {
       onMapCardChange: () => {
         this.refreshAesthetics()
       },
+      // The Structures card's eyes say which models the deck draws, so they
+      // follow every change to that — a cell's × and a row dropped on a `+`
+      // among them, which the card's own eye does not see.
+      onStructuresChange: () => {
+        this.structureCard?.refresh()
+      },
+      // A tracks cell renamed: the location rows name it (§25.3).
+      onCellRenamed: () => this.trackCard?.renamed(),
       // A track dropped on an empty cell, loaded onto the tracks cell the deck
       // opened there: the same road a file aimed at a map's edge takes, with
       // the cell's own id as the map (§16.9).
@@ -6187,6 +6333,13 @@ export class Session {
       onMapHidden: (picked) => {
         this.holdHidden(picked)
         this.syncCompareCard()
+      },
+      // The session's own cell hidden or put back (§16.9): the eye on its row
+      // of the Contact maps card follows, and the deck's memory has changed
+      // under the durable record.
+      onLeadShownChange: () => {
+        this.syncCompareCard()
+        this.host.sessionChanged(this)
       },
       // The *3D structure* card is the starred cell's (§25.3), so the star
       // moving is the column's card changing under it — and the session is
@@ -6402,6 +6555,8 @@ export class Session {
               browser.showLocus(formatLocus(range))
               return true
             },
+            exportCanvas: (dpi) => browser.exportCanvas(dpi),
+            setDeckExport: (hook) => browser.setDeckExport(hook),
           }
         : null,
     )
@@ -7299,12 +7454,28 @@ export class Session {
     // more: it is arithmetic over cells already in memory, so rebuilding to
     // apply it would pay a worker round trip for nothing — and on a gated
     // whole-genome map it would put the scan back behind its button.
+    //
+    // **So is a score that reads the same cells.** `VC`, `ICE`, the baseline and
+    // the correlation are arithmetic over the block in memory exactly as the O/E
+    // is, and picking one rebuilt the view and read the whole block again — two
+    // seconds of a 4,096-bin square spent before the correlation could start, to
+    // fetch the numbers already on screen. Only a change of the column read, or
+    // of the balancing *in force*, is a new read — `balance=1` written away on a
+    // file balanced by default is the same one; the picker is pointed at the
+    // choice, which a link or the back button can make as well as the picker.
+    const scoreOnly =
+      this.mounted !== null &&
+      this.current?.panel !== undefined &&
+      differsOnlyInPresentationOrScore(this.mounted, state) &&
+      this.valueOf(this.mounted) === this.valueOf(state) &&
+      this.balanceOf(this.mounted) === this.balanceOf(state)
     if (
       this.mounted !== null &&
       this.current !== null &&
-      differsOnlyInPresentation(this.mounted, state)
+      (differsOnlyInPresentation(this.mounted, state) || scoreOnly)
     ) {
       this.current.applyScale?.(this.scaleOf(state))
+      if (scoreOnly) this.current.panel?.syncScoreChoice(this.scoreOf(state).id)
       this.rederive()
       // …and stand back on the saved place, if the view is at one. Turning a map
       // re-cuts it and therefore refits it — which the reader asked for, and which
@@ -8328,6 +8499,35 @@ export class Session {
     else this.navigate(null)
   }
 
+  /**
+   * What is held behind the next mounted view's first picture: a file's track
+   * reads and its circularity measurement (§8.6, §8.15).
+   */
+  private pictureWaiters: Array<() => void> = []
+
+  /**
+   * Settles once the next view mounted has drawn its first block — at once for
+   * a view with no map to draw — or after {@link MAP_FIRST_CAP_MS}, whichever
+   * comes first.
+   *
+   * The map is the picture the reader opened, and until it is drawn nothing
+   * else a file brings with it should be competing for the connection or the
+   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, and
+   * up to fifty corner reads measuring which sequences are circles, all used to
+   * start in the same moment as the map's first read.
+   */
+  private firstPicture(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let timer = 0
+      const done = (): void => {
+        window.clearTimeout(timer)
+        resolve()
+      }
+      timer = window.setTimeout(done, MAP_FIRST_CAP_MS)
+      this.pictureWaiters.push(done)
+    })
+  }
+
   private showContent(
     node: HTMLElement,
     view?: {
@@ -8345,6 +8545,15 @@ export class Session {
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
+    // What was held behind the first picture goes once this view has drawn
+    // one, or now for a view with nothing to draw. A screen that is not a view
+    // — a loading line, the picker — releases nothing; the cap does.
+    if (view !== undefined && this.pictureWaiters.length > 0) {
+      const waiting = this.pictureWaiters.splice(0)
+      void (view.panel?.firstData ?? Promise.resolve()).then(() => {
+        for (const done of waiting) done()
+      })
+    }
     // Whichever stop of the map/tracks cycle we are at, applied to the panel
     // that has just been built. Here rather than in the four views that own a
     // panel: they are handed a picture to draw, and which furniture goes round
@@ -8481,8 +8690,6 @@ export class Session {
       this.analysis = null
       this.setAnalysis([])
       this.drawerHost.replaceChildren()
-      this.syntheticCard = null
-      this.renderAnnotations()
       return
     }
     if (this.analysis === null) {
@@ -8537,8 +8744,6 @@ export class Session {
     // shell's to place, which is why the two are separate hosts.
     this.setAnalysis(analysis.hasTasks ? [analysis.panelEl] : [])
     this.drawerHost.replaceChildren(analysis.drawerEl)
-    this.syntheticCard = analysis.syntheticEl
-    this.renderAnnotations()
   }
 
   /** The callbacks `AnalysisWorkspace` reads the session through. */
@@ -8629,12 +8834,6 @@ export class Session {
       // A deck the reader has left with no map starred has no file for a task
       // to run against, and none is guessed for them (§18.1).
       blocked: () => (this.deck !== null && this.deck.starredMap === null ? NO_STAR_TASKS : null),
-      // The same list the Tracks card is given, and deliberately not
-      // `allTargets` below: that one leaves out a companion whose two tables
-      // have not been read, which is right for *running* against it and wrong
-      // for *drawing* on it.
-      maps: () =>
-        this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
       /**
        * Every map on screen that can be run against **right now**, lead first.
        *
@@ -8914,29 +9113,8 @@ export class Session {
   }
 
   private setAnnotations(nodes: readonly HTMLElement[]): void {
-    this.annotationNodes = nodes
-    this.renderAnnotations()
-  }
-
-  /**
-   * The list, with the analysis card put where its marker is.
-   *
-   * Dropped rather than left empty where there is no workspace yet — a card
-   * titled *Synthetic tracks* with nothing in it and nothing on the way is a box
-   * the reader has to work out the meaning of, and the workspace arrives a frame
-   * or two later on every file.
-   */
-  private renderAnnotations(): void {
-    const out: HTMLElement[] = []
-    for (const node of this.annotationNodes) {
-      if (node !== this.syntheticSlot) {
-        out.push(node)
-        continue
-      }
-      if (this.syntheticCard !== null) out.push(this.syntheticCard)
-    }
-    this.annotationsHost.replaceChildren(...out)
-    this.setAvailability('annotations', out.length > 0)
+    this.annotationsHost.replaceChildren(...nodes)
+    this.setAvailability('annotations', nodes.length > 0)
   }
 
   /**
@@ -9539,6 +9717,15 @@ interface LevelChoice {
 
 /** Why `bin × bin` is greyed out, once this tab could not hold it. */
 const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
+
+/**
+ * The longest a file's tracks wait for its map's first block (§8.6).
+ *
+ * Long enough for a region's first read on an ordinary line — three seconds
+ * for the demo's at 25 Mbit/s — and short enough that a map whose first
+ * picture is a minute's scan does not hold every track for that minute.
+ */
+const MAP_FIRST_CAP_MS = 4000
 
 /**
  * Which levels the view on screen can draw, or `null` for none (§7.3).

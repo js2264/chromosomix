@@ -52,6 +52,9 @@ import { grantFor } from '../ui/chooseFiles'
 import { logAction } from '../state/actions'
 import { fmt } from '../ui/dom'
 
+/** The least time between two download ticks written onto a row. */
+const PROGRESS_EVERY_MS = 250
+
 /**
  * What a file's *name* suggests it is.
  *
@@ -136,6 +139,37 @@ export class AnnotationLoader {
 
   /** Entries this loader has told the worker about, so it can say when they go. */
   private readonly held = new Set<string>()
+
+  /**
+   * What every read waits for before it starts, while there is something to
+   * wait for; see {@link holdUntil}.
+   */
+  private gate: Promise<void> | null = null
+
+  /**
+   * Seat rows at once, and start reading them once `until` settles (§8.6).
+   *
+   * A session opening a map with its tracks started every track download in
+   * the same moment as the map's first read, from the same host: the demo's
+   * twelve-megabyte FASTA and ten-megabyte gene model shared the connection
+   * with the blocks of the picture the reader had asked for, and the map came
+   * in when they had — on a 25 Mbit/s line, 6.7 s after the view mounted where
+   * alone it took 3.0 s, and then moved when the sequence lane landed beside
+   * it. So the session holds the reads behind the map's first block, capped
+   * so a slow map does not hold the tracks for ever. The rows are seated
+   * straight away — the Tracks card lists them, reading — and only the bytes
+   * wait. Rejection releases the hold as settling does.
+   */
+  holdUntil(until: Promise<unknown>): void {
+    const gate = until.then(
+      () => undefined,
+      () => undefined,
+    )
+    this.gate = gate
+    void gate.then(() => {
+      if (this.gate === gate) this.gate = null
+    })
+  }
 
   /**
    * Drop what the store no longer has.
@@ -587,10 +621,22 @@ export class AnnotationLoader {
     guessed: boolean,
   ): Promise<void> {
     try {
+      // Behind the map's first block, where the session has asked for that
+      // ({@link holdUntil}) — and a row removed while it waited is not read.
+      if (this.gate !== null) {
+        await this.gate
+        if (this.store.byId(id) === undefined) return
+      }
       // Noted before the request rather than after it: a row removed while its
       // own load is still in flight must still be released, and the reply may
       // never come.
       this.held.add(id)
+      // A quarter of a second between two ticks on the row. The worker reports
+      // a download every fifty milliseconds, and each one on the row is a write
+      // of every row to session storage and a rebuild of the Tracks card — for
+      // a twelve-megabyte FASTA and a ten-megabyte gene model at once, forty a
+      // second, on the thread the map is being panned on.
+      let ticked = 0
       const result = await this.client.request<'load'>(
         {
           kind: 'load',
@@ -601,6 +647,9 @@ export class AnnotationLoader {
         // Onto the row, so a thirty-megabyte index reads as a bar and not as
         // a row that says *reading…* for as long as it takes.
         (done, total) => {
+          const now = performance.now()
+          if (now - ticked < PROGRESS_EVERY_MS && done < total) return
+          ticked = now
           if (this.store.byId(id)?.status === 'loading') this.store.update(id, { progress: { done, total } })
         },
       )

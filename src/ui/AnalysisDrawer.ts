@@ -41,15 +41,15 @@
  * did not ask for.
  *
  * **A per-bin result is a lane, not a picture** (§18.5). A profile is therefore
- * not drawn here *when there is a lane for it*: it goes to the Synthetic tracks
- * card, where it inherits colour, rename, limits, autoscale, four edges, the
- * tooltip, the 1D browser and the vector figure by being the same object a
+ * not drawn here *when there is a lane for it*: it goes to the Tracks card,
+ * marked `*`, where it inherits colour, rename, limits, autoscale, four edges,
+ * the tooltip, the 1D browser and the vector figure by being the same object a
  * bigWig is. What this drawer shows for one is a sentence saying where it went,
  * because a drawer that appeared to produce nothing would be a bug report.
  *
  * **…and a picture when there is not.** A `.metacool` carries no annotations at
- * all (§8.5), so it has no Tracks card, no Synthetic tracks card and nowhere for
- * a lane to be a row — and there the sentence was a bug report of its own,
+ * all (§8.5), so it has nowhere for a profile's lane to be drawn and nowhere
+ * for it to be a row — and there the sentence was a bug report of its own,
  * pointing a reader at a card that is not on screen while the numbers went
  * nowhere. Coverage and marginals, diamond insulation and MAG purity are all
  * offered on a metagenome and all produce per-bin vectors, so on that file this
@@ -1470,8 +1470,8 @@ export class AnalysisDrawer {
     const sentence =
       where === 'lane'
         ? many
-          ? `${fmt.int(outputs.length)} tracks added to the Synthetic tracks card in the Annotations panel.`
-          : 'Added to the Synthetic tracks card in the Annotations panel.'
+          ? `${fmt.int(outputs.length)} tracks added to the Tracks card in the Annotations panel, marked *.`
+          : 'Added to the Tracks card in the Annotations panel, marked *.'
         : where === 'structure'
           ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
             'structure cell (add one from the deck’s bar if none is open).'
@@ -1678,8 +1678,8 @@ export class AnalysisDrawer {
    *
    * **Disabled with a reason, rather than absent.** A row of one button says
    * nothing about the second while a greyed one with a sentence in its tooltip
-   * says exactly when it applies — the argument `ui/SyntheticCard.ts` makes
-   * about its own bigWig button, and the same alternative to avoid: a button
+   * says exactly when it applies — the argument a synthetic row's own export
+   * buttons make (`ui/synthetic.ts`), and the same alternative to avoid: a button
    * wired to something that writes a command line the command then rejects,
    * which the reader finds out somewhere else, later, with the app closed.
    */

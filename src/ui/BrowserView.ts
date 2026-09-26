@@ -123,6 +123,7 @@ import {
   gripAcross,
   gripBox,
   groupRuns,
+  laneRect,
   snapTo,
   withinGrip,
   type LaneFrame,
@@ -186,12 +187,14 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
   captionStamp,
+  copyPicture,
   copyPngToClipboard,
   copyTextToClipboard,
   chooseSaveTarget,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
+  readPageBackground,
   scaleForDpi,
 } from './export'
 import { locusText, type PickHandlers } from './mapPick'
@@ -211,7 +214,8 @@ import {
   SELECTION_PAD,
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
+import { laneMenuFeature, openLaneMenu, readCanvasPalette, type DeckExport } from './MatrixPanel'
+import { endCarry, landingAt, startCarry, type LaneCarry, type LaneLanding } from './laneCarry'
 import {
   PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
@@ -560,7 +564,15 @@ export class BrowserView {
     | { mode: 'select'; x0: number; x: number }
     | { mode: 'column'; x0: number; from: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
-    | { mode: 'reorder'; entry: AnnotationEntry; over: number }
+    | {
+        mode: 'reorder'
+        entry: AnnotationEntry
+        over: number
+        /** In a tracks cell, the lane in the hand as the deck's other places see it. */
+        carry: LaneCarry | null
+        /** …and the place off this cell it would land on, if it is over one. */
+        landing: LaneLanding | null
+      }
     | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
     | null = null
@@ -633,6 +645,8 @@ export class BrowserView {
   private canvasWidth = 0
   private exportDpi = 300
   private exportFormat: BrowserExportFormat = 'pdf'
+  /** Where this view's export goes while it leads a deck; see {@link setDeckExport}. */
+  private deckExport: DeckExport | null = null
   private clickTimer: number | null = null
   private reportTimer: number | null = null
   /**
@@ -644,8 +658,8 @@ export class BrowserView {
    * snaps the view by a fraction of a pixel on every frame.
    */
   private reported: string | undefined
-  /** Another surface's pointer on this axis, or `null`; see {@link showLocusEcho}. */
-  private echo: { contig: string; bp: number } | null = null
+  /** Another surface's pointer on this axis — every place it names; see {@link showLocusEcho}. */
+  private echo: ReadonlyArray<{ contig: string; bp: number }> = []
   /** Whether the last thing published to the hover store was this view's. */
   private published = false
 
@@ -703,84 +717,91 @@ export class BrowserView {
     // magnification, which is this view's — hence the reciprocal.
     this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.zoomBy(1 / step.factor)))
 
+    const head = el(
+      'header',
+      { class: 'view-head' },
+      el(
+        'div',
+        { class: 'title-bar browser-bar' },
+        // No title. The file's name is on its tab, in the Genome card and in
+        // the crumb; a fourth copy of it took the width the locus box wants
+        // and said nothing the other three had not.
+        //
+        // The box and its hit list are one element, because the list is
+        // positioned against the box it belongs to.
+        //
+        // The badge rides in the box rather than beside it, and steps out of
+        // the way as soon as the caret arrives: `/` is worth knowing exactly
+        // once, and after that it is furniture over the placeholder. **Only on
+        // the session's own browser**, though: in a deck's tracks cell the
+        // lead map's box is the one `/` reaches, and a second badge was a
+        // promise printed in a box the key does not land in (§25.3).
+        el(
+          'div',
+          { class: 'browser-search search-box' },
+          this.locusInput,
+          ...(props.map === undefined ? [searchKey()] : []),
+          this.searchList,
+        ),
+        // …and no `go` in a cell either. Enter submits, the lead's bar above
+        // the grid carries the button, and the cell's bar has to stay on one
+        // line at three cells across with a side column open — every control
+        // past that puts an orphaned button on a line of its own under the
+        // box and pushes the cell's ruler out of line with the maps beside it.
+        ...(props.map === undefined ? [button('go', () => this.submit())] : []),
+        // No switch back to the map here: the eye in the Contact maps card is
+        // where a reader says which pictures are drawn, and a second control
+        // for it cost a slot in six title bars.
+        //
+        // **The map's own four steps, from the map's own pair.** It was two
+        // bare magnifiers at 1.8×, which is a factor nobody can predict or
+        // undo, beside a region bar carrying `⊖10× ⊖3× ⊕3× ⊕10×` on the same
+        // screen — two zoom vocabularies for one gesture over two pictures of
+        // one genome (§26.6). `ZOOM_STEPS` and `zoomButton` come from
+        // `RegionView` so there is one row of buttons and not a second copy of
+        // it, and the group does not break between them.
+        el('div', { class: 'zoom-steps' }, ...this.zooms),
+        // The three lane-height marks are **not** here. They were, and they
+        // were the same three the Tracks card draws a few inches to the right
+        // — six identical glyphs on one screen, which makes a reader check
+        // whether the pair do different things — while the map's own bar
+        // carries none of them. A second way to do a thing is not a
+        // convenience when the first way is a row already in front of the
+        // reader (§5.4), and dropping them is what makes room for the four
+        // steps above.
+      ),
+      el(
+        'p',
+        { class: 'summary' },
+        this.zoomNote,
+        el('span', {
+          class: 'hint',
+          // **A label, not the explanation.** The words *rounded up* have to
+          // be here — the lengths are each sequence's last feature rounded up
+          // to three figures (`contigsOf`), so a reader told the sequence ends
+          // at its last feature would read the blank margin past it as real
+          // sequence with nothing in it, and would take the right-hand edge
+          // for a coordinate this file supports, which is the one thing an
+          // inferred length cannot be. But the sentence that said all of that
+          // made this the longest line on the page and said it for the third
+          // time on one screen: the Genome card's `lengths` row carries the
+          // same label and the card's hint carries the way out of it. §5.8
+          // asks for a label wherever the genome is described, so this is the
+          // label.
+          text: lengthsAreExact(props.assembly) ? '' : ' · lengths inferred (rounded up)',
+        }),
+      ),
+    )
     this.el = el(
       'section',
       { class: 'view view-browser' },
-      el(
-        'header',
-        { class: 'view-head' },
-        el(
-          'div',
-          { class: 'title-bar browser-bar' },
-          // No title. The file's name is on its tab, in the Genome card and in
-          // the crumb; a fourth copy of it took the width the locus box wants
-          // and said nothing the other three had not.
-          //
-          // The box and its hit list are one element, because the list is
-          // positioned against the box it belongs to.
-          //
-          // The badge rides in the box rather than beside it, and steps out of
-          // the way as soon as the caret arrives: `/` is worth knowing exactly
-          // once, and after that it is furniture over the placeholder. **Only on
-          // the session's own browser**, though: in a deck's tracks cell the
-          // lead map's box is the one `/` reaches, and a second badge was a
-          // promise printed in a box the key does not land in (§25.3).
-          el(
-            'div',
-            { class: 'browser-search search-box' },
-            this.locusInput,
-            ...(props.map === undefined ? [searchKey()] : []),
-            this.searchList,
-          ),
-          // …and no `go` in a cell either. Enter submits, the lead's bar above
-          // the grid carries the button, and the cell's bar has to stay on one
-          // line at three cells across with a side column open — every control
-          // past that puts an orphaned button on a line of its own under the
-          // box and pushes the cell's ruler out of line with the maps beside it.
-          ...(props.map === undefined ? [button('go', () => this.submit())] : []),
-          // No switch back to the map here: the eye in the Contact maps card is
-          // where a reader says which pictures are drawn, and a second control
-          // for it cost a slot in six title bars.
-          //
-          // **The map's own four steps, from the map's own pair.** It was two
-          // bare magnifiers at 1.8×, which is a factor nobody can predict or
-          // undo, beside a region bar carrying `⊖10× ⊖3× ⊕3× ⊕10×` on the same
-          // screen — two zoom vocabularies for one gesture over two pictures of
-          // one genome (§26.6). `ZOOM_STEPS` and `zoomButton` come from
-          // `RegionView` so there is one row of buttons and not a second copy of
-          // it, and the group does not break between them.
-          el('div', { class: 'zoom-steps' }, ...this.zooms),
-          // The three lane-height marks are **not** here. They were, and they
-          // were the same three the Tracks card draws a few inches to the right
-          // — six identical glyphs on one screen, which makes a reader check
-          // whether the pair do different things — while the map's own bar
-          // carries none of them. A second way to do a thing is not a
-          // convenience when the first way is a row already in front of the
-          // reader (§5.4), and dropping them is what makes room for the four
-          // steps above.
-        ),
-        el(
-          'p',
-          { class: 'summary' },
-          this.zoomNote,
-          el('span', {
-            class: 'hint',
-            // **A label, not the explanation.** The words *rounded up* have to
-            // be here — the lengths are each sequence's last feature rounded up
-            // to three figures (`contigsOf`), so a reader told the sequence ends
-            // at its last feature would read the blank margin past it as real
-            // sequence with nothing in it, and would take the right-hand edge
-            // for a coordinate this file supports, which is the one thing an
-            // inferred length cannot be. But the sentence that said all of that
-            // made this the longest line on the page and said it for the third
-            // time on one screen: the Genome card's `lengths` row carries the
-            // same label and the card's hint carries the way out of it. §5.8
-            // asks for a label wherever the genome is described, so this is the
-            // label.
-            text: lengthsAreExact(props.assembly) ? '' : ' · lengths inferred (rounded up)',
-          }),
-        ),
-      ),
+      // **A tracks cell of the deck has no heading of its own** — no locus box,
+      // no zoom steps, no summary line — only the axis: the chromosome's bar
+      // and its ruler, drawn at the top of the picture. Where to look is the
+      // maps' question, answered by the locus box above the grid, and a second
+      // box and four more buttons in every tracks cell were a second way of
+      // asking it that moved one cell out of step with the maps it follows.
+      ...(props.map === undefined ? [head] : []),
       this.stage,
     )
 
@@ -867,6 +888,8 @@ export class BrowserView {
   destroy(): void {
     this.disposed = true
     this.publishHover(null)
+    // A lane still in the hand as its cell closes: the places it lit go out.
+    if (this.drag?.mode === 'reorder' && this.drag.carry !== null) endCarry()
     // A picking mode outlives nothing: the picture it was placing marks on is
     // going away. Ended here rather than left to be collected, because the card
     // that armed it is *not* going away — it lives in the shell — and it learns
@@ -1014,8 +1037,24 @@ export class BrowserView {
     void this.copy()
   }
 
+  /**
+   * Route this view's export to the deck it leads, or back to itself — the
+   * map's own hook (`MatrixPanel.setDeckExport`), for the browser as a lead
+   * (§25 stage D). With a model beside the tracks, the Export card and the
+   * keys are asked for the arrangement; with the tracks hidden and the model
+   * alone on screen (§16.9), for the one picture there is — never for the
+   * tracks the reader took off it.
+   */
+  setDeckExport(hook: DeckExport | null): void {
+    this.deckExport = hook
+  }
+
   private async copy(): Promise<void> {
     this.exportStatus.textContent = 'copying…'
+    if (this.deckExport !== null && (await this.deckExport.copy(this.exportDpi))) {
+      this.exportStatus.textContent = 'copied the deck'
+      return
+    }
     const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
     const height = this.heightOf(this.lanes)
     const now = new Date()
@@ -1114,12 +1153,17 @@ export class BrowserView {
    * The lane-echo shape the map draws for a pointer on another panel's track,
    * for the same reason: one guide, wherever "here" came from. `null` clears.
    */
-  showLocusEcho(locus: { contig: string; bp: number } | null): void {
+  showLocusEcho(
+    loci: ReadonlyArray<{ contig: string; bp: number }> | { contig: string; bp: number } | null,
+  ): void {
+    // One place or several: a track or a bead names one, a cell of a map two —
+    // the two ends of its contact, both of which the lanes beside that map mark.
+    const next = loci === null ? [] : 'contig' in loci ? [loci] : [...loci]
     const same =
-      (locus === null && this.echo === null) ||
-      (locus !== null && this.echo !== null && locus.contig === this.echo.contig && locus.bp === this.echo.bp)
+      next.length === this.echo.length &&
+      next.every((locus, at) => locus.contig === this.echo[at]?.contig && locus.bp === this.echo[at]?.bp)
     if (same) return
-    this.echo = locus
+    this.echo = next
     this.schedule()
   }
 
@@ -1522,6 +1566,9 @@ export class BrowserView {
     // `X:1-745,751` there would name whichever sequence the midpoint fell in
     // and read as though the view were on it.
     this.locusInput.value = locus ?? '*'
+    // On the view itself as well as in the box, since a tracks cell has no box
+    // (§25.3): where it is looking is still a fact of the page.
+    this.el.dataset.locus = locus ?? '*'
     this.syncZoom()
     if (report) {
       if (this.reportTimer !== null) clearTimeout(this.reportTimer)
@@ -1906,22 +1953,18 @@ export class BrowserView {
     }
     // Another surface's pointer, at the same coordinate on this axis: a bead
     // under the hand in the structure cell, a cell on a map of the deck (§25.4).
-    // The same guide, so a reader learns one mark for "here" everywhere.
-    const echo = this.echo
-    if (chrome && echo !== null) {
-      const unit = this.axis.locusToUnit(echo.contig, echo.bp)
-      if (unit !== null) {
+    // The same guide, so a reader learns one mark for "here" everywhere — and
+    // under the same preference, as the lanes beside a map draw theirs: a
+    // tracks cell under a map went on following the map's pointer with the
+    // crosshair turned off, which read as the toggle not reaching the tracks.
+    if (chrome && this.crosshair) {
+      for (const echo of this.echo) {
+        const unit = this.axis.locusToUnit(echo.contig, echo.bp)
+        if (unit === null) continue
         const px = this.gutter + this.scale.toPixel(unit)
         if (px >= this.gutter && px <= width) drawGuide(ctx, px, 0, height, CROSSHAIR_COLOR, this.dpr)
       }
     }
-    // Where the line is drawn, it *is* the pointer, and the drawn arrowhead
-    // beside it is a second, blunter mark for the same coordinate — sitting on
-    // top of the answer. So the hardware pointer goes exactly where the line
-    // comes, condition for condition: over the name column, where there is no
-    // coordinate and therefore no line, the arrowhead is still the only thing
-    // saying where the hand is (`ui/styles.css`).
-    this.canvas.classList.toggle('is-guided', guided)
     // The resize grip, where the pointer is on a lane's lower border. The
     // cursor is the drawn arrowhead everywhere here — it is what points at a
     // base pair — so an affordance that lives in the cursor would not exist.
@@ -2199,6 +2242,8 @@ export class BrowserView {
     lane: Lane,
     groups: Map<string, { min: number; max: number }>,
     palette: ReturnType<typeof readCanvasPalette>,
+    /** The track alone, its name and range left off — only for {@link laneImage}. */
+    bare = false,
   ): void {
     const { entry, frame } = lane
     // What to write on the lane, decided by the branch that drew it and written
@@ -2345,9 +2390,14 @@ export class BrowserView {
         }
       }
     } else if (entry.payload?.kind === 'features') {
+      // What the boxes are coloured by, whether the stranded ones point and how
+      // the rows are spent (§8.16). Resolved through `featureColouring` on both
+      // surfaces and in the settings card's key, so the picture, the legend and
+      // the lane's own name cannot disagree about what a colour means.
+      const features = featuresOf(entry.style, entry.kind)
       // Every per-kind number in one place, so this surface and the map lanes
       // cannot drift into two pictures of one file (§8.16, §8.17).
-      const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+      const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength, features.display)
       const layout = layoutFeatures(
         frame,
         this.axis,
@@ -2358,11 +2408,6 @@ export class BrowserView {
       )
       this.layouts.set(entry.id, { frame, layout })
       const set = entry.payload.data
-      // What the boxes are coloured by, and whether the stranded ones point
-      // (§8.16). Resolved through `featureColouring` on both surfaces and in the
-      // settings card's key, so the picture, the legend and the lane's own name
-      // cannot disagree about what a colour means.
-      const features = featuresOf(entry.style, entry.kind)
       // A value axis the reader fixed by hand, which a barChart lane reads and
       // every other feature kind ignores (§8.17) — moved by the factor of a
       // ceiling drag in progress, exactly as a signal lane's is. Mid-drag an
@@ -2379,10 +2424,13 @@ export class BrowserView {
         haloColour: palette.labelHaloColor,
         font: scaleFont(LANE_FONT),
         opacity: entry.style.opacity,
-        labels: this.text,
+        // A squished lane is names-free by definition: its rows are too thin
+        // to hold one under anything (§8.16).
+        labels: this.text && features.display !== 'squished',
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,
+        display: features.display,
         barScale: features.bars,
         ...(barLimits === undefined ? {} : { barLimits }),
         colourOf: ink.colourOf,
@@ -2418,9 +2466,42 @@ export class BrowserView {
       }
     }
     ctx.restore()
-    if (label !== null) {
+    if (label !== null && !bare) {
       this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
     }
+  }
+
+  /**
+   * One lane as it is drawn here, alone — *copy this* on the lane's
+   * right-click menu (§7.2).
+   *
+   * The lane's own strip of the axis, at the screen's density, by the pass the
+   * screen is drawn by with the name and range left off; the ruler, the name
+   * column, the hairline, the marks and the hover card are the view's and are
+   * drawn round the lanes rather than in them, so none of them is here either.
+   * A gene's name under its body is the track's own and stays, as the overlays
+   * switch has it on screen. The page's colour goes under the ink.
+   *
+   * `null` where no lane of that id is on screen.
+   */
+  laneImage(id: string): HTMLCanvasElement | null {
+    const lane = this.lanes.find((each) => each.entry.id === id)
+    if (lane === undefined) return null
+    const { frame } = lane
+    const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * this.dpr))
+    out.height = Math.max(1, Math.round(height * this.dpr))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, -x * this.dpr, -y * this.dpr)
+    this.paintLane(ctx, lane, this.groupRanges(), readCanvasPalette(this.canvas), true)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
   }
 
   /**
@@ -2980,6 +3061,12 @@ export class BrowserView {
    * that is what a PNG is.
    */
   private async save(): Promise<void> {
+    // With a deck up, the figure is the deck; `false` is a deck with nothing
+    // drawn beside these tracks, which is this view's own figure.
+    if (this.deckExport !== null && (await this.deckExport.save(this.exportFormat, this.exportDpi))) {
+      this.exportStatus.textContent = 'saved the deck'
+      return
+    }
     // The whole canvas, name column included: the column is part of the figure —
     // it is where the track names are — and a page cut to the data would lose
     // every label on the left of it.
@@ -3143,7 +3230,20 @@ export class BrowserView {
         canvas.setPointerCapture(event.pointerId)
         canvas.classList.add('grabbing')
         this.tooltip.classList.add('hidden')
-        this.drag = { mode: 'reorder', entry: held.entry, over: this.lanes.indexOf(held) }
+        // In a tracks cell of the deck the lane can also *leave*, as a lane
+        // beside a map can (§16.9): every map shows the rectangles round it and
+        // the deck its cells, and letting go on one moves the lane there. The
+        // whole lane, an overlay group with it, off this cell's one edge.
+        const carry: LaneCarry | null =
+          this.props.map === undefined
+            ? null
+            : {
+                ids: [held.entry.id, ...held.overlaid.map((entry) => entry.id)],
+                from: this.props.map,
+                edge: 'bottom',
+              }
+        this.drag = { mode: 'reorder', entry: held.entry, over: this.lanes.indexOf(held), carry, landing: null }
+        if (carry !== null) startCarry(carry)
         event.preventDefault()
         return
       }
@@ -3331,6 +3431,18 @@ export class BrowserView {
         })
         return
       }
+      // Off this cell, over a place another surface offers — a map's edge, a
+      // `+`, another cell: lit there, and not a reorder here. The source cell
+      // is no answer, so over it the lane goes on moving up and down the stack.
+      if (drag.carry !== null) {
+        const away = landingAt(event.clientX, event.clientY, drag.carry)
+        if (away !== drag.landing) {
+          drag.landing?.light(false)
+          away?.light(true)
+          drag.landing = away
+        }
+        if (away !== null) return
+      }
       // Reordering: the lane follows the pointer through the stack, one slot at
       // a time, so the list is always in the order it looks like it is in.
       //
@@ -3363,6 +3475,13 @@ export class BrowserView {
       this.drag = null
       canvas.classList.remove('grabbing')
       if (drag === null) return
+      // Let go over a place another surface offered: the lane goes there and
+      // leaves this cell (§16.9).
+      if (drag.mode === 'reorder' && drag.carry !== null) {
+        drag.landing?.light(false)
+        drag.landing?.take(drag.carry)
+        endCarry()
+      }
       const { x, y } = at(event)
       if (drag.mode === 'press') {
         // A press that did not travel, while a mode is on, is the mark it was
@@ -3507,14 +3626,27 @@ export class BrowserView {
     }
 
     const onMenu = (event: MouseEvent): void => {
-      const { y } = at(event)
+      const { x, y } = at(event)
       const hit = this.laneAt(y)
       if (hit === null) return
       event.preventDefault()
+      // The feature under the pointer, if there is one, with what this surface
+      // can do with it: open its card, and frame it on the one axis it has.
+      const found = this.featureAtPoint(x, y)
+      const feature =
+        found === null
+          ? null
+          : laneMenuFeature(found.set, found.index, {
+              open: () => this.openFeatureCard(found),
+              zoom: () => this.frameFeature(found.set, found.index),
+            })
       // No edge: this surface has no map for a lane to be beside, so there is
       // no location to offer and every lane reads the way a horizontal track
       // under a ruler does.
-      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null)
+      const id = hit.lane.entry.id
+      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null, undefined, feature, () =>
+        copyPicture('track', this.laneImage(id)),
+      )
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -3523,6 +3655,11 @@ export class BrowserView {
     // treating it as a release fires the pending click — a navigation nobody
     // asked for — or commits a half-drawn zoom selection.
     const onCancel = (): void => {
+      // A lane in the air goes nowhere: the places it lit go out.
+      if (this.drag?.mode === 'reorder' && this.drag.carry !== null) {
+        this.drag.landing?.light(false)
+        endCarry()
+      }
       this.drag = null
       this.scaling = null
       canvas.classList.remove('grabbing')
@@ -3703,32 +3840,41 @@ export class BrowserView {
         if (lane !== null && !lane.onBorder) revealTrack(lane.lane.entry.id)
         return
       }
-      const { set, index, source } = hit
-      const contig = set.contigs[set.contig[index]]
-      const start = set.start[index]
-      const end = set.end[index]
       // The card, not the zoom. A gene that has been clicked is already on
       // screen, so "go there" answers a question the reader did not have; what
       // they want is the systematic name, the biotype and the exons, in
       // something that stays open long enough to be read and copied out of.
       // Zooming is still one press away, inside it.
-      this.featureDialog?.close()
-      this.featureDialog = openFeatureDialog({
-        set,
-        index,
-        source,
-        onGoTo: () => {
-          // The same margin a search hit gets, from the same function: finding a
-          // gene by name and framing the gene you clicked are two gestures for
-          // one intention, and the picture must not shift between them.
-          const span = paddedSpan(start, end)
-          this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
-        },
-        onClose: () => {
-          this.featureDialog = null
-        },
-      })
+      this.openFeatureCard(hit)
     }, DOUBLE_CLICK_MS)
+  }
+
+  /** A feature's card: what a click on it opens, and the lane menu's *About it*. */
+  private openFeatureCard(hit: { set: FeatureSet; index: number; source: string }): void {
+    const { set, index, source } = hit
+    this.featureDialog?.close()
+    this.featureDialog = openFeatureDialog({
+      set,
+      index,
+      source,
+      onGoTo: () => this.frameFeature(set, index),
+      onClose: () => {
+        this.featureDialog = null
+      },
+    })
+  }
+
+  /**
+   * Frame a feature — the card's *zoom to it*, and the lane menu's.
+   *
+   * The same margin a search hit gets, from the same function: finding a gene
+   * by name and framing the gene you clicked are two gestures for one
+   * intention, and the picture must not shift between them.
+   */
+  private frameFeature(set: FeatureSet, index: number): void {
+    const contig = set.contigs[set.contig[index]]
+    const span = paddedSpan(set.start[index], set.end[index])
+    this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
   }
 
   /**

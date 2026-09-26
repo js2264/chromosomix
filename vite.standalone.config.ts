@@ -201,6 +201,12 @@ export default defineConfig({
         find: './spawn',
         replacement: fileURLToPath(new URL('./src/worker/spawn.standalone.ts', import.meta.url)),
       },
+      // …and the correlation's helpers, started from inside the analysis worker
+      // (`analysis/worker/spawnGram.ts`), for the same reason.
+      {
+        find: /^(.*)\/spawnGram$/,
+        replacement: fileURLToPath(new URL('./src/analysis/worker/spawnGram.standalone.ts', import.meta.url)),
+      },
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },

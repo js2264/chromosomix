@@ -42,11 +42,12 @@ export interface DeckCell {
   /** The picture at an export dpi, or `null` where there is nothing to draw. */
   exportCanvas(dpi: number, now: Date): HTMLCanvasElement | null
   /**
-   * Another surface's pointer, as a mark at that place (§25.4), or `null` to
-   * clear it. Optional: a cell that subscribes to the hover store itself, as
-   * the structure cell does, has no use for the deck's relay.
+   * Another surface's pointer, as a mark at each place it names (§25.4) — one
+   * for a track or a bead, **two** for a cell of a map, whose contact is a
+   * pair — or `null` to clear. Optional: a cell that subscribes to the hover
+   * store itself, as the structure cell does, has no use for the deck's relay.
    */
-  showLocusEcho?(locus: { contig: string; bp: number } | null): void
+  showLocusEcho?(loci: ReadonlyArray<{ contig: string; bp: number }> | null): void
   /**
    * Draw this structure row, of the several the session may hold (§25). Only
    * a structure cell answers; the deck asks the one it has.

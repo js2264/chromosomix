@@ -514,8 +514,7 @@ export function expectedModel(
   runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
 ): ExpectedModel {
   const { nrows, ncols, values } = block
-  const rowLabel = labelsByIndex(runs.rows, nrows)
-  const colLabel = labelsByIndex(runs.cols, ncols)
+  const { rowIds, colIds, colSpans } = sequenceIds(runs, nrows, ncols)
   const rowStart = block.rowExtent[0]
   const colStart = block.colExtent[0]
 
@@ -528,21 +527,36 @@ export function expectedModel(
 
   for (let r = 0; r < nrows; r++) {
     const row = r * ncols
-    const rowBin = rowStart + r
-    const mine = rowLabel[r]
-    for (let c = 0; c < ncols; c++) {
-      const value = values[row + c]
-      if (!Number.isFinite(value)) continue
-      // An axis with no runs at all — a plain cooler read as one span — is one
-      // sequence as far as this is concerned, which is what `null === null`
-      // gives without a branch of its own.
-      if (mine === colLabel[c]) {
-        const d = Math.abs(rowBin - (colStart + c)) - base
+    // The column this row's own bin is at, where the separation is zero.
+    const diagonal = rowStart + r - colStart
+    const mine = rowIds[r]
+    for (let s = 0; s + 1 < colSpans.length; s++) {
+      const c0 = colSpans[s]
+      const c1 = colSpans[s + 1]
+      if (colIds[c0] !== mine) {
+        for (let c = c0; c < c1; c++) {
+          const value = values[row + c]
+          if (!Number.isFinite(value)) continue
+          transSum += value
+          transCount++
+        }
+        continue
+      }
+      // Either side of the diagonal, so the separation is a subtraction.
+      const split = Math.min(c1, Math.max(c0, diagonal))
+      for (let c = c0; c < split; c++) {
+        const value = values[row + c]
+        if (!Number.isFinite(value)) continue
+        const d = diagonal - c - base
         sums[d] += value
         counts[d]++
-      } else {
-        transSum += value
-        transCount++
+      }
+      for (let c = split; c < c1; c++) {
+        const value = values[row + c]
+        if (!Number.isFinite(value)) continue
+        const d = c - diagonal - base
+        sums[d] += value
+        counts[d]++
       }
     }
   }
@@ -641,41 +655,93 @@ export function observedOverExpected(
   block: BlockValues,
   runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
   model: ExpectedModel = expectedModel(block, runs),
+  /** Keep a zero ratio as zero — for the correlation only ({@link Derivation.keepZeros}). */
+  keepZeros = false,
 ): Float32Array {
   const { nrows, ncols, values } = block
-  const rowLabel = labelsByIndex(runs.rows, nrows)
-  const colLabel = labelsByIndex(runs.cols, ncols)
+  const { rowIds, colIds, colSpans } = sequenceIds(runs, nrows, ncols)
   const rowStart = block.rowExtent[0]
   const colStart = block.colExtent[0]
   const out = new Float32Array(nrows * ncols)
+  // What each separation is divided by, `NaN` where there is nothing to divide
+  // by — no mean measured there, or one that is not positive. A value divided by
+  // `NaN` is `NaN`, so the cell needs no test of its own for either, and none
+  // for its own absence: `NaN` and the infinities stay what they are divided.
+  const cis = new Float64Array(model.cis.length)
+  for (let d = 0; d < cis.length; d++) cis[d] = model.cis[d] > 0 ? model.cis[d] : Number.NaN
+  const trans = model.trans > 0 ? model.trans : Number.NaN
+  const base = model.base
 
   for (let r = 0; r < nrows; r++) {
     const row = r * ncols
-    const rowBin = rowStart + r
-    const mine = rowLabel[r]
-    for (let c = 0; c < ncols; c++) {
-      const value = values[row + c]
-      if (!Number.isFinite(value)) {
-        out[row + c] = Number.NaN
+    const diagonal = rowStart + r - colStart
+    const mine = rowIds[r]
+    for (let s = 0; s + 1 < colSpans.length; s++) {
+      const c0 = colSpans[s]
+      const c1 = colSpans[s + 1]
+      if (colIds[c0] !== mine) {
+        for (let c = c0; c < c1; c++) out[row + c] = paper(values[row + c] / trans, keepZeros)
         continue
       }
-      let expected: number
-      if (mine === colLabel[c]) {
-        const d = Math.abs(rowBin - (colStart + c)) - model.base
-        expected = d >= 0 && d < model.cis.length ? model.cis[d] : Number.NaN
-      } else {
-        expected = model.trans
-      }
-      const ratio = expected > 0 ? value / expected : Number.NaN
-      // Not `> 0`: an extra `/pixels` column may legitimately hold negative
-      // numbers, and blanking those would be this rule deciding what a file is
-      // allowed to contain. Exactly the two ends go — zero (and `-0`, which
-      // `!== 0` is false for) and either infinity — with `isFinite` carrying the
-      // `NaN` case above through unchanged.
-      out[row + c] = ratio !== 0 && Number.isFinite(ratio) ? ratio : Number.NaN
+      // A separation outside the curve reads `undefined`, which divides to `NaN`
+      // as a missing mean does.
+      const split = Math.min(c1, Math.max(c0, diagonal))
+      for (let c = c0; c < split; c++) out[row + c] = paper(values[row + c] / cis[diagonal - c - base], keepZeros)
+      for (let c = split; c < c1; c++) out[row + c] = paper(values[row + c] / cis[c - diagonal - base], keepZeros)
     }
   }
   return out
+}
+
+/**
+ * A ratio as the map draws it: itself, or paper at either end.
+ *
+ * Not `> 0`: an extra `/pixels` column may legitimately hold negative numbers,
+ * and blanking those would be this rule deciding what a file is allowed to
+ * contain. Exactly the two ends go — zero (and `-0`, which `!== 0` is false
+ * for) and either infinity — with `isFinite` carrying a `NaN` through
+ * unchanged. The zero stays where the ratio is for the correlation
+ * ({@link Derivation.keepZeros}).
+ */
+function paper(ratio: number, keepZeros: boolean): number {
+  return (keepZeros || ratio !== 0) && Number.isFinite(ratio) ? ratio : Number.NaN
+}
+
+/**
+ * The sequence of every row and column as a number both axes share, and where
+ * the columns change sequence.
+ *
+ * Numbers rather than {@link labelsByIndex}'s names because the O/E asks the
+ * question of every cell — sixteen million at the cell cap, twice — and the
+ * spans because it need not: within a span of columns the answer is the same.
+ * An axis with no runs at all — a plain cooler read as one span — is sequence
+ * `0` on both sides, so it is one sequence as far as the O/E is concerned.
+ */
+function sequenceIds(
+  runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
+  nrows: number,
+  ncols: number,
+): { rowIds: Int32Array; colIds: Int32Array; colSpans: Int32Array } {
+  const ids = new Map<string, number>()
+  const fill = (axis: readonly AxisRun[], length: number): Int32Array => {
+    const out = new Int32Array(length)
+    for (const run of axis) {
+      let id = ids.get(run.label)
+      if (id === undefined) {
+        id = ids.size + 1
+        ids.set(run.label, id)
+      }
+      const end = Math.min(run.end, length)
+      for (let i = Math.max(0, run.start); i < end; i++) out[i] = id
+    }
+    return out
+  }
+  const rowIds = fill(runs.rows, nrows)
+  const colIds = fill(runs.cols, ncols)
+  const spans = [0]
+  for (let c = 1; c < ncols; c++) if (colIds[c] !== colIds[c - 1]) spans.push(c)
+  if (ncols > 0) spans.push(ncols)
+  return { rowIds, colIds, colSpans: Int32Array.from(spans) }
 }
 
 // ---------------------------------------------------------------------------
@@ -687,6 +753,19 @@ export interface Derivation {
   normalise?: Normalisation
   /** Divide by what the genomic distance predicts. */
   expected?: boolean
+  /**
+   * Keep a cell where nothing was observed as the ratio it is — zero — rather
+   * than as paper (§7.5).
+   *
+   * For the map's correlation, which is the one reader of the ratio that is not
+   * a colour ramp. Paper is right for the eye and wrong for the statistic: an
+   * empty pixel is an observation of no contacts, and the compartment call
+   * correlates it as one (§18.8, as cooltools does). Blanked, every empty pixel
+   * left the correlation — a different matrix from the one the task solves,
+   * over the cells each pair happened to share — and on a sparse map made every
+   * pair's arithmetic an exception to correct for.
+   */
+  keepZeros?: boolean
   /**
    * Show what that division would be *by*, instead of doing it.
    *
@@ -843,6 +922,7 @@ function ratioOf(
   numerator: Float32Array,
   denominator: Float32Array | null,
   length: number,
+  keepZeros: boolean,
 ): Float32Array {
   const out = new Float32Array(length)
   for (let i = 0; i < length; i++) {
@@ -853,7 +933,7 @@ function ratioOf(
       continue
     }
     const ratio = d > 0 ? n / d : Number.NaN
-    out[i] = ratio !== 0 && Number.isFinite(ratio) ? ratio : Number.NaN
+    out[i] = (keepZeros || ratio !== 0) && Number.isFinite(ratio) ? ratio : Number.NaN
   }
   return out
 }
@@ -1017,10 +1097,11 @@ export function deriveBlock(
         smoothing === null ? stepped.values : smoothed.values,
         smoothing === null ? model : smoothed.over,
         block.nrows * block.ncols,
+        derivation.keepZeros === true,
       )
     } else if (smoothing === null) {
       smoothed = despeckle(values)
-      values = observedOverExpected(stepped, runs)
+      values = observedOverExpected(stepped, runs, undefined, derivation.keepZeros === true)
     } else {
       // **And the baseline is averaged over the same windows as the map.**
       // Dividing a smoothed map by an unsmoothed curve is a different operation
@@ -1032,7 +1113,7 @@ export function deriveBlock(
       // cancels, and the mean sits back at 1 where an O/E belongs.
       const model = expectedModel(stepped, runs)
       smoothed = despeckle(values, expectedValues(stepped, runs, model))
-      values = ratioOf(smoothed.values, smoothed.over, block.nrows * block.ncols)
+      values = ratioOf(smoothed.values, smoothed.over, block.nrows * block.ncols, derivation.keepZeros === true)
     }
     parts.push(arms === undefined ? 'O/E' : 'O/E along the arms')
   } else {
@@ -1072,6 +1153,27 @@ export function deriveBlock(
     scope,
     ...(smoothed.pending === undefined ? {} : { pending: smoothed.pending }),
   }
+}
+
+/**
+ * A field derived with {@link Derivation.keepZeros}, as the same derivation
+ * without it would have drawn it: every zero of the ratio made paper.
+ *
+ * That is the whole of the flag's effect, and only where the derivation divides
+ * — so the map's correlation derives its block once, sends it, and draws this
+ * under the veil, rather than deriving the same block twice (`ui/MatrixPanel.ts`).
+ * Elsewhere a zero is a count and is left alone, and the array is returned as it
+ * came.
+ */
+export function paperZeros(values: Float32Array, derivation: Derivation): Float32Array {
+  if (derivation.expected !== true || derivation.baseline === true) return values
+  const out = new Float32Array(values.length)
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i]
+    // `-0` too, which `=== 0` is true for, exactly as the division's own test.
+    out[i] = value === 0 ? Number.NaN : value
+  }
+  return out
 }
 
 /**

@@ -50,10 +50,13 @@ export const MAX_CORRELATION_BINS = 8192
  *
  * Compartments are called at 250 kb on a mammalian genome, which is under a
  * thousand bins for its longest chromosome; 100 kb — about two thousand — is
- * the fine end of what the literature uses, and takes a minute here. The
- * correlation grows as the cube of the bin count, so 4,600 bins is six
- * minutes with the CPU meter reading idle, which reads as a hang. The gate
- * above still decides what runs; this only decides what is said beside Run.
+ * the fine end of what the literature uses, and correlates in under half a
+ * second here. The correlation grows as the cube of the bin count, so the 4,642
+ * bins of *E. coli* at 1 kb are four seconds on one core and the gate's 8,192
+ * are twenty — the matrix product and the cores (`pearsonThreads.ts`) have made
+ * a finer run a wait rather than the six minutes it was, and not a sensible one.
+ * The gate above still decides what runs; this only decides what is said beside
+ * Run.
  */
 export const COMFORTABLE_CORRELATION_BINS = 2000
 
@@ -406,7 +409,8 @@ function tooFineNote(
   return (
     `${bins.toLocaleString()} bins ${unit} at ${fmtBp(context.binsize)} is far finer than ` +
     'compartments need — 250 kb is the usual bin on a mammalian genome, and past about ' +
-    `${COMFORTABLE_CORRELATION_BINS.toLocaleString()} bins the correlation takes minutes. ${advice} `
+    `${COMFORTABLE_CORRELATION_BINS.toLocaleString()} bins the correlation's wait grows as the cube ` +
+    `of the bins. ${advice} `
   )
 }
 
@@ -445,7 +449,7 @@ function estimateCis(
   const bytes = widest * widest * 8
   const tooFine = cooltools ? '' : tooFineNote(context, widest, widestContig?.length ?? 0, 'a sequence')
   return {
-    // A run that will take minutes is coloured as a scan is, whatever its
+    // A run finer than it should be is coloured as a scan is, whatever its
     // request count: the colour is the one warning a reader sees before Run.
     class: usable.length > 1 || tooFine !== '' ? 'scan' : 'bounded',
     requests: usable.length * (balance ? 5 : 4),
@@ -490,8 +494,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // **The correlation's cost is the correlation's.** cooltools' road skips it and
   // pays for the eigenvectors alone, each a few hundred passes over the square:
   // eight seconds for three of them over the 4,642 bins of *E. coli* at 1 kb,
-  // where the correlation takes minutes. So the warning about a resolution too
-  // fine, which is a warning about minutes, is the correlation's to give.
+  // where the correlation adds its own cube. So the warning about a resolution
+  // too fine, which is a warning about that cube, is the correlation's to give.
   // Absent is the default, which is cooltools'.
   const cooltools = params.method !== 'correlation'
   // Cis-only is a different shape of run, not a narrower one — see `estimateCis`

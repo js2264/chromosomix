@@ -156,6 +156,59 @@ describe('the file card', () => {
   })
 })
 
+/**
+ * The File card is the starred map's (§16.5). A deck is several files, and a
+ * card headed *File* that went on describing the first after the star had moved
+ * was a card about a map the reader had said they were not looking at.
+ */
+describe('the file card in a deck', () => {
+  it('describes the starred map’s file, and names that map with its star', () => {
+    const view = panel(openResult({ uri: 'micro-c.cool' }))
+    view.setShown({ kind: 'other', name: 'Hi-C (hic)', info: openResult({ uri: 'hic.hic', binsize: 5000 }) })
+    expect(table(view)['uri']).toBe('hic.hic')
+    expect(table(view)['bin size']).toBe('5 kb')
+    const line = view.el.querySelector('.file-host .file-card-for')
+    expect(line?.textContent).toBe('Hi-C (hic)')
+    expect(line?.querySelector('.map-card-star')?.classList.contains('is-on')).toBe(true)
+  })
+
+  it('goes back to the session’s own file when the star does', () => {
+    const view = panel(openResult({ uri: 'micro-c.cool' }))
+    view.setShown({ kind: 'other', name: 'Hi-C (hic)', info: openResult({ uri: 'hic.hic' }) })
+    view.setShown({ kind: 'own', name: 'micro-C (cool)', starred: true })
+    expect(table(view)['uri']).toBe('micro-c.cool')
+    expect(view.el.querySelector('.file-card-for')?.textContent).toBe('micro-C (cool)')
+    // With no star at all it is still the session's file, and the line says so
+    // without a lit star.
+    view.setShown({ kind: 'own', name: 'micro-C (cool)', starred: false })
+    expect(view.el.querySelector('.file-card-for .map-card-star')?.classList.contains('is-on')).toBe(false)
+  })
+
+  it('says so while the starred map’s file has not opened yet, rather than showing another', () => {
+    const view = panel(openResult({ uri: 'micro-c.cool' }))
+    view.setShown({ kind: 'other', name: 'Hi-C (hic)', info: null })
+    // No table at all: the first map's facts under the starred map's name
+    // would be the one wrong answer.
+    expect(all(view.el, '.file-host .kv')).toHaveLength(0)
+    expect(view.el.querySelector('.file-host .clip-note')?.textContent).toContain('once it has opened')
+  })
+
+  it('names nothing with no deck, where one map needs no name', () => {
+    const view = panel(openResult())
+    view.setShown(null)
+    expect(view.el.querySelector('.file-card-for')).toBeNull()
+  })
+
+  it('keeps the first map’s two triangles off the card while a companion is starred', () => {
+    const view = panel(openResult({ uri: 'micro-c.cool' }), () => {})
+    view.setCompare(openResult({ uri: 'other.cool' }))
+    view.setShown({ kind: 'other', name: 'Hi-C (hic)', info: openResult({ uri: 'hic.hic' }) })
+    expect(textsOf(view.el, '.file-host .file-name')).toEqual(['File'])
+    view.setShown({ kind: 'own', name: 'micro-C (cool)', starred: true })
+    expect(textsOf(view.el, '.file-host .file-name')).toEqual(['File 1', 'File 2'])
+  })
+})
+
 describe('the binning QC statistic', () => {
   it('is one number, and is not a door', () => {
     const view = panel(

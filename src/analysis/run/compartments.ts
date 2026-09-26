@@ -37,6 +37,7 @@ import {
   COOLTOOLS_CLIP_PERCENTILE,
   cisSeparation,
   compartmentSegments,
+  contactShares,
   cooltoolsMatrix,
   correlationMatrix,
   observedOverExpected,
@@ -558,6 +559,15 @@ async function runSquare(
     return null
   }
 
+  // How much of the contacts each accounts for (`contactShares`): under
+  // cooltools' method the eigenvalue squared over the sum of squares, as it
+  // always was, and under the correlation the same measure of the same map —
+  // which a correlation matrix's own eigenvalues are not. Before the loop below,
+  // which scales cooltools' vectors in place.
+  const contacts = cooltools
+    ? pairs.map(({ value }) => (value * value) / whole)
+    : contactShares(oe, index.length, pairs.map((pair) => pair.vector))
+
   const signal = phasingSignal(job, selection, index)
   let phased: Phasing | null = null
 
@@ -591,7 +601,8 @@ async function runSquare(
       sequence: label,
       component: `E${component + 1}`,
       eigenvalue: value,
-      explained: cooltools ? (value * value) / whole : value / whole,
+      ...(cooltools ? {} : { explained: value / whole }),
+      contacts: contacts[component],
       r,
     })
 
@@ -803,21 +814,30 @@ export const runCompartments: TaskRunner = async (job) => {
       { key: 'sequence', label: 'sequence', kind: 'text' },
       { key: 'component', label: 'component', kind: 'text', hint: 'By eigenvalue, largest first.' },
       { key: 'eigenvalue', label: 'eigenvalue', kind: 'number', digits: 3 },
-      method === 'cooltools'
-        ? {
-            key: 'explained',
-            label: 'share',
-            kind: 'number',
-            digits: 3,
-            hint: 'Share of the decomposed matrix: its eigenvalue squared over the sum of its cells squared.',
-          }
-        : {
-            key: 'explained',
-            label: 'variance',
-            kind: 'number',
-            digits: 3,
-            hint: 'Share of the correlation matrix’s variance: its eigenvalue over its rows.',
-          },
+      // The correlation matrix's own share, which is of how alike the rows are
+      // and not of the map: under cooltools' method the matrix decomposed *is*
+      // the map's departure from expected, and the column after this one says it.
+      ...(method === 'cooltools'
+        ? []
+        : [
+            {
+              key: 'explained',
+              label: 'variance',
+              kind: 'number' as const,
+              digits: 3,
+              hint: 'Share of the correlation matrix’s variance — how alike the rows are, not how much of the map: its eigenvalue over its rows.',
+            },
+          ]),
+      {
+        key: 'contacts',
+        label: 'of contacts',
+        kind: 'number',
+        digits: 3,
+        hint:
+          'How much of the contacts this component accounts for: the share of the map’s departure from ' +
+          'expected — observed/expected, clipped, less one — that its checkerboard carries. The same ' +
+          'measure under either method, and the components’ shares add up.',
+      },
       {
         key: 'r',
         label: 'r with phasing',

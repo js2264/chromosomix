@@ -814,15 +814,39 @@ p {
    because under them it was below the fold: a reader who ticked two tracks at
    the top of a list of seven saw nothing appear, and read the ticks as
    highlighting rather than as a selection with a bar. */
+/* The ticked rows' settings, as one (§8.1): a line with the count and what
+   can be done to them, then a row's settings body in the same shapes. Tinted
+   and dashed, because it is not a track — it is the tracks ticked below it. */
 .ann-batch {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 0.3rem;
   padding: 0.4rem;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--accent-soft);
+}
+
+.ann-batch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ann-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+}
+
+.ann-batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  padding-top: 0.35rem;
 }
 
 .ann-batch-count {
@@ -831,8 +855,27 @@ p {
   color: var(--accent);
 }
 
-.ann-batch .select {
+.ann-batch-head .select {
   max-width: 8rem;
+}
+
+/* *Mixed*: the ticked rows disagree about this setting. A hatch rather than a
+   fill, on the edge segments and the flip — lit would say every row is on, and
+   plain that none is — and a dashed ring on the swatch, which cannot show an
+   empty value the way a box shows its placeholder. */
+.ann-place[aria-pressed='mixed'],
+.ann-flip[aria-pressed='mixed'] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--accent-soft) 0 3px,
+    var(--bg) 3px 6px
+  );
+  color: var(--accent);
+}
+
+.ann-swatch.is-mixed {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
 }
 
 .ann-batch-remove:hover {
@@ -861,8 +904,9 @@ p {
 }
 
 /* A map the eye took out of the deck (§16.9): still listed, and dimmed, as a
-   name with no picture behind it. */
-.compare-deck-row.is-parked .ann-name {
+   name with no picture behind it — the first map's own row too, while its cell
+   is hidden. */
+.compare-row.is-parked .ann-name {
   color: var(--text-dim);
 }
 
@@ -2324,6 +2368,20 @@ p {
   white-space: nowrap;
 }
 
+/* A choice's tick, in a column of its own, so a group of choices lines up
+   whether or not each one is the one in force — and the label beside it takes
+   the room, so the hint stays at the far end as it does on every other row. */
+.context-menu-check {
+  flex: 0 0 0.8rem;
+  margin-right: -0.45rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.context-menu-check + span {
+  flex: 1 1 auto;
+}
+
 /* Names the group under it; not a target. */
 .context-menu-head {
   padding: 0.3rem 0.5rem 0.15rem;
@@ -3628,50 +3686,59 @@ p {
     default;
 }
 
-/* …unless the guide lines are on, in which case the pointer becomes a small
-   open cross.
+/* …unless the guide lines are on, in which case the pointer over the map is
+   Lucide's `locate` — a ring with four ticks — twenty pixels square.
 
    The arrowhead is the wrong shape over a picture being *measured*. It points
    from one corner, so the position it names is a pixel at its tip with a
    blunt body over everything below and to the right of it — and on a map where
    a cell can be one pixel, that body is on top of the answer. The guide lines
-   name the position exactly and this cross says where the *hand* is, which is
+   name the position exactly and this ring says where the *hand* is, which is
    not the same question: the lines are drawn at the cell the app resolved, and
    between one frame and the next the hand is somewhere the lines have not got
-   to yet. Removing the pointer entirely, which is what this rule used to do,
-   left nothing to follow between those two.
+   to yet.
 
-   Open in the middle, and that is the whole design: the four arms stop short of
-   the point they surround, so the cross is a thing you can find at a glance
-   while the pixel it is about stays visible through the hole. Drawn a little
-   heavier than the hairlines it stands among — those are one device pixel and
-   deliberately faint, and a pointer that reads as one of them is a pointer that
-   has to be hunted for. A white casing under the blue, because it crosses white
-   paper, dark contacts and every colour in between, and one flat colour would
-   vanish somewhere in every colourmap.
+   A ring rather than a cross, because the point of it is what is *inside*: the
+   cell under the hand and the cells round it, whole, with nothing drawn over
+   them. The guide lines stop where its ticks end (`LOCATE_REACH` in
+   `render/heatmap.ts`, which is worked out from this icon's size and has to
+   change with it), so a line through the hand runs into a tick and none of it
+   crosses the ring. Twenty pixels, the arrowhead's own size: at forty it was a
+   gunsight over the picture rather than a pointer on it, and twenty still leaves
+   a hole about ten across — a cell of a 1 kb map and the few round it, where a
+   small open cross left the pixel itself and none of its neighbourhood. The
+   strokes are heavier on the icon's grid than Lucide's for the same reason the
+   arrowhead's are: at this size its own weight is under a pixel. A white casing
+   under the blue, because it crosses white paper, dark contacts and every
+   colour in between, and one flat colour would vanish somewhere in every
+   colourmap.
+
+   **Over a lane or the 1D browser the arrowhead stays**, crosshair or not, its
+   tip on the hairline. It used to be taken away while the hairline was drawn,
+   on the argument that the line *is* the pointer there — and a stack with no
+   pointer read as a stack the hand had left: the line under the hand is drawn
+   exactly as the echo of another surface's pointer is (a map's cell, a bead in
+   the structure cell), so which line was the reader's own was the one thing
+   the picture no longer said. The arrowhead points from its tip, which is on
+   the base pair the line names, and its body hangs to the right of the line
+   rather than across it.
 
    Between the resting arrowhead and the transient shapes below, deliberately:
    each of those is one class deep, exactly as this is, so source order decides
-   and the later rule wins. A pan still shows the closed hand and a selection
-   still shows its crosshair — those say what is *happening*, which no drawn
-   guide line does.
+   and the later rule wins. A pan still shows the closed hand and a
+   selection still shows its crosshair — those say what is *happening*, which no
+   drawn guide line does.
 
-   `is-guided` is written by whatever owns the surface, and each owns a slightly
-   different condition because each draws its line under different ones: the map
-   while the crosshair preference is on *and* the pointer is over a cell (a
-   label gutter has no cell to draw one at), the 1D browser while it is on and
-   the pointer is on the axis rather than in the name column, and a lane stack
-   always — a lane answers a pointer with its own hairline whatever the
-   preference says.
+   `is-guided` is written by the map (`render/heatmap.ts`), while the crosshair
+   preference is on *and* the pointer is over a cell: a label gutter has no cell
+   to draw a line at, and there the arrowhead is what says where the hand is.
 
-   `crosshair` as the fallback: a browser that will not take the image still
-   gets a pointer of the right *kind*, which is the part that matters. */
-.heatmap-canvas.is-guided,
-.lane-canvas.is-guided,
-.browser-canvas.is-guided {
+   `crosshair` as the ring's fallback: a browser that will not take the image
+   still gets a pointer of the right *kind*, which is the part that matters. */
+.heatmap-canvas.is-guided {
   cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 19 19'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%23fff' stroke-width='2.5' opacity='.85'/%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%231f5fa9' stroke-width='1.1'/%3E%3C/g%3E%3C/svg%3E")
-      9 9,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='3' opacity='.85'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3Cg stroke='%231f5fa9' stroke-width='1.5'%3E%3Cpath d='M2 12H5M19 12H22M12 2V5M12 19V22'/%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+      10 10,
     crosshair;
 }
 
@@ -3780,22 +3847,19 @@ p {
   cursor: pointer;
 }
 
-/* Which surface the arrow keys will drive, drawn *inside* its own frame.
+/* No focus ring on the pictures, written out so a UA default cannot put one back.
 
-   All three of these take focus so they can receive keys — the map and the
-   browser pan, a table scrolls — and all three answered a Tab with nothing at
-   all: each carried `outline: none`, on the argument that a blue rectangle
-   around the data reads as part of the figure. That is true of a ring drawn
-   *outside* the picture, so the ring is drawn on the picture's own edge pixels
-   instead (`outline-offset: -2px`). It is painted over the content, as an
-   outline is, and it is not in an exported figure, which is re-rendered rather
-   than grabbed. A keyboard reader has to be able to see which of the two
-   pictures the next arrow press will move. */
+   All three take focus so they can receive keys — the map and the browser pan,
+   a table scrolls — and for a while they drew a 2px accent ring on their own
+   edge pixels when they had it. It did not stay a keyboard reader's cue:
+   `:focus-visible` also matches a focus the app hands over after a typed locus
+   and Enter, so the ring appeared around the map and the browser after the
+   commonest navigation there is, as a blue frame round the data that read as
+   part of the figure. The picture has a frame of its own already. */
 .heatmap-canvas:focus-visible,
 .browser-canvas:focus-visible,
 .tviewport:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -8663,34 +8727,34 @@ body.is-carrying-card * {
   color: var(--text-dim);
 }
 
-/* Which edge a lane is drawn on, as two words that latch rather than two
-   initials with tick boxes. Not a choice between them — a track can be on one
-   edge or on both — so they are drawn as one segmented control with two
-   independent segments rather than as a radio pair.
+/* Which edges a lane is drawn on, as four marks that latch — the map as a
+   dashed square with that one edge solid — rather than four words. Not a
+   choice between them — a track can be on several edges — so they are one
+   segmented control with independent segments rather than a radio group.
 
    The frame is on the *group* and the segments have none. A ready row makes
    every button inside it borderless (see `.ann-row.ann-ready .btn`), which is
    right for the icons on the head and wrong for a toggle, whose unpressed state
-   would then be indistinguishable from a word of prose. One frame around the
-   pair says "these are controls" once, without putting boxes back on the row. */
+   would then be indistinguishable from a mark of decoration. One frame around
+   the four says "these are controls" once, without putting boxes back on the
+   row.
+
+   As wide as the four marks and no wider: they were four words stretched
+   across the card on a line of their own, and a map's name now shares their
+   line (§8.1). */
 .ann-places {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-/* Four segments in the width two used to have, so the padding comes off the
-   sides rather than the words: "bottom" is the longest of them and it has to
-   read as a word rather than as a truncation. */
 .ann-place {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
   border: 0;
   border-radius: 0;
-  padding: 0.15rem 0.15rem;
-  font-size: var(--step--2);
+  padding: 0.15rem 0.3rem;
   background: var(--bg);
   color: var(--text-dim);
 }
@@ -9621,6 +9685,12 @@ body.is-carrying-card * {
   content: '· ';
 }
 
+/* Nothing to count — a deck of a model and no map — is no line, and no bullet
+   before it. */
+.deck-maps:empty {
+  display: none;
+}
+
 .deck-maps {
   font-size: var(--step--1);
   font-weight: 600;
@@ -9659,6 +9729,8 @@ body.is-carrying-card * {
   display: grid;
   grid-template-columns: repeat(var(--deck-columns, 1), minmax(0, 1fr));
   gap: 0.6rem;
+  /* The box a hidden lead is parked in (`.is-parked`, below). */
+  position: relative;
   /* Stretch, not start: a cell with a height is a cell its picture can be
      pushed to the foot of, which is how the maps in a row line up when one of
      them carries a heading the others do not. */
@@ -9736,11 +9808,31 @@ body.is-carrying-card * {
 }
 
 /* The lead is the session's own view — its heading, its search box, its lanes,
-   its cards — re-parented into the first cell. Nothing about it is restyled:
+   its cards — re-parented into a cell of the grid. Nothing about it is restyled:
    a panel that looked different from the map it was a moment ago would say the
    deck had replaced it rather than framed it. */
 .deck-panel.is-lead {
   min-width: 0;
+}
+
+/* **A hidden lead is parked, not removed** (§16.9). Its view is what the rest
+   of the deck follows — the maps' lock, the window a structure or tracks cell
+   lights, the locus box above the grid — so it stays laid out, at the width of
+   one column of the grid, where it goes on measuring and reporting as it did
+   in a cell: `display: none` would give it no width, a map of no pixels and a
+   window of nothing. Out of sight and out of reach, and clipped to the grid's
+   own box, so a tall stack of tracks behind the deck does not lengthen the
+   page. The width is the grid's column arithmetic, so the window it reports is
+   the one it would have shown on screen beside the others. */
+.deck-panel.is-lead.is-parked {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc((100% - (var(--deck-columns, 1) - 1) * 0.6rem) / var(--deck-columns, 1));
+  height: 100%;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* **A cell's lanes stay in its cell.** Three or four across, the first map's
@@ -9930,16 +10022,17 @@ span.deck-name {
   color: var(--text-dim);
 }
 
-/* The lead's heading carries its name, its star and its chain — everything a
-   companion's does but the grip, because the first map is always the lead. */
+/* The lead's heading carries what every cell's does — a grip, its name, its
+   star and chain, and a × (§16.9). */
 .deck-head-lead {
   color: var(--text-dim);
 }
 
 /* The tiling, while a map is looking for a cell. The cells are only worth
    seeing as cells during the gesture; a permanent outline round every panel
-   would be a grid drawn over four pictures for nobody. */
-.deck-grid.is-arranging .deck-panel:not(.is-lead) {
+   would be a grid drawn over four pictures for nobody. Every cell on screen,
+   the lead's among them: it is a target like the others. */
+.deck-grid.is-arranging .deck-panel:not(.is-parked) {
   outline: 1px dashed var(--border-strong);
   outline-offset: 3px;
   border-radius: var(--radius);
@@ -10373,11 +10466,34 @@ span.deck-name {
   min-height: 0;
 }
 
-/* The bar under the picture that sets that height. Three pixels of nothing
-   until it is wanted, and the whole width so it is found without aiming: it
-   sits between the cell and whatever is under it, which is where a hand
-   reaches for an edge. */
-.structure-resize {
+/* …and a stack of tracks, by the same bar under it: the scroll box takes the
+   height and the browser inside measures the box. */
+.deck-tracks.has-height > .tracks-body > .tracks-wrap {
+  flex: 0 0 auto;
+  height: var(--tracks-h);
+  min-height: 0;
+}
+
+/* **A cell alone on screen takes the height a map would** (§16.9) — the model
+   a lone structure file opened, or whatever is left beside a hidden first cell.
+   Its row has no map to take a height from, and the 16rem floor drew a model
+   in a strip across the top of an empty page. The window's height less what
+   stands above and below the picture — the bars, the view's heading and the
+   deck's, the cell's own, its resize bar and the `+` edge under the grid — so
+   the whole deck fits the column without a scroll; a height the reader set
+   wins. */
+.deck-grid.is-alone > .deck-panel:not(.has-height) > .structure-body > .structure-wrap,
+.deck-grid.is-alone > .deck-panel:not(.has-height) > .tracks-body > .tracks-wrap {
+  flex: 0 0 auto;
+  height: clamp(20rem, calc(100vh - 18.5rem - var(--tabstrip-h) - var(--deck-edge, 0px)), 60rem);
+}
+
+/* The bar under the picture that sets that height — a model's and a stack of
+   tracks' alike (`panels/cellHeight.ts`). Three pixels of nothing until it is
+   wanted, and the whole width so it is found without aiming: it sits between
+   the cell and whatever is under it, which is where a hand reaches for an
+   edge. */
+.cell-resize {
   flex: 0 0 auto;
   height: 7px;
   margin-top: 1px;
@@ -10388,7 +10504,7 @@ span.deck-name {
   touch-action: none;
 }
 
-.structure-resize::after {
+.cell-resize::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -10401,13 +10517,13 @@ span.deck-name {
   transition: background 0.12s ease;
 }
 
-.structure-resize:hover::after,
-.structure-resize:focus-visible::after,
-.structure-resize.is-dragging::after {
+.cell-resize:hover::after,
+.cell-resize:focus-visible::after,
+.cell-resize.is-dragging::after {
   background: var(--accent);
 }
 
-.structure-resize:focus-visible {
+.cell-resize:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -10520,43 +10636,6 @@ span.deck-name {
   padding: 0.25rem 0.35rem;
 }
 
-.deck-tracks .view-head {
-  margin-bottom: 0.25rem;
-}
-
-/* The bar's hint is written for a page; in a cell it is a paragraph over a
-   picture, and the locus box says what the cell is. */
-.deck-tracks .view-head .hint {
-  display: none;
-}
-
-/* **The box keeps the room a locus needs, and the bar breaks in one place.**
-
-   It had `flex-basis: 8rem; min-width: 6rem` under a wrapping bar, so in a cell
-   three across the one control that says where the cell is looking read
-   `IV:1,000,001-1,400,0` — the end of the window, which is the number the reader
-   is after, clipped — while the loose icon buttons after it wrapped one at a
-   time and left a single glyph on a line of its own under the box. An orphaned
-   icon reads as a separate control, and it pushed the cell's ruler down out of
-   line with the maps beside it.
-
-   Twelve rem is a twenty-two character locus at the mono size. The bar now holds
-   two things — the box, and the four zoom steps as one non-breaking group — so
-   when the cell is too narrow for both the break comes between them, always in
-   the same place, and both stay whole. `go` and the `/` badge are gone in a cell
-   (`ui/BrowserView.ts`): the lead's box above the grid owns the key, and Enter
-   submits. */
-.deck-tracks .browser-bar .browser-search {
-  flex: 1 1 12rem;
-  min-width: 12rem;
-}
-
-/* No badge in the cell, so no room reserved for one: the 2.1rem `.search-box`
-   keeps for the `/` is exactly the width the last digits of a locus need. */
-.deck-tracks .browser-bar .browser-search > .input {
-  padding-right: 0.4rem;
-}
-
 /* The add row beside a browser lead (§25 stage D): the roads that open a
    *map* are put away, since a map cannot follow a browser; the two cells that
    can stay. */
@@ -10650,13 +10729,14 @@ span.deck-name {
   border-style: dashed;
 }
 
-/* One row of four edges per map, for a track that can be drawn on any of them
-   (`annotations/placement.ts`). A session with one map gets the bare row of
-   edges it has always had, so none of this applies until a deck exists. */
+/* One line per map — its name, then its four edges — for a track that can be
+   drawn on any of them (`annotations/placement.ts`). A session with one map
+   gets the bare four edges beside the label, so none of this applies until a
+   deck exists. */
 .ann-place-maps {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
@@ -10667,10 +10747,11 @@ span.deck-name {
   min-width: 0;
 }
 
-/* The name is allowed to run out of room before the buttons are: which edges a
-   track is on is the answer being read, and the map's name is the label on it. */
+/* The name takes what the four marks leave, and is allowed to run out of room
+   before they are: which edges a track is on is the answer being read, and the
+   map's name is the label on it. */
 .ann-place-name {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -10691,38 +10772,22 @@ span.deck-name {
   color: var(--text-dim);
 }
 
-/* The one field in the body that does not put its label in the 3.6rem column
-   the others share, because four edges and a label cannot both have the width
-   they need in a sidebar this narrow. `bottom` came out as `bottc` — the single
-   thing `.ann-place` was laid out to avoid — and beside a deck, where each row
-   also carries a map's name, both names came out as `Ecoli.mcool…`, truncated
-   at exactly the point where they stop being the same file. Two labels that
-   read alike are worse than none.
+/* With one map the field is an ordinary one: `location` in the label column
+   and the four marks beside it.
 
-   So the field turns on its side: `location` over the rows, and each map's name
-   over its own edges. A session with one map has no name to show and gets the
-   bare row of edges, now with the whole body to spell them out in. */
-.ann-field-places {
+   Beside a deck it turns on its side, because a map's name, four marks and a
+   label cannot all have the width they need in a sidebar this narrow: the
+   names came out as `Ecoli.mcool…`, truncated at exactly the point where they
+   stop being the same file, and two labels that read alike are worse than
+   none. So `location` goes over the lines, and each line is a map's name with
+   its own four marks at the end of it. */
+.ann-field-places.is-named {
   flex-direction: column;
   align-items: stretch;
   gap: 0.2rem;
 }
 
-.ann-field-places > .field-label {
-  flex: 0 0 auto;
-}
-
-.ann-field-places .ann-place-maps {
-  gap: 0.4rem;
-}
-
-.ann-field-places .ann-place-map {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.1rem;
-}
-
-.ann-field-places .ann-place-name {
+.ann-field-places.is-named > .field-label {
   flex: 0 0 auto;
 }
 
@@ -11447,7 +11512,7 @@ span.deck-name {
 /* One output's name, on the row with its export buttons. `--text` and not the
    box's own dim grey: the sentence above is small print about where things went
    and these are the things — a lane's name is content, and it is what the reader
-   will look for on the Synthetic tracks card. */
+   will look for on the Tracks card, marked `*`. */
 .analysis-elsewhere-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -11533,20 +11598,41 @@ span.deck-name {
   min-width: 9rem;
 }
 
-/* --- the synthetic tracks card ------------------------------------------- */
+/* --- a synthetic track's row on the Tracks card ---------------------------
 
-.synthetic-row-source {
-  font-size: var(--step--2);
-  color: var(--text-faint);
-  line-height: 1.35;
+   The `*` a computed or derived track wears after its name (§18.5), the mark a
+   resolution the file does not store wears in the breadcrumb (`3 kb*`) and for
+   the same fact: this is not in any file the reader gave the app. Set in the
+   name's own weight and the accent, and hugging the name where the engine can
+   size a field to its text — elsewhere it stands at the end of the name's box,
+   which is still beside it. `margin-right: auto` keeps the eye, the chevron and
+   the × in the column every other row has them in. */
+.ann-synthetic {
+  flex: 0 0 auto;
+  margin-right: auto;
+  padding-inline: 0.05rem 0.15rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  cursor: help;
+  user-select: none;
 }
 
-.synthetic-exports {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  padding-top: 0.2rem;
+/* The three formats on one line with their label: at the column's default
+   width the row's ordinary gap put the last of them on a line of its own. */
+.ann-exports {
+  gap: 0.2rem 0.25rem;
+}
+
+.ann-exports > .btn {
+  padding-inline: 0.35rem;
+}
+
+@supports (field-sizing: content) {
+  .ann-row.is-synthetic .ann-name {
+    flex: 0 1 auto;
+    field-sizing: content;
+  }
 }
 
 /* --- narrow ---------------------------------------------------------------

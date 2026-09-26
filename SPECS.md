@@ -790,13 +790,15 @@ or one press past the locus — and they are ordinary bordered buttons like ever
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
 
-**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's, the
-1D browser's and a deck's tracks cell's (§26.6). The browser's carried two unlabelled magnifiers at
-1.8× instead, which is a factor nobody can predict or undo, so a reader who had learnt that one
-press is 3× on the map got something else on the tracks beside it; and the `−` / `+` keys drive the
-3× pair rather than a factor of their own. In a tracks cell the bar is the box and the four steps
-alone: no `go`, since Enter submits and the lead's bar above the grid carries the button, and no `/`
-badge, since one key cannot open two boxes and the lead's is the one it opens.
+**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's and
+the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
+a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
+something else on the tracks beside it; and the `−` / `+` keys drive the 3× pair rather than a
+factor of their own. **A deck's tracks cell has no bar** — no locus box, no steps, no summary line —
+only its axis, the chromosome's bar and ruler drawn at the top of its picture (§25.3). It had the box
+and the four steps, which were a second place to ask the question the lead's bar above the grid
+answers, in every tracks cell, and the one road there was to moving one cell out of step with the
+maps it follows.
 
 Every press moves the window about its own **centre**, which leaves what you were looking at in the
 middle of what comes back. Against an end of the sequence the window slides in rather than asking
@@ -1073,27 +1075,46 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
-**Where a guide line is drawn the pointer is a small open cross**, and that is one rule across all
-three surfaces. The arrowhead is the wrong shape over a picture being measured: it points from one
-corner, so the coordinate it names is a pixel at its tip with a blunt body over everything below and
-to the right of it — which on a matrix where a cell can be one pixel is the only thing covering the
-answer. The cross is four short arms around a hole, so the pixel it is about stays visible through
-the middle of it, and it is drawn a little heavier than the hairlines it stands among, which are one
-device pixel and deliberately faint: a pointer that reads as one of the guides is a pointer that has
-to be hunted for.
+**Over the map, where a guide line is drawn, the pointer gives way to it.** The arrowhead is the
+wrong shape over a picture being measured: it points from one corner, so the coordinate it names is a
+pixel at its tip with a blunt body over everything below and to the right of it — which on a matrix
+where a cell can be one pixel is the only thing covering the answer.
 
-It is not a second copy of the guide lines, and the difference is what it is for. The lines are at
-the position the app has *resolved* — the cell, the bin, the column — and the cross is where the
-**hand** is, which between one frame and the next is somewhere the lines have not got to yet. Taking
-the pointer away entirely, which this used to do, left nothing at all to follow in that gap, and a
-surface with no pointer over it reads as a surface that is not listening.
+**Over the map it is a ring**: Lucide's `locate`, twenty pixels square — the arrowhead's own size —
+with its hotspot in the middle: a ring with four ticks, in blue on a white casing so it reads over
+paper, dark contacts and every colour between. What it is for is what is *inside* it, the cell under
+the hand and the cells round it, whole, and so **the guide lines stop short of it**: every line is cut
+where it comes within the ends of the ticks of the hand (a little over eight pixels), so a line through
+the hand runs into a tick and none of it crosses the ring. The small open cross the ring replaced left
+a hole of a few pixels, which on a 1 kb map is the pixel itself and none of its neighbourhood; a ring
+twice this size with the lines running through its middle was a gunsight over the picture rather than a
+pointer on it, and put back over the answer the very ink it was drawn to take away.
 
-So the cross comes exactly where the line comes, condition for condition: on the map while the
-crosshair is on and the pointer is over a cell, here while it is on and the pointer is on the axis
-rather than in the strip before it, and on a lane stack always, since a lane answers a pointer with
-its own hairline whatever that preference says. The transient cursors stay — the closed hand while
-panning, the crosshair while a selection is about to be drawn — because those say what is
-*happening*, which no guide line does.
+It is not a second copy of the guide lines: they are at the position the app has *resolved*, through
+the middle of a cell that, zoomed in, is wider than the ring, and the ring is where the **hand** is.
+So the gap is cut round the hand rather than round the cell, and it follows the hand inside a cell: a
+move that shifts the gap is a repaint, and one that changes nothing drawn — a hand in the far corner of
+a large cell, clear of both lines — is not. The rays of a turned map and its span guide are cut the
+same way. A tap on a touch screen names a cell with no pointer on screen, and there the lines are
+drawn whole.
+
+**Over a lane or the 1D browser the arrowhead stays**, crosshair on or off, its tip on the hairline.
+It used to be taken away while the hairline was drawn — the line under the hand runs the height of the
+stack and names one base pair, so the line was argued to *be* the pointer — and a stack with a line
+and no pointer read as a stack the hand had left. The lanes also draw another surface's pointer as
+that same line (a cell of a map beside them, a bead in the structure cell, §25.4), so which line was
+the reader's own was the one thing the picture stopped saying. There is no cell whose neighbours a
+ring could frame; the arrowhead points from its tip, on the base pair the line names, and hangs to
+the right of the line rather than across it.
+
+So the ring comes exactly where the map's lines do: while the crosshair is on and the pointer is over
+a cell, and not over a label gutter, which holds no cell to draw one at. With the crosshair off there
+is no line on any of the three surfaces — the lanes' own hairline under the hand, and the line it
+carries across the map, follow the preference too, where they used to be drawn whatever it said, so
+a reader who turned the crosshair off watched it leave the map and stay on every track — and all
+three show the arrowhead.
+The transient cursors stay — the closed hand while panning, the crosshair while a selection is about
+to be drawn — because those say what is *happening*, which no guide line does.
 
 Only what follows the pointer goes down there. Everything that describes the *picture* — the sequence
 boundaries, the name column's own edge — stops with the tracks: a boundary is a mark *on* the tracks,
@@ -1520,11 +1541,11 @@ per frame on the main thread and therefore belongs in a worker. It is a known
 limitation of the drawing, not of the data: the numbers behind every pixel, the
 readout, the axes and the export are all taken from the reader's grid.
 
-**Keyboard pan and zoom are supported**, so the picture takes focus — and says so: the focus ring is
-drawn on the canvas's own edge pixels (`outline-offset: -2px`) rather than around it, since a ring
-outside the figure reads as part of the figure while a reader tabbing into a map still has to be able
-to see which of two pictures the next arrow press will move. It is not in an exported figure, which
-is re-rendered rather than grabbed.
+**Keyboard pan and zoom are supported**, so the picture takes focus — and draws **no focus ring**:
+not around the map, the 1D browser's strip or a table's viewport. A ring on those surfaces is a blue
+frame around the data, which reads as part of the figure; and `:focus-visible` also matches the focus
+the app hands the picture after a typed locus and Enter, so a ring kept for the keyboard appeared
+after the commonest navigation there is. The picture has a frame of its own.
 
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
@@ -1569,6 +1590,24 @@ one preference, kept with the overlays' kind (`localStorage`), and shared: off b
 off in the 1D browser, and in the deck's figure, which takes the first map's (§16.5). The tracks'
 own names and ranges are the picture's and are saved as they are on screen, whatever the switch
 says.
+
+**Copy this: the object under the pointer, and nothing round it.** The right-click menu on the map,
+on a lane beside it and on a lane of the 1D browser — and a right click that does not drag on a 3D
+model (§25.3) — carries **Copy this**, first on the map's and the model's menus and first under the
+track's name on a lane's. It puts that one object on the clipboard as a PNG, as it is drawn on
+screen and at the screen's own density: the map's **cells** in the part of the plot they fill, with
+no axis, tick, divider, key or frame, no loop, domain or mark drawn over them, and no guide line or
+pointer; the **lane** alone, the strip of its stack or of the browser it is drawn in, with no name
+or range, no handle, no name column, no hairline and no mark carried off the map — a gene's name
+under its body is the track's own and stays, as the overlays switch has it; the **model** as the
+renderer draws it, its names on it as the overlays have them, with no centre of rotation, key,
+buttons or frame. The page's colour goes under the ink, so a cell or a stretch the data leaves clear
+pastes as the page rather than as a hole. The Export card's copy is a *figure* — labelled,
+captioned, at the card's resolution — and this is the object, for a reader assembling a figure of
+their own in another program. Each is drawn by the same pass the screen is, stopped before
+everything round the data, rather than cut out of the screen's canvas, which carries all of that
+over it. The menu closes on the press, so what happened is said in the corner (`ui/toast.ts`): the
+size of what was copied, in pixels, or why the browser would not take it.
 
 ### 7.3 Genome × genome overview — gated, not default
 
@@ -1716,6 +1755,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
+| **Correlation** — Pearson's r between the rows of the O/E | an entry in the score picker | one matrix product, on the analysis thread and its helpers; square blocks up to 4,096 bins a side |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1927,6 +1967,35 @@ of the auto range they would otherwise drag. A **negative** ratio stays: an extr
 legitimately hold negative numbers, and blanking those would be this rule deciding what a file is
 allowed to contain.
 
+**The correlation reads an empty pixel as zero.** Paper is a rule for the eye, and the score picker's
+correlation is not drawn from the ratio but computed from it: there an empty pixel is an observation
+of no contacts, and the compartment call correlates it as one (§18.8, as cooltools does).
+Blanked, every empty pixel left the correlation, which was then of the cells each pair of rows
+happened to share — a different matrix from the one the task solves, though the option's own note
+said it was the same — and on a sparse map it was slow for the same reason: *E. coli* at 1 kb had two
+hundred and thirty missing cells a row, each pair's arithmetic an exception to correct for, and a
+4,096-bin square took fifteen seconds on four cores where its product takes one. The picture under the
+veil, while the answer is computed, is the ratio as it is always drawn — paper and all — made from
+the same derivation by blanking its zeros, so the block is derived once for both.
+
+**The correlation is one matrix product, on every core.** Pearson's r over the cells two rows share
+needs six sums, and only one of them — the products — depends on both rows at every cell; the others
+are each row's totals, corrected for the few cells the other row lacks. So the products of every pair
+are one matrix product in WebAssembly with SIMD (`analysis/wasm/gram.c`), fused multiply-adds where
+the engine has them, and the product is shared out in bands to helper workers the analysis thread
+starts and keeps for the next square (`analysis/pearsonThreads.ts`). Measured in Chromium with four
+cores, from picking the score to the picture: a thousand bins in under half a second, 2,048 in under
+one, 4,096 in two and a half, where it was capped at 1,500 and took three seconds at 929. So the map
+correlates any square block it can read, up to the raster's 4,096 cells a side — a whole bacterial
+genome at 1 kb, a human chromosome at 50 kb — and the Compartments task, which correlates with the
+same arithmetic, is no longer the slow half of its own method.
+
+**A score that reads the same cells reads nothing.** `VC`, `ICE`, the baseline and the correlation are
+arithmetic over the block on screen exactly as the O/E is, so picking one of them repaints rather than
+rebuilding the view; only a score that names another `/pixels` column, or the balancing, is a new
+read. Picking the correlation re-read the whole block first — two of the six seconds a 4,096-bin
+square took, spent fetching the numbers already on screen.
+
 **Diverging values need three things to change together**, and changing fewer produces a plausible
 picture of the wrong thing:
 
@@ -1980,6 +2049,12 @@ empty — on a file that cannot carry them. A fourth, **Bookmarks** (§8.10), si
 in this list because nothing in it is an annotation: it holds places rather than things drawn at
 them.
 
+The column reads, top to bottom: Contact maps, **Tracks**, Structures, **Manual annotations**,
+**Metadata annotations** and **Bookmarks** — the last two **folded** when they are built, since each
+is opened when a reader wants it rather than scanned past on the way to a track. The fold is the
+card's own (§26.6), is not remembered, and a view saved from the button beside `go` opens the
+Bookmarks card so the row it adds is seen.
+
 **Linear annotations** — headed **Tracks** on screen, which is also what its rows, its tooltips and
 every other surface call them; *annotation* survives as the column's name and in the two card names
 below. Three drop areas, and everything they hold is drawn *beside* the map, never on it: **one GTF**
@@ -1988,6 +2063,29 @@ below. Three drop areas, and everything they hold is drawn *beside* the map, nev
 or areas), and **bed-like files** (any number, resolved as genomic segments). Each is placed on any
 of the map's four edges — above, below, or down either side — or on several at once; each carries its
 own limits, style, colour and value scaling; and any set of tracks may share one autoscale group.
+
+The row's **location** is four marks rather than four words: the map as a dashed square with one edge
+drawn solid — Lucide's `square-dashed-top-solid`, and the same square turned for the other three
+(`scripts/build-icons.mjs`) — each a switch, lit where the track is drawn, named for its edge to a
+screen reader. With one map they sit beside the label like any other field. In a deck they sit at the
+end of each map's own line, the map's name before them, under the label: the four words were as wide
+as the card and took a line of their own under every name, so a deck of four maps spent eight lines
+saying where one track is.
+
+**Ticking rows edits them together.** Each row of the Tracks card has a tick box (shift-click takes
+the rows between it and the last one clicked), and two or more ticked open a box above the list: the
+count and what can be done to them — *combine…* for a pair of tracks (§7.5), *hide* or *show*,
+*remove*, *clear* — over **a row's settings**, in a row's shapes and words: colour, height, style
+(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity.
+Each control **shows what the ticked rows share**, and *mixed* where they differ — an empty box saying
+so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round the swatch — and
+nothing is written until the reader picks. A pick is written to **every ticked row it means something
+to and no other**: a gene model and two bigWigs ticked together get one style picker, the pick lands on
+the two bigWigs, and the control's tooltip says how many of the ticked rows it reaches. Limits take both
+bounds before they are written, since a batch has no one range to seed the other from, and *auto*
+keeps each row's own manual pair for when it leaves auto again. The edits are one change to the store
+however many rows they reach. A new group named from the box clears the ticks, since the set now
+exists as a group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -2002,8 +2100,9 @@ feature" — and because one file is rarely wanted in both roles at once.
 **Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
 sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
 map's own cells. Discovered rather than loaded, so it is the one card whose contents nobody had to
-find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and over the marks,
-because the column descends from what came out of a file to what a reader put there by hand.
+find, and the one card a `.metacool` gets (§8.5). It sits **under the marks, folded**, with
+Bookmarks after it: what a reader loaded and drew comes first, and a column of the open map's own
+tables is reached for on purpose.
 
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
@@ -2219,6 +2318,25 @@ the door a row comes back through is the same one a new row arrives by, and a ne
 tracks restored around it (§3.4) — so changing the resolution quietly undid a reader's "not this
 one", by way of a menu about something else entirely.
 
+**The map is drawn first, and its tracks are read after it.** A file opened with tracks — a
+workspace, a `?config=` link, a reload — seats every row at once, and the Tracks card lists them
+reading; the bytes are read once the map's first block is drawn, or four seconds after the rows were
+seated, whichever comes first, and at once for a view with no map. The first-open measurement of
+which sequences are circles (§8.15) waits the same way. They used to start in the same moment as the
+map's first read, from the same host: the demo session's twelve-megabyte FASTA and ten-megabyte gene
+model shared the connection with the picture the reader had asked for, and on a 25 Mbit/s line the map
+came in 6.7 s after its view mounted, where alone it took 3.0 s; held, it takes 2.5 s. Nothing about
+the FASTA is parsed on the main thread — the worker reads and parses it — so what made the map look
+as though it waited for the sequence was this contention, and the relayout below.
+
+**A lane stack is laid out for the rows still reading.** Its room is planned over the rows that are
+drawn *and* those on their way, so the map beside it is laid out once rather than shrunk again as
+each lands: the sequence lane is the last of seven to arrive and sits on two edges, and its arrival
+re-fitted the whole picture. A row still reading is a blank band at the far end of its stack; a row
+that fails gives its room back. Download progress reaches a row at most four times a second — each
+tick was a write of every row to session storage and a rebuild of the card, forty a second for two
+large files, on the thread the map is panned on.
+
 ### 8.11 bedGraph and wig, and reading part of a file
 
 Two additions to §8.3's list of text formats, and one to how any of them is read.
@@ -2337,6 +2455,20 @@ map disagreed with the bottom one and two cells of one deck disagreed with each 
 file, which is the one conclusion a picture of one file must not invite (§16.2). The ceiling can then
 sit a little above the highest mean drawn, which is the trade every other browser makes.
 
+**A lane's drawing style is one of six**: `area`, `line`, `bar`, `points`, `heatmap` (§18.11) and
+`ribbon` (§18.12), all modes of one `drawTrack`, so every one of them answers to the same limits,
+group, ceiling drag, flip and figure on both surfaces. **`points`** is a Manhattan plot's picture: a dot
+per value and nothing drawn between them, for a track whose values are not a curve — p-values, a score
+over sparse bins, anything whose outliers are the reading, where a line claims the straight run between
+two values is data. A dot is placed from the pixel's **mean**, as a line's vertex is, so it answers to
+the axis autoscale drew; a dot at each pixel's highest value would stand above that range, piled on the
+lane's edge. **One dot per run of equal values**, not per pixel: zoomed in, a bin twenty pixels wide is
+one point at its middle rather than a dash; zoomed out, each pixel is its own mean and its own dot. A
+gap draws nothing. The dots are three pixels across, the zero line and the floor are drawn as under bars,
+and the *outline* preference does not apply — a ring round each of a thousand overlapping dots is a
+smear of the page's ink. In a figure each dot is a circle of its own, which the PDF page draws whole
+(a full turn used to flatten to nothing there).
+
 The rest follows the same shape. **Groups** are a fact about the tracks rather than about a view
 (`annotations/groups.ts`), so one `GroupSettings` per open file is handed to both surfaces, one
 `planStack` decides which lanes exist, and one `resolveGroupExtents` decides what they are drawn
@@ -2425,12 +2557,34 @@ alike: there is a universal reading convention for a track on a genomic axis —
 built draws coverage rising from a floor under a ruler — and it beats every argument from the
 picture's own symmetry, because a profile above a contact map hanging from its ceiling is one a
 reader has to mirror in their head before they can compare it with the one below. A **vertical** lane
-has no such convention, so what decides is the corner: it grows towards the matrix, since a lane
-growing outward from the map's own edge reads as pointing away from the thing it is beside.
+is a horizontal one mirrored in the diagonal, which is what it is: the rows are the same genome as the
+columns. The stack on the **left** is the top stack turned over that line, so it grows **away** from
+the matrix as the top one does; the stack on the right is the bottom one turned, so it grows towards
+the matrix as the bottom one does. Both grow leftward — the vertical "up the page".
 
-Exactly one edge therefore turns a lane's axis on arrival, which is what it was when there were only
-two. Moving a lane between two edges turns it again exactly when that answer changes, so a reader who
-deliberately hung a track from its ceiling keeps that decision through the move.
+The left-hand stack used to grow towards the matrix, on the argument that the stacks meeting at a
+corner should agree about which way is more; it pointed a profile's peaks *into* the map, where the
+same profile above the map points them away, so one track either side of the diagonal read as two
+shapes. A lane saved before the change keeps the direction it was saved with; the invert button in
+the track's settings, or *Grow away from the map* on its lane's right-click menu, turns it.
+
+Both edges beside the map therefore turn a lane's axis on arrival — a file dropped there, a computed
+track, which opens on the left (§18.5), a row of the Tracks card placed there. Moving a lane between
+an edge above or below the map and one beside it turns it again, so a reader who deliberately hung a
+track from its ceiling keeps that decision through the move. A lane on **two** edges has one `flip`
+and two readings, so on the way to two it keeps what it had; on the way back to one it is turned from
+the edge it was last on *alone*. That is the move the location marks make — the new edge on, then the
+old one off — and read from its placement alone the second press came from neither edge and turned
+nothing, so a track moved from under the map to its left arrived growing into it. Which edge that was
+is remembered for the session; after a reload a lane on two edges keeps its flip, as it did before. A lane arriving on a **map it was not
+on** — a row placed on a companion's edge or a tracks cell, a lane carried there by its grip (§16.9)
+— keeps the track's `flip` on an edge that reads the way the track's own edge does, above or below
+the map for a track above or below one and beside it for beside, so a profile hung from its ceiling
+still hangs; **across the diagonal it starts as that edge's lanes start**. It used to arrive
+unturned, growing into the map beside lanes that grew away from it; and then turned from the track's
+edge, which carried a deviation over the diagonal that was more often a saved lane's than a
+reader's — the yeast demo's Pol II, growing away from the map on its right, hung upside down in a
+tracks cell.
 
 #### The lane that used to be here
 
@@ -2502,6 +2656,14 @@ that lands off the diagonal takes several more of the same gestures to come back
 say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
 where the picture already is one.
 
+**Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
+without looking, for the one gesture a reader makes over and over while reading a map — every pan and
+box lands a little off the diagonal, and the way back was a trip to a 15-pixel button in another
+column. It is the button's press, gated as the button is, and on a deck the first map's, whose
+window the others are locked to. It stands down wherever Space already has a job: a focused button
+it presses, a tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the
+shortcuts dialog and the palette as *Recentre on the diagonal*, and in the button's own tooltip.
+
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
 lane canvases to the map's along their shared axis, and two conversions would be two chances to name
@@ -2522,8 +2684,10 @@ locus, and clamping it to one end would hand back coordinates for a region nobod
 
 ### 8.10 Bookmarks
 
-A fourth card under the marks, and the second thing in this section that comes from nobody's file:
-**places worth coming back to.** A bookmark is a region and a bin size, and nothing else.
+The last card in the column, under the marks and the Metadata annotations card, **folded** until it
+is opened — or until the button beside `go` saves a view, which opens it — and the second thing in
+this section that comes from nobody's file: **places worth coming back to.** A bookmark is a region
+and a bin size, and nothing else.
 
 Both halves are decisions. The **region** is stated in (contig, base pair) like every other
 annotation here (§8.1), so it means the same thing at 1 kb and at 20 kb. The **bin size** is carried
@@ -3123,33 +3287,29 @@ the tick is, because a reader who typed one usually meant it.
 
 #### What the flag does to the picture
 
-The window becomes **unwrapped**. A region view on a circular sequence pans in a
-coordinate space that runs off both ends and is resolved modulo the sequence, so
-`chrom:2,900,000-3,100,000` on a 3 Mb circle is an ordinary place to be looking
+A window across the origin is read **unwrapped**. `chrom:2,900,000-100,000` on a
+3 Mb circle — or the `ori` framing below — is an extent that runs off the end of
+the sequence and is resolved modulo it, so it is an ordinary place to be looking
 and is two stored pieces: the last 100 kb and the first 100 kb. On both axes at
 once, so a square window across the junction is up to **four** stored blocks, one
 of which is that far corner. `worker/wrap.ts` says which pieces and
 `worker/wrappedMatrix.ts` reads and assembles them.
 
-Unwrapped rather than modular because it is the only space in which panning is
-*monotonic*. The alternative is a window whose start jumps from 2,999,000 to 0,
-and every `covers`, `pad` and `recentre` in `ui/refine.ts` — the whole
-zoom-and-travel policy of §2 — would have to learn about that. What those
-rules learn instead is one thing: on a circular axis **every edge of the block
-gives**, because there is no end of the world for one of them to be, and the
-answer to reaching one is the same block width rotated round to where the reader
-now is. The ceiling stops being a limit on *where* and becomes a cap on *how
-wide*: one lap, past which a bin would be drawn twice.
+**Such a window is a frame, and a map does not slide round the circle.** The
+extent is the view's ceiling: a zoom inside it refines as it does anywhere (§2),
+every read stays inside it, and a pan stops at its edges. A window that does not
+cross the origin pans as a window on a line does, to the sequence's ends. The way
+to the other side of the origin is `ori`, which frames the whole circle with the
+origin in the middle, or a window typed across it.
 
-**A circular view reads as it moves, whatever the refine setting says.** §2's
-zoom-to-refine is off until a reader turns it on, and that is the right default
-for what it was written for: a sharper picture of a place you are already at,
-bought with reads you did not ask for. A circular slide is not that — past the
-end of the sequence there is *no* block in hand, the window having left
-everything that was ever read, so with the ladder asleep the picture stops at the
-last bin, which is the exact wall the declaration was made to remove. A reader
-who ticks the box has asked for the reads that make the wrap possible. Only for a
-sequence they have declared: every other view keeps the setting's answer.
+It used to slide. Any window on a declared sequence was read with no ends: every
+edge of a block gave, a pan past one read the same width rotated round to where
+the reader now was, and the view read as it moved whatever the refine setting
+said, since past the end of the sequence there was no block in hand. It was not
+smooth — a read per stretch of drag, the picture frozen while each landed — and a
+map with no edges lost its reader, who could not tell how far round they had come.
+`ori` answers the question the slide was for in one press, and leaves a picture
+with edges.
 
 And the declaration does **not** rebuild the view. It changes how the block is
 read, so the ladder is armed again — against the block that is *drawn*, not the
@@ -3179,9 +3339,10 @@ written. Three things did have to change, and each is a place where *the first
 stretch with this name* stopped being the right answer: a window now carries the
 stretch it was cut from rather than looking one up by name, a mark is drawn at
 **every** place its locus lands rather than the first — or it would flicker in
-and out as the reader slid past the join — and the window a refine carries across
-a change of grid picks the narrowest ordered pair of landings, without which the
-panel refuses the very block the reader is sliding towards.
+and out as the reader panned across the join inside a frame — and the window a
+refine carries across a change of grid picks the narrowest ordered pair of
+landings, without which the panel refuses the very block a zoom on the join
+asks for.
 
 The turn (§17) needs nothing at all: it rotates whatever block is on screen, and
 a wrapped block has a diagonal like any other.
@@ -3225,9 +3386,9 @@ so near the junction their denominator is the curve's far tail rather than its
 near one — except where the map's O/E is taken along the arms, below, whose
 offsets from the origin are measured round the circle. A **deck companion** draws
 the sequence linearly — the declaration is the lead map's — so a deck of a
-circular chromosome shows the lead sliding and the companions standing still. Both
-are seams rather than wrong answers, and both are in the same place: the reader
-can see the junction.
+circular chromosome framed on `ori` shows the lead across the junction and the
+companions from the sequence's first base. Both are seams rather than wrong
+answers, and both are in the same place: the reader can see the junction.
 
 #### The origin, and the two arms
 
@@ -3270,16 +3431,15 @@ does not follow, rebuilds the view on the window it names. **`arms`** takes the 
 along the diagonal alone (§7.5), read from the origin in the column — the first
 base where none has been set.
 
-**The turn slides too, and it needed one gate widened.** `isTurnable` asked for
-*one run or none*, on the sound ground that a boundary between two sequences is a
-discontinuity in the x axis and the distance across it is not a distance. A
-wrapped block has two runs — the sequence's tail, then its head — so it was
-refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
-declines a block it cannot turn, so the ladder read the very block the reader was
-sliding towards and the picture simply stopped at the last bin with nothing said
-anywhere. The gate now asks *one sequence*, which is what it always meant: several
-runs are allowed when the block was read round a circle and every one of them
-carries the same name. `turnedAxis` then builds a segment per run instead of one,
+**A frame across the origin turns, and it needed one gate widened.** `isTurnable`
+asked for *one run or none*, on the sound ground that a boundary between two
+sequences is a discontinuity in the x axis and the distance across it is not a
+distance. A wrapped block has two runs — the sequence's tail, then its head — so it
+was refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
+declines a block it cannot turn, so a turned `ori` frame refined into nothing and
+stopped at the last bin with nothing said anywhere. The gate now asks *one
+sequence*, which is what it always meant: several runs are allowed when the block
+was read round a circle and every one of them carries the same name. `turnedAxis` then builds a segment per run instead of one,
 each carrying its own lap, and the turned picture reads the far side of the
 junction as the beginning of the sequence exactly as the square one does.
 
@@ -3340,22 +3500,64 @@ font. They are built from `featureColouring` — the function the renderer itsel
 disagreed with the picture would be a bug in the ink rule rather than a second palette drifting out
 of step.
 
-**A stranded feature points the way it runs.** On a segment box — and on a gene the file gives no
-exon table, which is a box too — the arrowhead is cut *out of* the leading end rather than drawn past
-it, so the glyph occupies exactly the bases the feature does and §8.4's rule holds:
-the box that is drawn, the box that is clicked and the box the packing kept a row clear for are one
-span. An ink says *which* strand; a point says *which way*, and a reader following an operon or a
-tandem array is reading the second. The head is capped by the glyph's own height, so it is a point
-rather than a spear, and by a third of the feature's width; below six pixels there is no head at all,
-because a pentagon and a rectangle three pixels wide are the same ink with a different corner and the
-reader has lost a pixel of extent to learn nothing. A long box additionally carries chevrons in the
-halo colour, so a segment running across the whole window says its direction at every point rather
-than only at one end.
+**A feature is drawn by its own structure, whatever format it came from.** A feature with no parts —
+a peak, a plain BED row, a call — is one block. One with exons is a transcript: its exons are blocks
+on a hairline standing for the introns between them, from the end of the first exon to the start of
+the last; the coding span is drawn **thick** and the untranslated ends, and every exon of a
+non-coding transcript, **thin** — three fifths of the thick height, which is the ratio at which the
+two read as two weights of one shape rather than as two shapes. One with a coding span and no exon
+table is a single exon split the same way. It used to be the lane's *kind* that decided, so a BED12 or
+a bigBed of transcripts — a `segments` lane — was drawn as one plain box per gene: its blocks and its
+thick span were parsed, carried and never drawn. The same gene from a GTF, a genePred and a BED12
+now draws the same blocks.
 
-A gene **with** exons keeps the chevrons on its spine and no head, which is not an omission: its
-glyph is a line with boxes on it, a point on the last exon would be a point on a piece of the gene
-rather than on the gene, and the chevrons already say the direction at every position along it. That
-is also what every genome browser draws, and the one place this lane should not be inventive.
+**The coding span includes the stop codon.** The Sequence Ontology's CDS ends with it and UCSC's
+genePred tables count it in `cdsEnd`, but a GTF in Ensembl's convention writes it on a row of its
+own outside the last CDS row — so read naively, the same gene drew three bases short of its stop
+from a GTF. The GTF reader folds `stop_codon` rows into the coding span, and the demo's genePred is
+written the same way (`scripts/make_demo_hub.py`). A GFF3 transcript spelled as its CDS and UTR rows
+with no `exon` rows has its exons in them: merged, they are the blocks and the gaps between them its
+introns — where that makes more than one block, since a single coding piece inside a longer
+transcript row is a coding span and not the transcript's only exon.
+
+**A stranded feature ends in a point**, on the block it ends in — the last exon in the direction it is
+transcribed — cut *out of* that block rather than drawn past it, so the glyph occupies exactly the
+bases the feature does and §8.4's rule holds: the box that is drawn, the box that is clicked and the
+box the packing kept a row clear for are one span. An ink says *which* strand; a point says *which
+way*, and a reader following an operon or a tandem array is reading the second. The head is capped
+by the block's height, so it is a point rather than a spear, and by a third of its width; below six
+pixels there is no head at all, because a pentagon and a rectangle three pixels wide are the same ink
+with a different corner. **Nothing else says the direction**: the chevrons that used to run through
+every long box and along every intron, in the halo colour, were a second way of saying it laid over
+the one thing the glyph exists to show — the extent — and on a gene they were the busiest marks on
+the lane. A long feature whose end is out of the window says its strand by its colour and its band.
+
+**Blocks are rounded and they fill their row.** Their corners are rounded a little — a fifth of the
+block's height, three pixels at most, and not at all under a pixel, where a corner is a smudge — and a
+block takes all of its row but a pixel either side, up to 22 pixels: a lane made taller draws its
+features thicker, where a gene used to stop at nine and thirteen pixels however tall its lane was
+made. Variants stay square: a mark on a base is a mark, not a box to be shaped (§8.14).
+
+**How the rows are spent is the reader's choice**, among the three every genome browser offers under
+the names it is known by: **expanded**, the default, gives each row room for a glyph and the name under
+it and bands the strands; **squished** packs rows eight pixels tall, as many as the lane holds up to
+thirty-two, with thin glyphs and no names, so a crowded stretch shows every overlapping feature in the
+height *expanded* needs for a few; **collapsed** puts everything in one row across the whole lane,
+overlaps drawn over each other and the strands unbanded — the point and the colour say which way each
+runs — which is a picture of *where* there are features rather than of each one. The lane keeps the
+height its reader gave it in all three; a mode that resized the lane to fit the window's rows would
+move the map every time a pan changed how many overlapped. A barChart has none of it, because its rows
+are its value axis (§8.17).
+
+The choice is offered in the card, as `rows`, and in the lane's **right-click menu** — which opens
+under the track's name with *Copy this*, the lane alone on the clipboard (§7.2) — and which a feature
+lane now fills with what a reader changes about a gene track while looking at it: the three row modes
+with a tick on the one in force, and the point as a switch with its own tick. Opened *on* a feature,
+the menu leads with that feature — named, with its card a click away (what a click on it opens), its
+name and its position to copy (the position as the locus box writes a window, so it can be pasted
+into one; where the browser will not allow the clipboard, the text is shown to be copied by hand), and
+in the 1D browser a zoom that frames it with a search hit's margin. Beside a map there is no zoom:
+the map's view is a region on two axes, and framing the gene on one would leave the other where it was.
 
 **The rows are banded by strand.** Unstranded first, then forward, then reverse, outward from the map
 — which on the 1D browser and on a bottom stack reads top to bottom. Two genes on the same bases and
@@ -3398,7 +3600,7 @@ a gene name that is not in the file**: `MSW1` was drawn as `SW1`, `HEH2` as `HE`
 feature the name is dropped where the window has cut the box, since a name centred in half a box is
 centred on a place the feature does not have.
 
-**Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows }` — a nested optional
+**Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows, bars, display }` — a nested optional
 record in the shape `reads` is one and for the same reasons: the fields mean nothing to a value
 track, optional means no stored row changes shape, and one accessor (`featuresOf`) keeps `undefined`
 from reaching a renderer. `colourBy` is an **open string** rather than a union, because the
@@ -4092,8 +4294,12 @@ A deck is a **lead** and its **companions**.
 
 The lead is the session's own file. It owns the breadcrumb, the genomes and contigs tables, the
 tracks, the record card and, where there is one, the second file blended into its lower triangle. It
-is not in the companion list and it is not reorderable, because "which file is this session of" is
-not a thing that should change by dragging.
+is not in the companion list, and "which file is this session of" is not a thing that changes by
+dragging. **Its cell is a cell like the others** all the same: it moves by its grip and closes with
+its × (§16.9), and neither changes which file the session is of — only where its picture stands, and
+whether it is on screen. It used to be cell 0 for good, with no grip and no ×, and a figure of a model
+beside its map, or of the model alone, could not be drawn with a deck whose first cell could do
+neither.
 
 A companion is the smallest thing that is still a map: its own `ReaderClient` — so its own worker, its
 own h5wasm instance, its own I/O — its own colour scale, its own block, and a heading with its name
@@ -4101,8 +4307,9 @@ on it. It has no annotations, no level toggle, no score picker and no second fil
 control over something the deck *shares*, and five copies of a shared control are five ways to put
 the deck out of step with itself.
 
-The lead's element is **re-parented** into the first cell of the grid rather than rebuilt, so a
-session with companions costs the session it would have been, plus the companions.
+The lead's element is **re-parented** into a cell of the grid — the first, until the reader moves it —
+rather than rebuilt, so a session with companions costs the session it would have been, plus the
+companions.
 
 ### 16.2 What is shared, and what is not
 
@@ -4295,8 +4502,8 @@ different sizes is one the eye has to correct for.
 
 **The session's heading leaves the first cell.** The view's title, its locus box, its zoom steps and
 its block summary answer *what am I looking at*, which is one question however many pictures are on
-screen — so in a deck they are hoisted above the grid and cell 0 holds the map and its file name,
-exactly as every other cell does. Left inside, they made the first cell a head taller than the
+screen — so in a deck they are hoisted above the grid and the lead's cell holds the map and its file
+name, exactly as every other cell does, wherever it stands. Left inside, they made the first cell a head taller than the
 others and the first map was drawn smaller than the maps it is there to be compared with. The
 element is **moved**, not rebuilt, so the box keeps its caret and the summary keeps the numbers the
 last read wrote into it; it goes back when the deck is put down.
@@ -4322,12 +4529,18 @@ does not fit **scrolls sideways inside the cell** instead of being painted over 
 off out of reach, and the scroll starts with the map in the middle of the cell — left at its start,
 a cell with a stack down its left edge showed that stack and no map at all.
 
-**Rearranging is a drag, not a pair of arrows.** Every panel has a grip before its name; taking hold
-of one shows the tiling, and dropping a map on a cell **exchanges** the two. `◀` `▶` could only say
-*one place along a list*, which describes a 2 × 2 poorly: moving the bottom-left map to the top-right
-was three presses, each shuffling everything in between. The lead has a name like every other cell
-and **no grip** — it is the session's own view re-parented into cell 0, and which file a session is
-of is not a thing that should change by dragging.
+**Rearranging is a drag, not a pair of arrows.** Every cell has a grip before its name, **the first
+map's included**; taking hold of one shows the tiling, and dropping it on a cell **exchanges** the
+two. `◀` `▶` could only say *one place along a list*, which describes a 2 × 2 poorly: moving the
+bottom-left map to the top-right was three presses, each shuffling everything in between. The first
+map used to have a name and no grip, on the argument that it is the session's own view and which file
+a session is of is not a thing a drag should change. Nor does the drag change it — the breadcrumb,
+the tables and the tracks are the same file's afterwards — and a deck with one cell that could not be
+moved was a deck whose first picture was wherever it happened to start. Where the lead stands is kept
+in the session's memory beside the column count (§8.6), and not in `maps`, which lists the companions:
+it is arrangement, like the columns, and a link that moved only the lead would say nothing new. A cell
+closing before it moves it up with the rest of the grid, and a `+` re-seats it with every other cell,
+in the row and column it had.
 
 **Every cell's chain sits in its own heading, the lead's included.** Taking a cell off the shared
 navigation (§16.3) is a statement about that cell, so the control for it belongs on it, beside the
@@ -4345,7 +4558,8 @@ copied to the clipboard, which is what `⌘C` reaches while a deck is on.
 
 The Aesthetics column's **Export** card saves and copies that same figure whenever any cell beside
 the first map has a picture of its own — a map, a structure, a stack of tracks — and the first map's
-own figure, vector PDF and all, only while every other cell is empty. It used to ask for another
+own figure, vector PDF and all, only while every other cell is empty. The figure is the cells as
+they stand on screen: the first map where it was moved to, and not at all while it is hidden (§16.9). It used to ask for another
 *map*, so a deck of a map beside its 3D model exported the map alone from the card, while the bar's
 button beside it wrote both: two exports of one screen disagreeing about what was on it.
 
@@ -4383,6 +4597,15 @@ one that could not open, gets a card that names it and says its settings arrive 
 never the first map's card standing in for it. The one row on it that reaches further is the turn,
 which is the deck's (§16.2) and is on every map's card for that reason; the overlays are preferences
 about every picture in the app, as they always were.
+
+**The General column's *File* card follows the star too.** It describes the starred map's file — a
+companion's bin size, format, pixel count and the rest once its panel has opened the file, and a line
+saying they arrive then until it has — under the same line the *Map* card carries: the map's name,
+with the star. With the star on the first map, or on none (the star shown dark), it is the session's
+own file, and a comparison's *File 1* and *File 2* are the first map's two triangles, so they stand
+aside while a companion is starred. It used to describe the first map whatever was starred, under a
+heading that did not say which file it was: a reader who starred a Hi-C map beside a micro-C one read
+the micro-C file's bin size as the map they had just chosen.
 
 **The star can be on no map.** A filled star is live — pressed, it leaves none filled — and then the
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
@@ -4511,6 +4734,13 @@ used to say *drop a map here*, which was true of the one kind it then took and h
 a tracks cell had no road on screen but the bar's row. Where the session carries no tracks (§8.5)
 it does not promise one.
 
+It **answers a drag with an effect the drag allows**. A drop target's effect has to be one the
+source's `effectAllowed` includes, or the browser refuses the drop with no event at all: the Tracks
+card's rows allowed only a *move*, the cell answered a *copy*, and a row dropped there slid back to the
+card while a test that dispatched the `drop` itself saw it land. The rows allow either now — moved up
+and down the card and onto a map's edge, placed on a cell — and an empty cell answers with what the
+drag allows (`ui/dom.ts`'s `dropEffectFor`).
+
 This is the first entry point a reader can *find*, and until there is a deck it is the only one —
 once there is, its bar offers *add a cell…* beside it (§16.5). Before either, the first companion was
 reachable only through the command palette, so nothing on screen said several maps side by side was
@@ -4560,11 +4790,48 @@ opened is written back into `maps`, so the link names the map rather than the co
 against a recipient's own lead it could otherwise be a different rung.
 
 A file **dropped on an edge** opens the cell that edge names and fills it in one movement, which is
-the gesture a reader tries first. It goes into the first cell that press opened rather than the
-first empty cell in the deck: the two differ only when the deck already had a hole somewhere, and
-there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
-chooser, the command palette — takes the first empty cell instead, because those name no position
-and the empty cells are the reader's own instruction about where the next map goes.
+the gesture a reader tries first. It goes into the cell that press opened **nearest the edge** — the
+top of a new column, the left of a new row — rather than the first empty cell in the deck: the two
+differ only when the deck already had a hole somewhere, and there the aim is the tie-breaker. Not
+the first cell the press opened, either: a press below a short last row squares that row up too
+(above), and the first of its new cells sits in a row above the one the reader pressed for. A map
+arriving by any other road — the bar's URL box, the file chooser, the command palette — takes the
+first empty cell instead, because those name no position and the empty cells are the reader's own
+instruction about where the next map goes.
+
+**Rows of the Tracks and Structures cards take the edges too.** A Tracks card row dropped on a `+`
+opens the cells with a tracks cell drawing that track in the one nearest the edge — *placed*, as on
+an empty cell, so it stays on every map it was drawn on. A Structures card row opens its model there
+and **moves** it: a cell that was drawing it is left **empty where it stands** rather than closed.
+Closing it closed the grid up in reading order, and the new cell slid into the place the model had
+just left, so the drop read as two empty cells and nothing else.
+
+**A lane carried by its grip goes anywhere a track can be drawn, and it is a move**: drawn where it
+is let go, and taken off the edge it came from. Onto a rectangle round **another map** — they light
+on every map while a lane is in the air, not only on the map it is leaving — it is drawn on that edge
+of that map. Onto a `+`, it opens the cells with a tracks cell drawing it in the one nearest the edge;
+onto an **empty cell**, that cell becomes a tracks cell — the 1D browser of it; onto a **tracks
+cell**, that cell draws it. **A lane in a tracks cell is carried the same way**, by the same grip
+that reorders the cell's stack: over the cell itself it goes on moving up and down the stack, and
+past the cell's border it is a carry like any other, lighting every map's rectangles, the `+` edges
+and the other cells. It used to reorder and nothing else, so a track sent to a cell of its own could
+not be carried on from there. The cells show their tiling while a lane is carried, as they do while a
+cell is. An overlay group travels as the one lane it is on screen; a lane arriving on a map it was not
+on is turned for the edge it lands on (§8.9); and what it held of its own on the map it left — a
+ceiling, set on that library's depth — stays behind with that map. **The lane is one edge's**: a
+track drawn along two sides of a map, one of them carried away, is still drawn along the other — the
+carry used to take it off the map altogether — and a grip let go on another of the same map's
+rectangles moves that lane there and leaves the track's lane on a third side where it is. Whatever
+stays behind is turned for the edge it is left on before the lane lands, so the lane that left is not
+turned with it. The Tracks card is where a track is put somewhere *as well*. The grip drag is a
+pointer drag captured by the lane it began on, so nothing else on the page hears it as a drag: the
+places a lane can land answer where the pointer is through one registry instead (`ui/laneCarry.ts`).
+
+**A `+` that fills the cell it opens writes the deck once, filled.** The deck is written into the
+link and the session reads the link back a moment later, so two writes in one gesture — the empty
+cell, then the filled one — came back as two states, the first of them no longer what the deck held,
+and the deck rebuilt its cells from it: a lane let go on a `+` went back to the map it had left, and
+the new cell stood empty.
 
 **Every map the session holds is a row of the Contact maps card**, in the order the grid holds
 them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
@@ -4589,15 +4856,37 @@ rule for the cell; a map still on screen elsewhere — another cell of the same 
 the lower triangle — is not listed twice, and one already hidden is not listed again. A hidden map is held by the session
 rather than by the deck, since a deck left with only the first map puts itself down, and it is let
 go by its × or when the session's own file closes; it is not in the link, which carries cells. Its
-eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The first map's eye and
-the compared map's keep their meanings: the 1D browser, and the lower triangle taken away (§5.7).
+eye is greyed in a view no deck frames (§16.8), which has nowhere to open it. The compared map's eye
+keeps its meaning, the lower triangle taken away (§5.7), and so does the first map's where there is
+no deck: the 1D browser. **In a deck the first map's eye is its cell's**, as every other map's is —
+it used to put the map down for the browser there too, which re-read the state with no map to lead,
+and a deck of maps cannot stand beside a browser (§25 stage D): the companions went with it.
+
+**The first cell closes like any other.** Its × is on its heading, after its star and chain, while
+another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
+is the eye's: the cell leaves the screen, and it is **parked, not closed**. Its view stays mounted
+behind the grid, at a column's width and out of sight, because it is what the rest of the deck
+follows — the maps' lock, the window a structure or tracks cell lights, the locus box above the grid,
+which goes on steering the deck — and a view taken out of the page would measure nothing and report
+nothing. The session is still of its file, and its tables and tracks are what they were; a track
+dropped while it is hidden is on it, as ever. It comes back **where it stood**: from the eye on its
+row, now dimmed, and from a `show …` in the deck's bar — the only road for the 1D browser as lead,
+which has no row on the card, and which it names as `show the 1D browser` rather than by the genome's
+name, which for a model that opened the session is the model's own file. It comes back by itself
+when the last cell beside it goes, since the deck is then put down and the view goes back to its own
+frame, which it must not reach hidden; *close deck* is that too. While it is hidden the star cannot
+stand on a map nobody can see — the *Map* card would be setting a picture off the screen — and moves
+to the first map still on screen, where there is one; the deck's count says the maps on screen, and
+its figure, its copy and the Export card's save are of the cells on screen. Hidden or not, it is
+remembered with its place, in this session's memory and in a saved workspace (§8.6).
 
 Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
 there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip
 would; a hidden map's row onto an empty cell, or onto a `+` edge, opens it there; the first map's or
-the compared map's row, the same way, opens that file there as a new companion — the first map being
-the session's own view, which is re-parented into cell 0 and never moved (§16.5). Taking hold of a
-row shows the tiling, as a cell's grip does.
+the compared map's row, the same way, opens that file there as a new companion — the plainest way to
+read one file at two windows or two colour scales. The first map's row onto a cell that holds
+something moves the first map there, as its own grip would (§16.5), and a companion's row onto the
+first map's cell exchanges the two. Taking hold of a row shows the tiling, as a cell's grip does.
 
 ### 16.10 Naming the maps
 
@@ -4648,7 +4937,8 @@ cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
 maps and the `~` of a vacancy are. A deck holds **a structure cell per model** — a second `3d` opens
-a second cell — and as many tracks cells as the reader opens, named apart in the location control.
+a second cell — and as many tracks cells as the reader opens, named apart in the location control:
+by the name the reader gave the cell (§25.3), or numbered where they gave none.
 
 **A `~` is resolved against the cells the deck is already holding, before the record.** The hash can
 say no more than `~` about a local map (§16.6), and what it is resolved against was the *stored*
@@ -5107,12 +5397,15 @@ The panel's fold is a **window** preference, like the other three columns. Which
 **session** fact, because it is about this file — so switching tabs shows the drawer exactly when that
 tab had one open, and the content re-parents exactly as the other three columns' does.
 
-**The Synthetic tracks card** is the third surface and the least obvious, and it exists because of a
-mistake that was already made once and corrected: the virtual 4C profile started as a strip of its own
-and became an entry in the `AnnotationStore`, which is what gave it renaming, limits, colour, edges,
+**The Tracks card** is the third surface and the least obvious, and it is there because of a mistake
+that was already made once and corrected: the virtual 4C profile started as a strip of its own and
+became an entry in the `AnnotationStore`, which is what gave it renaming, limits, colour, edges,
 reordering, the tooltip and the exported figure for free. That lane is gone (§8.9) and the argument it
-made is not: a per-bin analysis result is the same object. It is therefore an ordinary track on an ordinary card in the **Annotations** panel — not a
-picture in the drawer — and nothing downstream of it knows it was computed rather than loaded.
+made is not: a per-bin analysis result is the same object. It is therefore an ordinary track, a row of
+the **Tracks card** in the **Annotations** panel beside the files it was computed with — not a picture
+in the drawer — and nothing downstream of it knows it was computed rather than loaded. It had a card
+of its own, *Synthetic tracks*, until that card turned out to be the second mistake of the same shape:
+a shelf with the exports on it and almost none of a track's controls (§18.5).
 
 ### 18.2 Every task is a descriptor, and every task is parametrised
 
@@ -5308,12 +5601,33 @@ been re-binned would be a list of figures that no longer describe anything.
 
 ### 18.5 A synthetic track is a track
 
-Any result that is one value per bin becomes an `AnnotationEntry` with `kind: 'track'` on a new
+Any result that is one value per bin becomes an `AnnotationEntry` with `kind: 'track'` on the
 `synthetic` card, and from that moment it is indistinguishable from a loaded bigWig: the same colour
-chip, rename, limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, hairline,
-tooltip, 1D browser and vector figure — because it is the same implementation and not a second one.
-Its `source` is a new `computed` case carrying the task and its parameters, so the row can say what made
-it.
+chip, rename, height, style, scale, flip, limits, autoscale, ceiling drag, four edges, reordering,
+autoscale groups, batch, hairline, tooltip, 1D browser and vector figure — because it is the same
+implementation and not a second one. Its `source` is a new `computed` case carrying the task and its
+parameters, so the row can say what made it.
+
+**It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
+one list whose order is the lanes' order: a task's profile, its called interval set (an overlay, with
+the overlay's shape, radius and opacity), and a comparison of two loaded tracks (§7.5). What only a
+synthetic row has rides in the places a loaded row keeps the matching facts:
+
+- **a `*` after its name** — the mark a resolution the file does not store wears (`3 kb*`, §3.3),
+  for the same fact: this is not in any file the reader gave the app. Its tooltip is the provenance;
+- **what made it, and how many**, on the line a loaded row's summary takes — *Diamond insulation*,
+  *Pattern detection · 1,204 pairs*, *Two tracks, as their ratio*;
+- **its exports and its framing**, in its settings where a loaded row's path is — bigWig, bedGraph and
+  TSV for a track, BED or BEDPE and TSV for a called set (§18.7), then the framing it was computed
+  against in the path's monospace;
+- **Recompute**, where a dropped file's row offers to re-open it, on a row that came back `detached`.
+
+There was a **Synthetic tracks** card above the Tracks card, and it is gone. It listed these rows with
+the colour, the name, the eye, the edges, the style, the scale and the exports, and nothing else — no
+height, no limits, no group, no flip, and no tick box, so an insulation track could not join a batch
+with the bigWig it was being compared against. A row that is a track in every sense below had a
+second, smaller set of controls on a second shelf, which is the one thing this section says it is
+not.
 
 Mechanically, a finished vector is **registered with the annotations worker as a bin-vector source**,
 and the lane then asks for samples over a window exactly as it does of a bigWig. One new request kind,
@@ -5548,7 +5862,7 @@ alternatives — the BED is the file a tool reads, and the TSV is the same rows 
 them, which is a header a BED consumer would choke on and a reader needs.
 
 **Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
-where — *3 tracks added to the Synthetic tracks card in the Annotations panel.* — and each row under it
+where — *3 tracks added to the Tracks card in the Annotations panel, marked \*.* — and each row under it
 is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
 three lanes drawn as three dashed boxes each repeating the same thirty words, each with a lone TSV
 under it, made a run of three exports read as a run of three paragraphs. The sentence also does not say
@@ -5808,8 +6122,14 @@ the estimate says the pass is the whole file rather than half of it. A marginal 
 the file would correct the bins before the anchor and leave those after it uncorrected — one quantity
 by the axis and two by the arithmetic, which is the failure the trans expectation already exists to
 prevent.
-**On a metacool the form asks for the anchor and nothing else**, and the two switches are absent
-because neither question survives contact with the file. An anchor there is one MAG among hundreds
+**Exclude anchor region** leaves the anchor's own bins, and one bin either side, empty (`NaN`, a gap
+rather than a zero) — off by default. The anchor against itself is the diagonal and the bin beside it
+its shoulder: the brightest cells of the map by orders of magnitude, so in a track they are a spike
+that sets the scale every other bin is read on, and on a metagenome the whole of the MAG named. With
+it on, the label says *anchor excluded*, and a profile left with nothing — a whole sequence named,
+cis only — says so in the job's notes rather than exporting an empty bigWig without a word.
+**On a metacool the form asks for the anchor and that, and nothing else**, and the two other switches
+are absent because neither question survives contact with the file. An anchor there is one MAG among hundreds
 sharing a tube, and the reading wanted is what it touches *everywhere* — a profile restricted to the
 anchor's own assembly answers a question about a genome in isolation, which is not why anybody opened a
 metagenomic map. And a decay curve accumulated from one MAG's contigs is not an expectation for contact
@@ -5857,7 +6177,8 @@ largest, E2 the next. The phasing signal *signs* each one — positive where it 
 once their correlation reaches `minR` — and never chooses among them, because a component chosen for
 following GC content would make any later comparison of GC content between the compartments it
 calls a comparison of GC content with itself. A *components* table says what each one is: its
-eigenvalue, the share of the whole it explains, and its Pearson r with the phasing signal as drawn. The
+eigenvalue, **how much of the contacts it accounts for** — *of contacts*, below — and its Pearson r
+with the phasing signal as drawn. The
 phasing signal is a gene model, else **a track** — any loaded or computed lane, chosen and never
 assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
 the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone and
@@ -5880,11 +6201,18 @@ bin more than 0.03 apart on a track reaching ±0.74. What remains is cooltools' 
 averages the diagonals past about the thirtieth in logarithmic groups, and its percentile, which also
 counts the dropped rows' zeros and the ignored diagonals' ones. The two methods agree where a
 chromosome has compartments to find and part where it has none: E1 against E1, r = 0.94 on PAK and
-0.58 on *E. coli*. Under cooltools the table's share is the eigenvalue squared over the sum of every
-cell squared, which is what a matrix that is not a correlation's has in place of a variance. It
+0.58 on *E. coli*. **Of contacts** is one measure under both: the share of the map's departure from
+expected — cooltools' prepared matrix, observed/expected clipped and less one, a gap as expected —
+that a component's checkerboard carries, `(vᵀAv)²` over the sum of every cell squared. Under
+cooltools `vᵀAv` is the eigenvalue, so this is the share its table has always reported; under the
+correlation it is the one number about the map the table lacked, since a correlation matrix's
+eigenvalue over its rows — the table's *variance*, kept beside it — is a share of how alike the rows
+are rather than of the contacts, and cannot be set beside a cooltools run's. Orthogonal components'
+checkerboards are orthogonal, so the shares add up to what several carry together. cooltools' road
 skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
-about minutes — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds. A method the
-task does not have is refused rather than read as the default.
+about the cube — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds, where the
+correlation of the same square is four more on one core (§7.5). A method the task does not have is
+refused rather than read as the default.
 
 *Inter-arm alignment* — how strongly a bacterial chromosome's two arms are held together, as a number
 rather than an impression of a picture: the secondary diagonal is the mark SMC leaves when it is loaded
@@ -5897,12 +6225,24 @@ origin and the terminus they run into each other and a cell there is a pair a fe
 DNA, whose ratio says how compact the stretch is rather than whether the arms are aligned, so a cell
 nearer the main diagonal than `2 × band + 2` bins is left out. Three shapes of one reading: a
 **curve** against distance from the origin, the figure the literature draws; a **track**, how much
-each locus touches its mirror image; and a **table** of the mean enrichment over the arms, its peak,
-and its **reach** — outwards from the peak, how far it holds above half of it, both read from a
-running mean over 2% of the arm so that one noisy distance neither sets the peak nor carries the reach
-to the terminus of a flat profile. It separates what it should, at every rung: 1.6 on *P. aeruginosa*
-PAK, reaching 2.7 of its 3.2 Mb arms; 0.37 on *B. subtilis* 168; 0.07 on *E. coli* MG1655. Absent on a
-metacool, whose MAGs have no declared origins.
+each locus touches its mirror image; and a **table** of its peak, its **reach** — outwards from the
+peak, how far it holds above half of it, both read from a running mean over 2% of the arm so that one
+noisy distance neither sets the peak nor carries the reach to the terminus of a flat profile — and its
+**score**, the mean enrichment **from the origin out to the reach**. So the reach says how far the arms
+are held and the score how strongly where they are, where a mean over the whole arm said both at once
+and read an alignment confined round parS like a weak one that runs to the terminus. Read over the
+stretch that holds above half the peak, a chromosome whose arms are not aligned scores its noise's
+highest stretch rather than zero; where nothing reaches, the score is the whole arm's mean. Each
+sequence has **a second row** of the same numbers over the decay along both arms — the expectation the
+map's arms and Compartments divide by (§8.15), within `armWindow` bins along them, 50 as theirs is —
+which takes the secondary diagonal into itself: a control on that detrending, not a second measure,
+its score read over the first row's stretch so that both rows average the same distances. It
+separates what it should: 1.7 on *P. aeruginosa* PAK from 2 to 16 kb, reaching 2.6–2.7 of its 3.2 Mb
+arms, against 0.23–0.28 on *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and along
+both arms PAK's 1.7 is −0.03 to −0.08. The control's own peak is at the terminus, where the two
+diagonals cross and the arms' expectation is at its weakest, and it grows with the bin — 0.08 at 2 kb,
+1.2 at 16 kb on PAK — because the window is counted in bins, and fifty of 16 kb are too wide to follow
+the crossing. Absent on a metacool, whose MAGs have no declared origins.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
@@ -6524,9 +6864,9 @@ survives every scale reads as a column through the whole stack. A single-scale r
 ordinary ungrouped line — because there is no set for it to be part of, and a heatmap of one row is a
 worse picture of one track than the track.
 
-The Synthetic card carries the style control, and that is not an accident of layout: it is the **only**
-card that lists a computed row, since the Tracks card leaves them out on purpose (§18.5), so a style
-offered only there would be one a computed lane could never be given.
+A computed row is a row of the Tracks card (§18.5), so it carries the style control every loaded track
+carries — the one control this section needed a computed lane to have, since a mode offered to one kind
+of row only would be a mode the four insulation scales could never be drawn in.
 
 ### 18.12 A set of quantiles is one shape
 
@@ -8316,8 +8656,8 @@ A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
 **The Structures card.** Every model the session holds — dropped, named by URL, or computed
-(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
-Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
+(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card leaves
+`structure` rows out, computed or not. Each row carries the head every row has (colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
 computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
 head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
@@ -8328,7 +8668,7 @@ already says. There is no second control for that and no button labelled with wh
 reader who pressed the lit one expecting it to un-show got nothing. The card's own load zone names
 the three formats and, like every other zone that asks for a file, says it takes a drop or a click.
 A computed row that came back from a reload is detached and offers **recompute**, which opens its
-recipe in the drawer, as the Synthetic card does (§18.5).
+recipe in the drawer, as a synthetic row on the Tracks card does (§18.5).
 
 ### 25.3 The deck of cells
 
@@ -8351,9 +8691,26 @@ last of a batch used to get a picture and the others sat on the card as rows wit
 which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
-model it was to be judged against — the commonest way to lose a picture in this application. A
+model it was to be judged against — the commonest way to lose a picture in this application.
+**A model that opens the session on its own is drawn alone.** A structure file dropped on an empty
+window names a genome — its beads are on sequences — so the session it opens is a browser of that
+genome, and the browser has nothing to draw: a structure is a row and a cell, never a lane. It used
+to stop there, an empty axis and the model nowhere on screen, the row having arrived with the store
+and been taken for one already there. The model now gets its cell the moment the browser is mounted,
+and the tracks give it the screen — hidden rather than closed (§16.9), so the heading above the deck
+still steers which stretch of the model is lit and `show the 1D browser` in the deck's bar puts them
+back. With nothing beside it the cell takes the height a map would, where a cell of a row with no map
+in it had the 16 rem floor. Where something is already drawn on the tracks they stay on screen, and a
+link or a restored session names its own deck. A
 row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
-eye is a model asking for a cell, the drop is a cell being given a model. The *3D structure* card
+eye is a model asking for a cell, the drop is a cell being given a model. **The eye follows the
+deck, however the deck changed**: a cell closed from its own heading darkens its row's eye, and a
+row dropped on a `+` or an empty cell lights it, the moment the cell is drawn. The card used to ask
+the deck only when its own eye was pressed, so a closed cell left its row lit and a dropped model
+left it dark. **A structure cell's heading is its model's name**, and it is edited there: a name
+typed into it renames the row on the Structures card and every other place the model is named, as a
+map's heading renames the map (§16.10); an empty box keeps the name it had, since a model with
+no name is a row the card cannot tell from its neighbours. The *3D structure* card
 has no picker for it: it said the second thing in the place a reader looks for which cell the card
 sets, which its title line says instead (below). And **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
@@ -8492,10 +8849,10 @@ letter that folds a panel instead. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a **bar under it sets the cell's height**,
 dragged, nudged with the arrow keys, and double-clicked to give the height back to the row;
-remembered per seat. A model has no axis to line up with the map's, so it is the one cell whose
-height is nobody's business but the reader's: a deck one across put the model in a 16 rem band under
-a map that could be shrunk to a thumbnail, and nothing done to either of them gave the model any
-more room. A button in its corner **enlarges** it into
+remembered per seat. A model has no axis to line up with the map's, so its height is the reader's
+business — as a stack of tracks' is, whose cell has the same bar (below): a deck one across put the
+model in a 16 rem band under a map that could be shrunk to a thumbnail, and nothing done to either of
+them gave the model any more room. A button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
 them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
@@ -8505,7 +8862,8 @@ on the left and what it does on the right**, and **the live row is lit**: *drag*
 orbits, **without limit** — neither angle stops, so the model turns over the top and keeps going
 rather than hitting a wall halfway through a drag; the clamp that used to hold the horizon level was
 a turntable's convention and a structure has no horizon), *scroll* to zoom, *⇧* to move (a drag
-pans the whole model), the centre key — ⌘ on a Mac, Ctrl elsewhere — for *centre* (a click on a bead
+pans the whole model, as a drag with the right button does; a right click that does not drag opens
+the cell's menu, whose *Copy this* puts the model alone on the clipboard, §7.2), the centre key — ⌘ on a Mac, Ctrl elsewhere — for *centre* (a click on a bead
 makes it the centre of rotation), and *space* for *fog* (the wheel brings it forward or pushes it
 back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the cell always had). A
 **sticky mode** — *mark*, *loop* or *measure* (§25.4) — takes a row at the top while it runs, lit in
@@ -8543,14 +8901,34 @@ it beside the maps, with its one edge live and the other three greyed and saying
 the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
 deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
 cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
-spreads to every other map. The chain in its heading unhooks both roads.
+spreads to every other map. The chain in its heading unhooks both roads. **It is its axis and its
+lanes**, with no locus box, zoom steps or summary line of its own: where to look is the maps'
+question, asked in the lead's bar above the grid, and it is still panned and zoomed in place — by a
+drag, the wheel and the keys — like any 1D browser. **Its heading is a name the reader can change**,
+and the change is the cell's alone: it names the stack in its heading and in the location control's
+list of places, and renames no track on it — the tracks are the session's, named on the Tracks card,
+and a cell is where they are drawn. Until then it is `tracks`, and `tracks 2`, `tracks 3` for the
+ones after it counting from the left, in the heading as in the control — two headings both saying
+`tracks` over a list saying `tracks` and `tracks 2` left a reader guessing which line was which
+cell — renumbered as cells come and go. Two stacks side by side are what a name is for, *G1*
+beside *G2M*; an empty box, or the default typed back, hands the cell back to its default. **A bar
+under the stack sets the cell's height**, the structure cell's bar and gesture — dragged, nudged
+with the arrow keys, double-clicked to give the height back to the row: a column of cells under a
+map gave a stack of tracks the 16 rem floor and no more, and the stack scrolled inside it. The names
+and the heights are remembered by **seat**, a tracks cell's place among the tracks cells counting
+from the left, written from the live cells on every change to the deck, so a reload names and sizes
+each cell as it was and a cell moved or closed takes both with it rather than leaving them on a seat.
 
 **The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
-session's view, re-parented into cell 0 as a map's is, and the cells beside it are tracks and the
-structure. The deck learns a lead that is not a map — the browser's windows as loci, and a way to
-be taken somewhere — and the browser reports every move of its window, a link's included. A map
-may not join such a deck: the bar refuses it in words, the add row puts its map roads away, and a
-map a link names is held as the cell it would have been, under its name.
+session's view, re-parented into a cell as a map's is — moved and hidden as a map's is (§16.9) — and
+the cells beside it are tracks and the structure. The deck learns a lead that is not a map — the
+browser's windows as loci, a way to be taken somewhere, and its tracks drawn at an export's dpi, so
+the deck's figure has them in their cell where it used to leave a gap — and the browser reports every
+move of its window, a link's included. Its Export card saves and copies the deck's figure while a cell
+beside it has a picture, as the map's does (§16.5). A map may not join such a deck: the bar refuses
+it in words, the add row puts its map roads away, a map a link names is held as the cell it would
+have been, under its name, and the two presses that match maps' scales and resolutions are not
+offered, having nothing to act on. The deck's count of maps says nothing of a deck with none.
 
 ### 25.4 Hover, both ways
 
@@ -8601,9 +8979,11 @@ stopped naming a contact, so a model still joining two beads would be the one su
 a question the pointer stopped asking. The one place is the position along the diagonal, which is
 what the line is drawn at and what the readout names. Each saying which surface it came from, every
 subscriber ignoring its own.
-A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
-bead is a mark on every map's column axis and a guide on every tracks cell; a pointer on a tracks
-cell is the same on the maps and the structure. The deck's own cell-to-cell echo between maps is
+A pointer on a map lights the bead at each end and joins the two with a chord, and puts **a guide
+at each end** on every tracks cell — the pair the lanes beside that map mark, where a tracks cell
+marked the first of the two and left the other anchor with no line; a pointer on a bead is a mark on
+every map's column axis and a guide on every tracks cell; a pointer on a tracks cell is the same on
+the maps and the structure. The deck's own cell-to-cell echo between maps is
 untouched, and a map's hover is not relayed to the maps twice.
 
 What the maps are looking at reaches the cell as loci on every pan; beads outside the window are
@@ -8940,6 +9320,14 @@ chose rather than at a fixed one. Beads and sticks export as **paths** through
 `arc` can be and exports as the raster the GPU drew, **at the row's own resolution**; the deck's
 figure takes the cell's canvas like any other, at the deck's 300 dpi (§16.5). The clipboard takes a
 PNG, as it does for a map.
+
+**An exported model is framed by its cell's edge**: a thin rule round the picture, at the weight and
+in the colour of the map's plot border (`--border-strong`, 0.75 px scaled to the export's
+resolution), so the two cells of a deck are framed alike. A model zoomed past its cell is cut by the
+cell's edge, and on screen the cell's own border says where the cut is; exported without one, the
+model floated on the page with a straight side sliced off it for no visible reason. Every export of a
+model draws it — the deck's figure, the card's PNG and PDF, the clipboard — as pixels on a raster and
+as a path on a page of paths, inset by half its width so the whole of the line is on the page.
 
 **A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**

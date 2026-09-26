@@ -112,7 +112,7 @@ describe('colour by, on a lane of intervals', () => {
     // else loses the setting the moment the right file comes back.
     const made = make()
     made.store.restyle(made.entry.id, {
-      features: { colourBy: 'gene_biotype', arrows: true, bars: 'file' },
+      features: { colourBy: 'gene_biotype', arrows: true, bars: 'file', display: 'expanded' },
     })
     const field = featureColourField(made.store, now(made))
     document.body.append(field)

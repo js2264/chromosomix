@@ -56,6 +56,7 @@ import {
   isTypingTarget,
   keyLabel,
   matchesKeys,
+  wantsSpace,
   wantsTextCopy,
   withKey,
   type Command,
@@ -2332,6 +2333,8 @@ export class App implements SessionHost {
       if (typing && !command.keys.startsWith('mod+')) continue
       // ⌘C is the browser's before it is ours whenever there is text under it.
       if (command.yieldsToText === true && wantsTextCopy(event.target)) continue
+      // …and Space is a focused button's, tickbox's or menu row's before ours.
+      if (command.yieldsToControls === true && wantsSpace(event.target)) continue
 
       if (!matchesKeys(event, command.keys)) continue
       event.preventDefault()

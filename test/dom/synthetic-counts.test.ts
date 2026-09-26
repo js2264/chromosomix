@@ -5,7 +5,7 @@
  * A called set is a number of things, and the number is the first thing anybody
  * wants from it: a detector that returned 3 loops and one that returned 3,000
  * are different results, and a reader deciding whether to trust a run is reading
- * that number before anything else. The Synthetic tracks card said the task and
+ * that number before anything else. The row of a computed set said the task and
  * the framing and never the count — so *Detected loops* reported everything
  * about the run except its result, and the only way to find out how many was to
  * export the file and count the lines.
@@ -14,8 +14,8 @@
  * of row: a dropped BEDPE has carried `1,204 pairs` under its name since there
  * were rows at all, written by the annotations worker into `summary` and drawn
  * by the Tracks card. So this is one field and one line reused rather than a
- * second mechanism — `adoptIntervals` writes the same `summary`, and the
- * Synthetic card draws it with the same `ann-note` the Tracks card uses.
+ * second mechanism — `adoptIntervals` writes the same `summary`, and the Tracks
+ * card draws it on a computed row's line with the task that made it.
  *
  * The **noun is the task's**, which is the part worth pinning: both halves of a
  * loop set are `pairs` to the parser and `boundaries`, `domains`, `segments`,
@@ -39,6 +39,7 @@ import { FeatureBuilder, PairBuilder } from '@/annotations/featureset'
 import { AnnotationStore } from '@/annotations/store'
 import type { AnnotationClient } from '@/annotations/worker/client'
 import { setUpDom, type DomTeardown } from '../support/dom'
+import { tracksCardOver } from '../support/tracksCard'
 
 let teardown: DomTeardown
 
@@ -164,11 +165,14 @@ function bench(): { workspace: AnalysisWorkspace; store: AnnotationStore } {
   return { workspace: new AnalysisWorkspace(host), store }
 }
 
-/** Every line of prose on the one row the card is showing. */
-function notesOn(workspace: AnalysisWorkspace): string[] {
-  return Array.from(workspace.syntheticEl.querySelectorAll('.ann-note, .ann-origin')).map(
+/** Every line of prose on the one row, with its settings open, on the Tracks card. */
+function notesOn(workspace: AnalysisWorkspace, store: AnnotationStore): string[] {
+  const mounted = tracksCardOver(store, workspace)
+  const notes = Array.from(mounted.el.querySelectorAll('.ann-note, .ann-origin')).map(
     (node) => node.textContent ?? '',
   )
+  mounted.destroy()
+  return notes
 }
 
 describe('the count on a called set', () => {
@@ -180,15 +184,16 @@ describe('the count on a called set', () => {
     workspace.destroy()
   })
 
-  it('is shown on the card, under the task that made it', () => {
-    const { workspace } = bench()
+  it('is shown on the card, beside the task that made it', () => {
+    const { workspace, store } = bench()
     finish(workspace, loops(1204))
-    const notes = notesOn(workspace)
-    expect(notes).toContain('Pattern detection')
-    expect(notes).toContain('1,204 pairs')
+    const notes = notesOn(workspace, store)
+    expect(notes).toContain('Pattern detection · 1,204 pairs')
     // Above the framing, because the count is about the answer and the framing
     // is about the question.
-    expect(notes.indexOf('1,204 pairs')).toBeLessThan(notes.indexOf(framing().label))
+    expect(notes.indexOf('Pattern detection · 1,204 pairs')).toBeLessThan(
+      notes.indexOf(framing().label),
+    )
     workspace.destroy()
   })
 
@@ -246,15 +251,19 @@ describe('the count on a called set', () => {
  * set. This is the same line, in the other place rows are listed.
  */
 describe('the controls a called set is given', () => {
-  const labelsOn = (workspace: AnalysisWorkspace): string[] =>
-    Array.from(workspace.syntheticEl.querySelectorAll('.field-label')).map(
+  const labelsOn = (workspace: AnalysisWorkspace, store: AnnotationStore): string[] => {
+    const mounted = tracksCardOver(store, workspace)
+    const labels = Array.from(mounted.el.querySelectorAll('.field-label')).map(
       (node) => node.textContent ?? '',
     )
+    mounted.destroy()
+    return labels
+  }
 
   it('are the marks’ own, not four edges that cannot move it', () => {
-    const { workspace } = bench()
+    const { workspace, store } = bench()
     finish(workspace, loops(12))
-    const labels = labelsOn(workspace)
+    const labels = labelsOn(workspace, store)
     expect(labels).not.toContain('location')
     expect(labels).toContain('opacity')
     // A pair is a circle, so its size is the control; a segment is a box or a
@@ -265,9 +274,9 @@ describe('the controls a called set is given', () => {
   })
 
   it('are the shape and the opacity for a set of intervals', () => {
-    const { workspace } = bench()
+    const { workspace, store } = bench()
     finish(workspace, boundaries(88))
-    const labels = labelsOn(workspace)
+    const labels = labelsOn(workspace, store)
     expect(labels).not.toContain('location')
     expect(labels).toContain('shape')
     expect(labels).toContain('opacity')
@@ -279,11 +288,13 @@ describe('the controls a called set is given', () => {
     const { workspace, store } = bench()
     finish(workspace, loops(12))
     const id = 'analysis:chromosight:chromosight-patterns'
-    const slider = workspace.syntheticEl.querySelector<HTMLInputElement>('.ann-range')
+    const mounted = tracksCardOver(store, workspace)
+    const slider = mounted.el.querySelector<HTMLInputElement>('.ann-range')
     expect(slider).not.toBeNull()
     slider!.value = '18'
     slider!.dispatchEvent(new Event('input', { bubbles: true }))
     expect(store.byId(id)?.style.radius).toBe(18)
+    mounted.destroy()
     workspace.destroy()
   })
 })

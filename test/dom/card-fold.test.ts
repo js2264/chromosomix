@@ -194,3 +194,61 @@ describe('a real card from a panel', () => {
     built.destroy()
   })
 })
+
+describe('the cards that start folded', () => {
+  it('builds Metadata annotations and Bookmarks as their headings, saying so', async () => {
+    const { MetadataCard } = await import('@/ui/MetadataCard')
+    const { BookmarksCard } = await import('@/ui/BookmarksCard')
+    const { BookmarkStore } = await import('@/annotations/bookmarks')
+    const store = new AnnotationStore(`fold-${Math.random()}.mcool`, { persist: false })
+    const metadata = new MetadataCard({
+      store,
+      index: () => null,
+      level: () => null,
+      onExport: () => {},
+    })
+    const bookmarks = new BookmarksCard({
+      store: new BookmarkStore('k'),
+      go: () => {},
+      available: () => true,
+      framed: () => null,
+      binsize: () => null,
+    })
+    for (const built of [metadata.el, bookmarks.el]) {
+      document.body.appendChild(built)
+      expect(built.classList.contains('is-folded')).toBe(true)
+      const head = built.querySelector(':scope > .card-head') as HTMLElement
+      const chevron = chevronOf(head)
+      // The chevron agrees with the card from the first frame: a card built
+      // folded under a chevron that says *collapse* takes two presses to open.
+      expect(chevron.getAttribute('aria-expanded')).toBe('false')
+      expect(chevron.getAttribute('aria-label')).toMatch(/^Expand /)
+      head.click()
+      expect(built.classList.contains('is-folded')).toBe(false)
+      expect(chevron.getAttribute('aria-label')).toMatch(/^Collapse /)
+    }
+    metadata.destroy()
+    bookmarks.destroy()
+  })
+
+  it('opens Bookmarks when a view is saved from outside it', async () => {
+    const { BookmarksCard } = await import('@/ui/BookmarksCard')
+    const { BookmarkStore } = await import('@/annotations/bookmarks')
+    const marks = new BookmarkStore('k')
+    const card = new BookmarksCard({
+      store: marks,
+      go: () => {},
+      available: () => true,
+      framed: () => ({ contig: 'II', start: 120000, end: 180000 }),
+      binsize: () => 10000,
+    })
+    document.body.appendChild(card.el)
+    expect(card.el.classList.contains('is-folded')).toBe(true)
+    // The button beside `go` answers by the row appearing on this card, so the
+    // card cannot stay a heading while it does.
+    card.saveFramed()
+    expect(card.el.classList.contains('is-folded')).toBe(false)
+    expect(card.el.querySelectorAll('.bookmark-row')).toHaveLength(1)
+    card.destroy()
+  })
+})

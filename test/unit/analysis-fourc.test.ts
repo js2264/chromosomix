@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { runFourC } from '@/analysis/run/fourc'
+import { excludeAnchor, runFourC } from '@/analysis/run/fourc'
 import type { JobContext } from '@/analysis/job'
 import type { AnalysisFraming, Params, ProfileOutput } from '@/analysis/types'
 import type { MetaCooler } from '@/metacooler/MetaCooler'
@@ -208,6 +208,58 @@ describe('a 4C profile', () => {
     const { trans } = halves(profile)
     expect(trans.every((value) => value === TRANS_CELL)).toBe(true)
     expect(profile.label).toContain('with trans')
+  })
+})
+
+/**
+ * *Exclude anchor region* (§18.8): the anchor against itself is the diagonal,
+ * and the bin beside it its shoulder — the brightest cells of the map by orders
+ * of magnitude, and in a track the spike every other bin is read against.
+ */
+describe('with the anchor left out', () => {
+  it('leaves the anchor and one bin either side empty, and every other bin as it was', async () => {
+    const kept = halves(await profileOf({ anchor: ANCHOR, cis: true })).cis
+    const profile = await profileOf({ anchor: ANCHOR, cis: true, excludeAnchor: true })
+    const { cis } = halves(profile)
+    for (const bin of [ANCHOR_BIN - 1, ANCHOR_BIN, ANCHOR_BIN + 1]) {
+      // A gap, not a zero: nothing was measured away.
+      expect(Number.isNaN(cis[bin])).toBe(true)
+    }
+    for (const bin of [0, ANCHOR_BIN - 2, ANCHOR_BIN + 2, BINS - 1]) expect(cis[bin]).toBe(kept[bin])
+    expect(profile.label).toBe(`4C · ${ANCHOR} · anchor excluded`)
+  })
+
+  it('is off unless asked for', async () => {
+    const profile = await profileOf({ anchor: ANCHOR, cis: true })
+    expect(Number.isFinite(halves(profile).cis[ANCHOR_BIN])).toBe(true)
+    expect(profile.label).not.toContain('excluded')
+  })
+
+  it('leaves the same gap after a division, and the trans half alone', async () => {
+    const profile = await profileOf({ anchor: ANCHOR, cis: false, normalise: 'ps', excludeAnchor: true })
+    const { cis, trans } = halves(profile)
+    expect(Number.isNaN(cis[ANCHOR_BIN])).toBe(true)
+    expect(Number.isNaN(cis[ANCHOR_BIN + 1])).toBe(true)
+    expect(cis[ANCHOR_BIN + 2]).toBeCloseTo(1, 4)
+    expect(trans.every((value) => Number.isFinite(value))).toBe(true)
+  })
+
+  it('says so when leaving the anchor out leaves nothing', async () => {
+    // A whole sequence named, cis only: the anchor is everything the profile reads.
+    const made = job({ anchor: 'A', cis: true, excludeAnchor: true })
+    const outputs = await runFourC(made.context)
+    const profile = outputs[0] as ProfileOutput
+    expect([...profile.values].every((value) => Number.isNaN(value))).toBe(true)
+    expect(made.notes.join(' ')).toContain('leaves nothing')
+  })
+
+  it('stops at either end of the file', () => {
+    const values = new Float32Array(6).fill(1)
+    excludeAnchor(values, { from: 0, to: 1 })
+    expect([...values].map((value) => Number.isNaN(value))).toEqual([true, true, false, false, false, false])
+    values.fill(1)
+    excludeAnchor(values, { from: 5, to: 6 })
+    expect([...values].map((value) => Number.isNaN(value))).toEqual([false, false, false, false, true, true])
   })
 })
 

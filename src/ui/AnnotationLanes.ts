@@ -56,6 +56,7 @@ import {
   groupRuns,
   laneIsHorizontal,
   laneOutward,
+  laneRect,
   laneX,
   laneY,
   withinGrip,
@@ -634,7 +635,12 @@ export class AnnotationLanes {
    * shares one pair of limits, the two are directly comparable by construction.
    */
   private slotsFor(edge: LaneEdge): Slot[] {
-    return planStack(this.drawnOn(edge), {
+    return this.plan(this.drawnOn(edge))
+  }
+
+  /** {@link slotsFor}'s arithmetic over any list of rows. */
+  private plan(entries: AnnotationEntry[]): Slot[] {
+    return planStack(entries, {
       groupOf: (entry) => entry.style.group,
       modeOf: (group) => this.groups.modeOf(group),
       sizeOf: (entry) => entry.style.size,
@@ -659,7 +665,7 @@ export class AnnotationLanes {
    * profile was columns of the block itself; it is gone (§18.9), and with it the
    * only reason this could ever answer with a non-empty list.
    */
-  private drawnOn(edge: LaneEdge): AnnotationEntry[] {
+  private drawnOn(edge: LaneEdge, loading = false): AnnotationEntry[] {
     const map = this.options.map ?? LEAD_MAP
     // The map on its own; see {@link setBare}.
     if (this.bare) return []
@@ -671,9 +677,11 @@ export class AnnotationLanes {
     // be the picture editing their settings behind them. Which means "back
     // where it came from on the way home" costs nothing — the store never moved.
     if (this.turned && edge !== 'bottom') return []
-    const entries = this.turned
-      ? this.options.store.drawnAnywhereOn(map)
-      : this.options.store.drawnOnMap(map, edge)
+    const entries = loading
+      ? this.options.store.drawnOrLoadingOn(map, this.turned ? null : edge)
+      : this.turned
+        ? this.options.store.drawnAnywhereOn(map)
+        : this.options.store.drawnOnMap(map, edge)
     // No axis on this edge, no lane — with one exception, which is the whole of
     // §8.12. Every *loaded* kind draws against genomic coordinates, so a
     // contig-level or genome-level block leaves them nothing to place their
@@ -775,7 +783,15 @@ export class AnnotationLanes {
 
   /** Total thickness one edge needs, or `0` when it has no lanes. */
   thicknessOf(edge: LaneEdge): number {
-    const slots = this.slotsFor(edge)
+    // Planned over the rows still **reading** as well as the ones drawn, so
+    // the stack — and the map it shares the grid with — is laid out once for
+    // the tracks a session opened with, rather than shrunk again each time one
+    // lands. The demo's FASTA is the last of seven to arrive, twelve megabytes
+    // after the map is drawn, and its lane on two edges re-fitted the whole
+    // picture when it did. A row still reading is a band nothing is drawn in
+    // yet, at the far end of the stack from the map: the rows are drawn from
+    // the map outward and every coordinate here is measured from the map.
+    const slots = this.plan(this.drawnOn(edge, true))
     if (slots.length === 0) return 0
     const last = slots[slots.length - 1]
     return last.acrossFrom + last.thickness + this.anchorBand()
@@ -823,14 +839,18 @@ export class AnnotationLanes {
       const canvas = this.canvases[edge]
       const lanes = built[edge]
       this.state[edge] = emptyEdgeState()
-      canvas.classList.toggle('hidden', lanes.length === 0)
-      if (lanes.length === 0) continue
+      // Hidden only where nothing is drawn **or reading**: a stack whose tracks
+      // are all still on their way holds its room, blank, so the map beside it
+      // is laid out once rather than moved over when the first of them lands
+      // ({@link thicknessOf}).
+      const total = this.thicknessOf(edge)
+      canvas.classList.toggle('hidden', total === 0)
+      if (total === 0) continue
 
       // The lane canvas matches the heatmap canvas on the shared axis exactly,
       // so the two are drawn in one coordinate system rather than in two that
       // agree by arrangement — plus whatever tail a vertical stack's handles
       // need, which is added *after* the data and so moves nothing.
-      const total = this.thicknessOf(edge)
       const horizontal = laneIsHorizontal(edge)
       const cssAlong =
         (horizontal ? geometry.cssWidth : geometry.cssHeight) + this.tailFor(edge, geometry)
@@ -847,6 +867,7 @@ export class AnnotationLanes {
       if (ctx === null) continue
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
       ctx.clearRect(0, 0, cssWidth, cssHeight)
+      if (lanes.length === 0) continue
       this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
   }
@@ -988,6 +1009,42 @@ export class AnnotationLanes {
       this.paintEdge(ctx, edge, geometry, lanes, built.groups, scale)
       ctx.restore()
     }
+  }
+
+  /**
+   * One lane as it is drawn here, alone — *copy this* on the lane's
+   * right-click menu (§7.2).
+   *
+   * The lane's own rectangle of its stack, at the density the screen was last
+   * drawn at, by the pass the screen is drawn by with everything round the
+   * track left out: the name and
+   * the range written over it, the handle beside it, the pointer's line and
+   * the marks carried off the map. A gene's name under its body is the track's
+   * own and stays, as the overlays switch has it on screen. The page's colour
+   * goes under the ink, so a lane's clear background pastes as the page.
+   *
+   * `null` where no lane of that id is on that edge.
+   */
+  laneImage(edge: LaneEdge, id: string, geometry: LaneGeometry, background: string): HTMLCanvasElement | null {
+    const dpr = this.dpr
+    const built = this.build(geometry)
+    const lane = built[edge].find((each) => each.entry.id === id)
+    if (lane === undefined) return null
+    const { frame } = lane
+    const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * dpr))
+    out.height = Math.max(1, Math.round(height * dpr))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    ctx.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr)
+    this.paintEdge(ctx, edge, geometry, [lane], built.groups, dpr, true)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
   }
 
   // -------------------------------------------------------------------------
@@ -1156,6 +1213,12 @@ export class AnnotationLanes {
     lanes: Lane[],
     groups: Map<string, { min: number; max: number }>,
     dpr: number,
+    /**
+     * The tracks and nothing drawn round them — no name or range, no handle,
+     * no pointer's line, no mark carried off the map, no group bar. Only for
+     * {@link laneImage}.
+     */
+    bare = false,
   ): EdgeState {
     const state = emptyEdgeState()
     const axis = this.axisFor(edge)
@@ -1333,7 +1396,14 @@ export class AnnotationLanes {
         // function decides the rows, the floor and the banding for both
         // surfaces, because a number spelled at each is a number that drifts
         // (§8.16, §8.17).
-        const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+        //
+        // The same rule as the browser's, on the same lane drawn beside a map
+        // (§8.16, and §8.14 for the variant arm of it). One resolution of the
+        // colouring, the points and the rows on both surfaces, because a lane
+        // that read one way under the map and another in the browser would be
+        // two pictures of one file.
+        const features = featuresOf(entry.style, entry.kind)
+        const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength, features.display)
         const layout = layoutFeatures(
           frame,
           axis,
@@ -1344,11 +1414,6 @@ export class AnnotationLanes {
         )
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const set = entry.payload.data
-        // The same rule as the browser's, on the same lane drawn beside a map
-        // (§8.16, and §8.14 for the variant arm of it). One resolution of the
-        // colouring on both surfaces, because a lane that read one way under the
-        // map and another in the browser would be two pictures of one file.
-        const features = featuresOf(entry.style, entry.kind)
         // A value axis the reader fixed by hand, which a barChart lane reads and
         // every other feature kind ignores (§8.17) — moved by the factor of a
         // ceiling drag in progress, exactly as the profile lanes above are.
@@ -1373,10 +1438,12 @@ export class AnnotationLanes {
           haloColour: geometry.palette.halo,
           font: scaleFont(LANE_FONT),
           opacity: entry.style.opacity,
-          labels: text,
+          // A squished lane is names-free by definition (§8.16).
+          labels: text && features.display !== 'squished',
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
           arrows: features.arrows,
+          display: features.display,
           barScale: features.bars,
           ...(barLimits === undefined ? {} : { barLimits }),
           colourOf: ink.colourOf,
@@ -1408,6 +1475,7 @@ export class AnnotationLanes {
         }
       }
       ctx.restore()
+      if (bare) continue
       if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
 
       // The handle, outside the clip because it hangs outside the lane: in the
@@ -1469,12 +1537,15 @@ export class AnnotationLanes {
       ) {
         laneTick(ctx, frame, frame.toPixel(geometry.laneEcho.unit), geometry.palette.crosshair, dpr)
       }
-      // ...and the reader's own, from pointing at this stack. Not under the
-      // crosshair preference: that option is about what the *map* draws while
-      // you move over it, and this line is the direct answer to a gesture being
-      // made right now. A pointer over a track with no line under it looks like
-      // a track that does not respond.
-      if (geometry.guide !== null && geometry.guide.edge === edge) {
+      // ...and the reader's own, from pointing at this stack — under the same
+      // preference as the rest. It used to be exempt, on the argument that the
+      // option was about what the *map* draws; but the one toggle is offered as
+      // *the* crosshair, beside the map and beside the tracks, and a reader who
+      // turned it off watched the line go from the map and stay on every track.
+      // The arrowhead stays over the stack either way (`ui/styles.css`), so a
+      // track still answers the pointer with the line off, and with it on the
+      // line under the hand is told from an echo by the tip standing on it.
+      if (geometry.crosshair && geometry.guide !== null && geometry.guide.edge === edge) {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }
 
@@ -1535,7 +1606,7 @@ export class AnnotationLanes {
     // the tracks is actually asking for: the boundaries, in the coordinate the
     // tracks are drawn in.
     const last = lanes[lanes.length - 1]
-    if (last !== undefined) {
+    if (last !== undefined && !bare) {
       for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {

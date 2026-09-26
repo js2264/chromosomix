@@ -17,8 +17,13 @@
  * given three ways: a **curve** against distance from the origin, the figure the
  * literature draws; a **track** along the chromosome, how much each locus
  * touches its mirror image; and a **table** of two numbers per sequence for a
- * comparison across maps — the mean `log2` enrichment over the arms, and how far
- * from the origin it holds before falling below half its peak.
+ * comparison across maps — how far from the origin the enrichment holds before
+ * falling below half its peak, and its mean `log2` from the origin out to there.
+ *
+ * Each sequence has a **second row** of the same numbers over the O/E along both
+ * arms — the expectation the map's arms and Compartments divide by, which takes
+ * the secondary diagonal into itself. It is a control on that detrending rather
+ * than a second measure: where the detrending works, its score is near zero.
  *
  * The arms are read from each sequence's origin — the Origin and terminus task
  * fills it in, a reader types it, and it is the first base until either has —
@@ -42,6 +47,21 @@ const PARAMS: readonly ParamSpec[] = [
     default: 2,
     min: 0,
     max: 50,
+    integer: true,
+  },
+  {
+    kind: 'number',
+    key: 'armWindow',
+    label: 'window along the arms',
+    unit: 'bins',
+    hint:
+      'For the detrended row: each cell is compared within this far along the arms, as the map’s ' +
+      'arms and Compartments do; 0 is the whole chromosome.',
+    // The key, the label and the default are Compartments' own, and the map's
+    // arms control opens at the same window (`DEFAULT_ARM_WINDOW`): the row is a
+    // control on the detrending they apply, so it is theirs unless changed.
+    default: 50,
+    min: 0,
     integer: true,
   },
   BALANCE_PARAM,
@@ -78,7 +98,9 @@ export const INTERARM_TASK: AnalysisTask = {
   blurb: 'How strongly the two arms of a bacterial chromosome touch, from origin to terminus.',
   group: '2d',
   venue: 'analysis',
-  version: 1,
+  // 2: a second row per sequence, over the O/E along both arms; and the score is
+  // the mean from the origin out to the reach, where it was over the whole arm.
+  version: 2,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>

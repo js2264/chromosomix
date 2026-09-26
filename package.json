@@ -52,6 +52,7 @@
     "demo:hub": "${METACOOLER_PYTHON:-python3} scripts/make_demo_hub.py",
     "store": "python3 scripts/make_store.py",
     "icons": "node scripts/build-icons.mjs",
+    "wasm": "node scripts/build-gram-wasm.mjs",
     "icons:app": "${METACOOLER_PYTHON:-python3} scripts/make-app-icons.py",
     "icons:rsg": "node scripts/make-rsg-mark.mjs",
     "icons:stores": "node scripts/make-store-logos.mjs",

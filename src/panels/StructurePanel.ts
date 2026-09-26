@@ -92,7 +92,13 @@ import {
   type Camera,
 } from '../structure/camera'
 import { resolveColours, type BeadColours, type StructureKey } from '../structure/colour'
-import { PAPER_PALETTE, drawStructure, type StructureView } from '../structure/painter'
+import {
+  CELL_FRAME_WIDTH,
+  PAPER_PALETTE,
+  drawCellFrame,
+  drawStructure,
+  type StructureView,
+} from '../structure/painter'
 import {
   beadsAt,
   beadsIn,
@@ -109,6 +115,7 @@ import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
+import { cellHeightOf, heightBar } from './cellHeight'
 import {
   getPlotOptions,
   setPlotOption,
@@ -126,12 +133,14 @@ import { VectorPage } from '../ui/vector'
 import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
+  copyPicture,
   copyPngToClipboard,
   chooseSaveTarget,
   fileStamp,
   scaleForDpi,
   type ExportFormat,
 } from '../ui/export'
+import { openMenu } from '../ui/Menu'
 import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
@@ -202,6 +211,11 @@ export interface StructurePanelProps {
   /** The grip before the name was taken hold of, or let go. */
   onDragChange(dragging: boolean): void
   /**
+   * The model this cell draws changed — chosen, fallen to, or emptied — so the
+   * Structures card's eye on each row can say which models are on screen.
+   */
+  onShownChange?(): void
+  /**
    * The star pressed: make this the cell the settings card is about (§25.3).
    *
    * Absent for a cell with no deck around it, which has no sibling to be
@@ -243,9 +257,6 @@ function seatScope(scope: string, seat: number): string {
   return seat <= 0 ? scope : `${scope}:${seat}`
 }
 
-function clamp(value: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, value))
-}
 /*
  * The settings this cell reads that are **not** the row's own live in
  * `ui/plotOptions.ts` as {@link STRUCTURE_OPTIONS}, beside the matrix's and
@@ -261,10 +272,6 @@ const SIDE_SCOPE = 'structure:side'
 const HEIGHT_SCOPE = 'structure:height'
 /** Where *turn together* is kept for this seat (§25.3). */
 const TURN_SCOPE = 'structure:turnWith'
-/** The shortest a resized cell may be, in pixels — below this the picture is not one. */
-const CELL_MIN_H = 120
-/** The tallest, so a drag cannot push the rest of the page off the screen. */
-const CELL_MAX_H = 2000
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
@@ -354,7 +361,7 @@ type StructureMode = 'none' | 'mark' | 'loop' | 'measure'
 export class StructurePanel implements DeckCell {
   readonly kind = 'structure' as const
   readonly el: HTMLElement
-  private readonly nameEl: HTMLElement
+  private readonly nameEl: HTMLInputElement
   /**
    * The star (§25.3): which cell the *3D structure* card in the Aesthetics
    * column is about.
@@ -520,15 +527,11 @@ export class StructurePanel implements DeckCell {
 
   constructor(private readonly props: StructurePanelProps) {
     this.camera = cameraOf(recall<unknown>(props.memoryKey(), seatScope(CAMERA_SCOPE, props.seat?.() ?? 0)))
-    // A span, not a read-only box. `.deck-name` frames itself on hover and
-    // takes a caret on click, which is the rename control a map's name is
-    // (§16.10) — and this name is the row's, changed on the Structures card.
-    // Drawn as a box it invited a rename and then refused every keystroke.
-    this.nameEl = el('span', {
-      class: 'deck-name',
-      text: 'structure',
-      title: 'The session’s 3D model — renamed on its row in the Structures card',
-    })
+    // The rename control a map's name is (§16.10): a box that reads as text
+    // until it has the caret. The name is the **row's** — the model's label on
+    // the Structures card — so a rename here renames it there, and there here:
+    // one name for one model, wherever it is named.
+    this.nameEl = this.nameBox()
     this.starButton = iconButton('star', '', () => props.onStar?.(), {
       class: 'btn btn-icon deck-star structure-star',
       size: 14,
@@ -655,10 +658,8 @@ export class StructurePanel implements DeckCell {
       this.body,
     )
     // The height this seat was left at, where the reader has set one.
-    const height = recall<unknown>(props.memoryKey(), this.seatScope(HEIGHT_SCOPE))
-    if (typeof height === 'number' && Number.isFinite(height)) {
-      this.setHeight(Math.round(clamp(height, CELL_MIN_H, CELL_MAX_H)))
-    }
+    const height = cellHeightOf(recall<unknown>(props.memoryKey(), this.seatScope(HEIGHT_SCOPE)))
+    if (height !== null) this.setHeight(height)
     this.watchDrops()
     void this.loadRenderer()
     if (typeof ResizeObserver !== 'undefined') {
@@ -736,8 +737,49 @@ export class StructurePanel implements DeckCell {
   }
 
   syncName(): void {
+    // Not under a reader mid-word: the cell re-syncs on every change to the
+    // store, and a rename of another row is one.
+    if (document.activeElement === this.nameEl) return
     const label = this.entry?.label ?? 'structure'
-    if (this.nameEl.textContent !== label) this.nameEl.textContent = label
+    if (this.nameEl.value !== label) this.nameEl.value = label
+    this.nameEl.title = `${label} — click to rename; the Structures card’s row is renamed with it`
+    this.nameEl.readOnly = this.entry === null
+  }
+
+  /**
+   * The heading's name as a rename control, on the map's rules (§16.10): Enter
+   * commits, Escape abandons, and an empty box keeps the name it had — a model
+   * with no name is a row the card cannot tell from its neighbours.
+   */
+  private nameBox(): HTMLInputElement {
+    const input = el('input', { class: 'input deck-name', type: 'text', value: 'structure' })
+    const revert = (): void => {
+      input.value = this.entry?.label ?? 'structure'
+    }
+    input.addEventListener('change', () => {
+      const entry = this.entry
+      const typed = input.value.trim()
+      if (entry === null || typed === '' || typed === entry.label) {
+        revert()
+        return
+      }
+      this.props.store()?.update(entry.id, { label: typed })
+    })
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        input.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        revert()
+        input.blur()
+      }
+      event.stopPropagation()
+    })
+    // The heading is a *deck* heading: a drag that begins in the box is a
+    // selection, not the cell being taken by its grip or the model turned.
+    input.addEventListener('pointerdown', (event) => event.stopPropagation())
+    return input
   }
 
   exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
@@ -745,7 +787,54 @@ export class StructurePanel implements DeckCell {
     const scale = scaleForDpi(dpi)
     const width = Math.max(1, this.wrap.clientWidth)
     const height = Math.max(1, this.wrap.clientHeight)
-    return this.renderer.snapshot(width * scale, height * scale)
+    const out = this.renderer.snapshot(width * scale, height * scale)
+    // The cell's edge, which is what says where a model zoomed past it is cut
+    // (§25.7) — at the map's plot border's weight at this resolution.
+    const ctx = out?.getContext('2d') ?? null
+    if (out !== null && ctx !== null) {
+      drawCellFrame(
+        ctx,
+        { width: out.width, height: out.height },
+        readCanvasPalette(this.el).plotBorderColor,
+        Math.max(1, CELL_FRAME_WIDTH * scale),
+      )
+    }
+    return out
+  }
+
+  /**
+   * The cell's right-click menu: *copy this* — the model alone, as it is
+   * drawn here, onto the clipboard (§7.2).
+   */
+  private showMenu(x: number, y: number): void {
+    openMenu(x, y, [
+      { label: 'This model' },
+      {
+        label: 'Copy this',
+        hint: 'PNG',
+        title:
+          'The model as it is drawn here — the picture alone, with no key, buttons or frame — ' +
+          'onto the clipboard as a PNG, at the screen’s resolution',
+        run: () => copyPicture('model', this.modelImage()),
+      },
+    ])
+  }
+
+  /**
+   * The model as it is drawn on screen, and nothing round it: the renderer's
+   * own picture at the screen's density — its names on the model, as the
+   * overlays have them — without the centre of rotation, the key, the corner's
+   * buttons, the readout or the frame an exported figure carries (§25.7).
+   * `null` with no model.
+   */
+  private modelImage(): HTMLCanvasElement | null {
+    if (this.structure === null || this.renderer === null) return null
+    const dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
+    return this.renderer.snapshot(
+      Math.max(1, this.wrap.clientWidth) * dpr,
+      Math.max(1, this.wrap.clientHeight) * dpr,
+      { centre: false },
+    )
   }
 
   destroy(): void {
@@ -869,6 +958,9 @@ export class StructurePanel implements DeckCell {
     }
     this.entry = entry
     this.syncName()
+    // Said once the model is settled, whatever settled it: the row's eye in
+    // the Structures card lights or goes dark with it.
+    if ((shown?.id ?? null) !== (entry?.id ?? null)) this.props.onShownChange?.()
     const payload = entry?.payload
     if (entry === null) {
       this.say(rows.length > 0 ? WAITING.removed : WAITING.none)
@@ -1442,8 +1534,8 @@ export class StructurePanel implements DeckCell {
    * a column **under** one: a deck one across put the model in a 16 rem band
    * under a map that could be shrunk to a thumbnail, and nothing the reader
    * did to either of them gave the model any more room. A model has no axis to
-   * line up with the map's, so it is the one cell whose height is nobody's
-   * business but the reader's.
+   * line up with the map's, so its height is the reader's business — as a
+   * stack of tracks' is, whose cell has the same bar (`panels/cellHeight.ts`).
    *
    * The height is written as a property on the *cell*, not as a style on the
    * picture, because the picture is lent to the enlarged dialog and back: an
@@ -1451,43 +1543,15 @@ export class StructurePanel implements DeckCell {
    * middle of a full-screen stage.
    */
   private resizeGrip(): HTMLElement {
-    const grip = el('div', {
-      class: 'structure-resize',
-      attrs: { role: 'separator', 'aria-orientation': 'horizontal', tabindex: '0' },
-      title: 'Drag to make this cell taller or shorter · double-click to fit the row again',
+    return heightBar({
+      className: 'structure-resize',
+      picture: () => this.wrap,
+      preview: (height) => this.setHeight(height),
+      commit: (height) => {
+        this.setHeight(height)
+        remember(this.props.memoryKey(), this.seatScope(HEIGHT_SCOPE), height)
+      },
     })
-    const setTo = (height: number | null): void => {
-      this.setHeight(height)
-      remember(this.props.memoryKey(), this.seatScope(HEIGHT_SCOPE), height)
-    }
-    grip.addEventListener('pointerdown', (event) => {
-      grip.setPointerCapture(event.pointerId)
-      grip.classList.add('is-dragging')
-      event.preventDefault()
-      const from = this.wrap.getBoundingClientRect()
-      const heightAt = (clientY: number): number =>
-        Math.round(clamp(clientY - from.top, CELL_MIN_H, CELL_MAX_H))
-      const move = (moved: PointerEvent): void => this.setHeight(heightAt(moved.clientY))
-      const up = (ended: PointerEvent): void => {
-        grip.removeEventListener('pointermove', move)
-        grip.removeEventListener('pointerup', up)
-        grip.classList.remove('is-dragging')
-        if (grip.hasPointerCapture(ended.pointerId)) grip.releasePointerCapture(ended.pointerId)
-        setTo(heightAt(ended.clientY))
-      }
-      grip.addEventListener('pointermove', move)
-      grip.addEventListener('pointerup', up)
-    })
-    // Back to the row's own height, which is the state there is no other way
-    // out of once a height has been set.
-    grip.addEventListener('dblclick', () => setTo(null))
-    grip.addEventListener('keydown', (event) => {
-      const step = event.key === 'ArrowUp' ? -24 : event.key === 'ArrowDown' ? 24 : 0
-      if (step === 0) return
-      event.preventDefault()
-      setTo(Math.round(clamp(this.wrap.getBoundingClientRect().height + step, CELL_MIN_H, CELL_MAX_H)))
-    })
-    return grip
   }
 
   /** Hold the picture at `height` pixels, or give it back to the row. */
@@ -1817,6 +1881,14 @@ export class StructurePanel implements DeckCell {
       }
       if (drag.moved) {
         this.rememberCamera()
+        return
+      }
+      // A right press that did not travel is the cell's menu (§7.2). On the
+      // release rather than on `contextmenu`, which some systems send on the
+      // press — and a right drag pans the model, so the menu can only know it
+      // was asked for once the hand has let go where it began.
+      if (event.button === 2) {
+        this.showMenu(event.clientX, event.clientY)
         return
       }
       // A press that did not travel is a click: pin the bead, or with Shift
@@ -3346,6 +3418,9 @@ export class StructurePanel implements DeckCell {
         page.ctx.drawImage(raster, 0, 0, width, height)
       } else {
         drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+        // The raster above carries its frame from `exportCanvas`; paths get
+        // theirs as a path.
+        drawCellFrame(page.ctx, { width, height }, readCanvasPalette(this.el).plotBorderColor, CELL_FRAME_WIDTH)
       }
       const blob = await page.toBlob({ title: 'structure', created: now })
       await target.write(blob)

@@ -314,6 +314,14 @@ interface Ceiling {
   cols: [number, number]
 }
 
+/**
+ * Whether a window runs off either end of its sequence — a window across a
+ * circle's origin, in the unwrapped bins it is read in (§8.15).
+ */
+function runsOff(window: [number, number], sequence: [number, number]): boolean {
+  return window[0] < sequence[0] || window[1] > sequence[1]
+}
+
 export class RegionView {
   readonly el: HTMLElement
   /**
@@ -727,19 +735,28 @@ export class RegionView {
     // *before* the first read on a circular sequence — a window across the
     // origin cannot be read without knowing what a lap is. Asking again here
     // would be a second `range` request for an answer already in hand.
-    const ceiling = known ?? (await this.wholeOf(rows, cols))
-    if (this.disposed || ceiling === null) return
-    // **The sequence, when the reader has said it joins its own ends** (§8.15).
-    // A window on one is read wrapped, and the ceiling that ordinarily stops a
-    // read at the edge of the data stops being a limit on *where* and becomes a
-    // cap on *how wide*: one lap, past which a bin would be drawn twice.
+    const whole = known ?? (await this.wholeOf(rows, cols))
+    if (this.disposed || whole === null) return
+    // **A window across a circle's origin is a frame** (§8.15): the `ori`
+    // framing, or one typed backwards. Its extent runs off the end of the
+    // sequence, it is read wrapped — the worker resolves it modulo the
+    // sequence — and it is the ceiling: a zoom inside it refines as it does
+    // anywhere, and nothing reads past it.
     //
-    // On a two-contig block there is nothing to wrap — the axes are two different
-    // sequences and the slide has no diagonal to run along — so the control is
-    // not offered there and this is `undefined`.
+    // It used to be a place to start sliding from. Any window on a declared
+    // circle was read with no ends, and a pan past the edge of the block read
+    // the next stretch round, block after block, whatever the refine setting
+    // said. It was not smooth and it lost readers; `ori` is the way to the
+    // other side of the origin, and a window that is not across it pans as a
+    // window on a line does, to the sequence's ends.
+    //
+    // On a two-contig block there is nothing to wrap — the axes are two
+    // different sequences — so this is `undefined` there.
     const wrap =
-      cols === undefined && this.props.circular?.on === true ? ceiling.rows : undefined
-    const lap = wrap === undefined ? undefined : wrap[1] - wrap[0]
+      cols === undefined && this.props.circular?.on === true && runsOff(rows.extent, whole.rows)
+        ? whole.rows
+        : undefined
+    const ceiling: Ceiling = wrap === undefined ? whole : { rows: rows.extent, cols: rows.extent }
     const query = (
       rowExtent: [number, number],
       colExtent: [number, number],
@@ -758,22 +775,6 @@ export class RegionView {
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling,
-      ...(lap === undefined ? {} : { wrap: { rows: lap, cols: lap } }),
-      // **A circular view reads as it moves, whatever the refine setting says.**
-      //
-      // Zoom-to-refine is off until a reader turns it on (`REFINE_DEFAULT`), and
-      // that is the right default for what it was written for: a sharper picture
-      // of a place you are already at, bought with reads you did not ask for. A
-      // circular slide is not that. Past the end of the sequence there is *no*
-      // block in hand — the window has left everything that was ever read — so
-      // with the ladder asleep the picture simply stops at the last bin, which
-      // is the exact wall the declaration was made to remove. A reader who ticks
-      // it has asked for the reads that make the wrap possible; refusing them
-      // would leave a tickbox that does nothing.
-      //
-      // Only for a sequence they have declared: every other view keeps the
-      // setting's answer, so nothing reads more than it did before.
-      ...(lap === undefined ? {} : { enabled: () => true }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past

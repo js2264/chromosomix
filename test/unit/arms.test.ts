@@ -160,6 +160,32 @@ describe('the secondary diagonal', () => {
     expect(interArmSummary(byDistance).reach).toBe(20)
   })
 
+  it('scores the stretch the enrichment reaches, not the whole arm', () => {
+    // Four times as close from 2 to 20 bins out, and as expected beyond: the
+    // mean from the origin to the reach is that stretch's, where the mean over
+    // the arm would halve it for the eighteen bins of nothing after it.
+    const byDistance = new Float64Array(40).fill(1)
+    for (let d = 2; d <= 20; d++) byDistance[d] = 4
+    const summary = interArmSummary(byDistance)
+    expect(summary.reach).toBe(20)
+    expect(summary.score).toBeCloseTo((19 * 2) / 21, 9)
+  })
+
+  it('reads a control over the stretch it is handed, and the whole arm where nothing reaches', () => {
+    // As expected up to the terminus, where it rises: its own peak and reach are
+    // there, and over the measurement's stretch it is the nothing it is.
+    const byDistance = new Float64Array(40).fill(1)
+    for (let d = 35; d < 40; d++) byDistance[d] = 4
+    expect(interArmSummary(byDistance).reach).toBe(39)
+    expect(interArmSummary(byDistance, 20).score).toBeCloseTo(0, 9)
+    expect(interArmSummary(byDistance, Number.NaN).score).toBeCloseTo((5 * 2) / 40, 9)
+    // Nothing above zero anywhere: no reach, and the arm's own mean.
+    const depleted = new Float64Array(40).fill(0.5)
+    const summary = interArmSummary(depleted)
+    expect(Number.isNaN(summary.reach)).toBe(true)
+    expect(summary.score).toBeCloseTo(-1, 9)
+  })
+
   it('measures a line out to the end of its longer arm', () => {
     // Origin at bin 10 of 80: one arm of 10 bins, one of 69.
     const line: ArmFrame = { n: 80, origin: 10, circular: false }

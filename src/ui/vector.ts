@@ -472,7 +472,14 @@ export class VectorPage {
         // four-Bézier arc approximation for a shape used by one caller.
         const steps = 24
         const sweep = counter === true ? start - end : end - start
-        const span = ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+        // A sweep of a whole turn or more is the whole circle, as the canvas
+        // defines it — and the modulo below reads exactly one turn as none, which
+        // drew every full circle in a figure as a path of zero length: a points
+        // lane's dots and a loop's ring were on screen and not in the PDF.
+        const span =
+          sweep >= Math.PI * 2
+            ? Math.PI * 2
+            : ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
         let last = { x, y }
         for (let i = 0; i <= steps; i++) {
           const angle = start + (counter === true ? -1 : 1) * span * (i / steps)
