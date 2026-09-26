@@ -457,6 +457,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The map's correlation reaches 4,096 bins a side, and takes seconds there (§7.5).** Any square
+  block the map can read can now be correlated, where it was capped at 1,500 bins: a whole bacterial
+  genome at 1 kb, a human chromosome at 50 kb. All the pairs are one matrix product in WebAssembly,
+  shared across the cores — from picking the score to the picture, a thousand bins in under half a
+  second, 2,048 in under one and 4,096 in about two and a half, in Chromium on four cores. The
+  Compartments task's correlation is the same arithmetic and as much faster.
+
+- **The map's correlation counts an empty pixel as zero contacts (§7.5).** It left them out, as the
+  O/E picture draws them, so it correlated each pair of rows over the cells both happened to have — not
+  the matrix the Compartments task solves, though its note said so, and on a sparse map several times
+  slower. The picture under the veil still draws them as paper.
+
+- **Picking a score computed from the block reads nothing (§7.5).** `VC`, `ICE`, the baseline and the
+  correlation repaint the map, where picking one re-read the whole block first; only another column
+  of the file, or balancing, is a new read.
+
 - **A tracks cell of the deck is its axis and its lanes (§25.3).** Its locus box, zoom steps and summary
   line are gone: where to look is asked in the lead's bar above the grid, and the cell still pans and
   zooms in place.
@@ -1258,6 +1274,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **Closing the share dialog before its link is ready no longer copies the link.** The copy that
+  follows the link's arrival went ahead for a dialog already dismissed, writing over whatever the reader
+  had put on the clipboard since.
 
 - **A lane in a tracks cell can be carried out of it by its grip (§16.9).** The grip only reordered the
   cell's own stack, so a track sent to a cell of its own could not be put back beside a map: it now

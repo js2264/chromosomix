@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import {
   differsOnlyInFocus,
   differsOnlyInPresentation,
+  differsOnlyInPresentationOrScore,
   differsOnlyInScale,
   matrixLevel,
   overviewLevel,
@@ -438,6 +439,22 @@ describe('differsOnlyInPresentation', () => {
   it('keeps the scale and the derivations on the repaint road', () => {
     expect(differsOnlyInPresentation(base, { ...base, vmax: 12 })).toBe(true)
     expect(differsOnlyInPresentation(base, { ...base, flip: true })).toBe(true)
+  })
+
+  /**
+   * A score, and the balancing beside it, are the caller's to judge — only it
+   * knows whether the file reads another column, or other weights, for them —
+   * so they are off this road and on the next.
+   */
+  it('leaves a score and its balancing to the caller, and lets them through with the rest', () => {
+    expect(differsOnlyInPresentation(base, { ...base, score: 'correlation' })).toBe(false)
+    expect(differsOnlyInPresentation(base, { ...base, balance: true })).toBe(false)
+    expect(differsOnlyInPresentationOrScore(base, { ...base, score: 'correlation' })).toBe(true)
+    expect(differsOnlyInPresentationOrScore(base, { ...base, score: 'VC', oe: true, vmax: 3 })).toBe(true)
+    expect(differsOnlyInPresentationOrScore({ ...base, balance: true }, { ...base, score: 'correlation' })).toBe(true)
+    // Anything that chooses the block is still a rebuild.
+    expect(differsOnlyInPresentationOrScore(base, { ...base, score: 'correlation', region: 'chrII' })).toBe(false)
+    expect(differsOnlyInPresentationOrScore(base, { ...base, score: 'correlation', uri: 'b.cool' })).toBe(false)
   })
 })
 

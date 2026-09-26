@@ -50,6 +50,7 @@ import {
   ViewStore,
   differsOnlyInFocus,
   differsOnlyInPresentation,
+  differsOnlyInPresentationOrScore,
   cellsOf,
   cellsPatch,
   landingState,
@@ -7453,12 +7454,28 @@ export class Session {
     // more: it is arithmetic over cells already in memory, so rebuilding to
     // apply it would pay a worker round trip for nothing — and on a gated
     // whole-genome map it would put the scan back behind its button.
+    //
+    // **So is a score that reads the same cells.** `VC`, `ICE`, the baseline and
+    // the correlation are arithmetic over the block in memory exactly as the O/E
+    // is, and picking one rebuilt the view and read the whole block again — two
+    // seconds of a 4,096-bin square spent before the correlation could start, to
+    // fetch the numbers already on screen. Only a change of the column read, or
+    // of the balancing *in force*, is a new read — `balance=1` written away on a
+    // file balanced by default is the same one; the picker is pointed at the
+    // choice, which a link or the back button can make as well as the picker.
+    const scoreOnly =
+      this.mounted !== null &&
+      this.current?.panel !== undefined &&
+      differsOnlyInPresentationOrScore(this.mounted, state) &&
+      this.valueOf(this.mounted) === this.valueOf(state) &&
+      this.balanceOf(this.mounted) === this.balanceOf(state)
     if (
       this.mounted !== null &&
       this.current !== null &&
-      differsOnlyInPresentation(this.mounted, state)
+      (differsOnlyInPresentation(this.mounted, state) || scoreOnly)
     ) {
       this.current.applyScale?.(this.scaleOf(state))
+      if (scoreOnly) this.current.panel?.syncScoreChoice(this.scoreOf(state).id)
       this.rederive()
       // …and stand back on the saved place, if the view is at one. Turning a map
       // re-cuts it and therefore refits it — which the reader asked for, and which

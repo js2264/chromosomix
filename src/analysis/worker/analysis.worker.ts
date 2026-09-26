@@ -37,6 +37,8 @@ import { serialiseError } from '../../worker/protocol'
 import { createDetachedSource, releaseSources } from '../../worker/sources'
 import { openMap } from '../../worker/open'
 import { correlationField, type CorrelationField } from '../compartments'
+import { useCorrelationThreads } from '../pearsonThreads'
+import { spawnGramWorker } from './spawnGram'
 import { adaptiveSmoothValues } from '../../render/smooth'
 import { abortError, type JobContext } from '../job'
 import { RUNNERS } from '../run/index'
@@ -54,6 +56,15 @@ import type { SmoothedField } from '../../render/derive'
  * One cast, at the top, rather than a cast per `postMessage`.
  */
 const ctx = self as unknown as DedicatedWorkerGlobalScope
+
+// The correlation matrix — the map's correlation and the compartment chain's —
+// shares its bands with helper workers, one fewer than the cores, since this
+// thread computes a stretch of its own (`pearsonThreads.ts`). Seven at most:
+// past that the copies of the rows cost more than the cores give back.
+useCorrelationThreads(
+  spawnGramWorker,
+  Math.max(0, Math.min(7, (typeof navigator === 'undefined' ? 1 : navigator.hardwareConcurrency || 1) - 1)),
+)
 
 // The reader worker starts fetching h5wasm at module scope, while the user is
 // still choosing a file, because it is certain to need it within the second.

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import { scoreChoices, type ScoreChoice } from '@/ui/scores'
+import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -143,6 +144,38 @@ describe('a companion’s score picker', () => {
     const fit = harness()
     fit.panel.syncScoreChoice('nothing-of-the-sort')
     expect(fit.select().value).toBe('count')
+  })
+
+  /**
+   * A score that reads the same cells repaints rather than rebuilding the panel,
+   * so the dropdown is not all that has to follow: the framing an analysis of
+   * this map runs on is read from the panel's own score, and was left on the
+   * one it was built with — even when the reader had picked the new one in the
+   * dropdown itself, which is the commonest way to arrive here.
+   */
+  it('carries what it is told into the framing an analysis runs on, even once the dropdown shows it', () => {
+    const fit = harness()
+    fit.panel.setData(
+      {
+        nrows: 4,
+        ncols: 4,
+        values: new Float32Array(16).fill(1),
+        rowExtent: [0, 4],
+        colExtent: [0, 4],
+        rowGroups: [{ label: 'IV', start: 0, end: 4, unitStart: 0 }],
+        colGroups: [{ label: 'IV', start: 0, end: 4, unitStart: 0 }],
+        level: 'bin',
+        binsPerCell: 1,
+      } as unknown as MatrixResult,
+      'IV',
+    )
+    expect(fit.panel.analysisFraming('rep1.cool')?.balance).toBe(false)
+    fit.select().value = 'balanced'
+    fit.panel.syncScoreChoice('balanced')
+    expect(fit.panel.analysisFraming('rep1.cool')?.balance).toBe(true)
+    fit.panel.syncScoreChoice('expected')
+    expect(fit.select().value).toBe('expected')
+    expect(fit.panel.analysisFraming('rep1.cool')?.value).toBe('expected')
   })
 })
 

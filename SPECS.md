@@ -1755,6 +1755,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
+| **Correlation** — Pearson's r between the rows of the O/E | an entry in the score picker | one matrix product, on the analysis thread and its helpers; square blocks up to 4,096 bins a side |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1965,6 +1966,35 @@ about a baseline too small to divide by rather than a measurement of anything, a
 of the auto range they would otherwise drag. A **negative** ratio stays: an extra `/pixels` column may
 legitimately hold negative numbers, and blanking those would be this rule deciding what a file is
 allowed to contain.
+
+**The correlation reads an empty pixel as zero.** Paper is a rule for the eye, and the score picker's
+correlation is not drawn from the ratio but computed from it: there an empty pixel is an observation
+of no contacts, and the compartment call correlates it as one (§18.8, as cooltools does).
+Blanked, every empty pixel left the correlation, which was then of the cells each pair of rows
+happened to share — a different matrix from the one the task solves, though the option's own note
+said it was the same — and on a sparse map it was slow for the same reason: *E. coli* at 1 kb had two
+hundred and thirty missing cells a row, each pair's arithmetic an exception to correct for, and a
+4,096-bin square took fifteen seconds on four cores where its product takes one. The picture under the
+veil, while the answer is computed, is the ratio as it is always drawn — paper and all — made from
+the same derivation by blanking its zeros, so the block is derived once for both.
+
+**The correlation is one matrix product, on every core.** Pearson's r over the cells two rows share
+needs six sums, and only one of them — the products — depends on both rows at every cell; the others
+are each row's totals, corrected for the few cells the other row lacks. So the products of every pair
+are one matrix product in WebAssembly with SIMD (`analysis/wasm/gram.c`), fused multiply-adds where
+the engine has them, and the product is shared out in bands to helper workers the analysis thread
+starts and keeps for the next square (`analysis/pearsonThreads.ts`). Measured in Chromium with four
+cores, from picking the score to the picture: a thousand bins in under half a second, 2,048 in under
+one, 4,096 in two and a half, where it was capped at 1,500 and took three seconds at 929. So the map
+correlates any square block it can read, up to the raster's 4,096 cells a side — a whole bacterial
+genome at 1 kb, a human chromosome at 50 kb — and the Compartments task, which correlates with the
+same arithmetic, is no longer the slow half of its own method.
+
+**A score that reads the same cells reads nothing.** `VC`, `ICE`, the baseline and the correlation are
+arithmetic over the block on screen exactly as the O/E is, so picking one of them repaints rather than
+rebuilding the view; only a score that names another `/pixels` column, or the balancing, is a new
+read. Picking the correlation re-read the whole block first — two of the six seconds a 4,096-bin
+square took, spent fetching the numbers already on screen.
 
 **Diverging values need three things to change together**, and changing fewer produces a plausible
 picture of the wrong thing:
@@ -6173,8 +6203,9 @@ chromosome has compartments to find and part where it has none: E1 against E1, r
 0.58 on *E. coli*. Under cooltools the table's share is the eigenvalue squared over the sum of every
 cell squared, which is what a matrix that is not a correlation's has in place of a variance. It
 skips the correlation, the cubic step, so its estimate prices a decomposition and gives no warning
-about minutes — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds. A method the
-task does not have is refused rather than read as the default.
+about the cube — three components of *E. coli* at 1 kb, 4,642 bins, take eight seconds, where the
+correlation of the same square is four more on one core (§7.5). A method the task does not have is
+refused rather than read as the default.
 
 *Inter-arm alignment* — how strongly a bacterial chromosome's two arms are held together, as a number
 rather than an impression of a picture: the secondary diagonal is the mark SMC leaves when it is loaded

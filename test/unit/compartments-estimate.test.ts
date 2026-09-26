@@ -37,7 +37,7 @@ function context(binsize: number, length: number, resolutions: number[]): Analys
   })
 }
 
-// The correlation's, since the warning is about the correlation's minutes;
+// The correlation's, since the warning is about the correlation's cube;
 // cooltools' method, the default, is priced below.
 const PARAMS = { sequences: ['NC_000913.3'], contacts: 'cis', balance: true, method: 'correlation' }
 
@@ -69,7 +69,7 @@ describe('the compartments estimate at a resolution finer than the task wants', 
 })
 
 /**
- * The warning is about the correlation's minutes, and cooltools' road has no
+ * The warning is about the correlation's cube, and cooltools' road has no
  * correlation: three eigenvectors of the same 4,642 bins take seconds (§18.8).
  */
 describe('the compartments estimate under cooltools’ method, the default', () => {

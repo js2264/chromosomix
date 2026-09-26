@@ -23,6 +23,7 @@
 
 import type { ExpectedCurve } from './expected'
 import { expectedAt } from './expected'
+import { pearsonRowsThreaded } from './pearsonThreads'
 import { pearson, quantileEdges } from './stats'
 
 /**
@@ -40,8 +41,10 @@ export function usableBins(
   const keep: number[] = []
   const needed = Math.max(1, Math.ceil(n * minFraction))
   for (let r = 0; r < n; r++) {
+    // Counted only as far as the answer: a row of a balanced map has its tenth
+    // a tenth of the way along, and the square is sixteen million cells.
     let seen = 0
-    for (let c = 0; c < n; c++) if (Number.isFinite(values[r * n + c])) seen++
+    for (let c = 0; c < n && seen < needed; c++) if (Number.isFinite(values[r * n + c])) seen++
     if (seen >= needed) keep.push(r)
   }
   return Int32Array.from(keep)
@@ -215,6 +218,12 @@ export function observedOverExpected(
  * itself over pairwise-complete cells is 1, and computing it invites a
  * floating-point 0.9999999 on the diagonal of a matrix that is about to be
  * deflated.
+ *
+ * Computed by `pearsonRows.ts`, which says how: one matrix product in
+ * WebAssembly and a few numbers per pair, shared across the cores where the
+ * analysis worker has allowed it (`pearsonThreads.ts`) — where this used to be
+ * `pearson` called on every pair. The same statistic, pairwise-complete, fifty
+ * times sooner on one core.
  */
 export async function correlationMatrix(
   oe: Float64Array,
@@ -223,10 +232,11 @@ export async function correlationMatrix(
    * Called once per row, before it is correlated against the rows after it.
    *
    * This loop is `m²` correlations of `m` cells each — cubic, and the one step of
-   * the chain that is. At a thousand bins it is a second and at four thousand it
-   * is minutes, so a genome-wide run needs to be able to report where it has got
-   * to and to be stopped: the callback is where the runner does both, by
-   * throwing out of it. Optional, because nothing about the arithmetic needs it.
+   * the chain that is. At a thousand bins it is a tenth of a second and at four
+   * thousand two on four cores, but at the task's 8,192 it is eight times that,
+   * so a genome-wide run needs to be able to report where it has got to and to
+   * be stopped: the callback is where the runner does both, by throwing out of
+   * it. Optional, because nothing about the arithmetic needs it.
    *
    * **Awaited**, which is what makes the stopping real. A cancel arrives as a
    * message and a message is delivered in a task of its own, so a hook that
@@ -239,24 +249,47 @@ export async function correlationMatrix(
   onRow?: (row: number) => void | Promise<void>,
 ): Promise<Float64Array> {
   const out = new Float64Array(m * m)
-  const rows: Float64Array[] = []
-  for (let r = 0; r < m; r++) rows.push(oe.subarray(r * m, (r + 1) * m))
-  for (let r = 0; r < m; r++) {
-    await onRow?.(r)
-    out[r * m + r] = 1
-    for (let c = r + 1; c < m; c++) {
-      const value = pearson(rows[r], rows[c])
-      // A pair with too little overlap gets 0 rather than NaN: the eigensolver
-      // needs a real matrix, and *no evidence of correlation* is the honest
-      // reading of two rows that never overlap. `pearson` returning NaN is what
-      // distinguishes that from a computed zero, and it is why the substitution
-      // happens here where it can be commented rather than inside the statistic.
-      const filled = Number.isFinite(value) ? value : 0
-      out[r * m + c] = filled
-      out[c * m + r] = filled
+  await pearsonRowsThreaded(
+    { m, row: (r, into) => into.set(oe.subarray(r * m, (r + 1) * m)) },
+    (a, line) => {
+      out[a * m + a] = 1
+      for (let b = a + 1; b < m; b++) {
+        // A pair with too little overlap gets 0 rather than NaN: the eigensolver
+        // needs a real matrix, and *no evidence of correlation* is the honest
+        // reading of two rows that never overlap. The statistic returning NaN is
+        // what distinguishes that from a computed zero, and it is why the
+        // substitution happens here where it can be commented rather than
+        // inside the statistic.
+        out[a * m + b] = Number.isFinite(line[b]) ? line[b] : 0
+      }
+    },
+    onRow,
+  )
+  mirrorUpper(out, m)
+  return out
+}
+
+/**
+ * Copy a square's upper triangle onto its lower one, in tiles.
+ *
+ * The lines come a row at a time, and writing each one's mirror as it came was
+ * a write per cell down a column — every one to another cache line and most to
+ * another page, a fifth of a second of a 4,096-bin square spent on the copy of
+ * numbers already computed. A tile of rows read and written transposed keeps
+ * both sides in the cache, and the whole copy is a tenth of that.
+ */
+function mirrorUpper(values: Float32Array | Float64Array, n: number): void {
+  const TILE = 64
+  for (let i0 = 0; i0 < n; i0 += TILE) {
+    const i1 = Math.min(n, i0 + TILE)
+    for (let j0 = i0; j0 < n; j0 += TILE) {
+      const j1 = Math.min(n, j0 + TILE)
+      for (let i = i0; i < i1; i++) {
+        const row = i * n
+        for (let j = Math.max(j0, i + 1); j < j1; j++) values[j * n + i] = values[row + j]
+      }
     }
   }
-  return out
 }
 
 /**
@@ -413,23 +446,30 @@ export async function correlationField(
   // sparse trans corner — and it should draw as blank, not as an error card.
   if (m < 2) return { values, kept: m, dropped: n - m }
 
-  // The usable submatrix, packed. `Float64Array` because that is what
-  // `correlationMatrix` takes, and it takes it because the sums inside `pearson`
-  // are over `m` terms of a ratio whose tail is long.
-  const packed = new Float64Array(m * m)
-  for (let r = 0; r < m; r++) {
-    const from = index[r] * n
-    const to = r * m
-    for (let c = 0; c < m; c++) packed[to + c] = oe[from + index[c]]
-  }
-
-  const correlation = await correlationMatrix(packed, m, onRow)
-
-  for (let r = 0; r < m; r++) {
-    const to = index[r] * n
-    const from = r * m
-    for (let c = 0; c < m; c++) values[to + index[c]] = correlation[from + c]
-  }
+  // The usable rows, read straight off the square, and each row's line of
+  // correlations put straight back on it: the correlation matrix's own
+  // arithmetic (`pearsonRows.ts`), with no packed copy of the square and no
+  // second one of the answer — at 4,096 bins each is 64 MB.
+  await pearsonRowsThreaded(
+    {
+      m,
+      row: (r, into) => {
+        const from = index[r] * n
+        for (let c = 0; c < m; c++) into[c] = oe[from + index[c]]
+      },
+    },
+    (a, line) => {
+      const ia = index[a]
+      const row = ia * n
+      values[row + ia] = 1
+      // No evidence reads as no correlation, as in `correlationMatrix`.
+      for (let b = a + 1; b < m; b++) values[row + index[b]] = Number.isFinite(line[b]) ? line[b] : 0
+    },
+    onRow,
+  )
+  // A dropped bin's row and column are blank on both sides of the diagonal, so
+  // the whole square's upper triangle is the lower one's.
+  mirrorUpper(values, n)
   return { values, kept: m, dropped: n - m }
 }
 

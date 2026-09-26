@@ -116,7 +116,7 @@ export function nanExtent(values: ArrayLike<number>): { min: number; max: number
  * smallest number for which the coefficient is a statement about the data rather
  * than about the geometry of two points.
  */
-const MIN_PAIRS = 3
+export const MIN_PAIRS = 3
 
 /**
  * Pearson's *r* over the pairs where **both** sides have a value.

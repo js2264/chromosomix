@@ -179,6 +179,29 @@ describe('when the clipboard works', () => {
     expect(hints()).toMatch(/copied to the clipboard/i)
     expect(toast()).toBeNull()
   })
+
+  /**
+   * Dismissed before the link exists, the dialog asked for nothing: the copy
+   * that would have followed writes over a clipboard the reader has since
+   * filled with something else.
+   */
+  it('copies nothing once the dialog has been closed', async () => {
+    const written: string[] = []
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: (text: string) => {
+          written.push(text)
+          return Promise.resolve()
+        },
+      },
+    })
+    openShareDialog({ config: configOf(), base: BASE })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('.modal-backdrop')).toBeNull()
+    await settle()
+    await settle()
+    expect(written).toEqual([])
+  })
 })
 
 describe('when the clipboard is refused', () => {

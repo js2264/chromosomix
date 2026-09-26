@@ -450,6 +450,24 @@ export function differsOnlyInPresentation(a: ViewState, b: ViewState): boolean {
 }
 
 /**
+ * {@link differsOnlyInPresentation}, with the **score** — and the balancing
+ * written beside it — allowed to differ too.
+ *
+ * Not presentation keys on their own, because one score is a different read —
+ * an extra `/pixels` column is other numbers from the file, and balancing is
+ * the file's weights applied as it is read — while the rest are arithmetic over
+ * the same cells: `VC`, `ICE`, the baseline and the correlation are each
+ * computed from the block in memory (`ui/scores.ts`). Which of the two a change
+ * is depends on the file — its columns, and whether it is balanced by default,
+ * which is what makes `balance=1` and no `balance` the same read on one file and
+ * different reads on another — so the caller, which knows the file, asks
+ * whether the column and the balancing in force are the same.
+ */
+export function differsOnlyInPresentationOrScore(a: ViewState, b: ViewState): boolean {
+  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS, ...DECK_KEYS, 'score', 'balance'])
+}
+
+/**
  * `true` when two states are the same view of the same block and differ only in
  * **where the picture is standing** — which a mounted panel can be told.
  *

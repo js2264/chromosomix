@@ -93,6 +93,7 @@ import {
 } from '../render/compare'
 import {
   deriveBlock,
+  paperZeros,
   preferredTransform,
   type AxisRun,
   type DerivedValues,
@@ -829,39 +830,41 @@ export interface DerivePresentation {
 }
 
 /**
- * The largest square the map will correlate, per axis.
+ * The largest square the map will correlate, per axis: the block cap, so any
+ * square block the map can read, it can correlate.
  *
- * The correlation is `m²` correlations of `m` cells each — the one **cubic**
+ * The correlation is `m²/2` correlations of `m` cells each — the one **cubic**
  * step in the viewer, where everything else it draws is linear in the cells on
- * screen. That changes what a limit is for: the other budgets in this file trade
- * detail against milliseconds, and this one is the difference between a wait and
- * a coffee break.
+ * screen. It was capped at 1,500 when each pair was computed on its own, at
+ * 2.8 s for 929 bins and a projected four minutes at 4,096: a limit that was
+ * the difference between a wait and a coffee break.
  *
- * Measured on an *E. coli* square, which is the shape the arithmetic cares about
- * and not the organism: **232 bins in 32 ms, 464 in 232 ms, 929 in 2.8 s**. That
- * is the clean eightfold per doubling the exponent promises, and extrapolating
- * it puts this cap at about **twelve seconds** — the most a reader will ever be
- * asked to wait, and only at the very top of the range.
+ * `analysis/pearsonRows.ts` computes all the pairs as one matrix product in
+ * WebAssembly with SIMD, and `analysis/pearsonThreads.ts` shares it across the
+ * cores. Measured in Chromium with four cores, from picking the score to the
+ * picture: **a thousand bins in under half a second, 2,048 in under one, 4,096 in
+ * two and a half** — of which the analysis thread's part is a tenth of a second,
+ * a third of one and under two. On one core 4,096 is about four seconds. So the
+ * cap is the block cap rather than a budget of its own, and a whole bacterial
+ * genome at 1–2 kb, or a human chromosome at 50 kb, correlates about as fast as
+ * it reads.
  *
- * Twelve is tolerable here and would not be for a toggle that blocked: the job
- * is on the analysis thread, it reports a percentage, and unticking the box
- * cancels it. What the cap is really protecting against is the other end of the
- * curve — the block cap is 4,096 a side, which is **four minutes**, and a reader
- * who flipped a switch has not agreed to that.
+ * Two things around the product mattered as much as the product. The square is
+ * the O/E with an **empty pixel as the zero it is** — the matrix the compartment
+ * call correlates — where the picture's own ratio blanks it (`render/derive.ts`'s
+ * `keepZeros`): blanked, a sparse map at 1 kb had a few hundred missing cells a
+ * row, each pair's arithmetic was an exception to correct for, and the job was
+ * eight times slower than the product. And picking the score **reads nothing**:
+ * the block on screen is the block correlated (`Session.render`).
  *
- * The number itself comes from what the picture is *for*. A compartment is a
- * megabase-scale object read at 50–500 kb bins, where a whole human chromosome
- * is 500–5,000 bins and a bacterial genome is well under a thousand; nobody
- * reads compartments at the resolution where this would be slow. Above the cap
- * the control is greyed **and says why**, which is a better answer than a
- * progress bar that never ends.
+ * The job still runs on the analysis thread, reports a percentage and is
+ * cancelled by picking another score, as it was when a wait was expected.
  *
  * `MAX_CORRELATION_BINS` in the compartments task is 8,192 for the same
- * quantity, and the difference is not an inconsistency: there a reader has
- * asked for a number and is waiting for it on purpose, and here they have
- * flipped a switch on a map they were reading.
+ * quantity: there a reader has asked for a number and waits for it on purpose,
+ * and the square is read for it rather than being a block already on screen.
  */
-export const MAP_CORRELATION_BINS = 1500
+export const MAP_CORRELATION_BINS = 4096
 
 /** What identifies an arms setting, for the caches a derivation is keyed on. */
 function armsKey(arms: ArmsPresentation | undefined): string {
@@ -940,7 +943,7 @@ const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
   'A/B compartments — the same matrix the Compartments task solves. Implies O/E and balanced ' +
   'counts; one file, square blocks, up to ' +
-  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side, and about 3 seconds at a thousand.`
+  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side — a fraction of a second at a thousand, a few at the most.`
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
@@ -1303,11 +1306,27 @@ export class MatrixPanel {
    */
   private blockGeneration = 0
 
-  /** The last correlation computed, and the key it answers. */
-  private correlation: { key: string; field: CorrelationField } | null = null
+  /**
+   * The last correlation computed, the key it answers, and what it was a
+   * correlation *of* — the derivation's label and scope when it was sent.
+   */
+  private correlation: {
+    key: string
+    field: CorrelationField
+    label: string
+    scope: string | null
+  } | null = null
 
-  /** The one in flight, if any, and the key it will answer. */
-  private correlating: { key: string; job: Cancellable<CorrelationField> } | null = null
+  /**
+   * The one in flight, if any, the key it will answer, and the picture drawn
+   * under the veil meanwhile — kept so a redraw before the answer does not
+   * derive the block again.
+   */
+  private correlating: {
+    key: string
+    job: Cancellable<CorrelationField>
+    operand: DerivedValues
+  } | null = null
 
   /**
    * The veil's text while a correlation runs, or `null`.
@@ -3141,8 +3160,25 @@ export class MatrixPanel {
    * The alternative — blank until it lands — throws away a real picture of the
    * same region for several seconds to avoid showing the reader the thing their
    * correlation is *of*, and the veil already says what is happening.
+   *
+   * **It derives what it needs itself**, which is why the caller hands it the
+   * recipe rather than a derived block. A held correlation replaces the whole
+   * field, so the O/E under it is not computed at all — a pass over every cell,
+   * half a second at 4,096 bins, spent on the redraw that lands the answer for a
+   * picture nobody would see. A job to start takes the ratio with an empty pixel
+   * as the zero it is ({@link Derivation.keepZeros}), and it is sent before the
+   * picture under the veil is made — from that same ratio, the empty pixels
+   * blanked, which is all that separates the two.
+   *
+   * A despeckle still to come is waited for rather than raced: a correlation of
+   * the unsmoothed field would be drawn under a caption naming the smoothing,
+   * and then computed again once the smoothing landed.
    */
-  private correlated(data: MatrixResult, derivation: Derivation, mine: DerivedValues): DerivedValues {
+  private correlated(
+    data: MatrixResult,
+    derivation: Derivation,
+    runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
+  ): DerivedValues {
     const key = this.correlationKey(data, derivation)
     const held = this.correlation
     if (held !== null && held.key === key) {
@@ -3154,35 +3190,48 @@ export class MatrixPanel {
         // the values linear, which is right — a coefficient on `log2` would be
         // undefined over half its own range.
         neutral: 0,
-        label: `${mine.label} · correlation`,
+        label: `${held.label} · correlation`,
         // What a reader has to know to believe the picture, and the one thing
         // the map itself cannot show: a dropped bin is drawn blank, and blank is
         // also what a sparse corner looks like.
         scope:
           field.dropped > 0
             ? `${field.dropped.toLocaleString()} of ${(field.kept + field.dropped).toLocaleString()} bins had too little data to correlate`
-            : mine.scope,
+            : held.scope,
       }
     }
-    this.startCorrelation(key, mine.values, data.nrows)
-    return mine
+    const running = this.correlating
+    if (running !== null && running.key === key) return running.operand
+    // Of the ratio with an empty pixel as the zero it is, not the paper it is
+    // drawn as: the matrix the compartment call correlates.
+    const input = deriveBlock(data, { ...derivation, keepZeros: true }, runs)
+    const operand = { ...input, values: paperZeros(input.values, derivation) }
+    if (input.pending !== undefined) {
+      // The caller starts the smoothing from the operand's `pending`; this
+      // comes back through here once it has landed.
+      this.forgetCorrelation()
+      return operand
+    }
+    this.startCorrelation(key, input, operand, data.nrows)
+    return operand
   }
 
-  /** Ask for one, unless the same one is already on its way. */
-  private startCorrelation(key: string, values: Float32Array, n: number): void {
-    if (this.correlating?.key === key) return
+  /** Ask for one, with the operand drawn meanwhile. */
+  private startCorrelation(key: string, input: DerivedValues, operand: DerivedValues, n: number): void {
     const run = this.options.derive?.correlateBlock
     if (run === undefined) return
     // The block moved under a job that is still running, so its answer is about
     // a square nobody is looking at.
     this.correlating?.job.cancel()
 
-    const job = run(values, n, (done, total) => {
+    const job = run(input.values, n, (done, total) => {
       if (this.correlating?.key !== key) return
       this.showCorrelating(`correlating… ${Math.round((100 * done) / Math.max(1, total))}%`)
     })
-    this.correlating = { key, job }
+    this.correlating = { key, job, operand }
     this.showCorrelating('correlating…')
+    // What was correlated, said by the derivation that made it.
+    const { label, scope } = input
 
     job.promise.then(
       (field) => {
@@ -3191,7 +3240,7 @@ export class MatrixPanel {
         // would mean the cache answered for a block that is no longer read.
         if (this.correlating?.key !== key) return
         this.correlating = null
-        this.correlation = { key, field }
+        this.correlation = { key, field, label, scope }
         this.showCorrelating(null)
         this.redraw()
       },
@@ -6065,7 +6114,9 @@ export class MatrixPanel {
     if (this.smoothed !== null && this.smoothed.key !== smoothKey) this.smoothed = null
     if (this.smoothed?.key === smoothKey) derivation.smoothed = this.smoothed.field
 
-    const derived = deriveBlock(data, derivation, runs)
+    // Where a correlation is to be drawn it derives what it needs, and a held one
+    // needs nothing — see `correlated`.
+    const derived = correlating ? this.correlated(data, derivation, runs) : deriveBlock(data, derivation, runs)
     // Wanted and not held: start one, and draw the unsmoothed field meanwhile.
     // Exactly the correlation's arrangement — the operand is a real picture of
     // the same region, and the caption does not claim it is the smoothed one.
@@ -6076,7 +6127,7 @@ export class MatrixPanel {
     // this one is not, so the panel is the only place that can hold the answer
     // between the request and the frame that draws it.
     const mine = correlating
-      ? this.correlated(data, derivation, derived)
+      ? derived
       : refusal === null
         ? derived
         : // Said in the caption, which is the only place that survives an export.
@@ -7729,13 +7780,25 @@ export class MatrixPanel {
    *
    * Assignment fires no `change` event, so this cannot loop back through the
    * listener — the same property {@link applyScale} relies on.
+   *
+   * **And the panel's own idea of the score with it**, which is more than the
+   * dropdown: the key's first word and the framing every analysis of this map
+   * runs on are read from it. A score that reads the same cells no longer
+   * rebuilds the panel (`Session.render`), so this is where it learns of one —
+   * even when the dropdown already shows it, because the reader picked it
+   * there.
    */
   syncScoreChoice(id: string): void {
-    const select = this.scoreSelect
-    if (select === null || select.value === id) return
-    // Only to an option it has: a file that fell back to counts because it has
+    const scores = this.options.scores
+    // Only to a choice it has: a file that fell back to counts because it has
     // no such column would otherwise be left with a blank picker.
-    if (Array.from(select.options).some((option) => option.value === id)) select.value = id
+    if (scores === undefined || !scores.choices.some((choice) => choice.id === id)) return
+    if (scores.current !== id) {
+      this.options.scores = { ...scores, current: id }
+      this.painted = null
+    }
+    const select = this.scoreSelect
+    if (select !== null && select.value !== id) select.value = id
   }
 
   /**

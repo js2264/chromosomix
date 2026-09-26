@@ -35,6 +35,7 @@ import {
   isNormalisation,
   marginalsOf,
   observedOverExpected,
+  paperZeros,
   type AxisRun,
   type BlockValues,
 } from '@/render/derive'
@@ -339,6 +340,178 @@ describe('expected, and observed over it', () => {
     expect(oe[0 * 2 + 1]).toBeCloseTo(-1, 6)
     expect(oe[1 * 2 + 0]).toBeCloseTo(3, 6)
     expect(oe[0]).toBeCloseTo(1, 6)
+  })
+})
+
+describe('the O/E the correlation reads', () => {
+  // A sparse block: every cell a third of the way round is empty, and the rest
+  // fall off with distance. Two sequences, so there are trans cells too.
+  const runs: AxisRun[] = [
+    { label: 'a', start: 0, end: 5 },
+    { label: 'b', start: 5, end: 9 },
+  ]
+  const axes = { rows: runs, cols: runs }
+  const sparse = block(9, 9, (r, c) => ((r * 9 + c) % 3 === 0 && r !== c ? 0 : 12 / (1 + Math.abs(r - c))))
+
+  it('keeps a cell of nothing observed as the zero it is', () => {
+    const drawn = observedOverExpected(sparse, axes)
+    const read = observedOverExpected(sparse, axes, undefined, true)
+    let zeros = 0
+    for (let i = 0; i < read.length; i++) {
+      if (sparse.values[i] !== 0) continue
+      zeros++
+      // Paper in the picture, an observation of no contacts in the correlation.
+      expect(Number.isNaN(drawn[i])).toBe(true)
+      expect(read[i]).toBe(0)
+    }
+    expect(zeros).toBeGreaterThan(10)
+  })
+
+  it('still has no ratio where there is no baseline, or no observation', () => {
+    const empty = block(2, 2, () => 0)
+    for (const value of observedOverExpected(empty, { rows: [], cols: [] }, undefined, true)) {
+      expect(Number.isNaN(value)).toBe(true)
+    }
+    const gap = block(3, 3, (r) => (r === 1 ? Number.NaN : 5))
+    const read = observedOverExpected(gap, { rows: [], cols: [] }, undefined, true)
+    expect(Number.isNaN(read[1 * 3 + 2])).toBe(true)
+    expect(read[0]).toBeCloseTo(1, 6)
+  })
+
+  /** The picture, derived as it always was, and the correlation's ratio made paper. */
+  const both = (derivation: Parameters<typeof deriveBlock>[1], target = sparse, on = axes) => ({
+    drawn: deriveBlock(target, derivation, on),
+    read: deriveBlock(target, { ...derivation, keepZeros: true }, on),
+  })
+
+  it('differs from the picture in its zeros and nowhere else, whichever way the ratio is taken', () => {
+    const N = 12
+    const frame = { n: N, origin: 0, circular: true }
+    const bins = Int32Array.from({ length: N }, (_, i) => i)
+    const circle = block(N, N, (r, c) => ((r + 2 * c) % 5 === 0 && r !== c ? 0 : 30 / (1 + Math.abs(r - c))))
+    const chr = { rows: [{ label: 'chr', start: 0, end: N }], cols: [{ label: 'chr', start: 0, end: N }] }
+    for (const [name, pair] of [
+      ['the decay', both({ expected: true })],
+      ['a despeckle first', both({ expected: true, smooth: '1' })],
+      ['both arms', both({ expected: true, arms: { frame, rowBins: bins, colBins: bins, window: 0 } }, circle, chr)],
+    ] as const) {
+      const { drawn, read } = pair
+      expect(read.label, name).toBe(drawn.label)
+      expect(read.neutral, name).toBe(drawn.neutral)
+      const made = paperZeros(read.values, { expected: true })
+      expect(made, name).not.toBe(read.values)
+      for (let i = 0; i < made.length; i++) {
+        if (Number.isNaN(drawn.values[i])) expect(Number.isNaN(made[i]), `${name} at ${i}`).toBe(true)
+        else expect(made[i], `${name} at ${i}`).toBe(drawn.values[i])
+      }
+    }
+  })
+
+  it('leaves a field that was not divided exactly as it came', () => {
+    const counts = deriveBlock(sparse, {}, axes).values
+    expect(paperZeros(counts, {})).toBe(counts)
+    const baseline = deriveBlock(sparse, { expected: true, baseline: true }, axes).values
+    expect(paperZeros(baseline, { expected: true, baseline: true })).toBe(baseline)
+  })
+})
+
+describe('the O/E, cell by cell', () => {
+  /** The definition, one cell at a time, as the loops it is checked against once were. */
+  function reference(b: BlockValues, rows: readonly AxisRun[], cols: readonly AxisRun[]) {
+    const label = (axis: readonly AxisRun[], i: number): string | null =>
+      axis.find((run) => i >= run.start && i < run.end)?.label ?? null
+    const sums = new Map<number, number>()
+    const counts = new Map<number, number>()
+    let transSum = 0
+    let transCount = 0
+    for (let r = 0; r < b.nrows; r++) {
+      for (let c = 0; c < b.ncols; c++) {
+        const value = b.values[r * b.ncols + c]
+        if (!Number.isFinite(value)) continue
+        if (label(rows, r) === label(cols, c)) {
+          const d = Math.abs(b.rowExtent[0] + r - (b.colExtent[0] + c))
+          sums.set(d, (sums.get(d) ?? 0) + value)
+          counts.set(d, (counts.get(d) ?? 0) + 1)
+        } else {
+          transSum += value
+          transCount++
+        }
+      }
+    }
+    const trans = transCount > 0 ? transSum / transCount : Number.NaN
+    const oe = new Float32Array(b.nrows * b.ncols)
+    for (let r = 0; r < b.nrows; r++) {
+      for (let c = 0; c < b.ncols; c++) {
+        const value = b.values[r * b.ncols + c]
+        const d = Math.abs(b.rowExtent[0] + r - (b.colExtent[0] + c))
+        const expected = label(rows, r) === label(cols, c) ? (sums.get(d) ?? Number.NaN) / (counts.get(d) ?? Number.NaN) : trans
+        const ratio = Number.isFinite(value) && expected > 0 ? value / expected : Number.NaN
+        oe[r * b.ncols + c] = ratio !== 0 && Number.isFinite(ratio) ? ratio : Number.NaN
+      }
+    }
+    return { oe, trans }
+  }
+
+  it('agrees with the definition over several sequences, off the diagonal and across it', () => {
+    let seed = 11
+    const noise = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed / 0x7fffffff
+    }
+    const cases: { rows: AxisRun[]; cols: AxisRun[]; rowExtent: [number, number]; colExtent: [number, number] }[] = [
+      // Three sequences on both axes, over the diagonal.
+      {
+        rows: [
+          { label: 'a', start: 0, end: 7 },
+          { label: 'b', start: 7, end: 11 },
+          { label: 'c', start: 11, end: 20 },
+        ],
+        cols: [
+          { label: 'a', start: 0, end: 7 },
+          { label: 'b', start: 7, end: 11 },
+          { label: 'c', start: 11, end: 20 },
+        ],
+        rowExtent: [0, 20],
+        colExtent: [0, 20],
+      },
+      // Two windows that overlap, so the diagonal crosses the block partway.
+      { rows: [{ label: 'x', start: 0, end: 13 }], cols: [{ label: 'x', start: 0, end: 17 }], rowExtent: [40, 53], colExtent: [46, 63] },
+      // A window wholly to one side of the other, with a sequence change on the columns.
+      {
+        rows: [{ label: 'x', start: 0, end: 9 }],
+        cols: [
+          { label: 'x', start: 0, end: 6 },
+          { label: 'y', start: 6, end: 15 },
+        ],
+        rowExtent: [100, 109],
+        colExtent: [0, 15],
+      },
+      // And no runs at all.
+      { rows: [], cols: [], rowExtent: [5, 21], colExtent: [9, 20] },
+    ]
+    for (const { rows, cols, rowExtent, colExtent } of cases) {
+      const nrows = rowExtent[1] - rowExtent[0]
+      const ncols = colExtent[1] - colExtent[0]
+      const b = block(
+        nrows,
+        ncols,
+        () => {
+          const x = noise()
+          return x < 0.1 ? 0 : x < 0.15 ? Number.NaN : x < 0.17 ? -x : 50 * x
+        },
+        rowExtent,
+        colExtent,
+      )
+      const want = reference(b, rows, cols)
+      const got = observedOverExpected(b, { rows, cols })
+      for (let i = 0; i < got.length; i++) {
+        if (Number.isNaN(want.oe[i])) expect(Number.isNaN(got[i])).toBe(true)
+        else expect(got[i]).toBe(want.oe[i])
+      }
+      const model = expectedModel(b, { rows, cols })
+      if (Number.isNaN(want.trans)) expect(Number.isNaN(model.trans)).toBe(true)
+      else expect(model.trans).toBeCloseTo(want.trans, 12)
+    }
   })
 })
 

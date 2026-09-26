@@ -318,7 +318,7 @@ export function analysisTransfers(payload: unknown): Transferable[] {
   // A correlation field, which is not a `TaskResult` and has no `outputs`. Safe
   // to transfer where the *request's* array was not: this one is allocated by
   // the job and nothing on the far side keeps a reference, so moving it saves a
-  // copy of up to 9 MB at the bin cap instead of neutering a block being drawn.
+  // copy of up to 64 MB at the bin cap instead of neutering a block being drawn.
   const field = payload as Partial<CorrelationField> & Partial<SmoothedField>
   if (field.values instanceof Float32Array) {
     take(field.values)

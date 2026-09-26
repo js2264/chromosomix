@@ -255,6 +255,10 @@ export function openShareDialog(props: ShareDialogProps): Modal {
 
   void (async () => {
     const payload = await encodeShare(props.config)
+    // Closed while the link was being made: a reader who dismissed the dialog
+    // has not asked for their clipboard to be written over, nor for a
+    // selection in a box that is no longer on screen.
+    if (!field.isConnected) return
     link = shareUrl(props.base, payload)
     field.textContent = link
     selectLink()
