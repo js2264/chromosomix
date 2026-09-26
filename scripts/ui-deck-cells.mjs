@@ -16,7 +16,9 @@
  *   `+`, dark once the cell is closed from its heading, lit again;
  * - the structure cell renamed from its heading, and its row on the card with it;
  * - a track beside the map — the demo's Pol II, which grows away from it — put
- *   in a tracks cell, reading up the page.
+ *   in a tracks cell, reading up the page;
+ * - the bar under a cell that sets its height: a tracks cell's dragged taller
+ *   and double-clicked back to its row, and a structure cell's dragged too.
  *
  * It prints what each step left behind — the cells, which edges each track is
  * on, the eye — beside the pictures.
@@ -194,6 +196,27 @@ const middle = async (selector) => {
   const box = await page.locator(selector).first().boundingBox()
   return box === null ? null : { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
+/** Drag the height bar under a cell by `dy` pixels; the picture's height before and after. */
+const dragBar = async (bar, picture, dy, name) => {
+  const box = await page.locator(bar).first().boundingBox()
+  const before = await page.locator(picture).first().evaluate((node) => Math.round(node.getBoundingClientRect().height))
+  if (box === null) return { before, after: before }
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await sleep(300)
+  await page.mouse.down()
+  for (let i = 1; i <= 16; i++) {
+    await page.mouse.move(from.x, from.y + (dy * i) / 16)
+    await sleep(25)
+  }
+  await sleep(300)
+  if (name !== undefined) await shot(name)
+  await page.mouse.up()
+  await sleep(1500)
+  const after = await page.locator(picture).first().evaluate((node) => Math.round(node.getBoundingClientRect().height))
+  return { before, after }
+}
+
 /** Type a name into a heading's box and press Enter, as a reader would. */
 const rename = async (selector, name) => {
   const box = page.locator(selector).first()
@@ -368,6 +391,12 @@ try {
   console.log('after renaming the cell:', JSON.stringify(await cells()), JSON.stringify(await eye()))
   await shot('dc17-structure-renamed-from-its-cell')
   await shotOf('.structure-card', 'dc18-structures-card-row-renamed', 4)
+  // The structure cell's own bar, now drawn by the code the tracks cell shares.
+  const model = await dragBar('.deck-grid > .deck-structure .structure-resize', '.deck-grid > .deck-structure .structure-wrap', 160)
+  console.log('the structure cell dragged 160 px down:', JSON.stringify(model))
+  await page.mouse.move(5, 500)
+  await sleep(800)
+  await shot('dc18b-structure-cell-taller')
 
   // -------------------------------------------------------------------------
   // A track beside the map, put in a tracks cell.
@@ -397,6 +426,31 @@ try {
   console.log('cells:', JSON.stringify(await cells()))
   await shot('dc19-pol2-upright-in-a-tracks-cell')
   await shotOf('.deck-grid > .deck-tracks', 'dc20-pol2-in-the-tracks-cell', 4)
+
+  // The bar under the tracks cell: lit under the hand, dragged down, and
+  // double-clicked back to the row.
+  const tracksBar = '.deck-grid > .deck-tracks .tracks-resize'
+  const tracksWrap = '.deck-grid > .deck-tracks .tracks-wrap'
+  const barBox = await page.locator(tracksBar).first().boundingBox()
+  if (barBox !== null) await page.mouse.move(barBox.x + barBox.width / 2, barBox.y + barBox.height / 2)
+  await sleep(600)
+  await shotOf('.deck-grid > .deck-tracks', 'dc21-tracks-cell-bar-lit', 4)
+  const taller = await dragBar(tracksBar, tracksWrap, 220, 'dc22-tracks-cell-bar-dragged')
+  console.log('the tracks cell dragged 220 px down:', JSON.stringify(taller))
+  await page.mouse.move(5, 500)
+  await sleep(800)
+  console.log(
+    'let go and left alone:',
+    await page.locator(tracksWrap).first().evaluate((node) => Math.round(node.getBoundingClientRect().height)),
+  )
+  await shot('dc23-tracks-cell-taller')
+  await page.locator(tracksBar).first().dblclick()
+  await sleep(1500)
+  const back = await page.locator(tracksWrap).first().evaluate((node) => Math.round(node.getBoundingClientRect().height))
+  console.log('double-clicked back to the row:', back)
+  await page.mouse.move(5, 500)
+  await sleep(800)
+  await shot('dc24-tracks-cell-back-to-the-row')
 
   console.log(errors.length === 0 ? 'no page errors' : `page errors:\n${errors.join('\n')}`)
 } finally {

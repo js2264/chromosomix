@@ -89,6 +89,7 @@ import type { DeckCell } from './cell'
 import type { LocusWindow } from '../render/locus'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
 import { TRACKS_CELL_NAME, TracksPanel, type TracksCellProps } from './TracksPanel'
+import { cellHeightOf } from './cellHeight'
 import type { LaneEdge } from '../annotations/types'
 import { subscribeHoverPlace } from '../ui/hoverLocus'
 import { isStructureName } from '../annotations/g3d'
@@ -1688,15 +1689,18 @@ export class PanelDeck {
       slot.cell?.destroy()
     }
     this.slots = next
-    // A tracks cell built here takes the name its seat was left with — before
-    // `paintGrid`, whose publish writes the names back from the live cells and
-    // would otherwise write this deck's unnamed ones over the memory it is
-    // restoring from. A cell kept from the deck before keeps its own.
+    // A tracks cell built here takes the name and the height its seat was left
+    // with — before `paintGrid`, whose publish writes both back from the live
+    // cells and would otherwise write this deck's plain ones over the memory it
+    // is restoring from. A cell kept from the deck before keeps its own.
     const names = this.recallTracksNames()
+    const heights = this.recallTracksHeights()
     next
       .filter((slot) => slot.ref.kind === 'tracks')
       .forEach((slot, seat) => {
-        if (!reused.has(slot)) tracksIn(slot)?.setName(names[seat] ?? null)
+        if (reused.has(slot)) return
+        tracksIn(slot)?.setName(names[seat] ?? null)
+        tracksIn(slot)?.setHeight(heights[seat] ?? null)
       })
     // A link, or a restored session, can name fewer maps than the star knew
     // about — and a star on a slot that was not rebuilt would leave the Analysis
@@ -1824,9 +1828,10 @@ export class PanelDeck {
         leadSampleWidth: () => this.lead?.laneAcrossPixels() ?? 0,
         defaultName: () => this.tracksDefaultName(slot),
         onRename: () => {
-          this.rememberTracksNames()
+          this.rememberTracksCells()
           this.props.onCellRenamed?.()
         },
+        onResize: () => this.rememberTracksCells(),
       })
       const windows = this.leadWindows()
       if (windows !== null) slot.cell.applyWindow(windows)
@@ -3085,7 +3090,7 @@ export class PanelDeck {
     // a save, for the reason every other scope here is: what storage holds *is*
     // the session, so a reload and an exported workspace restore the same deck.
     remember(this.props.memoryKey(), 'deck:locals', localCompanions(refs))
-    this.rememberTracksNames()
+    this.rememberTracksCells()
     this.paintBar()
     this.props.onMapsChange(value)
     // A structure cell opened or closed is a change to which models are on
@@ -3094,18 +3099,24 @@ export class PanelDeck {
   }
 
   /**
-   * Every tracks cell's name, into this session's memory by **seat** — which
-   * tracks cell it is, counting from the left: the structure cells' rule, for
-   * their reason, since a slot's id is minted per build and would name nothing
-   * after a reload. Written from the live cells on every publish as well as on
-   * a rename, so a cell moved, closed or opened takes its name with it rather
-   * than leaving it on a seat for whichever cell sits there next.
+   * Every tracks cell's name and height, into this session's memory by
+   * **seat** — which tracks cell it is, counting from the left: the structure
+   * cells' rule, for their reason, since a slot's id is minted per build and
+   * would name nothing after a reload. Written from the live cells on every
+   * publish as well as on a rename or a resize, so a cell moved, closed or
+   * opened takes its name and its height with it rather than leaving them on a
+   * seat for whichever cell sits there next.
    */
-  private rememberTracksNames(): void {
-    const names = this.slots
-      .filter((slot) => slot.ref.kind === 'tracks')
-      .map((slot) => tracksIn(slot)?.customName() ?? '')
+  private rememberTracksCells(): void {
+    const cells = this.slots.filter((slot) => slot.ref.kind === 'tracks').map(tracksIn)
+    const names = cells.map((cell) => cell?.customName() ?? '')
+    const heights = cells.map((cell) => cell?.customHeight() ?? null)
     remember(this.props.memoryKey(), TRACKS_NAMES_SCOPE, names.some((name) => name !== '') ? names : null)
+    remember(
+      this.props.memoryKey(),
+      TRACKS_HEIGHTS_SCOPE,
+      heights.some((height) => height !== null) ? heights : null,
+    )
   }
 
   /**
@@ -3117,10 +3128,16 @@ export class PanelDeck {
     return seat <= 0 ? TRACKS_CELL_NAME : `${TRACKS_CELL_NAME} ${seat + 1}`
   }
 
-  /** The names {@link rememberTracksNames} wrote, by seat; `''` for a cell nobody named. */
+  /** The names {@link rememberTracksCells} wrote, by seat; `''` for a cell nobody named. */
   private recallTracksNames(): string[] {
     const stored = recall<unknown>(this.props.memoryKey(), TRACKS_NAMES_SCOPE)
     return Array.isArray(stored) ? stored.map((name) => (typeof name === 'string' ? name : '')) : []
+  }
+
+  /** The heights {@link rememberTracksCells} wrote, by seat; `null` for a cell as tall as its row. */
+  private recallTracksHeights(): Array<number | null> {
+    const stored = recall<unknown>(this.props.memoryKey(), TRACKS_HEIGHTS_SCOPE)
+    return Array.isArray(stored) ? stored.map(cellHeightOf) : []
   }
 
   // -------------------------------------------------------------------------
@@ -4224,6 +4241,9 @@ export class PanelDeck {
 
 /** Where the tracks cells' names live in this session's memory, by seat (§25.3). */
 const TRACKS_NAMES_SCOPE = 'deck:tracksNames'
+
+/** …and their heights, where the reader set one with the bar under the stack. */
+const TRACKS_HEIGHTS_SCOPE = 'deck:tracksHeights'
 
 /** The tracks cell a slot holds, or `null` for a map, a structure or a gap. */
 function tracksIn(slot: Slot): TracksPanel | null {

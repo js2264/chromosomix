@@ -835,6 +835,43 @@ describe('a tracks cell in the deck', () => {
     expect(told).toBe(2)
   })
 
+  it('is resized by the bar under it, and given back to the row on a double-click', () => {
+    // The structure cell's bar, under a stack of tracks: a column of cells
+    // under a map gave the stack the 16 rem floor and nothing more (§25.3).
+    const { deck } = make(undefined, tracksContext())
+    deck.add({ kind: 'tracks' })
+    const cell = tracksCells(deck)[0]
+    const bar = cell?.querySelector<HTMLElement>('.tracks-resize')
+    if (cell === undefined || bar === null || bar === undefined) throw new Error('no bar under the tracks cell')
+    expect(bar.classList.contains('cell-resize')).toBe(true)
+    expect(cell.classList.contains('has-height')).toBe(false)
+    bar.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(cell.classList.contains('has-height')).toBe(true)
+    // jsdom measures the stack at nothing, so a step down from there is the floor.
+    expect(cell.style.getPropertyValue('--tracks-h')).toBe('120px')
+    bar.dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }))
+    expect(cell.classList.contains('has-height')).toBe(false)
+    expect(cell.style.getPropertyValue('--tracks-h')).toBe('')
+  })
+
+  it('keeps its height across a reload, by where it sits among the tracks cells', () => {
+    const first = make(undefined, tracksContext())
+    first.deck.apply(state('tracks|https://x.example.org/b.cool|tracks'))
+    const bar = tracksCells(first.deck)[1]?.querySelector<HTMLElement>('.tracks-resize')
+    bar?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    first.deck.destroy()
+    const again = make(undefined, tracksContext())
+    again.deck.apply(state('tracks|https://x.example.org/b.cool|tracks'))
+    const heights = tracksCells(again.deck).map((cell) => cell.style.getPropertyValue('--tracks-h'))
+    expect(heights).toEqual(['', '120px'])
+    // Closing the first moves the second into its seat, height and all.
+    tracksCells(again.deck)[0]?.querySelector<HTMLButtonElement>('.btn-close')?.click()
+    again.deck.destroy()
+    const third = make(undefined, tracksContext())
+    third.deck.apply(state('https://x.example.org/b.cool|tracks'))
+    expect(tracksCells(third.deck)[0]?.style.getPropertyValue('--tracks-h')).toBe('120px')
+  })
+
   it('numbers the headings of cells nobody named as the location control lists them', () => {
     // Two cells both headed `tracks`, listed as `tracks` and `tracks 2`: a
     // reader could not tell which line was which cell.

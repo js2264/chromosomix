@@ -794,7 +794,7 @@ export class BrowserView {
     )
     this.el = el(
       'section',
-      { class: `view view-browser${props.map === undefined ? '' : ' is-cell'}` },
+      { class: 'view view-browser' },
       // **A tracks cell of the deck has no heading of its own** — no locus box,
       // no zoom steps, no summary line — only the axis: the chromosome's bar
       // and its ruler, drawn at the top of the picture. Where to look is the

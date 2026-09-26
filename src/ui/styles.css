@@ -10466,6 +10466,14 @@ span.deck-name {
   min-height: 0;
 }
 
+/* …and a stack of tracks, by the same bar under it: the scroll box takes the
+   height and the browser inside measures the box. */
+.deck-tracks.has-height > .tracks-body > .tracks-wrap {
+  flex: 0 0 auto;
+  height: var(--tracks-h);
+  min-height: 0;
+}
+
 /* **A cell alone on screen takes the height a map would** (§16.9) — the model
    a lone structure file opened, or whatever is left beside a hidden first cell.
    Its row has no map to take a height from, and the 16rem floor drew a model
@@ -10475,16 +10483,17 @@ span.deck-name {
    the whole deck fits the column without a scroll; a height the reader set
    wins. */
 .deck-grid.is-alone > .deck-panel:not(.has-height) > .structure-body > .structure-wrap,
-.deck-grid.is-alone > .deck-panel > .tracks-body > .tracks-wrap {
+.deck-grid.is-alone > .deck-panel:not(.has-height) > .tracks-body > .tracks-wrap {
   flex: 0 0 auto;
   height: clamp(20rem, calc(100vh - 18.5rem - var(--tabstrip-h) - var(--deck-edge, 0px)), 60rem);
 }
 
-/* The bar under the picture that sets that height. Three pixels of nothing
-   until it is wanted, and the whole width so it is found without aiming: it
-   sits between the cell and whatever is under it, which is where a hand
-   reaches for an edge. */
-.structure-resize {
+/* The bar under the picture that sets that height — a model's and a stack of
+   tracks' alike (`panels/cellHeight.ts`). Three pixels of nothing until it is
+   wanted, and the whole width so it is found without aiming: it sits between
+   the cell and whatever is under it, which is where a hand reaches for an
+   edge. */
+.cell-resize {
   flex: 0 0 auto;
   height: 7px;
   margin-top: 1px;
@@ -10495,7 +10504,7 @@ span.deck-name {
   touch-action: none;
 }
 
-.structure-resize::after {
+.cell-resize::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -10508,13 +10517,13 @@ span.deck-name {
   transition: background 0.12s ease;
 }
 
-.structure-resize:hover::after,
-.structure-resize:focus-visible::after,
-.structure-resize.is-dragging::after {
+.cell-resize:hover::after,
+.cell-resize:focus-visible::after,
+.cell-resize.is-dragging::after {
   background: var(--accent);
 }
 
-.structure-resize:focus-visible {
+.cell-resize:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -10625,43 +10634,6 @@ span.deck-name {
 .deck-tracks .view-browser {
   min-height: 0;
   padding: 0.25rem 0.35rem;
-}
-
-.deck-tracks .view-head {
-  margin-bottom: 0.25rem;
-}
-
-/* The bar's hint is written for a page; in a cell it is a paragraph over a
-   picture, and the locus box says what the cell is. */
-.deck-tracks .view-head .hint {
-  display: none;
-}
-
-/* **The box keeps the room a locus needs, and the bar breaks in one place.**
-
-   It had `flex-basis: 8rem; min-width: 6rem` under a wrapping bar, so in a cell
-   three across the one control that says where the cell is looking read
-   `IV:1,000,001-1,400,0` — the end of the window, which is the number the reader
-   is after, clipped — while the loose icon buttons after it wrapped one at a
-   time and left a single glyph on a line of its own under the box. An orphaned
-   icon reads as a separate control, and it pushed the cell's ruler down out of
-   line with the maps beside it.
-
-   Twelve rem is a twenty-two character locus at the mono size. The bar now holds
-   two things — the box, and the four zoom steps as one non-breaking group — so
-   when the cell is too narrow for both the break comes between them, always in
-   the same place, and both stay whole. `go` and the `/` badge are gone in a cell
-   (`ui/BrowserView.ts`): the lead's box above the grid owns the key, and Enter
-   submits. */
-.deck-tracks .browser-bar .browser-search {
-  flex: 1 1 12rem;
-  min-width: 12rem;
-}
-
-/* No badge in the cell, so no room reserved for one: the 2.1rem `.search-box`
-   keeps for the `/` is exactly the width the last digits of a locus need. */
-.deck-tracks .browser-bar .browser-search > .input {
-  padding-right: 0.4rem;
 }
 
 /* The add row beside a browser lead (§25 stage D): the roads that open a

@@ -14,6 +14,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A tracks cell has the structure cell's height bar (§25.3).** Drag the bar under the stack to make
+  the cell taller or shorter, nudge it with the arrow keys, double-click it to fit the row again; each
+  tracks cell keeps its height across a reload.
+
 - **Structure and tracks cells are renamed from their heading (§25.3).** A name typed into a
   structure cell's heading renames its model, on the Structures card and everywhere else it is named;
   a tracks cell's heading renames the cell alone — its name in the location control, remembered per

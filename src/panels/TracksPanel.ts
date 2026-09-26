@@ -32,6 +32,7 @@ import type { ViewState } from '../types'
 import { BrowserView } from '../ui/BrowserView'
 import { el } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
+import { clampCellHeight, heightBar } from './cellHeight'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
 
@@ -72,12 +73,6 @@ export interface TracksPanelProps {
    */
   leadSampleWidth?(): number
   /**
-   * What the reader called this cell, as it is built: restored by the deck,
-   * which is what knows which of its tracks cells this is. Absent for a cell
-   * nobody has named, which reads {@link defaultName}.
-   */
-  name?: string
-  /**
    * What the cell is called while nobody has named it: {@link TRACKS_CELL_NAME},
    * or `tracks 2` for the second of several — the words the location control
    * lists it under, so the heading and the list agree. Asked, because it is
@@ -94,6 +89,11 @@ export interface TracksPanelProps {
    * they are (§25.3).
    */
   onRename?(name: string | null): void
+  /**
+   * The reader set the cell's height with the bar under it, or gave it back
+   * to the row (`null`), which the deck remembers by seat (§25.3).
+   */
+  onResize?(height: number | null): void
 }
 
 /** What a tracks cell is called until the reader calls it something else. */
@@ -121,11 +121,16 @@ export class TracksPanel implements DeckCell {
   /** Set while this cell is being *told* where to look, so it does not tell back. */
   private adopting = false
   private destroyed = false
-  /** What the reader called this cell, or `null` for its default. */
-  private named: string | null
+  /**
+   * What the reader called this cell, or `null` for its default. Restored by
+   * the deck after the cell is built ({@link setName}), since it is the deck
+   * that knows which of its tracks cells this is.
+   */
+  private named: string | null = null
+  /** The height the reader set, in pixels, or `null` for the row's. */
+  private held: number | null = null
 
   constructor(private readonly props: TracksPanelProps) {
-    this.named = tracksCellName(props.name)
     this.nameEl = this.nameBox()
     this.chain = iconButton('link', '', () => this.toggleLink(), { class: 'btn btn-icon deck-lock', size: 14 })
     this.el = el(
@@ -143,7 +148,20 @@ export class TracksPanel implements DeckCell {
         }),
       ),
       this.note,
-      el('div', { class: 'deck-body tracks-body' }, this.wrap),
+      el(
+        'div',
+        { class: 'deck-body tracks-body' },
+        this.wrap,
+        heightBar({
+          className: 'tracks-resize',
+          picture: () => this.wrap,
+          preview: (height) => this.hold(height),
+          commit: (height) => {
+            this.hold(height)
+            this.props.onResize?.(height)
+          },
+        }),
+      ),
     )
     this.syncChain()
     this.sync()
@@ -203,6 +221,16 @@ export class TracksPanel implements DeckCell {
     this.syncName()
   }
 
+  /** The height the reader set with the bar under the stack, or `null` for the row's. */
+  customHeight(): number | null {
+    return this.held
+  }
+
+  /** Hold the cell at a height from the deck's memory, which nobody is told of: see {@link setName}. */
+  setHeight(height: number | null): void {
+    this.hold(height === null ? null : clampCellHeight(height))
+  }
+
   /**
    * Put the name back in the box. Skipped while the caret is in it, for the
    * reason a map's heading skips it: a box rewritten under a reader mid-word
@@ -231,6 +259,24 @@ export class TracksPanel implements DeckCell {
   // -------------------------------------------------------------------------
   // The browser inside
   // -------------------------------------------------------------------------
+
+  /**
+   * Hold the stack at `height` pixels, or give it back to the row (§25.3).
+   *
+   * On the cell, as the structure cell's is, where the stylesheet reads it:
+   * the scroll box takes the height and the browser inside measures the box.
+   */
+  private hold(height: number | null): void {
+    this.held = height
+    if (height === null) {
+      this.el.classList.remove('has-height')
+      this.el.style.removeProperty('--tracks-h')
+    } else {
+      this.el.classList.add('has-height')
+      this.el.style.setProperty('--tracks-h', `${height}px`)
+    }
+    this.browser?.remeasure()
+  }
 
   /** Build the browser over the session's machinery, or rebuild it when that changed. */
   private sync(): void {

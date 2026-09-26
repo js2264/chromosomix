@@ -115,6 +115,7 @@ import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
+import { cellHeightOf, heightBar } from './cellHeight'
 import {
   getPlotOptions,
   setPlotOption,
@@ -256,9 +257,6 @@ function seatScope(scope: string, seat: number): string {
   return seat <= 0 ? scope : `${scope}:${seat}`
 }
 
-function clamp(value: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, value))
-}
 /*
  * The settings this cell reads that are **not** the row's own live in
  * `ui/plotOptions.ts` as {@link STRUCTURE_OPTIONS}, beside the matrix's and
@@ -274,10 +272,6 @@ const SIDE_SCOPE = 'structure:side'
 const HEIGHT_SCOPE = 'structure:height'
 /** Where *turn together* is kept for this seat (§25.3). */
 const TURN_SCOPE = 'structure:turnWith'
-/** The shortest a resized cell may be, in pixels — below this the picture is not one. */
-const CELL_MIN_H = 120
-/** The tallest, so a drag cannot push the rest of the page off the screen. */
-const CELL_MAX_H = 2000
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
@@ -664,10 +658,8 @@ export class StructurePanel implements DeckCell {
       this.body,
     )
     // The height this seat was left at, where the reader has set one.
-    const height = recall<unknown>(props.memoryKey(), this.seatScope(HEIGHT_SCOPE))
-    if (typeof height === 'number' && Number.isFinite(height)) {
-      this.setHeight(Math.round(clamp(height, CELL_MIN_H, CELL_MAX_H)))
-    }
+    const height = cellHeightOf(recall<unknown>(props.memoryKey(), this.seatScope(HEIGHT_SCOPE)))
+    if (height !== null) this.setHeight(height)
     this.watchDrops()
     void this.loadRenderer()
     if (typeof ResizeObserver !== 'undefined') {
@@ -1542,8 +1534,8 @@ export class StructurePanel implements DeckCell {
    * a column **under** one: a deck one across put the model in a 16 rem band
    * under a map that could be shrunk to a thumbnail, and nothing the reader
    * did to either of them gave the model any more room. A model has no axis to
-   * line up with the map's, so it is the one cell whose height is nobody's
-   * business but the reader's.
+   * line up with the map's, so its height is the reader's business — as a
+   * stack of tracks' is, whose cell has the same bar (`panels/cellHeight.ts`).
    *
    * The height is written as a property on the *cell*, not as a style on the
    * picture, because the picture is lent to the enlarged dialog and back: an
@@ -1551,43 +1543,15 @@ export class StructurePanel implements DeckCell {
    * middle of a full-screen stage.
    */
   private resizeGrip(): HTMLElement {
-    const grip = el('div', {
-      class: 'structure-resize',
-      attrs: { role: 'separator', 'aria-orientation': 'horizontal', tabindex: '0' },
-      title: 'Drag to make this cell taller or shorter · double-click to fit the row again',
+    return heightBar({
+      className: 'structure-resize',
+      picture: () => this.wrap,
+      preview: (height) => this.setHeight(height),
+      commit: (height) => {
+        this.setHeight(height)
+        remember(this.props.memoryKey(), this.seatScope(HEIGHT_SCOPE), height)
+      },
     })
-    const setTo = (height: number | null): void => {
-      this.setHeight(height)
-      remember(this.props.memoryKey(), this.seatScope(HEIGHT_SCOPE), height)
-    }
-    grip.addEventListener('pointerdown', (event) => {
-      grip.setPointerCapture(event.pointerId)
-      grip.classList.add('is-dragging')
-      event.preventDefault()
-      const from = this.wrap.getBoundingClientRect()
-      const heightAt = (clientY: number): number =>
-        Math.round(clamp(clientY - from.top, CELL_MIN_H, CELL_MAX_H))
-      const move = (moved: PointerEvent): void => this.setHeight(heightAt(moved.clientY))
-      const up = (ended: PointerEvent): void => {
-        grip.removeEventListener('pointermove', move)
-        grip.removeEventListener('pointerup', up)
-        grip.classList.remove('is-dragging')
-        if (grip.hasPointerCapture(ended.pointerId)) grip.releasePointerCapture(ended.pointerId)
-        setTo(heightAt(ended.clientY))
-      }
-      grip.addEventListener('pointermove', move)
-      grip.addEventListener('pointerup', up)
-    })
-    // Back to the row's own height, which is the state there is no other way
-    // out of once a height has been set.
-    grip.addEventListener('dblclick', () => setTo(null))
-    grip.addEventListener('keydown', (event) => {
-      const step = event.key === 'ArrowUp' ? -24 : event.key === 'ArrowDown' ? 24 : 0
-      if (step === 0) return
-      event.preventDefault()
-      setTo(Math.round(clamp(this.wrap.getBoundingClientRect().height + step, CELL_MIN_H, CELL_MAX_H)))
-    })
-    return grip
   }
 
   /** Hold the picture at `height` pixels, or give it back to the row. */

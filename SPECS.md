@@ -8799,10 +8799,10 @@ letter that folds a panel instead. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a **bar under it sets the cell's height**,
 dragged, nudged with the arrow keys, and double-clicked to give the height back to the row;
-remembered per seat. A model has no axis to line up with the map's, so it is the one cell whose
-height is nobody's business but the reader's: a deck one across put the model in a 16 rem band under
-a map that could be shrunk to a thumbnail, and nothing done to either of them gave the model any
-more room. A button in its corner **enlarges** it into
+remembered per seat. A model has no axis to line up with the map's, so its height is the reader's
+business — as a stack of tracks' is, whose cell has the same bar (below): a deck one across put the
+model in a 16 rem band under a map that could be shrunk to a thumbnail, and nothing done to either of
+them gave the model any more room. A button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
 them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
@@ -8861,10 +8861,13 @@ and a cell is where they are drawn. Until then it is `tracks`, and `tracks 2`, `
 ones after it counting from the left, in the heading as in the control — two headings both saying
 `tracks` over a list saying `tracks` and `tracks 2` left a reader guessing which line was which
 cell — renumbered as cells come and go. Two stacks side by side are what a name is for, *G1*
-beside *G2M*; an empty box, or the default typed back, hands the cell back to its default. The names are remembered by **seat**, a
-tracks cell's place among the tracks cells counting from the left, written from the live cells on
-every change to the deck, so a reload names each cell as it was and a cell moved or closed takes its
-name with it rather than leaving it on a seat.
+beside *G2M*; an empty box, or the default typed back, hands the cell back to its default. **A bar
+under the stack sets the cell's height**, the structure cell's bar and gesture — dragged, nudged
+with the arrow keys, double-clicked to give the height back to the row: a column of cells under a
+map gave a stack of tracks the 16 rem floor and no more, and the stack scrolled inside it. The names
+and the heights are remembered by **seat**, a tracks cell's place among the tracks cells counting
+from the left, written from the live cells on every change to the deck, so a reload names and sizes
+each cell as it was and a cell moved or closed takes both with it rather than leaving them on a seat.
 
 **The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
 session's view, re-parented into a cell as a map's is — moved and hidden as a map's is (§16.9) — and
