@@ -6,12 +6,17 @@
  * over the ratio, which is the whole of the measurement and is tested on its own
  * (`analysis/arms.ts`). What is here is the reading, the origin, and the three
  * shapes the answer is given in.
+ *
+ * And the control: the same square over the decay along both arms, the
+ * expectation that takes the secondary diagonal in, summarised the same way as
+ * a second row of the table — what is left of the alignment once the map's arms
+ * or Compartments have divided it out.
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { cisSeparation } from '../compartments'
 import { ExpectedAccumulator, expectedAt } from '../expected'
-import { interArmProfile, interArmSummary, type ArmFrame } from '../arms'
+import { armExpected, interArmProfile, interArmSummary, type ArmFrame } from '../arms'
 import {
   boolParam,
   numParam,
@@ -61,6 +66,39 @@ function observedOverDecay(values: Float32Array, n: number, lap: number): Float6
   return out
 }
 
+/**
+ * Observed over the decay along both arms (`analysis/arms.ts`), masked as the
+ * map masks it: a cell with no value stays a gap, and so does one whose
+ * expectation is not positive. The expectation's own array holds the ratio, so
+ * a square at the cap costs one of them rather than two.
+ */
+function observedOverArms(values: Float32Array, n: number, frame: ArmFrame, window: number): Float64Array {
+  const bins = Int32Array.from({ length: n }, (_, i) => i)
+  const out = armExpected(values, bins, bins, frame, window)
+  for (let i = 0; i < out.length; i++) {
+    const observed = values[i]
+    const expected = out[i]
+    out[i] = Number.isFinite(observed) && expected > 0 ? observed / expected : Number.NaN
+  }
+  return out
+}
+
+/** What a row says of a summary: the reach in base pairs. */
+function rowNumbers(
+  summary: { score: number; reach: number; peak: number },
+  binsize: number,
+): { score: number; peak: number; reach: number } {
+  return {
+    score: summary.score,
+    peak: summary.peak,
+    reach: Number.isFinite(summary.reach) ? summary.reach * binsize : Number.NaN,
+  }
+}
+
+/** The rows' names for what each cell was divided by — Compartments' words for the same two. */
+const BY_DECAY = 'distance decay'
+const BY_ARMS = 'decay along both arms'
+
 export const runInterArm: TaskRunner = async (job) => {
   const { ids, missing } = tickedContigIds(job.mc, tickedSequences(job.params, 'sequences'))
   const said = missingSequencesNote(job.mc, missing, ids.length)
@@ -69,6 +107,7 @@ export const runInterArm: TaskRunner = async (job) => {
 
   const balance = boolParam(job.params, 'balance', true)
   const band = Math.max(0, Math.min(50, Math.round(numParam(job.params, 'band', 2))))
+  const armWindow = Math.max(0, Math.round(numParam(job.params, 'armWindow', 50)))
   const binsize = job.mc.binsize
   const track = new Float32Array(job.mc.nBins).fill(Number.NaN)
   const series: CurveSeries[] = []
@@ -105,8 +144,9 @@ export const runInterArm: TaskRunner = async (job) => {
 
     const values = await squareFor(job, from, to, balance)
     job.throwIfCancelled()
-    const oe = observedOverDecay(values, n, circular ? n : 0)
-    const { byDistance, byBin } = interArmProfile(oe, frame, band)
+    // Each ratio is let go once it is profiled, so the two squares of doubles
+    // are not held at once.
+    const { byDistance, byBin } = interArmProfile(observedOverDecay(values, n, circular ? n : 0), frame, band)
     const summary = interArmSummary(byDistance)
 
     for (let i = 0; i < n; i++) track[from + i] = byBin[i] > 0 ? Math.log2(byBin[i]) : Number.NaN
@@ -117,15 +157,26 @@ export const runInterArm: TaskRunner = async (job) => {
       y[d] = byDistance[d] > 0 ? Math.log2(byDistance[d]) : Number.NaN
     }
     series.push({ name, x, y })
-    rows.push({
+
+    // The control: the same cells over the decay along both arms, which has the
+    // secondary diagonal in it — so what the first row measured should be gone.
+    // Its score is read over the measurement's stretch, so the two rows average
+    // the same distances; its peak and reach are its own.
+    await job.breathe()
+    job.throwIfCancelled()
+    const detrended = interArmSummary(
+      interArmProfile(observedOverArms(values, n, frame, armWindow), frame, band).byDistance,
+      summary.reach,
+    )
+
+    const shared = {
       sequence: name,
       topology: circular ? 'circular' : 'linear',
       origin: (declared ?? 0) + 1,
-      score: summary.score,
-      peak: summary.peak,
-      reach: Number.isFinite(summary.reach) ? summary.reach * binsize : Number.NaN,
       armLength: (circular ? Math.floor(n / 2) : Math.max(origin, n - 1 - origin)) * binsize,
-    })
+    }
+    rows.push({ ...shared, expected: BY_DECAY, ...rowNumbers(summary, binsize) })
+    rows.push({ ...shared, expected: BY_ARMS, ...rowNumbers(detrended, binsize) })
     if (!circular) {
       job.note(
         `${name} was read as linear, so an origin near either end leaves it one arm. A bacterial ` +
@@ -138,6 +189,18 @@ export const runInterArm: TaskRunner = async (job) => {
   job.note(
     `Cells within ${band} ${band === 1 ? 'bin' : 'bins'} (${(band * binsize).toLocaleString()} bp) ` +
       'of the secondary diagonal, over each sequence’s own distance decay.',
+  )
+  job.note(
+    'Each sequence’s second row is the same cells over the decay along both arms' +
+      (armWindow === 0
+        ? ', over the whole of it'
+        : `, within ${armWindow.toLocaleString()} ${armWindow === 1 ? 'bin' : 'bins'} ` +
+          `(${(armWindow * binsize).toLocaleString()} bp) of each cell along them`) +
+      ' — the expectation the map’s arms and Compartments divide by, which takes the secondary ' +
+      'diagonal in. Its score, read over the first row’s stretch, is near 0 where that works: it is a ' +
+      'control on the detrending, not a second measure of the alignment. Its peak and reach are its ' +
+      'own, and a peak at the terminus — where the two diagonals cross and that expectation is at its ' +
+      'weakest — is the model’s edge rather than alignment left over.',
   )
 
   const outputs: TaskOutput[] = [
@@ -169,11 +232,23 @@ export const runInterArm: TaskRunner = async (job) => {
         { key: 'topology', label: 'read as', kind: 'text' },
         { key: 'origin', label: 'origin', kind: 'number', hint: 'The origin the arms were read from, 1-based.' },
         {
+          key: 'expected',
+          label: 'expected',
+          kind: 'text',
+          hint:
+            'What each cell was divided by: the distance decay, which leaves the secondary diagonal ' +
+            'standing out — the measurement — or the decay along both arms, which takes it in, as the ' +
+            'map’s arms and Compartments do — the control on that detrending.',
+        },
+        {
           key: 'score',
           label: 'score',
           kind: 'number',
           digits: 3,
-          hint: 'Mean log2 enrichment of the secondary diagonal over the arms; 0 is no alignment.',
+          hint:
+            'Mean log2 enrichment of the secondary diagonal from the origin out to the reach — how ' +
+            'strong the alignment is where it holds — or over the whole arm where nothing reaches. The ' +
+            'detrended row is read over the first row’s stretch; 0 there is none left over.',
         },
         {
           key: 'peak',

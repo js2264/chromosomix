@@ -6225,12 +6225,24 @@ origin and the terminus they run into each other and a cell there is a pair a fe
 DNA, whose ratio says how compact the stretch is rather than whether the arms are aligned, so a cell
 nearer the main diagonal than `2 × band + 2` bins is left out. Three shapes of one reading: a
 **curve** against distance from the origin, the figure the literature draws; a **track**, how much
-each locus touches its mirror image; and a **table** of the mean enrichment over the arms, its peak,
-and its **reach** — outwards from the peak, how far it holds above half of it, both read from a
-running mean over 2% of the arm so that one noisy distance neither sets the peak nor carries the reach
-to the terminus of a flat profile. It separates what it should, at every rung: 1.6 on *P. aeruginosa*
-PAK, reaching 2.7 of its 3.2 Mb arms; 0.37 on *B. subtilis* 168; 0.07 on *E. coli* MG1655. Absent on a
-metacool, whose MAGs have no declared origins.
+each locus touches its mirror image; and a **table** of its peak, its **reach** — outwards from the
+peak, how far it holds above half of it, both read from a running mean over 2% of the arm so that one
+noisy distance neither sets the peak nor carries the reach to the terminus of a flat profile — and its
+**score**, the mean enrichment **from the origin out to the reach**. So the reach says how far the arms
+are held and the score how strongly where they are, where a mean over the whole arm said both at once
+and read an alignment confined round parS like a weak one that runs to the terminus. Read over the
+stretch that holds above half the peak, a chromosome whose arms are not aligned scores its noise's
+highest stretch rather than zero; where nothing reaches, the score is the whole arm's mean. Each
+sequence has **a second row** of the same numbers over the decay along both arms — the expectation the
+map's arms and Compartments divide by (§8.15), within `armWindow` bins along them, 50 as theirs is —
+which takes the secondary diagonal into itself: a control on that detrending, not a second measure,
+its score read over the first row's stretch so that both rows average the same distances. It
+separates what it should: 1.7 on *P. aeruginosa* PAK from 2 to 16 kb, reaching 2.6–2.7 of its 3.2 Mb
+arms, against 0.23–0.28 on *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and along
+both arms PAK's 1.7 is −0.03 to −0.08. The control's own peak is at the terminus, where the two
+diagonals cross and the arms' expectation is at its weakest, and it grows with the bin — 0.08 at 2 kb,
+1.2 at 16 kb on PAK — because the window is counted in bins, and fifty of 16 kb are too wide to follow
+the crossing. Absent on a metacool, whose MAGs have no declared origins.
 *Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
 normalised cross-correlation against a template, over a map detrended by its own distance law, with
 neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter

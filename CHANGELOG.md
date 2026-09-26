@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Inter-arm alignment gives each sequence a control row (§18.8).** Beside the numbers read over
+  the sequence's own distance decay, a second row gives the same four — score, peak, reach, arm —
+  over the decay along both arms, the expectation the map's arms and Compartments divide by, which
+  takes the secondary diagonal in. Where that detrending works, its score is near zero: on
+  *P. aeruginosa* PAK the alignment's 1.7 is −0.03 to −0.08 along both arms. Its peak sits at the
+  terminus, where the arms' expectation is weakest, and grows with the bin size. The new *expected*
+  column says which row is which, and *window along the arms* (`--armWindow` in a shell; 50 bins,
+  the map's and Compartments' default) sets the control's. Task version 2.
+
 - **The Compartments table says how much of the contacts each component accounts for (§18.8).** Its
   *of contacts* column is the share of the map's departure from expected — observed/expected as
   cooltools prepares it — that the component's checkerboard carries, the same measure under either
@@ -464,6 +473,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **Inter-arm alignment's score is the mean from the origin out to the reach (§18.8),** where it was
+  over the whole arm: the reach says how far the arms are held, and the score now how strongly
+  within that, rather than both at once. The figures move — *P. aeruginosa* PAK 1.56 → 1.71 at 8 kb,
+  *E. coli* 0.08 → 0.23 at 5 kb — and a chromosome whose arms are not aligned now scores its noise's
+  highest stretch rather than zero. Where nothing reaches, the score is still the whole arm's mean.
 
 - **The map's correlation reaches 4,096 bins a side, and takes seconds there (§7.5).** Any square
   block the map can read can now be correlated, where it was capped at 1,500 bins: a whole bacterial
