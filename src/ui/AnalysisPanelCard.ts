@@ -146,18 +146,20 @@ function stoppable(state: JobState): boolean {
  * icon on the row and the drawer's `cancel` beside Run — and they were telling
  * a reader two different things about the same press. A task in the analysis
  * worker is genuinely cooperative: it reads the cancelled set between chunks and
- * abandons the work. A task in the annotations worker is a single synchronous
- * pass that never returns to its event loop, so the message is not read until
- * the pass is over and pressing stop discards the answer rather than preventing
- * it. That is still worth doing — the row ends *cancelled*, nothing is cached
- * and no lane is adopted — and it is not what "stops at the next chunk"
- * describes. These passes are bounded by what the worker will hold (a reference
- * over `FASTA_BYTE_CAP` is refused at load), so the wait is seconds, which is
- * why the honest sentence is acceptable and the false one was not.
+ * abandons the work. A task in the annotations worker reads the same kind of set,
+ * but only sees it when its thread is handed back — at a read of a track, or
+ * where a runner yields on purpose, as a genome-wide peak call does between its
+ * windows. A task with neither in it — a motif scan is one synchronous pass over
+ * the residues — runs to its end, and pressing stop discards the answer rather
+ * than preventing it. That is still worth doing — the row ends *cancelled*,
+ * nothing is cached and no lane is adopted — and it is not what "stops at the
+ * next chunk" describes, so the sentence says both. Such passes are bounded by
+ * what the worker will hold (a reference over `FASTA_BYTE_CAP` is refused at
+ * load), so the wait is seconds.
  */
 export function stopPromise(venue: AnalysisTask['venue']): string {
   return venue === 'annotations'
-    ? 'This one runs in a single pass, so the result is discarded rather than cut short.'
+    ? 'It stops at its next read; a pass with no read in it runs on, and its answer is discarded.'
     : 'The worker checks between chunks, so it stops at the next one.'
 }
 

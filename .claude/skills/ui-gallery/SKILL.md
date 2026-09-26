@@ -35,6 +35,7 @@ node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchor
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
+node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -169,6 +170,17 @@ which must be the data object alone: the map's cells with no axis, key, frame, o
 column; the model with no centre of rotation, key or buttons. It prints each PNG's size and what the
 corner said. Run it after any change to a right-click menu, to what a renderer draws round its data,
 or to `copyPicture`.
+
+`scripts/ui-peaks.mjs` calls **peaks** on the 1D browser demo's ATAC bigWig (§18.8): the task on the
+1D card, its form, a run on the one track — the note that says no test was made, the violin of every
+candidate's curvature on a log axis — then the strongest 5,000 with the cut drawn as a second violin
+and the table per sequence, the new lane under the MACS2 peaks of the same reads at the demo's locus
+and at 8 kb, where they can be compared peak for peak; then Pol II as the replicate, shot mid-fit
+(*IDR, round N*, with the cancel button), and its answer: the note naming each edge of IDR's
+parameter box the fit ended on — Pol II is not a replicate of ATAC — the four violins, the six
+thresholds and both lanes. It prints the notes of each run to stdout. The replicate run fits IDR
+over the whole genome and takes two minutes. Run it after any change to the task, to `yapc.ts` or
+`idr.ts`, or to how a figure draws a violin.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

@@ -616,6 +616,16 @@ settings. Nothing downstream of it knows it was computed rather than loaded, whi
 gets renaming, height, style, limits, groups, colour, edges, reordering, the batch, tooltips and the
 exported figure for free. A comparison of two tracks (`derived`) is one too.
 
+### port
+
+A published method reproduced here, as opposed to one this app would have devised (§18.9): its
+numbers are the reference's, held to a golden built from that software's **own output** rather than
+from a reading of its paper, and kept where they look like oversights, because changing one changes
+what the result means. Chromosight's detection (`analysis/chromosight.ts`), HiCRep, and the peak
+caller — yapc (`analysis/yapc.ts`) with the IDR it thresholds by (`analysis/idr.ts`) — are ports. A
+*caller* has to be one: a method that turns numbers into calls is only admitted with a published
+upstream and its golden.
+
 ### figure spec vs figure style
 
 The two halves every plot in the drawer is built from (§18.13). A **spec** is what the figure is

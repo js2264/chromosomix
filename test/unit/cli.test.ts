@@ -505,6 +505,32 @@ describe('the annotations venue', () => {
     expect(text).toMatch(/signal\.bw\t0\.\d+/)
   })
 
+  it('calls peaks on a bigWig, with no map, and writes them as BED', async () => {
+    // The demo's own ATAC track rather than the fixture above: the fixture is
+    // written at 1 kb bins, which is a staircase of flat steps and not a
+    // coverage track anybody would call peaks on.
+    reset()
+    const atac = new URL('../../demo/yeast/Yeast_ATAC.bw', import.meta.url).pathname
+    const where = join(directory, 'peaks')
+    expect(
+      await main([
+        'peaks', '--signal', atac, '--sequences', 'I', '--truncate', '50', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = await readdir(where)
+    const bed = files.find((name) => name.endsWith('.bed'))
+    expect(bed, files.join(', ')).toBeDefined()
+    const rows = (await readFile(join(where, bed!), 'utf8'))
+      .split('\n')
+      .filter((line) => line !== '' && !line.startsWith('#'))
+    expect(rows).toHaveLength(50)
+    for (const row of rows) expect(row.split('\t')[0]).toBe('I')
+    expect(files).toContain('Yeast_ATAC.peaks.peaks-sequences.tsv')
+    // With one track, the run says there was no test rather than letting the
+    // BED pass for an IDR-thresholded set.
+    expect(errors.join('')).toMatch(/no test of significance/)
+  })
+
   it('lays base composition out on bins of its own, with a map and without one', async () => {
     // §18.8: the map's resolution unless asked, and 10 kb with no map. Each file
     // is cut at the bin size the lanes were read at, so the second sequence

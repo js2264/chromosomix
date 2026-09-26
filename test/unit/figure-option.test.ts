@@ -192,6 +192,27 @@ describe('optionOf', () => {
     }
   })
 
+  // The bug: a violin's support runs three bandwidths past its sample, and on a
+  // figure whose ordinate was set — peak calling sets it to whole decades — the
+  // tail was drawn on below the axis, through the category names.
+  it('cuts a violin at the grid rather than drawing it over the names', () => {
+    const { option } = build(curve(), (style) => (style.mark = 'violin'))
+    expect(seriesOf(option).map((entry) => entry['clip'])).toEqual([true, true])
+  })
+
+  // The bug: a distribution drops its legend, but the grid still kept the
+  // legend's strip, so two violins sat beside an empty band down the right.
+  it('keeps no room for a legend a distribution does not draw', () => {
+    const right = (mark: FigureStyle['mark']): unknown =>
+      (build(curve(), (style) => {
+        style.mark = mark
+        style.legend = 'right'
+      }).option['grid'] as Record<string, unknown>)['right']
+    expect(right('violin')).toBe(16)
+    expect(right('box')).toBe(16)
+    expect(right('line')).toBeGreaterThan(100)
+  })
+
   it('gives a violin the series colour, so its swatch is not the library’s', () => {
     const { option } = build(curve(), (style) => (style.mark = 'violin'))
     expect(seriesOf(option).map((entry) => entry['color'])).toEqual(['#0072B2', '#D55E00'])

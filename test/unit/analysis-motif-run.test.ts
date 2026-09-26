@@ -408,12 +408,12 @@ async function settle(): Promise<void> {
  * **Stop must not end in `done`, whatever the worker goes on to answer.**
  *
  * A motif scan is a synchronous pass over a whole reference inside the
- * annotations worker, which never returns to its event loop, so a `cancel` there
- * cannot be read and the run finishes regardless — the venue has no cancellation
- * that reaches the work (`analysis/runner.ts`, the `annotations` branch of
- * `runStep`). That is a bounded wait and it is not what this asserts. What it
- * asserts is the half the runner owns: the reader pressed Stop, so the answer is
- * *refused*. Before this was checked, the runner's only cancellation test sat at
+ * annotations worker, which never returns to its event loop, so the `cancel` the
+ * runner now sends there (`analysis/runner.ts`, the `annotations` branch of
+ * `runStep`) cannot be read before the pass ends and the run finishes
+ * regardless. That is a bounded wait and it is not what this asserts. What it
+ * asserts is the half the runner owns: the reader pressed Stop, so the cancel is
+ * sent and the answer is *refused*. Before this was checked, the runner's only cancellation test sat at
  * the top of the step loop — before the step, never after it — so a Stop pressed
  * while the step was in flight left the row saying `running` until the scan
  * returned, then set it to `done` and handed the result to `finished`, which put
@@ -430,14 +430,22 @@ describe('a Stop pressed while a motif run is on the annotations worker', () => 
     runner: AnalysisRunner
     finish: (result: TaskResult) => void
     finished: string[]
+    cancels: () => number
   } {
     const finished: string[] = []
     let release: ((result: TaskResult) => void) | null = null
+    let cancels = 0
+    // Through `cancellable`, which is how a run reaches the worker: the Stop has
+    // a door to knock on even where, as here, the work cannot hear it.
     const tracks = {
-      request: () =>
-        new Promise<TaskResult>((resolve) => {
+      cancellable: () => ({
+        promise: new Promise<TaskResult>((resolve) => {
           release = resolve
         }),
+        cancel: () => {
+          cancels++
+        },
+      }),
     }
     const host: RunnerHost = {
       context: () => sessionContext(),
@@ -456,16 +464,19 @@ describe('a Stop pressed while a motif run is on the annotations worker', () => 
       runner: new AnalysisRunner(host, () => client),
       finish: (result) => release?.(result),
       finished,
+      cancels: () => cancels,
     }
   }
 
   it('leaves the row cancelled and adopts nothing when the scan answers anyway', async () => {
-    const { runner, finish, finished } = bench()
+    const { runner, finish, finished, cancels } = bench()
     runner.run(MOTIF_TASK, { sequence: 'seq1', pattern: 'GATC', bothStrands: false })
     await settle()
     expect(runner.stateOf('motif').status).toBe('running')
 
     runner.cancel('motif')
+    // Sent to the worker, where a task that yields reads it at its next check.
+    expect(cancels()).toBe(1)
     // The scan was already past the point of stopping, so the worker answers.
     finish(trackResult())
     await settle()

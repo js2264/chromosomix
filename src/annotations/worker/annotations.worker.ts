@@ -786,13 +786,17 @@ async function runTask(
     params: request.params,
     framing: request.framing,
     inputs: request.inputs,
-    // This worker has no cancel channel of its own: every task it runs is
-    // bounded by the feature set it was given, and the ones that are not belong
-    // in the analysis worker where the scan machinery is. Stated rather than
-    // stubbed silently, so a long task added here is a decision and not a
-    // surprise.
-    cancelled: () => false,
-    throwIfCancelled: () => {},
+    // The same id-keyed set a `cancel` fills for the BAM reads, which is the
+    // whole of the channel. It was stubbed out while every task here was bounded
+    // by the feature set it was handed; calling peaks reads every base of a
+    // genome and fits IDR for minutes, and that decision is this one (§18.3,
+    // `analysis/runner.ts`'s `runStep`). A check sees a cancel only once the
+    // thread has been handed back — a read does that, and so does
+    // `yieldToEventLoop`, which a runner doing arithmetic has to call itself.
+    cancelled: () => isCancelled(request.id),
+    throwIfCancelled: () => {
+      if (isCancelled(request.id)) throw abortError()
+    },
     progress: (done, total, note) => {
       const response: AnnotationResponse = {
         type: 'progress',

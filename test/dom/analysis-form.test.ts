@@ -289,8 +289,18 @@ describe('the units a form asks in', () => {
     // anything — the histogram measures a separation in base pairs and compares
     // it there. The 1D tasks are the stated exception — the three that read
     // tracks, and the two that read the reference, whose windows are lengths of
-    // sequence at every resolution.
-    const onTracks = new Set(['metaplot', 'frip', 'trackcorr', 'cellqc', 'composition', 'oriter', 'groupsignal'])
+    // sequence at every resolution — and the peak caller, whose smoothing window
+    // and widths are shapes along a track read at base resolution.
+    const onTracks = new Set([
+      'metaplot',
+      'frip',
+      'trackcorr',
+      'cellqc',
+      'composition',
+      'oriter',
+      'groupsignal',
+      'peaks',
+    ])
     const inBp = numbers().filter((param) => param.unit === 'bp' && !onTracks.has(param.task))
     expect(inBp).toEqual([])
   })

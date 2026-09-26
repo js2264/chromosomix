@@ -17,7 +17,7 @@ server-side processing or data upload.
   - Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
   - Annotations panel, supporting linear tracks, 1D and 2D manual annotations, bookmarks and synthetic annotations.
   - Analysis panel, with exportable results: 
-    - for 1D analysis tasks: metaplots, track correlation, interval overlap with a shuffle null, FRiP over a feature set, ...
+    - for 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), metaplots, track correlation, interval overlap with a shuffle null, FRiP over a feature set, ...
     - for 2D analysis tasks: P(s), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, loops and borders detection, APA, loop ranking, ...
     - for 3D analysis tasks: build a 3D model from the contact map, compare a 3D model with the contact map, and turn a 3D model into tracks.
     - for comparing what is on screen: HiCRep reproducibility across the maps in a deck, stratum by stratum and pooled.
@@ -256,6 +256,19 @@ metacooler-run tasks
 ##       --pattern  Sequence
 ##       --bothStrands (default true)  Both strands
 ##       --limit (default 500000)  Most sites
+## 
+## peaks
+##     Call peaks
+##       --signal  Track
+##       --replicate  Replicate
+##       --idr (default "0.05")  IDR threshold
+##       --sequences  Sequences
+##       --perPeak (default false)  List every peak
+##       --width (default 150)  Smoothing window
+##       --times (default 3)  Smoothing passes
+##       --minWidth (default 75)  Narrowest peak
+##       --halfWidth (default 0)  Fixed half-width
+##       --truncate (default 100000)  Keep the strongest
 ## 
 ## metaplot
 ##     Metaplot over a feature set
