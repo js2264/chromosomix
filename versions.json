@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 77,
+      "commit": "b5dc5f4",
+      "title": "Open every map of a multi-file drop in its cell (§16.11)",
+      "branch": "js/loving-wright-nydfby",
+      "date": "2026-09-27T10:47:38Z"
+    }
+  ]
 }
