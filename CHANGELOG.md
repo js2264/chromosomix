@@ -1331,6 +1331,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **`ori` and `arms` reach every map of a deck (§8.15, §16.2).** `ori` framed the first map across the
+  circle's junction and left every other map saying *End coordinate less than start — unless the
+  sequence joins its own ends…*; `arms` divided the first map alone, even with no map starred, where
+  the first map's card sets every map; and a starred companion's card had neither control. A companion
+  now takes the session's circles and origins for its own sequence of the same name and reads the
+  window across the junction, refined across it too; `arms` is each map's own, as its O/E is — seeded
+  from the first map's, set for every map from the first map's card while nothing is starred and for
+  one map from its own card while it is, and remembered with its look — and a starred companion's
+  card carries `ori`, which frames the whole deck.
+
 - **What a task makes of a map is called what the map is called (§16.10).** A map renamed on the
   Contact maps card or its heading kept its file's name in everything a task made of it: the drawer's
   tabs, the all-maps legend (`Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool::10000`, for a map called

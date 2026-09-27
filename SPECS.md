@@ -3384,11 +3384,8 @@ What is not, and is stated rather than left to be discovered: **chromosight** an
 the **observed/expected** map divide by an expected curve at a linear separation,
 so near the junction their denominator is the curve's far tail rather than its
 near one — except where the map's O/E is taken along the arms, below, whose
-offsets from the origin are measured round the circle. A **deck companion** draws
-the sequence linearly — the declaration is the lead map's — so a deck of a
-circular chromosome framed on `ori` shows the lead across the junction and the
-companions from the sequence's first base. Both are seams rather than wrong
-answers, and both are in the same place: the reader can see the junction.
+offsets from the origin are measured round the circle. That is a seam rather than
+a wrong answer, and it is in a place the reader can see: the junction.
 
 #### The origin, and the two arms
 
@@ -3430,6 +3427,18 @@ base again, as a view of it opens. Either press after a pan, which the address
 does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
 along the diagonal alone (§7.5), read from the origin in the column — the first
 base where none has been set.
+
+**Every map of a deck takes them** (§16). The declarations are the session's, about the molecules of
+the first map's file, and a deck is maps of one genome: a companion takes each circle and each origin
+for its own sequence of the same name, spelled its own way (§5.9). So `ori` frames **every** map on
+the origin — the region is shared, and each companion reads the window across the junction, where it
+used to read `end < start` as a typing mistake and draw nothing but the refusal — and a circle ticked
+under an open deck re-reads the companions it concerns. `arms` is each map's own, as its O/E is
+(§16.2): with no map starred the first map's card sets every map, the O/E with it; a starred
+companion's card carries `arms` and `ori` as the first map's does, the first setting that map alone
+and the second framing the deck, where both used to be missing. Each map's arms are read in the first
+map's frame — the sequence, its length and its origin — placed on its own block by base pairs, so a
+companion at another resolution divides by the same two arms.
 
 **A frame across the origin turns, and it needed one gate widened.** `isTurnable`
 asked for *one run or none*, on the sound ground that a boundary between two
@@ -4333,7 +4342,7 @@ companions.
 | Pan and zoom | yes (§16.3) | opt out |
 | Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
 | Score column and balancing | seeded from the lead | yes |
-| Derived values — O/E and the smoothing (§7.5) | seeded from the lead | yes |
+| Derived values — O/E, the smoothing and the arms (§7.5, §8.15) | seeded from the lead | yes |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | one press (§16.5) | yes |
 
@@ -4372,7 +4381,7 @@ drawing O/E beside four drawing raw counts was argued to be four wrong compariso
 choice — and each was applied by every panel and offered by the lead alone. What that cost was the
 reader's own comparison: *this replicate normalised, that one raw* had no control anywhere, and the
 Map card said *every map* about half its rows and *the first map* about the other half without
-saying which were which. Each map now **opens on the lead's** score, O/E and smoothing, so a deck
+saying which were which. Each map now **opens on the lead's** score, O/E, smoothing and arms, so a deck
 nobody has touched is exactly the deck it was, and from then on each is **that map's own** — set on
 its card while it is starred, remembered with its clip (`deck:looks`), and read by every picture,
 export and analysis of it. A normalisation, a correlation and the baseline are answers to *what are

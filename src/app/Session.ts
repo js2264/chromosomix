@@ -5298,8 +5298,9 @@ export class Session {
       get: (name) => store.get(name),
       set: (name, at) => {
         store.set(name, at)
-        // The arms on screen and `ori` are read from it.
+        // The arms on screen and `ori` are read from it — every map's.
         this.rederive()
+        this.deck?.redeclared()
       },
       subscribe: (listener) => store.subscribe(listener),
     }
@@ -5320,6 +5321,7 @@ export class Session {
         'are read from it from now on. It is on the Chromosomes table.',
     )
     this.rederive()
+    this.deck?.redeclared()
   }
 
   /**
@@ -5659,6 +5661,9 @@ export class Session {
     // `ori` framing exists only on a circle: the map's presentation of both is
     // built from the declaration, so it is built again with it.
     this.rederive()
+    // …and every companion's, which reads a window across the origin only where
+    // the circle is declared.
+    this.deck?.redeclared()
   }
 
   /**
@@ -6300,11 +6305,18 @@ export class Session {
       derive: () => {
         const state = this.store.state
         if (state === null) return undefined
-        // Nor the arms: their frame is the lead file's bins, and a companion is
-        // another file with a layout of its own (§8.15).
-        const { onExpectedChange: _own, arms: _lead, ...shared } = this.derivePresentation(state)
-        return shared
+        const { onExpectedChange: _own, arms, ...shared } = this.derivePresentation(state)
+        if (arms === undefined) return shared
+        // The arms go with it (§8.15): the frame is the molecule's — its length
+        // and its origin, placed on each companion's block by base pairs — and
+        // `ori` is the deck's, since the region every map reads is one. The
+        // toggle is each companion's own (`MapPanel.useArms`), as its O/E is.
+        const { onChange: _lead, ...frame } = arms
+        return { ...shared, arms: frame }
       },
+      // The circles the session declares, for the companions to read a window
+      // across the origin of the same molecule (§8.15).
+      circular: () => this.circularStore()?.list() ?? [],
       annotations: (map) => this.annotationContext(map),
       /**
        * The star moved, or the map it was on finished reading its tables.

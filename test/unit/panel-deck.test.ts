@@ -244,6 +244,16 @@ describe('how each companion was drawn', () => {
     expect(readDeckLook({ uri: 'rep2.cool', vmin: Number.NaN })).toEqual({ uri: 'rep2.cool' })
   })
 
+  it('reads a map’s own arms back, on and off alike (§8.15)', () => {
+    // A window is the arms on; `null` is the arms taken off a map the first map
+    // has on, which is a choice as much as a window is — and absent follows.
+    expect(readDeckLook({ uri: 'rep2.cool', arms: 50 })).toEqual({ uri: 'rep2.cool', arms: 50 })
+    expect(readDeckLook({ uri: 'rep2.cool', arms: 0 })).toEqual({ uri: 'rep2.cool', arms: 0 })
+    expect(readDeckLook({ uri: 'rep2.cool', arms: null })).toEqual({ uri: 'rep2.cool', arms: null })
+    expect(readDeckLook({ uri: 'rep2.cool', arms: -3 })).toEqual({ uri: 'rep2.cool' })
+    expect(readDeckLook({ uri: 'rep2.cool', arms: 'wide' })).toEqual({ uri: 'rep2.cool' })
+  })
+
   it('refuses a look with no file to be about', () => {
     // The key is the whole of what makes it findable again: a slot id is minted
     // per deck, so the file is the only thing that names the same map tomorrow.

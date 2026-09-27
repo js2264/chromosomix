@@ -296,6 +296,13 @@ export interface DeckLook {
   oe?: boolean
   smooth?: string
   /**
+   * This map's reading along the arms (`MapPanel.armsOwn`, §8.15): the window in
+   * bins while it divides by the decay along both arms — `0` the whole
+   * sequence — and `null` while it does not, which is a choice as much as a
+   * window is. Absent follows the first map.
+   */
+  arms?: number | null
+  /**
    * The window this map reads for itself rather than the deck's
    * (`MapPanel.ownPlace`, §16.3) — kept only beside `locked: false`, since a
    * window of its own is what an open chain is for.
@@ -349,6 +356,11 @@ export function readDeckLook(value: unknown): DeckLook | null {
     ...(typeof score === 'string' && score !== '' ? { score } : {}),
     ...(typeof row['oe'] === 'boolean' ? { oe: row['oe'] } : {}),
     ...(typeof row['smooth'] === 'string' && row['smooth'] !== '' ? { smooth: row['smooth'] as string } : {}),
+    ...(row['arms'] === null
+      ? { arms: null }
+      : Number.isInteger(row['arms']) && (row['arms'] as number) >= 0
+        ? { arms: row['arms'] as number }
+        : {}),
     ...(placeOf(row['place']) === null ? {} : { place: placeOf(row['place']) as { rows: string; cols?: string } }),
     ...(typeof row['locked'] === 'boolean' ? { locked: row['locked'] } : {}),
   }

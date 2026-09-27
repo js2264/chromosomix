@@ -358,6 +358,12 @@ export interface PanelDeckProps {
    * `undefined` for the whole session.
    */
   leadNaming?(): NameContext | undefined
+  /**
+   * The sequences the session declares circular (§8.15), as the first map's
+   * file names them — each companion reads a window across the origin of its
+   * own sequence of the same name. A thunk, for {@link leadNaming}'s reason.
+   */
+  circular?(): readonly string[]
   /** What the session's own map is called, for the placement control's rows. */
   leadLabel?(): string
   /**
@@ -1154,6 +1160,18 @@ export class PanelDeck {
   }
 
   /**
+   * The session's declarations moved under the maps on screen (§8.15) — a circle
+   * ticked or measured, an origin typed or placed by a task. Every companion
+   * reads them again: a window across a circle's origin is read only where the
+   * circle is declared, and the arms are read from the origin.
+   */
+  redeclared(): void {
+    const state = this.state
+    if (state === null) return
+    for (const slot of this.slots) slot.panel?.apply(state)
+  }
+
+  /**
    * With no map starred, make every change to the first map's card a change to
    * every map (§16.5).
    *
@@ -1170,6 +1188,7 @@ export class PanelDeck {
       score: this.props.score?.(),
       oe: state.oe === true,
       smooth: state.smooth ?? '0',
+      arms: state.arms,
       transform: state.transform,
       colormap: state.colormap,
       vmin: state.vmin,
@@ -1184,6 +1203,9 @@ export class PanelDeck {
       if (now.score !== undefined && now.score !== was.score) panel.useScore(now.score)
       if (now.smooth !== was.smooth) panel.useSmooth(now.smooth)
       if (now.oe !== was.oe) panel.useExpected(now.oe)
+      // Along the arms too (§8.15), which the first map's `arms` turns on with
+      // its O/E: one press on the card that sets every map.
+      if (now.arms !== was.arms) panel.useArms(now.arms)
       const look: ScaleState = {}
       if (now.transform !== was.transform && now.transform !== undefined) look.transform = now.transform
       if (now.colormap !== was.colormap && now.colormap !== undefined) look.colormap = now.colormap
@@ -1878,6 +1900,7 @@ export class PanelDeck {
       // lead's reading of its own numerals is the one a companion has to
       // resolve them under.
       naming: () => this.props.leadNaming?.(),
+      circular: () => this.props.circular?.() ?? [],
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
       annotations: () => this.props.annotations?.(slot.id),
@@ -4269,6 +4292,7 @@ interface LeadSettings {
   score: string | undefined
   oe: boolean
   smooth: string
+  arms: number | undefined
   transform: ScaleState['transform']
   colormap: string | undefined
   vmin: number | undefined
