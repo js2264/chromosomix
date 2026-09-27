@@ -6187,6 +6187,17 @@ export class Session {
       })),
     )
     if (this.destroyed) return
+    // **Only the state still in force reconciles the deck.** Dropping eight
+    // coolers adds seven companions one after another, and each publish is a
+    // render of its own: `~`, then `~|~`, up to seven. Every one of those waited
+    // here for its grants, and came back after the last map had been added —
+    // so the render of `~` shrank a deck of seven to one, and the renders after
+    // it grew it back from the stored record, which cannot re-open a dropped
+    // file. What a reader got was two maps and six cells reading *this cell
+    // held that file and it could not be re-opened*. A state the store has
+    // since moved past has a render of its own on the way, which is the one
+    // that says what the deck is.
+    if (!viewStateEquals(this.store.state, state)) return
     const deck = this.ensureDeck()
     deck.apply(state, locals)
     // A deck read back from the address does not publish — it *is* what the

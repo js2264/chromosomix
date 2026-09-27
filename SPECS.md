@@ -4962,6 +4962,15 @@ re-opened* — about files the deck still had in hand. A live cell is the best p
 own index and is asked first; the record answers for the rest; and both only ever over a `~`, so a
 list naming a remote map or a structure cell at that index still wins.
 
+**Only the state still in force is reconciled.** Asking the record for a grant is asynchronous, and
+several coolers dropped at once are added one after another, each add a publish and each publish a
+render of its own — `~`, then `~|~`, and so on. Every one of those renders waited for its grants and
+came back after the last map had been added, so the render of `~` shrank the deck to one companion
+and the renders after it grew it back from the record, which cannot re-open a dropped file: eight
+coolers dropped on a new tab opened two or three maps and five or six vacancies. A render whose state
+the store has since moved past reconciles nothing; the state that replaced it has a render of its
+own, and that one says what the deck is.
+
 ## 17. The turn: 45°, distance up the side
 
 A contact map is symmetric about its diagonal, and the diagonal is where all the signal is. So a

@@ -1322,6 +1322,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Several maps dropped at once open in every cell (§16.11).** Eight coolers, a GTF and a FASTA
+  dropped on a new tab loaded the tracks and the first two or three maps, and left the other cells
+  reading *this cell held that file and it could not be re-opened*. Each map added to the deck is a
+  render of its own, and the renders of the first adds finished after the last map was in: the first
+  shrank the deck back to one companion and the rest rebuilt it from the stored record, which cannot
+  re-open a dropped file. A render of a state the view has since moved past no longer touches the
+  deck.
+
 - **Stop reaches a task in the annotations worker (§18.3).** A metaplot, a FRiP or a track
   correlation ran to its end whatever was pressed, because the worker handed every task there a
   cancel check that always answered *no* and the runner never sent it a cancel; only the answer was
