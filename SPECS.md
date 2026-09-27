@@ -4855,9 +4855,11 @@ and the deck rebuilt its cells from it: a lane let go on a `+` went back to the 
 the new cell stood empty.
 
 **Every map the session holds is a row of the Contact maps card**, in the order the grid holds
-them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
-cell's heading gives it. The card used to list the first two only, so a deck of four maps showed a
-card of one and the other three were named nowhere in the column.
+them — the first map where its cell stands, with the one in its lower triangle (§5.7) under it, which
+is the one square, and each companion under the name its cell's heading gives it — then the maps held
+hidden, which have no cell to be in the order of. The card used to list the first two only, so a
+deck of four maps showed a card of one and the other three were named nowhere in the column; and
+then it listed the first map first wherever its cell had been moved to.
 
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
 eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
@@ -4908,6 +4910,18 @@ the compared map's row, the same way, opens that file there as a new companion �
 read one file at two windows or two colour scales. The first map's row onto a cell that holds
 something moves the first map there, as its own grip would (§16.5), and a companion's row onto the
 first map's cell exchanges the two. Taking hold of a row shows the tiling, as a cell's grip does.
+
+**A row dragged up or down the card moves its map's cell**: let go above the middle of another map's
+row, it goes before that map; below it, after — and the arrow keys on a focused grip move it one map
+up or down, as on the Tracks card. It is an **insertion among the maps**, where a cell's grip
+exchanges two cells: a list is reordered by insertion, and a reader carrying the eighth map to the top
+of the card means *first*, not *swap with the first*. Only the seats maps stand in are dealt again,
+so a tracks cell, a model and an empty cell keep their places while the maps move round them. The
+first map moves the same way, its square with it; the compared map, being that square's lower
+triangle, has no place of its own, and a hidden map has no cell to move. A move of the companions is
+written into `maps`, and one of the first map alone into this session's memory, where its place is
+kept (§16.5). Everything that follows the grid's order follows the move: the card, the deck's figure,
+and the analysis — a batch's runs, the drawer's tabs, and the all-maps overlays and tables (§18.7).
 
 ### 16.10 Naming the maps
 

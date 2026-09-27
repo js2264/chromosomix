@@ -298,8 +298,9 @@ export interface PanelDeckProps {
    */
   onMapHidden?(picked: PickedFile): void
   /**
-   * The session's own cell was closed from its heading, or put back (§16.9) —
-   * the Contact maps card's eye on the first map says which, and the deck's
+   * The session's own cell was closed from its heading, put back, or moved to
+   * another place in the grid (§16.9) — the Contact maps card's eye on the
+   * first map says which, its row stands where the cell does, and the deck's
    * memory has just changed under the durable record.
    */
   onLeadShownChange?(): void
@@ -2307,14 +2308,68 @@ export class PanelDeck {
     // A drop on itself, or on nothing: `swapItems` answers both with a copy, so
     // this would repaint the grid and rewrite the hash with what it had.
     if (from === to || from < 0 || to < 0) return
-    const next = swapItems(order, from, to)
+    this.reseat(swapItems(order, from, to))
+  }
+
+  /**
+   * Put the cells in a new reading order, the lead's among them — the one road
+   * an exchange and a move on the Contact maps card both take.
+   *
+   * The link carries the companions' order, so it is written only where that
+   * moved; where the lead alone moved, the place is this session's memory, as
+   * the column count is, and the session is told — its card lists the maps in
+   * the grid's order and its record is of that memory.
+   */
+  private reseat(next: ReadonlyArray<Slot | typeof LEAD_CELL>): void {
     const slots = next.filter((cell): cell is Slot => cell !== LEAD_CELL)
     const reordered = slots.some((slot, index) => slot !== this.slots[index])
+    const was = this.leadAt
     this.slots = slots
     this.placeLead(next.indexOf(LEAD_CELL), this.leadHidden)
     this.paintGrid()
     if (reordered) this.publish()
     else this.paintBar()
+    if (this.leadAt !== was) this.props.onLeadShownChange?.()
+  }
+
+  /**
+   * How many maps stand before the session's own in the grid — where its row
+   * goes on the Contact maps card, which lists the maps in the grid's order.
+   */
+  get leadMapIndex(): number {
+    return this.order()
+      .slice(0, this.leadAt)
+      .filter((cell) => cell !== LEAD_CELL && cell.panel !== null).length
+  }
+
+  /**
+   * Move one map's cell to before or after another map's — a row of the Contact
+   * maps card dragged up or down it (§16.9).
+   *
+   * An **insertion among the maps**, where a cell's own grip exchanges two cells:
+   * a list reorders by insertion, and a reader dragging the fourth map to the top
+   * of the card means *first*, not *swap with the first*. Only the seats maps
+   * stand in are re-dealt, so a tracks cell, a model or an empty cell keeps its
+   * place in the grid while the maps move round it. `map` and `onto` are the
+   * deck's ids for its maps, {@link LEAD_MAP} for the session's own.
+   */
+  moveMap(map: MapId, onto: MapId, after: boolean): void {
+    const cellOf = (id: MapId): Slot | typeof LEAD_CELL | undefined =>
+      id === LEAD_MAP ? LEAD_CELL : this.slots.find((slot) => slot.id === id && slot.panel !== null)
+    const moved = cellOf(map)
+    const target = cellOf(onto)
+    if (moved === undefined || target === undefined || moved === target) return
+    const order = this.order()
+    const seats = order.flatMap((cell, at) => (cell === LEAD_CELL || cell.panel !== null ? [at] : []))
+    const maps = seats.map((at) => order[at])
+    const rest = maps.filter((cell) => cell !== moved)
+    rest.splice(rest.indexOf(target) + (after ? 1 : 0), 0, moved)
+    if (rest.every((cell, at) => cell === maps[at])) return
+    const next = [...order]
+    seats.forEach((seat, at) => {
+      next[seat] = rest[at]
+    })
+    this.reseat(next)
   }
 
   /**

@@ -20,7 +20,7 @@
 
 import { alignNames, type Alignment, type NamedSequence } from '../genome/naming'
 
-import { MAP_ROW_DRAG_TYPE, button, el, fmt, type MapRow } from './dom'
+import { MAP_ROW_DRAG_TYPE, button, dropEffectFor, el, fmt, type MapRow } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
 import { fileLabel } from './labels'
@@ -129,13 +129,39 @@ export interface CompareCardProps {
    * a map is looking for a cell, as it does for a cell's own grip.
    */
   onDragMap?(dragging: boolean): void
+  /**
+   * How many of {@link deckMaps}' shown maps stand before this session's own in
+   * the grid, so the card lists every map in the grid's order (§16.9): the first
+   * map's row — and the compared map's under it, the one square — where its cell
+   * stands rather than always first. Absent is first.
+   */
+  leadAt?(): number
+  /**
+   * A map's row was dragged up or down the card, or moved by the arrow keys on
+   * its grip: put its cell before or after another map's (§16.9). {@link LEAD_ROW}
+   * is this session's own map, and every other id is a deck map's.
+   */
+  onReorderMap?(map: string, onto: string, after: boolean): void
 }
+
+/** The id the card's reorder speaks of this session's own map by. */
+export const LEAD_ROW = 'lead'
 
 export class CompareCard {
   readonly el: HTMLElement
   private readonly body = el('div', { class: 'ann-list compare-body' })
   private readonly slots: [DropSlot, DropSlot]
   private state: CompareState = { kind: 'empty' }
+  /**
+   * The map whose row is being dragged, where it is one the card can reorder —
+   * held here rather than read off the drag, which a `dragover` cannot, and
+   * which lets a drag survive the card redrawing under it.
+   */
+  private dragging: string | null = null
+  /** The maps the card lists in the grid's order, by the ids a reorder uses. */
+  private order: string[] = []
+  /** The grip a keyboard move asked for, focused again once the card redraws. */
+  private refocus: string | null = null
 
   constructor(private readonly props: CompareCardProps) {
     // One zone per slot, built once and reworded per render: which map a
@@ -220,18 +246,79 @@ export class CompareCard {
             : first
               ? this.slots[1].zone
               : null
-    // Every other map the session holds, one row each, in the order the deck
-    // shows them — after the first map and the one it is compared with, which
-    // are the one square, and before the rectangle that asks for a second file,
-    // which is about that square too and reads as its last line.
-    const deck = first ? (this.props.deckMaps?.() ?? []).map((map) => this.deckRow(map)) : []
+    // Every other map the session holds, one row each, **in the order the grid
+    // holds them** — the first map's square among them where its cell stands,
+    // with the map compared against it under it, which is the one square; the
+    // hidden maps after the shown ones, having no cell to be in the order of;
+    // and the rectangle that asks for a second file last, being about that
+    // square too.
+    const maps = first ? (this.props.deckMaps?.() ?? []) : []
+    const shownMaps = maps.filter((map) => map.shown !== false)
+    const hiddenMaps = maps.filter((map) => map.shown === false)
+    const at = Math.max(0, Math.min(shownMaps.length, Math.floor(this.props.leadAt?.() ?? 0)))
     const open = this.state.kind !== 'empty' || !first
+    const square = [
+      this.reorderable(top, first ? LEAD_ROW : null),
+      ...(open && bottom !== null ? [this.reorderable(bottom, first ? LEAD_ROW : null)] : []),
+    ]
+    this.order = first
+      ? [...shownMaps.slice(0, at).map((map) => map.id), LEAD_ROW, ...shownMaps.slice(at).map((map) => map.id)]
+      : []
     this.body.replaceChildren(
-      top,
-      ...(open && bottom !== null ? [bottom] : []),
-      ...deck,
+      ...shownMaps.slice(0, at).map((map) => this.reorderable(this.deckRow(map), map.id)),
+      ...square,
+      ...shownMaps.slice(at).map((map) => this.reorderable(this.deckRow(map), map.id)),
+      ...hiddenMaps.map((map) => this.deckRow(map)),
       ...(!open && bottom !== null ? [bottom] : []),
     )
+    const wanted = this.refocus
+    this.refocus = null
+    if (wanted !== null) {
+      const row = [...this.body.querySelectorAll<HTMLElement>('.compare-row')].find(
+        (node) => node.dataset['map'] === wanted,
+      )
+      row?.querySelector<HTMLElement>('.compare-grip')?.focus()
+    }
+  }
+
+  /**
+   * A map's row as a place another map's row can be dropped: above its middle
+   * puts the dragged map before it, below its middle after it (§16.9). The
+   * compared map's row is the first map's square too, so a drop on it is one on
+   * the first map. `null` is a row that is no map — the drop rectangles — and
+   * is returned as it came.
+   */
+  private reorderable(row: HTMLElement, id: string | null): HTMLElement {
+    if (id === null || this.props.onReorderMap === undefined) return row
+    row.dataset['map'] = id
+    const after = (event: DragEvent): boolean => {
+      const box = row.getBoundingClientRect()
+      return event.clientY >= box.top + box.height / 2
+    }
+    row.addEventListener('dragover', (event) => {
+      if (this.dragging === null || this.dragging === id) return
+      // Without this the drop is refused and the ghost springs back.
+      event.preventDefault()
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer, 'move')
+      this.clearDropMarks()
+      row.classList.add(after(event) ? 'drop-after' : 'drop-before')
+    })
+    row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'))
+    row.addEventListener('drop', (event) => {
+      const moved = this.dragging
+      this.clearDropMarks()
+      if (moved === null || moved === id) return
+      event.preventDefault()
+      this.dragging = null
+      this.props.onReorderMap?.(moved, id, after(event))
+    })
+    return row
+  }
+
+  private clearDropMarks(): void {
+    for (const node of this.body.querySelectorAll('.drop-before, .drop-after')) {
+      node.classList.remove('drop-before', 'drop-after')
+    }
   }
 
   /**
@@ -243,18 +330,51 @@ export class CompareCard {
    * companion's own row moves that companion, as the grip on its cell does.
    */
   private grip(row: MapRow, label: string): HTMLElement {
+    // The maps a drag up or down the card moves: the first map and every map in
+    // a cell. The compared map is the first map's square and moves with it; a
+    // hidden map has no cell to move.
+    const reorder =
+      this.props.onReorderMap === undefined
+        ? null
+        : row.kind === 'lead'
+          ? LEAD_ROW
+          : row.kind === 'companion'
+            ? row.id
+            : null
     const node = el('span', {
       class: 'ann-grip compare-grip',
       title:
         row.kind === 'companion'
-          ? `Drag ${label} to another cell of the deck`
+          ? `Drag ${label} up or down this card, or to another cell of the deck`
           : row.kind === 'hidden'
             ? `Drag ${label} onto an empty cell, or a + beside the map, to open it there`
-            : `Drag ${label} onto an empty cell, or a + beside the map, to open it there too`,
-      attrs: { draggable: 'true', role: 'button', 'aria-label': `Move ${label} to a cell` },
+            : row.kind === 'lead' && reorder !== null
+              ? `Drag ${label} up or down this card to move its cell, or onto an empty cell or a + to open it there too`
+              : `Drag ${label} onto an empty cell, or a + beside the map, to open it there too`,
+      attrs: {
+        draggable: 'true',
+        role: 'button',
+        'aria-label': reorder === null ? `Move ${label} to a cell` : `Move ${label} to a cell; the arrow keys move it up or down`,
+        ...(reorder === null ? {} : { tabindex: '0' }),
+      },
     })
     node.append(icon('grip-vertical', { size: 12 }))
+    if (reorder !== null) {
+      // The keyboard's road, the Tracks card's: up and down past its neighbour.
+      node.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+        event.preventDefault()
+        const at = this.order.indexOf(reorder)
+        const up = event.key === 'ArrowUp'
+        const neighbour = this.order[at + (up ? -1 : 1)]
+        if (at < 0 || neighbour === undefined) return
+        this.refocus = reorder
+        this.props.onReorderMap?.(reorder, neighbour, !up)
+      })
+    }
     node.addEventListener('dragstart', (event) => {
+      this.dragging = reorder
+      node.closest('.ann-row')?.classList.add('is-dragging')
       if (event.dataTransfer !== null) {
         // Both, whichever the row is: each target names its own effect — the
         // grid a move, an empty cell and an edge a copy — and a drag whose
@@ -268,7 +388,12 @@ export class CompareCard {
       }
       this.props.onDragMap?.(true)
     })
-    node.addEventListener('dragend', () => this.props.onDragMap?.(false))
+    node.addEventListener('dragend', () => {
+      this.dragging = null
+      node.closest('.ann-row')?.classList.remove('is-dragging')
+      this.clearDropMarks()
+      this.props.onDragMap?.(false)
+    })
     return node
   }
 

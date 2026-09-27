@@ -134,7 +134,7 @@ import { AnnotationCard } from '../ui/AnnotationCard'
 import { StructureCard } from '../ui/StructureCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
-import { CompareCard, compareRefusal } from '../ui/CompareCard'
+import { CompareCard, LEAD_ROW, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { PanelDeck } from '../panels/PanelDeck'
 import { DeckFrame } from '../panels/DeckFrame'
@@ -4479,6 +4479,11 @@ export class Session {
       },
       onRenameDeckMap: (target, name) => this.renameMap(target, name),
       onDragMap: (dragging) => this.deck?.showTiling(dragging),
+      // The rows follow the grid, the first map's where its cell stands, and a
+      // row dragged up or down the card moves its cell (§16.9).
+      leadAt: () => this.deck?.leadMapIndex ?? 0,
+      onReorderMap: (map, onto, after) =>
+        this.deck?.moveMap(map === LEAD_ROW ? LEAD_MAP : map, onto === LEAD_ROW ? LEAD_MAP : onto, after),
     })
   }
 
@@ -8969,14 +8974,15 @@ export class Session {
    * One list built two ways, which is the point of the parameter: the
    * synchronous caller wants whatever is ready *and* wants the rest to start
    * reading, and the awaiting one has already waited and must not kick off a
-   * second round of the same reads. Both give the lead first, which is the order
-   * a reader looking at the grid expects a batch to follow.
+   * second round of the same reads. Both give the maps in the grid's order,
+   * which is the order a reader looking at the grid expects a batch to follow.
    */
   private readyTargets(options: { start: boolean }): RunTarget[] {
     const out: RunTarget[] = []
     const file = this.file
+    let lead: RunTarget | null = null
     if (file !== null) {
-      out.push({
+      lead = {
         map: LEAD_MAP,
         uri: file.uri,
         source: file.source,
@@ -8986,7 +8992,7 @@ export class Session {
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.
         label: this.mapLabel(file.uri),
-      })
+      }
     }
     for (const { map, panel } of this.deck?.analysable() ?? []) {
       const facts = panel.analysisFacts()
@@ -9002,6 +9008,19 @@ export class Session {
         ...binningOfMap(facts.info),
         label: this.mapLabel(facts.uri),
       })
+    }
+    // **In the grid's order**, the first map among the others where its cell
+    // stands: a batch works through the maps as a reader reads the grid, and
+    // the drawer's tabs and the all-maps figures and tables follow this list —
+    // so a map moved on the Contact maps card moves there too (§16.9). The
+    // companions still reading are left out, and the place is counted among the
+    // maps that are in.
+    if (lead !== null) {
+      const before = this.deck?.leadMapIndex ?? 0
+      const ahead = (this.deck?.analysable() ?? [])
+        .slice(0, before)
+        .filter(({ map }) => out.some((target) => target.map === map)).length
+      out.splice(ahead, 0, lead)
     }
     return out
   }

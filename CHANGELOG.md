@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Maps are reordered on the Contact maps card (§16.9).** The card lists the maps in the grid's
+  order — the first map where its cell stands, no longer always first — and a row dragged up or down
+  it moves the map's cell: let go above another map's row it goes before it, below it after it, and
+  the arrow keys on a focused grip move it a map at a time. The maps are re-dealt among the seats maps
+  stand in, so tracks cells, models and empty cells stay put. Run on all maps, a task works through
+  the maps in the grid's order, and its tabs, overlays and tables follow it.
+
 - **Run on every map, the tables come together too (§18.7).** The `all maps` tab drew the curves of
   every map on one axis and sent the tables back to the per-map tabs; it now shows each table as one:
   every map's rows in the deck's order, under a first column naming the map. Inter-arm alignment run
