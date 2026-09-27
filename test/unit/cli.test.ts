@@ -960,11 +960,13 @@ describe('a task that compares two maps', () => {
     expect(files).toContain('sample.hicrep.hicrep-pairs.tsv')
     expect(files).toContain('sample.hicrep.hicrep-strata.tsv')
     const text = await readFile(join(where, 'sample.hicrep.hicrep-pairs.tsv'), 'utf8')
-    // Labelled by file, and a map against itself is exactly 1: the arithmetic
-    // is `analysis/hicrep.ts`'s, and what is pinned is that both peers were
+    // Labelled by file — this one too, by its base name as the peers are, not
+    // *This map* — and a map against itself is exactly 1: the arithmetic is
+    // `analysis/hicrep.ts`'s, and what is pinned is that both peers were
     // mounted and read on the same grid.
-    expect(text).toMatch(/This map\tother\.hic\t-?[01]\.\d+/)
-    expect(text).toMatch(/This map\tsample\.hic\t1(\.0*)?$/m)
+    expect(text).toMatch(/sample\.hic\tother\.hic\t-?[01]\.\d+/)
+    expect(text).toMatch(/sample\.hic\tsample\.hic\t1(\.0*)?$/m)
+    expect(text).not.toMatch(/This map/)
     expect(complained()).not.toMatch(/failed:/)
   })
 })

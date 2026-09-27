@@ -81,17 +81,23 @@ import {
   type TaskOutput,
   type TaskResult,
 } from '../analysis/types'
-import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
+import {
+  combinedProvenanceLines,
+  combinedToTsv,
+  outputToTsv,
+  provenanceLines,
+  tsvName,
+} from '../analysis/write/tsv'
 import { cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
 import { figureBlock } from '../figures/FigureBlock'
 import type { MapId } from '../annotations/placement'
 import type { RunTarget } from '../analysis/runner'
-import type { CurveOutput } from '../analysis/types'
 
 /**
- * The tab that is not a map: every map's curves on one axis.
+ * The tab that is not a map: every map's curves on one axis, and its tables as
+ * one.
  *
  * A sentinel rather than `null`, because `null` already means *no choice yet*
  * and the two lead to different pictures — the first map's, and all of them.
@@ -522,6 +528,12 @@ export class AnalysisDrawer {
   private readonly chosenRun = new Map<string, number>()
   /** Set while the combined figure is drawn, so the exports know what they are. */
   private combined = false
+  /**
+   * The maps the all-maps tab is drawn from, each with its provenance naming its
+   * own file — what the record row's two copies speak for there, since the tab
+   * has no one result for them to read.
+   */
+  private across: ReadonlyArray<{ label: string; provenance: Provenance }> | null = null
   /** The dragged width, or `null` for "however wide the default says". */
   private width: number | null = readStoredWidth()
 
@@ -1086,7 +1098,9 @@ export class AnalysisDrawer {
       ),
       button('all maps', () => go(ALL_MAPS), {
         class: `btn btn-quiet analysis-map${chosen === ALL_MAPS ? ' is-on' : ''}`,
-        title: 'Every map\u2019s curves on one axis — the comparison the deck was opened for',
+        title:
+          'Every map\u2019s curves on one axis and every map\u2019s tables as one — the ' +
+          'comparison the deck was opened for',
       }),
       iconButton('chevron-right', 'The next map', () => step(1), { class: 'btn-quiet' }),
     )
@@ -1161,12 +1175,14 @@ export class AnalysisDrawer {
   }
 
   /**
-   * The overlay: every map's curves on one set of axes.
+   * Every map's results together: the curves on one set of axes, the tables as
+   * one table with a column naming the map (§18.7).
    *
    * Not a `TaskResult`, and therefore not routed through {@link syncOutputs}: it
-   * has no single provenance, so it has no framing line, no *recompute*, and no
-   * TSV — the per-map tabs are where a number with one origin is exported from.
-   * What it has is the picture, and PNG and PDF of the picture.
+   * has no single provenance, so it has no framing line and no *recompute*. Its
+   * TSV carries every map's provenance instead, one block per map above the
+   * numbers, so a row of the stacked table can still be traced to the file and
+   * the settings it was measured with.
    */
   private syncCombined(across: ReadonlyArray<{ target: RunTarget; result: TaskResult }>): void {
     this.drawn = null
@@ -1175,9 +1191,9 @@ export class AnalysisDrawer {
     this.setStatus('')
     this.notesEl.classList.add('hidden')
     this.recordEl.classList.remove('hidden')
-    this.recordNote.textContent = `${across.length} maps, overlaid`
+    this.recordNote.textContent = `${across.length} maps, together`
 
-    const { curves, perMapOnly } = combineResults(
+    const { outputs, perMapOnly } = combineResults(
       across.map((entry) => ({ label: entry.target.label, result: entry.result })),
       (output) =>
         output.kind === 'curve'
@@ -1186,8 +1202,25 @@ export class AnalysisDrawer {
             ? profileCurve(output)
             : null,
     )
+    // Each map's provenance naming **its own** file: a batch shares one framing,
+    // taken from the starred map, and every result echoes it (`runner.ts`'s
+    // `recordable` makes the same correction for the console).
+    const maps = across.map((entry) => ({
+      label: entry.target.label,
+      provenance:
+        entry.target.uri === '' || entry.target.uri === entry.result.provenance.framing.uri
+          ? entry.result.provenance
+          : {
+              ...entry.result.provenance,
+              framing: { ...entry.result.provenance.framing, uri: entry.target.uri },
+            },
+    }))
 
-    const blocks: HTMLElement[] = curves.map((curve) => this.combinedBlock(curve))
+    this.across = maps
+    const first = maps[0]
+    if (first !== undefined) this.paintCli(first.provenance)
+
+    const blocks: HTMLElement[] = outputs.map((output) => this.combinedBlock(output, maps))
     if (perMapOnly.length > 0) {
       blocks.push(
         el('p', {
@@ -1212,23 +1245,44 @@ export class AnalysisDrawer {
   }
 
   /**
-   * One overlaid curve, with the two exports that mean anything for it.
+   * One output drawn across the maps — an overlaid curve, a stacked table — with
+   * its exports.
    *
    * The same shell every other figure gets, keyed under the task's id with a
    * suffix: a curve drawn *across* the maps is a different picture from the
    * per-map one of the same name, and a reader who logs one has not said
    * anything about the other.
    */
-  private combinedBlock(curve: CurveOutput): HTMLElement {
+  private combinedBlock(
+    output: TaskOutput,
+    maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
+  ): HTMLElement {
     const block = figureBlock({
-      output: curve,
+      output,
       task: `${this.current?.id ?? 'task'}:combined`,
       uri: this.options.context()?.uri ?? '',
-      onPng: (figure) => void this.savePngPlain(figure, curve.label),
-      onPdf: (figure) => void this.savePdfPlain(figure, curve.label),
+      extras: [
+        button('TSV', () => this.saveCombinedTsv(output, maps), {
+          class: 'btn',
+          title:
+            'The numbers of every map as one table, with each map’s provenance above them — ' +
+            'the file, the framing and the settings every row was measured with.',
+        }),
+      ],
+      onPng: (figure) => void this.savePngPlain(figure, output.label),
+      onPdf: (figure) => void this.savePdfPlain(figure, output.label),
     })
     this.figures.push(block)
     return block.el
+  }
+
+  private saveCombinedTsv(
+    output: TaskOutput,
+    maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
+  ): void {
+    const stamp = fileStamp(new Date())
+    const blob = new Blob([combinedToTsv(output, maps)], { type: 'text/tab-separated-values' })
+    void downloadBlob(blob, tsvName(this.current?.id ?? 'task', output, stamp))
   }
 
   // -------------------------------------------------------------------------
@@ -1280,6 +1334,7 @@ export class AnalysisDrawer {
   private syncOutputs(result: TaskResult | null): void {
     if (result === this.drawn && !this.combined) return
     this.combined = false
+    this.across = null
     this.drawn = result
     this.clearFigures()
     this.setStatus('')
@@ -1698,6 +1753,15 @@ export class AnalysisDrawer {
   }
 
   /**
+   * What the record row's two copies speak for: the one result on screen, or on
+   * the all-maps tab every map's, each named.
+   */
+  private shownProvenances(): Array<{ label: string | null; provenance: Provenance }> {
+    if (this.drawn !== null) return [{ label: null, provenance: this.drawn.provenance }]
+    return (this.across ?? []).map((map) => ({ label: map.label, provenance: map.provenance }))
+  }
+
+  /**
    * Put the command on the clipboard, and say what it left behind.
    *
    * The status line names the notes rather than repeating them: they are on the
@@ -1706,23 +1770,28 @@ export class AnalysisDrawer {
    * be the second place they can go stale.
    */
   private copyCliCommand(): void {
-    const result = this.drawn
-    if (result === null) return
-    const task = taskById(result.provenance.task)
+    const shown = this.shownProvenances()
+    const first = shown[0]
+    if (first === undefined) return
+    const task = taskById(first.provenance.task)
     if (task === undefined) return
-    const command = cliCommandFor({
-      task,
-      provenance: result.provenance,
-      context: this.options.context(),
+    const commands = shown.map(({ label, provenance }) => {
+      const text = cliCommandFor({ task, provenance, context: this.options.context() }).text
+      // On the all-maps tab, a command per map under its name — the batch as
+      // the shell would run it, one file at a time.
+      return label === null ? text : `# ${label}\n${text}`
     })
-    const caveats = command.text.split('\n').filter((line) => line.startsWith('#')).length
-    void copyTextToClipboard(command.text).then(
+    const text = commands.join('\n\n')
+    const caveats = shown.length > 1 ? 0 : text.split('\n').filter((line) => line.startsWith('#')).length
+    void copyTextToClipboard(text).then(
       () => {
         this.setStatus(
-          caveats === 0
-            ? 'CLI command copied.'
-            : `CLI command copied, with ${caveats} note${caveats === 1 ? '' : 's'} on what a ` +
-              'shell cannot be told.',
+          shown.length > 1
+            ? `${shown.length} CLI commands copied, one per map.`
+            : caveats === 0
+              ? 'CLI command copied.'
+              : `CLI command copied, with ${caveats} note${caveats === 1 ? '' : 's'} on what a ` +
+                'shell cannot be told.',
         )
       },
       (err: unknown) => {
@@ -1739,9 +1808,13 @@ export class AnalysisDrawer {
    * a parameter would otherwise copy a recipe that produced something else.
    */
   private copyProvenance(): void {
-    const result = this.drawn
-    if (result === null) return
-    const text = provenanceLines(result.provenance).join('\n')
+    const shown = this.shownProvenances()
+    if (shown.length === 0) return
+    const text = (
+      this.drawn === null
+        ? combinedProvenanceLines(shown.map(({ label, provenance }) => ({ label: label ?? '', provenance })))
+        : provenanceLines(shown[0].provenance)
+    ).join('\n')
     void copyTextToClipboard(text).then(
       () => {
         this.setStatus('Provenance copied.')

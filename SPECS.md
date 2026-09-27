@@ -4917,6 +4917,17 @@ under the pointer, the derived label on a ratio, and the caption on an exported 
 not a rebuild — it changes what the picture is called and nothing about what is in it, and rebuilding
 the view would put a gated whole-genome scan (§7.3) back behind its button.
 
+**What a task makes of a map is named by it too** (§18). A run names the map it measured — the
+drawer's tab for it, its line in the all-maps overlay and its rows in the all-maps tables (§18.7),
+the lane or the model it adds (`<output> · <map>`), a reproducibility run's matrix, tables and lines,
+and the console — by what the map is called when the run is made, and never by its file:
+`dparAB`, where the legend used to read `Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool::10000`. The
+drawer's tabs, overlays and stacked tables are named afresh on every refresh, so a result computed
+before a rename follows it; a lane, a model or a comparison's own figure is named when it is made
+and keeps that name, which is then the reader's to change like any other row's. A track and a model
+are the same: a run takes each chosen row's name as it is dispatched, and a task's form open over a
+rename lists the row under its new name.
+
 Three things about where the name lives:
 
 - **One record per session, not one note per file.** Every name sits under the session's own memory
@@ -5885,6 +5896,26 @@ number in a figure checkable by the person reading the figure. Where an output h
 alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
 them, which is a header a BED consumer would choke on and a reader needs.
 
+**Run on every map of a deck, the outputs come together on one more tab, `all maps`.** Each output id
+is folded once, in the order the task returns them:
+
+- a **curve** — and a profile, drawn as one — is one overlay, a line per map named by the map (§16.10),
+  each map's lines prefixed by its name where it drew several;
+- a **table** is one table: every map's rows, in the deck's order, under a first column `Map` naming
+  the map each row was measured on — the columns every map returned, in the order they were met, a
+  value a map did not return drawn as a dash. A batch over eight libraries is run *for* this table:
+  the inter-arm enrichment of every map side by side, rather than eight tabs to copy one row out of
+  each;
+- an output that **already compares every map** — a reproducibility run's matrix, tables and lines,
+  each about every pair — is shown **once**, from the run that compared the most maps: every map's run
+  of it computes the same pairs, and overlaying or stacking them listed each pair once per map;
+- a **matrix** stays per map, and the tab says so: four pileups averaged would be a fifth picture
+  nobody asked for.
+
+The tab has no single provenance, so it has no framing line and no *recompute*; its **TSV** carries
+every map's instead — one indented block per map, opened by the name the map column uses, naming the
+file, the framing and the settings its rows were measured with — above the numbers.
+
 **Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
 where — *3 tracks added to the Tracks card in the Annotations panel, marked \*.* — and each row under it
 is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
@@ -6326,7 +6357,11 @@ reached the cap on every file at 10 kb or finer.
 
 **The other maps are the deck's**, in the order they are on screen and under the reader's own names
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
-is a number with nothing to look at beside it. The one thing the deck deliberately does not settle
+is a number with nothing to look at beside it. The map a run is about is named the same way, never
+*This map*: run on every map of a deck, each run names every map alike, and the all-maps tab shows
+the comparison once (§18.7). The row is offered as soon as the deck holds a second map — the
+companion is asked for the two tables an analysis reads when the column is priced, where it used to
+wait until a batch or a star had asked, and the row said *open a second map* over a deck of two. The one thing the deck deliberately does not settle
 is the grid: §16's lock is in base pairs precisely so a 1 kb file and a 5 kb one can follow each
 other, and a stratum is a diagonal offset in *bins*, so a mismatched map is refused by name in the
 estimate exactly as §5.7's triangle refuses a mismatched pair. Three outputs: the N×N coefficient

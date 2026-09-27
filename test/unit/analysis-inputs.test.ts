@@ -109,4 +109,17 @@ describe('what makes a task’s inputs different', () => {
     load(b, 'x', 'segments')
     expect(entrySignature(a)).not.toBe(entrySignature(b))
   })
+
+  it('changes when a file is renamed, so the form lists it under its new name', () => {
+    // A run takes each entry's name as it is dispatched, so an output always
+    // said the new one — while a form left open over the rename went on
+    // offering the old one, which read as the run ignoring it. A rename commits
+    // on Enter or on leaving the box, never per keystroke, so this costs one
+    // refill per name.
+    const held = store()
+    load(held, 'atac.bw', 'track')
+    const before = entrySignature(held)
+    held.update('atac.bw', { label: 'ATAC, rep 1' })
+    expect(entrySignature(held)).not.toBe(before)
+  })
 })

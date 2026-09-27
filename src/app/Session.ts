@@ -4969,7 +4969,7 @@ export class Session {
       store,
       index: () => this.annotations?.metadata ?? null,
       level: () => this.metadataLevel(),
-      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
+      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
       onExport: (entry) => this.exportMetadata(entry),
     })
 
@@ -4994,7 +4994,7 @@ export class Session {
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
-        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
+        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
         ...(published.length === 0 || wanted
           ? {}
           : {
@@ -5754,6 +5754,10 @@ export class Session {
         this.compare === null ? undefined : this.mapLabel(this.compare.uri),
       )
     }
+    // …and the Analysis drawer, whose tabs, overlay legends and all-maps tables
+    // name each map by what it is called now: they are read off the targets on
+    // every refresh, so a result computed before the rename follows it.
+    this.analysis?.refresh()
   }
 
   // -------------------------------------------------------------------------
@@ -8768,6 +8772,9 @@ export class Session {
             source: starred.source,
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
+            // What a plain Run names the map it measured (§16.10), as a batch
+            // names each of its maps (`readyTargets`).
+            label: this.mapLabel(starred.uri),
           }
         }
         const file = this.file
@@ -8781,6 +8788,7 @@ export class Session {
             source: file.source,
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
+            label: this.mapLabel(file.uri),
           }
         }
         // **The genome, where there is no map.** Three tasks run entirely on
@@ -8962,7 +8970,10 @@ export class Session {
         source: file.source,
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
-        label: fileLabel(file.uri),
+        // What the reader calls it (§16.10), which is what every tab, legend,
+        // lane and table a task makes of it is named by — not the file's name,
+        // which is only the default a map starts with.
+        label: this.mapLabel(file.uri),
       })
     }
     for (const { map, panel } of this.deck?.analysable() ?? []) {
@@ -8977,7 +8988,7 @@ export class Session {
         source: facts.source,
         ...cellsOfMap(facts.info),
         ...binningOfMap(facts.info),
-        label: fileLabel(facts.uri),
+        label: this.mapLabel(facts.uri),
       })
     }
     return out
@@ -9102,11 +9113,19 @@ export class Session {
       // the star. A task that compares two files is offered the others, and a
       // map cannot be a peer of itself.
       peers: (this.deck?.analysable() ?? [])
-        .map(({ panel }) => panel.analysisFacts())
+        .map(({ panel }) => {
+          const facts = panel.analysisFacts()
+          // A companion reads the two tables an analysis needs only when asked,
+          // and nothing asked until a batch or a star did — so a deck of two
+          // offered Reproducibility as *waiting for a second map*. Asked here,
+          // once per panel, as `readyTargets` asks.
+          if (facts === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
+          return facts
+        })
         .filter((facts): facts is NonNullable<typeof facts> => facts !== null)
         .filter((facts) => facts.uri !== uri)
         .map((facts) => ({
-          label: fileLabel(facts.uri),
+          label: this.mapLabel(facts.uri),
           uri: facts.uri,
           binsize: facts.info.binsize ?? 0,
         })),

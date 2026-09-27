@@ -7,10 +7,11 @@
  * third, so what four libraries left behind was four synthetic tracks and *one*
  * plot. The tracks were filed per map and the figures were not.
  *
- * The second is that the overlay is a comparison rather than a result: it has no
- * single provenance, so it offers no TSV and no recompute, and it says which
- * outputs it could not fold rather than showing three of a task's five and
- * letting the reader assume that is all there are.
+ * The second is that the all-maps tab is a comparison rather than a result: it
+ * has no single provenance, so it offers no recompute and its TSV carries every
+ * map's provenance; its tables are stacked under a column naming the map; and it
+ * says which outputs it could not fold rather than showing three of a task's
+ * five and letting the reader assume that is all there are.
  *
  * The third is that an interactive figure is a *plain figure of a derived
  * output* — the property that makes the PDF export show what is on screen rather
@@ -36,8 +37,21 @@ import type {
   AnalysisFraming,
   CurveOutput,
   MatrixOutput,
+  TableOutput,
   TaskResult,
 } from '@/analysis/types'
+import type { CombinedFigures } from '@/analysis/combine'
+import { combinedToTsv } from '@/analysis/write/tsv'
+
+/** The overlays of a combination, in its order. */
+function curvesOf(combined: CombinedFigures): CurveOutput[] {
+  return combined.outputs.filter((output): output is CurveOutput => output.kind === 'curve')
+}
+
+/** The stacked and shown-once tables of a combination, in its order. */
+function tablesOf(combined: CombinedFigures): TableOutput[] {
+  return combined.outputs.filter((output): output is TableOutput => output.kind === 'table')
+}
 
 const FRAMING: AnalysisFraming = {
   uri: 'a.mcool',
@@ -245,12 +259,12 @@ describe('the combined figure', () => {
       threeMaps().map((entry) => ({ label: entry.target.label, result: entry.result })),
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves).toHaveLength(1)
-    expect(combined.curves[0].series.map((series) => series.name)).toEqual(['rep1', 'rep2', 'rep3'])
+    expect(curvesOf(combined)).toHaveLength(1)
+    expect(curvesOf(combined)[0].series.map((series) => series.name)).toEqual(['rep1', 'rep2', 'rep3'])
     // The axes are the task's, taken from the first: every map ran the same
     // task, so there is only one answer to take.
-    expect(combined.curves[0].xScale).toBe('log')
-    expect(combined.curves[0].xLabel).toBe('separation')
+    expect(curvesOf(combined)[0].xScale).toBe('log')
+    expect(curvesOf(combined)[0].xLabel).toBe('separation')
   })
 
   it('keeps both names when a map contributes several lines', () => {
@@ -268,7 +282,7 @@ describe('the combined figure', () => {
       ],
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves[0].series.map((series) => series.name)).toEqual([
+    expect(curvesOf(combined)[0].series.map((series) => series.name)).toEqual([
       'rep1 · cis',
       'rep1 · trans',
       'rep2 · cis',
@@ -306,7 +320,7 @@ describe('the combined figure', () => {
       ],
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves[0].series.map((series) => series.stack)).toEqual([
+    expect(curvesOf(combined)[0].series.map((series) => series.stack)).toEqual([
       'rep1 · contacts',
       'rep1 · contacts',
       'rep2 · contacts',
@@ -314,7 +328,7 @@ describe('the combined figure', () => {
     ])
     // Two libraries of one genome name their sequences the same way, so the
     // abscissa keeps its names.
-    expect(combined.curves[0].xTicks).toEqual(['I', 'II'])
+    expect(curvesOf(combined)[0].xTicks).toEqual(['I', 'II'])
   })
 
   it('drops the names of an abscissa the maps do not agree about', () => {
@@ -332,7 +346,7 @@ describe('the combined figure', () => {
       ],
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves[0].xTicks).toBeUndefined()
+    expect(curvesOf(combined)[0].xTicks).toBeUndefined()
   })
 
   it('names what it could not fold rather than quietly dropping it', () => {
@@ -343,7 +357,7 @@ describe('the combined figure', () => {
       ],
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves).toHaveLength(1)
+    expect(curvesOf(combined)).toHaveLength(1)
     // A pileup averaged over two libraries would be a third thing nobody asked
     // for, so it stays per map — and the tab says so.
     expect(combined.perMapOnly).toEqual(['pileup'])
@@ -360,8 +374,8 @@ describe('the combined figure', () => {
       ],
       (output) => (output.kind === 'curve' ? output : null),
     )
-    expect(combined.curves).toHaveLength(1)
-    expect(combined.curves[0].series.map((series) => series.name)).toEqual(['rep1', 'rep2'])
+    expect(curvesOf(combined)).toHaveLength(1)
+    expect(curvesOf(combined)[0].series.map((series) => series.name)).toEqual(['rep1', 'rep2'])
   })
 
   it('is shown on the all-maps tab, with the exports a comparison can have', () => {
@@ -373,9 +387,170 @@ describe('the combined figure', () => {
     )
     expect(buttons).toContain('PNG')
     expect(buttons).toContain('PDF')
-    // No TSV: an overlay has no single provenance, so there is no one framing
-    // for a column of numbers to be labelled with. The per-map tabs export.
-    expect(buttons).not.toContain('TSV')
+    // And a TSV, whose head is every map's provenance rather than one framing
+    // for numbers that came from three files.
+    expect(buttons).toContain('TSV')
+  })
+})
+
+/**
+ * A task's tables on the all-maps tab: one table, every map's rows (§18.7).
+ *
+ * They used to stay per map, named in a sentence saying so — and a batch run
+ * over eight libraries is run *for* the table: every map's inter-arm enrichment
+ * side by side, rather than eight tabs to copy one row out of each.
+ */
+describe('the combined table', () => {
+  function table(id: string, rows: TableOutput['rows'], columns?: TableOutput['columns']): TableOutput {
+    return {
+      kind: 'table',
+      id,
+      label: 'Inter-arm alignment per sequence',
+      columns: columns ?? [
+        { key: 'sequence', label: 'Sequence', kind: 'text' },
+        { key: 'enrichment', label: 'Enrichment', kind: 'number', digits: 2 },
+      ],
+      rows,
+    }
+  }
+
+  it('stacks every map’s rows under a column naming the map, in the deck’s order', () => {
+    const combined = combineResults(
+      [
+        { label: 'WT', result: resultOf(TASK_ID, [table('interarm-table', [{ sequence: 'chr', enrichment: 3.3 }])]) },
+        { label: 'dparAB', result: resultOf(TASK_ID, [table('interarm-table', [{ sequence: 'chr', enrichment: 1.1 }])]) },
+      ],
+      (output) => (output.kind === 'curve' ? output : null),
+    )
+    expect(combined.perMapOnly).toEqual([])
+    const [stacked] = tablesOf(combined)
+    expect(stacked.label).toBe('Inter-arm alignment per sequence — all maps')
+    expect(stacked.columns.map((column) => column.key)).toEqual(['map', 'sequence', 'enrichment'])
+    expect(stacked.rows).toEqual([
+      { map: 'WT', sequence: 'chr', enrichment: 3.3 },
+      { map: 'dparAB', sequence: 'chr', enrichment: 1.1 },
+    ])
+  })
+
+  it('keeps a column only some maps returned, and a task’s own `map` column', () => {
+    const own = [
+      { key: 'map', label: 'Map of the task', kind: 'text' as const },
+      { key: 'score', label: 'Score', kind: 'number' as const },
+    ]
+    const combined = combineResults(
+      [
+        { label: 'a', result: resultOf(TASK_ID, [table('t', [{ map: 'x', score: 1 }], own)]) },
+        {
+          label: 'b',
+          result: resultOf(TASK_ID, [table('t', [{ map: 'y', score: 2, extra: 5 }], [...own, { key: 'extra', label: 'Extra', kind: 'number' }])]),
+        },
+      ],
+      () => null,
+    )
+    const [stacked] = tablesOf(combined)
+    // The task's key is the stable name a script reads; the deck's moves aside.
+    expect(stacked.columns.map((column) => column.key)).toEqual(['map_', 'map', 'score', 'extra'])
+    expect(stacked.rows).toEqual([
+      { map_: 'a', map: 'x', score: 1 },
+      { map_: 'b', map: 'y', score: 2, extra: 5 },
+    ])
+  })
+
+  it('is drawn on the all-maps tab beside the overlay, with a TSV naming every map', () => {
+    const across = [
+      { target: targetOf('lead', 'WT'), result: resultOf(TASK_ID, [curve('ps', 'P(s)', 'cis'), table('interarm-table', [{ sequence: 'chr', enrichment: 3.3 }])]) },
+      { target: targetOf('m2', 'dparAB'), result: resultOf(TASK_ID, [curve('ps', 'P(s)', 'cis', 2), table('interarm-table', [{ sequence: 'chr', enrichment: 1.1 }])]) },
+    ]
+    const drawer = open(across)
+    click([...drawer.el.querySelectorAll('.analysis-map')].at(-1))
+    expect(titles(drawer)).toEqual(['P(s) — all maps', 'Inter-arm alignment per sequence — all maps'])
+    const cells = [...drawer.el.querySelectorAll('tbody tr')].map((row) =>
+      [...row.children].map((cell) => cell.textContent),
+    )
+    expect(cells).toEqual([
+      ['WT', 'chr', '3.30'],
+      ['dparAB', 'chr', '1.10'],
+    ])
+    // Nothing is left to say is per map only.
+    expect(drawer.el.querySelector('.analysis-elsewhere')).toBeNull()
+  })
+
+  it('writes each map’s provenance above the rows', () => {
+    const combined = combineResults(
+      [
+        { label: 'WT', result: resultOf(TASK_ID, [table('t', [{ sequence: 'chr', enrichment: 3.3 }])]) },
+        { label: 'dparAB', result: resultOf(TASK_ID, [table('t', [{ sequence: 'chr', enrichment: 1.1 }])]) },
+      ],
+      () => null,
+    )
+    const [stacked] = tablesOf(combined)
+    const text = combinedToTsv(stacked, [
+      { label: 'WT', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'wt.mcool' } } },
+      { label: 'dparAB', provenance: { ...resultOf(TASK_ID, []).provenance, framing: { ...FRAMING, uri: 'dparab.mcool' } } },
+    ])
+    const lines = text.split('\n')
+    expect(lines).toContain('# maps: 2')
+    expect(lines).toContain('# map: WT')
+    expect(lines).toContain('#   file: wt.mcool')
+    expect(lines).toContain('# map: dparAB')
+    expect(lines).toContain('#   file: dparab.mcool')
+    expect(lines).toContain('map\tsequence\tenrichment')
+    expect(lines).toContain('WT\tchr\t3.3')
+    expect(lines).toContain('dparAB\tchr\t1.1')
+  })
+})
+
+/**
+ * An output that already compares every map — a reproducibility run's — is
+ * shown once on the all-maps tab, not once per map (§18.7).
+ */
+describe('an output across every map', () => {
+  const pairs = (a: string, b: string, scc: number): TableOutput => ({
+    kind: 'table',
+    id: 'hicrep-pairs',
+    label: 'Pooled over every sequence',
+    columns: [
+      { key: 'a', label: 'Map', kind: 'text' },
+      { key: 'b', label: 'Map', kind: 'text' },
+      { key: 'scc', label: 'SCC', kind: 'number', digits: 4 },
+    ],
+    rows: [{ a, b, scc }],
+    acrossMaps: true,
+  })
+  const strata = (a: string, b: string): CurveOutput => ({
+    ...curve('hicrep-strata', 'Correlation by separation', `${a} vs ${b}`),
+    acrossMaps: true,
+  })
+
+  it('is taken once, from the first run, rather than stacked or overlaid per map', () => {
+    const combined = combineResults(
+      [
+        { label: 'WT', result: resultOf(TASK_ID, [pairs('WT', 'dparAB', 0.9), strata('WT', 'dparAB')]) },
+        { label: 'dparAB', result: resultOf(TASK_ID, [pairs('dparAB', 'WT', 0.9), strata('dparAB', 'WT')]) },
+      ],
+      (output) => (output.kind === 'curve' ? output : null),
+    )
+    const [table] = tablesOf(combined)
+    expect(table.rows).toEqual([{ a: 'WT', b: 'dparAB', scc: 0.9 }])
+    expect(table.columns.map((column) => column.key)).toEqual(['a', 'b', 'scc'])
+    const [lines] = curvesOf(combined)
+    // One pair, once, under its own name — not the same pair twice under the
+    // names of the two maps whose runs computed it.
+    expect(lines.series.map((series) => series.name)).toEqual(['WT vs dparAB'])
+    expect(lines.label).toBe('Correlation by separation — all maps')
+  })
+
+  it('is taken from the run that compared the most maps', () => {
+    // A map at another bin size is left out of each other map's run.
+    const wide: TableOutput = { ...pairs('a', 'b', 0.8), rows: [{ a: 'a', b: 'b', scc: 0.8 }, { a: 'a', b: 'c', scc: 0.7 }, { a: 'b', b: 'c', scc: 0.6 }] }
+    const combined = combineResults(
+      [
+        { label: 'x', result: resultOf(TASK_ID, [pairs('x', 'y', 0.5)]) },
+        { label: 'a', result: resultOf(TASK_ID, [wide]) },
+      ],
+      () => null,
+    )
+    expect(tablesOf(combined)[0].rows).toHaveLength(3)
   })
 })
 

@@ -741,6 +741,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       contigLengths: Object.fromEntries(mc.chromsizes),
       ...(opened.orientation === null ? {} : { orientation: opened.orientation }),
       ...(options.peers.length === 0 ? {} : { peers: peersOf(options.peers) }),
+      // This map by its base name too, as `peersOf` names the others, so the
+      // matrix's axes and the tables name every file the same way.
+      ...(options.peers.length === 0 ? {} : { mapLabel: basename(parseUri(options.path).path) }),
     }
 
     /**
