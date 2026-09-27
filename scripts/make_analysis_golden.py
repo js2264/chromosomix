@@ -1533,6 +1533,335 @@ def overlap_golden() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# peak calling: yapc, and the IDR it thresholds with
+# ---------------------------------------------------------------------------
+#
+# The oracle is the software itself, as the chromosight goldens' is: there is no
+# second definition of "what yapc calls" to recompute in numpy. What is imported
+# is **yapc 0.1** — the release on bioconda, whose `bin/yapc` script is loaded
+# with `runpy` so its functions are called as they are, not copied — and
+# **idr 2.0.3** at commit 74665e73, the one `yapc/idr.py` cites.
+#
+# Neither installs on a current stack, and both are used unmodified all the
+# same, in an environment of their own:
+#
+#     python -m venv yapc-env && . yapc-env/bin/activate
+#     pip install 'numpy<1.24' 'cython<3' 'scipy<1.11' 'pandas<2.1' pyBigWig setuptools
+#     git clone https://github.com/nboley/idr && cd idr && git checkout 74665e73
+#     rm idr/inv_cdf.c && pip install --no-build-isolation . && cd ..
+#     pip install --no-deps 'git+https://github.com/jurgjn/yapc@v0.1'
+#     python scripts/make_analysis_golden.py --only yapc yapc_idr idr
+#
+# `numpy<1.24` because yapc passes `dtype=np.int`; `cython<3` because IDR's
+# `inv_cdf.pyx` types its ranks `np.int_t`; and IDR's generated `inv_cdf.c` is
+# deleted before the build because it predates Python 3.11's `PyCode_New` and
+# Cython only regenerates a `.c` older than its `.pyx`. `--only` rebuilds these
+# three and leaves every other golden, and its manifest entry, as it was.
+
+#: The two tracks yapc's reproducibility golden treats as replicates. They are
+#: not replicates — ATAC and a Pol II ChIP — and that is what makes them useful:
+#: IDR's EM leaves its parameter box on them, so this golden drives the
+#: coordinate-ascent fallback, and `idr_golden`'s simulated pair drives the EM.
+YAPC_PAIR = ("Yeast_ATAC.bw", "Yeast_ChIP_Pol2-vs-input.bw")
+
+
+def _yapc_script() -> dict[str, Any]:
+    """yapc's `bin/yapc`, loaded as a module: its functions, not a copy of them."""
+    import runpy
+
+    path = shutil.which("yapc")
+    if path is None:
+        raise RuntimeError("yapc is not on PATH; see the section comment above")
+    return runpy.run_path(path, run_name="yapc_oracle")
+
+
+def _subset_bigwig(source: Path, target: Path, chroms: list[str]) -> Path:
+    """The same bigWig with only `chroms` in it, interval for interval.
+
+    yapc runs over every sequence a file names and ranks its regions across all
+    of them, so the way to run it over four chromosomes is to hand it a file of
+    four. The values are copied, not resampled: `intervals()` is the base level.
+    """
+    import pyBigWig
+
+    handle = pyBigWig.open(str(source))
+    sizes = handle.chroms()
+    out = pyBigWig.open(str(target), "w")
+    out.addHeader([(chrom, sizes[chrom]) for chrom in chroms])
+    for chrom in chroms:
+        entries = handle.intervals(chrom) or ()
+        if entries:
+            out.addEntries(
+                [chrom] * len(entries),
+                [int(a) for a, _, _ in entries],
+                ends=[int(b) for _, b, _ in entries],
+                values=[float(v) for _, _, v in entries],
+            )
+    out.close()
+    handle.close()
+    return target
+
+
+def _quietly(call, *args, **kwargs):
+    """yapc prints a line per chromosome per step; the golden log is not the place."""
+    import contextlib
+    import io
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        return call(*args, **kwargs)
+
+
+def _first_gap(path: Path, chrom: str) -> int | None:
+    """Where the first stretch with no value begins after one with a value, or `None`.
+
+    After one, because a gap at the first base has nothing to its left for the
+    convolution to carry it into, and that is the half of the rule worth seeing.
+    """
+    import pyBigWig
+
+    handle = pyBigWig.open(str(path))
+    values = handle.values(chrom, 0, handle.chroms()[chrom], numpy=True)
+    handle.close()
+    missing = np.isnan(values)
+    starts = np.flatnonzero(missing[1:] & ~missing[:-1]) + 1
+    return int(starts[0]) if starts.size else None
+
+
+def yapc_golden(
+    chroms: list[str], track: str, truncate: int, halfwidth: int, width: int, times: int
+) -> dict:
+    """yapc's candidate stage on one real track, from yapc's own functions.
+
+    `coverage`, `d2smooth`, `find_concave_regions` and `scores` are called as
+    `main()` calls them, round trips through bigWigs included, so the pooled
+    track and its second derivative are float32 exactly where yapc's are. The
+    few pandas lines of `main()` that follow — the width filter, the best rank,
+    the truncation and the fixed half-width — live inside `main()` and are
+    written out below as `main()` writes them; with one track there is no IDR to
+    run, and `main()` cannot be called without one.
+    """
+    import pyBigWig
+
+    ns = _yapc_script()
+    kernel = ns["prepare_second_derivative_kernel"](width, times)
+    min_width = 75
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _subset_bigwig(DEMO / track, Path(tmp) / track, chroms)
+        prefix = str(Path(tmp) / "yapc")
+        _quietly(ns["coverage"], [str(src)], prefix + "_coverage.bw")
+        _quietly(ns["d2smooth"], prefix + "_coverage.bw", prefix + "_d2smooth.bw", kernel)
+        regions = _quietly(ns["find_concave_regions"], prefix + "_d2smooth.bw", None, None)
+        regions["rep_score"] = list(
+            ns["scores"](
+                str(src),
+                regions.chrom.tolist(),
+                regions.concave_start.tolist(),
+                regions.concave_end.tolist(),
+                kernel,
+            )
+        )
+
+        # Two windows of the second derivative as yapc reads it back: the start
+        # of the first chromosome, and the first stretch the track has no value
+        # for, which the convolution must widen by its reach on both sides.
+        d2 = pyBigWig.open(prefix + "_d2smooth.bw")
+        windows = []
+        gap = _first_gap(src, chroms[0])
+        spans = [(chroms[0], 0, 4000)]
+        if gap is not None:
+            spans.append((chroms[0], max(0, gap - 600), gap + 600))
+        for chrom, start, end in spans:
+            end = min(end, d2.chroms()[chrom])
+            windows.append(
+                {
+                    "contig": chrom,
+                    "start": start,
+                    "end": end,
+                    "d2": rounded(d2.values(chrom, start, end, numpy=True), 10),
+                }
+            )
+        d2.close()
+
+    # `main()`, from "discard narrow peaks" to the final boundaries, verbatim but
+    # for the column name of the one sample.
+    samples = ["rep"]
+    df = regions.query("(concave_end - concave_start) >= @min_width").reset_index(drop=True)
+    df["min_rank"] = df[[s + "_score" for s in samples]].rank(axis=0, ascending=False).min(axis=1)
+    kept = (
+        df.sort_values("min_rank")
+        .head(truncate)
+        .sort_values(["chrom", "concave_start", "concave_end"])
+        .reset_index(drop=True)
+    )
+    kept["start"] = kept["mode"] - halfwidth
+    kept["end"] = kept["mode"] + halfwidth + 1
+
+    return {
+        "track": track,
+        "chroms": chroms,
+        "width": width,
+        "times": times,
+        "min_width": min_width,
+        "truncate": truncate,
+        "halfwidth": halfwidth,
+        "tool": "yapc 0.1 (bin/yapc, loaded with runpy)",
+        "compare": "exact bounds and summits; scores and the second derivative relative",
+        "tolerance": 1e-6,
+        "kernel": rounded(kernel, 15),
+        "windows": windows,
+        "regions": {
+            "contig": regions.chrom.tolist(),
+            "start": [int(v) for v in regions.concave_start],
+            "end": [int(v) for v in regions.concave_end],
+            "mode": [int(v) for v in regions["mode"]],
+            "score": rounded(regions.rep_score, 10),
+        },
+        "n_wide": int(len(df)),
+        "kept": {
+            "contig": kept.chrom.tolist(),
+            "start": [int(v) for v in kept.concave_start],
+            "end": [int(v) for v in kept.concave_end],
+            "fixed_start": [int(v) for v in kept.start],
+            "fixed_end": [int(v) for v in kept.end],
+        },
+    }
+
+
+def yapc_idr_golden(chroms: list[str]) -> dict:
+    """yapc's whole pipeline on two tracks, by calling `main()` itself.
+
+    Everything from the pooled coverage to the BED files, with IDR, run exactly
+    as the command line would run it on two single-condition replicates.
+    `np.random` is seeded because `call_idr` breaks rank ties with it — there are
+    none here, which the golden records, so the seed changes nothing it compares.
+    """
+    import pandas as pd
+
+    ns = _yapc_script()
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = [str(_subset_bigwig(DEMO / name, Path(tmp) / name, chroms)) for name in YAPC_PAIR]
+        prefix = str(Path(tmp) / "yapc")
+        np.random.seed(0)
+        samples = ns["parse_input_files"](["cond", paths[0], paths[1]], False)
+        _quietly(
+            ns["main"],
+            df_samples=samples,
+            prefix_out=prefix,
+            kernel=ns["prepare_second_derivative_kernel"](150, 3),
+            min_concave_region_width=75,
+            truncate_idr_input=100000,
+            fixed_peak_halfwidth=None,
+            pseudoreplicates=False,
+            recycle=False,
+        )
+        table = pd.read_csv(prefix + ".tsv", sep="\t")
+        # `main()`'s own list, which it writes one BED per threshold of. Each BED
+        # is recorded as the rows of the table it holds, so the golden says which
+        # peaks passed without writing their coordinates out six more times.
+        row_of = {
+            (chrom, int(start), int(end)): i
+            for i, (chrom, start, end) in enumerate(
+                zip(table.chrom, table.concave_start, table.concave_end)
+            )
+        }
+        passing = {}
+        for th in [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]:
+            bed = Path(prefix + "_%s.bed" % (th,))
+            rows = [
+                line.split("\t")
+                for line in bed.read_text().splitlines()
+                if line and not line.startswith("#")
+            ]
+            passing[str(th)] = sorted(row_of[(r[0], int(r[1]), int(r[2]))] for r in rows)
+
+    scores = table[["cond_rep1_score", "cond_rep2_score"]].to_numpy()
+    return {
+        "tracks": list(YAPC_PAIR),
+        "chroms": chroms,
+        "tool": "yapc 0.1 main(), with idr 2.0.3 (74665e73)",
+        "compare": "exact regions; scores relative; IDR absolute",
+        "tolerance": 1e-6,
+        "idr_tolerance": 1e-4,
+        "ties": int(len(scores) - len(np.unique(scores[:, 0])))
+        + int(len(scores) - len(np.unique(scores[:, 1]))),
+        "table": {
+            "contig": table.chrom.tolist(),
+            "start": [int(v) for v in table.concave_start],
+            "end": [int(v) for v in table.concave_end],
+            "mode": [int(v) for v in table["mode"]],
+            "score1": rounded(table.cond_rep1_score, 10),
+            "score2": rounded(table.cond_rep2_score, 10),
+            "min_rank": rounded(table.min_rank, 10),
+            "global_idr": rounded(table.cond_globalIDR, 10),
+        },
+        "passing": passing,
+    }
+
+
+def idr_golden(n: int, seed: int) -> dict:
+    """IDR on a simulated replicate pair, from IDR's own simulator and fit.
+
+    `idr.utility.simulate_values` draws the pair from the model itself, so the EM
+    has an interior optimum to find and never falls back to coordinate ascent —
+    the path the yapc pair above cannot reach. What goes in is the ranks, and
+    what comes out is compared stage by stage: the fitted parameters, the local
+    IDRs, the global ones. The fit's own path is recorded too — how many rounds,
+    and whether coordinate ascent ran — by wrapping the two functions it calls,
+    which changes nothing they return.
+    """
+    import idr
+    import idr.idr
+    import idr.optimization
+    import idr.utility
+
+    np.random.seed(seed)
+    (r1, r2), _ = idr.utility.simulate_values(n, (2.0, 1.0, 0.8, 0.4))
+    r1 = np.asarray(r1, dtype=np.int64)
+    r2 = np.asarray(r2, dtype=np.int64)
+
+    calls = {"em": 0, "ca": 0}
+    em, ca = idr.optimization.EM_iteration, idr.optimization.CA_iteration
+
+    def counted_em(*args, **kwargs):
+        calls["em"] += 1
+        return em(*args, **kwargs)
+
+    def counted_ca(*args, **kwargs):
+        calls["ca"] += 1
+        return ca(*args, **kwargs)
+
+    idr.optimization.EM_iteration, idr.optimization.CA_iteration = counted_em, counted_ca
+    try:
+        theta, _ = idr.optimization.estimate_model_params(
+            r1,
+            r2,
+            (idr.DEFAULT_MU, idr.DEFAULT_SIGMA, idr.DEFAULT_RHO, idr.DEFAULT_MIX_PARAM),
+            max_iter=idr.MAX_ITER_DEFAULT,
+            convergence_eps=idr.CONVERGENCE_EPS_DEFAULT,
+        )
+    finally:
+        idr.optimization.EM_iteration, idr.optimization.CA_iteration = em, ca
+    local = idr.idr.calc_local_IDR(np.array(theta), r1, r2)
+    global_ = idr.idr.calc_global_IDR(local)
+    return {
+        "n": n,
+        "seed": seed,
+        "simulated": [2.0, 1.0, 0.8, 0.4],
+        "tool": "idr 2.0.3 (74665e73): estimate_model_params, calc_local_IDR, calc_global_IDR",
+        "compare": "parameters relative, IDRs absolute",
+        "tolerance": 1e-5,
+        "idr_tolerance": 1e-4,
+        "rounds": calls["em"],
+        "coordinate_ascent": calls["ca"] > 0,
+        "r1": [int(v) for v in r1],
+        "r2": [int(v) for v in r2],
+        "theta": [float(v) for v in theta],
+        "local_idr": rounded(local, 12),
+        "global_idr": rounded(global_, 12),
+    }
+
+
+# ---------------------------------------------------------------------------
 # manifest
 # ---------------------------------------------------------------------------
 
@@ -1549,6 +1878,9 @@ COVERAGE = {
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
     "overlap": "Jaccard and hit counts, against a per-base boolean mask",
     "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
+    "yapc": "concave regions, summits and scores of one bigWig, against yapc 0.1 itself",
+    "yapc_idr": "yapc's whole pipeline on two bigWigs, IDR and BED cuts included, against yapc 0.1",
+    "idr": "IDR's fit, local and global IDR on a simulated pair, against idr 2.0.3 itself",
 }
 
 
@@ -1616,12 +1948,47 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--meta-flank", type=int, default=1000, help="metaplot flank, in bp")
     parser.add_argument("--meta-columns", type=int, default=40, help="metaplot columns")
     parser.add_argument("--meta-features", type=int, default=300, help="metaplot features")
+    parser.add_argument(
+        "--yapc-truncate",
+        type=int,
+        default=1000,
+        help="the strongest regions yapc's golden keeps, small enough that the cut bites",
+    )
+    parser.add_argument(
+        "--yapc-halfwidth", type=int, default=100, help="the fixed half-width yapc's golden records"
+    )
+    # The pipeline golden's chromosomes are part of its answer, for chromosight's
+    # reason: the ranking and IDR are global, so a peak's IDR over four
+    # chromosomes is not its IDR over two. The four the other goldens use are
+    # also the fewest on which this pair's fit passes some peaks and fails
+    # others at every cut — over I and III alone it passes none, and a golden
+    # of empty BEDs would check nothing about the cut.
+    parser.add_argument(
+        "--yapc-idr-chroms",
+        nargs="+",
+        default=list(DEFAULT_CHROMS),
+        help="chromosomes for yapc's two-track pipeline golden",
+    )
+    parser.add_argument("--idr-peaks", type=int, default=2000, help="size of IDR's simulated pair")
+    parser.add_argument("--idr-seed", type=int, default=1, help="seed of IDR's simulated pair")
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        default=None,
+        help="rebuild these goldens and keep every other golden and manifest entry as it is",
+    )
     args = parser.parse_args(argv)
 
     if not COOLER.exists():
         log.error("%s is missing; the demo data is what these goldens are of.", COOLER)
         return 1
-    if not have("cooler"):
+    # cooler is needed by the goldens of the map, and not by the three of the
+    # peak caller — whose oracle environment cannot install it (see the yapc
+    # section), which is what `--only` is for.
+    needs_cooler = args.only is None or any(
+        name not in ("yapc", "yapc_idr", "idr") for name in args.only
+    )
+    if needs_cooler and not have("cooler"):
         log.error("cooler is not installed. pip install cooler cooltools")
         return 1
 
@@ -1678,7 +2045,33 @@ def main(argv: list[str] | None = None) -> int:
             ("chromosight",),
             {"chroms": args.chromosight_chroms, "limit": args.chromosight_pairs},
         ),
+        (
+            "yapc",
+            yapc_golden,
+            ("bin:yapc", "idr", "pyBigWig", "pandas"),
+            {
+                "chroms": chroms,
+                "track": TRACKS[0],
+                "truncate": args.yapc_truncate,
+                "halfwidth": args.yapc_halfwidth,
+                "width": 150,
+                "times": 3,
+            },
+        ),
+        (
+            "yapc_idr",
+            yapc_idr_golden,
+            ("bin:yapc", "idr", "pyBigWig", "pandas"),
+            {"chroms": args.yapc_idr_chroms},
+        ),
+        ("idr", idr_golden, ("idr",), {"n": args.idr_peaks, "seed": args.idr_seed}),
     ]
+    if args.only is not None:
+        unknown = sorted(set(args.only) - {name for name, *_ in builders})
+        if unknown:
+            log.error("--only names goldens this script does not build: %s", ", ".join(unknown))
+            return 2
+        builders = [entry for entry in builders if entry[0] in args.only]
 
     for name, build, needs, kwargs in builders:
         missing = [module for module in needs if not have(module)]
@@ -1696,7 +2089,16 @@ def main(argv: list[str] | None = None) -> int:
         written.append({"name": name, "golden": f"{name}.json", "bytes": size})
 
     versions: dict[str, str] = {}
-    for module in ("numpy", "cooler", "cooltools", "coolpuppy", "pyBigWig", "chromosight"):
+    for module in (
+        "numpy",
+        "cooler",
+        "cooltools",
+        "coolpuppy",
+        "pyBigWig",
+        "chromosight",
+        "yapc",
+        "idr",
+    ):
         if not have(module):
             continue
         loaded = importlib.import_module(module)
@@ -1708,6 +2110,23 @@ def main(argv: list[str] | None = None) -> int:
                 version = "?"
         versions[module] = str(version)
 
+    manifest_path = args.out / "_manifest.json"
+    if args.only is not None and manifest_path.exists():
+        # A partial rebuild: every other golden keeps its entry, and the manifest
+        # keeps the versions of the run that built those. The goldens rebuilt
+        # here carry their own environment's versions on their own entries,
+        # since the environment that can run yapc 0.1 is not the one that runs
+        # cooltools, and one list of versions would say something false of half.
+        held = json.loads(manifest_path.read_text())
+        for entry in written:
+            entry["environment"] = versions
+        rebuilt = {entry["name"] for entry in written}
+        written = [e for e in held.get("goldens", []) if e.get("name") not in rebuilt] + written
+        order = list(COVERAGE)
+        written.sort(key=lambda e: order.index(e["name"]) if e["name"] in order else len(order))
+        versions = held.get("versions", versions)
+        chroms = held.get("chroms", chroms)
+
     dump(
         {
             "generator": "scripts/make_analysis_golden.py",
@@ -1718,7 +2137,7 @@ def main(argv: list[str] | None = None) -> int:
             "tolerances": {"sums": TOL_SUMS, "eigenvectors": TOL_EIGS, "float32": TOL_F32},
             "goldens": written,
         },
-        args.out / "_manifest.json",
+        manifest_path,
     )
     return 0
 

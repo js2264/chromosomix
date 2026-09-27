@@ -1440,6 +1440,8 @@ export class AnnotationLanes {
           opacity: entry.style.opacity,
           // A squished lane is names-free by definition (§8.16).
           labels: text && features.display !== 'squished',
+          // The rule along the top of the tracks, round the blocks too (§8.16).
+          outline,
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
           arrows: features.arrows,

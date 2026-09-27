@@ -730,13 +730,13 @@ export class AnalysisRunner {
    * cancellation rather than as a failure. A job that has already finished is
    * left alone — cancelling a result would be deleting it.
    *
-   * That is the analysis worker. A step in the **annotations** venue is not
-   * stoppable mid-flight at all — `runStep` says why — so the guarantee there
-   * is narrower and is kept on this side instead: whatever the step goes on to
-   * compute, the row ends `cancelled` and nothing it produced is adopted
-   * (`execute`, at the check after `runStep`). Both halves are needed. Setting
-   * the flag without that check is what let a cancelled run finish as `done`
-   * with its lanes on the panel.
+   * The **annotations** venue checks the same way, at a read or a yield, and a
+   * task there that does neither runs to its end — `runStep` says which — so the
+   * guarantee that holds for every step is kept on this side as well: whatever
+   * the step goes on to compute, the row ends `cancelled` and nothing it
+   * produced is adopted (`execute`, at the check after `runStep`). Both halves
+   * are needed. Setting the flag without that check is what let a cancelled run
+   * finish as `done` with its lanes on the panel.
    */
   cancel(taskId: string): void {
     // **Every** queued job for this task, not the first: a batch is one task
@@ -873,10 +873,10 @@ export class AnalysisRunner {
         // the Annotations panel and its row said `running` until the moment it
         // said `done`, never `cancelled`. The whole of what the panel's Stop
         // promises is that the answer is not taken, so the refusal belongs here
-        // rather than only in the worker: the **annotations** venue has no
-        // cancel that reaches the work at all (see `runStep`), and even the
-        // analysis worker's `AbortError` can lose the race with the result it
-        // was meant to pre-empt.
+        // rather than only in the worker: a task in the **annotations** venue that
+        // never hands its thread back never sees the cancel (see `runStep`), and
+        // even an `AbortError` can lose the race with the result it was meant to
+        // pre-empt.
         if (job.cancelled) throw abortError()
         const key = resultKey(job.target.map, step.task.id)
         // The result this one replaces goes to the front of the history, so
@@ -1132,21 +1132,18 @@ export class AnalysisRunner {
 
     let raw: TaskResult
     if (step.task.venue === 'annotations') {
-      // The other venue (§18.3), awaited rather than made cancellable — and
-      // that is a limitation to be stated, not a property to rely on. The wire
-      // for it exists on both sides: `AnnotationClient.cancellable` is generic
-      // over every request kind including this one, and the worker keeps the
-      // id-keyed `cancelled` set that the BAM reads already check. What is
-      // missing is the last hop — the `TrackJobContext` that worker builds
-      // stubs `cancelled` and `throwIfCancelled` out, so a cancel delivered
-      // there would stop nothing — and a motif scan is a synchronous pass over
-      // a whole reference, which does not return to the event loop for the
-      // message to be read in the first place. So `job.running` stays null and
-      // Stop cannot reach the work. What it does instead is refuse the answer
-      // when it arrives, at the guard after `runStep` in `execute`: the row
-      // ends `cancelled` and nothing the run produced is adopted. The scan
-      // itself is bounded — `annotations.worker.ts` refuses a FASTA over
-      // 300 MB — so what is unstoppable here is seconds rather than minutes.
+      // The other venue (§18.3), and cancellable the same way: the id-keyed
+      // `cancelled` set the worker keeps for its BAM reads is what the
+      // `TrackJobContext` it builds now reads, so a Stop reaches a runner at its
+      // next check. That was the missing last hop, and it stayed missing while
+      // every task here was bounded; calling peaks reads every base of a genome
+      // and fits IDR for minutes, which is a job §18.3's *every job can be
+      // cancelled* is about. A check only sees a cancel once the thread has been
+      // handed back, which a read does and `yieldToEventLoop` does for
+      // arithmetic — so a task that does neither (a motif scan is one pass over
+      // the residues) still runs to the end, and the guard after `runStep` in
+      // `execute` is what refuses its answer: the row ends `cancelled` and
+      // nothing the run produced is adopted.
       const tracks = this.host.annotations?.()
       if (tracks === null || tracks === undefined) {
         throw new Error(
@@ -1154,7 +1151,10 @@ export class AnalysisRunner {
             'annotations worker.',
         )
       }
-      raw = await tracks.request<'run'>(payload, onProgress)
+      const handle = tracks.cancellable<'run'>(payload, onProgress)
+      job.running = { id: step.task.id, handle }
+      raw = await handle.promise
+      job.running = null
     } else {
       const handle = client.cancellable<'run'>(payload, onProgress)
       job.running = { id: step.task.id, handle }

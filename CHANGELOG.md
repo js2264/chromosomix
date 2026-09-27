@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
+  coverage track's smoothed second derivative turns negative — where the signal curves down — found by
+  its shape rather than its height, so it needs no background model of normalised signal and splits
+  two summits on one shoulder. Choose a replicate and IDR (Boley's `idr` 2.0.3, the implementation
+  ENCODE uses) tests every peak against it, keeping those at or below one of yapc's six thresholds;
+  with one track the peaks are ranked by curvature, the run says no test was made, and a violin of
+  every candidate's curvature shows where the two populations part. Out come the peaks with their
+  summits (BED on export), a table per sequence, the six thresholds with the peaks each keeps, and a
+  row per peak on request. Reads every base in windows of 256 kb, so a genome is never held whole,
+  with no map needed, and runs from `metacooler-run peaks --signal … [--replicate …]`. Held to
+  yapc's and IDR's own output on the demo data, region for region and cut for cut
+  (`npm run fixtures:analysis -- --only yapc yapc_idr idr`, in the environment its script describes).
+
 - **Inter-arm alignment gives each sequence a control row (§18.8).** Beside the numbers read over
   the sequence's own distance decay, a second row gives the same four — enrichment, peak, reach, arm
   — over the decay along both arms, the expectation the map's arms and Compartments divide by, which
@@ -473,6 +486,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **A feature's box is edged like a coverage track's top (§8.16).** With the *track outline*
+  preference on — the default — every block of a BED, a peak set, a gene or a call is drawn with the
+  hairline in the plot's ink that runs along the top of a coverage track: beside the map, in the 1D
+  browser and in a saved figure. Blocks that abut, a pale colour and an untranslated end against its
+  coding span now read as shapes. A block under four pixels either way keeps its colour unedged, and
+  the one switch turns the rule off on the tracks and the boxes together.
 
 - **Inter-arm alignment's table gives the enrichment, as a fold, from the origin out to the reach
   (§18.8),** where its score was the mean `log2` over the whole arm: the reach says how far the arms
@@ -1301,6 +1321,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **Stop reaches a task in the annotations worker (§18.3).** A metaplot, a FRiP or a track
+  correlation ran to its end whatever was pressed, because the worker handed every task there a
+  cancel check that always answered *no* and the runner never sent it a cancel; only the answer was
+  refused when it came. A task now stops at its next read of a track, and a peak call between its
+  windows and IDR's rounds. A motif scan, one pass with no read in it, still runs to its end, and the
+  Stop button's tooltip says which.
+
+- **A violin stays inside its figure (§18.13).** A violin's density runs past its sample, and where
+  the ordinate was set — by the task or by typing its bounds — the tail was drawn on below the axis,
+  through the names of the groups; it is cut at the plot's edge now. And a figure of boxes or violins,
+  which names its series under the axis rather than in a legend, no longer keeps the legend's strip
+  empty down its right side.
 
 - **Closing the share dialog before its link is ready no longer copies the link.** The copy that
   follows the link's arrival went ahead for a dialog already dismissed, writing over whatever the reader

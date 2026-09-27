@@ -395,10 +395,12 @@ describe('the cards', () => {
     expect(idsIn('3d')).toEqual(['reconstruct3d', 'structuremap', 'spatialtracks'])
   })
 
-  it('opens the 1D card with the task that makes an interval set', () => {
-    // A motif search produces exactly the input the four below it take.
+  it('opens the 1D card with the tasks that make an interval set', () => {
+    // A motif search and a peak call produce exactly the input the tasks below
+    // them take — one from the sequence, the other from a track.
     expect(idsIn('1d')).toEqual([
       'motif',
+      'peaks',
       'composition',
       'oriter',
       'metaplot',

@@ -42,6 +42,7 @@ import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
+import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
 import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
@@ -102,6 +103,11 @@ export const TASKS: readonly AnalysisTask[] = [
   // take. Same reading order as the 2D card's — the thing that comes first is
   // the thing the next one is built on.
   MOTIF_TASK,
+  // And the other that makes one: peaks called from a track, which is the input
+  // FRiP, the metaplot and the overlap below were always handed from elsewhere.
+  // A motif search reads the sequence and this reads a track, so the two open
+  // the card side by side, before the tasks that read what they make.
+  PEAKS_TASK,
   // Then the two that read a bacterial chromosome off its own sequence: its
   // composition, whose GC skew changes sign at the ends of replication, and the
   // origin and terminus that skew and the sites around it place — which the 2D

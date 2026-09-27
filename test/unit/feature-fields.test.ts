@@ -391,6 +391,7 @@ function paintOf(over: Partial<Parameters<typeof drawFeatures>[4]> = {}): Parame
     font: '10px sans-serif',
     opacity: 1,
     labels: false,
+    outline: false,
     ...over,
   }
 }

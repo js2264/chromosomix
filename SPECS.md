@@ -3538,6 +3538,18 @@ block takes all of its row but a pixel either side, up to 22 pixels: a lane made
 features thicker, where a gene used to stop at nine and thirteen pixels however tall its lane was
 made. Variants stay square: a mark on a base is a mark, not a box to be shaped (§8.14).
 
+**A block is edged in the plot's ink** while the *outline* preference is on: the hairline — three
+quarters of a pixel, in the guide colour — that runs along the top of a coverage track, under the one
+switch for both. The argument is the track's. The boundary between a block's colour and the paper is
+where the feature starts and ends, and in the block's own colour it is the one edge that does not
+stand out from it, so two blocks that abut, a pale colour on the page or an untranslated end against
+its coding span read as one patch of ink rather than as shapes. Only a block at least **four pixels**
+along and across is edged: under that it is a tick, and a rule round a tick is most of its ink — the
+colour that says which strand or which class, lost on exactly the features too small to say it any
+other way. The intron is a hairline already, and a barChart's bars and the zoomed-out density are
+measurements rather than boxes, so none of them is edged. The edge is traced from the outlines the
+fill drew, so it is the shape's boundary and not a second shape, and a saved figure carries it.
+
 **How the rows are spent is the reader's choice**, among the three every genome browser offers under
 the names it is known by: **expanded**, the default, gives each row room for a glyph and the name under
 it and bands the strands; **squished** packs rows eight pixels tall, as many as the lane holds up to
@@ -5537,7 +5549,10 @@ So: **a third worker, with its own mount of the same source.**
 - **One job at a time per session**, queued. Two scans over one byte source thrash it and both finish
   later than they would in sequence.
 - **Every job reports progress and can be cancelled**, through the same hooks the genome × genome scan
-  (§7.3) already uses.
+  (§7.3) already uses. That holds in the annotations worker too, where the 1D tasks run: a task there
+  sees a Stop at its next read of a track, or where it yields on purpose — a peak call yields between
+  its windows and between IDR's rounds — and a task with neither in it, a motif scan being one
+  synchronous pass over the residues, runs to its end and has its answer refused rather than adopted.
 - **A job survives navigation and tab switches** and is bound to the session rather than to the mounted
   view. Pan, zoom, open a chromosome, switch tabs, come back: it is still running, and the panel row
   says so. It does not survive the session, which cancels it.
@@ -5876,7 +5891,7 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Twenty-eight tasks, in **four cards — 2D, 3D, 1D and Metagenome**. The build order is in
+Thirty tasks, in **four cards — 2D, 3D, 1D and Metagenome**. The build order is in
 `TASKS_PLAN.md`; what follows is what each one must be.
 
 **Cut by the dimension the question is about**, not by the file it reads: a task is **2D** when its
@@ -5893,8 +5908,9 @@ other column has, in the order their first task appears in the registry (§18.8'
 an argued reading order). A group whose every task is *absent* for the file in hand has **no card at
 all**, which is how the Metagenome card stays away from a file with no genomes. Within a card the
 task that **makes** the thing the others read comes first: *model from the map* opens the 3D card,
-because a reader with no structure loaded has exactly one thing to do in it; *find a motif* opens
-the 1D card for the same reason.
+because a reader with no structure loaded has exactly one thing to do in it; *find a motif* and
+*peak calling* open the 1D card for the same reason, one making an interval set from the sequence and
+the other from a track.
 
 **2D.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
 producing the **expected** curve three later tasks consume. Two quantities are called P(s) and the task
@@ -6364,6 +6380,53 @@ sequence the reader has not declared one on (§8.15). A call whose terminus disa
 skew alone would put it is said, and so is a sequence read as a line, on which an origin at the
 first base is split between the two ends.
 
+**Calling peaks on a track.** *Peak calling* is **yapc** (Jänes et al. 2018), ported (§18.9): a peak is a
+stretch where the smoothed signal **curves down**. The track — or its mean with a replicate — is
+convolved with yapc's composite kernel, the nine-point second difference smoothed three times by a
+150 bp rolling mean (456 taps), and every run of bases where that second derivative is below
+10⁻¹⁰ is a candidate, summited at its most concave base and scored by each track as minus its mean
+second derivative there. Candidates narrower than 75 bp are dropped and the 100,000 strongest by
+each track's best rank are kept. With a **replicate**, IDR (Li et al. 2011, in Boley's `idr` 2.0.3,
+the implementation ENCODE's pipelines use) fits its copula mixture to the two rankings, and the
+peaks at or below the chosen global IDR — one of the six yapc writes, 0.001 to 0.2, 0.05 by default
+— are the set. With **one track** there is no test, and the run says so in a note and in the lane's
+name: the candidates are ranked by curvature, and a figure of every candidate's curvature on a log
+axis, split by what was kept, is how the cut is chosen. On the demo ATAC track the scores are plainly
+bimodal, and the 5,000 strongest overlap a MACS2 peak 97 % of the time and recover 89 % of the MACS2
+set.
+
+**Why yapc**, and not a threshold. A bigWig is normalised signal rather than reads, so the Poisson
+background MACS computes from reads is not there to compute; MACS's `bdgpeakcall` thresholds a score
+track at a cutoff that means nothing on normalised coverage, SEACR assumes the sparse background of
+CUT&RUN, and LanceOtron is a trained network. A peak found by its **shape** needs no background model
+of a signal that has already been normalised, is indifferent to its scale, and splits two summits on
+one shoulder into two peaks rather than one wide one — which is what a narrow-peak assay wants.
+
+The port keeps yapc's numbers where they look like oversights. The pooled track and its second
+derivative are **float32** where yapc decides on them, since yapc writes both to bigWigs and reads
+them back; numpy's `'same'` convolution centres an even kernel half a base right, and on a sequence
+shorter than the kernel centres on the sequence; a stretch of constant signal passes the concavity
+test, the kernel's float64 sum being a few times 10⁻¹¹ below zero rather than zero; and a sequence
+with no rising edge has no regions at all. Where yapc has no answer the port gives one and says which: a sequence ending
+on an open concave stretch with no rising edge before it (yapc raises an `IndexError`), a fixed
+half-width reaching past a sequence end (yapc writes a negative start; here it is cut at the end),
+and a tie — at the truncation cut, or in an IDR ranking — which yapc breaks at random and unseeded,
+and which is broken here by position, so that a run is reproducible (§18.4). And with one track only,
+a **flat** candidate — one the signal is constant across a whole kernel's width inside, which is a run
+of explicit zeros in the bigWigs deepTools writes — is left out, as IDR would leave it out of two
+replicates: a structural test, not a threshold on a score.
+
+It reads **every base** of every ticked sequence at the file's own resolution and is priced as a
+scan. It reads a window of 256 kb at a time, plus the kernel's reach of 228 bases each side, so
+memory is a window's rather than a chromosome's (yapc holds each chromosome of each sample as
+float64), and a Stop is read between windows and between IDR's rounds (§18.3). What comes out: the
+peaks as an interval set, with each summit as its thick part and a BED on export; a table per
+sequence; with a replicate, yapc's six thresholds as rows, each with the peaks its BED file would
+hold; and on request a row per peak, 1-based (§26.1), with its curvature on each track and its local
+and global IDR. A fit that ends at the edge of IDR's parameter box — where two tracks that are not
+replicates of one experiment put it — is said, naming the parameters that hit it, since its IDRs are
+then not a statement about reproducibility.
+
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
 of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature heatmap — because the
@@ -6610,6 +6673,14 @@ frame rules and the sub-diagonal band of `NaN` are all reproduced, including whe
 takes them for oversights, because changing one is changing what the score means and the agreement is
 the entire value of having it.
 
+**Peak calling is the second caller, admitted on exactly those terms.** *Peak calling* is yapc 0.1 with
+the IDR 2.0.3 it thresholds by, both ported rather than approximated, and its goldens are those
+programs' own output over `demo/yeast/` — yapc's functions and its `main()` loaded as they are, IDR's
+fit at the commit yapc cites — compared region for region, summit for summit and cut for cut
+(§18.10). A cut of this app's own devising is still refused: a single track is reported as a ranked
+candidate list with no significance claimed, rather than cut at a valley in its histogram or at a
+score that looked about right, because yapc's cut is IDR and nobody published another.
+
 **No contact-based contig reordering or scaffolding.** It would only be useful if the reordering could
 be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
 with nowhere to go.
@@ -6814,6 +6885,20 @@ rather than an importable module, which is what the `bin:` prefix in the generat
 and like every other it is *named* in the manifest when it is skipped. One test in the suite is not a
 comparison at all: it drives the kernel with the mirror fold switched off and records what that
 produces, because what it produces still looks like a P(s).
+
+**And three goldens are built in an environment of their own.** yapc's last release passes
+`dtype=np.int`, which numpy removed in 1.24, and IDR 2.0.3's Cython types its ranks `np.int_t`, which
+numpy 2 and Cython 3 do not have; neither is patched, since a golden from a modified reference is a
+golden from something else. `scripts/make_analysis_golden.py --only yapc yapc_idr idr` rebuilds them
+under numpy 1.23 and Cython 0.29, leaves every other golden and its manifest entry as it was, and
+records its environment's versions on the three entries it writes. They compare **exactly** where the
+answer is an integer decided by a comparison — a region's ends, its summit, which peaks each of yapc's
+six BED files holds — and to a tolerance where it is a float: a curvature to 10⁻⁶ relative, a global
+IDR to 10⁻⁴. The IDR port is held to the reference's **path** as well as its destination: on a pair
+drawn from IDR's own model it converges in the same 227 rounds to the same parameters in the last
+place, and on the demo pair — ATAC against a Pol II ChIP, which drives the EM out of its box — it
+takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported beside it, and passes
+the same 1,615 to 1,630 peaks at the six thresholds.
 
 ### 18.11 A set of scales is one picture
 
@@ -7030,7 +7115,11 @@ by the same peak, because two violins each normalised to their own width say the
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
 one against another as a scatter. A task whose every series is a sample rather than a function says
 so (`CurveSeries.mark = 'violin'`), and its figure opens as violins, one per series — *Signal by
-group*'s groups — which the mark control turns into boxes or a histogram like any other.
+group*'s groups — which the mark control turns into boxes or a histogram like any other. A box or a
+violin names its series along the abscissa, so it has **no legend and keeps no room for one**, whatever
+the legend switch says; and a violin is **cut at the grid**, because its density runs three bandwidths
+past the sample and an ordinate the task or the reader set cuts through it — uncut, the tail was drawn
+on over the names under the axis.
 
 **Bars stack where the series are parts of one whole.** A sequence's cis and trans fractions sum to
 one, and the reading is one bar split in two rather than two bars side by side whose sum the reader

@@ -98,6 +98,7 @@ function paintOf(set: FeatureSet): Parameters<typeof drawFeatures>[4] {
     font: '10px sans-serif',
     opacity: 1,
     labels: false,
+    outline: false,
     colourOf: (at: number) => variantInk(set.detail[at] ?? '', LANE),
   }
 }

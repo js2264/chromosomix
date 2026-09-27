@@ -105,6 +105,67 @@ export function nanExtent(values: ArrayLike<number>): { min: number; max: number
 }
 
 // ---------------------------------------------------------------------------
+// numpy's own order of addition
+// ---------------------------------------------------------------------------
+
+/**
+ * `numpy.add.reduce` over `values[from, from + n)`, added in **numpy's order**.
+ *
+ * For the ports (§18.9) and nothing else. A port is held to its reference's own
+ * output, and where the reference makes a decision on a sum — a convergence test
+ * on a log-likelihood, a tie between two means — a sum taken in another order is
+ * a different number in the last place and, now and then, a different decision.
+ * numpy does not add left to right: a contiguous float64 reduction is a
+ * **pairwise** sum, eight running accumulators over blocks of at most 128, and
+ * the halves of a longer run split at a multiple of eight
+ * (`loops_utils.h.src`, `pairwise_sum`). This is that function, line for line,
+ * so `np.sum` and `np.mean` in yapc and IDR are the same sums here.
+ *
+ * `NaN` is not skipped: numpy's `sum` does not skip it either, and the callers
+ * never hand it one.
+ */
+export function numpySum(values: ArrayLike<number>, from = 0, n = values.length - from): number {
+  if (n < 8) {
+    let total = 0
+    for (let i = 0; i < n; i++) total += values[from + i]
+    return total
+  }
+  if (n <= 128) {
+    let r0 = values[from]
+    let r1 = values[from + 1]
+    let r2 = values[from + 2]
+    let r3 = values[from + 3]
+    let r4 = values[from + 4]
+    let r5 = values[from + 5]
+    let r6 = values[from + 6]
+    let r7 = values[from + 7]
+    let i = 8
+    for (; i < n - (n % 8); i += 8) {
+      const at = from + i
+      r0 += values[at]
+      r1 += values[at + 1]
+      r2 += values[at + 2]
+      r3 += values[at + 3]
+      r4 += values[at + 4]
+      r5 += values[at + 5]
+      r6 += values[at + 6]
+      r7 += values[at + 7]
+    }
+    let total = r0 + r1 + (r2 + r3) + (r4 + r5 + (r6 + r7))
+    for (; i < n; i++) total += values[from + i]
+    return total
+  }
+  let half = Math.floor(n / 2)
+  half -= half % 8
+  return numpySum(values, from, half) + numpySum(values, from + half, n - half)
+}
+
+/** `numpy.mean` of `values[from, from + n)`: {@link numpySum} over the count. */
+export function numpyMean(values: ArrayLike<number>, from = 0, n = values.length - from): number {
+  return numpySum(values, from, n) / n
+}
+
+// ---------------------------------------------------------------------------
 // Correlation
 // ---------------------------------------------------------------------------
 

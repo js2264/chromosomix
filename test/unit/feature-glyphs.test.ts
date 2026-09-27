@@ -26,9 +26,10 @@ import { describe, expect, it } from 'vitest'
 import { parseBed, parseGtf } from '@/annotations/parse'
 import type { FeatureSet } from '@/annotations/types'
 import { LocusAxis } from '@/render/locus'
-import type { LaneFrame } from '@/render/lane'
+import { OUTLINE_WIDTH, type LaneFrame } from '@/render/lane'
 import {
   MAX_THICK,
+  OUTLINE_MIN,
   drawFeatures,
   featureLayoutFor,
   glyphSizes,
@@ -47,9 +48,21 @@ interface Shape {
   tip: number | null
 }
 
-function recorder(): { ctx: CanvasRenderingContext2D; shapes: Shape[]; strokes: number[] } {
+/** One stroked shape, with the ink and the width it was stroked in. */
+interface Edge extends Shape {
+  ink: string
+  width: number
+}
+
+function recorder(): {
+  ctx: CanvasRenderingContext2D
+  shapes: Shape[]
+  strokes: number[]
+  edges: Edge[]
+} {
   const shapes: Shape[] = []
   const strokes: number[] = []
+  const edges: Edge[] = []
   let pending: Shape[] = []
   let outline: Array<[number, number]> = []
   const close = (): void => {
@@ -104,6 +117,9 @@ function recorder(): { ctx: CanvasRenderingContext2D; shapes: Shape[]; strokes: 
       pending = []
     },
     stroke: () => {
+      close()
+      for (const shape of pending) edges.push({ ...shape, ink: ctx.strokeStyle, width: ctx.lineWidth })
+      pending = []
       strokes.push(1)
     },
     fillText: () => {},
@@ -114,7 +130,7 @@ function recorder(): { ctx: CanvasRenderingContext2D; shapes: Shape[]; strokes: 
     setLineDash: () => {},
     getLineDash: () => [],
   }
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, shapes, strokes }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, shapes, strokes, edges }
 }
 
 const LENGTH = 20_000
@@ -148,6 +164,7 @@ function paint(over: Partial<FeaturePaint> = {}): FeaturePaint {
     font: '10px sans-serif',
     opacity: 1,
     labels: false,
+    outline: false,
     ...over,
   }
 }
@@ -158,12 +175,12 @@ function drawn(
   kind: 'gtf' | 'segments',
   frame = frameOf(),
   over: Partial<FeaturePaint> = {},
-): { shapes: Shape[]; strokes: number[] } {
+): { shapes: Shape[]; strokes: number[]; edges: Edge[] } {
   const rules = featureLayoutFor(kind, frame.thickness, (n) => n, over.display)
   const layout = layoutFeatures(frame, axisOf(), set, rules.rows, rules.least, rules.banded)
-  const { ctx, shapes, strokes } = recorder()
+  const { ctx, shapes, strokes, edges } = recorder()
   drawFeatures(ctx, frame, set, layout, paint(over), kind)
-  return { shapes, strokes }
+  return { shapes, strokes, edges }
 }
 
 /**
@@ -255,9 +272,54 @@ describe('a transcript', () => {
     for (const part of parts) expect(part.y1 - part.y0).toBeCloseTo(thin, 5)
   })
 
-  it('strokes nothing: no chevrons along the introns or through the blocks', () => {
+  it('strokes nothing with the outline off: no chevrons along the introns or through the blocks', () => {
     expect(drawn(bed12('+'), 'segments').strokes).toHaveLength(0)
     expect(drawn(gtf('-'), 'gtf').strokes).toHaveLength(0)
+  })
+})
+
+/**
+ * The outline (§8.16): with the preference on, each block is edged in the plot's
+ * ink at the hairline a coverage track's top is drawn in — the blocks the fill
+ * drew and nothing else, and none too small for an edge to leave its colour.
+ */
+describe('the outline', () => {
+  it('edges every block of a transcript in the plot’s ink, at the track outline’s width', () => {
+    const { shapes, edges } = drawn(bed12('+'), 'segments', frameOf(), { outline: true })
+    const parts = blocks(shapes)
+    expect(parts).toHaveLength(5)
+    // The same outlines the fill drew, block for block — and not the intron,
+    // which is a hairline already.
+    expect(edges.map(({ x0, x1, y0, y1 }) => [x0, x1, y0, y1])).toEqual(
+      parts.map(({ x0, x1, y0, y1 }) => [x0, x1, y0, y1]),
+    )
+    for (const edge of edges) {
+      expect(edge.ink).toBe('#333')
+      expect(edge.width).toBe(OUTLINE_WIDTH)
+    }
+  })
+
+  it('edges a plain box, and leaves a tick its colour', () => {
+    // Two bases a pixel: the wide box is 300 pixels, the narrow one three.
+    const set = parseBed('I\t200\t800\tWIDE\t0\t.\nI\t1200\t1206\tTICK\t0\t.\n', 'peaks.bed')
+    const { shapes, edges } = drawn(set, 'segments', frameOf(), { outline: true })
+    expect(shapes).toHaveLength(2)
+    expect(edges).toHaveLength(1)
+    expect(edges[0].x1 - edges[0].x0).toBeCloseTo(300, 5)
+    expect(OUTLINE_MIN).toBeGreaterThan(3)
+  })
+
+  it('does not edge a block too thin for it, as a squished row’s untranslated end', () => {
+    // A squished lane eight pixels tall: coding blocks 5.6 pixels, and the
+    // untranslated ends three fifths of that.
+    const { shapes, edges } = drawn(bed12('+'), 'segments', frameOf(8), {
+      outline: true,
+      display: 'squished',
+    })
+    const thin = blocks(shapes).filter((part) => part.y1 - part.y0 < OUTLINE_MIN)
+    expect(thin).toHaveLength(2)
+    for (const edge of edges) expect(edge.y1 - edge.y0).toBeGreaterThanOrEqual(OUTLINE_MIN)
+    expect(edges.length).toBe(blocks(shapes).length - thin.length)
   })
 })
 

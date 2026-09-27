@@ -53,6 +53,7 @@ dist-standalone/
 gallery/
 gallery-figures/
 gallery-bacteria/
+gallery-peaks/
 
 # What notebooks/dbz-chromosome-figures.qmd fetches and makes: the store's maps
 # and references, every metacooler-run output, the figures, and what Quarto

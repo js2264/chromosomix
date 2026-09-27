@@ -824,6 +824,16 @@ describe('sameRecipe', () => {
   })
 })
 
+/**
+ * The annotations worker's client, as far as a run is concerned: a run goes
+ * through `cancellable`, the door a Stop can reach it by (`runStep`).
+ */
+function trackClient(answer: (payload: unknown) => Promise<TaskResult>): {
+  cancellable: (payload: unknown) => { promise: Promise<TaskResult>; cancel: () => void }
+} {
+  return { cancellable: (payload) => ({ promise: answer(payload), cancel: () => {} }) }
+}
+
 describe('a view with no map', () => {
   it('refuses rather than queueing, and never builds a worker', () => {
     const { runner, fake } = harness(null)
@@ -848,12 +858,10 @@ describe('a view with no map', () => {
    */
   it('runs a track-only task against the genome, with no file to mount', async () => {
     const sent: unknown[] = []
-    const tracks = {
-      request: (payload: unknown) => {
-        sent.push(payload)
-        return Promise.resolve(trackResult('metaplot'))
-      },
-    }
+    const tracks = trackClient((payload) => {
+      sent.push(payload)
+      return Promise.resolve(trackResult('metaplot'))
+    })
     const { runner, fake, finished } = harness(null, null, [], { block: null, map: 'lead' }, {
       // The genome the tracks were loaded against: a bigWig, and not a cooler.
       source: () => ({ uri: 'peaks.bw', source: { kind: 'remote', url: 'peaks.bw' } }),
@@ -879,7 +887,7 @@ describe('a view with no map', () => {
     // The other half of the same rule, and the one that keeps it from coming
     // back: what a track task needs is tracks. A target with no byte source is
     // not a broken target here, because nothing in this chain mounts one.
-    const tracks = { request: () => Promise.resolve(trackResult('trackcorr')) }
+    const tracks = trackClient(() => Promise.resolve(trackResult('trackcorr')))
     const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
       source: () => null,
       annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
@@ -896,12 +904,10 @@ describe('a view with no map', () => {
     // nor the origins — a declared circle was read as a line, which splits an
     // origin near its first base between the two ends (§8.15).
     const sent: Array<{ framing?: AnalysisFraming }> = []
-    const tracks = {
-      request: (payload: { framing?: AnalysisFraming }) => {
-        sent.push(payload)
-        return Promise.resolve(trackResult('oriter'))
-      },
-    }
+    const tracks = trackClient((payload) => {
+      sent.push(payload as { framing?: AnalysisFraming })
+      return Promise.resolve(trackResult('oriter'))
+    })
     const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
       context: () => ({ ...context(null), circular: ['chr'], origins: { chr: 1_000 } }),
       annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,

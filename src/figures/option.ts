@@ -222,11 +222,16 @@ export function optionOf(
               : { orient: 'horizontal', bottom: 4, left: 'center' }),
         }
 
+  const categorical = isCategorical(style.mark)
+  // A box or a violin has no legend (`distributionOption`), so it keeps no room
+  // for one either: a strip kept for a list that is never drawn is an empty
+  // band down one side of the figure.
+  const edge = categorical ? 'none' : style.legend
   const grid = {
     left: 8,
-    right: style.legend === 'right' ? LEGEND_WIDTH : 16,
-    top: style.legend === 'top' ? LEGEND_HEIGHT + 8 : 16,
-    bottom: style.legend === 'bottom' ? LEGEND_HEIGHT + 8 : 8,
+    right: edge === 'right' ? LEGEND_WIDTH : 16,
+    top: edge === 'top' ? LEGEND_HEIGHT + 8 : 16,
+    bottom: edge === 'bottom' ? LEGEND_HEIGHT + 8 : 8,
     // The modern spelling of `containLabel`, and stricter than it was: `'all'`
     // (the default under this mode) keeps the axis *names* inside the box too,
     // so a figure whose ordinate is called "contact probability" does not push
@@ -234,7 +239,6 @@ export function optionOf(
     outerBoundsMode: 'same',
   }
 
-  const categorical = isCategorical(style.mark)
   const built = categorical
     ? distributionOption(spec, style, theme, shown)
     : xyOption(spec, style, theme, shown)
@@ -636,6 +640,10 @@ function violinSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme):
     // sixteen medians with the shapes drawn far outside it, and a datum at zero
     // would have been filtered out by a log axis before `renderItem` ever ran.
     data: shapes[at].at.map((value) => [at, value]),
+    // Cut at the grid. The support runs three bandwidths past the sample, and an
+    // ordinate the task or the reader set cuts through it; a custom series is
+    // not clipped by default, so the tail was drawn on over the category names.
+    clip: true,
     renderItem: (
       params: { dataIndex: number },
       api: {

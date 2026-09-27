@@ -17,10 +17,12 @@ import { runMotif } from './motif'
 import { runComposition } from './composition'
 import { runOriTer } from './oriter'
 import { runOverlap } from './overlap'
+import { runPeaks } from './peaks'
 import { runTrackCorrelation } from './trackcorr'
 
 export const TRACK_RUNNERS: Record<string, TrackTaskRunner> = {
   motif: runMotif,
+  peaks: runPeaks,
   composition: runComposition,
   oriter: runOriTer,
   metaplot: runMetaplot,
