@@ -351,41 +351,33 @@ show(pd.DataFrame([{'package': 'metacooler-run', 'version': APP_VERSION},
 
 ## 1 · Diamond insulation
 
-**metacooler-run** `insulation`: for each bin, the contacts in a square of `window × window` bins
-beside the diagonal, as a log2 ratio to the chromosome's mean; boundaries where the score has a
-minimum at least `prominence` deep. **Reference:** `cooltools.insulation`, with the same window,
-the same diagonals left out, the same floor on how much of the window must be present, and the same
-boundary threshold.
+**metacooler-run** `insulation`: cooltools' definition, to the pixel — for each bin, the mean of the
+valid cells of the `window × window` square cornered on its own diagonal pixel, the diagonals nearer
+than `ignoreDiags` left out, divided by the median over its chromosome and taken in log2; boundaries
+at the minima whose prominence reaches the threshold, found over the bins whose diamond holds at least
+`minValid` of the fullest one's cells. **Reference:** `cooltools.insulation`, with the same window,
+diagonals, floor and threshold.
 
 | | metacooler-run | cooltools |
 |---|---|---|
 | window | `--window 10` (bins, 100 kb) | `window_bp=[100_000]` |
-| diagonals left out | `--ignoreDiags 2` | `ignore_diags=2` |
-| least share of the window present | `--minValid 0.5` | `min_frac_valid_pixels=0.5` |
-| boundary threshold | `--prominence 0.2` | `threshold=0.2` |
+| diagonals left out | `--ignoreDiags 2` (default) | `ignore_diags=2` |
+| share of the fullest diamond a call needs | `--minValid 0.5` (default) | `min_frac_valid_pixels=0.5` |
+| boundary threshold | `--prominence 0.2` (default) | `threshold=0.2` |
 | counts | balanced, the file's weights | `clr_weight_name='weight'` |
-
-**The two are not one definition**, and `scripts/make_analysis_golden.py`, which holds this task to
-cooltools in the unit tests, lists how. cooltools **averages** the valid pixels of a window whose rows
-include the scored bin, and normalises by the chromosome's **median**; the app **sums** the pixels
-present in a window that stops short of it, and normalises by the **mean**. Over a complete window a
-sum is a mean times a constant, and either normalisation is one constant per chromosome, so the two
-scores should follow each other there, half a bin apart. Where the window reaches a bin the balancer
-dropped, a sum loses what is missing and a mean does not — so the comparison is split by whether the
-window is complete.
 
 ```{python}
 INS = WORK / 'insulation'
 MOUSE_10K = f'{rel(MOUSE)}::/resolutions/10000'
 mr('insulation', MOUSE_10K, '--window', 10, out=INS / 'app', name='insulation', analysis='Diamond insulation')
-reference('cooltools-insulation', 'Diamond insulation', 'cooltools', [PYTHON, script('cooltools_insulation', r'''
+reference('cooltools-insulation', 'Diamond insulation', 'cooltools', [PYTHON, script('cooltools_insulation', r"""
     import sys, cooler, cooltools
     uri, out = sys.argv[1:]
     table = cooltools.insulation(cooler.Cooler(uri), [100_000], ignore_diags=2,
                                  clr_weight_name='weight', min_frac_valid_pixels=0.5,
                                  threshold=0.2, nproc=__THREADS__)
     table.to_csv(out, sep='\t', index=False)
-'''), MOUSE_10K, OUT], out=INS / 'cooltools.tsv')
+"""), MOUSE_10K, OUT], out=INS / 'cooltools.tsv')
 
 clr10 = cooler.Cooler(f'{MOUSE}::/resolutions/10000')
 bins10 = clr10.bins()[:]
@@ -395,90 +387,47 @@ app_ins = table(one(INS / 'app', '*.insulation-w10.tsv'))
 assert (app_ins['bin'].to_numpy() == np.arange(len(bins10))).all()
 a_ins = app_ins['value'].to_numpy(float)
 b_ins = ref_ins['log2_insulation_score_100000'].to_numpy(float)
-
-
-def complete_windows(bins, window):
-    """Bins whose diamond lies wholly inside the chromosome and holds no dropped bin."""
-    valid = np.isfinite(bins['weight'].to_numpy(float))
-    out = np.zeros(len(bins), bool)
-    for idx in bins.groupby('chrom', observed=True, sort=False).indices.values():
-        v = np.concatenate([[0], np.cumsum(valid[idx])])
-        i = np.arange(len(idx))
-        lo, hi = i - window, i + window + 1
-        inside = (lo >= 0) & (hi <= len(idx))
-        count = np.where(inside, v[np.clip(hi, 0, len(idx))] - v[np.clip(lo, 0, len(idx))], 0)
-        out[idx] = inside & (count == 2 * window + 1)
-    return out
-
-
-complete = complete_windows(bins10, 10)
 both = np.isfinite(a_ins) & np.isfinite(b_ins)
-rows = []
-for label, where in (('every bin both score', both), ('complete windows', both & complete),
-                     ('windows touching a dropped bin', both & ~complete)):
-    rows.append({'bins': label, 'n': int(where.sum()), 'Pearson r': pearson(a_ins[where], b_ins[where]),
-                 'Spearman ρ': spearman(a_ins[where], b_ins[where])})
-ins_table = pd.DataFrame(rows)
-show(ins_table, n='{:,}')
-```
+ins_diff = np.abs(a_ins[both] - b_ins[both])
 
-```{python}
 app_b = table(one(INS / 'app', '*.insulation-boundaries.tsv'))
 ref_b = ref_ins.loc[ref_ins['is_boundary_100000'].astype(bool), ['chrom', 'start', 'boundary_strength_100000']]
-
-
-def nearest(calls, others):
-    """For each call, the distance to the nearest call of the other set on its chromosome."""
-    out = np.full(len(calls), np.inf)
-    for chrom, idx in calls.groupby('chrom', observed=True).indices.items():
-        theirs = np.sort(others.loc[others['chrom'] == chrom, 'start'].to_numpy())
-        if not len(theirs):
-            continue
-        mine = calls['start'].to_numpy()[idx]
-        k = np.searchsorted(theirs, mine)
-        left = np.abs(mine - theirs[np.clip(k - 1, 0, len(theirs) - 1)])
-        right = np.abs(mine - theirs[np.clip(k, 0, len(theirs) - 1)])
-        out[idx] = np.minimum(left, right)
-    return out
-
-
-rows = []
-for label, mine, theirs in (
-        ('every call', app_b, ref_b),
-        ('calls at least 0.5 deep', app_b[app_b['score'] >= 0.5],
-         ref_b[ref_b['boundary_strength_100000'] >= 0.5])):
-    d_app, d_ref = nearest(mine.reset_index(drop=True), theirs), nearest(theirs.reset_index(drop=True), mine)
-    row = {'boundaries': label, 'metacooler-run': len(mine), 'cooltools': len(theirs)}
-    for bins_off in (0, 1, 2):
-        row[f'≤ {bins_off} bin'] = f'{(d_app <= bins_off * 10_000).mean():.1%} · {(d_ref <= bins_off * 10_000).mean():.1%}'
-    rows.append(row)
-bnd_table = pd.DataFrame(rows)
-show(bnd_table, **{'metacooler-run': '{:,}', 'cooltools': '{:,}'})
+calls = app_b[['chrom', 'start', 'score']].merge(ref_b, on=['chrom', 'start'], how='outer', indicator=True)
+same_calls = calls[calls['_merge'] == 'both']
+strength_diff = np.abs(same_calls['score'] - same_calls['boundary_strength_100000'])
+measures({
+    'bins both score': f'{both.sum():,}',
+    'bins only one of them scores': f'{int((np.isfinite(a_ins) != np.isfinite(b_ins)).sum()):,}',
+    'score, median |difference|': f'{np.median(ins_diff):.1e}',
+    'score, max |difference|': f'{ins_diff.max():.1e}',
+    'boundaries, metacooler-run': f'{len(app_b):,}',
+    'boundaries, cooltools': f'{len(ref_b):,}',
+    'boundaries at the same bin': f'{len(same_calls):,}',
+    'boundaries in one only': f"{int((calls['_merge'] != 'both').sum()):,}",
+    'boundary strength, max |difference|': f'{strength_diff.max():.1e}',
+})
 ```
-
-Each boundary cell reads *share of metacooler-run's calls with a cooltools call that near · share
-of cooltools' calls with a metacooler-run call that near*.
 
 ```{python}
 #| label: fig-insulation
-#| fig-cap: "Diamond insulation, metacooler-run against cooltools, mouse Hi-C at 10 kb, 100 kb window. a, b, every bin both score, split by whether the window is complete; c, a stretch of chr11, dropped bins shaded."
-r_all = ins_table['Pearson r']
-TEXT['ins_all'] = f'{r_all[0]:.3f}'
-TEXT['ins_complete'] = f'{r_all[1]:.3f}'
-TEXT['ins_touching'] = f'{r_all[2]:.3f}'
-TEXT['ins_share_touching'] = f'{(both & ~complete).sum() / both.sum():.0%}'
-TEXT['ins_within1'] = bnd_table.loc[0, '≤ 1 bin'].split(' · ')[0]
-TEXT['ins_strong_within1'] = bnd_table.loc[1, '≤ 1 bin'].split(' · ')[0]
-TEXT['ins_exact'] = bnd_table.loc[0, '≤ 0 bin'].split(' · ')[0]
+#| fig-cap: "Diamond insulation, metacooler-run against cooltools, mouse Hi-C at 10 kb, 100 kb window. a, every bin both score; b, the strength of every boundary both call; c, a stretch of chr11, dropped bins shaded."
+TEXT['ins_n'] = f'{both.sum():,}'
+TEXT['ins_max'] = f'{ins_diff.max():.1e}'
+TEXT['ins_calls'] = f'{len(same_calls):,}'
+TEXT['ins_only'] = f"{int((calls['_merge'] != 'both').sum())}"
+TEXT['ins_strength'] = f'{strength_diff.max():.1e}'
 
 fig = plt.figure(figsize=(11, 7.2), layout='constrained')
 grid = fig.add_gridspec(2, 2, height_ratios=[1.15, 1])
-ax = fig.add_subplot(grid[0, 0])
-agreement(ax, b_ins[both & complete], a_ins[both & complete], 'cooltools (log2)', 'metacooler-run (log2)',
-          'a  complete windows')
+agreement(fig.add_subplot(grid[0, 0]), b_ins[both], a_ins[both], 'cooltools (log2)', 'metacooler-run (log2)',
+          'a  every bin')
 ax = fig.add_subplot(grid[0, 1])
-agreement(ax, b_ins[both & ~complete], a_ins[both & ~complete], 'cooltools (log2)', 'metacooler-run (log2)',
-          'b  windows touching a dropped bin')
+ax.scatter(same_calls['boundary_strength_100000'], same_calls['score'], s=4, color=APP_COLOUR, alpha=0.35, lw=0,
+           rasterized=True)
+identity(ax, 0, same_calls['boundary_strength_100000'].max())
+ax.set(xlabel='cooltools boundary strength', ylabel='metacooler-run prominence', title='b  every boundary')
+ax.text(0.03, 0.97, f'{len(same_calls):,} boundaries\nmax |difference| {strength_diff.max():.1e}',
+        transform=ax.transAxes, va='top', fontsize=8, color=INK2)
 ax = fig.add_subplot(grid[1, :])
 lo, hi = clr10.extent('chr11')
 stretch = slice(lo + 3_000, lo + 4_000)
@@ -486,29 +435,23 @@ x = bins10['start'].to_numpy()[stretch] / 1e6
 dropped = ~np.isfinite(bins10['weight'].to_numpy(float)[stretch])
 for pos in x[dropped]:
     ax.axvspan(pos, pos + 0.01, color=MISSING, lw=0, zorder=0)
-ax.plot(x, b_ins[stretch], color=REF, lw=2, label='cooltools')
+ax.plot(x, b_ins[stretch], color=REF, lw=3, label='cooltools')
 ax.plot(x, a_ins[stretch], color=APP_COLOUR, lw=1.2, label='metacooler-run')
 ax.set(xlabel='chr11 (Mb)', ylabel='insulation (log2)', title='c  chr11, 30–40 Mb')
 ax.legend(loc='lower left', ncols=2)
 plt.show()
 ```
 
-**Over complete windows the two scores correlate at r = `{python} TEXT['ins_complete']`**, and over
-every bin both score at `{python} TEXT['ins_all']`: the gap is the `{python} TEXT['ins_share_touching']`
-of bins whose window reaches a dropped bin — many, on this map at 10 kb — where they correlate at only
-`{python} TEXT['ins_touching']`, because one definition sums what is left and the other averages it.
-Boundaries: `{python} TEXT['ins_within1']` of the app's calls have a cooltools call within one bin
-(`{python} TEXT['ins_strong_within1']` of the calls at least 0.5 deep), and only
-`{python} TEXT['ins_exact']` fall on the very same bin — which is what two windows half a bin apart
-give. These are the differences the golden documents; the kernel itself (`diamondSums`) is held to
-cooltools cell for cell in the unit tests.
+**The two are the same numbers**: over the `{python} TEXT['ins_n']` bins both score — every bin either
+scores, the ends of each chromosome and the edges of every dropped row included — the largest
+difference is `{python} TEXT['ins_max']`, the float32 the app reads a map in; and they call the same
+`{python} TEXT['ins_calls']` boundaries, `{python} TEXT['ins_only']` in one only, with strengths within
+`{python} TEXT['ins_strength']` — the six significant digits the app writes a prominence to.
 
 ```{python}
 record('Diamond insulation', 'mouse Hi-C, 10 kb, window 100 kb', f"cooltools {VERSIONS['cooltools']}",
-       f"r = {TEXT['ins_complete']} over complete windows ({TEXT['ins_all']} over all); "
-       f"{TEXT['ins_within1']} of boundaries within 1 bin",
-       'Correlated; definitions differ by design (sum vs mean, window offset)',
-       apps=['insulation'], refs=['cooltools-insulation'])
+       f"max |difference| {TEXT['ins_max']} over {TEXT['ins_n']} bins; the same {TEXT['ins_calls']} boundaries",
+       'Identical (float32)', apps=['insulation'], refs=['cooltools-insulation'])
 ```
 
 ## 2 · Directionality index
@@ -1048,12 +991,15 @@ record('Loops (chromosight)', 'yeast micro-C G2/M, 1 kb', f"chromosight {VERSION
 
 ## 7 · Reproducibility (HiCRep)
 
-**metacooler-run** `hicrep`: HiCRep's stratum-adjusted correlation (Yang et al. 2017) — both maps
-smoothed with a 2D mean filter of half-width `h`, a Pearson correlation on each diagonal, and the
-diagonals pooled with Cochran–Mantel–Haenszel weights. **References:** two published Python
-implementations, `hicrep` (Lin) and `hicreppy`, which differ between themselves in details — hicrep
-leaves the main diagonal out and drops the positions where both maps are zero; hicreppy keeps both —
-so the app is compared with each, and the two with each other, which is the yardstick.
+**metacooler-run** `hicrep`: HiCRep's stratum-adjusted correlation (Yang et al. 2017), computed as
+`hicrep` 0.2.6 computes it — each map's upper triangle, with its main diagonal and every diagonal past
+the furthest compared set to zero, smoothed with a 2D mean filter of half-width `h`; a Pearson
+correlation on each diagonal, over the positions where either map has a contact; and the diagonals
+pooled with the variance-stabilised weights, `(n + 1)/12` for a diagonal of `n` positions.
+**References:** the two published Python implementations, `hicrep` (Lin) and `hicreppy`, which differ
+between themselves — hicreppy keeps the main diagonal and the positions where both maps are zero,
+smooths the whole matrix, and computes its weights from ranks with ties — so the app is compared with
+each, and the two with each other, which is the yardstick.
 
 | | metacooler-run | hicrep | hicreppy |
 |---|---|---|---|
@@ -1127,56 +1073,22 @@ for x, y in (('metacooler-run', 'hicrep'), ('metacooler-run', 'hicreppy'), ('hic
     rows.append({'comparison': f'{x} − {y}', 'pairs × chromosomes': len(scc), 'mean difference': d.mean(),
                  'max |difference|': d.abs().max(), 'Pearson r': pearson(scc[x].to_numpy(), scc[y].to_numpy())})
 scc_table = pd.DataFrame(rows)
-show(scc_table, precision=3)
-```
-
-The app's SCC sits well above both references, which agree with each other. The per-diagonal
-correlations show where: the same two maps on chr1, the app's own table of correlation by separation
-against the per-diagonal correlation of the same matrices smoothed by hicreppy's own `smooth` —
-`hicreppy.get_scc`'s first step for each diagonal, `pearsonr(mat1.diagonal(d), mat2.diagonal(d))`.
-
-```{python}
-import hicreppy.utils.mat_process as cu
-
-PAIR = ('G2', '60m')
-mr('hicrep', URIS[PAIR[0]], '--against', URIS[PAIR[1]], '--maxDistance', STRATA, '--smooth', H, '--no-balance',
-   '--sequences', 'chr1', out=HR / 'app-chr1', name='hicrep-chr1', analysis='Reproducibility (HiCRep)',
-   label='chr1, G2 vs 60m', bench=False)
-strata_app = table(one(HR / 'app-chr1', '*.hicrep-strata.tsv')).iloc[:, 1].to_numpy(float)
-
-
-def smoothed(label):
-    raw = cooler.Cooler(f'{CHICKEN[label]}::/resolutions/{RES}').matrix(sparse=True, balance=False).fetch('chr1')
-    return cu.smooth(cu.diag_trim(raw.todia(), STRATA + 1 + H).tocoo(), H).tocsr()
-
-
-s1, s2 = smoothed(PAIR[0]), smoothed(PAIR[1])
-strata_ref = np.array([stats.pearsonr(s1.diagonal(d), s2.diagonal(d))[0] for d in range(len(strata_app))])
-pooled = scc[(scc['a'] == PAIR[0]) & (scc['b'] == PAIR[1]) & (scc['sequence'] == 'chr1')].iloc[0]
-measures({'per-diagonal r, Pearson r between the two curves': f'{stats.pearsonr(strata_app, strata_ref)[0]:.5f}',
-          'per-diagonal r, max |difference|': f'{np.abs(strata_app - strata_ref).max():.4f}',
-          'plain mean of the per-diagonal r': f'{strata_app.mean():.3f}',
-          'SCC, metacooler-run': f"{pooled['metacooler-run']:.3f}", 'SCC, hicrep': f"{pooled['hicrep']:.3f}",
-          'SCC, hicreppy': f"{pooled['hicreppy']:.3f}"})
+show(scc_table, precision=4, **{'mean difference': '{:+.1e}', 'max |difference|': '{:.1e}'})
 ```
 
 ```{python}
 #| label: fig-hicrep
-#| fig-cap: "HiCRep on seven chicken DT40 maps, every pair, every chromosome of at least 5.1 Mb, at 100 kb. a–c, each implementation against the others; d, chr1 of G2 against 60 min: the correlation of each diagonal, and the SCC each tool pools them into."
-TEXT['hr_app_lin'] = f"{scc_table.loc[0, 'mean difference']:+.2f}"
-TEXT['hr_app_py'] = f"{scc_table.loc[1, 'mean difference']:+.2f}"
+#| fig-cap: "HiCRep on seven chicken DT40 maps, every pair, every chromosome of at least 5.1 Mb, at 100 kb. a–c, each implementation against the others; d, metacooler-run less hicrep, value by value."
+TEXT['hr_n'] = f'{len(scc)}'
+app_lin = scc['metacooler-run'] - scc['hicrep']
+TEXT['hr_app_lin_max'] = f'{app_lin.abs().max():.1e}'
 TEXT['hr_lin_py'] = f"{scc_table.loc[2, 'mean difference']:+.2f}"
 TEXT['hr_lin_py_max'] = f"{scc_table.loc[2, 'max |difference|']:.2f}"
 TEXT['hr_lin_py_r'] = f"{scc_table.loc[2, 'Pearson r']:.2f}"
-TEXT['hr_app_r'] = f"{max(scc_table.loc[0, 'Pearson r'], scc_table.loc[1, 'Pearson r']):.2f}"
-TEXT['hr_n'] = f'{len(scc)}'
-TEXT['hr_strata_r'] = f"{stats.pearsonr(strata_app, strata_ref)[0]:.4f}"
-TEXT['hr_chr1_app'] = f"{pooled['metacooler-run']:.2f}"
-TEXT['hr_chr1_refs'] = f"{pooled['hicrep']:.2f} and {pooled['hicreppy']:.2f}"
-TEXT['hr_chr1_mean'] = f'{strata_app.mean():.2f}'
+TEXT['hr_app_py_r'] = f"{scc_table.loc[1, 'Pearson r']:.2f}"
 
-fig = plt.figure(figsize=(11, 7.6), layout='constrained')
-grid = fig.add_gridspec(2, 3, height_ratios=[1, 1.1])
+fig = plt.figure(figsize=(11, 7.4), layout='constrained')
+grid = fig.add_gridspec(2, 3, height_ratios=[1, 0.8])
 for col, (x, y, title) in enumerate((('hicrep', 'metacooler-run', 'a'), ('hicreppy', 'metacooler-run', 'b'),
                                      ('hicrep', 'hicreppy', 'c'))):
     ax = fig.add_subplot(grid[0, col])
@@ -1185,46 +1097,29 @@ for col, (x, y, title) in enumerate((('hicrep', 'metacooler-run', 'a'), ('hicrep
     ax.set(xlim=(0, 1), ylim=(0, 1), xlabel=f'{x} SCC', ylabel=f'{y} SCC', title=f'{title}  {y} vs {x}')
     ax.set_aspect('equal')
 ax = fig.add_subplot(grid[1, :])
-sep = np.arange(len(strata_app)) * RES / 1e6
-ax.plot(sep, strata_ref, color=REF2, lw=3, label='per-diagonal r, hicreppy smoothing')
-ax.plot(sep, strata_app, color=APP_COLOUR, lw=1.2, label='per-diagonal r, metacooler-run')
-placed = []
-for value, colour, name in sorted(((pooled['metacooler-run'], APP_COLOUR, 'SCC, metacooler-run'),
-                                   (pooled['hicrep'], REF, 'SCC, hicrep'), (pooled['hicreppy'], REF2, 'SCC, hicreppy'))):
-    ax.hlines(value, 0, sep.max(), color=colour, lw=1, ls=(0, (4, 3)))
-    label_at = max(value, placed[-1] + 0.05) if placed else value
-    placed.append(label_at)
-    ax.text(sep.max() + 0.1, label_at, f'{name} {value:.2f}', color=INK2, fontsize=8, va='center', ha='left')
-ax.set(xlim=(0, sep.max() * 1.3), ylim=(0, 1.02), xlabel='separation (Mb)', ylabel='Pearson r',
-       title='d  chr1, G2 vs 60 min: each diagonal, and the pooled SCC')
-ax.legend(loc='lower left')
+ax.hist(app_lin * 1e5, bins=np.linspace(-6, 6, 49), color=APP_COLOUR)
+for edge in (-5, 5):
+    ax.axvline(edge, color=INK2, lw=1, ls=(0, (4, 3)))
+ax.set(xlabel='metacooler-run − hicrep (×10⁻⁵)', ylabel='pairs × chromosomes',
+       title='d  every value, against the rounding of the four decimals the app writes (dashed)')
 plt.show()
 ```
 
-**This comparison fails, and the figure says why.** The two references follow each other closely
-(r = `{python} TEXT['hr_lin_py_r']` over the `{python} TEXT['hr_n']` values, mean difference
-`{python} TEXT['hr_lin_py']`, at most `{python} TEXT['hr_lin_py_max']` apart), while the app's SCC
-follows neither (r ≤ `{python} TEXT['hr_app_r']`) and sits on average `{python} TEXT['hr_app_lin']`
-above hicrep and `{python} TEXT['hr_app_py']` above hicreppy. Its **per-diagonal** correlations are
-the references' (r = `{python} TEXT['hr_strata_r']` between the two curves in d), so the smoothing
-and the correlation are right and the difference is in the **pooling**: on chr1 the app pools
-diagonals whose correlation is mostly around `{python} TEXT['hr_chr1_mean']` into
-`{python} TEXT['hr_chr1_app']`, where hicrep and hicreppy give `{python} TEXT['hr_chr1_refs']`. The
-weight each diagonal gets is the cause. `src/analysis/hicrep.ts` weights a diagonal by
-`N √(var₁ · var₂)` of the smoothed **counts**, which on raw counts is dominated by the few diagonals
-nearest the main one, where the counts are largest and the correlation highest. Both references — and
-the original R package — take that variance of the **ranks** (`vstran`: hicrep's `varVstran`,
-hicreppy's `vstrans`), which depends on little but the number of positions, so every diagonal counts
-about equally. The app's port does not reproduce the reference here; no source was changed for this
-notebook.
+**metacooler-run gives hicrep's coefficient**: over the `{python} TEXT['hr_n']` values — 21 pairs of
+maps by 26 chromosomes — the two never differ by more than `{python} TEXT['hr_app_lin_max']`, which is
+the rounding of the four decimals the app writes an SCC to; the unit tests hold the same kernel to
+hicrep's own `sccByDiag` at twelve decimals. hicreppy stands where it stood against hicrep
+(r = `{python} TEXT['hr_lin_py_r']`, mean difference `{python} TEXT['hr_lin_py']`, at most
+`{python} TEXT['hr_lin_py_max']` apart), and so against the app (r = `{python} TEXT['hr_app_py_r']`):
+its main diagonal, its smoothing of the whole matrix and its weights are its own.
 
 ```{python}
 record('Reproducibility (HiCRep)', 'chicken DT40, 7 maps, 100 kb, raw counts',
        f"hicrep {VERSIONS['hicrep']}; hicreppy {VERSIONS['hicreppy']}",
-       f"SCC {TEXT['hr_app_lin']} vs hicrep, {TEXT['hr_app_py']} vs hicreppy (the references differ by {TEXT['hr_lin_py']}); "
-       f"per-diagonal r agree (r = {TEXT['hr_strata_r']})",
-       'Differs: diagonals weighted by count variance, not rank variance',
-       apps=['hicrep', 'hicrep-chr1'], refs=['hicrep', 'hicreppy'])
+       f"within {TEXT['hr_app_lin_max']} of hicrep over {TEXT['hr_n']} values, the 4 decimals written; "
+       f"hicreppy {TEXT['hr_lin_py']} from both",
+       'Identical to hicrep; hicreppy differs from both, as from each other',
+       apps=['hicrep'], refs=['hicrep', 'hicreppy'])
 ```
 
 ## 8 · 3D model (pastis-NB)
@@ -1429,13 +1324,12 @@ summary.style.hide(axis='index').set_table_styles([
 ])
 ```
 
-Five of the eight reproduce their reference: the directionality index, P(s), yapc's candidates and
-chromosight's loops **exactly** — to the float32 the app computes in, or the digits it writes — and
-compartments give the **same eigenvectors**. The 3D model **fits the map as well as pastis'** and has
-its shape, a little further from pastis within chromosomes than pastis' own runs are from one another.
-Insulation **correlates** with cooltools where the two definitions agree, over complete windows, and
-parts from it where they do not, by design. **HiCRep does not reproduce its reference**: its
-per-diagonal correlations are the references', and the weights that pool them are not.
+Seven of the eight reproduce their reference. Six **exactly** — diamond insulation, the
+directionality index, P(s), yapc's candidates, chromosight's loops and HiCRep, to the float32 the app
+computes in or the digits it writes — and compartments give the **same eigenvectors**. The 3D model
+**fits the map as well as pastis'** and has its shape, a little further from pastis within chromosomes
+than pastis' own runs are from one another: its dispersion and its start depart from the paper on
+purpose.
 
 What this notebook does not cover, and where it is covered instead: P(s) as a density (HiContacts, in
 R) and yapc's reproducibility test with two replicates (IDR 2.0.3) are held to their references by the
@@ -1454,20 +1348,19 @@ for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref[
 
 ## Time
 
-Every command in the summary that produced a compared result is timed `{python} str(RUNS)` times —
-each `metacooler-run` command, and each reference as it ran (for pastis, the first seed; the chr1
-HiCRep run behind panel d is not timed, being a diagnosis rather than a result). Each run is a
-**fresh process**, started from this notebook exactly as the summary prints it but writing to a
-scratch folder, so its time includes starting up: Node loading `metacooler-run`, Python importing a
-reference's packages. Two bare start-ups are timed beside them for scale. The runs go **round
-robin** — every command once, then every command again — so that whatever else the machine was doing
-is spread across all of them rather than landing on one.
+Every command in the summary is timed `{python} str(RUNS)` times — each `metacooler-run` command, and
+each reference as it ran (for pastis, the first seed). Each run is a **fresh process**, started from
+this notebook exactly as the summary prints it but writing to a scratch folder, so its time includes
+starting up: Node loading `metacooler-run`, Python importing a reference's packages. Two bare
+start-ups are timed beside them for scale. The runs go **round robin** — every command once, then
+every command again — so that whatever else the machine was doing is spread across all of them rather
+than landing on one.
 
-**Wall** time is what a reader waits. **CPU** time — user and system, of the process and every
-process it started — says how many cores that took. `metacooler-run` computes on one thread.
-cooltools' insulation and P(s), and chromosight, were given `{python} str(THREADS)` processes, and
-the numerical libraries under every Python reference may spread their linear algebra over several
-cores on their own; the *cores busy* column says what each command used.
+**What is counted is CPU time**: user and system, of the process and of every process it started —
+the work a command does, whatever machine it runs on. `metacooler-run` computes on one thread;
+cooltools' insulation and P(s), and chromosight, were given `{python} str(THREADS)` processes, and the
+numerical libraries under every Python reference may spread their linear algebra over several cores on
+their own. Their CPU time is the sum over all of them.
 
 ```{python}
 BENCH = WORK / 'benchmark'
@@ -1475,15 +1368,13 @@ ANALYSES = [row['Analysis'] for row in SUMMARY]
 
 
 def timed(argv, env=None):
-    """Wall and CPU seconds of one command, run from work/validation/ as the others were."""
+    """CPU seconds of one command and every process it started, run from work/validation/."""
     before = resource.getrusage(resource.RUSAGE_CHILDREN)
-    start = time.perf_counter()
     run = subprocess.run(argv, capture_output=True, text=True, cwd=WORK, env=env)
-    wall = time.perf_counter() - start
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     if run.returncode:
         raise RuntimeError(f'{typed(argv)}\n{run.stderr[-3000:]}')
-    return wall, (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+    return (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
 
 
 def jobs():
@@ -1525,10 +1416,10 @@ def benchmark():
             scratch = BENCH / 'scratch' / job['name']
             shutil.rmtree(scratch, ignore_errors=True)
             scratch.mkdir(parents=True)
-            wall, cpu = timed(job['argv'](scratch), job['env'])
+            cpu = timed(job['argv'](scratch), job['env'])
             shutil.rmtree(scratch, ignore_errors=True)
             rows.append({'order': i, 'analysis': job['analysis'], 'tool': job['tool'], 'variant': job['label'],
-                         'run': run, 'wall s': wall, 'CPU s': cpu})
+                         'run': run, 'CPU s': cpu})
     (BENCH / 'machine.json').write_text(json.dumps(machine(), indent=1))
     return pd.DataFrame(rows)
 
@@ -1543,16 +1434,13 @@ measures(json.loads((BENCH / 'machine.json').read_text()))
 ```{python}
 #| column: page
 key = ['order', 'analysis', 'tool', 'variant']
-wide = times.pivot_table(index=key, columns='run', values='wall s').reset_index()
+wide = times.pivot_table(index=key, columns='run', values='CPU s').reset_index()
 wide.columns = [f'run {c}' if isinstance(c, (int, np.integer)) else c for c in wide.columns]
-stats_ = times.groupby(key).agg(mean=('wall s', 'mean'), sd=('wall s', 'std'), cpu=('CPU s', 'mean')).reset_index()
+stats_ = times.groupby(key).agg(mean=('CPU s', 'mean'), sd=('CPU s', 'std')).reset_index()
 wide = wide.merge(stats_, on=key).sort_values('order')
-wide['wall, mean ± sd'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(wide['mean'], wide['sd'])]
-wide['CPU, mean'] = wide['cpu']
-wide['cores busy'] = wide['cpu'] / wide['mean']
+wide['CPU, mean ± sd'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(wide['mean'], wide['sd'])]
 run_columns = [f'run {r}' for r in range(1, RUNS + 1)]
-show(wide[['analysis', 'tool', 'variant', *run_columns, 'wall, mean ± sd', 'CPU, mean', 'cores busy']],
-     precision=2, **{'cores busy': '{:.1f}'})
+show(wide[['analysis', 'tool', 'variant', *run_columns, 'CPU, mean ± sd']], precision=2)
 ```
 
 ```{python}
@@ -1564,22 +1452,18 @@ TEXT['t_app'] = f"{mine['mean'].min():.1f}–{mine['mean'].max():.0f} s"
 TEXT['t_ref'] = f"{theirs['mean'].min():.1f}–{theirs['mean'].max():.0f} s"
 TEXT['t_node'] = f"{boot['metacooler-run']:.2f} s"
 TEXT['t_python'] = f"{boot['python']:.1f} s"
-TEXT['t_cores_app'] = f"{(mine['cpu'] / mine['mean']).max():.1f}"
-TEXT['t_cores_ref'] = f"{(theirs['cpu'] / theirs['mean']).max():.1f}"
 TEXT['t_sd'] = f"{(timed_['sd'] / timed_['mean']).max():.0%}"
 ```
 
-Times are in seconds; *cores busy* is the mean CPU time over the mean wall time. Every
-`metacooler-run` command here takes `{python} TEXT['t_app']`, and every reference
-`{python} TEXT['t_ref']`. Of that, starting Node with the bundle takes `{python} TEXT['t_node']` and
-importing cooler and cooltools `{python} TEXT['t_python']`. `metacooler-run` never keeps more than
-`{python} TEXT['t_cores_app']` cores busy — its one thread, and Node's own housekeeping — where a
-reference keeps up to `{python} TEXT['t_cores_ref']`. Across its runs, no analysis command's time
-spreads by more than `{python} TEXT['t_sd']` of its mean (sd over mean).
+CPU seconds, each run and the mean ± sd over them. Every `metacooler-run` command here does
+`{python} TEXT['t_app']` of work and every reference `{python} TEXT['t_ref']`; of that, starting
+Node with the bundle is `{python} TEXT['t_node']` and importing cooler and cooltools
+`{python} TEXT['t_python']`. Across its runs, no analysis command's time spreads by more than
+`{python} TEXT['t_sd']` of its mean (sd over mean).
 
 ```{python}
 #| label: fig-time
-#| fig-cap: "Wall time of every timed command, each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
+#| fig-cap: "CPU time of every timed command, each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
 from matplotlib.ticker import FuncFormatter, NullLocator
 
 rows_ = wide.reset_index(drop=True)
@@ -1590,17 +1474,17 @@ for k, (analysis, members) in enumerate(rows_.groupby('analysis', sort=False)):
         ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
 for yi, (_, row) in zip(y, rows_.iterrows()):
     colour = APP_COLOUR if row['tool'] == 'metacooler-run' else REF
-    runs_ = times[(times['order'] == row['order'])]['wall s']
+    runs_ = times[(times['order'] == row['order'])]['CPU s']
     ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
     ax.plot([row['mean']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
 labels = [f"{row['analysis']} · {row['tool']}" + (f" ({row['variant']})" if row['variant'] else '')
           for _, row in rows_.iterrows()]
 ax.set_yticks(y, labels, fontsize=8)
 ax.set_xscale('log')
-ax.set_xlim(times['wall s'].min() / 1.5, times['wall s'].max() * 1.5)
+ax.set_xlim(times['CPU s'].min() / 1.5, times['CPU s'].max() * 1.5)
 ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
 ax.xaxis.set_minor_locator(NullLocator())
-ax.set(xlabel='wall time (s)', ylim=(-0.5, len(rows_) - 0.5))
+ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(rows_) - 0.5))
 ax.grid(axis='y', visible=False)
 ax.scatter([], [], s=24, color=APP_COLOUR, label='metacooler-run')
 ax.scatter([], [], s=24, color=REF, label='reference')
