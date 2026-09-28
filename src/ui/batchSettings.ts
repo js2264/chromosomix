@@ -42,7 +42,7 @@ import {
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
-import { edgeToggle, type PlacementMap } from './lanePlacement'
+import { edgeToggle, faceToggle, type PlacementMap } from './lanePlacement'
 import { MAX_SIZE, MIN_SIZE } from './laneSettings'
 
 /** What the ticked rows say about one setting: one value, or several. */
@@ -168,6 +168,10 @@ export function batchFields(options: BatchFieldsOptions): HTMLElement[] {
   }
   const overlays = rows.filter((entry) => entry.card === 'overlay')
   if (overlays.length > 0) out.push(opacityField(options, overlays))
+  if (options.context !== 'browser' && overlays.length > 0) {
+    const faces = facesField(options, overlays)
+    if (faces !== null) out.push(faces)
+  }
   return out
 }
 
@@ -552,6 +556,92 @@ function placementField(options: BatchFieldsOptions, applies: readonly Annotatio
                 'no map',
                 () => {
                   for (const entry of applies) store.withdrawFrom(entry.id)
+                },
+                {
+                  class: 'btn btn-quiet',
+                  title: 'Take all of these off every map. They stay in the list, ready to put back.',
+                },
+              ),
+            ),
+          ]
+        : []),
+    ),
+  )
+}
+
+/**
+ * Which maps the ticked overlays are drawn on — `overlayMapsField`, for
+ * several.
+ *
+ * A map's mark is lit where every ticked overlay is on it and hatched where
+ * some are; a press on a lit one takes them all off that map, and on any other
+ * puts them all there. Offered on the terms the row's own field is: several
+ * contact maps, or one that some of these are drawn nowhere on.
+ */
+function facesField(options: BatchFieldsOptions, applies: readonly AnnotationEntry[]): HTMLElement | null {
+  const { store } = options
+  const faces = options.maps.filter((map) => map.tracks !== true)
+  const nowhere = applies.some((entry) => faces.every((map) => store.laneFor(entry.id, map.id) === undefined))
+  if (faces.length === 0 || (faces.length === 1 && !nowhere)) return null
+  const named = faces.length > 1
+  const ids = faces.map((map) => map.id)
+  const rowFor = (map: PlacementMap): HTMLElement => {
+    const on = applies.filter((entry) => store.laneFor(entry.id, map.id) !== undefined)
+    const all = on.length === applies.length
+    const some = on.length > 0 && !all
+    const where = named ? map.label : 'this map'
+    const node = faceToggle(
+      where,
+      all
+        ? `Take ${reach(applies, options.rows)} off ${where}`
+        : some
+          ? `${on.length} of these are on ${where}: a press puts ${reach(applies, options.rows)} there`
+          : `Draw ${reach(applies, options.rows)} on ${where}`,
+      all ? 'true' : some ? 'mixed' : 'false',
+    )
+    node.addEventListener('click', () => {
+      for (const entry of applies) {
+        if (all) store.unplaceFrom(entry.id, map.id)
+        else if (store.laneFor(entry.id, map.id) === undefined) store.placeOn(entry.id, map.id, entry.placement)
+      }
+    })
+    const marks = el('div', { class: 'ann-places' }, node)
+    return named
+      ? el(
+          'div',
+          { class: 'ann-place-map' },
+          el('span', { class: 'ann-place-name', text: map.label, attrs: { title: map.label } }),
+          marks,
+        )
+      : marks
+  }
+  return el(
+    'div',
+    {
+      class: `field ann-field ann-field-places${named ? ' is-named' : ''}`,
+      title: `Which maps ${reach(applies, options.rows)} are drawn on.`,
+    },
+    el('span', { class: 'field-label', text: 'maps' }),
+    el(
+      'div',
+      { class: 'ann-place-maps' },
+      ...faces.map(rowFor),
+      ...(named
+        ? [
+            el(
+              'div',
+              { class: 'ann-place-all' },
+              button(
+                'every map',
+                () => {
+                  for (const entry of applies) store.propagateTo(entry.id, ids)
+                },
+                { class: 'btn btn-quiet', title: 'Draw all of these on every map.' },
+              ),
+              button(
+                'no map',
+                () => {
+                  for (const entry of applies) store.withdrawFrom(entry.id, ids)
                 },
                 {
                   class: 'btn btn-quiet',

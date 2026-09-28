@@ -214,7 +214,7 @@ metacooler-run tasks
 ##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## compartments
-##     Compartments (eigenvectors)
+##     Compartments
 ##       --sequences  Sequences
 ##       --contacts (default "cis")  Contacts
 ##       --ignoreDiags (default 2)  Diagonals to ignore
@@ -243,7 +243,7 @@ metacooler-run tasks
 ##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## hicrep
-##     Reproducibility (HiCRep)
+##     Reproducibility
 ##       --against <file>  The other maps to compare with; repeat per map
 ##       --sequences  Sequences
 ##       --maxDistance (default 500)  Furthest separation compared

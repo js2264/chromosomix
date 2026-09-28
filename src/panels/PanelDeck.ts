@@ -1359,8 +1359,8 @@ export class PanelDeck {
    * a lane waiting for a picture, and the reader can place it the moment one
    * arrives.
    */
-  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> {
-    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = []
+  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[]; tracks?: true }> {
+    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[]; tracks?: true }> = []
     for (const slot of this.order()) {
       if (slot === LEAD_CELL) {
         out.push({ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' })
@@ -1393,10 +1393,11 @@ export class PanelDeck {
     // A tracks cell is a place a track can be put, with one edge (§25.3).
     // After the maps, under the name on its heading: the reader's, or numbered
     // where there is none, since two stacks of tracks would otherwise be two
-    // rows with one name.
+    // rows with one name. Marked as one, because it has no matrix for an
+    // overlay to be drawn on (`ui/lanePlacement.ts`'s `overlayMapsField`).
     for (const slot of this.slots) {
       const cell = tracksIn(slot)
-      if (cell !== null) out.push({ id: slot.id, label: cell.label, edges: ['bottom'] })
+      if (cell !== null) out.push({ id: slot.id, label: cell.label, edges: ['bottom'], tracks: true })
     }
     return out
   }

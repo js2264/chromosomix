@@ -22,6 +22,11 @@
  * companion — and, on either, turns a lane that crosses between a horizontal
  * stack and a vertical one so it arrives reading the same way up as its
  * neighbours (`render/lane.ts`'s `laneStartsFlipped`).
+ *
+ * An **overlay** is asked the same question with a smaller answer, and gets
+ * the same field with one mark per map instead of four ({@link
+ * overlayMapsField}): it is drawn on the map's face, so a map has one place for
+ * it rather than four edges.
  */
 
 import { LEAD_MAP } from '../annotations/placement'
@@ -42,6 +47,11 @@ export interface PlacementMap {
    * so the row keeps the shape every other row has.
    */
   edges?: readonly LaneEdge[]
+  /**
+   * A deck's tracks cell (§25.3): a stack of lanes with no contact map in it,
+   * so a place for a track and not for an overlay. Absent for a map.
+   */
+  tracks?: true
 }
 
 /**
@@ -160,6 +170,135 @@ function everyMapRow(
       text: drawn === maps.length ? 'on every map' : `on ${drawn} of ${maps.length}`,
     }),
   )
+}
+
+/**
+ * Which maps an overlay is drawn on (§8.1): a line per contact map — its name
+ * and one mark, the map's grid, lit where the overlay is drawn on it — then
+ * *every map*, *no map* and how many.
+ *
+ * The location field's shape, because it is the location field's question: an
+ * overlay is placed per map exactly as a lane is (`annotations/placement.ts`),
+ * and every map used to draw every one — a loop set called on one replicate
+ * circled on all six. Named `maps` rather than `location`, because a
+ * batch of a bigWig and a loop set shows both fields and they answer
+ * differently: edges of each map there, maps here. A tracks cell is not
+ * listed: it has no matrix to draw a loop on.
+ *
+ * `null` where there is nothing to choose — one map, with the overlay on it:
+ * the eye on the row's head hides it there already, and a second switch saying
+ * the same thing is two answers to one question. The one map *is* offered
+ * while the overlay is drawn on none, which a deck closed after *no map* leaves
+ * it, because then this is the only way back.
+ */
+export function overlayMapsField(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  maps: readonly PlacementMap[],
+): HTMLElement | null {
+  const faces = maps.filter((map) => map.tracks !== true)
+  const drawn = faces.filter((map) => store.laneFor(entry.id, map.id) !== undefined).length
+  if (faces.length === 0 || (faces.length === 1 && drawn === 1)) return null
+  const named = faces.length > 1
+  return el(
+    'div',
+    { class: `field ann-field ann-field-places${named ? ' is-named' : ''}` },
+    el('span', { class: 'field-label', text: 'maps' }),
+    el(
+      'div',
+      { class: 'ann-place-maps' },
+      ...faces.map((map) => faceRow(store, entry, map, named)),
+      ...(named ? [everyFaceRow(store, entry, faces, drawn)] : []),
+    ),
+  )
+}
+
+/** One map's mark for an overlay, and its name where there are several. */
+function faceRow(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  map: PlacementMap,
+  named: boolean,
+): HTMLElement {
+  const on = store.laneFor(entry.id, map.id) !== undefined
+  const where = named ? map.label : 'this map'
+  const node = faceToggle(
+    where,
+    on
+      ? `Drawn on ${where} — pressing it takes it off, and leaves it in the list to put back`
+      : `Draw this on ${where}`,
+    on ? 'true' : 'false',
+  )
+  node.addEventListener('click', () => {
+    // The track's own placement for the lane, as every new lane is given: its
+    // edges are not read on the matrix, and a lane made any other way would be
+    // one more shape for the same fact.
+    if (on) store.unplaceFrom(entry.id, map.id)
+    else store.placeOn(entry.id, map.id, entry.placement)
+  })
+  const marks = el('div', { class: 'ann-places' }, node)
+  return named
+    ? el(
+        'div',
+        { class: 'ann-place-map' },
+        el('span', { class: 'ann-place-name', text: map.label, attrs: { title: map.label } }),
+        marks,
+      )
+    : marks
+}
+
+/**
+ * {@link everyMapRow} for an overlay, over the contact maps alone: *no map*
+ * takes it off those, and leaves a tracks cell it was dropped on to that cell.
+ */
+function everyFaceRow(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  faces: readonly PlacementMap[],
+  drawn: number,
+): HTMLElement {
+  const ids = faces.map((map) => map.id)
+  return el(
+    'div',
+    { class: 'ann-place-all' },
+    button('every map', () => store.propagateTo(entry.id, ids), {
+      class: 'btn btn-quiet',
+      title:
+        'Draw this on every map. The copies keep following this row — recolour it here and ' +
+        'they all move.',
+    }),
+    button('no map', () => store.withdrawFrom(entry.id, ids), {
+      class: 'btn btn-quiet',
+      title: 'Take it off every map. It stays in this list, with its settings, ready to put back.',
+    }),
+    el('span', {
+      class: 'ann-place-count',
+      text: drawn === faces.length ? 'on every map' : `on ${drawn} of ${faces.length}`,
+    }),
+  )
+}
+
+/**
+ * An overlay's mark on one map, as both its controls draw it — this one and
+ * the batch box's twin (`ui/batchSettings.ts`).
+ *
+ * The map's grid, the mark the Contact maps card is headed with: an overlay is
+ * drawn *on* the map rather than beside one of its edges, so the mark is the
+ * map rather than a side of it. `where` names the map to a screen reader.
+ */
+export function faceToggle(
+  where: string,
+  title: string,
+  pressed: 'true' | 'false' | 'mixed',
+): HTMLButtonElement {
+  const node = el('button', {
+    class: 'btn btn-icon btn-toggle ann-place',
+    type: 'button',
+    title,
+    attrs: { 'aria-label': `on ${where}`, 'aria-pressed': pressed, 'data-face': '' },
+  }) as HTMLButtonElement
+  node.append(icon('grid-2x2', { size: 15 }))
+  return node
 }
 
 /**

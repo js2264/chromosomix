@@ -2076,16 +2076,16 @@ saying where one track is.
 the rows between it and the last one clicked), and two or more ticked open a box above the list: the
 count and what can be done to them — *combine…* for a pair of tracks (§7.5), *hide* or *show*,
 *remove*, *clear* — over **a row's settings**, in a row's shapes and words: colour, height, style
-(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity.
-Each control **shows what the ticked rows share**, and *mixed* where they differ — an empty box saying
-so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round the swatch — and
-nothing is written until the reader picks. A pick is written to **every ticked row it means something
-to and no other**: a gene model and two bigWigs ticked together get one style picker, the pick lands on
-the two bigWigs, and the control's tooltip says how many of the ticked rows it reaches. Limits take both
-bounds before they are written, since a batch has no one range to seed the other from, and *auto*
-keeps each row's own manual pair for when it leaves auto again. The edits are one change to the store
-however many rows they reach. A new group named from the box clears the ticks, since the set now
-exists as a group.
+(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity
+and maps. Each control **shows what the ticked rows share**, and *mixed* where they differ — an
+empty box saying so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round
+the swatch — and nothing is written until the reader picks. A pick is written to **every ticked row
+it means something to and no other**: a gene model and two bigWigs ticked together get one style
+picker, the pick lands on the two bigWigs, and the control's tooltip says how many of the ticked
+rows it reaches. Limits take both bounds before they are written, since a batch has no one range to
+seed the other from, and *auto* keeps each row's own manual pair for when it leaves auto again. The
+edits are one change to the store however many rows they reach. A new group named from the box
+clears the ticks, since the set now exists as a group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -2096,6 +2096,20 @@ which is the point of it.
 elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from the card above because
 these two answer a different question — not "what is on the sequence here" but "this pixel is a
 feature" — and because one file is rarely wanted in both roles at once.
+
+An overlay is **placed per map**, as a track is, and a map draws only the overlays placed on it. It
+used to be drawn on every map of a deck: a loop set called on one of six maps was circled on all
+six, and a batch of insulation over five drew five sets of boundaries on each, with nothing on the row
+to say otherwise. Imported, an overlay is on the session's own map; dropped on a companion's edge, on
+that companion; called by a task, on the map it was called from. In a deck its row has a **maps**
+field in the location field's shape: a line per contact map — its name, then one mark, the map's grid
+from the Contact maps card's head, lit where the overlay is drawn — and under them *every map*, *no
+map* and *on N of M*. One mark rather than four because an overlay is drawn on the map's face and
+not beside an edge of it, and `maps` rather than `location` because a batch of a bigWig and a loop
+set shows both fields and they answer differently. A tracks cell is not listed, having no matrix to
+draw on, and *no map* leaves an overlay placed in one where it is. With one map the field is not
+shown — the eye on the head already hides the overlay there — unless the overlay is drawn on no map,
+which a deck closed after *no map* leaves it, and then it is the one mark that puts it back.
 
 **Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
 sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the

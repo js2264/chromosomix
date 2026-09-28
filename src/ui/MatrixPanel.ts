@@ -4185,8 +4185,8 @@ export class MatrixPanel {
   }
 
   /**
-   * Everything drawn on the data: the overlay card's files, then the hand-drawn
-   * marks over them.
+   * Everything drawn on the data: the overlays placed on this map, then the
+   * hand-drawn marks over them.
    *
    * Files first and marks second, because a mark is what the reader put there
    * and it must not end up underneath a circle from a loop table.
@@ -4196,7 +4196,7 @@ export class MatrixPanel {
     if (context === undefined) return
     const palette = readCanvasPalette(this.canvas)
 
-    for (const entry of context.store.overlays()) {
+    for (const entry of context.store.overlays(this.mapId)) {
       if (entry.payload?.kind === 'features') {
         drawDiagonalFeatures(ctx, frame, this.locusAxes, entry.payload.data, {
           colour: entry.style.colour,

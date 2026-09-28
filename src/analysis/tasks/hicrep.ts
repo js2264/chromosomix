@@ -161,7 +161,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
 export const HICREP_TASK: AnalysisTask = {
   id: 'hicrep',
-  title: 'Reproducibility (HiCRep)',
+  title: 'Reproducibility',
   blurb: 'How much the maps on screen agree, stratum by stratum and pooled.',
   group: '2d',
   venue: 'analysis',

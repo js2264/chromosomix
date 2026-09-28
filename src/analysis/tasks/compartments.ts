@@ -570,7 +570,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
 export const COMPARTMENTS_TASK: AnalysisTask = {
   id: 'compartments',
-  title: 'Compartments (eigenvectors)',
+  title: 'Compartments',
   blurb: 'Observed/expected, correlated or taken as it is, and its leading components.',
   group: '2d',
   venue: 'analysis',

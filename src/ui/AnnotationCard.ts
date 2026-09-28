@@ -38,7 +38,7 @@ import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
-import { mapsOrLead, placementField } from './lanePlacement'
+import { mapsOrLead, overlayMapsField, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import {
   framingOf,
@@ -1198,6 +1198,13 @@ export class AnnotationCard {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))
       out.push(this.opacity(entry))
+      // …and which maps it is drawn on, which a deck makes a question: the
+      // location field's, one mark per map rather than four edges. Not in the
+      // 1D browser, which has no map to draw one on.
+      if (this.props.context !== 'browser') {
+        const maps = overlayMapsField(this.props.store, entry, mapsOrLead(this.props.maps))
+        if (maps !== null) out.push(maps)
+      }
     }
     // What only a synthetic row has, where a loaded row has its path: the
     // exports, then the framing it was computed against — the framing in the

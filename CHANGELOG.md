@@ -30,6 +30,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   overlay drew each pair twice under the names of the two runs that computed it. The tab's TSV — the
   tables' and the overlays' — carries every map's provenance, one block per map above the numbers.
 
+- **Which maps an overlay is drawn on, from its row (§8.1).** A loop set, a BED of borders or a
+  set a task called was drawn on every map of a deck: the loops called on one of six maps were
+  circled on all six, and a batch of insulation over five drew five sets of boundaries on each. An
+  overlay is placed per map now, as a track is, and in a deck its row has a *maps* field in the shape
+  of a track's *location*: a line per contact map with one mark, lit where the overlay is drawn,
+  then *every map*, *no map* and *on N of M*. The batch box has it for several ticked overlays,
+  hatched where they differ. Imported, an overlay is on the session's own map, as a track is; a set
+  a task called is on the map it was called from, which the drawer already said it was. A session
+  saved before this brings its overlays back on its own map, one press of *every map* from where
+  they were.
+
 - **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
   coverage track's smoothed second derivative turns negative — where the signal curves down — found by
   its shape rather than its height, so it needs no background model of normalised signal and splits
@@ -502,6 +513,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The tasks are called *Compartments* and *Reproducibility* (§18.8).** The words in brackets,
+  *eigenvectors* and *HiCRep*, named a method where every other title in the column names what is
+  measured, and §18 already called the two tasks so; `metacooler-run --help` lists them the same.
 
 - **Diamond insulation is cooltools' own, to the pixel (§18.8).** A bin's score is the mean of the
   valid cells of the square cornered on its diagonal pixel, over the median of its sequence, in log2 —
@@ -1386,7 +1401,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   re-open a dropped file. A render of a state the view has since moved past no longer touches the
   deck.
 
-- **Reproducibility (HiCRep) gives hicrep's coefficient (§18.8).** The diagonals were pooled by the
+- **Reproducibility gives hicrep's coefficient (§18.8).** The diagonals were pooled by the
   variance of their smoothed counts, which let the few nearest the main one — the largest counts and
   the highest correlation — carry the answer, and put the SCC a few tenths above hicrep's and
   hicreppy's on the same maps: 0.90 against 0.51 on chicken chr1, G2 against 60 min. They are now

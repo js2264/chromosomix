@@ -38,6 +38,7 @@ node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and i
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # insulation's and HiCRep's forms on the yeast deck, and what each run returns: ih01 … ih10
+node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, pressed through every state, and the batch box: om01 … om14
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -199,10 +200,19 @@ all-maps tab, or to how a companion reads a circle.
 `scripts/ui-insulation-hicrep.mjs` drives the two tasks held to their references to the pixel
 (§18.8) on the yeast deck: *Diamond insulation*'s form — its *Boundaries* section holding the diamond
 coverage the calls are read over — and a run, with its lane and its domains on both maps; then
-*Reproducibility (HiCRep)*'s form and a run between the cooler and the `.hic`: the coefficient
+*Reproducibility*'s form and a run between the cooler and the `.hic`: the coefficient
 matrix, the table per sequence and the correlation by separation, which starts at the first diagonal.
 It prints each run's notes and the per-sequence rows. Run it after any change to either task's form,
 to `analysis/insulation.ts` or to `analysis/hicrep.ts`.
+
+`scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
+yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the
+loops row's *maps* field and the deck at each state — imported onto the first map, the Hi-C map's
+mark pressed, *every map*, the first map's mark pressed off, *no map* — then the ATAC row's
+*location* beside it, the batch box's two fields with both rows ticked, and the Analysis column's
+*Compartments* and *Reproducibility* rows. It prints the lit marks and the count at every step. Run
+it after any change to `ui/lanePlacement.ts`, to how `MatrixPanel` paints its overlays, or to
+`AnnotationStore.overlays`.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

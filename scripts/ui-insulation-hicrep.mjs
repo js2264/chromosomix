@@ -1,6 +1,6 @@
 /**
- * Diamond insulation and Reproducibility (HiCRep) on the yeast deck, in headless
- * Chromium (§18.8): each form as the reader meets it — insulation's *Boundaries*
+ * Diamond insulation and Reproducibility on the yeast deck, in headless Chromium
+ * (§18.8): each form as the reader meets it — insulation's *Boundaries*
  * section, which now holds the coverage the calls are read over, and HiCRep's
  * furthest separation — and what each run returns: the insulation lane with its
  * boundaries and domains on the map, and HiCRep's coefficient matrix, its table
@@ -103,7 +103,7 @@ try {
   await shot('ih04-insulation-on-the-map')
 
   // ---- reproducibility ----------------------------------------------------
-  await open('Reproducibility (HiCRep)')
+  await open('"Reproducibility"')
   await shot('ih05-hicrep-form')
   await shotOf('.analysis-form', 'ih06-hicrep-form-alone')
   console.log(
