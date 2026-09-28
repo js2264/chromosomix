@@ -1325,9 +1325,15 @@ export class AnalysisRunner {
     // Taken from the host's list rather than from the job, because the job knows
     // the map it is *about* and this is a question about the ones beside it —
     // and filtered against the job's own target, since a map is not its own peer.
+    //
+    // The list that **waits**, as *Run on all maps* does: a companion is on the
+    // list only once it has read the two tables an analysis needs, which it does
+    // when starred or batched, so the first run in a fresh deck found none of
+    // them and said no second map was open beside the one it was looking at.
     if (step.task.id === 'hicrep') {
       const peers: PeerMap[] = []
-      for (const target of this.host.allTargets?.() ?? []) {
+      const targets = (await this.host.allTargetsReady?.()) ?? this.host.allTargets?.() ?? []
+      for (const target of targets) {
         if (target.map === job.target.map || target.source === undefined) continue
         peers.push({
           label: target.label,

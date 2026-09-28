@@ -37,7 +37,7 @@ node scripts/ui-compartments.mjs gallery     # the Compartments table under cool
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
-node scripts/ui-insulation-hicrep.mjs gallery  # insulation's and HiCRep's forms on the yeast deck, and what each run returns: ih01 … ih10
+node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, pressed through every state, and the batch box: om01 … om14
 ```
 
@@ -198,12 +198,15 @@ change to how a deck is filled, to the Contact maps card, to what a task names a
 all-maps tab, or to how a companion reads a circle.
 
 `scripts/ui-insulation-hicrep.mjs` drives the two tasks held to their references to the pixel
-(§18.8) on the yeast deck: *Diamond insulation*'s form — its *Boundaries* section holding the diamond
-coverage the calls are read over — and a run, with its lane and its domains on both maps; then
-*Reproducibility*'s form and a run between the cooler and the `.hic`: the coefficient
-matrix, the table per sequence and the correlation by separation, which starts at the first diagonal.
-It prints each run's notes and the per-sequence rows. Run it after any change to either task's form,
-to `analysis/insulation.ts` or to `analysis/hicrep.ts`.
+(§18.8) on the yeast deck. First the Analysis column as the deck opens, *Reproducibility* ready
+beside the second map (§18.1) — it stood greyed there until another task had run — and then that
+task **first**, on the fresh deck: its form and a run between the cooler and the `.hic`, the
+coefficient matrix, the table per sequence and the correlation by separation, which starts at the
+first diagonal. Run after insulation's, it would find the other map whether or not a first run
+could. Then *Diamond insulation*'s form — its *Boundaries* section holding the diamond coverage the
+calls are read over — and a run, with its lane and its domains on the map. It prints the row's
+state, each run's notes and the per-sequence rows. Run it after any change to either task's form,
+to `analysis/insulation.ts`, to `analysis/hicrep.ts`, or to how the deck tells the column its maps.
 
 `scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
 yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the

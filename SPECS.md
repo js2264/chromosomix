@@ -5423,6 +5423,13 @@ that read only tracks included, because the rule a reader is given is *a task ru
 map* and a column in which some run and some do not under no star is a rule with exceptions to
 learn. Starring any map puts every task back.
 
+**The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
+moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
+about what is on screen, and a task that compares two files is waiting on exactly this. It was asked
+when the column was built and when a companion's tables arrived, and nothing asked it when a cell
+closed, so *Reproducibility* could stand ready beside a map that had gone. Asked per change and not
+per read: a pan re-reads every companion and changes nothing here.
+
 **The panel exists without a contact map.** Three tasks — metaplot, track correlation and interval
 overlap — read only the loaded tracks, and a 1D browser session (§5.8) is exactly where a reader has
 the tracks and not the matrix. There the map tasks are `waiting` on *open a contact map*, the track
@@ -6409,9 +6416,13 @@ is, since a far stratum weighs about as much as a near one.
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
 is a number with nothing to look at beside it. The map a run is about is named the same way, never
 *This map*: run on every map of a deck, each run names every map alike, and the all-maps tab shows
-the comparison once (§18.7). The row is offered as soon as the deck holds a second map — the
-companion is asked for the two tables an analysis reads when the column is priced, where it used to
-wait until a batch or a star had asked, and the row said *open a second map* over a deck of two. The one thing the deck deliberately does not settle
+the comparison once (§18.7). The row is offered as soon as the deck holds a second map: a map is one
+of the others **once its file has opened**, whichever map is starred, the first map included — its
+name, its address and its bin size are all the task asks before a run, and a companion has them when
+it draws. The companion is asked for the two tables an analysis reads when the column is priced,
+where it used to wait until a batch or a star had asked, and the row said *open a second map* over a
+deck of two; a run waits for them as *run on all maps* does, so the first one in a fresh deck finds
+every map rather than none. The one thing the deck deliberately does not settle
 is the grid: §16's lock is in base pairs precisely so a 1 kb file and a 5 kb one can follow each
 other, and a stratum is a diagonal offset in *bins*, so a mismatched map is refused by name in the
 estimate exactly as §5.7's triangle refuses a mismatched pair. Three outputs: the N×N coefficient

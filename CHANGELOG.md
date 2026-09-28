@@ -1389,9 +1389,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pixels for the region on screen, and came back with the companion's numbers. The button now says
   *run on ★*, naming the starred map in its tooltip.
 
-- **Reproducibility is offered as soon as a deck has a second map (§18.8).** It waited, greyed with
-  *open a second map beside this one*, over a deck of two, until a batch or a star had made the other
-  map read the tables an analysis needs.
+- **Reproducibility is offered as soon as a deck has a second map (§18.1, §18.8).** It waited, greyed
+  with *open a second map beside this one*, over a deck of two, until a batch or a star had made the
+  other map read the tables an analysis needs. A map counts once its file has opened, the first map
+  included when the star is on another; the column is asked again whenever a map of the deck opens,
+  moves to another rung or closes; and a run waits for the other maps' tables, as *run on all maps*
+  does, so the first one finds them.
 
 - **Several maps dropped at once open in every cell (§16.11).** Eight coolers, a GTF and a FASTA
   dropped on a new tab loaded the tracks and the first two or three maps, and left the other cells

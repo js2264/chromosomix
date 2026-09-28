@@ -1,12 +1,17 @@
 /**
  * Diamond insulation and Reproducibility on the yeast deck, in headless Chromium
- * (§18.8): each form as the reader meets it — insulation's *Boundaries*
- * section, which now holds the coverage the calls are read over, and HiCRep's
- * furthest separation — and what each run returns: the insulation lane with its
- * boundaries and domains on the map, and HiCRep's coefficient matrix, its table
- * per sequence and its correlation by separation between the cooler and the
- * `.hic` beside it. Prints each run's notes and HiCRep's per-sequence rows, so a
- * run that said something unexpected is a line in the log as well as a picture.
+ * (§18.1, §18.8). First the Analysis column as the deck opens, with
+ * *Reproducibility* ready — it stood greyed there, asking for the second map
+ * beside the first, until another task had run — and then that task **first**,
+ * on the fresh deck, since a run made after insulation's would find the other
+ * map whether or not a first one could. Each form as the reader meets it —
+ * HiCRep's furthest separation, and insulation's *Boundaries* section holding
+ * the coverage the calls are read over — and what each run returns: HiCRep's
+ * coefficient matrix, its table per sequence and its correlation by separation
+ * between the cooler and the `.hic` beside it, and the insulation lane with its
+ * boundaries and domains on the map. Prints each run's notes and HiCRep's
+ * per-sequence rows, so a run that said something unexpected is a line in the
+ * log as well as a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-insulation-hicrep.mjs [out-dir]
@@ -83,29 +88,39 @@ try {
   await fold('Show the Analysis panel')
   await sleep(800)
 
-  // ---- diamond insulation -------------------------------------------------
-  await open('Diamond insulation')
-  await shot('ih01-insulation-form')
-  await shotOf('.analysis-form', 'ih02-insulation-form-alone')
+  // ---- the column as the deck opens ----------------------------------------
+  const reproducibility = page.locator('.analysis-row', {
+    has: page.locator('.analysis-row-title', { hasText: /^Reproducibility$/ }),
+  })
+  await page
+    .waitForFunction(
+      () =>
+        [...document.querySelectorAll('.analysis-row')].some(
+          (row) =>
+            row.querySelector('.analysis-row-title')?.textContent === 'Reproducibility' &&
+            !row.classList.contains('is-waiting'),
+        ),
+      null,
+      { timeout: 60000 },
+    )
+    .catch(() => console.log('Reproducibility still waiting after a minute'))
   console.log(
-    'insulation form sections:',
-    JSON.stringify(await page.$$eval('.analysis-form .controls-title', (all) => all.map((n) => n.textContent))),
+    'Reproducibility row:',
+    JSON.stringify(
+      await reproducibility.first().evaluate((row) => ({
+        waiting: row.classList.contains('is-waiting'),
+        needs: row.nextElementSibling?.classList.contains('hidden') === false ? row.nextElementSibling.textContent : '',
+      })),
+    ),
   )
-  console.log(
-    'insulation form fields:',
-    JSON.stringify(await page.$$eval('.analysis-form .field', (all) => all.map((f) => f.textContent.trim().replace(/\s+/g, ' ').slice(0, 90)))),
-  )
-  await run(() => document.querySelectorAll('.ann-row.is-synthetic').length > 0)
-  console.log('insulation notes:', JSON.stringify(await notes()))
-  await shot('ih03-insulation-ran')
-  await page.keyboard.press('Escape')
-  await sleep(1200)
-  await shot('ih04-insulation-on-the-map')
+  await reproducibility.first().scrollIntoViewIfNeeded()
+  await sleep(600)
+  await shot('ih00-analysis-reproducibility-ready')
 
-  // ---- reproducibility ----------------------------------------------------
+  // ---- reproducibility, first on a fresh deck --------------------------------
   await open('"Reproducibility"')
-  await shot('ih05-hicrep-form')
-  await shotOf('.analysis-form', 'ih06-hicrep-form-alone')
+  await shot('ih01-hicrep-form')
+  await shotOf('.analysis-form', 'ih02-hicrep-form-alone')
   console.log(
     'hicrep form fields:',
     JSON.stringify(await page.$$eval('.analysis-form .field', (all) => all.map((f) => f.textContent.trim().replace(/\s+/g, ' ').slice(0, 160)))),
@@ -124,7 +139,7 @@ try {
       ),
     ),
   )
-  await shot('ih07-hicrep-ran')
+  await shot('ih03-hicrep-ran')
   const drawer = page.locator('.analysis-drawer').first()
   for (let i = 0; i < 3; i++) {
     await drawer.evaluate((node, i) => {
@@ -132,8 +147,27 @@ try {
       scroller.scrollTo({ top: (scroller.scrollHeight / 3) * i })
     }, i)
     await sleep(800)
-    await shotOf('.analysis-drawer', `ih${String(8 + i).padStart(2, '0')}-hicrep-drawer-${i + 1}`)
+    await shotOf('.analysis-drawer', `ih${String(4 + i).padStart(2, '0')}-hicrep-drawer-${i + 1}`)
   }
+
+  // ---- diamond insulation -------------------------------------------------
+  await open('Diamond insulation')
+  await shot('ih07-insulation-form')
+  await shotOf('.analysis-form', 'ih08-insulation-form-alone')
+  console.log(
+    'insulation form sections:',
+    JSON.stringify(await page.$$eval('.analysis-form .controls-title', (all) => all.map((n) => n.textContent))),
+  )
+  console.log(
+    'insulation form fields:',
+    JSON.stringify(await page.$$eval('.analysis-form .field', (all) => all.map((f) => f.textContent.trim().replace(/\s+/g, ' ').slice(0, 90)))),
+  )
+  await run(() => document.querySelectorAll('.ann-row.is-synthetic').length > 0)
+  console.log('insulation notes:', JSON.stringify(await notes()))
+  await shot('ih09-insulation-ran')
+  await page.keyboard.press('Escape')
+  await sleep(1200)
+  await shot('ih10-insulation-on-the-map')
 } finally {
   if (errors.length > 0) console.log('page errors:', JSON.stringify(errors.slice(0, 10)))
   await browser.close()

@@ -6337,6 +6337,11 @@ export class Session {
         // that says its file has opened (`MapPanel.prepareAnalysis`).
         this.syncFileCard()
       },
+      // A map of the deck opened, moved rung or left: the maps a comparison
+      // can be made against have changed under the column (§18.1).
+      onPeersChange: () => {
+        this.analysis?.refresh()
+      },
       // The column's *Map* card is the starred map's (§16.5), so the star
       // moving, or the starred companion's card being built, changes the card
       // that column holds — and the session is what puts cards in it.
@@ -8969,6 +8974,38 @@ export class Session {
   }
 
   /**
+   * Every map on screen **except the one a context is about** — the star — for a
+   * task that compares two files (§18.1); a map cannot be a peer of itself.
+   *
+   * A map counts **once its file has opened**: its name, its address and its
+   * bin size are all a peer is asked for, and a companion has them as soon as it
+   * has drawn. The two tables a run also reads are asked for here as well, once
+   * per panel and as `readyTargets` asks, since a companion reads them only when
+   * asked and nothing asked until a batch or a star did — so a deck of two
+   * offered Reproducibility as *waiting for a second map*. A run waits for them
+   * (`AnalysisRunner`'s inputs, through `allTargetsReady`), so the first one in a
+   * fresh deck finds every map rather than none.
+   *
+   * The lead is one of them whenever the star is on a companion: it is a map on
+   * screen like the others, and the runner already compares it. Each is named
+   * what the reader calls it (§16.10).
+   */
+  private peersOf(uri: string): Array<{ label: string; uri: string; binsize: number }> {
+    const out: Array<{ label: string; uri: string; binsize: number }> = []
+    const file = this.file
+    if (file !== null && file.uri !== uri) {
+      out.push({ label: this.mapLabel(file.uri), uri: file.uri, binsize: file.info.binsize ?? 0 })
+    }
+    for (const { panel } of this.deck?.analysable() ?? []) {
+      if (panel.analysisFacts() === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
+      const info = panel.openInfo ?? panel.analysisFacts()?.info ?? null
+      if (info === null || panel.uri === uri) continue
+      out.push({ label: this.mapLabel(panel.uri), uri: panel.uri, binsize: info.binsize ?? 0 })
+    }
+    return out
+  }
+
+  /**
    * The maps a task can run against, as the runner's targets.
    *
    * One list built two ways, which is the point of the parameter: the
@@ -9140,26 +9177,7 @@ export class Session {
         ? { selectedCells: info.activeCells }
         : {}),
       resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
-      // Every map on screen **except the one this context is about**, which is
-      // the star. A task that compares two files is offered the others, and a
-      // map cannot be a peer of itself.
-      peers: (this.deck?.analysable() ?? [])
-        .map(({ panel }) => {
-          const facts = panel.analysisFacts()
-          // A companion reads the two tables an analysis needs only when asked,
-          // and nothing asked until a batch or a star did — so a deck of two
-          // offered Reproducibility as *waiting for a second map*. Asked here,
-          // once per panel, as `readyTargets` asks.
-          if (facts === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
-          return facts
-        })
-        .filter((facts): facts is NonNullable<typeof facts> => facts !== null)
-        .filter((facts) => facts.uri !== uri)
-        .map((facts) => ({
-          label: this.mapLabel(facts.uri),
-          uri: facts.uri,
-          binsize: facts.info.binsize ?? 0,
-        })),
+      peers: this.peersOf(uri),
     })
   }
 
