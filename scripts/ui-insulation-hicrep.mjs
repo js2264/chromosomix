@@ -68,7 +68,9 @@ const open = async (title) => {
 }
 const run = async (wait) => {
   const before = await figureTitles()
-  await page.locator('button', { hasText: /^run$/i }).first().click()
+  // `run` on one map, `run on ★` in a deck (the star is an icon, so the text
+  // ends at `on`) — and never `run on all N maps`, which is the batch.
+  await page.locator('.analysis-drawer button', { hasText: /^run(\s+on)?\s*$/i }).first().click()
   await page
     .waitForFunction(wait, before, { timeout: 240000 })
     .catch(() => console.log('no output within four minutes'))
