@@ -32,7 +32,11 @@ agreement separately there.
 | 7 | Reproducibility (HiCRep) | `demo/chicken`, seven 4DN DT40 maps, 100 kb | hicrep 0.2.6 and hicreppy 0.1.0 |
 | 8 | 3D model (pastis-NB) | the yeast G2/M micro-C map, 10 kb | pastis, GitHub `6888ac2` |
 
-The last section gathers every comparison into one table.
+Every reference runs as a command — its own command line where it has one, otherwise a short Python
+script this notebook writes — and that command is what produces the result compared, what the
+summary prints next to the `metacooler-run` command, and what the last section times, five times
+each. Every command runs from `notebooks/work/validation/`, where the data are, and is printed with
+its paths as it was given them.
 
 **Before rendering.** `npm run build:cli` at the repository root, which builds this checkout's
 `metacooler-run`. Then two Python environments:
@@ -57,8 +61,8 @@ QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python \
 
 The data are fetched from the bucket once, into `notebooks/work/validation/data/` (about 7 GB, most
 of it the chicken maps and the mm10 FASTA), and every command's outputs are kept beside them, so a
-second render reads rather than recomputes (`REDO` below). The first render takes about half an
-hour, most of it pastis and hicreppy.
+second render reads rather than recomputes (`REDO` below); the timings are kept the same way
+(`REDO_BENCHMARK`). The first render takes about an hour, most of it the timing.
 
 ```{python}
 from pathlib import Path
@@ -66,6 +70,9 @@ import os
 
 #: Run a step again even where its outputs are already on disk.
 REDO = False
+#: How many times the last section times each command, and whether to time them again.
+RUNS = 5
+REDO_BENCHMARK = False
 #: Processes for the reference packages that take them.
 THREADS = 4
 #: yapc 0.1's interpreter: a venv of its own (see above), relative to the repository or absolute.
@@ -76,24 +83,28 @@ REPO = HERE.parent if HERE.name == 'notebooks' else HERE
 CLI = REPO / 'dist-cli' / 'metacooler-run.mjs'
 WORK = REPO / 'notebooks' / 'work' / 'validation'
 DATA = WORK / 'data'
+SCRIPTS = WORK / 'scripts'
 BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com'
 YAPC_PYTHON = Path(YAPC_PYTHON) if Path(YAPC_PYTHON).is_absolute() else REPO / YAPC_PYTHON
 ```
 
 ```{python}
+import html
 import json
+import platform
 import re
+import resource
 import shlex
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 import urllib.request
 import warnings
 from importlib.metadata import version
 
 import cooler
-import cooltools
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -104,6 +115,10 @@ warnings.filterwarnings('ignore')
 if not CLI.exists():
     raise FileNotFoundError(f'{CLI} is not there: run `npm run build:cli` at the repository root.')
 DATA.mkdir(parents=True, exist_ok=True)
+SCRIPTS.mkdir(parents=True, exist_ok=True)
+PYTHON = sys.executable
+CHROMOSIGHT = shutil.which('chromosight') or str(Path(PYTHON).parent / 'chromosight')
+YAPC_ENV = dict(os.environ, PATH=f'{YAPC_PYTHON.parent}{os.pathsep}{os.environ["PATH"]}')
 
 
 def fetch(key):
@@ -118,30 +133,76 @@ def fetch(key):
     return path
 
 
-NOTES = {}
+def rel(path):
+    """A path the way the commands give it: from work/validation/, where they run."""
+    path = Path(path)
+    return str(path.relative_to(WORK)) if path.is_relative_to(WORK) else str(path)
 
 
-def mr(task, *args, out):
+def arg(value):
+    return rel(value) if isinstance(value, Path) else str(value)
+
+
+def typed(argv):
+    """A command as a reader would type it: each tool by its name, as it is installed."""
+    names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight'}
+    if argv[:2] == ['node', str(CLI)]:
+        argv = ['metacooler-run', *argv[2:]]
+    return shlex.join([names.get(a, a) for a in argv])
+
+
+#: Every metacooler-run command, and every reference command, by name: for the summary and the timing.
+APP, REFS, NOTES = {}, {}, {}
+#: Where a reference writes, in its command.
+OUT = '<out>'
+
+
+def mr(task, *args, out, name, analysis, label='', bench=True):
     """One metacooler-run command into `out`, skipped when `out` already holds its outputs.
 
-    The command is printed as it runs, and the notes it prints are kept beside its outputs."""
+    The command is printed, and the notes it prints are kept beside its outputs."""
     out = Path(out)
-    argv = ['node', str(CLI), task, *[str(a) for a in args], '--out', str(out)]
-    shown = shlex.join(['metacooler-run', *argv[2:]]).replace(str(REPO) + '/', '')
-    if (out / '.command').exists() and not REDO:
-        NOTES[out] = (out / '.notes').read_text().splitlines()
-        return out
-    out.mkdir(parents=True, exist_ok=True)
-    print('$', shown)
-    start = time.time()
-    run = subprocess.run(argv, capture_output=True, text=True, cwd=REPO)
-    if run.returncode:
-        raise RuntimeError(run.stderr[-4000:])
-    notes = [line.strip()[len('note: '):] for line in re.split(r'[\r\n]', run.stderr)
-             if line.strip().startswith('note:')]
-    (out / '.notes').write_text('\n'.join(notes))
-    (out / '.command').write_text(f'{shown}\n# {time.time() - start:.1f} s\n')
-    NOTES[out] = notes
+    argv = ['node', str(CLI), task, *[arg(a) for a in args]]
+    full = argv + ['--out', rel(out)]
+    APP[name] = dict(analysis=analysis, tool='metacooler-run', label=label, argv=argv, bench=bench,
+                     shown=typed(full))
+    print('$', typed(full))
+    if not (out / '.command').exists() or REDO:
+        out.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+        run = subprocess.run(full, capture_output=True, text=True, cwd=WORK)
+        if run.returncode:
+            raise RuntimeError(run.stderr[-4000:])
+        notes = [line.strip()[len('note: '):] for line in re.split(r'[\r\n]', run.stderr)
+                 if line.strip().startswith('note:')]
+        (out / '.notes').write_text('\n'.join(notes))
+        (out / '.command').write_text(f'{typed(full)}\n# {time.time() - start:.1f} s\n')
+    NOTES[name] = (out / '.notes').read_text().splitlines()
+    return out
+
+
+def script(name, text):
+    """A reference's Python, written to work/validation/scripts/ to be run, printed and timed."""
+    path = SCRIPTS / f'{name}.py'
+    path.write_text(textwrap.dedent(text).strip().replace('__THREADS__', str(THREADS)) + '\n')
+    return path
+
+
+def reference(name, analysis, tool, argv, out, made=None, env=None, label='', bench=True):
+    """A reference command, run once for the comparison (skipped when its output is on disk).
+
+    `argv` holds OUT where the command writes, so the timing can send it elsewhere."""
+    argv = [a if a == OUT else arg(a) for a in argv]
+    out = Path(out)
+    real = [rel(out) if a == OUT else a for a in argv]
+    REFS[name] = dict(analysis=analysis, tool=tool, label=label, argv=argv, out=out, env=env, bench=bench,
+                      shown=typed(real), scripts=[a for a in argv if a.endswith('.py')])
+    print('$', typed(real))
+    if REDO or not Path(made or out).exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        run = subprocess.run(real, capture_output=True, text=True, cwd=WORK, env=env)
+        if run.returncode:
+            raise RuntimeError(run.stderr[-4000:])
     return out
 
 
@@ -159,7 +220,7 @@ def one(folder, pattern):
 
 
 def cached(path, compute):
-    """A reference result computed once and kept: a table as TSV, an array as NPY."""
+    """A result of this notebook's own computed once and kept: a table as TSV, an array as NPY."""
     path = Path(path)
     if path.exists() and not REDO:
         return pd.read_csv(path, sep='\t') if path.suffix == '.tsv' else np.load(path)
@@ -173,9 +234,8 @@ def cached(path, compute):
 
 
 def show(frame, precision=4, **formats):
-    """A table without its row numbers."""
-    styled = frame.style.hide(axis='index').format(precision=precision)
-    return styled.format(formats) if formats else styled
+    """A table without its row numbers: the columns named in `formats` their way, the others to `precision`."""
+    return frame.style.hide(axis='index').format(formats or None, precision=precision)
 
 
 def measures(values):
@@ -194,7 +254,7 @@ def spearman(a, b):
 
 
 # The figures: blue is always metacooler-run, orange the reference, aqua a second reference.
-APP, REF, REF2 = '#2a78d6', '#eb6834', '#1baf7a'
+APP_COLOUR, REF, REF2 = '#2a78d6', '#eb6834', '#1baf7a'
 INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
 DENSITY = LinearSegmentedColormap.from_list(
     'density', ['#cde2fb', '#86b6ef', '#3987e5', '#1c5cab', '#0d366b'])
@@ -232,8 +292,16 @@ TEXT = {}
 SUMMARY = []
 
 
-def record(task, data, reference, agreement_, verdict):
-    SUMMARY.append({'Analysis': task, 'Data': data, 'Reference': reference,
+def commands(lines):
+    return '<pre>' + html.escape('\n'.join(lines)) + '</pre>'
+
+
+def record(task, data, reference_, agreement_, verdict, apps, refs):
+    """One row of the summary, with the metacooler-run commands and the reference commands as they ran."""
+    SUMMARY.append({'Analysis': task, 'Data': data,
+                    'metacooler-run command': commands([f'$ {APP[name]["shown"]}' for name in apps]),
+                    'Reference': reference_,
+                    'Reference command': commands([f'$ {REFS[name]["shown"]}' for name in refs]),
                     'Agreement': agreement_, 'Verdict': verdict})
 ```
 
@@ -248,11 +316,9 @@ YEAST_G2M = fetch('demo/yeast/Yeast_microC_G2M_1kb.cool')
 YEAST_ATAC = fetch('demo/yeast/Yeast_ATAC.bw')
 MOUSE = fetch('demo/mouse/Murphy2023_TSC_HiC.mcool')
 MM10 = fetch('demo/mouse/mm10.fa')
-CHICKEN = {label: fetch(f'demo/chicken/{name}') for label, name in (
-    ('G2', 'G2_4DNFIT479GDR.mcool'), ('5 min', '5m_4DNFINSJ2GYV.mcool'),
-    ('10 min', '10m_4DNFIYOEGHHV.mcool'), ('15 min', '15m_4DNFILKIISAU.mcool'),
-    ('30 min', '30m_4DNFI165SFJU.mcool'), ('60 min', '60m_4DNFIWHQLZTL.mcool'),
-    ('unsorted', 'unsorted_4DNFI6LHZFXL.mcool'))}
+CHICKEN = {label: fetch(f'demo/chicken/{label}_{name}.mcool') for label, name in (
+    ('G2', '4DNFIT479GDR'), ('5m', '4DNFINSJ2GYV'), ('10m', '4DNFIYOEGHHV'), ('15m', '4DNFILKIISAU'),
+    ('30m', '4DNFI165SFJU'), ('60m', '4DNFIWHQLZTL'), ('unsorted', '4DNFI6LHZFXL'))}
 
 show(pd.DataFrame([{'file': p.name, 'MB': p.stat().st_size / 1e6}
                    for p in [YEAST_G2M, YEAST_ATAC, MOUSE, MM10, *CHICKEN.values()]]), MB='{:,.1f}')
@@ -310,13 +376,20 @@ window is complete.
 
 ```{python}
 INS = WORK / 'insulation'
-mr('insulation', f'{MOUSE}::/resolutions/10000', '--window', 10, out=INS / 'app')
+MOUSE_10K = f'{rel(MOUSE)}::/resolutions/10000'
+mr('insulation', MOUSE_10K, '--window', 10, out=INS / 'app', name='insulation', analysis='Diamond insulation')
+reference('cooltools-insulation', 'Diamond insulation', 'cooltools', [PYTHON, script('cooltools_insulation', r'''
+    import sys, cooler, cooltools
+    uri, out = sys.argv[1:]
+    table = cooltools.insulation(cooler.Cooler(uri), [100_000], ignore_diags=2,
+                                 clr_weight_name='weight', min_frac_valid_pixels=0.5,
+                                 threshold=0.2, nproc=__THREADS__)
+    table.to_csv(out, sep='\t', index=False)
+'''), MOUSE_10K, OUT], out=INS / 'cooltools.tsv')
 
 clr10 = cooler.Cooler(f'{MOUSE}::/resolutions/10000')
 bins10 = clr10.bins()[:]
-ref_ins = cached(INS / 'cooltools.tsv', lambda: cooltools.insulation(
-    clr10, [100_000], ignore_diags=2, clr_weight_name='weight', min_frac_valid_pixels=0.5,
-    threshold=0.2, nproc=THREADS, verbose=False))
+ref_ins = pd.read_csv(INS / 'cooltools.tsv', sep='\t')
 app_ins = table(one(INS / 'app', '*.insulation-w10.tsv'))
 # The app numbers its bins across the whole file, as cooler's bin table does.
 assert (app_ins['bin'].to_numpy() == np.arange(len(bins10))).all()
@@ -346,8 +419,6 @@ for label, where in (('every bin both score', both), ('complete windows', both &
     rows.append({'bins': label, 'n': int(where.sum()), 'Pearson r': pearson(a_ins[where], b_ins[where]),
                  'Spearman ρ': spearman(a_ins[where], b_ins[where])})
 ins_table = pd.DataFrame(rows)
-ins_only_ref = int((~np.isfinite(a_ins) & np.isfinite(b_ins)).sum())
-ins_only_app = int((np.isfinite(a_ins) & ~np.isfinite(b_ins)).sum())
 show(ins_table, n='{:,}')
 ```
 
@@ -416,7 +487,7 @@ dropped = ~np.isfinite(bins10['weight'].to_numpy(float)[stretch])
 for pos in x[dropped]:
     ax.axvspan(pos, pos + 0.01, color=MISSING, lw=0, zorder=0)
 ax.plot(x, b_ins[stretch], color=REF, lw=2, label='cooltools')
-ax.plot(x, a_ins[stretch], color=APP, lw=1.2, label='metacooler-run')
+ax.plot(x, a_ins[stretch], color=APP_COLOUR, lw=1.2, label='metacooler-run')
 ax.set(xlabel='chr11 (Mb)', ylabel='insulation (log2)', title='c  chr11, 30–40 Mb')
 ax.legend(loc='lower left', ncols=2)
 plt.show()
@@ -436,7 +507,8 @@ cooltools cell for cell in the unit tests.
 record('Diamond insulation', 'mouse Hi-C, 10 kb, window 100 kb', f"cooltools {VERSIONS['cooltools']}",
        f"r = {TEXT['ins_complete']} over complete windows ({TEXT['ins_all']} over all); "
        f"{TEXT['ins_within1']} of boundaries within 1 bin",
-       'Correlated; definitions differ by design (sum vs mean, window offset)')
+       'Correlated; definitions differ by design (sum vs mean, window offset)',
+       apps=['insulation'], refs=['cooltools-insulation'])
 ```
 
 ## 2 · Directionality index
@@ -457,23 +529,26 @@ The map has no 40 kb level, so this is Dixon's 2 Mb window at 50 kb.
 
 ```{python}
 DI = WORK / 'di'
-mr('di', f'{MOUSE}::/resolutions/50000', '--window', 40, out=DI / 'app')
-clr50 = cooler.Cooler(f'{MOUSE}::/resolutions/50000')
-
-
-def domaincaller_di():
+MOUSE_50K = f'{rel(MOUSE)}::/resolutions/50000'
+mr('di', MOUSE_50K, '--window', 40, out=DI / 'app', name='di', analysis='Directionality index')
+reference('domaincaller-di', 'Directionality index', 'domaincaller', [PYTHON, script('domaincaller_di', r'''
+    import sys, cooler, numpy as np
     from domaincaller.chromLev import Chrom
-    values = np.full(clr50.info['nbins'], np.nan)
-    for chrom in clr50.chromnames:
-        lo, _ = clr50.extent(chrom)
-        # As the domaincaller script builds it: one chromosome of the balanced matrix, sparse.
-        work = Chrom(chrom, clr50.binsize, clr50.matrix(balance='weight', sparse=True).fetch(chrom).tocsr())
+    uri, out = sys.argv[1:]
+    clr = cooler.Cooler(uri)
+    di = np.full(clr.info['nbins'], np.nan)
+    for chrom in clr.chromnames:
+        # One chromosome, balanced and sparse, as domaincaller's own script builds it.
+        matrix = clr.matrix(balance='weight', sparse=True).fetch(chrom).tocsr()
+        work = Chrom(chrom, clr.binsize, matrix)
         work.calDI(window=2_000_000)
-        values[lo:lo + len(work.DIs)] = work.DIs
-    return values
+        lo = clr.extent(chrom)[0]
+        di[lo:lo + len(work.DIs)] = work.DIs
+    np.save(out, di)
+'''), MOUSE_50K, OUT], out=DI / 'domaincaller.npy')
 
-
-b_di = cached(DI / 'domaincaller.npy', domaincaller_di)
+clr50 = cooler.Cooler(f'{MOUSE}::/resolutions/50000')
+b_di = np.load(DI / 'domaincaller.npy')
 a_di = table(one(DI / 'app', '*.di-w40.tsv'))['value'].to_numpy(float)
 ok = np.isfinite(a_di) & np.isfinite(b_di)
 floor = np.median(np.abs(b_di[ok]))
@@ -499,7 +574,7 @@ TEXT['di_only_ref'] = f'{di_only_ref:,}'
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), layout='constrained', width_ratios=[1, 1.6])
 ax = axes[0]
-ax.scatter(b_di[ok], a_di[ok], s=3, color=APP, alpha=0.35, lw=0, rasterized=True)
+ax.scatter(b_di[ok], a_di[ok], s=3, color=APP_COLOUR, alpha=0.35, lw=0, rasterized=True)
 lim = np.abs(b_di[ok]).max()
 identity(ax, -lim, lim)
 TICKS = [-1, -0.1, -0.01, 0, 0.01, 0.1, 1]
@@ -517,7 +592,7 @@ lo, _ = clr50.extent('chr2')
 stretch = slice(lo + 800, lo + 1_400)
 x = clr50.bins()['start'][:].to_numpy()[stretch] / 1e6
 ax.plot(x, b_di[stretch], color=REF, lw=3, label='domaincaller')
-ax.plot(x, a_di[stretch], color=APP, lw=1.2, label='metacooler-run')
+ax.plot(x, a_di[stretch], color=APP_COLOUR, lw=1.2, label='metacooler-run')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr2 (Mb)', ylabel='directionality index', title='b  chr2, 40–70 Mb')
 ax.legend(loc='lower left', ncols=2)
@@ -533,7 +608,7 @@ blank rather than reading a one-sided sum as a direction.
 ```{python}
 record('Directionality index', 'mouse Hi-C, 50 kb, window 2 Mb', f"domaincaller {VERSIONS['domaincaller']}",
        f"max relative difference {TEXT['di_max']} over {TEXT['di_n']} bins; every sign agrees",
-       'Identical (float32)')
+       'Identical (float32)', apps=['di'], refs=['domaincaller-di'])
 ```
 
 ## 3 · Compartments
@@ -542,7 +617,8 @@ record('Directionality index', 'mouse Hi-C, 50 kb, window 2 Mb', f"domaincaller 
 clipped at its 99.9th percentile, less one, gaps as expected — and three eigenvectors, ranked by
 eigenvalue and signed by GC content. **Reference:** `cooltools.eigs_cis`, signed by the same track.
 The GC content is computed once, per 100 kb bin with `bioframe.frac_gc`, and handed to both, so a
-difference in sign would be a difference in the method rather than in the phasing data.
+difference in sign would be a difference in the method rather than in the phasing data; it is
+input to both rather than part of either, so it is not timed.
 
 | | metacooler-run | cooltools |
 |---|---|---|
@@ -559,6 +635,7 @@ zero.
 
 ```{python}
 CMP = WORK / 'compartments'
+MOUSE_100K = f'{rel(MOUSE)}::/resolutions/100000'
 clr100 = cooler.Cooler(f'{MOUSE}::/resolutions/100000')
 
 
@@ -574,21 +651,23 @@ gc = cached(CMP / 'gc.tsv', gc_content)
 GC_TRACK = CMP / 'gc.bedGraph'
 if REDO or not GC_TRACK.exists():
     gc.dropna()[['chrom', 'start', 'end', 'GC']].to_csv(GC_TRACK, sep='\t', header=False, index=False)
-mr('compartments', f'{MOUSE}::/resolutions/100000', '--components', 3, '--phaseTrack', GC_TRACK,
-   out=CMP / 'app')
+mr('compartments', MOUSE_100K, '--components', 3, '--phaseTrack', GC_TRACK, out=CMP / 'app',
+   name='compartments', analysis='Compartments')
+reference('cooltools-eigs', 'Compartments', 'cooltools', [PYTHON, script('cooltools_eigs_cis', r'''
+    import sys, cooler, cooltools, pandas as pd
+    uri, gc, out = sys.argv[1:]
+    values, vectors = cooltools.eigs_cis(
+        cooler.Cooler(uri), phasing_track=pd.read_csv(gc, sep='\t'), n_eigs=3,
+        clr_weight_name='weight', ignore_diags=2, clip_percentile=99.9)
+    values.to_csv(f'{out}-eigenvalues.tsv', sep='\t', index=False)
+    vectors.to_csv(f'{out}-eigenvectors.tsv', sep='\t', index=False)
+'''), MOUSE_100K, CMP / 'gc.tsv', OUT], out=CMP / 'cooltools', made=CMP / 'cooltools-eigenvectors.tsv')
 
-
-def eigs_cis():
-    values, vectors = cooltools.eigs_cis(clr100, phasing_track=gc, n_eigs=3, clr_weight_name='weight',
-                                         ignore_diags=2, clip_percentile=99.9)
-    values.to_csv(CMP / 'cooltools-eigenvalues.tsv', sep='\t', index=False)
-    return vectors
-
-
-ref_vec = cached(CMP / 'cooltools-eigenvectors.tsv', eigs_cis)
+ref_vec = pd.read_csv(CMP / 'cooltools-eigenvectors.tsv', sep='\t')
 ref_val = pd.read_csv(CMP / 'cooltools-eigenvalues.tsv', sep='\t')
 app_vec = {k: table(one(CMP / 'app', f'*.compartment-e{k}.tsv'))['value'].to_numpy(float) for k in (1, 2, 3)}
 app_comp = table(one(CMP / 'app', '*.compartment-components.tsv'))
+
 
 def first(values):
     return values.iloc[0] if len(values) else np.nan
@@ -659,7 +738,7 @@ TEXT['cmp_e23_sentence'] = sentence
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), layout='constrained', width_ratios=[1.25, 1])
 ax = axes[0]
 x = np.arange(len(cmp_table))
-for k, colour, offset in ((1, APP, -0.2), (2, REF, 0), (3, REF2, 0.2)):
+for k, colour, offset in ((1, APP_COLOUR, -0.2), (2, REF, 0), (3, REF2, 0.2)):
     ax.scatter(x + offset, cmp_table[f'r E{k}'].abs(), s=24, color=colour, label=f'E{k}', zorder=3)
 ax.set_xticks(x, cmp_table['chromosome'].str.replace('chr', ''), fontsize=7)
 ax.set(ylim=(0, 1.05), xlabel='chromosome', ylabel='|Pearson r|, metacooler-run vs cooltools',
@@ -669,7 +748,7 @@ ax = axes[1]
 s = chrom100 == 'chr1'
 xs = ref_vec['start'].to_numpy()[s] / 1e6
 ax.plot(xs, ref_vec['E1'].to_numpy(float)[s], color=REF, lw=3, label='cooltools')
-ax.plot(xs, app_vec[1][s], color=APP, lw=1.2, label='metacooler-run')
+ax.plot(xs, app_vec[1][s], color=APP_COLOUR, lw=1.2, label='metacooler-run')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr1 (Mb)', ylabel='E1', title='b  E1 along chr1')
 ax.legend(loc='lower left', ncols=2)
@@ -688,7 +767,8 @@ the negative correlation in the table is. `{python} TEXT['cmp_e23_sentence']`
 record('Compartments', 'mouse Hi-C, 100 kb, GC-phased', f"cooltools {VERSIONS['cooltools']}",
        f"E1 r ≥ {TEXT['cmp_min_r']} on {TEXT['cmp_n']} chromosomes; eigenvalues within {TEXT['cmp_eig']}; "
        f"A/B ≥ {TEXT['cmp_ab']}",
-       f"Same eigenvectors (phasing ambiguous on {TEXT['cmp_ambiguous']})")
+       f"Same eigenvectors (phasing ambiguous on {TEXT['cmp_ambiguous']})",
+       apps=['compartments'], refs=['cooltools-eigs'])
 ```
 
 ## 4 · P(s)
@@ -709,15 +789,16 @@ not part of this notebook's environment, so that form is not re-checked here.
 
 ```{python}
 PS = WORK / 'ps'
-PS_CASES = {'yeast micro-C, 1 kb': ('yeast', str(YEAST_G2M)),
-            'mouse Hi-C, 10 kb': ('mouse', f'{MOUSE}::/resolutions/10000')}
-
-
-def per_diagonal(uri):
-    cvd = cooltools.expected_cis(cooler.Cooler(uri), ignore_diags=0, smooth=False, aggregate_smoothed=False,
-                                 clr_weight_name='weight', nproc=THREADS)
-    cvd['balanced.sum'] = cvd['balanced.sum'].fillna(0)
-    return cvd.groupby('dist', as_index=False)[['n_valid', 'balanced.sum']].sum()
+PS_CASES = {'yeast micro-C, 1 kb': ('yeast', rel(YEAST_G2M), str(YEAST_G2M), 'yeast 1 kb'),
+            'mouse Hi-C, 10 kb': ('mouse', MOUSE_10K, f'{MOUSE}::/resolutions/10000', 'mouse 10 kb')}
+EXPECTED = script('cooltools_expected_cis', r'''
+    import sys, cooler, cooltools
+    uri, out = sys.argv[1:]
+    table = cooltools.expected_cis(cooler.Cooler(uri), ignore_diags=0, smooth=False,
+                                   aggregate_smoothed=False, clr_weight_name='weight',
+                                   nproc=__THREADS__)
+    table.to_csv(out, sep='\t', index=False)
+''')
 
 
 def bands(n_valid, separations, binsize):
@@ -750,15 +831,19 @@ def bands(n_valid, separations, binsize):
 
 
 ps = {}
-for label, (slug, uri) in PS_CASES.items():
-    mr('expected', uri, '--quantity', 'expected', '--scope', 'file', out=PS / slug)
+for label, (slug, uri, local, short) in PS_CASES.items():
+    mr('expected', uri, '--quantity', 'expected', '--scope', 'file', out=PS / slug, name=f'expected-{slug}',
+       analysis='P(s)', label=short)
+    reference(f'cooltools-expected-{slug}', 'P(s)', 'cooltools', [PYTHON, EXPECTED, uri, OUT],
+              out=PS / f'{slug}-cooltools.tsv', label=short)
     app = table(one(PS / slug, '*.expected.ps.tsv'))
-    ref = cached(PS / f'{slug}-cooltools.tsv', lambda uri=uri: per_diagonal(uri))
-    binsize = cooler.Cooler(uri).binsize
-    n = ref.set_index('dist')['n_valid'].reindex(range(int(ref['dist'].max()) + 1), fill_value=0).to_numpy(float)
-    total = ref.set_index('dist')['balanced.sum'].reindex(range(len(n)), fill_value=0).to_numpy(float)
+    cvd = pd.read_csv(PS / f'{slug}-cooltools.tsv', sep='\t')
+    cvd['balanced.sum'] = cvd['balanced.sum'].fillna(0)
+    ref = cvd.groupby('dist')[['n_valid', 'balanced.sum']].sum()
+    n = ref['n_valid'].reindex(range(int(ref.index.max()) + 1), fill_value=0).to_numpy(float)
+    total = ref['balanced.sum'].reindex(range(len(n)), fill_value=0).to_numpy(float)
     x, y = app.iloc[:, 0].to_numpy(float), app.iloc[:, 1].to_numpy(float)
-    runs = bands(n, x, binsize)
+    runs = bands(n, x, cooler.Cooler(local).binsize)
     pooled = np.array([total[a:b].sum() / n[a:b].sum() for a, b in runs])
     ps[label] = dict(x=x, app=y, ref=pooled, rel=np.abs(y / pooled - 1),
                      widest=max(b - a for a, b in runs), reach=x.max())
@@ -779,11 +864,11 @@ fig, axes = plt.subplots(2, 2, figsize=(11, 6.4), layout='constrained', height_r
 for col, (label, v) in enumerate(ps.items()):
     ax = axes[0, col]
     ax.plot(v['x'], v['ref'], color=REF, lw=3, label='cooltools, pooled')
-    ax.scatter(v['x'], v['app'], s=14, color=APP, zorder=3, label='metacooler-run')
+    ax.scatter(v['x'], v['app'], s=14, color=APP_COLOUR, zorder=3, label='metacooler-run')
     ax.set(xscale='log', yscale='log', ylabel='mean balanced contact per bin pair', title=label)
     ax.legend(loc='lower left')
     ax = axes[1, col]
-    ax.scatter(v['x'], np.maximum(v['rel'], 1e-9), s=10, color=APP)
+    ax.scatter(v['x'], np.maximum(v['rel'], 1e-9), s=10, color=APP_COLOUR)
     ax.set(xscale='log', yscale='log', ylim=(1e-9, 1e-3), xlabel='separation (bp)',
            ylabel='|metacooler-run / cooltools − 1|')
 plt.show()
@@ -796,7 +881,8 @@ one bin of separation to the length of the longest chromosome, the largest relat
 ```{python}
 record('P(s)', 'yeast micro-C 1 kb; mouse Hi-C 10 kb', f"cooltools {VERSIONS['cooltools']}",
        f"max relative difference {TEXT['ps_max']} over {TEXT['ps_points']} points",
-       'Identical (float32)')
+       'Identical (float32)', apps=['expected-yeast', 'expected-mouse'],
+       refs=['cooltools-expected-yeast', 'cooltools-expected-mouse'])
 ```
 
 ## 5 · Peak calling (yapc)
@@ -821,38 +907,28 @@ The app's peak **table** counts from 1, as its tables do; its BED counts from 0,
 ```{python}
 YP = WORK / 'yapc'
 mr('peaks', '--signal', YEAST_ATAC, '--perPeak', 'true', '--width', 150, '--times', 3, '--minWidth', 75,
-   out=YP / 'app')
+   out=YP / 'app', name='peaks', analysis='Peak calling (yapc)')
+reference('yapc', 'Peak calling (yapc)', 'yapc 0.1', [YAPC_PYTHON, script('yapc_candidates', r'''
+    """yapc 0.1's candidate stage on one bigWig: yapc's own functions, from bin/yapc."""
+    import contextlib, io, os, runpy, shutil, sys, tempfile
+    track, out = sys.argv[1:3]
+    width, times = int(sys.argv[3]), int(sys.argv[4])
+    ns = runpy.run_path(shutil.which('yapc'), run_name='yapc_reference')
+    kernel = ns['prepare_second_derivative_kernel'](width, times)
+    quiet = contextlib.redirect_stdout(io.StringIO())
+    with tempfile.TemporaryDirectory() as tmp, quiet:
+        prefix = os.path.join(tmp, 'yapc')
+        ns['coverage']([track], prefix + '_coverage.bw')
+        ns['d2smooth'](prefix + '_coverage.bw', prefix + '_d2smooth.bw', kernel)
+        regions = ns['find_concave_regions'](prefix + '_d2smooth.bw', None, None)
+        regions['score'] = list(ns['scores'](
+            track, regions.chrom.tolist(), regions.concave_start.tolist(),
+            regions.concave_end.tolist(), kernel))
+    columns = ['chrom', 'concave_start', 'concave_end', 'mode', 'score']
+    regions[columns].to_csv(out, sep='\t', index=False)
+'''), YEAST_ATAC, OUT, 150, 3], out=YP / 'yapc-candidates.tsv', env=YAPC_ENV)
 
-YAPC_CANDIDATES = '''
-"""yapc 0.1's candidate stage on one bigWig, from yapc's own functions (bin/yapc, loaded with runpy)."""
-import contextlib, io, os, runpy, shutil, sys, tempfile
-track, out, width, times = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-ns = runpy.run_path(shutil.which('yapc'), run_name='yapc_reference')
-kernel = ns['prepare_second_derivative_kernel'](width, times)
-with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
-    prefix = os.path.join(tmp, 'yapc')
-    ns['coverage']([track], prefix + '_coverage.bw')
-    ns['d2smooth'](prefix + '_coverage.bw', prefix + '_d2smooth.bw', kernel)
-    regions = ns['find_concave_regions'](prefix + '_d2smooth.bw', None, None)
-    regions['score'] = list(ns['scores'](track, regions.chrom.tolist(), regions.concave_start.tolist(),
-                                         regions.concave_end.tolist(), kernel))
-regions[['chrom', 'concave_start', 'concave_end', 'mode', 'score']].to_csv(out, sep='\\t', index=False)
-'''
-
-
-def yapc_candidates():
-    script = YP / 'yapc_candidates.py'
-    script.write_text(YAPC_CANDIDATES)
-    out = YP / 'yapc-candidates.raw.tsv'
-    env = dict(os.environ, PATH=f'{YAPC_PYTHON.parent}{os.pathsep}{os.environ["PATH"]}')
-    run = subprocess.run([str(YAPC_PYTHON), str(script), str(YEAST_ATAC), str(out), '150', '3'],
-                         capture_output=True, text=True, env=env)
-    if run.returncode:
-        raise RuntimeError(run.stderr[-3000:])
-    return pd.read_csv(out, sep='\t')
-
-
-ref_all = cached(YP / 'yapc-candidates.tsv', yapc_candidates)
+ref_all = pd.read_csv(YP / 'yapc-candidates.tsv', sep='\t')
 ref_peaks = ref_all[(ref_all['concave_end'] - ref_all['concave_start']) >= 75]
 listing = table(one(YP / 'app', '*.peaks-list.tsv'))
 bed = pd.read_csv(one(YP / 'app', '*.bed'), sep='\t', header=None, names=['chrom', 'start', 'end', 'name', 'score', 'strand'])
@@ -862,15 +938,15 @@ app_peaks = (listing.assign(start=listing['start'] - 1, summit=listing['summit']
 m = app_peaks.merge(ref_peaks, left_on=['chrom', 'start', 'end'], right_on=['chrom', 'concave_start', 'concave_end'],
                     how='outer', indicator=True, suffixes=('_app', '_yapc'))
 shared = m[m['_merge'] == 'both']
-rel = np.abs(shared['score_app'] / shared['score_yapc'] - 1)
-candidates_app = next((int(re.sub(r'\D', '', n.split(' concave')[0])) for n in NOTES[YP / 'app'] if 'concave regions' in n), None)
+rel_score = np.abs(shared['score_app'] / shared['score_yapc'] - 1)
+candidates_app = next((int(re.sub(r'\D', '', n.split(' concave')[0])) for n in NOTES['peaks'] if 'concave regions' in n), None)
 measures({
     'concave regions, metacooler-run': f'{candidates_app:,}', 'concave regions, yapc': f'{len(ref_all):,}',
     'at least 75 bp, metacooler-run': f'{len(app_peaks):,}', 'at least 75 bp, yapc': f'{len(ref_peaks):,}',
     'same bounds': f'{len(shared):,}', 'only metacooler-run': f"{int((m['_merge'] == 'left_only').sum()):,}",
     'only yapc': f"{int((m['_merge'] == 'right_only').sum()):,}",
     'same summit': f"{(shared['summit'] == shared['mode']).mean():.2%}",
-    'score, max relative difference': f'{rel.max():.1e}',
+    'score, max relative difference': f'{rel_score.max():.1e}',
     'score ranks, Spearman ρ': f"{stats.spearmanr(shared['score_app'], shared['score_yapc'])[0]:.6f}",
 })
 ```
@@ -879,7 +955,7 @@ measures({
 #| label: fig-yapc
 #| fig-cap: "yapc's candidate regions on the yeast ATAC-seq track, metacooler-run against yapc 0.1: the score of every region both call."
 TEXT['yapc_n'] = f'{len(shared):,}'
-TEXT['yapc_rel'] = f'{rel.max():.1e}'
+TEXT['yapc_rel'] = f'{rel_score.max():.1e}'
 TEXT['yapc_summit'] = f"{(shared['summit'] == shared['mode']).mean():.2%}"
 TEXT['yapc_only'] = f"{int((m['_merge'] != 'both').sum())}"
 
@@ -897,7 +973,7 @@ significant digits the app writes a score to.
 ```{python}
 record('Peak calling (yapc)', 'yeast ATAC-seq bigWig, one track', f'yapc {YAPC} (bioconda release)',
        f"{TEXT['yapc_n']} regions, same bounds and summits ({TEXT['yapc_summit']}); scores within {TEXT['yapc_rel']}",
-       'Identical (candidate stage; IDR needs replicates)')
+       'Identical (candidate stage; IDR needs replicates)', apps=['peaks'], refs=['yapc'])
 ```
 
 ## 6 · Loops (chromosight)
@@ -911,21 +987,12 @@ chromosight writes.
 
 ```{python}
 LP = WORK / 'loops'
-mr('chromosight', YEAST_G2M, '--pattern', 'loops', out=LP / 'app')
-CHROMOSIGHT = shutil.which('chromosight') or str(Path(sys.executable).parent / 'chromosight')
+mr('chromosight', YEAST_G2M, '--pattern', 'loops', out=LP / 'app', name='chromosight', analysis='Loops (chromosight)')
+reference('chromosight', 'Loops (chromosight)', 'chromosight',
+          [CHROMOSIGHT, 'detect', '--pattern', 'loops', '--threads', THREADS, YEAST_G2M, OUT],
+          out=LP / 'chromosight' / 'loops', made=LP / 'chromosight' / 'loops.tsv')
 
-
-def chromosight_detect():
-    prefix = LP / 'chromosight' / 'loops'
-    prefix.parent.mkdir(parents=True, exist_ok=True)
-    run = subprocess.run([CHROMOSIGHT, 'detect', '--pattern', 'loops', '--threads', str(THREADS),
-                          str(YEAST_G2M), str(prefix)], capture_output=True, text=True)
-    if run.returncode:
-        raise RuntimeError(run.stderr[-3000:])
-    return pd.read_csv(f'{prefix}.tsv', sep='\t')
-
-
-ref_loops = cached(LP / 'chromosight-loops.tsv', chromosight_detect)
+ref_loops = pd.read_csv(LP / 'chromosight' / 'loops.tsv', sep='\t')
 app_loops = table(one(LP / 'app', '*.chromosight-patterns.tsv'))
 for key in ('p', 'q'):
     app_loops[key] = app_loops['detail'].str.extract(rf'\b{key} ([0-9.e+-]+)')[0].astype(float)
@@ -957,12 +1024,12 @@ TEXT['loops_p'] = f"{np.abs(readable['p'] / readable['pvalue'] - 1).max():.1e}"
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4.4), layout='constrained')
 ax = axes[0]
-ax.scatter(shared['score_ref'], shared['score_app'], s=8, color=APP, alpha=0.6, lw=0)
+ax.scatter(shared['score_ref'], shared['score_app'], s=8, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, shared['score_ref'].min(), shared['score_ref'].max())
 ax.set(xlabel='chromosight score', ylabel='metacooler-run score', title='a  loop scores')
 ax = axes[1]
 px, py = -np.log10(readable['pvalue']), -np.log10(readable['p'])
-ax.scatter(px, py, s=8, color=APP, alpha=0.6, lw=0)
+ax.scatter(px, py, s=8, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, min(px.min(), py.min()), max(px.max(), py.max()))
 ax.set(xlabel='chromosight, −log10 p', ylabel='metacooler-run, −log10 p', title='b  p-values')
 plt.show()
@@ -976,7 +1043,7 @@ prints in a call's detail.
 ```{python}
 record('Loops (chromosight)', 'yeast micro-C G2/M, 1 kb', f"chromosight {VERSIONS['chromosight']}",
        f"{TEXT['loops_n']} loops, the same bin pairs; scores within {TEXT['loops_score']}",
-       'Identical')
+       'Identical', apps=['chromosight'], refs=['chromosight'])
 ```
 
 ## 7 · Reproducibility (HiCRep)
@@ -995,38 +1062,51 @@ so the app is compared with each, and the two with each other, which is the yard
 | furthest diagonal | `--maxDistance 50` (5 Mb) | `dBPMax=5_000_000` | `max_dist=5_100_000` (diagonals 0–50) |
 | depth | as read | `bDownSample=False` | no subsampling |
 
-Seven maps of the chicken DT40 series in `demo/chicken`, every pair of them, over every chromosome
-long enough for all three tools (hicreppy leaves out a chromosome shorter than the furthest
-separation).
+Seven maps of the chicken DT40 series in `demo/chicken` — G2, 5, 10, 15, 30 and 60 min, and
+unsorted, as the files name them — every pair of them, over every chromosome long enough for all
+three tools (hicreppy leaves out a chromosome shorter than the furthest separation).
 
 ```{python}
 HR = WORK / 'hicrep'
 RES, STRATA, H = 100_000, 50, 1
 LABELS = list(CHICKEN)
-URIS = {label: f'{CHICKEN[label]}::/resolutions/{RES}' for label in LABELS}
-first = cooler.Cooler(URIS[LABELS[0]])
-SEQS = [c for c, length in first.chromsizes.items() if length >= (STRATA + 1) * RES]
-against = [arg for label in LABELS[1:] for arg in ('--against', URIS[label])]
+URIS = {label: f'{rel(CHICKEN[label])}::/resolutions/{RES}' for label in LABELS}
+first_map = cooler.Cooler(f'{CHICKEN[LABELS[0]]}::/resolutions/{RES}')
+SEQS = [c for c, length in first_map.chromsizes.items() if length >= (STRATA + 1) * RES]
+against = [a for label in LABELS[1:] for a in ('--against', URIS[label])]
 mr('hicrep', URIS[LABELS[0]], *against, '--maxDistance', STRATA, '--smooth', H, '--no-balance',
-   '--sequences', ','.join(SEQS), out=HR / 'app')
-
-
-def reference_scc():
+   '--sequences', ','.join(SEQS), out=HR / 'app', name='hicrep', analysis='Reproducibility (HiCRep)',
+   label='7 maps, 21 pairs')
+MAPS = [f'{label}={URIS[label]}' for label in LABELS]
+reference('hicrep', 'Reproducibility (HiCRep)', 'hicrep', [PYTHON, script('hicrep_scc', r'''
+    import sys, cooler, pandas as pd
     from hicrep import hicrepSCC
+    out, seqs = sys.argv[1], sys.argv[2].split(',')
+    maps = dict(m.split('=', 1) for m in sys.argv[3:])
+    labels, rows = list(maps), []
+    for i, a in enumerate(labels):
+        for b in labels[i + 1:]:
+            scc = hicrepSCC(cooler.Cooler(maps[a]), cooler.Cooler(maps[b]), h=1,
+                            dBPMax=5_000_000, bDownSample=False, chrNames=seqs)
+            rows += [dict(a=a, b=b, sequence=s, hicrep=v) for s, v in zip(seqs, scc)]
+    pd.DataFrame(rows).to_csv(out, sep='\t', index=False)
+'''), OUT, ','.join(SEQS), *MAPS], out=HR / 'hicrep.tsv', label='7 maps, 21 pairs')
+reference('hicreppy', 'Reproducibility (HiCRep)', 'hicreppy', [PYTHON, script('hicreppy_scc', r'''
+    import sys, cooler, pandas as pd
     from hicreppy.hicrep import genome_scc
-    rows = []
-    for i, a in enumerate(LABELS):
-        for b in LABELS[i + 1:]:
-            ca, cb = cooler.Cooler(URIS[a]), cooler.Cooler(URIS[b])
-            lin = hicrepSCC(ca, cb, h=H, dBPMax=STRATA * RES, bDownSample=False, chrNames=SEQS)
-            for seq, value in zip(SEQS, lin):
-                rows.append({'a': a, 'b': b, 'sequence': seq, 'hicrep': value,
-                             'hicreppy': genome_scc(ca, cb, max_dist=(STRATA + 1) * RES, h=H, whitelist=[seq])})
-    return pd.DataFrame(rows)
+    out, seqs = sys.argv[1], sys.argv[2].split(',')
+    maps = dict(m.split('=', 1) for m in sys.argv[3:])
+    labels, rows = list(maps), []
+    for i, a in enumerate(labels):
+        for b in labels[i + 1:]:
+            ca, cb = cooler.Cooler(maps[a]), cooler.Cooler(maps[b])
+            for s in seqs:
+                scc = genome_scc(ca, cb, max_dist=5_100_000, h=1, whitelist=[s])
+                rows.append(dict(a=a, b=b, sequence=s, hicreppy=scc))
+    pd.DataFrame(rows).to_csv(out, sep='\t', index=False)
+'''), OUT, ','.join(SEQS), *MAPS], out=HR / 'hicreppy.tsv', label='7 maps, 21 pairs')
 
-
-ref_scc = cached(HR / 'references.tsv', reference_scc)
-names = {'This map': LABELS[0], **{Path(CHICKEN[label]).name: label for label in LABELS}}
+names = {'This map': LABELS[0], **{CHICKEN[label].name: label for label in LABELS}}
 app_scc = table(one(HR / 'app', '*.hicrep-sequences.tsv'))
 app_scc['a'], app_scc['b'] = app_scc['a'].map(names), app_scc['b'].map(names)
 
@@ -1038,8 +1118,9 @@ def unordered(frame):
     return frame
 
 
-scc = unordered(app_scc[['a', 'b', 'sequence', 'scc']].rename(columns={'scc': 'metacooler-run'})).merge(
-    unordered(ref_scc), on=['a', 'b', 'sequence'])
+scc = (unordered(app_scc[['a', 'b', 'sequence', 'scc']].rename(columns={'scc': 'metacooler-run'}))
+       .merge(unordered(pd.read_csv(HR / 'hicrep.tsv', sep='\t')), on=['a', 'b', 'sequence'])
+       .merge(unordered(pd.read_csv(HR / 'hicreppy.tsv', sep='\t')), on=['a', 'b', 'sequence']))
 rows = []
 for x, y in (('metacooler-run', 'hicrep'), ('metacooler-run', 'hicreppy'), ('hicrep', 'hicreppy')):
     d = scc[x] - scc[y]
@@ -1057,18 +1138,19 @@ against the per-diagonal correlation of the same matrices smoothed by hicreppy's
 ```{python}
 import hicreppy.utils.mat_process as cu
 
-PAIR = ('G2', '60 min')
+PAIR = ('G2', '60m')
 mr('hicrep', URIS[PAIR[0]], '--against', URIS[PAIR[1]], '--maxDistance', STRATA, '--smooth', H, '--no-balance',
-   '--sequences', 'chr1', out=HR / 'app-chr1')
+   '--sequences', 'chr1', out=HR / 'app-chr1', name='hicrep-chr1', analysis='Reproducibility (HiCRep)',
+   label='chr1, G2 vs 60m', bench=False)
 strata_app = table(one(HR / 'app-chr1', '*.hicrep-strata.tsv')).iloc[:, 1].to_numpy(float)
 
 
-def smoothed(uri):
-    raw = cooler.Cooler(uri).matrix(sparse=True, balance=False).fetch('chr1')
+def smoothed(label):
+    raw = cooler.Cooler(f'{CHICKEN[label]}::/resolutions/{RES}').matrix(sparse=True, balance=False).fetch('chr1')
     return cu.smooth(cu.diag_trim(raw.todia(), STRATA + 1 + H).tocoo(), H).tocsr()
 
 
-s1, s2 = smoothed(URIS[PAIR[0]]), smoothed(URIS[PAIR[1]])
+s1, s2 = smoothed(PAIR[0]), smoothed(PAIR[1])
 strata_ref = np.array([stats.pearsonr(s1.diagonal(d), s2.diagonal(d))[0] for d in range(len(strata_app))])
 pooled = scc[(scc['a'] == PAIR[0]) & (scc['b'] == PAIR[1]) & (scc['sequence'] == 'chr1')].iloc[0]
 measures({'per-diagonal r, Pearson r between the two curves': f'{stats.pearsonr(strata_app, strata_ref)[0]:.5f}',
@@ -1086,7 +1168,8 @@ TEXT['hr_app_py'] = f"{scc_table.loc[1, 'mean difference']:+.2f}"
 TEXT['hr_lin_py'] = f"{scc_table.loc[2, 'mean difference']:+.2f}"
 TEXT['hr_lin_py_max'] = f"{scc_table.loc[2, 'max |difference|']:.2f}"
 TEXT['hr_lin_py_r'] = f"{scc_table.loc[2, 'Pearson r']:.2f}"
-TEXT['hr_app_r'] = f"{min(scc_table.loc[0, 'Pearson r'], scc_table.loc[1, 'Pearson r']):.2f}"
+TEXT['hr_app_r'] = f"{max(scc_table.loc[0, 'Pearson r'], scc_table.loc[1, 'Pearson r']):.2f}"
+TEXT['hr_n'] = f'{len(scc)}'
 TEXT['hr_strata_r'] = f"{stats.pearsonr(strata_app, strata_ref)[0]:.4f}"
 TEXT['hr_chr1_app'] = f"{pooled['metacooler-run']:.2f}"
 TEXT['hr_chr1_refs'] = f"{pooled['hicrep']:.2f} and {pooled['hicreppy']:.2f}"
@@ -1097,16 +1180,16 @@ grid = fig.add_gridspec(2, 3, height_ratios=[1, 1.1])
 for col, (x, y, title) in enumerate((('hicrep', 'metacooler-run', 'a'), ('hicreppy', 'metacooler-run', 'b'),
                                      ('hicrep', 'hicreppy', 'c'))):
     ax = fig.add_subplot(grid[0, col])
-    ax.scatter(scc[x], scc[y], s=7, color=APP if y == 'metacooler-run' else REF2, alpha=0.5, lw=0)
+    ax.scatter(scc[x], scc[y], s=7, color=APP_COLOUR if y == 'metacooler-run' else REF2, alpha=0.5, lw=0)
     identity(ax, 0, 1)
     ax.set(xlim=(0, 1), ylim=(0, 1), xlabel=f'{x} SCC', ylabel=f'{y} SCC', title=f'{title}  {y} vs {x}')
     ax.set_aspect('equal')
 ax = fig.add_subplot(grid[1, :])
 sep = np.arange(len(strata_app)) * RES / 1e6
 ax.plot(sep, strata_ref, color=REF2, lw=3, label='per-diagonal r, hicreppy smoothing')
-ax.plot(sep, strata_app, color=APP, lw=1.2, label='per-diagonal r, metacooler-run')
+ax.plot(sep, strata_app, color=APP_COLOUR, lw=1.2, label='per-diagonal r, metacooler-run')
 placed = []
-for value, colour, name in sorted(((pooled['metacooler-run'], APP, 'SCC, metacooler-run'),
+for value, colour, name in sorted(((pooled['metacooler-run'], APP_COLOUR, 'SCC, metacooler-run'),
                                    (pooled['hicrep'], REF, 'SCC, hicrep'), (pooled['hicreppy'], REF2, 'SCC, hicreppy'))):
     ax.hlines(value, 0, sep.max(), color=colour, lw=1, ls=(0, (4, 3)))
     label_at = max(value, placed[-1] + 0.05) if placed else value
@@ -1119,27 +1202,29 @@ plt.show()
 ```
 
 **This comparison fails, and the figure says why.** The two references follow each other closely
-(r = `{python} TEXT['hr_lin_py_r']` over the 546 values, mean difference `{python} TEXT['hr_lin_py']`,
-at most `{python} TEXT['hr_lin_py_max']` apart), while the app's SCC follows neither (r ≤
-`{python} TEXT['hr_app_r']`) and sits on average `{python} TEXT['hr_app_lin']` above hicrep and
-`{python} TEXT['hr_app_py']` above hicreppy. Its **per-diagonal** correlations are the references' (r = `{python} TEXT['hr_strata_r']`
-between the two curves in d), so the smoothing and the correlation are right and the difference is
-in the **pooling**: on chr1 the app pools diagonals whose correlation is mostly around
-`{python} TEXT['hr_chr1_mean']` into `{python} TEXT['hr_chr1_app']`, where hicrep and hicreppy give
-`{python} TEXT['hr_chr1_refs']`. The weight each diagonal gets is the cause.
-`src/analysis/hicrep.ts` weights a diagonal by `N √(var₁ · var₂)` of the smoothed **counts**, which
-on raw counts is dominated by the few diagonals nearest the main one, where the counts are largest
-and the correlation highest. Both references — and the original R package — take that variance of
-the **ranks** (`vstran`: hicrep's `varVstran`, hicreppy's `vstrans`), which depends on little but
-the number of positions, so every diagonal counts about equally. The app's port does not reproduce
-the reference here; no source was changed for this notebook.
+(r = `{python} TEXT['hr_lin_py_r']` over the `{python} TEXT['hr_n']` values, mean difference
+`{python} TEXT['hr_lin_py']`, at most `{python} TEXT['hr_lin_py_max']` apart), while the app's SCC
+follows neither (r ≤ `{python} TEXT['hr_app_r']`) and sits on average `{python} TEXT['hr_app_lin']`
+above hicrep and `{python} TEXT['hr_app_py']` above hicreppy. Its **per-diagonal** correlations are
+the references' (r = `{python} TEXT['hr_strata_r']` between the two curves in d), so the smoothing
+and the correlation are right and the difference is in the **pooling**: on chr1 the app pools
+diagonals whose correlation is mostly around `{python} TEXT['hr_chr1_mean']` into
+`{python} TEXT['hr_chr1_app']`, where hicrep and hicreppy give `{python} TEXT['hr_chr1_refs']`. The
+weight each diagonal gets is the cause. `src/analysis/hicrep.ts` weights a diagonal by
+`N √(var₁ · var₂)` of the smoothed **counts**, which on raw counts is dominated by the few diagonals
+nearest the main one, where the counts are largest and the correlation highest. Both references — and
+the original R package — take that variance of the **ranks** (`vstran`: hicrep's `varVstran`,
+hicreppy's `vstrans`), which depends on little but the number of positions, so every diagonal counts
+about equally. The app's port does not reproduce the reference here; no source was changed for this
+notebook.
 
 ```{python}
 record('Reproducibility (HiCRep)', 'chicken DT40, 7 maps, 100 kb, raw counts',
        f"hicrep {VERSIONS['hicrep']}; hicreppy {VERSIONS['hicreppy']}",
        f"SCC {TEXT['hr_app_lin']} vs hicrep, {TEXT['hr_app_py']} vs hicreppy (the references differ by {TEXT['hr_lin_py']}); "
        f"per-diagonal r agree (r = {TEXT['hr_strata_r']})",
-       'Differs: diagonals weighted by count variance, not rank variance')
+       'Differs: diagonals weighted by count variance, not rank variance',
+       apps=['hicrep', 'hicrep-chr1'], refs=['hicrep', 'hicreppy'])
 ```
 
 ## 8 · 3D model (pastis-NB)
@@ -1166,8 +1251,38 @@ if REDO or not Y10.exists():
     P3.mkdir(parents=True, exist_ok=True)
     cooler.coarsen_cooler(str(YEAST_G2M), str(Y10), factor=10, chunksize=10_000_000)
     cooler.balance_cooler(cooler.Cooler(str(Y10)), store=True)
-mr('reconstruct3d', Y10, '--method', 'nb', '--alpha', 3, '--iterations', 1000, out=P3 / 'app-1000')
-mr('reconstruct3d', Y10, '--method', 'nb', '--alpha', 3, out=P3 / 'app-150')
+mr('reconstruct3d', Y10, '--method', 'nb', '--alpha', 3, '--iterations', 1000, out=P3 / 'app-1000',
+   name='reconstruct3d-1000', analysis='3D model (pastis-NB)', label='1,000 steps')
+mr('reconstruct3d', Y10, '--method', 'nb', '--alpha', 3, out=P3 / 'app-150',
+   name='reconstruct3d-150', analysis='3D model (pastis-NB)', label='150 steps, the default')
+PASTIS = script('pastis_nb', r'''
+    import sys, cooler, numpy as np, pandas as pd
+    from pastis import dispersion
+    from pastis.optimization import mds, negative_binomial_structure as nbs
+    uri, out, seed = sys.argv[1], sys.argv[2], int(sys.argv[3])
+    clr = cooler.Cooler(uri)
+    raw = clr.matrix(balance=False)[:].astype(float)
+    w = clr.bins()['weight'][:].to_numpy(float)
+    keep = np.isfinite(w) & (raw.sum(axis=0) > 0)  # the beads metacooler-run models
+    chroms = clr.bins()['chrom'][:].to_numpy()[keep]
+    lengths = np.array([np.sum(chroms == c) for c in pd.unique(chroms)])
+    counts, bias = raw[np.ix_(keep, keep)], 1 / w[keep]
+    bias /= bias.mean()
+    _, mean, variance, weights = dispersion.compute_mean_variance(
+        counts, lengths, bias=bias)
+    fitted = dispersion.ExponentialDispersion(degree=1)
+    fitted.fit(mean, variance, sample_weights=weights ** 0.5)
+    start = mds.estimate_X(counts / np.outer(bias, bias), alpha=-3., beta=1.,
+                           random_state=np.random.RandomState(seed))
+    model = nbs.estimate_X(counts, alpha=-3., beta=1., ini=start.flatten(),
+                           dispersion=fitted, bias=bias, lengths=lengths,
+                           use_zero_entries=True,
+                           random_state=np.random.RandomState(seed))
+    np.save(out, model.reshape(-1, 3))
+''')
+for seed in (0, 1, 2):
+    reference(f'pastis-seed{seed}', '3D model (pastis-NB)', 'pastis', [PYTHON, PASTIS, Y10, OUT, seed],
+              out=P3 / f'pastis-seed{seed}.npy', label=f'seed {seed}', bench=seed == 0)
 
 clr_y = cooler.Cooler(str(Y10))
 raw_y = clr_y.matrix(balance=False)[:].astype(float)
@@ -1175,23 +1290,6 @@ w_y = clr_y.bins()['weight'][:].to_numpy(float)
 KEEP = np.isfinite(w_y) & (raw_y.sum(axis=0) > 0)
 beads = clr_y.bins()[['chrom', 'start']][:][KEEP].reset_index(drop=True)
 bead_chrom = beads['chrom'].astype(str).to_numpy()
-
-
-def pastis_nb(seed):
-    from pastis import dispersion
-    from pastis.optimization import mds, negative_binomial_structure as nbs
-    counts = raw_y[np.ix_(KEEP, KEEP)]
-    lengths = np.array([np.sum(bead_chrom == c) for c in pd.unique(bead_chrom)])
-    bias = 1 / w_y[KEEP]
-    bias /= bias.mean()
-    _, mean, variance, weights = dispersion.compute_mean_variance(counts, lengths, bias=bias)
-    fitted = dispersion.ExponentialDispersion(degree=1)
-    fitted.fit(mean, variance, sample_weights=weights ** 0.5)
-    start = mds.estimate_X(counts / np.outer(bias, bias), alpha=-3., beta=1.,
-                           random_state=np.random.RandomState(seed))
-    model = nbs.estimate_X(counts, alpha=-3., beta=1., ini=start.flatten(), dispersion=fitted, bias=bias,
-                           lengths=lengths, use_zero_entries=True, random_state=np.random.RandomState(seed))
-    return model.reshape(-1, 3)
 
 
 def app_model(folder):
@@ -1202,8 +1300,9 @@ def app_model(folder):
 
 MODELS = {'metacooler-run, 150 steps': app_model(P3 / 'app-150'),
           'metacooler-run, 1,000 steps': app_model(P3 / 'app-1000'),
-          **{f'pastis, seed {s}': cached(P3 / f'pastis-seed{s}.npy', lambda s=s: pastis_nb(s)) for s in (0, 1, 2)}}
-assert all(np.isfinite(model).all() for model in MODELS.values()), 'a bead is missing from a model'
+          **{f'pastis, seed {s}': np.load(P3 / f'pastis-seed{s}.npy') for s in (0, 1, 2)}}
+assert all(model.shape == (KEEP.sum(), 3) and np.isfinite(model).all() for model in MODELS.values()), \
+    'a bead is missing from a model'
 ```
 
 ```{python}
@@ -1235,8 +1334,8 @@ fit_table = pd.DataFrame([{'model': name,
                            'fit, all pairs': stats.spearmanr(1 / d[seen], contacts[seen])[0],
                            'fit, within chromosomes': stats.spearmanr(1 / d[seen & same], contacts[seen & same])[0]}
                           for name, d in dist.items()])
-display(models_table.style.format(precision=3).hide(axis='index'))
-fit_table.style.format(precision=3).hide(axis='index')
+display(show(models_table, precision=3))
+show(fit_table, precision=3)
 ```
 
 The fit is the Spearman correlation between `1/d` and the balanced contacts over every pair of beads
@@ -1248,17 +1347,23 @@ the map counted, computed the same way for every model.
 kinds = models_table[models_table['kind'] != 'metacooler-run vs metacooler-run']
 cross = kinds[kinds['kind'] == 'metacooler-run vs pastis']
 selfs = kinds[kinds['kind'] == 'pastis vs pastis']
-TEXT['p3_intra_cross'] = f"{cross['within chromosomes, Spearman ρ'].min():.3f}–{cross['within chromosomes, Spearman ρ'].max():.3f}"
-TEXT['p3_intra_self'] = f"{selfs['within chromosomes, Spearman ρ'].min():.3f}–{selfs['within chromosomes, Spearman ρ'].max():.3f}"
-TEXT['p3_inter_cross'] = f"{cross['between chromosomes, Spearman ρ'].min():.2f}–{cross['between chromosomes, Spearman ρ'].max():.2f}"
-TEXT['p3_inter_self'] = f"{selfs['between chromosomes, Spearman ρ'].min():.2f}–{selfs['between chromosomes, Spearman ρ'].max():.2f}"
-TEXT['p3_disp_cross'] = f"{cross['per-chromosome Procrustes disparity'].min():.3f}–{cross['per-chromosome Procrustes disparity'].max():.3f}"
-TEXT['p3_disp_self'] = f"{selfs['per-chromosome Procrustes disparity'].min():.3f}–{selfs['per-chromosome Procrustes disparity'].max():.3f}"
+
+
+def spread(frame, column, digits):
+    return f"{frame[column].min():.{digits}f}–{frame[column].max():.{digits}f}"
+
+
+TEXT['p3_intra_cross'] = spread(cross, 'within chromosomes, Spearman ρ', 3)
+TEXT['p3_intra_self'] = spread(selfs, 'within chromosomes, Spearman ρ', 3)
+TEXT['p3_inter_cross'] = spread(cross, 'between chromosomes, Spearman ρ', 2)
+TEXT['p3_inter_self'] = spread(selfs, 'between chromosomes, Spearman ρ', 2)
+TEXT['p3_disp_cross'] = spread(cross, 'per-chromosome Procrustes disparity', 3)
+TEXT['p3_disp_self'] = spread(selfs, 'per-chromosome Procrustes disparity', 3)
 fits = fit_table.set_index('model')['fit, all pairs']
 TEXT['p3_fit_app'] = f"{fits['metacooler-run, 1,000 steps']:.3f}"
-TEXT['p3_fit_pastis'] = f"{fits[[n for n in fits.index if n.startswith('pastis')]].min():.3f}–{fits[[n for n in fits.index if n.startswith('pastis')]].max():.3f}"
-TEXT['p3_default'] = models_table.loc[models_table['kind'] == 'metacooler-run vs metacooler-run', 'within chromosomes, Spearman ρ'].iloc[0]
-TEXT['p3_default'] = f"{TEXT['p3_default']:.3f}"
+pastis_fits = fits[[n for n in fits.index if n.startswith('pastis')]]
+TEXT['p3_fit_pastis'] = f"{pastis_fits.min():.3f}–{pastis_fits.max():.3f}"
+TEXT['p3_default'] = f"{models_table.loc[models_table['kind'] == 'metacooler-run vs metacooler-run', 'within chromosomes, Spearman ρ'].iloc[0]:.3f}"
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ratios=[1, 1.15])
 
@@ -1273,7 +1378,7 @@ agreement(axes[0], scaled(MODELS['pastis, seed 0'])[same], scaled(MODELS['metaco
           'pastis, seed 0', 'metacooler-run, 1,000 steps', 'a  distances within chromosomes', scale='log')
 ax = axes[1]
 for col, metric in enumerate(('within chromosomes, Spearman ρ', 'between chromosomes, Spearman ρ')):
-    for offset, frame, colour, label in ((-0.12, cross, APP, 'metacooler-run vs pastis'),
+    for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'metacooler-run vs pastis'),
                                          (0.12, selfs, REF, 'pastis vs pastis')):
         ax.scatter(np.full(len(frame), col + offset), frame[metric], s=36, color=colour,
                    label=label if col == 0 else None, zorder=3)
@@ -1299,14 +1404,29 @@ within chromosomes).
 record('3D model (pastis-NB)', 'yeast micro-C G2/M, 10 kb, 1,128 beads', 'pastis 0.5.0 (GitHub 6888ac2)',
        f"within chromosomes ρ = {TEXT['p3_intra_cross']} (pastis vs pastis {TEXT['p3_intra_self']}); "
        f"between ρ = {TEXT['p3_inter_cross']} ({TEXT['p3_inter_self']}); fit {TEXT['p3_fit_app']} vs {TEXT['p3_fit_pastis']}",
-       'Equivalent fit; shapes close, slightly outside pastis\' own run-to-run spread')
+       'Equivalent fit; shapes close, slightly outside pastis\' own run-to-run spread',
+       apps=['reconstruct3d-1000', 'reconstruct3d-150'], refs=['pastis-seed0', 'pastis-seed1', 'pastis-seed2'])
 ```
 
 ## Summary
 
+Each row gives the commands exactly as this notebook ran them, from `notebooks/work/validation/`:
+`metacooler-run` is the command this package installs (here `node dist-cli/metacooler-run.mjs`, built
+from this checkout), `python` the interpreter of the reference packages and `yapc-env/bin/python`
+yapc's own. The reference scripts are printed in full [below](#the-reference-scripts).
+
 ```{python}
-pd.set_option('display.max_colwidth', None)
-pd.DataFrame(SUMMARY).style.hide(axis='index').set_properties(**{'text-align': 'left', 'vertical-align': 'top'})
+#| column: screen-inset
+WIDTHS = {'Analysis': 8, 'Data': 9, 'metacooler-run command': 25, 'Reference': 8, 'Reference command': 25,
+          'Agreement': 14, 'Verdict': 11}
+summary = pd.DataFrame(SUMMARY)[list(WIDTHS)]
+summary.style.hide(axis='index').set_table_styles([
+    {'selector': '', 'props': [('table-layout', 'fixed'), ('width', '100%'), ('font-size', '0.85em')]},
+    {'selector': 'td, th', 'props': [('vertical-align', 'top'), ('text-align', 'left')]},
+    {'selector': 'td pre', 'props': [('font-size', '0.85em'), ('white-space', 'pre-wrap'), ('overflow-wrap', 'anywhere'),
+                                     ('margin', '0'), ('padding', '0'), ('background', 'transparent')]},
+    *[{'selector': f'th.col{i}', 'props': [('width', f'{w}%')]} for i, w in enumerate(WIDTHS.values())],
+])
 ```
 
 Five of the eight reproduce their reference: the directionality index, P(s), yapc's candidates and
@@ -1320,3 +1440,170 @@ per-diagonal correlations are the references', and the weights that pool them ar
 What this notebook does not cover, and where it is covered instead: P(s) as a density (HiContacts, in
 R) and yapc's reproducibility test with two replicates (IDR 2.0.3) are held to their references by the
 unit tests' goldens (`test/golden/analysis/hicontacts_ps.json`, `yapc_idr.json`, `idr.json`).
+
+### The reference scripts
+
+Where a reference has no command line of its own — all but chromosight — the notebook writes the few
+lines that call it into `notebooks/work/validation/scripts/`, and runs them as the table shows.
+
+```{python}
+#| output: asis
+for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref['scripts']}.items():
+    print(f'**{analysis}**, `{path}`\n\n```python\n{(WORK / path).read_text().rstrip()}\n```\n')
+```
+
+## Time
+
+Every command in the summary that produced a compared result is timed `{python} str(RUNS)` times —
+each `metacooler-run` command, and each reference as it ran (for pastis, the first seed; the chr1
+HiCRep run behind panel d is not timed, being a diagnosis rather than a result). Each run is a
+**fresh process**, started from this notebook exactly as the summary prints it but writing to a
+scratch folder, so its time includes starting up: Node loading `metacooler-run`, Python importing a
+reference's packages. Two bare start-ups are timed beside them for scale. The runs go **round
+robin** — every command once, then every command again — so that whatever else the machine was doing
+is spread across all of them rather than landing on one.
+
+**Wall** time is what a reader waits. **CPU** time — user and system, of the process and every
+process it started — says how many cores that took. `metacooler-run` computes on one thread.
+cooltools' insulation and P(s), and chromosight, were given `{python} str(THREADS)` processes, and
+the numerical libraries under every Python reference may spread their linear algebra over several
+cores on their own; the *cores busy* column says what each command used.
+
+```{python}
+BENCH = WORK / 'benchmark'
+ANALYSES = [row['Analysis'] for row in SUMMARY]
+
+
+def timed(argv, env=None):
+    """Wall and CPU seconds of one command, run from work/validation/ as the others were."""
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    start = time.perf_counter()
+    run = subprocess.run(argv, capture_output=True, text=True, cwd=WORK, env=env)
+    wall = time.perf_counter() - start
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    if run.returncode:
+        raise RuntimeError(f'{typed(argv)}\n{run.stderr[-3000:]}')
+    return wall, (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+
+
+def jobs():
+    """What is timed, in the summary's order: each analysis's metacooler-run commands, then its references."""
+    out = [dict(name='start-up', analysis='Start-up only', tool='metacooler-run', label='node, bundle loaded',
+                argv=lambda scratch: ['node', str(CLI), 'tasks'], env=None),
+           dict(name='start-up-python', analysis='Start-up only', tool='python', label='import cooler, cooltools',
+                argv=lambda scratch: [PYTHON, '-c', 'import cooler, cooltools'], env=None)]
+    for analysis in ANALYSES:
+        for name, app in APP.items():
+            if app['analysis'] == analysis and app['bench']:
+                out.append(dict(name=name, analysis=analysis, tool='metacooler-run', label=app['label'], env=None,
+                                argv=lambda scratch, app=app: app['argv'] + ['--out', rel(scratch)]))
+        for name, ref in REFS.items():
+            if ref['analysis'] == analysis and ref['bench']:
+                out.append(dict(name=name, analysis=analysis, tool=ref['tool'], label=ref['label'], env=ref['env'],
+                                argv=lambda scratch, ref=ref: [rel(scratch / ref['out'].name) if a == OUT else a
+                                                               for a in ref['argv']]))
+    return out
+
+
+def machine():
+    cpu = platform.processor()
+    if Path('/proc/cpuinfo').exists():
+        cpu = next((line.split(':', 1)[1].strip() for line in open('/proc/cpuinfo') if line.startswith('model name')), cpu)
+    try:
+        memory = f"{os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 1e9:.0f} GB"
+    except (ValueError, OSError):
+        memory = '?'
+    node = subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip()
+    return {'processor': cpu, 'cores': str(os.cpu_count()), 'memory': memory, 'system': platform.platform(),
+            'Node': node, 'Python': platform.python_version(), 'measured': time.strftime('%Y-%m-%d %H:%M')}
+
+
+def benchmark():
+    order, rows = jobs(), []
+    for run in range(1, RUNS + 1):
+        for i, job in enumerate(order):
+            scratch = BENCH / 'scratch' / job['name']
+            shutil.rmtree(scratch, ignore_errors=True)
+            scratch.mkdir(parents=True)
+            wall, cpu = timed(job['argv'](scratch), job['env'])
+            shutil.rmtree(scratch, ignore_errors=True)
+            rows.append({'order': i, 'analysis': job['analysis'], 'tool': job['tool'], 'variant': job['label'],
+                         'run': run, 'wall s': wall, 'CPU s': cpu})
+    (BENCH / 'machine.json').write_text(json.dumps(machine(), indent=1))
+    return pd.DataFrame(rows)
+
+
+if REDO_BENCHMARK or not (BENCH / 'times.tsv').exists():
+    BENCH.mkdir(parents=True, exist_ok=True)
+    benchmark().to_csv(BENCH / 'times.tsv', sep='\t', index=False)
+times = pd.read_csv(BENCH / 'times.tsv', sep='\t', keep_default_na=False)
+measures(json.loads((BENCH / 'machine.json').read_text()))
+```
+
+```{python}
+#| column: page
+key = ['order', 'analysis', 'tool', 'variant']
+wide = times.pivot_table(index=key, columns='run', values='wall s').reset_index()
+wide.columns = [f'run {c}' if isinstance(c, (int, np.integer)) else c for c in wide.columns]
+stats_ = times.groupby(key).agg(mean=('wall s', 'mean'), sd=('wall s', 'std'), cpu=('CPU s', 'mean')).reset_index()
+wide = wide.merge(stats_, on=key).sort_values('order')
+wide['wall, mean ± sd'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(wide['mean'], wide['sd'])]
+wide['CPU, mean'] = wide['cpu']
+wide['cores busy'] = wide['cpu'] / wide['mean']
+run_columns = [f'run {r}' for r in range(1, RUNS + 1)]
+show(wide[['analysis', 'tool', 'variant', *run_columns, 'wall, mean ± sd', 'CPU, mean', 'cores busy']],
+     precision=2, **{'cores busy': '{:.1f}'})
+```
+
+```{python}
+timed_ = wide[wide['analysis'] != 'Start-up only']
+mine = timed_[timed_['tool'] == 'metacooler-run']
+theirs = timed_[timed_['tool'] != 'metacooler-run']
+boot = wide[wide['analysis'] == 'Start-up only'].set_index('tool')['mean']
+TEXT['t_app'] = f"{mine['mean'].min():.1f}–{mine['mean'].max():.0f} s"
+TEXT['t_ref'] = f"{theirs['mean'].min():.1f}–{theirs['mean'].max():.0f} s"
+TEXT['t_node'] = f"{boot['metacooler-run']:.2f} s"
+TEXT['t_python'] = f"{boot['python']:.1f} s"
+TEXT['t_cores_app'] = f"{(mine['cpu'] / mine['mean']).max():.1f}"
+TEXT['t_cores_ref'] = f"{(theirs['cpu'] / theirs['mean']).max():.1f}"
+TEXT['t_sd'] = f"{(timed_['sd'] / timed_['mean']).max():.0%}"
+```
+
+Times are in seconds; *cores busy* is the mean CPU time over the mean wall time. Every
+`metacooler-run` command here takes `{python} TEXT['t_app']`, and every reference
+`{python} TEXT['t_ref']`. Of that, starting Node with the bundle takes `{python} TEXT['t_node']` and
+importing cooler and cooltools `{python} TEXT['t_python']`. `metacooler-run` never keeps more than
+`{python} TEXT['t_cores_app']` cores busy — its one thread, and Node's own housekeeping — where a
+reference keeps up to `{python} TEXT['t_cores_ref']`. Across its runs, no analysis command's time
+spreads by more than `{python} TEXT['t_sd']` of its mean (sd over mean).
+
+```{python}
+#| label: fig-time
+#| fig-cap: "Wall time of every timed command, each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
+from matplotlib.ticker import FuncFormatter, NullLocator
+
+rows_ = wide.reset_index(drop=True)
+fig, ax = plt.subplots(figsize=(10, 0.36 * len(rows_) + 1.2), layout='constrained')
+y = np.arange(len(rows_))[::-1]
+for k, (analysis, members) in enumerate(rows_.groupby('analysis', sort=False)):
+    if k % 2:
+        ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
+for yi, (_, row) in zip(y, rows_.iterrows()):
+    colour = APP_COLOUR if row['tool'] == 'metacooler-run' else REF
+    runs_ = times[(times['order'] == row['order'])]['wall s']
+    ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
+    ax.plot([row['mean']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
+labels = [f"{row['analysis']} · {row['tool']}" + (f" ({row['variant']})" if row['variant'] else '')
+          for _, row in rows_.iterrows()]
+ax.set_yticks(y, labels, fontsize=8)
+ax.set_xscale('log')
+ax.set_xlim(times['wall s'].min() / 1.5, times['wall s'].max() * 1.5)
+ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
+ax.xaxis.set_minor_locator(NullLocator())
+ax.set(xlabel='wall time (s)', ylim=(-0.5, len(rows_) - 0.5))
+ax.grid(axis='y', visible=False)
+ax.scatter([], [], s=24, color=APP_COLOUR, label='metacooler-run')
+ax.scatter([], [], s=24, color=REF, label='reference')
+ax.legend(loc='upper right')
+plt.show()
+```
