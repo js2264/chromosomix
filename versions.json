@@ -207,6 +207,13 @@
   ],
   "pulls": [
     {
+      "number": 79,
+      "commit": "fe5bcc2",
+      "title": "Overlay map selection and validation notebook",
+      "branch": "js/validation-notebook",
+      "date": "2026-09-28T17:05:32Z"
+    },
+    {
       "number": 78,
       "commit": "614be1f",
       "title": "Draw maps to a chosen number of contacts (§6.5)",
