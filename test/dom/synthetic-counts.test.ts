@@ -239,13 +239,14 @@ describe('the count on a called set', () => {
  * row *is* rather than about which card is listing it.
  *
  * A lane is placed — drawn along one or more of the map's four edges, which is
- * what the placement buttons decide. An **overlay** is not placed at all:
- * `MatrixPanel.paintOverlays` draws every ready, visible entry of
- * `store.overlays()` onto the matrix face and never reads a placement. So the
- * four edge buttons on a called loop set were inert, and pressing the last one
- * filed the row under a map it is not drawn on the strength of — while the two
- * controls that *would* have done something, the opacity and the radius, were
- * private to the one card a computed set never appears on.
+ * what the placement buttons decide. An **overlay** has no edges:
+ * `MatrixPanel.paintOverlays` draws the ready, visible entries of
+ * `store.overlays(map)` onto the matrix face and never reads a placement's
+ * edges. So the four edge buttons on a called loop set were inert — while the
+ * two controls that *would* have done something, the opacity and the radius,
+ * were private to the one card a computed set never appears on. Which *maps* it
+ * is drawn on is a question it does have, and in a deck its row answers it
+ * under `maps` (`overlay-maps.test.ts`).
  *
  * The Tracks card has always drawn this line correctly for a loaded interval
  * set. This is the same line, in the other place rows are listed.

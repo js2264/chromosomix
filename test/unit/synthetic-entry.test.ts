@@ -298,7 +298,7 @@ describe('carrying rows to the next file', () => {
 /**
  * A called interval set is an overlay, and that is what makes the map draw it.
  *
- * `MatrixPanel.paintOverlays` walks `store.overlays()` and hands any entry with
+ * `MatrixPanel.paintOverlays` walks `store.overlays(map)` and hands any entry with
  * a `features` payload to `render/overlays.ts`'s `drawDiagonalFeatures`. Until
  * §18 there was nothing that could put one there — `loader.cardFor` gives the
  * overlay card to a BEDPE and to nothing else, so a BED was always a lane and

@@ -65,7 +65,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'window',
     label: 'window',
-    hint: 'The diamond is this many bins wide on each side of the bin it scores.',
+    hint: 'The diamond is a square this many bins on a side, cornered on the bin it scores.',
     default: 10,
     min: 1,
     integer: true,
@@ -96,32 +96,20 @@ const PARAMS: readonly ParamSpec[] = [
      * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the
      * two beside it.
      *
-     * The diamond never touches the main diagonal, so what this trims is its
-     * **inner corner** — the cells one and two bins of separation from it, where
-     * self-ligation and unligated fragments land. They are the largest in the
-     * matrix, so at a small window that corner can be most of the sum, and a
+     * The diamond is cornered on the bin's own diagonal pixel, so what this trims
+     * is that **corner** — the pixel and the cells one bin of separation from it,
+     * where self-ligation and unligated fragments land. They are the largest in
+     * the matrix, so at a small window the corner can be most of the mean, and a
      * track carried by it is a picture of how deep the near-diagonal is rather
      * than of what crosses the bin.
      *
      * Two by default, which is cooltools' default and what the numbers a reader
      * compares against were computed with.
      */
-    hint: '0 counts every cell; 2 trims the corner of the diamond nearest the diagonal.',
+    hint: '0 counts every cell; 2 leaves out the corner of the diamond on the diagonal.',
     default: 2,
     min: 0,
     integer: true,
-    section: 'Quality',
-  },
-  {
-    kind: 'number',
-    key: 'minValid',
-    label: 'minimum coverage of the diamond',
-    hint: 'Below this fraction of usable cells the bin gets no score at all.',
-    default: 0.5,
-    min: 0,
-    max: 1,
-    step: 0.05,
-    slider: true,
     section: 'Quality',
   },
   BALANCE_PARAM,
@@ -137,10 +125,32 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'prominence',
     label: 'minimum prominence',
-    hint: 'How far the track must climb on both sides of a minimum, in log2 units.',
+    hint: 'How far the track must climb from a minimum before it falls lower, in log2 units.',
     default: 0.2,
     min: 0,
     max: 3,
+    step: 0.05,
+    slider: true,
+    when: (params) => params.call === true,
+    section: 'Boundaries',
+  },
+  /**
+   * cooltools' `min_frac_valid_pixels`, and only for the calls.
+   *
+   * Every bin is scored — a diamond that runs off the end of its sequence or
+   * over a dropped row averages the cells it holds — but a mean of a handful of
+   * cells is a noisy one, and a minimum in it is not a boundary. So the bins
+   * whose diamond holds less than this share of the fullest diamond of the run
+   * are left out of the track the minima are found on, as cooltools leaves them.
+   */
+  {
+    kind: 'number',
+    key: 'minValid',
+    label: 'diamond coverage to call',
+    hint: 'Bins whose diamond holds less than this share of the fullest one’s cells are not called.',
+    default: 0.5,
+    min: 0,
+    max: 1,
     step: 0.05,
     slider: true,
     when: (params) => params.call === true,
@@ -203,30 +213,10 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  // A window wider than the sequence it is scoring has no bin at which the whole
-  // diamond fits, so every bin comes back NaN — an empty track, produced at full
-  // cost. Better to say so than to draw nothing and let the reader wonder. One
-  // ticked sequence is named; several are counted.
-  const long = chosen.filter((entry) => entry.bins > widest * 2)
-  if (long.length === 0) {
-    const one = chosen.length === 1 ? chosen[0] : null
-    return {
-      class: 'free',
-      requests: 0,
-      bytes: 0,
-      note: 'Nothing to read.',
-      refusal:
-        one !== null
-          ? `${one.name} is ${one.bins.toLocaleString()} bins and the widest diamond is ` +
-            `${widest.toLocaleString()} on each side, so no bin on it has a whole window ` +
-            'either side. Use a narrower window, fewer scales, or a longer sequence.'
-          : `No ticked sequence is longer than twice a ${widest.toLocaleString()}-bin diamond, ` +
-            'so no bin on any of them has a whole window either side. Use a narrower window, ' +
-            'fewer scales, or tick a longer sequence.',
-    }
-  }
-
-  const extent = extentOf(long)
+  // Every ticked sequence is read, however short: a diamond that runs off the
+  // end of one averages the cells it has, as cooltools' does, so no sequence is
+  // too short to score.
+  const extent = extentOf(chosen)
 
   const framing = context.framing
   if (
@@ -251,8 +241,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // reads: one square over a chromosome was four requests and the truth is four
   // per tile, which on mouse chr1 is off by two orders of magnitude.
   const each = balance ? 5 : 4
-  if (long.length === 1) {
-    const contig = long[0]
+  if (chosen.length === 1) {
+    const contig = chosen[0]
     const tiles = diagonalTiles(contig.bins, widest)
     const requests = tiles * each
     return {
@@ -269,13 +259,13 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // Every ticked sequence, tile by tile. Bounded per contig and unbounded in the
   // count of them, which on a metagenome is the expensive shape — so it is
   // priced as a scan and gated like one, with the count named.
-  const tiles = long.reduce((sum, entry) => sum + diagonalTiles(entry.bins, widest), 0)
+  const tiles = chosen.reduce((sum, entry) => sum + diagonalTiles(entry.bins, widest), 0)
   return {
     class: 'scan',
     requests: tiles * each,
     bytes: null,
     note:
-      `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
+      `${chosen.length.toLocaleString()} sequences, read as ` +
       `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals.`,
   }
 }
@@ -286,7 +276,10 @@ export const INSULATION_TASK: AnalysisTask = {
   blurb: 'How much contact crosses each bin, and where the boundaries are.',
   group: '2d',
   venue: 'analysis',
-  version: 1,
+  // 2: cooltools' definition — the mean of the diamond's valid cells over the
+  // sequence's median, and its boundaries — where 1 summed a diamond half a bin
+  // along and divided by the mean.
+  version: 2,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['profile', 'intervals'],

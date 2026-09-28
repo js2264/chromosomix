@@ -265,6 +265,15 @@ export interface PanelDeckProps {
    */
   onStarChange?(): void
   /**
+   * The maps open in the deck changed: a companion's file finished opening, it
+   * moved to another rung, or its cell was closed.
+   *
+   * The session's cue to re-ask the Analysis column which tasks apply, since a
+   * task that compares two files is waiting on exactly this (§18.1). Told once
+   * per change rather than per block read — see {@link PanelDeck.notePeers}.
+   */
+  onPeersChange?(): void
+  /**
    * The *Map* card the Aesthetics column should show has changed (§16.5): the
    * star moved, or the starred companion's card was built or rebuilt. Only the
    * session can put a card in that column, so it is told and asks
@@ -779,6 +788,8 @@ export class PanelDeck {
    * to have published and has to be told apart from "never published".
    */
   private published: { value: string | undefined } | null = null
+  /** The open maps as last told to the session; see {@link notePeers}. */
+  private peersTold = ''
   /** Which block the deck was last showing, so a move to another resets the lock. */
   private place: string | null = null
   private destroyed = false
@@ -1359,8 +1370,8 @@ export class PanelDeck {
    * a lane waiting for a picture, and the reader can place it the moment one
    * arrives.
    */
-  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> {
-    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = []
+  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[]; tracks?: true }> {
+    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[]; tracks?: true }> = []
     for (const slot of this.order()) {
       if (slot === LEAD_CELL) {
         out.push({ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' })
@@ -1393,10 +1404,11 @@ export class PanelDeck {
     // A tracks cell is a place a track can be put, with one edge (§25.3).
     // After the maps, under the name on its heading: the reader's, or numbered
     // where there is none, since two stacks of tracks would otherwise be two
-    // rows with one name.
+    // rows with one name. Marked as one, because it has no matrix for an
+    // overlay to be drawn on (`ui/lanePlacement.ts`'s `overlayMapsField`).
     for (const slot of this.slots) {
       const cell = tracksIn(slot)
-      if (cell !== null) out.push({ id: slot.id, label: cell.label, edges: ['bottom'] })
+      if (cell !== null) out.push({ id: slot.id, label: cell.label, edges: ['bottom'], tracks: true })
     }
     return out
   }
@@ -1997,6 +2009,9 @@ export class PanelDeck {
     if (map === null) {
       this.lock.leave(slot.id)
       slot.panel?.syncLock()
+      // A file can open and its first block still fail to draw; it is open
+      // all the same, and a comparison reads the file rather than the picture.
+      this.notePeers()
       return
     }
     // Nothing pushed here. A companion opens on the first map's base look and
@@ -2023,6 +2038,7 @@ export class PanelDeck {
     this.seedFromLead()
     this.lock.catchUp(slot.id)
     this.paintBar()
+    this.notePeers()
   }
 
   /**
@@ -3174,6 +3190,29 @@ export class PanelDeck {
     // A structure cell opened or closed is a change to which models are on
     // screen, told after the maps so the card is asked about the deck it sees.
     this.props.onStructuresChange?.()
+    this.notePeers()
+  }
+
+  /**
+   * Tell the session when the maps that have opened change — and only then.
+   *
+   * Asked after every publish, which is a cell added or closed, and after every
+   * settle, which is a companion's read landing: its first, which is its file
+   * opening, or one after a change of rung. Most settles are a pan and change
+   * nothing here, so the answer is compared with the last one told rather than
+   * sent each time — the Analysis column it refreshes walks every task.
+   */
+  private notePeers(): void {
+    const told = this.analysable()
+      .map(({ map, panel }) => {
+        const info = panel.openInfo
+        return info === null ? '' : `${map} ${panel.uri} ${info.binsize ?? 0}`
+      })
+      .filter((line) => line !== '')
+      .join('\n')
+    if (told === this.peersTold) return
+    this.peersTold = told
+    this.props.onPeersChange?.()
   }
 
   /**

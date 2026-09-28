@@ -192,7 +192,17 @@ import {
   smallestLaneSize,
   trackHeightField,
 } from './trackControls'
-import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt, trimNumber } from './dom'
+import {
+  TRACK_DRAG_TYPE,
+  dragHasFiles,
+  dragHasOverlay,
+  dragHasTrack,
+  dropEffectFor,
+  el,
+  field,
+  fmt,
+  trimNumber,
+} from './dom'
 import { resolutionLabel } from '../units'
 import { dragHasFileRow } from './fileDrag'
 import { filesFrom } from './chooseFiles'
@@ -1016,8 +1026,12 @@ export interface AnnotationContext {
    *
    * Absent on a file that cannot carry annotation files at all, which is also
    * what turns the drop rectangles into move-only targets.
+   *
+   * `null` is the rectangle in the middle, *on this map*: the files are this
+   * map's, drawn on its face if they are overlays and on their usual edge if
+   * they are tracks (§8.1).
    */
-  loadOnEdge?(files: readonly File[], edge: LaneEdge): void
+  loadOnEdge?(files: readonly File[], edge: LaneEdge | null): void
   /**
    * The same aim, at a row dragged out of the Files panel.
    *
@@ -1033,7 +1047,7 @@ export interface AnnotationContext {
    * annotations has no stack to aim at, and a rectangle that lights up for a
    * drop it will not answer is a target that eats the file.
    */
-  pickOnEdge?(event: DragEvent, edge: LaneEdge): void
+  pickOnEdge?(event: DragEvent, edge: LaneEdge | null): void
 }
 
 /**
@@ -1461,6 +1475,8 @@ export class MatrixPanel {
    * annotations and therefore no lanes.
    */
   private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
+  /** The rectangle in the middle of the map, *on this map*; see {@link faceZone}. */
+  private faceDrop: HTMLElement | null = null
   /**
    * This map's edge rectangles as places a lane carried from **another** map
    * can land (§16.9, `ui/laneCarry.ts`). A lane of this map's own is answered
@@ -1484,6 +1500,8 @@ export class MatrixPanel {
     carrying: (carry) => {
       if (carry !== null && carry.from === this.mapId) return
       this.grid.classList.toggle('is-dropping', carry !== null)
+      // A lane is carried to an *edge*; the face is where an overlay lands.
+      this.faceDrop?.classList.toggle('away', carry !== null)
       if (carry === null) for (const zone of this.edgeZones.values()) zone.classList.remove('over')
     },
   }
@@ -2406,6 +2424,7 @@ export class MatrixPanel {
       this.grips.left,
       this.grips.right,
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
+      this.faceZone(),
     ))
     this.watchGrips()
 
@@ -2625,7 +2644,7 @@ export class MatrixPanel {
     zone.addEventListener('dragleave', () => zone.classList.remove('over'))
     zone.addEventListener('drop', (event) => {
       zone.classList.remove('over')
-      this.grid.classList.remove('is-dropping')
+      this.endDropping()
 
       // A track already loaded, dragged here by its grip to change which edge it
       // is drawn on. A move rather than a copy: the other edge is cleared, which
@@ -2634,39 +2653,120 @@ export class MatrixPanel {
       const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
       if (moved !== '') {
         event.preventDefault()
-        if (this.laneStore.byId(moved) !== undefined) {
-          // This panel's own map, as the grip drag is: a track carried onto the
-          // third replicate's edge belongs on the third replicate.
-          this.laneStore.placeAt(moved, this.mapId, placementOn(edge))
-        }
+        const entry = this.laneStore.byId(moved)
+        // An overlay has no edge: dropped on one, it is on this map, as it
+        // would be dropped on the face.
+        if (entry?.card === 'overlay') this.placeHere(moved)
+        // This panel's own map, as the grip drag is: a track carried onto the
+        // third replicate's edge belongs on the third replicate.
+        else if (entry !== undefined) this.laneStore.placeAt(moved, this.mapId, placementOn(edge))
         return
       }
-
-      const load = this.options.annotations?.loadOnEdge
-      // A row out of the Files panel: the same aim, at a file whose bytes have
-      // not been fetched yet. Resolved by the session, because resolving it here
-      // would mean this panel knowing how a folder is read.
-      if (dragHasFileRow(event)) {
-        const pick = this.options.annotations?.pickOnEdge
-        if (pick === undefined) return
-        event.preventDefault()
-        pick(event, edge)
-        return
-      }
-      const files = filesFrom(event.dataTransfer)
-      // Untouched where this file cannot carry tracks at all (§8.5). The shell
-      // stands aside for a `.lane-drop` target, so claiming a drop we cannot
-      // answer would swallow it — and a `.cool` dropped on a metacool's map is
-      // still a file the session knows how to open.
-      if (files.length === 0 || load === undefined) return
-      event.preventDefault()
-      // Not stopped: the shell's content-wide handler has to see this drop to
-      // put its own highlight away, and it stands aside for a `.lane-drop`
-      // target exactly as it does for the picker's zone — so the files are
-      // loaded once, here, with the edge the reader aimed at.
-      load(files, edge)
+      this.dropFiles(event, edge)
     })
     return zone
+  }
+
+  /**
+   * The rectangle in the middle of the map: *on this map* (§8.1).
+   *
+   * The four at the edges say which stack a track is drawn in; this says which
+   * map, and it is the one target an overlay has — a loop set is drawn on the
+   * face of the map and along no edge of it. A file dropped here opens onto this
+   * map alone, an overlay on its face and a track on its usual edge; a row of
+   * the Tracks card is drawn on this map **as well** as wherever it already
+   * was, as the location field's marks put it. Before it the middle of a
+   * companion was no target at all, and a file dropped there went where a drop
+   * anywhere else goes: onto the first map.
+   *
+   * Kept down while a lane is carried by its grip (`.away`): that gesture is
+   * about an edge.
+   */
+  private faceZone(): HTMLElement {
+    const zone = el(
+      'div',
+      { class: 'lane-drop lane-drop-face' },
+      el('span', { class: 'lane-drop-label', text: 'on this map' }),
+    )
+    this.faceDrop = zone
+    zone.addEventListener('dragover', (event) => {
+      if (!this.acceptsDrag(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      // *Placed*, a copy: the row stays on every map it was on (§16.9).
+      if (event.dataTransfer !== null && dragHasTrack(event)) {
+        event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer, 'copy')
+      }
+      zone.classList.add('over')
+    })
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
+    zone.addEventListener('drop', (event) => {
+      zone.classList.remove('over')
+      this.endDropping()
+      const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
+      if (moved !== '') {
+        event.preventDefault()
+        this.placeHere(moved)
+        return
+      }
+      this.dropFiles(event, null)
+    })
+    return zone
+  }
+
+  /**
+   * A row of the Tracks card, put on this map — an overlay on its face, a track
+   * on its usual edge — and left on every other map it is drawn on.
+   *
+   * Nothing where it is here already: the face says *this map*, not *move it*,
+   * and a track already on one of this map's edges is on this map.
+   */
+  private placeHere(id: string): void {
+    const entry = this.laneStore.byId(id)
+    if (entry === undefined || this.laneStore.laneFor(id, this.mapId) !== undefined) return
+    if (entry.card === 'overlay') {
+      this.laneStore.placeOn(id, this.mapId, entry.placement)
+      return
+    }
+    const usual = LANE_EDGES.some((edge) => entry.placement[edge])
+      ? entry.placement
+      : placementOn('bottom')
+    this.laneStore.placeAt(id, this.mapId, usual)
+  }
+
+  /**
+   * Files, or a row of the Files panel, dropped on one of this map's rectangles:
+   * an edge, or the face for `null`.
+   */
+  private dropFiles(event: DragEvent, edge: LaneEdge | null): void {
+    const load = this.options.annotations?.loadOnEdge
+    // A row out of the Files panel: the same aim, at a file whose bytes have
+    // not been fetched yet. Resolved by the session, because resolving it here
+    // would mean this panel knowing how a folder is read.
+    if (dragHasFileRow(event)) {
+      const pick = this.options.annotations?.pickOnEdge
+      if (pick === undefined) return
+      event.preventDefault()
+      pick(event, edge)
+      return
+    }
+    const files = filesFrom(event.dataTransfer)
+    // Untouched where this file cannot carry tracks at all (§8.5). The shell
+    // stands aside for a `.lane-drop` target, so claiming a drop we cannot
+    // answer would swallow it — and a `.cool` dropped on a metacool's map is
+    // still a file the session knows how to open.
+    if (files.length === 0 || load === undefined) return
+    event.preventDefault()
+    // Not stopped: the shell's content-wide handler has to see this drop to
+    // put its own highlight away, and it stands aside for a `.lane-drop`
+    // target exactly as it does for the picker's zone — so the files are
+    // loaded once, here, where the reader aimed them.
+    load(files, edge)
+  }
+
+  /** Put the rectangles away at the end of a drag, whatever it carried. */
+  private endDropping(): void {
+    this.grid.classList.remove('is-dropping', 'is-overlay-drag')
   }
 
   /**
@@ -2705,6 +2805,9 @@ export class MatrixPanel {
     const show = (event: DragEvent): void => {
       if (!this.acceptsDrag(event)) return
       this.grid.classList.add('is-dropping')
+      // An overlay row has one target on a map, its face; the edges are down
+      // for it (see the stylesheet).
+      this.grid.classList.toggle('is-overlay-drag', dragHasOverlay(event))
     }
     const hide = (event: DragEvent): void => {
       // A drag crossing from the map onto a zone leaves the grid by the letter
@@ -2712,17 +2815,17 @@ export class MatrixPanel {
       // apart, and `null` (leaving the window) is a real departure.
       const to = event.relatedTarget
       if (to instanceof Node && this.grid.contains(to)) return
-      this.grid.classList.remove('is-dropping')
+      this.endDropping()
     }
     this.grid.addEventListener('dragenter', show)
     this.grid.addEventListener('dragover', show)
     this.grid.addEventListener('dragleave', hide)
-    this.grid.addEventListener('drop', () => this.grid.classList.remove('is-dropping'))
+    this.grid.addEventListener('drop', () => this.endDropping())
     // A row dragged out of the Tracks card and then abandoned — Escape, or a
     // release over nothing — ends with `dragend` on the row and no event of any
     // kind here, so without this the two rectangles would stay up until the next
     // drag. On the window because the row is not in this panel's tree.
-    const done = (): void => this.grid.classList.remove('is-dropping')
+    const done = (): void => this.endDropping()
     window.addEventListener('dragend', done)
     this.laneListeners.push(() => window.removeEventListener('dragend', done))
   }
@@ -4185,8 +4288,8 @@ export class MatrixPanel {
   }
 
   /**
-   * Everything drawn on the data: the overlay card's files, then the hand-drawn
-   * marks over them.
+   * Everything drawn on the data: the overlays placed on this map, then the
+   * hand-drawn marks over them.
    *
    * Files first and marks second, because a mark is what the reader put there
    * and it must not end up underneath a circle from a loop table.
@@ -4196,7 +4299,7 @@ export class MatrixPanel {
     if (context === undefined) return
     const palette = readCanvasPalette(this.canvas)
 
-    for (const entry of context.store.overlays()) {
+    for (const entry of context.store.overlays(this.mapId)) {
       if (entry.payload?.kind === 'features') {
         drawDiagonalFeatures(ctx, frame, this.locusAxes, entry.payload.data, {
           colour: entry.style.colour,
@@ -4930,6 +5033,7 @@ export class MatrixPanel {
         // lit rectangle that does nothing when you let go reads as the drag
         // having failed.
         this.edgeZones.get(edge)?.classList.add('away')
+        this.faceDrop?.classList.add('away')
         this.grid.classList.add('is-dropping')
         return
       }
@@ -5189,6 +5293,7 @@ export class MatrixPanel {
         drag.landing?.light(false)
         this.grid.classList.remove('is-dropping')
         for (const zone of this.edgeZones.values()) zone.classList.remove('over', 'away')
+        this.faceDrop?.classList.remove('away')
         this.laneGripping = false
         if (drag.carry !== null) endCarry()
       }

@@ -1,32 +1,41 @@
 /**
- * Diamond insulation, and the boundaries its minima call.
+ * Diamond insulation, and the boundaries its minima call — cooltools', exactly.
  *
  * The arithmetic a reader can do by eye and cannot do accurately, which is the
  * same sentence `analysis/viewpoint.ts` opens with and the same reason both exist:
  * slide a square window along the diagonal, and at every bin ask how much
  * contact crosses it. Where a domain boundary sits, very little does.
  *
- * Three things here are load-bearing and each is a place a reimplementation goes
- * quietly wrong.
+ * **The definition is `cooltools.insulation`'s, to the pixel**, because an
+ * insulation score is compared with cooltools' more than with anything else and
+ * a second definition under the same name is a difference a reader finds in a
+ * figure rather than in a changelog. The golden holds this file to cooltools'
+ * own table — score, cells counted and boundary strength, bin for bin
+ * (`scripts/make_analysis_golden.py`). Three things here are load-bearing, and
+ * each is a place a reimplementation goes quietly wrong.
  *
  * **The diamond never crosses a contig boundary.** It is a window over *one*
- * sequence, and a window straddling the join between `chrIV` and `chrV` sums
- * contacts between two chromosomes and reports the answer as a property of a
- * position — which on a metagenome, where the join is between two organisms, is
- * not a subtle error. Every function here works within one contig's square and
- * the caller supplies them one at a time.
+ * sequence — cooltools' region — and a window straddling the join between
+ * `chrIV` and `chrV` averages contacts between two chromosomes and reports the
+ * answer as a property of a position, which on a metagenome, where the join is
+ * between two organisms, is not a subtle error. Every function here works within
+ * one contig's square and the caller supplies them one at a time.
  *
- * **The score is a log ratio against the contig's own mean, not the raw sum.**
- * A raw diamond sum falls with coverage and with distance from the centromere,
- * so a track of raw sums is mostly a picture of depth. Dividing by the mean over
- * the sequence is what makes two chromosomes comparable and what makes zero mean
- * *average*, which is the convention every published insulation track follows.
+ * **The score is a mean, not a sum.** The window at bin `k` is the square of
+ * rows `(k − w, k]` against columns `[k, k + w)` — its corner is the diagonal
+ * pixel `(k, k)` — less the cells nearer the diagonal than `ignoreDiags`, and
+ * the score is the mean of the cells in it that carry a value. A mean is what
+ * lets a window lose cells without reading as insulation: one that runs off the
+ * end of the sequence, or over a row the balancer dropped (§6.4), averages what
+ * it has, where a sum of fewer cells is a smaller number that looks exactly like
+ * a boundary. So every bin with a cell to average is scored, the two ends of a
+ * sequence included.
  *
- * **A bin whose diamond is mostly missing gets `NaN`, not a small number.** The
- * diamond at the first and last `window` bins of a contig hangs off the end, and
- * inside a balanced matrix whole rows are dropped (§6.4). Summing what is left
- * and reporting it would draw a deep, entirely artificial trough at both ends of
- * every sequence — exactly where a reader looks for a telomeric boundary.
+ * **It is a log2 ratio against the sequence's median.** A raw mean falls with
+ * depth and with distance from the centromere, so dividing by one number per
+ * sequence is what makes two chromosomes comparable and what makes zero read as
+ * *typical*. The median rather than the mean because it is cooltools', and
+ * because the scores being looked for are the tail.
  */
 
 import type { SeparationBand } from './band'
@@ -39,202 +48,164 @@ export interface ContigSquare {
 }
 
 export interface DiamondOptions {
-  /** Half-width of the diamond, in bins. */
+  /** Side of the diamond, in bins: cooltools' `window_bp` over the bin size. */
   window: number
   /**
-   * How much of the diamond has to carry a value before the bin gets a score.
+   * Diagonals to leave out, cooltools' `ignore_diags`: a cell counts when its
+   * separation `col − row` is at least this.
    *
-   * A fraction of the cells it is allowed to count. Below it the answer is
-   * `NaN`.
-   */
-  minValid: number
-  /**
-   * Diagonals to leave out of the sum, cooltools' `ignore_diags`.
-   *
-   * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the two
-   * beside it — the rule is `|col − row| < n`, the same one the compartment
-   * chain applies (`analysis/compartments.ts`).
-   *
-   * The diamond never touches the main diagonal, so this is about its **inner
-   * corner**: the cell at `(i − 1, i)` is one bin of separation, and the corner
-   * of the rectangle nearest the diagonal is where self-ligation and unligated
-   * fragments land. Those cells are the largest in the matrix, so at a small
-   * window the corner can be most of the sum — and a track carried by it is a
-   * track of how deep the near-diagonal is rather than of what crosses the bin.
-   *
-   * `cells` is reduced with it, so `minValid` stays a fraction of what is
-   * actually countable rather than of a rectangle two cells of which can never
-   * be counted.
+   * `0` counts every cell, the diagonal pixel at the diamond's corner included;
+   * `2`, the default, drops that pixel and the two beside it — the cells where
+   * self-ligation and unligated fragments land. Those are the largest in the
+   * matrix, so at a small window the corner can be most of the mean, and a track
+   * carried by it is a picture of how deep the near-diagonal is rather than of
+   * what crosses the bin.
    */
   ignoreDiags?: number
 }
 
 /**
- * Cells of a diamond that `ignoreDiags` leaves countable.
+ * Cells of a whole diamond that `ignoreDiags` leaves countable.
  *
- * The diamond at bin `i` is `[i − w, i) × [i, i + w)`, so its separations run
- * `1 … 2w − 1`, with `d` cells at separation `d` up to `w` and `2w − d` past it.
- * `ignoreDiags` drops every cell below it, and at `2w` there is nothing left at
- * all: **a window is only as wide as its widest separation**, and asking to
- * ignore more diagonals than the diamond spans empties it.
- *
- * Counted rather than solved for, because the closed form has three regimes and
- * this is `2w` additions once per call. The version it replaces had two of the
- * three: it capped the ignored triangle at `w(w + 1) / 2` and so kept reporting
- * a positive cell count for a diamond with nothing countable in it. `minValid`
- * is a fraction *of this number*, so the error did not stop at bookkeeping —
- * past `ignoreDiags = w + 1` the threshold was computed against cells that could
- * never be counted, and bins with a perfectly good diamond were scored `NaN`;
- * past `2w` every bin was, and the track came back empty with nothing said.
+ * The diamond is `window × window` cells at separations `0 … 2w − 2`: `d + 1`
+ * of them at separation `d` up to `w − 1`, and `2w − 1 − d` past it. Counted
+ * rather than solved for — `w²` additions once per call. At `ignoreDiags` of
+ * `2w − 1` or more nothing is left, **a window being only as wide as its widest
+ * separation**, and the runner says so rather than drawing a lane of gaps.
  */
 export function diamondCells(window: number, ignoreDiags: number): number {
   const w = Math.max(1, Math.trunc(window))
   const ignore = Math.max(0, Math.trunc(ignoreDiags))
   let cells = 0
-  for (let d = Math.max(1, ignore); d < 2 * w; d++) cells += d <= w ? d : 2 * w - d
+  for (let a = 0; a < w; a++) {
+    for (let b = 0; b < w; b++) if (a + b >= ignore) cells++
+  }
   return cells
 }
 
 /**
- * The diamond sum at every bin of one contig, or `NaN` where there is no answer.
+ * Per bin, what its diamond holds: the sum of the cells with a value, and how
+ * many there were. cooltools' `sum_balanced` and `n_valid_pixels`.
  *
- * The diamond at bin `i` is the rectangle of upstream rows against downstream
- * columns — `[i - w, i) × [i, i + w)` — which is the contact *crossing* `i`. Not
- * a square centred on the diagonal: that would include the near-diagonal signal
- * on both sides of the boundary, which is the thing a boundary does *not*
- * suppress, and it is the difference between a dip and a smear.
- *
- * Accumulated in `Float64Array`, for `analysis/viewpoint.ts`'s reason: a sum over
- * a thousand rows of a deep map runs past what float32 adds without drift, and
- * the drift shows up as a track whose peaks are a few per cent short — plausible,
- * and wrong.
+ * Kept as the two numbers rather than as their ratio for one reason: the count
+ * is what boundary calling filters on — a fraction of the *fullest* diamond on
+ * any sequence of the run ({@link insulationBoundaries}) — and a ratio has
+ * forgotten it.
  */
-export function diamondSums(square: ContigSquare, options: DiamondOptions): Float64Array {
+export interface DiamondTotals {
+  sums: Float64Array
+  counts: Float64Array
+}
+
+/**
+ * The diamond at every bin of one contig, read from its dense square.
+ *
+ * A cell counts when it lies inside the sequence, off the ignored diagonals, and
+ * carries a value: a cell of a row the balancer dropped is `NaN` in a balanced
+ * square and is not counted, which is cooltools' valid-pixel mask. A contact
+ * that simply did not occur is a zero and is counted, as cooltools counts it.
+ *
+ * Accumulated in `Float64Array`, for `analysis/viewpoint.ts`'s reason: a sum
+ * over a large window of a deep map runs past what float32 adds without drift.
+ */
+export function diamondTotals(square: ContigSquare, options: DiamondOptions): DiamondTotals {
   const { size, values } = square
   const w = Math.max(1, Math.trunc(options.window))
   const ignore = Math.max(0, Math.trunc(options.ignoreDiags ?? 0))
-  const out = new Float64Array(size).fill(Number.NaN)
-  // The rectangle, less the cells the ignored diagonals take off its inner
-  // corner — counted, because the triangle is only a triangle while the cut is
-  // narrower than the window. See {@link diamondCells}.
-  const cells = diamondCells(w, ignore)
-  if (cells <= 0 || size === 0) return out
-  const needed = Math.max(1, Math.ceil(cells * options.minValid))
-
-  for (let i = 0; i < size; i++) {
-    // The whole diamond, or none of it. A partial window at the ends of a
-    // contig is what produces the artificial trough this module's header warns
-    // about, and clamping it to what fits would produce a *smaller* sum from
-    // *fewer* cells — which reads as strong insulation rather than as no data.
-    if (i - w < 0 || i + w > size) continue
+  const sums = new Float64Array(size)
+  const counts = new Float64Array(size)
+  for (let k = 0; k < size; k++) {
     let total = 0
     let seen = 0
-    for (let row = i - w; row < i; row++) {
-      const base = row * size
-      for (let col = i; col < i + w; col++) {
-        // The inner corner, where the near-diagonal is. `col - row` is the
-        // separation and is always positive here, the diamond being strictly
-        // upstream-against-downstream.
-        if (col - row < ignore) continue
-        const value = values[base + col]
+    // `a` rows up from the corner and `b` columns along it: the cell
+    // `(k − a, k + b)`, at separation `a + b`.
+    for (let a = 0; a < w && k - a >= 0; a++) {
+      const base = (k - a) * size
+      for (let b = Math.max(0, ignore - a); b < w && k + b < size; b++) {
+        const value = values[base + k + b]
         if (Number.isNaN(value)) continue
         total += value
         seen++
       }
     }
-    out[i] = seen >= needed ? total : Number.NaN
+    sums[k] = total
+    counts[k] = seen
   }
-  return out
+  return { sums, counts }
 }
 
 /**
  * The same diamond, read from a band rather than from a square — for a sequence
  * that joins its own ends (SPECS §8.15).
  *
- * The diamond at bin `i` is `[i − w, i) × [i, i + w)`, so every cell in it is at
- * a separation between `1` and `2w − 1`: **it is a band already**, and the square
- * was never needed for it. What the square *was* needed for is the two ends of a
- * linear sequence, where the diamond hangs off and `diamondSums` says so by
- * scoring `NaN` — and a circle has no such ends, so every bin scores and the band
- * is the honest shape to read it from.
- *
- * Written beside {@link diamondSums} rather than replacing it, on purpose. That
- * function is goldened against cooltools cell for cell and is what every linear
- * run still takes; this one is checked against it — `analysis-insulation.test.ts`
- * asserts the two agree on a linear band, which is the property that makes a
- * second implementation safe rather than a second answer.
- *
- * `band.circular` decides what happens at the ends: on a circular band `forward`
- * wraps and every bin is scored, on a linear one it answers `NaN` past either end
- * and the first and last `w` bins come out as gaps, exactly as the square gives
- * them.
+ * Every cell of the diamond at bin `k` is at a separation between `0` and
+ * `2w − 2`, so **it is a band already**: the cell `(k − a, k + b)` is `a + b`
+ * along from row `k − a`. On a circular band that row wraps and every bin has a
+ * whole diamond, including the ones at the junction; on a linear one `forward`
+ * answers `NaN` past either end and the ends average what they hold, exactly as
+ * {@link diamondTotals} gives them — `analysis-insulation.test.ts` asserts the
+ * two agree on a linear band, which is what makes a second implementation safe
+ * rather than a second answer.
  */
-export function diamondSumsBanded(band: SeparationBand, options: DiamondOptions): Float64Array {
+export function diamondTotalsBanded(band: SeparationBand, options: DiamondOptions): DiamondTotals {
   const n = band.n
   const w = Math.max(1, Math.trunc(options.window))
   const ignore = Math.max(0, Math.trunc(options.ignoreDiags ?? 0))
-  const out = new Float64Array(n).fill(Number.NaN)
-  const cells = diamondCells(w, ignore)
-  if (cells <= 0 || n === 0) return out
-  const needed = Math.max(1, Math.ceil(cells * options.minValid))
-
-  for (let i = 0; i < n; i++) {
-    // **The whole diamond, or none of it** — `diamondSums`' rule, restated here
-    // because it is not implied by `minValid`: at `minValid = 0` a bin with one
-    // countable cell would score, and the sum of a partial window is a *smaller*
-    // sum from *fewer* cells, which reads as strong insulation rather than as no
-    // data. On a circular band there is no partial window to have: the diamond
-    // wraps, so every bin has a whole one.
-    if (!band.circular && (i - w < 0 || i + w > n)) continue
+  const sums = new Float64Array(n)
+  const counts = new Float64Array(n)
+  for (let k = 0; k < n; k++) {
     let total = 0
     let seen = 0
-    for (let row = i - w; row < i; row++) {
-      // `col` runs `i … i + w`, so the separation `col − row` runs from `i − row`
-      // up to `i − row + w − 1`. Addressed by that separation rather than by the
-      // pair, which is the whole of what lets the wrap live in one place.
-      const near = i - row
-      for (let offset = near; offset < near + w; offset++) {
-        if (offset < ignore) continue
-        const value = band.forward(row, offset)
+    for (let a = 0; a < w; a++) {
+      for (let b = Math.max(0, ignore - a); b < w; b++) {
+        const value = band.forward(k - a, a + b)
         if (!Number.isFinite(value)) continue
         total += value
         seen++
       }
     }
-    out[i] = seen >= needed ? total : Number.NaN
+    sums[k] = total
+    counts[k] = seen
+  }
+  return { sums, counts }
+}
+
+/**
+ * The totals as cooltools' `log2_insulation_score`.
+ *
+ * The mean of each diamond, divided by the median of those means over the
+ * sequence, in log2. A diamond with no cell to average is `NaN`; one whose mean
+ * is exactly zero is `NaN` too rather than minus infinity — a bin with no contact
+ * across it is one the data cannot place a boundary at, an infinite trough would
+ * take the lane's value axis with it, and it could not be written to a bigWig
+ * at all (§18.7). The zeros still count towards the median, as cooltools counts
+ * them.
+ */
+export function insulationScore(totals: DiamondTotals): Float64Array {
+  const n = totals.sums.length
+  const means = new Float64Array(n).fill(Number.NaN)
+  const finite: number[] = []
+  for (let k = 0; k < n; k++) {
+    if (!(totals.counts[k] > 0)) continue
+    means[k] = totals.sums[k] / totals.counts[k]
+    finite.push(means[k])
+  }
+  const out = new Float64Array(n).fill(Number.NaN)
+  const median = medianOf(finite)
+  if (!(median > 0)) return out
+  for (let k = 0; k < n; k++) {
+    const value = Math.log2(means[k] / median)
+    if (Number.isFinite(value)) out[k] = value
   }
   return out
 }
 
-/**
- * The sums as a log2 ratio against their own mean.
- *
- * `NaN` in, `NaN` out, and a sum of exactly zero also becomes `NaN` rather than
- * `-Infinity`: a bin with no contact at all across it is a bin the data cannot
- * place a boundary at, and an infinite trough would take the value axis of the
- * whole lane with it — and could not be written to a bigWig at all (§18.7).
- *
- * The mean is over the finite sums of this contig only, which is what makes the
- * track comparable between sequences of different depth.
- */
-export function insulationScore(sums: Float64Array): Float64Array {
-  let total = 0
-  let seen = 0
-  for (const value of sums) {
-    if (!Number.isFinite(value)) continue
-    total += value
-    seen++
-  }
-  const out = new Float64Array(sums.length).fill(Number.NaN)
-  if (seen === 0) return out
-  const mean = total / seen
-  if (!(mean > 0)) return out
-  for (let i = 0; i < sums.length; i++) {
-    const value = sums[i]
-    if (!Number.isFinite(value) || value <= 0) continue
-    out[i] = Math.log2(value / mean)
-  }
-  return out
+/** numpy's median: the middle value, or the mean of the two middle values. */
+function medianOf(values: number[]): number {
+  if (values.length === 0) return Number.NaN
+  const sorted = Float64Array.from(values).sort()
+  const mid = sorted.length >> 1
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
 /** One called boundary, in bins local to its contig. */
@@ -254,7 +225,162 @@ export interface BoundaryOptions {
 }
 
 /**
- * Local minima of the score, with a prominence each.
+ * The local maxima of an array and the prominence of each —
+ * `cooltools.lib.peaks.find_peak_prominence`, line for line.
+ *
+ * A maximum is a value strictly above both of its nearest neighbours that carry
+ * a value, so neither end of the array is one and neither is any bin of a flat
+ * top. Its prominence is how far it stands above the lowest point between it and
+ * the nearest strictly higher value, on whichever side that is lower, which is
+ * the topographic definition. The highest maximum, with nothing higher on either
+ * side, is measured against the lowest local minimum of the whole array; where
+ * two maxima share that height only the first is, and the second has no
+ * prominence at all — cooltools' own arithmetic, kept because a boundary set
+ * that matched it everywhere but there would not be the same set.
+ *
+ * Returned in the array's own indices, maxima in order, with `NaN` where a
+ * maximum has no prominence.
+ */
+export function findPeakProminence(arr: ArrayLike<number>): {
+  positions: number[]
+  prominences: number[]
+} {
+  const n = arr.length
+  const kept: number[] = []
+  for (let i = 0; i < n; i++) if (!Number.isNaN(arr[i])) kept.push(i)
+
+  const minima: number[] = []
+  const maxima: number[] = []
+  for (let k = 1; k < kept.length - 1; k++) {
+    const before = arr[kept[k - 1]]
+    const here = arr[kept[k]]
+    const after = arr[kept[k + 1]]
+    if (before > here && here < after) minima.push(kept[k])
+    if (before < here && here > after) maxima.push(kept[k])
+  }
+
+  const prominences: number[] = []
+  const unbounded: boolean[] = []
+  for (const pos of maxima) {
+    const height = arr[pos]
+    let left = -1
+    for (let j = pos - 1; j >= 0; j--) {
+      if (arr[j] > height) {
+        left = j
+        break
+      }
+    }
+    let right = -1
+    for (let j = pos + 1; j < n; j++) {
+      if (arr[j] > height) {
+        right = j
+        break
+      }
+    }
+    // The left side runs from the higher value up to the maximum, excluding it;
+    // the right from the maximum up to the higher value, excluding that. Either
+    // way the maximum is compared with everything between.
+    const fromLeft = left >= 0 ? height - lowest(arr, left, pos) : Number.NaN
+    const fromRight = right >= 0 ? height - lowest(arr, pos, right) : Number.NaN
+    prominences.push(nanMin(fromLeft, fromRight))
+    unbounded.push(left < 0 && right < 0)
+  }
+
+  const top = unbounded.indexOf(true)
+  if (top >= 0) {
+    const pos = maxima[top]
+    let floor = Number.POSITIVE_INFINITY
+    for (const i of minima) floor = Math.min(floor, arr[i])
+    prominences[top] = arr[pos] - (minima.length > 0 ? floor : lowest(arr, 0, n))
+  }
+  return { positions: maxima, prominences }
+}
+
+/** `np.nanmin(arr[from:to])`: the least value that is not `NaN`, or `NaN`. */
+function lowest(arr: ArrayLike<number>, from: number, to: number): number {
+  let out = Number.NaN
+  for (let i = from; i < to; i++) {
+    const value = arr[i]
+    if (Number.isNaN(value)) continue
+    if (Number.isNaN(out) || value < out) out = value
+  }
+  return out
+}
+
+function nanMin(a: number, b: number): number {
+  if (Number.isNaN(a)) return b
+  if (Number.isNaN(b)) return a
+  return Math.min(a, b)
+}
+
+export interface InsulationBoundaryOptions {
+  /**
+   * The fewest cells a diamond must hold for its bin to take part —
+   * `min_frac_valid_pixels` times the most any diamond of the run holds, which
+   * is cooltools' rule and is why the caller works it out over every sequence
+   * before calling any one of them.
+   */
+  minCells: number
+  /** Boundary strength at or above which a minimum is a boundary, in log2 units. */
+  threshold: number
+  /** Minimum gap between two calls, in bins; `1` or less keeps them all. */
+  spacing: number
+}
+
+/**
+ * cooltools' boundaries on one sequence: `find_boundaries`, then the threshold.
+ *
+ * The bins whose diamond holds too few cells are **taken out of the track**, not
+ * blanked in it — cooltools' mask — so the minima and their prominences are
+ * those of what is left, read end to end. On what remains a boundary is a local
+ * minimum of the score whose prominence ({@link findPeakProminence} of the
+ * negated track) is at least `threshold`; the prominence is cooltools'
+ * `boundary_strength`, and the call is its `is_boundary`.
+ *
+ * `spacing` is this app's own, and at its default does nothing: where two calls
+ * are closer than it the stronger is kept.
+ */
+export function insulationBoundaries(
+  score: Float64Array,
+  counts: Float64Array,
+  options: InsulationBoundaryOptions,
+): Boundary[] {
+  const bins: number[] = []
+  for (let k = 0; k < score.length; k++) if (counts[k] >= options.minCells) bins.push(k)
+  const track = bins.map((k) => -score[k])
+  const { positions, prominences } = findPeakProminence(track)
+
+  const found: Boundary[] = []
+  for (let i = 0; i < positions.length; i++) {
+    const prominence = prominences[i]
+    if (!(prominence >= options.threshold)) continue
+    const bin = bins[positions[i]]
+    found.push({ bin, score: score[bin], prominence })
+  }
+  return thinned(found, options.spacing)
+}
+
+/**
+ * Calls closer than `spacing` bins, reduced to the stronger of each such pair.
+ *
+ * Strongest first, so that where two calls are too close the one that survives
+ * is the better one rather than the leftmost; answered in bin order.
+ */
+function thinned(found: Boundary[], spacing: number): Boundary[] {
+  if (spacing <= 1) return [...found].sort((a, b) => a.bin - b.bin)
+  const order = [...found].sort((a, b) => b.prominence - a.prominence)
+  const kept: Boundary[] = []
+  for (const candidate of order) {
+    if (kept.some((other) => Math.abs(other.bin - candidate.bin) < spacing)) continue
+    kept.push(candidate)
+  }
+  return kept.sort((a, b) => a.bin - b.bin)
+}
+
+/**
+ * Local minima of a track, with a prominence each — the directionality index's
+ * borders, called on its integrated curve (`analysis/di.ts`). The diamond's own
+ * boundaries are cooltools' ({@link insulationBoundaries}).
  *
  * Prominence rather than depth, and the distinction is the whole of why this is
  * not three lines. A score of −1.2 in a quiet region is a boundary; the same

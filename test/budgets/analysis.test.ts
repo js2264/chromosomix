@@ -45,7 +45,7 @@ import {
 } from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
 import { ExpectedAccumulator } from '@/analysis/expected'
-import { diamondSums, insulationScore } from '@/analysis/insulation'
+import { diamondTotals, insulationScore } from '@/analysis/insulation'
 import { leadingEigenpairs } from '@/analysis/linalg'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import type { DenseMatrix } from '@/types'
@@ -99,7 +99,7 @@ suite('§12 — analysis over a remote cooler', () => {
       expected.finish()
 
       insulationScore(
-        diamondSums({ size: dense.nrows, values: dense.values }, { window: 10, minValid: 0.5 }),
+        diamondTotals({ size: dense.nrows, values: dense.values }, { window: 10, ignoreDiags: 2 }),
       )
 
       const coverage = new CoverageAccumulator(dense.nrows, new Int32Array(dense.nrows))
@@ -131,7 +131,7 @@ suite('§12 — analysis over a remote cooler', () => {
       source.resetStats()
       const dense = await square(mc, BIG)
       insulationScore(
-        diamondSums({ size: dense.nrows, values: dense.values }, { window: 25, minValid: 0.5 }),
+        diamondTotals({ size: dense.nrows, values: dense.values }, { window: 25, ignoreDiags: 2 }),
       )
       const { requests, bytes } = source.stats()
       expect(

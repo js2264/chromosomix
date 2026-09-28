@@ -2076,16 +2076,16 @@ saying where one track is.
 the rows between it and the last one clicked), and two or more ticked open a box above the list: the
 count and what can be done to them — *combine…* for a pair of tracks (§7.5), *hide* or *show*,
 *remove*, *clear* — over **a row's settings**, in a row's shapes and words: colour, height, style
-(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity.
-Each control **shows what the ticked rows share**, and *mixed* where they differ — an empty box saying
-so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round the swatch — and
-nothing is written until the reader picks. A pick is written to **every ticked row it means something
-to and no other**: a gene model and two bigWigs ticked together get one style picker, the pick lands on
-the two bigWigs, and the control's tooltip says how many of the ticked rows it reaches. Limits take both
-bounds before they are written, since a batch has no one range to seed the other from, and *auto*
-keeps each row's own manual pair for when it leaves auto again. The edits are one change to the store
-however many rows they reach. A new group named from the box clears the ticks, since the set now
-exists as a group.
+(and its colours under a heatmap), scale, flip, limits, group, location and, for overlays, opacity
+and maps. Each control **shows what the ticked rows share**, and *mixed* where they differ — an
+empty box saying so, a `mixed` entry heading a picker, a hatched edge or flip, a dashed ring round
+the swatch — and nothing is written until the reader picks. A pick is written to **every ticked row
+it means something to and no other**: a gene model and two bigWigs ticked together get one style
+picker, the pick lands on the two bigWigs, and the control's tooltip says how many of the ticked
+rows it reaches. Limits take both bounds before they are written, since a batch has no one range to
+seed the other from, and *auto* keeps each row's own manual pair for when it leaves auto again. The
+edits are one change to the store however many rows they reach. A new group named from the box
+clears the ticks, since the set now exists as a group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -2096,6 +2096,29 @@ which is the point of it.
 elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from the card above because
 these two answer a different question — not "what is on the sequence here" but "this pixel is a
 feature" — and because one file is rarely wanted in both roles at once.
+
+An overlay is **placed per map**, as a track is, and a map draws only the overlays placed on it. It
+used to be drawn on every map of a deck: a loop set called on one of six maps was circled on all
+six, and a batch of insulation over five drew five sets of boundaries on each, with nothing on the row
+to say otherwise. Imported, an overlay is on the session's own map; dropped on a companion's edge, on
+that companion; called by a task, on the map it was called from. In a deck its row has a **maps**
+field in the location field's shape: a line per contact map — its name, then one mark, the map's grid
+from the Contact maps card's head, lit where the overlay is drawn — and under them *every map*, *no
+map* and *on N of M*. One mark rather than four because an overlay is drawn on the map's face and
+not beside an edge of it, and `maps` rather than `location` because a batch of a bigWig and a loop
+set shows both fields and they answer differently. A tracks cell is not listed, having no matrix to
+draw on, and *no map* leaves an overlay placed in one where it is. With one map the field is not
+shown — the eye on the head already hides the overlay there — unless the overlay is drawn on no map,
+which a deck closed after *no map* leaves it, and then it is the one mark that puts it back.
+
+**It is dropped on a map as a track is dropped on an edge.** The middle of every map is a fifth
+rectangle, *on this map*, lit with the four strips at its edges while a file or a row is dragged —
+and **alone** while an overlay's row is, since the strips name stacks and an overlay has none. A
+file dropped there opens onto that map only, an overlay on its face and a track on its usual edge,
+where a file dropped in the middle of a companion used to land on the first map; a row of the Tracks
+card dropped there is drawn on that map **as well** as wherever it was, as the marks put it. An
+overlay's row let go on a strip is taken the same way, and given no edge. A lane carried by its
+grip is not offered the face: that gesture is about an edge.
 
 **Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
 sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
@@ -5409,6 +5432,13 @@ that read only tracks included, because the rule a reader is given is *a task ru
 map* and a column in which some run and some do not under no star is a rule with exceptions to
 learn. Starring any map puts every task back.
 
+**The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
+moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
+about what is on screen, and a task that compares two files is waiting on exactly this. It was asked
+when the column was built and when a companion's tables arrived, and nothing asked it when a cell
+closed, so *Reproducibility* could stand ready beside a map that had gone. Asked per change and not
+per read: a pan re-reads every companion and changes nothing here.
+
 **The panel exists without a contact map.** Three tasks — metaplot, track correlation and interval
 overlap — read only the loaded tracks, and a 1D browser session (§5.8) is exactly where a reader has
 the tracks and not the matrix. There the map tasks are `waiting` on *open a contact map*, the track
@@ -6069,17 +6099,26 @@ and its numbers land back in the **Cells table** as sortable columns, because th
 for is the one that table already has: sort, tick a run of rows, sum them. It does not assign a
 phase: the bands are a measurement with a citation and a cut through the horseshoe is a method with
 choices, and §18.9's argument applies to a phase call as it does to a loop call. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
-minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
+minima — **cooltools' own, to the pixel**. A bin's score is the mean of the valid cells of the
+`window × window` square cornered on its own diagonal pixel, `ignore_diags` left out, divided by the
+median of those means over its sequence and taken in log2; its boundaries are `find_boundaries`' —
+the prominence of each minimum, found over the bins whose diamond holds at least `minValid` of the
+fullest diamond's cells, and called at or above the threshold. A mean and not a sum, because a window
+that runs off the end of the sequence or over a dropped row then averages what it has, where a sum of
+fewer cells is a smaller number that reads exactly as a boundary: so every bin with a cell to average
+is scored, and `minValid` is cooltools' `min_frac_valid_pixels`, deciding only which bins the calls are
+read from. It never averages across a contig boundary, and never across a MAG boundary on a metacool.
 **Both scans on the map read a diagonal rather than a square**, and that is what decides how fine a
 resolution either can be run at. A diamond reaches `window` bins each side of the bin it scores and
 chromosight correlates inside a band `max_dist` wide; neither has ever needed the `n²` square around
 those cells, and reading one put a ceiling on each that belonged to the reader rather than to the
 arithmetic — a single `Float32Array` is refused past 23,170 bins on any machine (§5.2), which is
 116 Mb at 5 kb, and loop calling stopped at a hard-coded 8,192 bins, which is 41. Insulation now walks
-the sequence as overlapping squares with a `window`-bin halo, filling in the *sums* — which are local
-to a bin — and takes the score, which is a ratio against the mean over the whole sequence, once at the
-end; `diamondSums` is unchanged and still goldened against cooltools, and the answer is identical cell
-for cell rather than merely close. Loop calling reads the band it was always going to scan, which is
+the sequence as overlapping squares with a `window`-bin halo, filling in each bin's *totals* — the sum
+and the count of its diamond, which are local to it — and takes the score, which is a ratio against the
+median over the whole sequence, once at the end; the answer is identical cell for cell to the whole
+square's rather than merely close, and the boundaries wait for every sequence, the floor they are read
+above being a share of the fullest diamond of the run. Loop calling reads the band it was always going to scan, which is
 what `analysis/chromosight.ts` had already banded every one of its own objects to. Its gate is
 therefore a bound on the **band** — the scan distance times the sequence — and no longer on the
 chromosome: the whole mouse genome scans at 5 kb, and what is still refused is a deep scan on a fine
@@ -6237,7 +6276,7 @@ two are refused on size; *trans only* is the standard genome-wide call, with no 
 the answer at all, and needs two sequences. Both it and insulation take cooltools' **`ignore_diags`**
 (`|col − row| < n`, default 2), which is what keeps the near-diagonal — self-ligation and unligated
 fragments, the largest cells in the matrix and the least structural — from carrying a correlation or a
-diamond sum that then reads as structure. It emits **A/B segments** from E1's sign beside the eigenvector,
+diamond mean that then reads as structure. It emits **A/B segments** from E1's sign beside the eigenvector,
 because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
 comparison against zero. *Saddle*, which follows from the two above.
 
@@ -6367,8 +6406,11 @@ package's own output rather than a re-derivation (§18.10).
 *Reproducibility* is the one task in the catalogue whose unit is a **pair of files**, and it is a
 port: HiCRep's stratum-adjusted correlation (Yang et al. 2017), which smooths both maps with a 2D
 mean filter, correlates each diagonal **separately** — where the decay the two share is a constant
-and contributes no variance — and pools the per-diagonal coefficients by the Cochran–Mantel–Haenszel
-weight `N_k √(var₁ₖ·var₂ₖ)`. Both halves are load-bearing. Plain Pearson on two matrices comes out
+and contributes no variance — and pools the per-diagonal coefficients with **variance-stabilised
+weights**: `n` times the variance of the ranks of a diagonal's `n` values, which is `(n + 1)/12`, so a
+diagonal counts by the positions it compares. Weighting by the variance of the counts instead lets the
+few diagonals nearest the main one, where the counts and the correlation are highest, carry the whole
+number; on raw counts that alone lifts it by a few tenths. Both halves are load-bearing. Plain Pearson on two matrices comes out
 near 0.9 for two *unrelated* maps of the same assembly, because almost all of the variance is in the
 one gradient every Hi-C map has; and without the smoothing the coefficient measures depth as much as
 structure, which is why two shallow replicates would score worse than two deep ones of different
@@ -6376,26 +6418,34 @@ conditions. It reads a **band** rather than a square, so a mammalian chromosome 
 bounded reads. How far it compares is a **number of strata**, capped at and defaulting to 500: a
 stratum is a diagonal offset — which is the whole reason two maps on different grids cannot be
 compared at all — so the 5 Mb this used to be asked in was divided by the bin size in two places, and
-reached the cap on every file at 10 kb or finer.
+reached the cap on every file at 10 kb or finer. It is part of the answer, as the reference's `dBPMax`
+is, since a far stratum weighs about as much as a near one.
 
 **The other maps are the deck's**, in the order they are on screen and under the reader's own names
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
 is a number with nothing to look at beside it. The map a run is about is named the same way, never
 *This map*: run on every map of a deck, each run names every map alike, and the all-maps tab shows
-the comparison once (§18.7). The row is offered as soon as the deck holds a second map — the
-companion is asked for the two tables an analysis reads when the column is priced, where it used to
-wait until a batch or a star had asked, and the row said *open a second map* over a deck of two. The one thing the deck deliberately does not settle
+the comparison once (§18.7). The row is offered as soon as the deck holds a second map: a map is one
+of the others **once its file has opened**, whichever map is starred, the first map included — its
+name, its address and its bin size are all the task asks before a run, and a companion has them when
+it draws. The companion is asked for the two tables an analysis reads when the column is priced,
+where it used to wait until a batch or a star had asked, and the row said *open a second map* over a
+deck of two; a run waits for them as *run on all maps* does, so the first one in a fresh deck finds
+every map rather than none. The one thing the deck deliberately does not settle
 is the grid: §16's lock is in base pairs precisely so a 1 kb file and a 5 kb one can follow each
 other, and a stratum is a diagonal offset in *bins*, so a mismatched map is refused by name in the
 estimate exactly as §5.7's triangle refuses a mismatched pair. Three outputs: the N×N coefficient
 matrix on a fixed `[0, 1]` scale, the per-sequence table, and — the one that says more than the
 scalar — the **correlation against separation**, which distinguishes *these agree near the diagonal
 and not far from it*, which is a depth difference, from *these disagree everywhere*, which is two
-experiments. Two departures from the reference are stated where they are made
-(`analysis/hicrep.ts`): the reference is defined over dense raw counts and has no missing cells,
-so a smoothing window here is a mean over the cells that **have** values and a stratum is correlated
-over the positions where **both** maps do. Neither changes the answer on a file the reference was
-defined for.
+experiments. The arithmetic is **`hicrep` 0.2.6's**, the Python implementation of the R package,
+exactly: the upper triangle, with the main diagonal and every diagonal past the furthest compared set to
+zero before the smoothing; the window's mean over the cells it covers inside the sequence, zeros
+included; each diagonal from the first compared over the positions where **either** map is non-zero,
+one with a constant side pooled as zero with its weight. The reference is defined over raw counts,
+which have no missing cells, and a balanced map has them wherever the balancer dropped a bin: such a
+cell leaves the window's sum and its count, and a position whose whole window is dropped leaves the
+comparison (`analysis/hicrep.ts`). Neither changes a raw map's answer.
 
 *CID* — insulation plus boundary calls plus a pileup over those calls — is **gone**, and its going is
 the argument that withheld it carried to its end. Everything it did is reachable and now in one place:
@@ -6881,12 +6931,15 @@ the other tool's number under *its* definition, compared to whatever relation ac
 only the second would force a choice between a tolerance loose enough to cover a difference of
 definition and a test that fails on a difference that is correct. `direct` asks whether the code
 computes what it says; `reference` asks whether what it says is the quantity the field means by that
-name. Three of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
+name. Four of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
 the diagonal being counted once here and twice there, APA against coolpuppy once the diagonal-crossing
-windows are excluded. **Insulation is not**, and cannot be: the two diamonds differ by a row, by two
-diagonals, by a sum against a mean, by a median against a mean, and by a bad-bin mask. The golden lists
-all five, records the correlation *measured* per chromosome and window, and the test asserts that it has
-not degraded — which is a claim that is true, where equality would have been a claim that is false.
+windows are excluded, and **insulation against `cooltools.insulation`**, bin for bin: the score, the
+cells each diamond counted and the boundary strength, at three windows, with the calls at the threshold.
+It was once only correlated — the diamond here was a sum, half a bin along, over the contig's mean —
+and the golden recorded the correlation and asserted it had not degraded; the diamond is now cooltools'
+own, so the golden asserts what is true. **HiCRep** is held to `hicrep` 0.2.6's own coefficient, through
+its `trimDiags`, `meanFilterSparse` and `sccByDiag`, on a pair of maps with zeros scattered through both,
+at three smoothings.
 
 **And one golden has no `direct` half at all, deliberately.** There is no second definition of *what
 chromosight detects* to recompute in numpy: the algorithm is the definition, so the oracle is the
@@ -7448,7 +7501,8 @@ marks, on a gallery card and on the tray under a portal. Clicking a folder row's
 verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
-stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks card, onto the content
+stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
+(§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto the content
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 

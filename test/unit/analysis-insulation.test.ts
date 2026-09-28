@@ -1,15 +1,17 @@
 /**
  * Diamond insulation, against squares whose answer is worked out by hand.
  *
- * Three properties are checked rather than a golden, because all three are
- * places a reimplementation goes wrong while still producing a plausible track,
- * and none of them needs cooltools to state:
+ * The definition is cooltools' (`scripts/make_analysis_golden.py` holds it to
+ * cooltools' own table on the demo map); what is checked here is the handful of
+ * places a reimplementation goes wrong while still producing a plausible track:
  *
- * - the diamond is the rectangle *crossing* a bin, not a square centred on the
- *   diagonal — the difference between a dip and a smear;
- * - the ends of a contig get `NaN` and not a small number, since a partial
- *   window sums fewer cells and reads as strong insulation;
- * - a prominence is a climb on *both* sides, so one ragged trough is one call.
+ * - the diamond is the `w × w` square cornered on the bin's own diagonal pixel,
+ *   rows `(k − w, k]` against columns `[k, k + w)`, less the ignored diagonals;
+ * - it is a **mean** over the cells that carry a value, so the ends of a contig
+ *   and the edge of a dropped row are scored from what is there rather than
+ *   reading as insulation;
+ * - boundaries are cooltools' prominences, on the bins whose diamond holds enough
+ *   cells, with those bins taken out of the track rather than blanked in it.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -17,16 +19,18 @@ import { describe, expect, it } from 'vitest'
 import {
   callBoundaries,
   diamondCells,
-  diamondSums,
+  diamondTotals,
+  diamondTotalsBanded,
   domainsBetween,
-  diamondSumsBanded,
+  findPeakProminence,
+  insulationBoundaries,
   insulationScore,
   type Boundary,
   type ContigSquare,
 } from '@/analysis/insulation'
 import { squareBand } from '@/analysis/band'
 
-/** A square of ones, so every diamond sum is its own cell count. */
+/** A square of ones, so every diamond's sum is its own cell count. */
 function ones(size: number): ContigSquare {
   return { size, values: new Float32Array(size * size).fill(1) }
 }
@@ -45,173 +49,190 @@ function withBoundary(size: number, at: number): ContigSquare {
   return square
 }
 
-describe('diamondSums', () => {
-  it('sums the window crossing the bin, and nothing else', () => {
-    // On a square of ones, a diamond of half-width 2 covers 2 x 2 = 4 cells.
-    const sums = diamondSums(ones(10), { window: 2, minValid: 0.5 })
+describe('diamondTotals', () => {
+  it('counts the w × w square cornered on the bin, and nothing else', () => {
+    const { sums, counts } = diamondTotals(ones(10), { window: 2 })
+    // Rows (k − 2, k] against columns [k, k + 2): four cells, the diagonal pixel
+    // (k, k) among them.
+    expect(counts[5]).toBe(4)
     expect(sums[5]).toBe(4)
-    expect(sums[2]).toBe(4)
   })
 
   /**
-   * cooltools' `ignore_diags`, applied to the diamond's **inner corner**.
-   *
-   * The rectangle `[i - w, i) x [i, i + w)` never touches the main diagonal, so
-   * what a diagonal cut removes is the corner nearest it — where self-ligation
-   * and unligated fragments land. Those cells are the largest in the matrix, so
-   * at a small window the corner can be most of the sum, and a track carried by
-   * it is a picture of how deep the near-diagonal is rather than of what crosses
-   * the bin.
-   *
-   * The count is the triangle `1 + 2 + ... + (n - 1)`: at `w = 3` a cut of 2
-   * removes one cell and a cut of 3 removes three.
+   * cooltools' `ignore_diags`: a cell counts when `col − row` is at least the
+   * cut. The diagonal pixel is the diamond's corner, so a cut of 1 takes it and
+   * a cut of 2 takes it and the two cells beside it.
    */
-  it('trims the corner nearest the diagonal, by cooltools’ count', () => {
+  it('leaves out the diagonals nearest the corner, by cooltools’ count', () => {
     const square = ones(12)
-    expect(diamondSums(square, { window: 3, minValid: 0 })[6]).toBe(9)
-    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 0 })[6]).toBe(9)
-    // Offset 1 is the single cell (i - 1, i).
-    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 2 })[6]).toBe(8)
-    // …and offsets 1 and 2 are three cells.
-    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 3 })[6]).toBe(6)
+    expect(diamondTotals(square, { window: 3 }).counts[6]).toBe(9)
+    expect(diamondTotals(square, { window: 3, ignoreDiags: 1 }).counts[6]).toBe(8)
+    expect(diamondTotals(square, { window: 3, ignoreDiags: 2 }).counts[6]).toBe(6)
+    expect(diamondTotals(square, { window: 3, ignoreDiags: 3 }).counts[6]).toBe(3)
   })
 
-  /**
-   * `minValid` is a fraction of what can be counted, so trimming the corner must
-   * shrink the denominator with it — otherwise raising the cut quietly raises
-   * the bar a bin has to clear, and bins start losing their score for a reason
-   * that has nothing to do with their data.
-   */
-  it('measures coverage against the cells it is allowed to count', () => {
-    const square = ones(12)
-    // 9 cells, 3 cut away, 6 countable and all 6 present: a demand for every
-    // cell is met.
-    expect(diamondSums(square, { window: 3, minValid: 1, ignoreDiags: 3 })[6]).toBe(6)
+  it('scores the ends of a contig from the part of the diamond inside it', () => {
+    const { counts } = diamondTotals(ones(10), { window: 3 })
+    // Bin 0 has only its own row; bin 9 only its own column. cooltools averages
+    // what they hold rather than leaving them out, and a mean of fewer cells is
+    // not a smaller number, so neither end reads as a boundary.
+    expect(counts[0]).toBe(3)
+    expect(counts[1]).toBe(6)
+    expect(counts[9]).toBe(3)
+    const score = insulationScore(diamondTotals(ones(10), { window: 3 }))
+    for (const value of score) expect(value).toBe(0)
   })
 
-  // The cut cannot take more than the diamond has. A window of 1 is one cell at
-  // offset 1, so a cut of 2 or more leaves nothing and the bin has no score
-  // rather than a sum of zero.
-  it('leaves no score at all when the cut swallows the whole diamond', () => {
-    const sums = diamondSums(ones(12), { window: 1, minValid: 0, ignoreDiags: 2 })
-    expect(sums[6]).toBeNaN()
-  })
-
-  it('gives the ends of a contig no score at all', () => {
-    const sums = diamondSums(ones(10), { window: 2, minValid: 0.5 })
-    // The diamond at `i` reads rows [i-2, i) and columns [i, i+2), so it fits
-    // exactly for 2 <= i <= 8 on a ten-bin contig. Bins 0, 1 and 9 have no whole
-    // window: a partial one would sum fewer cells and read as strong
-    // insulation, which is the artefact this test exists to pin.
-    expect(sums[0]).toBeNaN()
-    expect(sums[1]).toBeNaN()
-    expect(sums[9]).toBeNaN()
-    expect(sums[2]).not.toBeNaN()
-    expect(sums[8]).not.toBeNaN()
-  })
-
-  it('refuses a bin whose diamond is mostly missing', () => {
+  it('does not count a cell the balancer dropped', () => {
     const square = ones(10)
-    // Blank three of the four cells of the diamond at bin 5.
-    square.values[3 * 10 + 5] = Number.NaN
-    square.values[3 * 10 + 6] = Number.NaN
     square.values[4 * 10 + 5] = Number.NaN
-    const strict = diamondSums(square, { window: 2, minValid: 0.5 })
-    expect(strict[5]).toBeNaN()
-    // The same square with no requirement answers from the one cell left, which
-    // is why the requirement exists rather than being a matter of taste.
-    const loose = diamondSums(square, { window: 2, minValid: 0 })
-    expect(loose[5]).toBe(1)
+    square.values[5 * 10 + 6] = Number.NaN
+    const { sums, counts } = diamondTotals(square, { window: 2 })
+    // Bin 5's diamond is (4..5) × (5..6): two of its four cells are gone, and
+    // its mean is still that of the two that are left.
+    expect(counts[5]).toBe(2)
+    expect(sums[5]).toBe(2)
   })
 
-  it('finds a boundary where one was built', () => {
-    const sums = diamondSums(withBoundary(20, 10), { window: 3, minValid: 0.5 })
-    expect(sums[10]).toBe(0)
-    // And the bins away from it are full, so the trough is a trough.
-    expect(sums[5]).toBe(9)
-    expect(sums[15]).toBe(9)
+  it('finds a boundary where one was built, half a bin either side of it', () => {
+    const { sums, counts } = diamondTotals(withBoundary(20, 10), { window: 3 })
+    // The edge falls between bins 9 and 10, and the diamond is cornered on a
+    // bin, so both see six of their nine cells cross it.
+    expect(sums[9] / counts[9]).toBeCloseTo(1 / 3, 12)
+    expect(sums[10] / counts[10]).toBeCloseTo(1 / 3, 12)
+    expect(sums[5] / counts[5]).toBe(1)
+    expect(sums[15] / counts[15]).toBe(1)
   })
 
-  /**
-   * How many cells a cut actually leaves, which is what `minValid` is a fraction
-   * of — and the number the old arithmetic stopped tracking past `w + 1`.
-   *
-   * A diamond of half-width `w` spans separations `1 … 2w − 1`. It is the *span*
-   * that bounds the cut, not the window: at `ignoreDiags = 2w` there is nothing
-   * left, and between `w + 1` and `2w` there is less left than a triangle of
-   * `w(w + 1) / 2` would suggest.
-   */
   describe('ignoring diagonals', () => {
     it('counts what a cut leaves, over the diamond’s whole span', () => {
-      // Nothing ignored is the whole rectangle.
+      // Separations run 0 … 2w − 2: one cell at 0, two at 1, … four at 3, then
+      // three, two, one.
       expect(diamondCells(4, 0)).toBe(16)
-      expect(diamondCells(4, 1)).toBe(16)
-      // One cell at separation 1, two at 2, three at 3, four at 4, then 3, 2, 1.
-      expect(diamondCells(4, 2)).toBe(15)
-      expect(diamondCells(4, 3)).toBe(13)
-      expect(diamondCells(4, 5)).toBe(6)
-      // Separations run 1…7, so seven ignored diagonals leave one cell and
-      // eight leave none — where the capped triangle claimed 6.
-      expect(diamondCells(4, 7)).toBe(1)
-      expect(diamondCells(4, 8)).toBe(0)
+      expect(diamondCells(4, 1)).toBe(15)
+      expect(diamondCells(4, 2)).toBe(13)
+      expect(diamondCells(4, 3)).toBe(10)
+      expect(diamondCells(4, 6)).toBe(1)
+      expect(diamondCells(4, 7)).toBe(0)
       expect(diamondCells(4, 30)).toBe(0)
     })
 
-    it('trims the corner nearest the diagonal, and only that', () => {
-      const square = ones(12)
-      const all = diamondSums(square, { window: 3, minValid: 0 })
-      const trimmed = diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 2 })
-      // The cell at (i − 1, i) is one bin of separation and is the only one the
-      // cut reaches at `ignoreDiags: 2`.
-      expect(all[6]).toBe(9)
-      expect(trimmed[6]).toBe(8)
-    })
-
-    it('scores a bin whose diamond still has cells in it', () => {
-      // Six ignored diagonals of a window-4 diamond leave separations 6 and 7 —
-      // three cells. The count that capped its triangle called it 6, so a
-      // `minValid` of 0.5 asked for 3 of a possible 3 and got them; at 0.9 it
-      // asked for 6 and refused a bin that had everything it could have.
-      const square = ones(20)
-      expect(diamondCells(4, 6)).toBe(3)
-      const scored = diamondSums(square, { window: 4, minValid: 0.9, ignoreDiags: 6 })
-      expect(scored[10]).toBe(3)
-    })
-
     it('answers a cut wider than the diamond with gaps rather than with zeros', () => {
-      const sums = diamondSums(ones(40), { window: 5, minValid: 0.5, ignoreDiags: 30 })
-      // Every bin, not merely the ends: there is no cell at a separation of 30
-      // in a diamond that spans 9. A zero here would read as total insulation.
-      expect([...sums].every((value) => Number.isNaN(value))).toBe(true)
+      const score = insulationScore(diamondTotals(ones(40), { window: 5, ignoreDiags: 30 }))
+      // There is no cell at a separation of 30 in a diamond that spans 8, and a
+      // zero here would read as total insulation.
+      expect([...score].every((value) => Number.isNaN(value))).toBe(true)
     })
   })
 })
 
 describe('insulationScore', () => {
-  it('is zero at the mean and negative where contact is suppressed', () => {
-    const score = insulationScore(Float64Array.from([4, 4, 2, 4, 4]))
-    // Mean is 3.6; a bin at 4 is just above it and the bin at 2 well below.
-    expect(score[0]).toBeGreaterThan(0)
-    expect(score[2]).toBeLessThan(0)
-    expect(score[2]).toBeCloseTo(Math.log2(2 / 3.6), 12)
+  const totals = (means: number[]) => ({
+    sums: Float64Array.from(means),
+    counts: new Float64Array(means.length).fill(1),
   })
 
-  it('answers NaN for a bin with no contact rather than minus infinity', () => {
-    // A -Infinity would take the value axis of the whole lane with it, and
-    // could not be written to a bigWig at all (S16.7).
-    const score = insulationScore(Float64Array.from([4, 0, 4]))
-    expect(score[1]).toBeNaN()
-    expect(Number.isFinite(score[0])).toBe(true)
+  it('is zero at the median and negative where contact is suppressed', () => {
+    const score = insulationScore(totals([4, 4, 2, 4, 5]))
+    // The median is 4: a bin at 4 is zero, the bin at 2 one below.
+    expect(score[0]).toBe(0)
+    expect(score[2]).toBe(-1)
+    expect(score[4]).toBeCloseTo(Math.log2(5 / 4), 12)
   })
 
-  it('carries NaN straight through', () => {
-    const score = insulationScore(Float64Array.from([4, Number.NaN, 4]))
+  it('takes the median of an even count as the mean of the middle two', () => {
+    const score = insulationScore(totals([1, 2, 4, 8]))
+    expect(score[1]).toBeCloseTo(Math.log2(2 / 3), 12)
+  })
+
+  it('answers NaN for a bin with no contact rather than minus infinity, and counts it', () => {
+    // A -Infinity would take the value axis of the whole lane with it, and could
+    // not be written to a bigWig at all (§18.7). The zero still pulls the median
+    // down, as cooltools lets it: the median of 0, 4, 8 is 4.
+    const score = insulationScore(totals([8, 0, 4]))
     expect(score[1]).toBeNaN()
+    expect(score[0]).toBe(1)
+  })
+
+  it('gives a bin with no cell to average no score', () => {
+    const score = insulationScore({ sums: Float64Array.from([4, 0, 4]), counts: Float64Array.from([1, 0, 1]) })
+    expect(score[1]).toBeNaN()
+    expect(score[0]).toBe(0)
   })
 
   it('answers all NaN when nothing is finite, rather than throwing', () => {
-    const score = insulationScore(Float64Array.from([Number.NaN, Number.NaN]))
+    const score = insulationScore({ sums: new Float64Array(2), counts: new Float64Array(2) })
     expect(Array.from(score).every(Number.isNaN)).toBe(true)
+  })
+})
+
+/**
+ * cooltools' `find_peak_prominence`, against its own answers.
+ *
+ * Every expected value below is what cooltools 0.7.1 returns for the same array
+ * — flat tops, `NaN` gaps and a tie for the highest peak included, which are the
+ * three places a port quietly parts from it.
+ */
+describe('findPeakProminence', () => {
+  const run = (values: number[]) => {
+    const { positions, prominences } = findPeakProminence(values)
+    return { positions, prominences: prominences.map((p) => (Number.isNaN(p) ? null : p)) }
+  }
+
+  it('measures each peak against the lowest point before a higher one', () => {
+    expect(run([0, 1, 0, 2, 0])).toEqual({ positions: [1, 3], prominences: [1, 2] })
+    const ragged = run([0, 3, 2.5, 2.9, 1, 4, 0.5, 2, 0])
+    expect(ragged.positions).toEqual([1, 3, 5, 7])
+    ragged.prominences.forEach((p, i) => expect(p).toBeCloseTo([2, 0.4, 3.5, 1.5][i], 12))
+  })
+
+  it('finds no peak on a flat top', () => {
+    expect(run([0, 1, 1, 0])).toEqual({ positions: [], prominences: [] })
+  })
+
+  it('reads across gaps to the nearest values either side', () => {
+    expect(run([0, Number.NaN, 1, Number.NaN, 0, 3, 0])).toEqual({
+      positions: [2, 5],
+      prominences: [1, 3],
+    })
+  })
+
+  it('measures only the first of two equal highest peaks', () => {
+    expect(run([0, 2, 0, 2, 0])).toEqual({ positions: [1, 3], prominences: [2, null] })
+  })
+
+  it('measures a lone peak against the lowest value when there is no minimum', () => {
+    expect(run([0, 1, 0])).toEqual({ positions: [1], prominences: [1] })
+  })
+})
+
+describe('insulationBoundaries', () => {
+  it('calls the minima at least as prominent as the threshold', () => {
+    const score = Float64Array.from([0, -1, 0, -3, 0])
+    const counts = new Float64Array(5).fill(9)
+    const calls = insulationBoundaries(score, counts, { minCells: 0, threshold: 1, spacing: 0 })
+    expect(calls.map((call) => [call.bin, call.prominence])).toEqual([
+      [1, 1],
+      [3, 3],
+    ])
+    expect(insulationBoundaries(score, counts, { minCells: 0, threshold: 1.5, spacing: 0 })).toHaveLength(1)
+  })
+
+  it('takes thin diamonds out of the track rather than blanking them', () => {
+    // Bin 2 holds too few cells. Removed, bins 1 and 3 become neighbours and the
+    // minimum at 3 is measured against the 0 at bin 0 rather than the 4 at bin 2.
+    const score = Float64Array.from([0, -1, 4, -3, 0])
+    const counts = Float64Array.from([9, 9, 2, 9, 9])
+    const calls = insulationBoundaries(score, counts, { minCells: 4.5, threshold: 0, spacing: 0 })
+    expect(calls.map((call) => call.bin)).toEqual([3])
+    expect(calls[0].prominence).toBe(3)
+  })
+
+  it('keeps the stronger of two calls closer than the spacing', () => {
+    const score = Float64Array.from([0, -1, 0, -3, 0])
+    const counts = new Float64Array(5).fill(9)
+    const calls = insulationBoundaries(score, counts, { minCells: 0, threshold: 0, spacing: 4 })
+    expect(calls.map((call) => call.bin)).toEqual([3])
   })
 })
 
@@ -304,10 +325,10 @@ describe('domainsBetween', () => {
  * A circular sequence's diamond has to be read from a band — the square has two
  * ends and a circle has none — and a second implementation of a goldened kernel
  * is a second answer unless something holds them together. This is that
- * something: on a **linear** band the two must agree cell for cell, including
- * where they both give up.
+ * something: on a **linear** band the two must agree cell for cell, the partial
+ * diamonds at both ends included.
  */
-describe('diamondSumsBanded', () => {
+describe('diamondTotalsBanded', () => {
   /** A square with no symmetry an indexing mistake could hide behind. */
   function noisy(size: number): Float32Array {
     const values = new Float32Array(size * size)
@@ -324,35 +345,28 @@ describe('diamondSumsBanded', () => {
   it('agrees with the square diamond on a linear sequence', () => {
     const size = 60
     const values = noisy(size)
-    for (const options of [
-      { window: 5, minValid: 1 },
-      { window: 8, minValid: 0.5, ignoreDiags: 2 },
-      { window: 3, minValid: 0, ignoreDiags: 0 },
-    ]) {
-      const square = diamondSums({ size, values }, options)
-      const banded = diamondSumsBanded(squareBand(values, size, { hi: 2 * options.window }), options)
-      for (let i = 0; i < size; i++) {
-        if (Number.isNaN(square[i])) expect(banded[i]).toBeNaN()
-        else expect(banded[i]).toBeCloseTo(square[i], 6)
-      }
+    for (const options of [{ window: 5 }, { window: 8, ignoreDiags: 2 }, { window: 3, ignoreDiags: 0 }]) {
+      const square = diamondTotals({ size, values }, options)
+      const banded = diamondTotalsBanded(squareBand(values, size, { hi: 2 * options.window }), options)
+      expect(Array.from(banded.counts)).toEqual(Array.from(square.counts))
+      for (let i = 0; i < size; i++) expect(banded.sums[i]).toBeCloseTo(square.sums[i], 6)
     }
   })
 
-  it('scores every bin of a circular sequence, junction included', () => {
+  it('gives every bin of a circular sequence a whole diamond, junction included', () => {
     const size = 60
-    const values = noisy(size)
-    const banded = diamondSumsBanded(squareBand(values, size, { circular: true, hi: 10 }), {
+    const banded = diamondTotalsBanded(squareBand(noisy(size), size, { circular: true, hi: 10 }), {
       window: 5,
-      minValid: 1,
+      ignoreDiags: 2,
     })
-    for (let i = 0; i < size; i++) expect(Number.isNaN(banded[i])).toBe(false)
+    for (let i = 0; i < size; i++) expect(banded.counts[i]).toBe(diamondCells(5, 2))
   })
 
   it('reads the junction of a circle as one continuous stretch', () => {
     const size = 60
     // Contact that depends only on the circular separation: no boundary anywhere,
-    // so every diamond holds the same sum and the track is flat — the junction
-    // most of all, which is where a linear reading would put a hole.
+    // so every diamond holds the same cells and the track is flat — the junction
+    // most of all, which is where a linear reading would thin the diamond.
     const values = new Float32Array(size * size)
     for (let i = 0; i < size; i++) {
       for (let j = 0; j < size; j++) {
@@ -360,11 +374,9 @@ describe('diamondSumsBanded', () => {
         values[i * size + j] = 1 / (1 + d)
       }
     }
-    const banded = diamondSumsBanded(squareBand(values, size, { circular: true, hi: 10 }), {
-      window: 5,
-      minValid: 1,
-    })
-    for (let i = 1; i < size; i++) expect(banded[i]).toBeCloseTo(banded[0], 10)
+    const score = insulationScore(
+      diamondTotalsBanded(squareBand(values, size, { circular: true, hi: 10 }), { window: 5 }),
+    )
+    for (let i = 0; i < size; i++) expect(score[i]).toBeCloseTo(0, 10)
   })
 })
-

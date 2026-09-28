@@ -252,7 +252,7 @@ describe('the HiCRep kernel', () => {
   }
 
   it('scores a map against itself at one', () => {
-    const a = strataOf(200, 20, (i, k) => Math.sin(i / 7) + k)
+    const a = strataOf(200, 20, (i, k) => Math.sin(i / 7) + k + 2)
     expect(stratumAdjusted(a, a).scc).toBeCloseTo(1, 12)
   })
 
@@ -274,31 +274,69 @@ describe('the HiCRep kernel', () => {
     expect(Math.abs(scc)).toBeLessThan(0.2)
   })
 
-  it('weights a stratum by its own evidence, not by its index', () => {
-    const a = strataOf(300, 3, (i, k) => (k === 0 ? Math.sin(i) : 1))
-    const b = strataOf(300, 3, (i, k) => (k === 0 ? Math.sin(i) : 1))
+  /**
+   * The variance-stabilised weight: `n` times the variance of the ranks of `n`
+   * values, which is `(n + 1) / 12` whatever the values are. A diagonal counts by
+   * how many positions it compares — never by how large or how varied its counts
+   * are, which is what let the few diagonals nearest the main one carry the
+   * number before.
+   */
+  it('weighs every stratum by the positions it compares, and nothing else', () => {
+    const a = strataOf(100, 3, (i, k) => (k === 1 ? 1000 * Math.sin(i) + 2000 : Math.sin(i) + 2))
+    const b = strataOf(100, 3, (i, k) => (k === 1 ? 1000 * Math.cos(i) + 2000 : Math.sin(i) + 2))
     const result = stratumAdjusted(a, b)
-    const varying = result.strata.find((stratum) => stratum.k === 0)
-    const flat = result.strata.find((stratum) => stratum.k === 1)
-    // A stratum with no variance has no correlation and no weight; one that
-    // varies carries the whole answer.
-    expect(varying?.weight).toBeGreaterThan(0)
-    expect(flat?.weight ?? 0).toBe(0)
+    expect(result.strata.map((stratum) => [stratum.k, stratum.n, stratum.weight])).toEqual([
+      [1, 99, 100 / 12],
+      [2, 98, 99 / 12],
+      [3, 97, 98 / 12],
+    ])
+    const [one, two, three] = result.strata
+    expect(result.scc).toBeCloseTo(
+      (one.weight * one.r + two.weight * two.r + three.weight * three.r) /
+        (one.weight + two.weight + three.weight),
+      12,
+    )
   })
 
-  it('leaves out a stratum too thin to say anything', () => {
+  it('never compares the main diagonal', () => {
+    const a = strataOf(50, 2, (i) => i + 1)
+    const result = stratumAdjusted(a, a)
+    expect(result.strata.map((stratum) => stratum.k)).toEqual([1, 2])
+  })
+
+  it('compares where either map has a contact, and leaves out where neither does', () => {
+    const a = emptyStrata(6, 1)
+    const b = emptyStrata(6, 1)
+    a[1].set([0, 2, 0, 4, 5, Number.NaN])
+    b[1].set([0, 0, 3, 1, 5, Number.NaN])
+    // Positions 1 to 4: position 0 is zero in both, and 5 is past the diagonal.
+    expect(stratumAdjusted(a, b).strata[0].n).toBe(4)
+  })
+
+  it('counts a stratum with no correlation as zero, with its weight', () => {
+    // One map constant along the second diagonal: its correlation is undefined,
+    // and the reference pools it as a zero that still carries its weight.
+    const a = strataOf(40, 2, (i, k) => (k === 2 ? 7 : i + 1))
+    const b = strataOf(40, 2, (i) => i + 1)
+    const result = stratumAdjusted(a, b)
+    expect(result.strata[1].r).toBeNaN()
+    const [one, two] = result.strata
+    expect(result.scc).toBeCloseTo((one.weight * one.r) / (one.weight + two.weight), 12)
+  })
+
+  it('leaves out a stratum of one position, and pools one of two', () => {
     const a = emptyStrata(10, 9)
     const b = emptyStrata(10, 9)
     for (let k = 0; k <= 9; k++) {
       for (let i = 0; i + k < 10; i++) {
-        a[k][i] = i
-        b[k][i] = i
+        a[k][i] = i + 1
+        b[k][i] = i + 1
       }
     }
     const result = stratumAdjusted(a, b)
-    // `k = 8` has two positions and `k = 9` has one: two points always correlate
-    // perfectly and say nothing, so neither is pooled.
-    expect(result.strata.every((stratum) => stratum.n >= 3)).toBe(true)
+    // `k = 8` has two positions and `k = 9` has one; the reference's weight is
+    // undefined under two.
+    expect(result.strata.map((stratum) => stratum.k)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   })
 
   it('has no answer where nothing can be compared', () => {
@@ -306,8 +344,46 @@ describe('the HiCRep kernel', () => {
     expect(Number.isNaN(stratumAdjusted(empty, empty).scc)).toBe(true)
   })
 
+  /**
+   * The whole kernel — trim, smooth, compare, pool — against `hicrep` 0.2.6 on a
+   * pair of 40-bin maps with zeros scattered through both. Each expected value is
+   * what `hicrep.hicrep.sccByDiag` returns for the same counts, after its own
+   * `trimDiags` and `meanFilterSparse`, at the same `h` and ten strata.
+   */
+  it('is hicrep 0.2.6’s coefficient, to the last places', () => {
+    const size = 40
+    const maxK = 10
+    const counts = (f: (i: number, j: number) => number): Float32Array => {
+      const values = new Float32Array(size * size)
+      for (let i = 0; i < size; i++) {
+        for (let j = i; j < size; j++) {
+          values[i * size + j] = f(i, j)
+          values[j * size + i] = f(i, j)
+        }
+      }
+      return values
+    }
+    const first = counts((i, j) => {
+      const v = (i * 7919 + j * 104729 + 17) % 23
+      return v < 8 ? 0 : v - 8
+    })
+    const second = counts((i, j) => {
+      const v = (i * 104729 + j * 7919 + 5) % 19
+      return v < 6 ? 0 : v - 6
+    })
+    const smoothed = (values: Float32Array, h: number): Strata => {
+      const into = emptyStrata(size, maxK)
+      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, h, maxK, into)
+      return into
+    }
+    const hicrep = [-0.20423464041983147, 0.011723637111902174, 0.06983099051628908]
+    for (const h of [0, 1, 2]) {
+      expect(stratumAdjusted(smoothed(first, h), smoothed(second, h)).scc).toBeCloseTo(hicrep[h], 12)
+    }
+  })
+
   describe('the mean filter', () => {
-    /** A tile whose cell `(r, c)` is `r * 10 + c`. */
+    /** A tile whose cell `(r, c)` is `r * 10 + c`, both triangles. */
     function tile(size: number): {
       values: Float32Array
       size: number
@@ -322,53 +398,81 @@ describe('the HiCRep kernel', () => {
       return { values, size, from: 0, ownFrom: 0, ownTo: size }
     }
 
-    it('takes the plain mean of the window it covers', () => {
+    it('averages the upper band only, zeros below and on the diagonal counted', () => {
+      const into = emptyStrata(9, 3)
+      smoothTileInto(tile(9), 1, 3, into)
+      // `(4, 5)` with `h = 1`: rows 3–5 by columns 4–6. The band `1 ≤ c − r ≤ 3`
+      // holds six of the nine cells — (3,4) (3,5) (3,6) (4,5) (4,6) (5,6) — and
+      // the other three are the zeros of the diagonal and below it.
+      expect(into[1][4]).toBeCloseTo((34 + 35 + 36 + 45 + 46 + 56) / 9, 10)
+    })
+
+    it('counts the window inside the sequence, as the reference does at an end', () => {
+      const into = emptyStrata(9, 3)
+      smoothTileInto(tile(9), 1, 3, into)
+      // `(0, 1)`: rows 0–1 by columns 0–2, six cells, of which (0,1) (0,2) and
+      // (1,2) are in the band.
+      expect(into[1][0]).toBeCloseTo((1 + 2 + 12) / 6, 10)
+    })
+
+    it('sets the diagonals past the furthest compared to zero before smoothing', () => {
       const into = emptyStrata(9, 2)
       smoothTileInto(tile(9), 1, 2, into)
-      // `(4, 5)` with `h = 1`: rows 3–5, cols 4–6, whose mean is the centre's
-      // own value by symmetry.
-      expect(into[1][4]).toBeCloseTo(45, 10)
-      // At the corner the window is clipped, so the mean is of rows 0–1 and
-      // cols 0–1 — `(0 + 1 + 10 + 11) / 4`.
-      expect(into[0][0]).toBeCloseTo(5.5, 10)
+      // `(4, 6)`: rows 3–5 by columns 5–7, and (3,6) (3,7) (4,7) are three and
+      // four diagonals out — past the two compared, so zeros.
+      expect(into[2][4]).toBeCloseTo((35 + 45 + 46 + 56 + 57) / 9, 10)
     })
 
     it('does nothing at all with a half-width of zero', () => {
       const into = emptyStrata(6, 2)
       smoothTileInto(tile(6), 0, 2, into)
       for (let i = 0; i < 4; i++) expect(into[2][i]).toBe(i * 10 + i + 2)
+      // The main diagonal is never filled: it is not compared.
+      expect(Number.isNaN(into[0][0])).toBe(true)
     })
 
-    it('averages over the cells that have values, not over the window', () => {
-      const size = 5
+    it('averages over the cells that have values, and counts the ones that are zero', () => {
+      const size = 8
       const values = new Float32Array(size * size).fill(4)
-      // One hole in the middle of the window around `(2, 2)`.
-      values[1 * size + 1] = Number.NaN
-      const into = emptyStrata(size, 0)
-      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, 1, 0, into)
-      // Eight cells of four and one dropped: the mean is four, not four times
-      // eight over nine. A window mean over the full area would report 3.56 and
-      // pull every value near a gap towards zero.
-      expect(into[0][2]).toBeCloseTo(4, 10)
+      // One dropped cell in the window around `(2, 5)`.
+      values[1 * size + 4] = Number.NaN
+      const into = emptyStrata(size, 5)
+      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, 1, 5, into)
+      // Rows 1–3 by columns 4–6, separations 1 to 5, all in the band: eight
+      // cells of four and one dropped. The mean is four — the dropped cell leaves
+      // the count as well as the sum — where a mean over the whole window would
+      // pull it towards zero.
+      expect(into[3][2]).toBeCloseTo(4, 10)
     })
 
     it('says nothing where the whole window is missing', () => {
-      const size = 3
+      const size = 4
       const values = new Float32Array(size * size).fill(Number.NaN)
-      const into = emptyStrata(size, 0)
-      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, 1, 0, into)
-      expect(Number.isNaN(into[0][1])).toBe(true)
+      const into = emptyStrata(size, 1)
+      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, 0, 1, into)
+      expect(Number.isNaN(into[1][1])).toBe(true)
+    })
+
+    it('is exactly zero where the window holds no contact', () => {
+      const size = 12
+      const values = new Float32Array(size * size)
+      // Large values far from a zero window, so a difference of prefix sums
+      // would leave a residue there.
+      for (let c = 8; c < size; c++) values[0 * size + c] = 1e7 + 0.3
+      const into = emptyStrata(size, 2)
+      smoothTileInto({ values, size, from: 0, ownFrom: 0, ownTo: size }, 1, 2, into)
+      expect(into[1][4]).toBe(0)
     })
 
     it('writes only the rows its own tile owns, in the sequence’s coordinates', () => {
       const size = 6
       const values = new Float32Array(size * size).fill(1)
-      const into = emptyStrata(20, 0)
-      smoothTileInto({ values, size, from: 10, ownFrom: 12, ownTo: 14 }, 0, 0, into)
-      expect(Number.isNaN(into[0][11])).toBe(true)
-      expect(into[0][12]).toBe(1)
-      expect(into[0][13]).toBe(1)
-      expect(Number.isNaN(into[0][14])).toBe(true)
+      const into = emptyStrata(20, 1)
+      smoothTileInto({ values, size, from: 10, ownFrom: 12, ownTo: 14 }, 0, 1, into)
+      expect(Number.isNaN(into[1][11])).toBe(true)
+      expect(into[1][12]).toBe(1)
+      expect(into[1][13]).toBe(1)
+      expect(Number.isNaN(into[1][14])).toBe(true)
     })
   })
 })

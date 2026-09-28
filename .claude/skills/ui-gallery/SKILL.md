@@ -37,6 +37,8 @@ node scripts/ui-compartments.mjs gallery     # the Compartments table under cool
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
+node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
+node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -194,6 +196,30 @@ Contact maps card's rows carried up and down it (shot mid-carry) and moved by th
 grid printed after each. `GALLERY_ONLY=drop`, `maps` or `order` runs one part. Run it after any
 change to how a deck is filled, to the Contact maps card, to what a task names a map, to the
 all-maps tab, or to how a companion reads a circle.
+
+`scripts/ui-insulation-hicrep.mjs` drives the two tasks held to their references to the pixel
+(§18.8) on the yeast deck. First the Analysis column as the deck opens, *Reproducibility* ready
+beside the second map (§18.1) — it stood greyed there until another task had run — and then that
+task **first**, on the fresh deck: its form and a run between the cooler and the `.hic`, the
+coefficient matrix, the table per sequence and the correlation by separation, which starts at the
+first diagonal. Run after insulation's, it would find the other map whether or not a first run
+could. Then *Diamond insulation*'s form — its *Boundaries* section holding the diamond coverage the
+calls are read over — and a run, with its lane and its domains on the map. It prints the row's
+state, each run's notes and the per-sequence rows. Run it after any change to either task's form,
+to `analysis/insulation.ts`, to `analysis/hicrep.ts`, or to how the deck tells the column its maps.
+
+`scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
+yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the
+loops row's *maps* field and the deck at each state — imported onto the first map, the Hi-C map's
+mark pressed, *every map*, the first map's mark pressed off, *no map* — then the two drops onto a
+map's middle, *on this map*: the loops row carried onto the Hi-C map, with the middle the only
+rectangle lit for it, and a loop *file* dropped on the third map, all five lit, which opens there
+alone. Dispatched with a real `DataTransfer` rather than dragged by the mouse, so the rectangles
+can be shot while the hand is still in the air. Then the ATAC row's *location* beside it, the batch
+box's two fields with both rows ticked, and the Analysis column's *Compartments* and
+*Reproducibility* rows. It prints the lit marks, the lit rectangles and the count at every step.
+Run it after any change to `ui/lanePlacement.ts`, to how `MatrixPanel` paints its overlays or takes
+a drop, or to `AnnotationStore.overlays`.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

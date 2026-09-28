@@ -293,10 +293,18 @@ export class AnnotationStore {
     this.changed()
   }
 
-  /** Take a track off every map, keeping the import. */
-  withdrawFrom(track: string): void {
+  /**
+   * Take a track off every map — or off every one of `maps` — keeping the import.
+   *
+   * The list is for an overlay's *no map*, which means the contact maps and not
+   * the tracks cells beside them (`ui/lanePlacement.ts`'s `overlayMapsField`).
+   */
+  withdrawFrom(track: string, maps?: readonly MapId[]): void {
     const before = this.lanes.length
-    this.lanes = withdraw(this.lanes, track)
+    this.lanes =
+      maps === undefined
+        ? withdraw(this.lanes, track)
+        : this.lanes.filter((lane) => lane.track !== track || !maps.includes(lane.map))
     if (this.lanes.length !== before) this.changed()
   }
 
@@ -554,10 +562,22 @@ export class AnnotationStore {
     this.changed()
   }
 
-  /** The rows drawn on the matrix itself. */
-  overlays(): AnnotationEntry[] {
+  /**
+   * The rows one map draws on the matrix itself.
+   *
+   * **Placed per map, as a lane is.** Every map used to draw every overlay, so a
+   * loop set called on one replicate was circled on all of them and a batch of
+   * insulation over five maps drew five sets of boundaries on each. An overlay
+   * has a lane on each map it is drawn on, as a track beside the map does; the
+   * lane's edges mean nothing on the matrix's face and are not read.
+   */
+  overlays(map: MapId = LEAD_MAP): AnnotationEntry[] {
     return this.items.filter(
-      (entry) => entry.card === 'overlay' && entry.visible && entry.status === 'ready',
+      (entry) =>
+        entry.card === 'overlay' &&
+        entry.visible &&
+        entry.status === 'ready' &&
+        laneOf(this.lanes, entry.id, map) !== undefined,
     )
   }
 

@@ -32,13 +32,13 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import { hasTrackControls, isIntervalSet, readsAlignments } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
-import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
+import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
-import { mapsOrLead, placementField } from './lanePlacement'
+import { mapsOrLead, overlayMapsField, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import {
   framingOf,
@@ -855,6 +855,9 @@ export class AnnotationCard {
         // being moved from a file being loaded and from a dragged word, while
         // the drag is still in the air and only `types` can be read.
         event.dataTransfer.setData(TRACK_DRAG_TYPE, entry.id)
+        // …and, for an overlay, that it is one: a map offers it its face and
+        // not its four edges, and only the types say so before the drop.
+        if (entry.card === 'overlay') event.dataTransfer.setData(OVERLAY_DRAG_TYPE, entry.id)
         // The row, not the handle: a 12-pixel ghost says nothing about what is
         // being moved.
         if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 12, 12)
@@ -1198,6 +1201,13 @@ export class AnnotationCard {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))
       out.push(this.opacity(entry))
+      // …and which maps it is drawn on, which a deck makes a question: the
+      // location field's, one mark per map rather than four edges. Not in the
+      // 1D browser, which has no map to draw one on.
+      if (this.props.context !== 'browser') {
+        const maps = overlayMapsField(this.props.store, entry, mapsOrLead(this.props.maps))
+        if (maps !== null) out.push(maps)
+      }
     }
     // What only a synthetic row has, where a loaded row has its path: the
     // exports, then the framing it was computed against — the framing in the

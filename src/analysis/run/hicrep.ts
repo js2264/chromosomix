@@ -192,20 +192,24 @@ async function compare(
     for (let a = 0; a < n; a++) {
       for (let b = a + 1; b < n; b++) {
         const result = stratumAdjusted(strata[a], strata[b])
+        const key = a * n + b
         for (const stratum of result.strata) {
-          if (!(stratum.weight > 0)) continue
+          // Pooled as each sequence's own number is: a stratum with no
+          // correlation counts as zero, with its weight.
+          pooledWeighted[key] += stratum.weight * (Number.isFinite(stratum.r) ? stratum.r : 0)
+          pooledWeights[key] += stratum.weight
+          // The curve is the correlation *at* each separation, so a stratum that
+          // has none is left out of it rather than drawn as a zero.
+          if (!Number.isFinite(stratum.r)) continue
           strataWeighted[pair][stratum.k] += stratum.weight * stratum.r
           strataWeights[pair][stratum.k] += stratum.weight
-          const key = a * n + b
-          pooledWeighted[key] += stratum.weight * stratum.r
-          pooledWeights[key] += stratum.weight
         }
         perSequence.push({
           sequence: name,
           a: maps[a].label,
           b: maps[b].label,
           scc: result.scc,
-          strata: result.strata.filter((stratum) => stratum.weight > 0).length,
+          strata: result.strata.length,
         })
         pair++
       }
@@ -272,7 +276,7 @@ async function compare(
         label: 'SCC',
         kind: 'number',
         digits: 4,
-        hint: 'Weighted by each stratum’s own evidence, then by each sequence’s.',
+        hint: 'Every stratum of every sequence, each weighted by the positions it compares.',
       },
     ],
     rows: pooledRows.sort((x, y) => Number(y.scc) - Number(x.scc)),

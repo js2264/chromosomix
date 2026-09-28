@@ -627,6 +627,24 @@ describe('running on every map', () => {
       runner.destroy()
     })
 
+    it('are waited for by a comparison, so its first run finds the other maps', async () => {
+      // A fresh deck: the companions have drawn, and not read the two tables a
+      // target needs — they read those when starred or batched. The first
+      // Reproducibility run took the synchronous list, found only the map it
+      // was run on, and said no second map was open beside it.
+      const late = opening()
+      const { runner, fake } = harness(FRAMING, null, DECK, { block: null, map: 'lead' }, {
+        ...late.host,
+        allTargets: () => [DECK[0]],
+      })
+      runner.run(task('hicrep'), {})
+      await settle()
+      const sent = fake.seen.find((message) => message.kind === 'run')
+      const peers = sent?.kind === 'run' ? (sent.inputs.peers ?? []) : []
+      expect(peers.map((peer) => peer.label)).toEqual(['rep2.cool', 'rep3.cool'])
+      runner.destroy()
+    })
+
     it('fall back to the synchronous list where a host has nothing to wait for', async () => {
       // Every session with no deck: one map, open, nothing to wait for.
       const { runner } = harness(FRAMING, null, [DECK[0]])

@@ -30,6 +30,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   overlay drew each pair twice under the names of the two runs that computed it. The tab's TSV — the
   tables' and the overlays' — carries every map's provenance, one block per map above the numbers.
 
+- **Which maps an overlay is drawn on, from its row (§8.1).** A loop set, a BED of borders or a
+  set a task called was drawn on every map of a deck: the loops called on one of six maps were
+  circled on all six, and a batch of insulation over five drew five sets of boundaries on each. An
+  overlay is placed per map now, as a track is, and in a deck its row has a *maps* field in the shape
+  of a track's *location*: a line per contact map with one mark, lit where the overlay is drawn,
+  then *every map*, *no map* and *on N of M*. The batch box has it for several ticked overlays,
+  hatched where they differ. Imported, an overlay is on the session's own map, as a track is; a set
+  a task called is on the map it was called from, which the drawer already said it was. A session
+  saved before this brings its overlays back on its own map, one press of *every map* from where
+  they were.
+
+- **The middle of a map is a drop target: *on this map* (§8.1).** A fifth rectangle, lit with the
+  four strips at a map's edges while a file or a Tracks card row is dragged, and alone while an
+  overlay's row is. A file dropped there opens onto that map only — a loop set on its face, a track
+  on its usual edge — where a file dropped in the middle of a deck's third map used to land on the
+  first; a row dropped there is drawn on that map as well as wherever it already was. An overlay's
+  row let go on one of the strips is taken the same way.
+
 - **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
   coverage track's smoothed second derivative turns negative — where the signal curves down — found by
   its shape rather than its height, so it needs no background model of normalised signal and splits
@@ -502,6 +520,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **The tasks are called *Compartments* and *Reproducibility* (§18.8).** The words in brackets,
+  *eigenvectors* and *HiCRep*, named a method where every other title in the column names what is
+  measured, and §18 already called the two tasks so; `metacooler-run --help` lists them the same.
+
+- **Diamond insulation is cooltools' own, to the pixel (§18.8).** A bin's score is the mean of the
+  valid cells of the square cornered on its diagonal pixel, over the median of its sequence, in log2 —
+  `cooltools.insulation`'s `log2_insulation_score` — and its boundaries are cooltools' prominences,
+  read over the bins whose diamond holds at least *diamond coverage to call* of the fullest one's
+  cells. It was a sum over a window half a bin along, against the sequence's mean, and agreed with
+  cooltools only where the window was whole: r = 0.98 there, 0.82 beside a dropped bin, on mouse at
+  10 kb. The two ends of a sequence and the edges of a dropped row are now scored from what their
+  diamond holds, where they were gaps, and a sequence shorter than twice the window is scored rather
+  than refused; the coverage setting, which blanked those bins, now only keeps them out of the calls,
+  and sits under *Boundaries*. Held to cooltools' table bin for bin on the demo map
+  (`npm run fixtures:analysis -- --only insulation`).
 
 - **A feature's box is edged like a coverage track's top (§8.16).** With the *track outline*
   preference on — the default — every block of a BED, a peak set, a gene or a call is drawn with the
@@ -1362,9 +1396,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pixels for the region on screen, and came back with the companion's numbers. The button now says
   *run on ★*, naming the starred map in its tooltip.
 
-- **Reproducibility is offered as soon as a deck has a second map (§18.8).** It waited, greyed with
-  *open a second map beside this one*, over a deck of two, until a batch or a star had made the other
-  map read the tables an analysis needs.
+- **Reproducibility is offered as soon as a deck has a second map (§18.1, §18.8).** It waited, greyed
+  with *open a second map beside this one*, over a deck of two, until a batch or a star had made the
+  other map read the tables an analysis needs. A map counts once its file has opened, the first map
+  included when the star is on another; the column is asked again whenever a map of the deck opens,
+  moves to another rung or closes; and a run waits for the other maps' tables, as *run on all maps*
+  does, so the first one finds them.
 
 - **Several maps dropped at once open in every cell (§16.11).** Eight coolers, a GTF and a FASTA
   dropped on a new tab loaded the tracks and the first two or three maps, and left the other cells
@@ -1373,6 +1410,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shrank the deck back to one companion and the rest rebuilt it from the stored record, which cannot
   re-open a dropped file. A render of a state the view has since moved past no longer touches the
   deck.
+
+- **Reproducibility gives hicrep's coefficient (§18.8).** The diagonals were pooled by the
+  variance of their smoothed counts, which let the few nearest the main one — the largest counts and
+  the highest correlation — carry the answer, and put the SCC a few tenths above hicrep's and
+  hicreppy's on the same maps: 0.90 against 0.51 on chicken chr1, G2 against 60 min. They are now
+  weighted as HiCRep weights them, `(n + 1)/12` for a diagonal of `n` positions, over the positions
+  where either map has a contact, from the first diagonal out, on the upper triangle with the diagonal
+  and everything past the furthest stratum set to zero before the smoothing — `hicrep` 0.2.6's
+  arithmetic, which the unit tests hold the kernel to at twelve decimals. How far the comparison runs
+  is now part of the answer, as hicrep's `dBPMax` is.
 
 - **Stop reaches a task in the annotations worker (§18.3).** A metaplot, a FRiP or a track
   correlation ran to its end whatever was pressed, because the worker handed every task there a

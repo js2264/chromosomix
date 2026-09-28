@@ -36,8 +36,7 @@ computes what it says, ``reference`` asks whether what it says is the quantity
 the field means by that name.
 
 Anything that only has one of the two is a task where the other does not exist —
-no published tool computes per-MAG contact purity, and nothing but this repo
-defines insulation against a contig mean rather than a genome median.
+no published tool computes per-MAG contact purity.
 
 Why the demo data and not a fixture
 -----------------------------------
@@ -424,102 +423,85 @@ def _ps_breaks() -> dict[str, list]:
     return {"pos": pos, "width": width}
 
 
-def direct_diamond(mat: np.ndarray, window: int, min_valid: float) -> dict[str, Any]:
-    """The viewer's diamond, in numpy: rows ``[i-w, i)`` against cols ``[i, i+w)``.
+def direct_diamond(mat: np.ndarray, window: int, ignore_diags: int) -> dict[str, Any]:
+    """cooltools' diamond, in numpy: rows ``(k-w, k]`` against columns ``[k, k+w)``.
 
-    Whole window or nothing — the first and last ``w`` bins of a contig get no
-    score at all rather than a smaller sum from fewer cells, which is the one
-    rule in `analysis/insulation.ts` that a reimplementation reliably breaks and
-    the one that decides whether every sequence has a fake telomeric boundary.
+    The ``w × w`` square cornered on the bin's own diagonal pixel, less the cells
+    nearer the diagonal than ``ignore_diags``, **averaged** over the cells that
+    carry a value — so every bin with a cell to average is scored, the two ends
+    of a contig from the part of their diamond inside it. That is the rule a
+    reimplementation reliably breaks, by summing instead, and a sum of fewer
+    cells draws a trough at both ends of every sequence. The mean is divided by
+    the contig's median and taken in log2, a zero giving no score.
     """
     n = mat.shape[0]
     w = max(1, int(window))
-    needed = max(1, math.ceil(w * w * min_valid))
-    sums = np.full(n, np.nan)
-    for i in range(n):
-        if i - w < 0 or i + w > n:
-            continue
-        block = mat[i - w : i, i : i + w]
-        ok = ~np.isnan(block)
-        if int(ok.sum()) < needed:
-            continue
-        sums[i] = float(block[ok].sum())
-
-    finite = np.isfinite(sums)
-    score = np.full(n, np.nan)
-    if finite.any():
-        mean = float(sums[finite].mean())
-        if mean > 0:
-            positive = finite & (sums > 0)
-            score[positive] = np.log2(sums[positive] / mean)
-    return {"sums": rounded(sums), "score": rounded(score)}
+    sums = np.zeros(n)
+    counts = np.zeros(n)
+    for k in range(n):
+        for a in range(min(w, k + 1)):
+            row = mat[k - a, k + max(0, ignore_diags - a) : min(n, k + w)]
+            ok = ~np.isnan(row)
+            sums[k] += float(row[ok].sum())
+            counts[k] += int(ok.sum())
+    with np.errstate(divide="ignore", invalid="ignore"):
+        means = sums / counts
+        finite = means[np.isfinite(means)]
+        median = float(np.median(finite)) if finite.size else math.nan
+        score = np.log2(means / median)
+    score[~np.isfinite(score)] = np.nan
+    return {"sums": rounded(sums), "counts": [int(c) for c in counts], "score": rounded(score)}
 
 
 def insulation_golden(chroms: list[str], windows: list[int], min_valid: float) -> dict:
-    """cooltools' diamond insulation at several window sizes, and the viewer's own.
+    """cooltools' diamond insulation at several window sizes, and the viewer's, which is the same.
 
     Several windows, because the window is the parameter everybody changes
     (§18.8) and a kernel that is right at one width and wrong at another is a
     kernel whose edge handling is wrong.
 
-    **The two definitions are not the same, and the golden says how.** cooltools
-    takes the *mean* of a ``window × window`` block that includes row ``i``, drops
-    the first ``ignore_diags`` diagonals, and normalises by the **median** over
-    the region; this repo takes the *sum* of the block that excludes row ``i``,
-    drops nothing, and normalises by the **mean** over the contig. Both are
-    "diamond insulation" and both are published; they differ by a constant factor
-    plus a near-diagonal term. So the reference relation is ``correlated``, with a
-    floor the shapes must clear, and equality is asserted against ``direct``.
+    **The relation is equality.** The viewer computes ``cooltools.insulation``'s
+    own definition — the mean of the valid cells of a window cornered on the bin,
+    ``ignore_diags`` left out, over the region's median, in log2 — and calls
+    boundaries as its ``find_boundaries`` does: prominences of the minima over the
+    bins whose diamond holds at least ``min_frac_valid_pixels`` of the fullest one
+    in the whole table. So the reference records cooltools' score, cell count and
+    boundary strength per bin, which bins it calls at the threshold, and the
+    fullest diamond — which a test over four chromosomes cannot see for itself.
     """
     import cooler
     import cooltools
 
     clr = cooler.Cooler(str(COOLER))
     bp_windows = [w * int(clr.binsize) for w in windows]
+    ignore_diags = 2
+    threshold = 0.2
 
     out: dict[str, Any] = {
         "cooler": COOLER.name,
         "binsize": int(clr.binsize),
         "chroms": chroms,
         "windows_bins": windows,
+        "ignore_diags": ignore_diags,
         "min_valid": min_valid,
+        "threshold": threshold,
         "tolerance": TOL_F32,
         # The score is a logarithm, and a relative tolerance is the wrong shape
         # for one: a diamond sum carrying 2e-6 of float32 error turns into about
         # 3e-6 of *absolute* error in `log2`, which at a score of 0.03 — an
-        # entirely ordinary value, since zero means "average" — reads as 1e-4
-        # relative. Compared as `|a - b| <= max(rel * scale, abs)`.
+        # entirely ordinary value, since zero means "typical" — reads as 1e-4
+        # relative. Compared as `|a - b| <= max(rel * scale, abs)`, and the
+        # boundary strength, a difference of two scores, the same way.
         "tolerance_absolute_score": 1e-5,
         "compare": "relative",
         "direct": {},
-        "reference": {
-            "tool": "cooltools.insulation",
-            "relation": "correlated",
-            # The floor is *measured*, per chromosome and window, and written into
-            # the golden below rather than asserted here. A number picked in
-            # advance would be either so low it proves nothing or so high it fails
-            # on a dataset with weak domain structure — and this one has weak
-            # domain structure: budding yeast at 1 kb has no TADs to speak of, so
-            # much of what both tools are correlating is noise. What the test can
-            # honestly assert is that the correspondence has not *degraded*, which
-            # is what a recorded floor gives it.
-            "floor_is_measured": True,
-            "differences": [
-                "cooltools averages a window x window block whose rows run (i-w, i] "
-                "— it includes row i; this repo sums the block [i-w, i) that excludes it",
-                "cooltools drops the first ignore_diags diagonals; this repo drops none",
-                "cooltools divides by the count of valid positions, excluding bad bins; "
-                "this repo sums and requires a fraction of the window to be present",
-                "cooltools normalises by the region median; this repo by the contig mean",
-                "cooltools masks positions within min_dist_bad_bin of a dropped bin",
-            ],
-        },
+        "reference": {"tool": "cooltools.insulation", "relation": "equal"},
     }
 
     for chrom in chroms:
         mat = square(clr, chrom, balance=True)
         out["direct"][chrom] = {
-            str(w): direct_diamond(mat, w, min_valid) for w in windows
+            str(w): direct_diamond(mat, w, ignore_diags) for w in windows
         }
 
     try:
@@ -528,30 +510,28 @@ def insulation_golden(chroms: list[str], windows: list[int], min_valid: float) -
             bp_windows,
             verbose=False,
             clr_weight_name="weight",
-            ignore_diags=2,
+            ignore_diags=ignore_diags,
+            min_frac_valid_pixels=min_valid,
+            threshold=threshold,
         )
     except Exception as err:  # noqa: BLE001 - recorded, not raised
         out["reference"]["unavailable"] = str(err)
         return out
 
+    out["reference"]["max_valid_pixels"] = {
+        str(w): int(table[f"n_valid_pixels_{bp}"].max()) for w, bp in zip(windows, bp_windows)
+    }
     for chrom in chroms:
         rows = table[table["chrom"] == chrom]
         per_window: dict[str, Any] = {}
         for bins_wide, bp in zip(windows, bp_windows):
-            column = f"log2_insulation_score_{bp}"
-            if column not in rows.columns:
-                per_window[str(bins_wide)] = {"unavailable": f"cooltools wrote no {column}"}
-                continue
-            theirs = rows[column].to_numpy()
-            ours = np.asarray(
-                [np.nan if v is None else v for v in out["direct"][chrom][str(bins_wide)]["score"]],
-                dtype=float,
-            )
             per_window[str(bins_wide)] = {
-                "start": [int(v) for v in rows["start"]],
-                "score": rounded(theirs),
-                "is_bad_bin": [bool(v) for v in rows["is_bad_bin"]],
-                "measured_pearson": _pearson(ours, theirs),
+                "score": rounded(rows[f"log2_insulation_score_{bp}"].to_numpy()),
+                "n_valid_pixels": [int(v) for v in rows[f"n_valid_pixels_{bp}"]],
+                "boundary_strength": rounded(rows[f"boundary_strength_{bp}"].to_numpy()),
+                "is_boundary": [
+                    i for i, called in enumerate(rows[f"is_boundary_{bp}"].to_numpy()) if called
+                ],
             }
         out["reference"][chrom] = per_window
     return out
@@ -1868,7 +1848,7 @@ def idr_golden(n: int, seed: int) -> dict:
 #: What each golden proves, in one line, for the manifest a JS test iterates.
 COVERAGE = {
     "expected": "P(s) per chromosome, raw and balanced, against numpy and cooltools.expected_cis",
-    "insulation": "diamond sums and scores at three windows, against numpy and cooltools.insulation",
+    "insulation": "diamond means, scores and boundaries at three windows, equal to cooltools.insulation",
     "coverage": "cis marginals, against numpy and cooltools.coverage",
     "viewpoint": "a virtual 4C profile, against numpy — the diagonal counted once",
     "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
@@ -1910,7 +1890,7 @@ def main(argv: list[str] | None = None) -> int:
         "--min-valid",
         type=float,
         default=0.5,
-        help="fraction of a diamond that must carry a value",
+        help="cooltools' min_frac_valid_pixels, for the insulation boundaries",
     )
     parser.add_argument("--anchor-bins", type=int, default=5, help="4C anchor width, in bins")
     parser.add_argument("--apa-flank", type=int, default=10, help="APA flank, in bins")

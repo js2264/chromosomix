@@ -3566,6 +3566,41 @@ p {
   right: 0;
 }
 
+/* The middle of the map: *on this map* (§8.1) — the one target an overlay has,
+   since it is drawn on the map's face and along no edge of it, and for a track
+   the map rather than a stack of it.
+
+   Inset far enough that it never meets a strip: a fifth of the map from every
+   side is more than a strip's thirty pixels on any map this layout builds, so a
+   drop between the two lands on neither, as one in a corner does. Paler than
+   the strips, because it covers the picture the reader is choosing by. */
+.lane-drop-face {
+  inset: 22%;
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+}
+
+/* …and still see-through with the hand over it: the map under it is the one
+   being chosen, and the strips' solid fill would hide it at the moment the
+   reader is checking it is the right one. */
+.lane-drop-face.over {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Over the picture its words need a ground of their own, or the diagonal
+   runs through them. */
+.lane-drop-face .lane-drop-label {
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  padding: 0.15rem 0.5rem;
+}
+
+/* An overlay row in the air has nothing to say about an edge, so the four
+   strips stay down for it and the face is the only target the map offers. */
+.panel-grid.is-dropping.is-overlay-drag .lane-drop:not(.lane-drop-face) {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .lane-drop-label {
   font-size: var(--step--1);
   font-weight: 600;

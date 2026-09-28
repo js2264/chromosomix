@@ -91,6 +91,21 @@ export function dragHasTrack(event: DragEvent): boolean {
 }
 
 /**
+ * Written **beside** {@link TRACK_DRAG_TYPE} when the row dragged is an overlay.
+ *
+ * An overlay is drawn on the map's face and not along one of its edges, so a
+ * map shows it the one target it has — *on this map* — and not four edges that
+ * would each mean the same thing. Which row is in the air cannot be read until
+ * it lands; its types can, so the kind travels as one.
+ */
+export const OVERLAY_DRAG_TYPE = 'application/x-metacooler-overlay'
+
+/** Whether a drag is carrying a row of the Tracks card that is an overlay. */
+export function dragHasOverlay(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes(OVERLAY_DRAG_TYPE)
+}
+
+/**
  * The drop effect a target should answer a drag with: `wanted`, where the
  * drag's source allows it, and otherwise the first effect it does allow.
  *

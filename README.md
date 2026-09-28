@@ -186,10 +186,10 @@ metacooler-run tasks
 ##       --scales (default 1)  Scales
 ##       --sequences  Sequences
 ##       --ignoreDiags (default 2)  Diagonals to ignore
-##       --minValid (default 0.5)  Minimum coverage of the diamond
 ##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ##       --call (default true)  Call boundaries from the minima
 ##       --prominence (default 0.2)  Minimum prominence
+##       --minValid (default 0.5)  Diamond coverage to call
 ##       --spacing (default 0)  Minimum spacing
 ##       --domains (default true)  Also the domains between them
 ## 
@@ -214,7 +214,7 @@ metacooler-run tasks
 ##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## compartments
-##     Compartments (eigenvectors)
+##     Compartments
 ##       --sequences  Sequences
 ##       --contacts (default "cis")  Contacts
 ##       --ignoreDiags (default 2)  Diagonals to ignore
@@ -243,7 +243,7 @@ metacooler-run tasks
 ##       --no-balance  Read the raw counts (balanced by default where the file carries weights)
 ## 
 ## hicrep
-##     Reproducibility (HiCRep)
+##     Reproducibility
 ##       --against <file>  The other maps to compare with; repeat per map
 ##       --sequences  Sequences
 ##       --maxDistance (default 500)  Furthest separation compared
