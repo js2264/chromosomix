@@ -3384,11 +3384,8 @@ What is not, and is stated rather than left to be discovered: **chromosight** an
 the **observed/expected** map divide by an expected curve at a linear separation,
 so near the junction their denominator is the curve's far tail rather than its
 near one — except where the map's O/E is taken along the arms, below, whose
-offsets from the origin are measured round the circle. A **deck companion** draws
-the sequence linearly — the declaration is the lead map's — so a deck of a
-circular chromosome framed on `ori` shows the lead across the junction and the
-companions from the sequence's first base. Both are seams rather than wrong
-answers, and both are in the same place: the reader can see the junction.
+offsets from the origin are measured round the circle. That is a seam rather than
+a wrong answer, and it is in a place the reader can see: the junction.
 
 #### The origin, and the two arms
 
@@ -3430,6 +3427,18 @@ base again, as a view of it opens. Either press after a pan, which the address
 does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
 along the diagonal alone (§7.5), read from the origin in the column — the first
 base where none has been set.
+
+**Every map of a deck takes them** (§16). The declarations are the session's, about the molecules of
+the first map's file, and a deck is maps of one genome: a companion takes each circle and each origin
+for its own sequence of the same name, spelled its own way (§5.9). So `ori` frames **every** map on
+the origin — the region is shared, and each companion reads the window across the junction, where it
+used to read `end < start` as a typing mistake and draw nothing but the refusal — and a circle ticked
+under an open deck re-reads the companions it concerns. `arms` is each map's own, as its O/E is
+(§16.2): with no map starred the first map's card sets every map, the O/E with it; a starred
+companion's card carries `arms` and `ori` as the first map's does, the first setting that map alone
+and the second framing the deck, where both used to be missing. Each map's arms are read in the first
+map's frame — the sequence, its length and its origin — placed on its own block by base pairs, so a
+companion at another resolution divides by the same two arms.
 
 **A frame across the origin turns, and it needed one gate widened.** `isTurnable`
 asked for *one run or none*, on the sound ground that a boundary between two
@@ -4333,7 +4342,7 @@ companions.
 | Pan and zoom | yes (§16.3) | opt out |
 | Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
 | Score column and balancing | seeded from the lead | yes |
-| Derived values — O/E and the smoothing (§7.5) | seeded from the lead | yes |
+| Derived values — O/E, the smoothing and the arms (§7.5, §8.15) | seeded from the lead | yes |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | one press (§16.5) | yes |
 
@@ -4372,7 +4381,7 @@ drawing O/E beside four drawing raw counts was argued to be four wrong compariso
 choice — and each was applied by every panel and offered by the lead alone. What that cost was the
 reader's own comparison: *this replicate normalised, that one raw* had no control anywhere, and the
 Map card said *every map* about half its rows and *the first map* about the other half without
-saying which were which. Each map now **opens on the lead's** score, O/E and smoothing, so a deck
+saying which were which. Each map now **opens on the lead's** score, O/E, smoothing and arms, so a deck
 nobody has touched is exactly the deck it was, and from then on each is **that map's own** — set on
 its card while it is starred, remembered with its clip (`deck:looks`), and read by every picture,
 export and analysis of it. A normalisation, a correlation and the baseline are answers to *what are
@@ -4846,9 +4855,11 @@ and the deck rebuilt its cells from it: a lane let go on a `+` went back to the 
 the new cell stood empty.
 
 **Every map the session holds is a row of the Contact maps card**, in the order the grid holds
-them: the first map, the one in its lower triangle (§5.7), then each companion under the name its
-cell's heading gives it. The card used to list the first two only, so a deck of four maps showed a
-card of one and the other three were named nowhere in the column.
+them — the first map where its cell stands, with the one in its lower triangle (§5.7) under it, which
+is the one square, and each companion under the name its cell's heading gives it — then the maps held
+hidden, which have no cell to be in the order of. The card used to list the first two only, so a
+deck of four maps showed a card of one and the other three were named nowhere in the column; and
+then it listed the first map first wherever its cell had been moved to.
 
 Each companion's row has an **eye** and an **×**, and they are two acts, as on a track's row. The
 eye is the Structures card's (§25.3): lit, the map is in a cell, and pressing it takes the map out
@@ -4900,6 +4911,18 @@ read one file at two windows or two colour scales. The first map's row onto a ce
 something moves the first map there, as its own grip would (§16.5), and a companion's row onto the
 first map's cell exchanges the two. Taking hold of a row shows the tiling, as a cell's grip does.
 
+**A row dragged up or down the card moves its map's cell**: let go above the middle of another map's
+row, it goes before that map; below it, after — and the arrow keys on a focused grip move it one map
+up or down, as on the Tracks card. It is an **insertion among the maps**, where a cell's grip
+exchanges two cells: a list is reordered by insertion, and a reader carrying the eighth map to the top
+of the card means *first*, not *swap with the first*. Only the seats maps stand in are dealt again,
+so a tracks cell, a model and an empty cell keep their places while the maps move round them. The
+first map moves the same way, its square with it; the compared map, being that square's lower
+triangle, has no place of its own, and a hidden map has no cell to move. A move of the companions is
+written into `maps`, and one of the first map alone into this session's memory, where its place is
+kept (§16.5). Everything that follows the grid's order follows the move: the card, the deck's figure,
+and the analysis — a batch's runs, the drawer's tabs, and the all-maps overlays and tables (§18.7).
+
 ### 16.10 Naming the maps
 
 A map is labelled by its file, which is the right default and a poor name for the work: four
@@ -4916,6 +4939,17 @@ heading over its cell, the two bands of a turned comparison (§17.2), the readou
 under the pointer, the derived label on a ratio, and the caption on an exported figure. A rename is
 not a rebuild — it changes what the picture is called and nothing about what is in it, and rebuilding
 the view would put a gated whole-genome scan (§7.3) back behind its button.
+
+**What a task makes of a map is named by it too** (§18). A run names the map it measured — the
+drawer's tab for it, its line in the all-maps overlay and its rows in the all-maps tables (§18.7),
+the lane or the model it adds (`<output> · <map>`), a reproducibility run's matrix, tables and lines,
+and the console — by what the map is called when the run is made, and never by its file:
+`dparAB`, where the legend used to read `Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool::10000`. The
+drawer's tabs, overlays and stacked tables are named afresh on every refresh, so a result computed
+before a rename follows it; a lane, a model or a comparison's own figure is named when it is made
+and keeps that name, which is then the reader's to change like any other row's. A track and a model
+are the same: a run takes each chosen row's name as it is dispatched, and a task's form open over a
+rename lists the row under its new name.
 
 Three things about where the name lives:
 
@@ -4961,6 +4995,15 @@ and replaced all four with vacancies reading *this cell held that file and it co
 re-opened* — about files the deck still had in hand. A live cell is the best possible answer for its
 own index and is asked first; the record answers for the rest; and both only ever over a `~`, so a
 list naming a remote map or a structure cell at that index still wins.
+
+**Only the state still in force is reconciled.** Asking the record for a grant is asynchronous, and
+several coolers dropped at once are added one after another, each add a publish and each publish a
+render of its own — `~`, then `~|~`, and so on. Every one of those renders waited for its grants and
+came back after the last map had been added, so the render of `~` shrank the deck to one companion
+and the renders after it grew it back from the record, which cannot re-open a dropped file: eight
+coolers dropped on a new tab opened two or three maps and five or six vacancies. A render whose state
+the store has since moved past reconciles nothing; the state that replaced it has a render of its
+own, and that one says what the deck is.
 
 ## 17. The turn: 45°, distance up the side
 
@@ -5876,6 +5919,26 @@ number in a figure checkable by the person reading the figure. Where an output h
 alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
 them, which is a header a BED consumer would choke on and a reader needs.
 
+**Run on every map of a deck, the outputs come together on one more tab, `all maps`.** Each output id
+is folded once, in the order the task returns them:
+
+- a **curve** — and a profile, drawn as one — is one overlay, a line per map named by the map (§16.10),
+  each map's lines prefixed by its name where it drew several;
+- a **table** is one table: every map's rows, in the deck's order, under a first column `Map` naming
+  the map each row was measured on — the columns every map returned, in the order they were met, a
+  value a map did not return drawn as a dash. A batch over eight libraries is run *for* this table:
+  the inter-arm enrichment of every map side by side, rather than eight tabs to copy one row out of
+  each;
+- an output that **already compares every map** — a reproducibility run's matrix, tables and lines,
+  each about every pair — is shown **once**, from the run that compared the most maps: every map's run
+  of it computes the same pairs, and overlaying or stacking them listed each pair once per map;
+- a **matrix** stays per map, and the tab says so: four pileups averaged would be a fifth picture
+  nobody asked for.
+
+The tab has no single provenance, so it has no framing line and no *recompute*; its **TSV** carries
+every map's instead — one indented block per map, opened by the name the map column uses, naming the
+file, the framing and the settings its rows were measured with — above the numbers.
+
 **Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
 where — *3 tracks added to the Tracks card in the Annotations panel, marked \*.* — and each row under it
 is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
@@ -6317,7 +6380,11 @@ reached the cap on every file at 10 kb or finer.
 
 **The other maps are the deck's**, in the order they are on screen and under the reader's own names
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
-is a number with nothing to look at beside it. The one thing the deck deliberately does not settle
+is a number with nothing to look at beside it. The map a run is about is named the same way, never
+*This map*: run on every map of a deck, each run names every map alike, and the all-maps tab shows
+the comparison once (§18.7). The row is offered as soon as the deck holds a second map — the
+companion is asked for the two tables an analysis reads when the column is priced, where it used to
+wait until a batch or a star had asked, and the row said *open a second map* over a deck of two. The one thing the deck deliberately does not settle
 is the grid: §16's lock is in base pairs precisely so a 1 kb file and a 5 kb one can follow each
 other, and a stratum is a diagonal offset in *bins*, so a mismatched map is refused by name in the
 estimate exactly as §5.7's triangle refuses a mismatched pair. Three outputs: the N×N coefficient

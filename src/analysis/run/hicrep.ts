@@ -61,7 +61,10 @@ export const runHicrep: TaskRunner = async (job) => {
   const h = Math.max(0, Math.round(numParam(job.params, 'smooth', 1)))
   const maxK = strataOf(job.params)
 
-  const maps: Compared[] = [{ label: 'This map', mc: job.mc, lead: true }]
+  // Named as the reader names it (§16.10), like the peers beside it: a batch
+  // runs this once per map, and a table that called each run's own map *This
+  // map* named a different map by the same words in every run.
+  const maps: Compared[] = [{ label: job.inputs.mapLabel ?? 'This map', mc: job.mc, lead: true }]
   try {
     for (let i = 0; i < peers.length; i++) {
       job.progress(i, peers.length, `opening ${peers[i].label}`)
@@ -241,6 +244,9 @@ async function compare(
       // where they are the same result.
       range: [0, 1],
       stats: [{ label: 'sequences', value: chosen.length, digits: 0 }],
+      // Every map against every other, whichever map this run was about — so
+      // the all-maps tab shows it once rather than once per map (§18.7).
+      acrossMaps: true,
     } satisfies MatrixOutput,
   ]
 
@@ -270,6 +276,7 @@ async function compare(
       },
     ],
     rows: pooledRows.sort((x, y) => Number(y.scc) - Number(x.scc)),
+    acrossMaps: true,
   } satisfies TableOutput)
 
   if (perSequence.length > 0) {
@@ -285,6 +292,7 @@ async function compare(
         { key: 'strata', label: 'Strata', kind: 'number', digits: 0 },
       ],
       rows: perSequence,
+      acrossMaps: true,
     } satisfies TableOutput)
   }
 
@@ -319,6 +327,7 @@ async function compare(
       xScale: 'log',
       yScale: 'linear',
       yDomain: [-0.2, 1],
+      acrossMaps: true,
     } satisfies CurveOutput)
   }
 

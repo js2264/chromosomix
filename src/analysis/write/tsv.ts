@@ -513,18 +513,59 @@ export function spansToTsv(
 
 /** One output, with its provenance above it, as the text of a `.tsv`. */
 export function outputToTsv(output: TaskOutput, provenance: Provenance): string {
-  const head = provenanceLines(provenance)
+  return document([...provenanceLines(provenance), ...outputLines(output)])
+}
+
+/**
+ * An output drawn **across several maps** — the drawer's all-maps tab (§18.7):
+ * a stacked table, an overlay of every map's curves — with every map's
+ * provenance above it.
+ *
+ * One block per map, in the order the rows name them, each opened by the name
+ * the map column uses and indented under it. A stacked table has no single
+ * provenance, and one printed for the first map would be a claim about the
+ * other seven that is not true — they are other files, and they may have been
+ * run at other times with other settings.
+ */
+export function combinedToTsv(
+  output: TaskOutput,
+  maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
+): string {
+  return document([...combinedProvenanceLines(maps), ...outputLines(output)])
+}
+
+/**
+ * Every map's provenance, as the head of an export across several maps and as
+ * what *copy provenance* puts on the clipboard there: the build once, then one
+ * indented block per map, opened by its name.
+ */
+export function combinedProvenanceLines(
+  maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
+): string[] {
+  const head: string[] = []
+  const app = maps[0]?.provenance.app
+  if (app !== undefined) head.push(`# metacooler ${cell(app)}`)
+  head.push(`# maps: ${tsvNumber(maps.length)}`)
+  for (const map of maps) {
+    head.push(`# map: ${cell(map.label)}`)
+    // Everything but the build, which is the file's and said once above.
+    for (const line of provenanceLines(map.provenance).slice(1)) head.push(`#   ${line.slice(2)}`)
+  }
+  return head
+}
+
+function outputLines(output: TaskOutput): string[] {
   switch (output.kind) {
     case 'profile':
-      return document([...head, ...profileToTsv(output)])
+      return profileToTsv(output)
     case 'curve':
-      return document([...head, ...curveToTsv(output)])
+      return curveToTsv(output)
     case 'matrix':
-      return document([...head, ...matrixToTsv(output)])
+      return matrixToTsv(output)
     case 'table':
-      return document([...head, ...tableToTsv(output)])
+      return tableToTsv(output)
     case 'intervals':
-      return document([...head, ...intervalsToTsv(output)])
+      return intervalsToTsv(output)
   }
 }
 

@@ -637,6 +637,56 @@ describe('running on every map', () => {
   })
 })
 
+/**
+ * What a result calls the map it measured (§16.10).
+ *
+ * A map a reader renamed is renamed everywhere on screen, and a task's output
+ * was the one place the name did not reach: a plain Run named its map by the
+ * framing's address, and a reproducibility run named its own map *This map*
+ * beside peers named by the deck. The host says what the map is called; the
+ * runner carries it.
+ */
+describe('the name a result gives its map', () => {
+  it('is what the host calls the map a plain Run measured', async () => {
+    const { runner, fake } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => ({ uri: URI, source: { kind: 'local', file: new File([], URI) }, label: 'wild type' }),
+    })
+    runner.run(task('coverage'), {})
+    await settle()
+    fake.finish()
+    await settle()
+    expect(runner.resultsFor('coverage').map((entry) => entry.target.label)).toEqual(['wild type'])
+    runner.destroy()
+  })
+
+  it('falls back to the framing where the host has no name for it', async () => {
+    // A genome browsed as tracks: there is no map to have a name.
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), {})
+    await settle()
+    fake.finish()
+    await settle()
+    expect(runner.resultsFor('coverage').map((entry) => entry.target.label)).toEqual([URI])
+    runner.destroy()
+  })
+
+  it('is handed to a reproducibility run for its own map, beside its peers’', async () => {
+    const renamed = DECK.map((target, at) => ({ ...target, label: ['WT', '0 min', '15 min'][at] }))
+    const { runner, fake } = harness(FRAMING, null, renamed)
+    runner.runAll(task('hicrep'), {}, runner.targets())
+    await settle()
+    const first = fake.seen.find((request) => request.kind === 'run')
+    expect(first?.inputs.mapLabel).toBe('WT')
+    expect(first?.inputs.peers?.map((peer) => peer.label)).toEqual(['0 min', '15 min'])
+    fake.finish()
+    await settle()
+    const second = fake.seen.filter((request) => request.kind === 'run')[1]
+    expect(second?.inputs.mapLabel).toBe('0 min')
+    expect(second?.inputs.peers?.map((peer) => peer.label)).toEqual(['WT', '15 min'])
+    runner.destroy()
+  })
+})
+
 describe('cancelling a job', () => {
   it('lands in cancelled, not failed, and carries no message', async () => {
     const { runner, fake } = harness()

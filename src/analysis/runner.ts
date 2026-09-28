@@ -107,6 +107,8 @@ export interface RunnerHost {
     cells?: readonly string[]
     binning?: PairsBinning
     orientation?: OrientationSummary
+    /** What the reader calls this map (§16.10), which its results are named by. */
+    label?: string
   } | null
   /** Which map a plain Run files its results against — the star (§18.2). */
   targetMap?(): MapId
@@ -718,7 +720,10 @@ export class AnalysisRunner {
       // set lost here is lost for every single-map run — which is all of them
       // outside a batch (§3.8).
       ...(source?.cells === undefined ? {} : { cells: source.cells }),
-      label: framing.uri,
+      // The map's name where the host has one — the tab, the lane and every
+      // figure that names the map take it from here — and the framing's address
+      // where it has none, which is a genome browsed as tracks.
+      label: source?.label ?? framing.uri,
     }
   }
 
@@ -1333,6 +1338,9 @@ export class AnalysisRunner {
         })
       }
       if (peers.length > 0) inputs.peers = peers
+      // …and the job's own map, named the way its peers are, so a comparison
+      // run on every map names each one the same in every run.
+      if (job.target.label !== '') inputs.mapLabel = job.target.label
     }
 
     // **Only to the job that is about the map the block came from.**

@@ -14,6 +14,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Maps are reordered on the Contact maps card (§16.9).** The card lists the maps in the grid's
+  order — the first map where its cell stands, no longer always first — and a row dragged up or down
+  it moves the map's cell: let go above another map's row it goes before it, below it after it, and
+  the arrow keys on a focused grip move it a map at a time. The maps are re-dealt among the seats maps
+  stand in, so tracks cells, models and empty cells stay put. Run on all maps, a task works through
+  the maps in the grid's order, and its tabs, overlays and tables follow it.
+
+- **Run on every map, the tables come together too (§18.7).** The `all maps` tab drew the curves of
+  every map on one axis and sent the tables back to the per-map tabs; it now shows each table as one:
+  every map's rows in the deck's order, under a first column naming the map. Inter-arm alignment run
+  over eight libraries is one table of eight maps' enrichments, sortable and exportable, rather than
+  eight tabs to copy a row out of. A reproducibility run already compares every map with every other,
+  so its matrix, tables and lines are shown once, from the run that compared the most maps, where the
+  overlay drew each pair twice under the names of the two runs that computed it. The tab's TSV — the
+  tables' and the overlays' — carries every map's provenance, one block per map above the numbers.
+
 - **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
   coverage track's smoothed second derivative turns negative — where the signal curves down — found by
   its shape rather than its height, so it needs no background model of normalised signal and splits
@@ -1321,6 +1337,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **`ori` and `arms` reach every map of a deck (§8.15, §16.2).** `ori` framed the first map across the
+  circle's junction and left every other map saying *End coordinate less than start — unless the
+  sequence joins its own ends…*; `arms` divided the first map alone, even with no map starred, where
+  the first map's card sets every map; and a starred companion's card had neither control. A companion
+  now takes the session's circles and origins for its own sequence of the same name and reads the
+  window across the junction, refined across it too; `arms` is each map's own, as its O/E is — seeded
+  from the first map's, set for every map from the first map's card while nothing is starred and for
+  one map from its own card while it is, and remembered with its look — and a starred companion's
+  card carries `ori`, which frames the whole deck.
+
+- **What a task makes of a map is called what the map is called (§16.10).** A map renamed on the
+  Contact maps card or its heading kept its file's name in everything a task made of it: the drawer's
+  tabs, the all-maps legend (`Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool::10000`, for a map called
+  `dparAB`), the lanes and models a run adds, and a reproducibility run, which also called its own map
+  *This map*. They take the map's name now, and the tabs and the all-maps figures follow a later
+  rename. A track or a model was already named by the name it had when a run was made; a task's form
+  open over the rename now lists it under the new one too.
+
+- **A plain Run on a starred companion is that map's (§18.1).** It was filed under the first map —
+  its tab, its lanes and its name were the first map's — and the Run button never said which map it
+  would measure. In a batch with a companion starred, the first map's run was lent the companion's
+  pixels for the region on screen, and came back with the companion's numbers. The button now says
+  *run on ★*, naming the starred map in its tooltip.
+
+- **Reproducibility is offered as soon as a deck has a second map (§18.8).** It waited, greyed with
+  *open a second map beside this one*, over a deck of two, until a batch or a star had made the other
+  map read the tables an analysis needs.
+
+- **Several maps dropped at once open in every cell (§16.11).** Eight coolers, a GTF and a FASTA
+  dropped on a new tab loaded the tracks and the first two or three maps, and left the other cells
+  reading *this cell held that file and it could not be re-opened*. Each map added to the deck is a
+  render of its own, and the renders of the first adds finished after the last map was in: the first
+  shrank the deck back to one companion and the rest rebuilt it from the stored record, which cannot
+  re-open a dropped file. A render of a state the view has since moved past no longer touches the
+  deck.
 
 - **Stop reaches a task in the annotations worker (§18.3).** A metaplot, a FRiP or a track
   correlation ran to its end whatever was pressed, because the worker handed every task there a

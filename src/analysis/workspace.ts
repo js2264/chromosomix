@@ -80,9 +80,10 @@ export interface AnalysisWorkspaceHost {
    * How the analysis worker should mount the file; `null` before anything is open.
    *
    * `cells` is the ticked set of a single-cell container and is absent for every
-   * other file — see {@link RunTarget.cells}.
+   * other file — see {@link RunTarget.cells}. `label` is what the reader calls
+   * the map (§16.10), which a plain Run names its results by.
    */
-  source(): { uri: string; source: SourceSpec; cells?: readonly string[] } | null
+  source(): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
   context(): AnalysisContext | null
   framing(): AnalysisFraming | null
   block(): BlockInput | null
@@ -253,6 +254,9 @@ export class AnalysisWorkspace {
         for (const contig of this.host.contigs()) out[contig.name] = contig.length
         return out
       },
+      // The star, so a plain Run files what it measured under the map it read
+      // (§18.2) — and names it by that map rather than by the first one.
+      ...(this.host.targetMap === undefined ? {} : { targetMap: () => this.host.targetMap?.() ?? LEAD_MAP }),
       allTargets: () => this.host.allTargets?.() ?? [],
       ...(this.host.allTargetsReady === undefined
         ? {}
@@ -1305,17 +1309,20 @@ function derivedProvenance(
  * What a form needs to know about the loaded files, as one string.
  *
  * Id, kind and status, in order — the three things `candidatesFor` filters on to
- * decide what a task may be run against. A colour, a height, an edge and a name
- * are all absent on purpose: none of them changes the answer, and the first
- * fires the store on every tick of a colour drag while the last fires on every
- * keystroke of a rename.
+ * decide what a task may be run against — and the **name**, which is what the
+ * form lists each of them by. A colour, a height and an edge are absent on
+ * purpose: none of them changes what the form says, and a colour fires the
+ * store on every tick of its drag.
  *
- * The cost of leaving the *label* out is a dropdown that goes on showing the old
- * name until something else changes — which is a cosmetic lag measured against
- * refilling every control, including a column list that reads four hundred
- * features, once per keystroke. If that lag ever matters, the fix is to debounce
- * a rename rather than to widen this.
+ * The name was left out too, on the grounds that a rename fired on every
+ * keystroke and refilling every control per keystroke was dear. No rename does:
+ * each box commits on Enter or on leaving it. So it is in, and a form open
+ * while a track or a model is renamed lists it under the name the run will
+ * write — the outputs always took the new name, and a dropdown still offering
+ * the old one read as the run ignoring it.
  */
 export function entrySignature(store: AnnotationStore): string {
-  return store.entries.map((entry) => `${entry.id}:${entry.kind}:${entry.status}`).join('|')
+  return store.entries
+    .map((entry) => `${entry.id}:${entry.kind}:${entry.status}:${entry.label}`)
+    .join('|')
 }

@@ -36,6 +36,7 @@ node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
+node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -181,6 +182,18 @@ parameter box the fit ended on — Pol II is not a replicate of ATAC — the fou
 thresholds and both lanes. It prints the notes of each run to stdout. The replicate run fits IDR
 over the whole genome and takes two minutes. Run it after any change to the task, to `yapc.ts` or
 `idr.ts`, or to how a figure draws a violin.
+
+`scripts/ui-deck-maps.mjs` drives a **deck of many maps** end to end (§16.9–§16.11, §18.7, §8.15):
+eight copies of the yeast cooler dropped on the landing page with a GTF and a FASTA, every one of
+which must open in its own cell (printed, with a count of the cells that say *could not be
+re-opened*, which must be 0); three copies of the *E. coli* demo renamed on their headings, run on
+together — Inter-arm alignment's `all maps` tab with its stacked table, Reproducibility's shown once
+— every map named by its name; the first map's card setting O/E and `arms` on every map with none
+starred, `ori` framing every map across the junction, and a starred companion's own card; then the
+Contact maps card's rows carried up and down it (shot mid-carry) and moved by the arrow keys, the
+grid printed after each. `GALLERY_ONLY=drop`, `maps` or `order` runs one part. Run it after any
+change to how a deck is filled, to the Contact maps card, to what a task names a map, to the
+all-maps tab, or to how a companion reads a circle.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

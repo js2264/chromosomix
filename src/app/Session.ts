@@ -134,7 +134,7 @@ import { AnnotationCard } from '../ui/AnnotationCard'
 import { StructureCard } from '../ui/StructureCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
-import { CompareCard, compareRefusal } from '../ui/CompareCard'
+import { CompareCard, LEAD_ROW, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { PanelDeck } from '../panels/PanelDeck'
 import { DeckFrame } from '../panels/DeckFrame'
@@ -4479,6 +4479,11 @@ export class Session {
       },
       onRenameDeckMap: (target, name) => this.renameMap(target, name),
       onDragMap: (dragging) => this.deck?.showTiling(dragging),
+      // The rows follow the grid, the first map's where its cell stands, and a
+      // row dragged up or down the card moves its cell (§16.9).
+      leadAt: () => this.deck?.leadMapIndex ?? 0,
+      onReorderMap: (map, onto, after) =>
+        this.deck?.moveMap(map === LEAD_ROW ? LEAD_MAP : map, onto === LEAD_ROW ? LEAD_MAP : onto, after),
     })
   }
 
@@ -4969,7 +4974,7 @@ export class Session {
       store,
       index: () => this.annotations?.metadata ?? null,
       level: () => this.metadataLevel(),
-      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
+      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
       onExport: (entry) => this.exportMetadata(entry),
     })
 
@@ -4994,7 +4999,7 @@ export class Session {
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
-        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
+        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
         ...(published.length === 0 || wanted
           ? {}
           : {
@@ -5298,8 +5303,9 @@ export class Session {
       get: (name) => store.get(name),
       set: (name, at) => {
         store.set(name, at)
-        // The arms on screen and `ori` are read from it.
+        // The arms on screen and `ori` are read from it — every map's.
         this.rederive()
+        this.deck?.redeclared()
       },
       subscribe: (listener) => store.subscribe(listener),
     }
@@ -5320,6 +5326,7 @@ export class Session {
         'are read from it from now on. It is on the Chromosomes table.',
     )
     this.rederive()
+    this.deck?.redeclared()
   }
 
   /**
@@ -5659,6 +5666,9 @@ export class Session {
     // `ori` framing exists only on a circle: the map's presentation of both is
     // built from the declaration, so it is built again with it.
     this.rederive()
+    // …and every companion's, which reads a window across the origin only where
+    // the circle is declared.
+    this.deck?.redeclared()
   }
 
   /**
@@ -5754,6 +5764,10 @@ export class Session {
         this.compare === null ? undefined : this.mapLabel(this.compare.uri),
       )
     }
+    // …and the Analysis drawer, whose tabs, overlay legends and all-maps tables
+    // name each map by what it is called now: they are read off the targets on
+    // every refresh, so a result computed before the rename follows it.
+    this.analysis?.refresh()
   }
 
   // -------------------------------------------------------------------------
@@ -6187,6 +6201,17 @@ export class Session {
       })),
     )
     if (this.destroyed) return
+    // **Only the state still in force reconciles the deck.** Dropping eight
+    // coolers adds seven companions one after another, and each publish is a
+    // render of its own: `~`, then `~|~`, up to seven. Every one of those waited
+    // here for its grants, and came back after the last map had been added —
+    // so the render of `~` shrank a deck of seven to one, and the renders after
+    // it grew it back from the stored record, which cannot re-open a dropped
+    // file. What a reader got was two maps and six cells reading *this cell
+    // held that file and it could not be re-opened*. A state the store has
+    // since moved past has a render of its own on the way, which is the one
+    // that says what the deck is.
+    if (!viewStateEquals(this.store.state, state)) return
     const deck = this.ensureDeck()
     deck.apply(state, locals)
     // A deck read back from the address does not publish — it *is* what the
@@ -6285,11 +6310,18 @@ export class Session {
       derive: () => {
         const state = this.store.state
         if (state === null) return undefined
-        // Nor the arms: their frame is the lead file's bins, and a companion is
-        // another file with a layout of its own (§8.15).
-        const { onExpectedChange: _own, arms: _lead, ...shared } = this.derivePresentation(state)
-        return shared
+        const { onExpectedChange: _own, arms, ...shared } = this.derivePresentation(state)
+        if (arms === undefined) return shared
+        // The arms go with it (§8.15): the frame is the molecule's — its length
+        // and its origin, placed on each companion's block by base pairs — and
+        // `ori` is the deck's, since the region every map reads is one. The
+        // toggle is each companion's own (`MapPanel.useArms`), as its O/E is.
+        const { onChange: _lead, ...frame } = arms
+        return { ...shared, arms: frame }
       },
+      // The circles the session declares, for the companions to read a window
+      // across the origin of the same molecule (§8.15).
+      circular: () => this.circularStore()?.list() ?? [],
       annotations: (map) => this.annotationContext(map),
       /**
        * The star moved, or the map it was on finished reading its tables.
@@ -8757,6 +8789,9 @@ export class Session {
             source: starred.source,
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
+            // What a plain Run names the map it measured (§16.10), as a batch
+            // names each of its maps (`readyTargets`).
+            label: this.mapLabel(starred.uri),
           }
         }
         const file = this.file
@@ -8770,6 +8805,7 @@ export class Session {
             source: file.source,
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
+            label: this.mapLabel(file.uri),
           }
         }
         // **The genome, where there is no map.** Three tasks run entirely on
@@ -8938,21 +8974,25 @@ export class Session {
    * One list built two ways, which is the point of the parameter: the
    * synchronous caller wants whatever is ready *and* wants the rest to start
    * reading, and the awaiting one has already waited and must not kick off a
-   * second round of the same reads. Both give the lead first, which is the order
-   * a reader looking at the grid expects a batch to follow.
+   * second round of the same reads. Both give the maps in the grid's order,
+   * which is the order a reader looking at the grid expects a batch to follow.
    */
   private readyTargets(options: { start: boolean }): RunTarget[] {
     const out: RunTarget[] = []
     const file = this.file
+    let lead: RunTarget | null = null
     if (file !== null) {
-      out.push({
+      lead = {
         map: LEAD_MAP,
         uri: file.uri,
         source: file.source,
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
-        label: fileLabel(file.uri),
-      })
+        // What the reader calls it (§16.10), which is what every tab, legend,
+        // lane and table a task makes of it is named by — not the file's name,
+        // which is only the default a map starts with.
+        label: this.mapLabel(file.uri),
+      }
     }
     for (const { map, panel } of this.deck?.analysable() ?? []) {
       const facts = panel.analysisFacts()
@@ -8966,8 +9006,21 @@ export class Session {
         source: facts.source,
         ...cellsOfMap(facts.info),
         ...binningOfMap(facts.info),
-        label: fileLabel(facts.uri),
+        label: this.mapLabel(facts.uri),
       })
+    }
+    // **In the grid's order**, the first map among the others where its cell
+    // stands: a batch works through the maps as a reader reads the grid, and
+    // the drawer's tabs and the all-maps figures and tables follow this list —
+    // so a map moved on the Contact maps card moves there too (§16.9). The
+    // companions still reading are left out, and the place is counted among the
+    // maps that are in.
+    if (lead !== null) {
+      const before = this.deck?.leadMapIndex ?? 0
+      const ahead = (this.deck?.analysable() ?? [])
+        .slice(0, before)
+        .filter(({ map }) => out.some((target) => target.map === map)).length
+      out.splice(ahead, 0, lead)
     }
     return out
   }
@@ -9091,11 +9144,19 @@ export class Session {
       // the star. A task that compares two files is offered the others, and a
       // map cannot be a peer of itself.
       peers: (this.deck?.analysable() ?? [])
-        .map(({ panel }) => panel.analysisFacts())
+        .map(({ panel }) => {
+          const facts = panel.analysisFacts()
+          // A companion reads the two tables an analysis needs only when asked,
+          // and nothing asked until a batch or a star did — so a deck of two
+          // offered Reproducibility as *waiting for a second map*. Asked here,
+          // once per panel, as `readyTargets` asks.
+          if (facts === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
+          return facts
+        })
         .filter((facts): facts is NonNullable<typeof facts> => facts !== null)
         .filter((facts) => facts.uri !== uri)
         .map((facts) => ({
-          label: fileLabel(facts.uri),
+          label: this.mapLabel(facts.uri),
           uri: facts.uri,
           binsize: facts.info.binsize ?? 0,
         })),

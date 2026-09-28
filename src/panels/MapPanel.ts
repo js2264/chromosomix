@@ -176,6 +176,18 @@ export interface MapPanelProps {
    */
   naming?(): NameContext | undefined
   /**
+   * The sequences the session declares circular (§8.15), as the first map's
+   * file names them.
+   *
+   * The declaration is the session's, and a companion is another file of the
+   * same genome: a window the first map frames across a circle's origin —
+   * `ori`, written `NC_000913.3:2,016,731-2,016,729` — is a window across that
+   * molecule's origin in every map of the deck. A companion that was not told
+   * read the end below the start as a typing mistake, and said so where its map
+   * should have been.
+   */
+  circular?(): readonly string[]
+  /**
    * Why it is not following anyway, or `null` when it is.
    *
    * Asking is not the same as being followed: a block that spans a different
@@ -457,6 +469,19 @@ export class MapPanel {
   private expectedOwn: boolean | null = null
   private smoothOwn: string | null = null
   /**
+   * This map's own reading along the arms (§8.15): the window while it divides
+   * by the decay along both arms, `undefined` while it does not — each map's
+   * own, for {@link expectedOwn}'s reason. `null` until seeded from the first
+   * map's.
+   */
+  private armsOwn: { window: number | undefined } | null = null
+  /**
+   * The whole sequence, in this file's bins, where the block on screen was read
+   * across a circle's origin (§8.15) — which every refine of it has to be read
+   * across too — and `undefined` for every other block.
+   */
+  private wrap: [number, number] | undefined = undefined
+  /**
    * The window this map reads for itself, or `null` for the deck's (§16.3).
    *
    * Set by a box drawn on it while its chain is open, which is the one gesture
@@ -586,6 +611,7 @@ export class MapPanel {
       if (held.score !== undefined) this.scoreOverride = held.score
       if (held.oe !== undefined) this.expectedOwn = held.oe
       if (held.smooth !== undefined) this.smoothOwn = held.smooth
+      if (held.arms !== undefined) this.armsOwn = { window: held.arms ?? undefined }
       // Only on a map that is still off the deck: a window of its own is what
       // an open chain is for, and one restored under a closed chain would be a
       // map the lock follows reading somewhere the others are not.
@@ -944,6 +970,19 @@ export class MapPanel {
     this.panel?.rederive(this.derivation(), undefined, this.props.turn())
   }
 
+  /**
+   * Divide this map by the decay along both arms, or stop (§8.15) — its own, as
+   * its O/E is. On turns the O/E on with it, as it does on the first map: it is
+   * a reading of the ratio and nothing else.
+   */
+  useArms(window: number | undefined): void {
+    if (this.armsOwn !== null && this.armsOwn.window === window) return
+    this.armsOwn = { window }
+    if (window !== undefined) this.expectedOwn = true
+    this.reportLook()
+    this.panel?.rederive(this.derivation(), undefined, this.props.turn())
+  }
+
   /** Put part of a scale on this map and keep the rest of its own. */
   mergeLook(look: ScaleState): void {
     this.applyLook({ ...(this.panel?.baseScale() ?? this.look), ...look })
@@ -966,9 +1005,24 @@ export class MapPanel {
     const { normalise: _first, ...rest } = shared
     const choice = this.opened === null || this.state === null ? null : this.scoreOf(this.opened, this.state)
     const normalise = choice === null ? shared.normalise : choice.normalise
+    // The arms are the first map's frame — the sequence, its length and its
+    // origin, which are facts about the molecule and so this map's too, placed
+    // on each block by base pairs (`MatrixPanel.armsFor`) — read with this map's
+    // own window, and its own control. `ori` stays the deck's: the region is
+    // shared, so framing it on the origin frames every map there.
+    const lead = shared.arms
+    const arms =
+      lead === undefined
+        ? undefined
+        : {
+            ...lead,
+            window: this.armsOwn === null ? lead.window : this.armsOwn.window,
+            onChange: (window: number | undefined) => this.useArms(window),
+          }
     return {
       ...rest,
       ...(normalise === undefined ? {} : { normalise }),
+      ...(arms === undefined ? {} : { arms }),
       expected: this.expectedOwn ?? shared.expected,
       smooth: this.smoothOwn ?? shared.smooth,
       correlate: choice === null ? shared.correlate : choice.correlate === true,
@@ -994,6 +1048,10 @@ export class MapPanel {
     if (shared === undefined) return
     this.expectedOwn ??= shared.expected
     this.smoothOwn ??= shared.smooth
+    // Only once the first map is on a sequence that has arms at all: seeded
+    // from a view with none, this map would be pinned off along the arms
+    // before the first map had been asked.
+    if (this.armsOwn === null && shared.arms !== undefined) this.armsOwn = { window: shared.arms.window }
   }
 
   // -------------------------------------------------------------------------
@@ -1418,8 +1476,11 @@ export class MapPanel {
       this.read = key
       this.panel?.setBusy(true)
       this.say('')
-      const result = await this.readBlock(state, plan, info)
+      const { block: result, wrap } = await this.readBlock(state, plan, info)
       if (this.disposed || this.read !== key) return
+      // Kept only for the read that is drawn: a read overtaken by a newer one
+      // must not leave its lap behind for the ladder of a block it is not.
+      this.wrap = wrap
       this.show(result, info, state)
       this.props.onSettled()
     } catch (err) {
@@ -1456,11 +1517,16 @@ export class MapPanel {
     // the names *mean* (§5.9): a block resolved before the lead's contigs had
     // arrived was resolved with no context, and reusing it afterwards would
     // pin a panel to the reading it made while it was still guessing.
+    // …and whether the sequence is declared round, which decides whether a
+    // window across its origin reads at all (§8.15): a tick in the Chromosomes
+    // table has to re-read a companion that refused the window a moment ago.
+    const sequence = plan.kind === 'names' && plan.cols === undefined ? plan.rows.split(':')[0] : null
     return JSON.stringify([
       plan,
       this.levelOf(state),
       this.scoreOf(info, state).id,
       this.props.naming?.() ?? null,
+      sequence !== null && (this.props.circular?.() ?? []).includes(sequence),
     ])
   }
 
@@ -1513,6 +1579,7 @@ export class MapPanel {
       ...(this.scoreOverride === null ? {} : { score: this.scoreOverride }),
       ...(this.expectedOwn === null ? {} : { oe: this.expectedOwn }),
       ...(this.smoothOwn === null ? {} : { smooth: this.smoothOwn }),
+      ...(this.armsOwn === null ? {} : { arms: this.armsOwn.window ?? null }),
       ...(this.ownPlace === null ? {} : { place: this.ownPlace }),
     })
   }
@@ -1521,7 +1588,7 @@ export class MapPanel {
     state: ViewState,
     plan: Exclude<BlockPlan, { kind: 'none' }>,
     info: OpenResult,
-  ): Promise<MatrixResult> {
+  ): Promise<{ block: MatrixResult; wrap?: [number, number] }> {
     const choice = this.scoreOf(info, state)
     const level = this.levelOf(state)
     // Resolved against *this* file's columns rather than carried over from the
@@ -1550,16 +1617,38 @@ export class MapPanel {
       // the note left the previous view's rename standing over an unrelated
       // picture, which is worse than not saying it at all.
       this.sayRename(result.matched ?? [])
-      return result
+      return { block: result }
     }
 
+    // **A window on a declared circle is asked as one** (§8.15). The declaration
+    // is the session's, in the first map's spelling of the sequence, and the
+    // worker checks a wrap against *this* file's — so the sequence is looked up
+    // bare first, which is also the lap a window across its origin is read
+    // modulo. Only for one sequence on the diagonal: a two-axis block has two
+    // sequences and nothing to wrap, exactly as on the first map.
+    const declared = plan.kind === 'names' && plan.cols === undefined ? this.props.circular?.() ?? [] : []
+    const sequence = plan.kind === 'names' ? plan.rows.split(':')[0] : ''
+    const lap =
+      declared.includes(sequence)
+        ? await this.client.request<'range'>({
+            kind: 'range',
+            range: sequence,
+            ...(naming === undefined ? {} : { naming }),
+          })
+        : null
+    const round = lap !== null && lap.kind === 'contig' ? [lap.label] : undefined
     // The resolved ranges are kept whole rather than reduced to their extents: a
     // range that had to be matched across conventions says so, and the panel
     // prints it.
     const rowRange =
       plan.kind === 'whole'
         ? null
-        : await this.client.request<'range'>({ kind: 'range', range: plan.rows, ...(naming === undefined ? {} : { naming }) })
+        : await this.client.request<'range'>({
+            kind: 'range',
+            range: plan.rows,
+            ...(naming === undefined ? {} : { naming }),
+            ...(round === undefined ? {} : { circular: round }),
+          })
     const colRange =
       plan.kind === 'names' && plan.cols !== undefined
         ? await this.client.request<'range'>({ kind: 'range', range: plan.cols, ...(naming === undefined ? {} : { naming }) })
@@ -1567,9 +1656,13 @@ export class MapPanel {
     this.sayRename([rowRange?.matched, colRange?.matched])
     const rows: [number, number] = rowRange === null ? info.displayExtent : rowRange.extent
     const cols = colRange === null ? {} : { cols: colRange.extent }
+    // The lap, where the window runs off the end of it — `ori`'s frame, or a
+    // window typed backwards across the origin — and nothing where it does not,
+    // so every other read on a circle is the read it always was.
+    const wrap = round !== undefined && lap !== null && rows[1] > lap.extent[1] ? lap.extent : undefined
 
     if (level === 'contig') {
-      return this.client.request<'aggregate'>({
+      const block = await this.client.request<'aggregate'>({
         kind: 'aggregate',
         rows,
         ...cols,
@@ -1578,15 +1671,18 @@ export class MapPanel {
         ...value,
         budgetBytes,
       })
+      return { block }
     }
-    return this.client.request<'matrix'>({
+    const block = await this.client.request<'matrix'>({
       kind: 'matrix',
       rows,
       ...cols,
+      ...(wrap === undefined ? {} : { wrap }),
       ...balance,
       ...value,
       budgetBytes,
     })
+    return wrap === undefined ? { block } : { block, wrap }
   }
 
   /**
@@ -1753,6 +1849,10 @@ export class MapPanel {
     const choice = this.scoreOf(info, state)
     const value = choice.value === undefined || choice.value === COUNT_SCORE ? {} : { value: choice.value }
     const balance = choice.balance ? { balance: true } : {}
+    // A block read across a circle's origin is refined across it too — the
+    // ceiling is that frame, and a read inside it past the sequence's end is a
+    // read round the lap (§8.15).
+    const wrap = this.wrap
     this.ladder = attachRefine({
       panel: this.panel as MatrixPanel,
       ceiling: { rows: result.rowExtent, cols: result.colExtent },
@@ -1764,6 +1864,7 @@ export class MapPanel {
           ...(rung === undefined ? {} : { rung }),
           rows,
           cols,
+          ...(wrap === undefined ? {} : { wrap }),
           ...balance,
           ...value,
           budgetBytes: this.props.budgetBytes(),

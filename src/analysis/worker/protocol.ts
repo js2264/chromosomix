@@ -153,6 +153,12 @@ export interface TaskInputs {
    * a time, closing as it goes.
    */
   peers?: PeerMap[]
+  /**
+   * What the reader calls the map this job measures (§16.10), for a task that
+   * names it beside its peers — the matrix, the tables and the lines of a
+   * reproducibility run name every map, this one included.
+   */
+  mapLabel?: string
   /** The view's own block, when it was small enough to be worth copying. */
   block?: BlockInput
   /**

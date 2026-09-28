@@ -799,6 +799,17 @@ export interface CurveOutput {
    * way every other figure does.
    */
   xTicks?: string[]
+  /**
+   * The output already compares **every map on screen** — a reproducibility
+   * run's lines, its matrix and its tables, each about every pair of maps.
+   *
+   * Every map's run of such a task computes the same comparison, so the
+   * all-maps tab (`analysis/combine.ts`) shows it **once** — from the run that
+   * compared the most maps — rather than overlaying one copy per map, which
+   * drew every pair twice under two names, or stacking one table per map,
+   * which listed every pair once per map.
+   */
+  acrossMaps?: boolean
 }
 
 /**
@@ -880,6 +891,8 @@ export interface MatrixOutput {
    * bound where they do*.
    */
   margins?: MatrixMargins
+  /** See {@link CurveOutput.acrossMaps}. */
+  acrossMaps?: boolean
 }
 
 /**
@@ -941,6 +954,8 @@ export interface TableOutput {
   label: string
   columns: TableColumn[]
   rows: Array<Record<string, string | number>>
+  /** See {@link CurveOutput.acrossMaps}. */
+  acrossMaps?: boolean
 }
 
 /**
