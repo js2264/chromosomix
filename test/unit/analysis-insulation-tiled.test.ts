@@ -5,18 +5,18 @@
  * nothing to do with its arithmetic: one `Float32Array` of `n²` is refused past
  * 23,170 bins whatever the machine has, which is 116 Mb at 5 kb — so mouse chr9
  * could not be scored at all and chr1 could not be scored below 10 kb. The
- * diamond reaches `window` bins each side of the bin it scores and no further,
- * so the sequence is a band and the square was never needed.
+ * diamond reaches `window − 1` bins each side of the bin it scores and no
+ * further, so the sequence is a band and the square was never needed.
  *
  * What has to hold, and what this file exists to hold it to, is that the tiled
  * read is a *substitution* and not an approximation. Two things make it one, and
  * they are different in kind:
  *
- * - **the sums are local**, so a bin whose whole diamond sits inside a tile gets
- *   the number it would have got from the square — the same cells, added in the
- *   same order;
- * - **the score is not local** — it is a log2 ratio against the mean over the
- *   whole sequence — so it is taken once, after every tile has filed its sums,
+ * - **the totals are local**, so a bin whose whole diamond sits inside a tile
+ *   gets the numbers it would have got from the square — the same cells, added
+ *   in the same order;
+ * - **the score is not local** — it is a log2 ratio against the median over the
+ *   whole sequence — so it is taken once, after every tile has filed its totals,
  *   and never per tile. Taking it per tile would produce a plausible track
  *   normalised in stripes, which is exactly the failure a golden over one small
  *   contig would never catch.
@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { diamondSums, insulationScore } from '@/analysis/insulation'
+import { diamondTotals, insulationScore } from '@/analysis/insulation'
 import { runInsulation } from '@/analysis/run/insulation'
 import { INSULATION_TASK } from '@/analysis/tasks/insulation'
 import { diagonalTiles } from '@/analysis/tiles'
@@ -55,7 +55,7 @@ const FRAMING: AnalysisFraming = {
  *
  * Contact falls with distance, three boundaries insulate, and a slow ramp along
  * the sequence makes the left end genuinely denser than the right — which is
- * what a per-tile mean would flatten and a whole-sequence mean must not.
+ * what a per-tile median would flatten and a whole-sequence median must not.
  */
 const BOUNDARIES = [180, 351, 522]
 
@@ -153,7 +153,7 @@ describe('insulation read in tiles', () => {
     // The same kernels the runner uses, over the whole square in one go — which
     // is what the runner did before it read in tiles.
     const reference = insulationScore(
-      diamondSums({ size: BINS, values: wholeSquare() }, { window: WINDOW, minValid: 0.5, ignoreDiags: 2 }),
+      diamondTotals({ size: BINS, values: wholeSquare() }, { window: WINDOW, ignoreDiags: 2 }),
     )
 
     expect(tiled).toHaveLength(BINS)
@@ -163,29 +163,39 @@ describe('insulation read in tiles', () => {
         expect(Number.isFinite(tiled[bin])).toBe(false)
         continue
       }
-      // Identical, not close: the sums are the same cells added in the same
+      // Identical, not close: the totals are the same cells added in the same
       // order, and the only narrowing is the lane's own float32.
       expect(tiled[bin]).toBe(Math.fround(reference[bin]))
       compared++
     }
-    // The ends of the sequence have no whole diamond, and everything else does:
-    // `diamondSums` scores `i` where `i - w >= 0` and `i + w <= size`, which is
-    // `size - 2w + 1` bins.
-    expect(compared).toBe(BINS - 2 * WINDOW + 1)
+    // Every bin: the two ends of the sequence are scored from the part of their
+    // diamond that lies inside it, as cooltools scores them, and a tile's edge
+    // is never one of them.
+    expect(compared).toBe(BINS)
   })
 
   it('calls the same boundaries a whole square would', async () => {
     const outputs = await runInsulation(job(SETTINGS))
-    const tiled = profileOf(outputs).values
-    // Every boundary built into the map, and nothing between them: a
-    // normalisation taken per tile would move these.
-    const troughs: number[] = []
-    for (let bin = 1; bin < BINS - 1; bin++) {
-      if (tiled[bin] < -1 && tiled[bin] <= tiled[bin - 1] && tiled[bin] < tiled[bin + 1]) {
-        troughs.push(bin)
+    const troughsOf = (score: ArrayLike<number>): number[] => {
+      const out: number[] = []
+      for (let bin = 1; bin < BINS - 1; bin++) {
+        if (score[bin] < -1 && score[bin] <= score[bin - 1] && score[bin] < score[bin + 1]) {
+          out.push(bin)
+        }
       }
+      return out
     }
-    expect(troughs).toEqual(BOUNDARIES)
+    const tiled = troughsOf(profileOf(outputs).values)
+    const whole = troughsOf(
+      insulationScore(diamondTotals({ size: BINS, values: wholeSquare() }, { window: WINDOW, ignoreDiags: 2 })),
+    )
+    // The whole square's troughs, and one at every boundary built into the map
+    // — half a bin from it, which is where a diamond cornered on the bin it
+    // scores puts an edge that falls between two bins. A normalisation taken
+    // per tile would move these.
+    expect(tiled).toEqual(whole)
+    expect(tiled).toHaveLength(BOUNDARIES.length)
+    tiled.forEach((bin, i) => expect(Math.abs(bin - BOUNDARIES[i] + 0.5)).toBe(0.5))
   })
 
   it('never reads the square, and covers every bin once', async () => {
@@ -195,7 +205,7 @@ describe('insulation read in tiles', () => {
     for (const read of reads) {
       const side = read.rows[1] - read.rows[0]
       expect(side).toBeLessThan(BINS)
-      // Square tiles, because `diamondSums` takes a square and is goldened.
+      // Square tiles, because `diamondTotals` takes a square and is goldened.
       expect(read.cols[1] - read.cols[0]).toBe(side)
     }
   })

@@ -14,7 +14,7 @@
   "expected": "P(s) per chromosome, raw and balanced, against numpy and cooltools.expected_cis",
   "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
   "idr": "IDR's fit, local and global IDR on a simulated pair, against idr 2.0.3 itself",
-  "insulation": "diamond sums and scores at three windows, against numpy and cooltools.insulation",
+  "insulation": "diamond means, scores and boundaries at three windows, equal to cooltools.insulation",
   "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
   "overlap": "Jaccard and hit counts, against a per-base boolean mask",
   "viewpoint": "a virtual 4C profile, against numpy \u2014 the diagonal counted once",
@@ -29,7 +29,14 @@
    "name": "expected"
   },
   {
-   "bytes": 568804,
+   "bytes": 620694,
+   "environment": {
+    "chromosight": "1.6.3",
+    "cooler": "0.10.4",
+    "cooltools": "0.7.1",
+    "numpy": "2.4.6",
+    "pyBigWig": "0.3.26"
+   },
    "golden": "insulation.json",
    "name": "insulation"
   },

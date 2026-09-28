@@ -59,24 +59,31 @@ const FRAMING: AnalysisFraming = {
 }
 
 /**
- * Ones, with a cross of *nearly* zero through each boundary bin.
+ * Ones, with a cross of *nearly* zero through each boundary bin: the contact
+ * between the two sides of it, the bin itself belonging to both.
  *
- * What a domain boundary is, near enough the limit. Not exactly zero, and that
- * is not fussiness: `insulationScore` is a log2 ratio and leaves a bin whose
- * diamond sums to zero as a gap rather than as minus infinity, so a perfect
- * boundary is `NaN` and never gets called. A twentieth is a −4.3 trough, which
- * is what a real one looks like.
+ * What a domain boundary is, near enough the limit. Across the bin rather than
+ * between two bins, because the diamond is cornered on the bin it scores: an
+ * edge falling *between* bins `b − 1` and `b` leaves both of them the same mean,
+ * a flat floor of two bins, and cooltools calls no minimum on a flat floor. Not
+ * exactly zero either, and that is not fussiness: `insulationScore` is a log2
+ * ratio and leaves a bin whose diamond averages zero as a gap rather than as
+ * minus infinity, so a perfect boundary is `NaN` and never gets called.
+ *
+ * **Each a different depth**, as real ones are: three troughs of exactly one
+ * depth tie for the deepest, and cooltools measures the prominence of only the
+ * first of equally high peaks.
  */
-const ACROSS = 0.05
+const ACROSS = [0.05, 0.1, 0.2]
 
 function valueAt(row: number, col: number): number {
   for (let c = 0; c < CONTIGS.length; c++) {
     const from = OFFSET[c]
     const to = from + CONTIGS[c].bins
     if (row < from || row >= to || col < from || col >= to) continue
-    for (const at of CONTIGS[c].at) {
-      const bin = from + at
-      if ((row < bin && col >= bin) || (col < bin && row >= bin)) return ACROSS
+    for (let i = 0; i < CONTIGS[c].at.length; i++) {
+      const bin = from + CONTIGS[c].at[i]
+      if ((row < bin && col > bin) || (col < bin && row > bin)) return ACROSS[i]
     }
     return 1
   }

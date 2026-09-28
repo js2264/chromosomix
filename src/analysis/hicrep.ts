@@ -28,32 +28,38 @@
  * 2. **Stratify by distance, then pool.** The correlation is computed
  *    *separately* on each diagonal — where the shared decay is a constant and
  *    therefore contributes no variance at all — and the per-diagonal
- *    coefficients are combined by the Cochran–Mantel–Haenszel weighting,
- *    `N_k √(var₁ₖ · var₂ₖ)`. That weight is what stops a distant stratum with
- *    four non-zero cells from counting as much as the near ones, and it is the
- *    whole reason the pooled number behaves like a correlation rather than like
- *    an average of noise.
+ *    coefficients are pooled with **variance-stabilised weights**: a diagonal's
+ *    weight is `n` times the variance of its values' *ranks*, which depends on
+ *    nothing but `n`, and is `(n + 1) / 12`. So every diagonal counts by how many
+ *    positions it compares. Weighting by the variance of the values themselves —
+ *    the Cochran–Mantel–Haenszel weight before the stabilisation — lets the few
+ *    diagonals nearest the main one, where the counts are largest and the
+ *    correlation highest, carry the whole number, and on raw counts that alone
+ *    lifts it by a few tenths.
  *
- * ## Where this departs from the reference, and why it is said out loud
+ * ## Which reference, exactly
  *
- * The reference implementations (`hicrep` in R, `hicreppy`) are defined over
- * dense matrices of **raw counts**, which have no missing cells. This app reads
- * balanced maps as often as raw ones, and a balanced map has genuine `NaN`s
- * wherever the balancer dropped a bin. Two decisions follow and neither is
- * silent:
+ * `hicrep` 0.2.6 (Lin), the Python implementation of the R package, reproduced
+ * to its arithmetic — the golden and `notebooks/validation.qmd` hold this file
+ * to it. Its details are part of the answer, so they are kept:
  *
- * - the smoothing window is a mean over the cells that **have** values rather
- *   than over the window's full area, which is identical to the reference
- *   wherever nothing is missing and is the only reading that does not pull every
- *   value near a gap towards zero;
- * - a stratum's correlation is over the positions where **both** maps have a
- *   value, so a bin one map dropped removes that position from the comparison
- *   rather than from one side of it.
+ * - the map is its **upper triangle**, with the main diagonal and every diagonal
+ *   past the furthest compared set to zero **before** smoothing — so a window
+ *   near the diagonal averages in the zeros below it;
+ * - the window's mean is over **every cell it covers inside the sequence**,
+ *   zeros included — `(h + 1 + min(d, h))` rows by as many columns, `d` being the
+ *   distance to the sequence's nearer end;
+ * - a diagonal is compared over the positions where **either** map is non-zero,
+ *   and one where neither is left out; a diagonal whose values are constant has
+ *   no correlation and counts as zero, with its weight.
  *
- * Neither changes the answer on the files the reference was defined for.
+ * ## Where a balanced map takes it further
+ *
+ * The reference is defined over raw counts, which have no missing cells; a
+ * balanced map has `NaN` wherever the balancer dropped a bin. Such a cell is left
+ * out of the window's mean — its sum and its count — and a position whose window
+ * is all `NaN` is left out of the comparison. Neither changes a raw map's answer.
  */
-
-import { pearson } from './stats'
 
 /** One map's smoothed diagonals for one sequence; `[k]` is the `k`-th. */
 export type Strata = Array<Float64Array>
@@ -62,11 +68,11 @@ export type Strata = Array<Float64Array>
 export interface StratumResult {
   /** Diagonal offset, in bins. */
   k: number
-  /** Positions where both maps had a value. */
+  /** Positions compared: where either map is non-zero, and both have a value. */
   n: number
-  /** Pearson's r on this diagonal. */
+  /** Pearson's r on this diagonal; `NaN` where either side is constant. */
   r: number
-  /** The Cochran–Mantel–Haenszel weight, `n √(var₁ var₂)`. */
+  /** The variance-stabilised weight, `(n + 1) / 12`. */
   weight: number
 }
 
@@ -82,6 +88,11 @@ export interface SccResult {
  * `a` and `b` must be the same sequence at the same bin size — which the caller
  * establishes, because *the same sequence* is a question about two files' naming
  * (§5.9) and not one this arithmetic can ask.
+ *
+ * Diagonals `1 … maxK`: the main one is not compared, having been set to zero
+ * before the smoothing. A diagonal with fewer than two positions has no weight;
+ * one whose correlation is undefined — a constant side — pools as zero with its
+ * weight, as the reference pools it.
  */
 export function stratumAdjusted(a: Strata, b: Strata): SccResult {
   const strata: StratumResult[] = []
@@ -89,48 +100,38 @@ export function stratumAdjusted(a: Strata, b: Strata): SccResult {
   let weighted = 0
   let weights = 0
 
-  for (let k = 0; k < upTo; k++) {
-    const x = a[k]
-    const y = b[k]
-    const paired = completePairs(x, y)
+  for (let k = 1; k < upTo; k++) {
+    const paired = comparedPairs(a[k], b[k])
     if (paired === null) continue
-    const r = pearson(paired.x, paired.y)
-    if (!Number.isFinite(r)) continue
-    // The variances of the **completed** pairs, not of each vector whole: the
-    // weight and the coefficient have to be about the same sample, or a stratum
-    // where one map is mostly missing is weighted by variance it did not
-    // contribute a correlation from.
-    const weight = paired.n * Math.sqrt(varianceOf(paired.x) * varianceOf(paired.y))
-    if (!Number.isFinite(weight) || weight <= 0) {
-      strata.push({ k, n: paired.n, r, weight: 0 })
-      continue
-    }
+    const r = correlation(paired.x, paired.y)
+    const weight = (paired.n + 1) / 12
     strata.push({ k, n: paired.n, r, weight })
-    weighted += weight * r
+    weighted += weight * (Number.isFinite(r) ? r : 0)
     weights += weight
   }
 
   return { scc: weights > 0 ? weighted / weights : Number.NaN, strata }
 }
 
-/** The positions where both have a value, or `null` where there are too few. */
-function completePairs(
+/**
+ * The positions a diagonal is compared over: both maps have a value and at least
+ * one is non-zero. `null` under two, where the weight is undefined.
+ */
+function comparedPairs(
   x: Float64Array,
   y: Float64Array,
 ): { x: Float64Array; y: Float64Array; n: number } | null {
   const length = Math.min(x.length, y.length)
+  const keep = (i: number): boolean =>
+    Number.isFinite(x[i]) && Number.isFinite(y[i]) && (x[i] !== 0 || y[i] !== 0)
   let kept = 0
-  for (let i = 0; i < length; i++) {
-    if (Number.isFinite(x[i]) && Number.isFinite(y[i])) kept++
-  }
-  // Two points always correlate perfectly and say nothing; a stratum this thin
-  // is left out of the pooling rather than contributing an r of one.
-  if (kept < 3) return null
+  for (let i = 0; i < length; i++) if (keep(i)) kept++
+  if (kept < 2) return null
   const outX = new Float64Array(kept)
   const outY = new Float64Array(kept)
   let at = 0
   for (let i = 0; i < length; i++) {
-    if (!Number.isFinite(x[i]) || !Number.isFinite(y[i])) continue
+    if (!keep(i)) continue
     outX[at] = x[i]
     outY[at] = y[i]
     at++
@@ -138,33 +139,51 @@ function completePairs(
   return { x: outX, y: outY, n: kept }
 }
 
-/** Population variance, which is what the CMH weight is defined over. */
-function varianceOf(values: Float64Array): number {
-  const n = values.length
-  if (n === 0) return Number.NaN
-  let total = 0
-  for (let i = 0; i < n; i++) total += values[i]
-  const mean = total / n
-  let ss = 0
-  for (let i = 0; i < n; i++) ss += (values[i] - mean) ** 2
-  return ss / n
+/** Pearson's r of two equal-length samples, `NaN` where either is constant. */
+function correlation(x: Float64Array, y: Float64Array): number {
+  const n = x.length
+  let meanX = 0
+  let meanY = 0
+  for (let i = 0; i < n; i++) {
+    meanX += x[i]
+    meanY += y[i]
+  }
+  meanX /= n
+  meanY /= n
+  let cov = 0
+  let varX = 0
+  let varY = 0
+  for (let i = 0; i < n; i++) {
+    const dx = x[i] - meanX
+    const dy = y[i] - meanY
+    cov += dx * dy
+    varX += dx * dx
+    varY += dy * dy
+  }
+  return cov / Math.sqrt(varX * varY)
 }
 
 /**
  * Smooth one tile and read the diagonals its own rows own.
  *
- * A **summed-area table** rather than a window walked per cell: the filter is a
- * mean over `(2h+1)²` cells, and walking it costs that many operations per cell
- * where a prefix sum costs four. On a chromosome at a fine resolution with `h`
- * of five that is a factor of a hundred and twenty, which is the difference
- * between a task that runs and one that is abandoned.
+ * The matrix smoothed is the reference's: the tile's **upper triangle** out to
+ * `maxK`, the main diagonal, the lower triangle and every diagonal past `maxK`
+ * set to zero first. The mean at `(i, j)` is the window's sum over the cells of
+ * it that lie inside the sequence and carry a value, divided by how many that
+ * is — `(h + 1 + min(dᵢ, h)) · (h + 1 + min(dⱼ, h))` on a map with nothing
+ * missing, `d` being the distance to the sequence's nearer end.
  *
- * Two tables rather than one, because the values are NaN-aware: one over the
- * finite values and one over the count of them, so the window's mean is over
- * what was there.
+ * A **summed-area table** rather than a window walked per cell: the filter is a
+ * sum over `(2h+1)²` cells, and walking it costs that many operations per cell
+ * where a prefix sum costs four. Three tables — the values, the missing cells and
+ * the non-zero ones — and the third is not bookkeeping: a difference of prefix
+ * sums leaves a residue in the last places where the window's true sum is zero,
+ * and whether a position is compared at all turns on whether it is zero. A window
+ * with no non-zero cell is exactly zero.
  *
  * `into[k][i]` receives the smoothed value at `(i, i + k)` in the **sequence's**
- * own coordinates, for every `i` the tile owns.
+ * own coordinates, for every `i` the tile owns and `1 ≤ k ≤ maxK`; `into[0][i]`
+ * is left as it was, the main diagonal being set to zero before smoothing.
  */
 export function smoothTileInto(
   tile: { values: Float32Array; size: number; from: number; ownFrom: number; ownTo: number },
@@ -173,21 +192,25 @@ export function smoothTileInto(
   into: Strata,
 ): void {
   const size = tile.size
+  const bins = into[0].length
   const stride = size + 1
   const sums = new Float64Array(stride * stride)
-  const counts = new Float64Array(stride * stride)
+  const missing = new Float64Array(stride * stride)
+  const nonzero = new Float64Array(stride * stride)
 
   for (let r = 0; r < size; r++) {
     const row = r * size
     const above = r * stride
     const here = (r + 1) * stride
     for (let c = 0; c < size; c++) {
-      const value = tile.values[row + c]
-      const finite = Number.isFinite(value)
-      sums[here + c + 1] =
-        (finite ? value : 0) + sums[here + c] + sums[above + c + 1] - sums[above + c]
-      counts[here + c + 1] =
-        (finite ? 1 : 0) + counts[here + c] + counts[above + c + 1] - counts[above + c]
+      // Only the band `1 … maxK` above the diagonal; everything else is a zero.
+      const inBand = c - r >= 1 && c - r <= maxK
+      const value = inBand ? tile.values[row + c] : 0
+      const gap = Number.isNaN(value)
+      sums[here + c + 1] = (gap ? 0 : value) + sums[here + c] + sums[above + c + 1] - sums[above + c]
+      missing[here + c + 1] = (gap ? 1 : 0) + missing[here + c] + missing[above + c + 1] - missing[above + c]
+      nonzero[here + c + 1] =
+        (!gap && value !== 0 ? 1 : 0) + nonzero[here + c] + nonzero[above + c + 1] - nonzero[above + c]
     }
   }
 
@@ -196,22 +219,29 @@ export function smoothTileInto(
     table[r0 * stride + c1 + 1] -
     table[(r1 + 1) * stride + c0] +
     table[r0 * stride + c0]
+  // Rows or columns of the window inside the sequence, as the reference counts
+  // them from a position's distance to the nearer end.
+  const span = (at: number): number => h + 1 + Math.min(Math.min(at, bins - 1 - at), h)
 
   for (let own = tile.ownFrom; own < tile.ownTo; own++) {
     // Local to the tile's square, which starts at `tile.from` in the sequence.
     const r = own - tile.from
-    for (let k = 0; k < into.length && k <= maxK; k++) {
+    for (let k = 1; k < into.length && k <= maxK; k++) {
       const c = r + k
       if (c >= size) break
       const r0 = Math.max(0, r - h)
       const r1 = Math.min(size - 1, r + h)
       const c0 = Math.max(0, c - h)
       const c1 = Math.min(size - 1, c + h)
-      const seen = box(r0, c0, r1, c1, counts)
+      const cells = span(own) * span(own + k) - box(r0, c0, r1, c1, missing)
       // A window with nothing in it is `NaN` rather than zero: an absent pixel
       // is a measured zero and a dropped bin is not, and the whole window being
       // dropped means this position says nothing about either map.
-      into[k][own] = seen > 0 ? box(r0, c0, r1, c1, sums) / seen : Number.NaN
+      if (!(cells > 0)) {
+        into[k][own] = Number.NaN
+        continue
+      }
+      into[k][own] = box(r0, c0, r1, c1, nonzero) > 0 ? box(r0, c0, r1, c1, sums) / cells : 0
     }
   }
 }

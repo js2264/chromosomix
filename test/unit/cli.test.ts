@@ -27,12 +27,16 @@ let out = ''
 const written: string[] = []
 const errors: string[] = []
 
-function records(nx: number, ny: number, intra: boolean, seed: number): HicRecord[] {
+function records(nx: number, ny: number, intra: boolean, seed: number, boundary = -1): HicRecord[] {
   const list: HicRecord[] = []
   for (let x = 0; x < nx; x++) {
     for (let y = intra ? x : 0; y < ny; y++) {
       if ((x * 7 + y * 3 + seed) % 5 !== 0) continue
-      list.push({ x, y, value: Math.max(1, Math.round(100 / (1 + Math.abs(x - y)))) })
+      // A boundary bin, where one is asked for, barely touches anything: its own
+      // contacts and the contact across it are one read each.
+      const across =
+        intra && ((x < boundary && y > boundary) || x === boundary || y === boundary)
+      list.push({ x, y, value: across ? 1 : Math.max(1, Math.round(100 / (1 + Math.abs(x - y)))) })
     }
   }
   return list
@@ -251,10 +255,30 @@ describe('running a task', () => {
     // since there were any; the shell wrote only the TSV, so a boundary set
     // called in a batch came out as a table with a provenance header — readable,
     // and not what bedtools takes.
+    //
+    // On a map with a boundary to call. The sample's cells repeat every five
+    // bins, so every diamond holds the same ones and the track is flat — and
+    // cooltools calls no minimum on a flat track.
+    const bounded = join(directory, 'bounded.hic')
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [
+        { name: 'chrI', length: 120_000 },
+        { name: 'chrII', length: 60_000 },
+      ],
+      resolutions: [1000],
+      records: {
+        '1_1': records(120, 120, true, 1, 60),
+        '2_2': records(60, 60, true, 2, 30),
+        '1_2': records(120, 60, false, 3),
+      },
+      blockBinCount: 32,
+    })
+    await writeFile(bounded, fixture.bytes)
     expect(
-      await main(['insulation', sample, '--out', out, '--quiet', '--prominence', '0']),
+      await main(['insulation', bounded, '--out', out, '--quiet', '--prominence', '0']),
     ).toBe(0)
-    const bed = await readFile(join(out, 'sample.insulation.insulation-boundaries.bed'), 'utf8')
+    const bed = await readFile(join(out, 'bounded.insulation.insulation-boundaries.bed'), 'utf8')
     const rows = bed.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
     expect(rows.length).toBeGreaterThan(0)
     for (const row of rows) {
@@ -961,12 +985,24 @@ describe('a task that compares two maps', () => {
     expect(files).toContain('sample.hicrep.hicrep-strata.tsv')
     const text = await readFile(join(where, 'sample.hicrep.hicrep-pairs.tsv'), 'utf8')
     // Labelled by file — this one too, by its base name as the peers are, not
-    // *This map* — and a map against itself is exactly 1: the arithmetic is
-    // `analysis/hicrep.ts`'s, and what is pinned is that both peers were
-    // mounted and read on the same grid.
+    // *This map*. The arithmetic is `analysis/hicrep.ts`'s, and what is pinned
+    // is that both peers were mounted and read on the same grid: a map against
+    // itself correlates at exactly 1 on every stratum that has a correlation.
+    // Not the pooled number — HiCRep pools a stratum with a constant side as
+    // zero, and this fixture's cells repeat along each diagonal, so after
+    // smoothing many of its strata are constant.
     expect(text).toMatch(/sample\.hic\tother\.hic\t-?[01]\.\d+/)
-    expect(text).toMatch(/sample\.hic\tsample\.hic\t1(\.0*)?$/m)
+    expect(text).toMatch(/sample\.hic\tsample\.hic\t(0\.\d+|1)$/m)
     expect(text).not.toMatch(/This map/)
+    const strata = (await readFile(join(where, 'sample.hicrep.hicrep-strata.tsv'), 'utf8'))
+      .split('\n')
+      .filter((line) => line !== '' && !line.startsWith('#'))
+      .map((line) => line.split('\t'))
+    const self = strata[0].indexOf('sample.hic vs sample.hic')
+    expect(self).toBeGreaterThan(0)
+    const values = strata.slice(1).map((cells) => cells[self]).filter((value) => value !== '')
+    expect(values.length).toBeGreaterThan(0)
+    for (const value of values) expect(Number(value)).toBe(1)
     expect(complained()).not.toMatch(/failed:/)
   })
 })

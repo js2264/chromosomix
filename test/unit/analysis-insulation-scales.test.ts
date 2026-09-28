@@ -143,15 +143,13 @@ describe('a multi-scale insulation run', () => {
     const [widest, , narrowest] = await profiles(3)
     expect(widest.values).toHaveLength(BINS)
     expect(narrowest.values).toHaveLength(BINS)
-    // The boundary is scored at every width; the wider window is the smoother
-    // track, so the two vectors are not copies of each other.
-    let differing = 0
-    for (let bin = 0; bin < BINS; bin++) {
-      if (Number.isFinite(widest.values[bin]) && Number.isFinite(narrowest.values[bin])) {
-        if (widest.values[bin] !== narrowest.values[bin]) differing++
-      }
-    }
-    expect(differing).toBeGreaterThan(BINS / 2)
+    // The boundary is scored at every width, and a wider diamond feels it from
+    // further away, so its trough is wider. Away from the boundary every scale
+    // reads zero — each diamond there holds the same cells, and is the median —
+    // so it is the trough that says the two are not copies of each other.
+    const trough = (values: Float32Array): number => values.filter((value) => value < 0).length
+    expect(trough(widest.values)).toBeGreaterThan(trough(narrowest.values))
+    expect(trough(narrowest.values)).toBeGreaterThan(0)
   })
 
   it('leaves a single-scale run an ordinary ungrouped line', async () => {

@@ -45,13 +45,13 @@ import { BALANCE_PARAM } from './shared'
 /**
  * The largest number of strata worth correlating, and the default.
  *
- * A stratum near the end of a chromosome has a handful of cells in it and a
- * correlation that is mostly noise — which the CMH weight already discounts to
- * almost nothing, so this is about *cost* rather than about correctness. It is
- * the default as well as the cap because the 5 Mb it replaces reached the cap on
- * every file at 10 kb or finer, which is most of them: a reader who typed the
- * old default got 500 strata, and now sees that that is what they are asking
- * for.
+ * **Part of the answer, not only of the cost.** HiCRep weighs a stratum by how
+ * many positions it compares, so a far one counts about as much as a near one —
+ * how far the comparison runs is the reference's own `dBPMax`, and moving it
+ * moves the coefficient. It is the default as well as the cap because the 5 Mb
+ * it replaces reached the cap on every file at 10 kb or finer, which is most of
+ * them: a reader who typed the old default got 500 strata, and now sees that
+ * that is what they are asking for.
  */
 export const MAX_STRATA = 500
 
@@ -74,8 +74,8 @@ const PARAMS: readonly ParamSpec[] = [
     // and the default, because 5 Mb hit that cap on every file finer than 10 kb.
     unit: 'bins',
     hint:
-      'Past this the strata hold a handful of cells each and contribute almost nothing — the ' +
-      'weighting already knows that, so this is about what the run costs.',
+      'Every stratum out to here counts, weighted by the positions it compares — so this moves ' +
+      'the answer, as hicrep’s dBPMax does: 5 Mb is 50 strata at 100 kb.',
     default: MAX_STRATA,
     min: 1,
     max: MAX_STRATA,
@@ -165,7 +165,11 @@ export const HICREP_TASK: AnalysisTask = {
   blurb: 'How much the maps on screen agree, stratum by stratum and pooled.',
   group: '2d',
   venue: 'analysis',
-  version: 1,
+  // 2: the strata pooled by HiCRep's variance-stabilised weights, `(n + 1) / 12`,
+  // over the positions either map has a contact at — where 1 weighted them by
+  // the variance of the counts and let the diagonals nearest the main one carry
+  // the answer.
+  version: 2,
   needsPeers: true,
   // **Waiting rather than absent** with one map open, and the distinction is
   // §8.5's: a second map is one press of `+` away, so hiding the row would

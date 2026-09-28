@@ -19,13 +19,14 @@
 import { FeatureBuilder } from '../../annotations/featureset'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import {
-  callBoundaries,
   diamondCells,
-  diamondSums,
-  diamondSumsBanded,
+  diamondTotals,
+  diamondTotalsBanded,
   domainsBetween,
+  insulationBoundaries,
   insulationScore,
   type Boundary,
+  type DiamondTotals,
 } from '../insulation'
 import {
   boolParam,
@@ -63,7 +64,7 @@ interface Unit {
  *
  * A region names a *sequence* and not a window of one, for the reason
  * `analysis/run/expected.ts` gives about P(s): insulation is computed against
- * the mean over a whole sequence, so a score taken from whatever happened to be
+ * the median over a whole sequence, so a score taken from whatever happened to be
  * on screen but labelled `chrIV` is a different quantity wearing the same name.
  */
 function planUnits(job: JobContext, names: readonly string[] | null): {
@@ -106,23 +107,25 @@ const INSULATION_GROUP = 'Insulation'
 export const runInsulation: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
+  // cooltools' `min_frac_valid_pixels`: which bins boundary calling reads, as a
+  // fraction of the fullest diamond of the run. The score itself is every bin's.
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
   // cooltools' `ignore_diags`, and its arithmetic: `|col - row| < n`.
   const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 2)))
   const windows = windowLadder(job.params)
   const widest = windows[windows.length - 1]
 
-  // A diamond spans separations `1 … 2w − 1`, so ignoring `2w` diagonals or more
-  // leaves it with nothing to sum. Said here rather than discovered as an empty
-  // lane: every bin would score `NaN`, which is indistinguishable from a file
-  // with no contacts in it, and the reader's next move would be to doubt the
-  // data rather than the setting.
+  // A diamond spans separations `0 … 2w − 2`, so ignoring `2w − 1` diagonals or
+  // more leaves it with nothing to average. Said here rather than discovered as
+  // an empty lane: every bin would score `NaN`, which is indistinguishable from a
+  // file with no contacts in it, and the reader's next move would be to doubt
+  // the data rather than the setting.
   const empty = windows.filter((window) => diamondCells(window, ignoreDiags) <= 0)
   if (empty.length === windows.length) {
     throw new Error(
       `Ignoring ${ignoreDiags} diagonals leaves nothing in a diamond ` +
         `${windows.length === 1 ? `${widest} bins` : `up to ${widest} bins`} wide: it spans ` +
-        `separations 1 to ${2 * widest - 1}, so every cell is inside the cut. Ignore fewer, or ` +
+        `separations 0 to ${2 * widest - 2}, so every cell is inside the cut. Ignore fewer, or ` +
         'use a wider window.',
     )
   }
@@ -130,7 +133,7 @@ export const runInsulation: TaskRunner = async (job) => {
     job.note(
       `Ignoring ${ignoreDiags} diagonals empties the ${empty.join(', ')} bin ` +
         `${empty.length === 1 ? 'window' : 'windows'} — a diamond of ${empty[0]} bins spans only ` +
-        `${2 * empty[0] - 1} separations — so ${empty.length === 1 ? 'that scale is' : 'those scales are'} ` +
+        `separations 0 to ${2 * empty[0] - 2} — so ${empty.length === 1 ? 'that scale is' : 'those scales are'} ` +
         'all gaps.',
     )
   }
@@ -140,26 +143,18 @@ export const runInsulation: TaskRunner = async (job) => {
     job.note('No sequence is ticked, so there is nothing to score.')
     return []
   }
-  // Three ways to end with nothing and they need three sentences. A ticked
-  // sequence this file has not got is a batch across a deck of two assemblies
-  // (§18.2), and answering it with the window advice below sends the reader to
-  // change a number that was never the problem.
-  const { units: planned, missing } = planUnits(job, ticked)
-  const said = missingSequencesNote(job.mc, missing, planned.length)
+  // Two ways to end with nothing and they need two sentences. A ticked sequence
+  // this file has not got is a batch across a deck of two assemblies (§18.2),
+  // and answering it as though nothing were ticked sends the reader to the tick
+  // boxes, which were never the problem.
+  const { units, missing } = planUnits(job, ticked)
+  const said = missingSequencesNote(job.mc, missing, units.length)
   if (said !== null) job.note(said)
-  if (planned.length === 0) return []
-  const units = planned.filter(
-    // A sequence with no bin whose whole diamond fits produces a column of NaN
-    // at full cost. Dropped here and counted, rather than read and thrown away.
-    (unit) => unit.span.to - unit.span.from > widest * 2,
-  )
-  if (units.length === 0) {
-    job.note(
-      'No sequence in this file is long enough for a whole diamond of this width either side ' +
-        'of any bin. Use a narrower window.',
-    )
-    return []
-  }
+  if (units.length === 0) return []
+  // **Every ticked sequence is scored, however short.** A diamond that runs off
+  // the end of its sequence averages the cells it has, as cooltools' does, so
+  // there is no bin that has to be left out for want of a whole window — and a
+  // sequence shorter than the window is still scored, from partial diamonds.
 
   const nBins = job.mc.nBins
   // One vector per scale, over every bin in the file, gaps everywhere nothing is
@@ -168,7 +163,10 @@ export const runInsulation: TaskRunner = async (job) => {
   // that lies about its own coverage.
   const scores = windows.map(() => new Float32Array(nBins).fill(Number.NaN))
   const block = usableBlock(job, units.map((unit) => unit.span), balance)
-  const calls: Array<{ unit: Unit; boundaries: Boundary[]; window: number }> = []
+  // The base scale's score and cell counts per sequence, kept until every
+  // sequence is in: which bins boundary calling reads is a fraction of the
+  // fullest diamond of the whole run, which the last sequence can change.
+  const based: Array<{ unit: Unit; score: Float64Array; counts: Float64Array }> = []
 
   const call = boolParam(job.params, 'call', true)
   const prominence = numParam(job.params, 'prominence', 0.2)
@@ -177,18 +175,19 @@ export const runInsulation: TaskRunner = async (job) => {
   const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
   /**
-   * One sequence's sums, turned into the lane and (at the base scale) the calls.
+   * One sequence's totals, turned into the lane and (at the base scale) kept for
+   * the calls.
    *
    * A closure rather than two copies, because the two read paths above it —
    * tiled squares for a line, one band for a circle — differ only in how the
-   * sums are filled in, and everything after that is the same for both. Two
+   * totals are filled in, and everything after that is the same for both. Two
    * copies of it is two places for the local-to-absolute conversion to be
    * written, and that conversion is the one `run/insulation.ts` opens by warning
    * about.
    */
-  const finish = (unit: Unit, size: number, sums: Float64Array[]): void => {
+  const finish = (unit: Unit, size: number, totals: DiamondTotals[]): void => {
     for (let w = 0; w < windows.length; w++) {
-      const score = insulationScore(sums[w])
+      const score = insulationScore(totals[w])
       for (let local = 0; local < size; local++) {
         scores[w][unit.span.from + local] = score[local]
       }
@@ -196,9 +195,7 @@ export const runInsulation: TaskRunner = async (job) => {
       // overlapping sets of the same features at different smoothings, and
       // merging them is a decision this task has no basis for making; the reader
       // who wants the wider set runs it again with that width as the base.
-      if (call && w === 0) {
-        calls.push({ unit, boundaries: callBoundaries(score, { prominence, spacing }), window: windows[w] })
-      }
+      if (call && w === 0) based.push({ unit, score, counts: totals[w].counts })
     }
   }
 
@@ -206,21 +203,23 @@ export const runInsulation: TaskRunner = async (job) => {
     const unit = units[u]
     const size = unit.span.to - unit.span.from
 
-    // **The sums are accumulated over tiles and the score is taken once.** The
-    // diamond at a bin reaches `window` bins each side of it and no further, so
-    // a sequence is a band and never a square — and reading it as a square put a
-    // ceiling on this task that had nothing to do with its arithmetic: one
+    // **The totals are accumulated over tiles and the score is taken once.** The
+    // diamond at a bin reaches `window − 1` bins each side of it and no further,
+    // so a sequence is a band and never a square — and reading it as a square put
+    // a ceiling on this task that had nothing to do with its arithmetic: one
     // `Float32Array` of `n²` is refused past 23,170 bins whatever the machine
     // has (`MAX_DENSE_ARRAY_BYTES`), which is 116 Mb at 5 kb. Mouse chr9 is 125.
     //
-    // The split is between the *sums*, which are per bin and local, and the
-    // *score*, which is a log2 ratio against the mean over the whole sequence.
-    // So each tile fills in the sums for the bins whose whole diamond it holds,
-    // and `insulationScore` runs once at the end over the assembled vector —
-    // which makes the answer identical to the whole-square one cell for cell,
-    // rather than merely close. `diamondSums` is unchanged and still goldened
-    // against cooltools; it simply sees a smaller square.
-    const sums = windows.map(() => new Float64Array(size).fill(Number.NaN))
+    // The split is between the *totals*, which are per bin and local, and the
+    // *score*, which is a log2 ratio against the median over the whole sequence.
+    // So each tile fills in the totals for the bins it owns — its halo holds
+    // their whole diamond, or the sequence's end does — and `insulationScore`
+    // runs once at the end over the assembled vectors, which makes the answer
+    // identical to the whole-square one cell for cell rather than merely close.
+    const totals: DiamondTotals[] = windows.map(() => ({
+      sums: new Float64Array(size),
+      counts: new Float64Array(size),
+    }))
 
     // **A circular sequence is read as a band, not as tiled squares.** The
     // diamond at a bin spans separations `1 … 2w − 1`, so it *is* a band — the
@@ -248,14 +247,9 @@ export const runInsulation: TaskRunner = async (job) => {
         },
       })
       for (let w = 0; w < windows.length; w++) {
-        const local = diamondSumsBanded(band, {
-          window: windows[w],
-          minValid,
-          ignoreDiags,
-        })
-        sums[w].set(local)
+        totals[w] = diamondTotalsBanded(band, { window: windows[w], ignoreDiags })
       }
-      finish(unit, size, sums)
+      finish(unit, size, totals)
       continue
     }
 
@@ -273,20 +267,35 @@ export const runInsulation: TaskRunner = async (job) => {
           tile.total === 1 ? unit.name : `${unit.name} · part ${tile.index + 1} of ${tile.total}`,
         )
         for (let w = 0; w < windows.length; w++) {
-          const tileSums = diamondSums(
+          const tileTotals = diamondTotals(
             { size: tile.size, values: tile.values },
-            { window: windows[w], minValid, ignoreDiags },
+            { window: windows[w], ignoreDiags },
           )
           for (let local = tile.ownFrom; local < tile.ownTo; local++) {
-            sums[w][local] = tileSums[local - tile.from]
+            totals[w].sums[local] = tileTotals.sums[local - tile.from]
+            totals[w].counts[local] = tileTotals.counts[local - tile.from]
           }
         }
       },
     )
 
-    finish(unit, size, sums)
+    finish(unit, size, totals)
   }
   job.progress(units.length, units.length, 'done')
+
+  // cooltools' floor: a fraction of the most cells any diamond of the run holds,
+  // over every sequence, and only then the calls on each.
+  let fullest = 0
+  for (const entry of based) for (const count of entry.counts) fullest = Math.max(fullest, count)
+  const calls = based.map(({ unit, score, counts }) => ({
+    unit,
+    boundaries: insulationBoundaries(score, counts, {
+      minCells: fullest * minValid,
+      threshold: prominence,
+      spacing,
+    }),
+    window: windows[0],
+  }))
 
   const round = units.filter((unit) => unit.circular).length
   if (round > 0) {
@@ -372,7 +381,7 @@ function profileFor(
     values,
     extent: [0, job.mc.nBins],
     binsize: job.mc.binsize,
-    // log2 of a ratio against the sequence mean, so zero is average and the
+    // log2 of a ratio against the sequence median, so zero is typical and the
     // sign is the whole reading. Named rather than left blank, because a lane
     // whose axis runs −2 to 2 with no unit invites being read as a count.
     unit: 'log2 ratio',

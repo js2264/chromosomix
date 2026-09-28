@@ -22,8 +22,8 @@
  *   tightening or loosening it is editing data rather than editing this file.
  *
  * Four of the relations are worth naming here, because each one is a place two
- * defensible implementations legitimately part company and a test that asserted
- * equality would be wrong rather than strict:
+ * defensible implementations could part company, and a test has to assert the
+ * relation that actually holds:
  *
  * - **P(s)** — exact. cooltools' `count.avg` is the mean over a diagonal, and so
  *   is a mirrored dense block's; the doubling cancels.
@@ -33,9 +33,9 @@
  * - **APA** — exact, once the loops whose window would cross the main diagonal
  *   are excluded. With them in, the two pileups differ by about 1 % and every
  *   differing cell sits below the diagonal.
- * - **Insulation** — correlated, not equal, and the golden lists the five ways
- *   the definitions differ. The floor is the value measured when the golden was
- *   written, so this asserts the correspondence has not *degraded*.
+ * - **Insulation** — exact. The diamond is cooltools' own — the mean of the
+ *   valid cells of a window cornered on the bin, over the sequence's median —
+ *   and so are the boundaries, strength for strength.
  */
 
 import { existsSync } from 'node:fs'
@@ -59,7 +59,7 @@ import {
   logBinCurve,
   logRoundedBreaks,
 } from '@/analysis/expected'
-import { diamondSums, insulationScore } from '@/analysis/insulation'
+import { diamondTotals, insulationBoundaries, insulationScore } from '@/analysis/insulation'
 import { leadingEigenpairs } from '@/analysis/linalg'
 import { referenceWindows, windowRow } from '@/analysis/metaplot'
 import { compareSets } from '@/analysis/overlap'
@@ -424,46 +424,61 @@ suite('P(s) as a density, against HiContacts::distanceLaw', () => {
 interface InsulationGolden {
   chroms: string[]
   windows_bins: number[]
+  ignore_diags: number
   min_valid: number
+  threshold: number
   tolerance: number
   tolerance_absolute_score: number
-  direct: Record<string, Record<string, { sums: GoldenNumbers; score: GoldenNumbers }>>
+  direct: Record<
+    string,
+    Record<string, { sums: GoldenNumbers; counts: number[]; score: GoldenNumbers }>
+  >
   reference: Record<
     string,
-    Record<string, { score: GoldenNumbers; measured_pearson: number | null }>
-  > & { differences?: string[] }
+    Record<
+      string,
+      {
+        score: GoldenNumbers
+        n_valid_pixels: number[]
+        boundary_strength: GoldenNumbers
+        is_boundary: number[]
+      }
+    >
+  > & { relation: string; max_valid_pixels: Record<string, number> }
 }
 
 suite('diamond insulation, against numpy and cooltools.insulation', () => {
   const golden = ready ? loadAnalysisGolden<InsulationGolden>('insulation') : null
 
-  it('reproduces the diamond sum exactly, at every window', async () => {
+  async function totalsOf(chrom: string, window: number) {
+    const g = golden!
+    const dense = await demo.square(chrom, true)
+    return diamondTotals({ size: dense.nrows, values: dense.values }, { window, ignoreDiags: g.ignore_diags })
+  }
+
+  it('reproduces the diamond exactly, at every window', async () => {
     const g = golden!
     for (const chrom of g.chroms) {
-      const dense = await demo.square(chrom, true)
-      const square = { size: dense.nrows, values: dense.values }
       for (const window of g.windows_bins) {
-        const sums = diamondSums(square, { window, minValid: g.min_valid })
-        expectSeries(
-          sums,
-          numbers(g.direct[chrom][String(window)].sums),
-          g.tolerance,
-          `sums ${chrom} w${window}`,
-        )
+        const totals = await totalsOf(chrom, window)
+        const direct = g.direct[chrom][String(window)]
+        expect(Array.from(totals.counts), `counts ${chrom} w${window}`).toEqual(direct.counts)
+        expectSeries(totals.sums, numbers(direct.sums), g.tolerance, `sums ${chrom} w${window}`)
       }
     }
   })
 
-  it('reproduces the log2 score exactly, at every window', async () => {
+  it('is cooltools’ log2 insulation score, bin for bin', async () => {
     const g = golden!
+    expect(g.reference.relation).toBe('equal')
     for (const chrom of g.chroms) {
-      const dense = await demo.square(chrom, true)
-      const square = { size: dense.nrows, values: dense.values }
       for (const window of g.windows_bins) {
-        const score = insulationScore(diamondSums(square, { window, minValid: g.min_valid }))
+        const totals = await totalsOf(chrom, window)
+        const theirs = g.reference[chrom][String(window)]
+        expect(Array.from(totals.counts), `cells ${chrom} w${window}`).toEqual(theirs.n_valid_pixels)
         expectSeries(
-          score,
-          numbers(g.direct[chrom][String(window)].score),
+          insulationScore(totals),
+          numbers(theirs.score),
           g.tolerance,
           `score ${chrom} w${window}`,
           g.tolerance_absolute_score,
@@ -472,26 +487,36 @@ suite('diamond insulation, against numpy and cooltools.insulation', () => {
     }
   })
 
-  it('still tracks cooltools as closely as it did when the golden was written', async () => {
-    // Not equality: the golden lists five ways the definitions differ, and yeast
-    // at 1 kb has little domain structure, so what is left is a correlation in
-    // the 0.6-0.85 range. The floor is the measured value less a margin, which
-    // makes this a regression test on the correspondence rather than a claim
-    // about how close two different statistics ought to be.
+  it('calls cooltools’ boundaries, with its strengths', async () => {
+    // cooltools reads which bins take part against the fullest diamond of the
+    // whole table, every chromosome of it — so the golden carries that number
+    // rather than this test taking it from the four chromosomes it reads.
     const g = golden!
-    expect(g.reference.differences?.length ?? 0).toBeGreaterThan(0)
     for (const chrom of g.chroms) {
-      const dense = await demo.square(chrom, true)
-      const square = { size: dense.nrows, values: dense.values }
       for (const window of g.windows_bins) {
-        const recorded = g.reference[chrom][String(window)].measured_pearson
-        if (recorded === null) continue
-        const score = insulationScore(diamondSums(square, { window, minValid: g.min_valid }))
-        const theirs = numbers(g.reference[chrom][String(window)].score)
-        const found = pearsonOf(score, theirs)
-        expect(found, `${chrom} w${window}: recorded ${recorded.toFixed(3)}`).toBeGreaterThan(
-          recorded - 0.05,
+        const totals = await totalsOf(chrom, window)
+        const theirs = g.reference[chrom][String(window)]
+        const minCells = g.reference.max_valid_pixels[String(window)] * g.min_valid
+        const all = insulationBoundaries(insulationScore(totals), totals.counts, {
+          minCells,
+          threshold: Number.NEGATIVE_INFINITY,
+          spacing: 0,
+        })
+        const strength = new Float64Array(totals.counts.length).fill(Number.NaN)
+        for (const call of all) strength[call.bin] = call.prominence
+        expectSeries(
+          strength,
+          numbers(theirs.boundary_strength),
+          g.tolerance,
+          `strength ${chrom} w${window}`,
+          g.tolerance_absolute_score,
         )
+        const called = insulationBoundaries(insulationScore(totals), totals.counts, {
+          minCells,
+          threshold: g.threshold,
+          spacing: 0,
+        })
+        expect(called.map((call) => call.bin), `calls ${chrom} w${window}`).toEqual(theirs.is_boundary)
       }
     }
   })
