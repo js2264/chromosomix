@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 78,
-      "commit": "614be1f",
+      "commit": "20dead1",
       "title": "Draw maps to a chosen number of contacts (§6.5)",
       "branch": "js/relaxed-clarke-466ofi",
-      "date": "2026-09-28T14:10:23Z"
+      "date": "2026-09-28T18:00:54Z"
     }
   ]
 }
