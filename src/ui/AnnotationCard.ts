@@ -32,7 +32,7 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import { hasTrackControls, isIntervalSet, readsAlignments } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
-import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
+import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
@@ -855,6 +855,9 @@ export class AnnotationCard {
         // being moved from a file being loaded and from a dragged word, while
         // the drag is still in the air and only `types` can be read.
         event.dataTransfer.setData(TRACK_DRAG_TYPE, entry.id)
+        // …and, for an overlay, that it is one: a map offers it its face and
+        // not its four edges, and only the types say so before the drop.
+        if (entry.card === 'overlay') event.dataTransfer.setData(OVERLAY_DRAG_TYPE, entry.id)
         // The row, not the handle: a 12-pixel ghost says nothing about what is
         // being moved.
         if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 12, 12)

@@ -12,9 +12,12 @@
  * - the first map's mark pressed off: on the other two;
  * - *no map*: on none, the row still in the list;
  *
- * then the ATAC row beside it, whose *location* keeps its four edges a map, the
- * batch box's two fields with both ticked, and the Analysis column's rows for
- * *Compartments* and *Reproducibility* under their names. It prints
+ * then the row carried onto the middle of the Hi-C map — the rectangle *on this
+ * map*, the only one lit for an overlay — and a loop *file* dropped on the
+ * middle of the third map, which opens there alone (§8.1); then the ATAC row
+ * beside it, whose *location* keeps its four edges a map, the batch box's two
+ * fields with both ticked, and the Analysis column's rows for *Compartments*
+ * and *Reproducibility* under their names. It prints
  * which marks are lit and how many circles each map drew at every step.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
@@ -174,6 +177,14 @@ const pressAll = async (text) => {
   await sleep(1500)
 }
 const deck = () => page.locator('.deck-grid').first()
+/** Which of a cell's drop rectangles are showing, by the edge or `face` they stand for. */
+const litZones = (at) =>
+  page.evaluate((at) => {
+    const cell = document.querySelectorAll('.deck-grid > .deck-panel')[at]
+    return [...(cell?.querySelectorAll('.lane-drop') ?? [])]
+      .filter((zone) => getComputedStyle(zone).opacity !== '0')
+      .map((zone) => [...zone.classList].find((name) => name.startsWith('lane-drop-'))?.slice('lane-drop-'.length))
+  }, at)
 
 try {
   await page.goto(`${BASE}/?config=${BASE}/gallery/_overlay-deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
@@ -219,9 +230,61 @@ try {
   await pressMap(2)
   console.log('third map back:', await marks())
 
+  // ---- dropped on a map ----------------------------------------------------
+  // The row, carried onto the middle of the Hi-C map. Dispatched rather than
+  // dragged by the mouse, with a real `DataTransfer`, so the picture can be
+  // taken with the rectangles up — the hand is still in the air.
+  const cells = page.locator('.deck-grid > .deck-panel')
+  const faceOf = (at) => cells.nth(at).locator('.lane-drop-face')
+  const gridOf = (at) => cells.nth(at).locator('.panel-grid')
+  const transfer = await page.evaluateHandle(() => new DataTransfer())
+  await rowOf('demo-loops').locator('.ann-grip').dispatchEvent('dragstart', { dataTransfer: transfer })
+  await gridOf(1).dispatchEvent('dragenter', { dataTransfer: transfer })
+  await faceOf(1).dispatchEvent('dragover', { dataTransfer: transfer })
+  await sleep(400)
+  console.log('lit for the row:', JSON.stringify(await litZones(1)))
+  await shotOf(cells.nth(1), 'om10-row-over-the-hic-map')
+  await faceOf(1).dispatchEvent('drop', { dataTransfer: transfer })
+  await rowOf('demo-loops').locator('.ann-grip').dispatchEvent('dragend', { dataTransfer: transfer })
+  await sleep(1500)
+  console.log('row dropped on Hi-C:', await marks())
+  await shot('om11-row-dropped-on-the-hic-map')
+
+  // A loop file, dropped on the middle of the third map: it opens there alone.
+  const file = await page.evaluateHandle(async (url) => {
+    const text = await (await fetch(url)).text()
+    const data = new DataTransfer()
+    data.items.add(new File([text], 'Yeast_microC_loops.tsv', { type: 'text/tab-separated-values' }))
+    return data
+  }, `${YEAST}/Yeast_microC_loops.tsv`)
+  await gridOf(2).dispatchEvent('dragenter', { dataTransfer: file })
+  await faceOf(2).dispatchEvent('dragover', { dataTransfer: file })
+  await sleep(400)
+  console.log('lit for a file:', JSON.stringify(await litZones(2)))
+  await shotOf(cells.nth(2), 'om12-file-over-the-third-map')
+  await faceOf(2).dispatchEvent('drop', { dataTransfer: file })
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('.annotation-card .ann-row.ann-ready')].some(
+        (row) => row.dataset.id !== 'demo-loops' && row.dataset.id !== 'demo-atac',
+      ),
+    null,
+    { timeout: 60000 },
+  ).catch(() => console.log('the dropped file never became a row'))
+  await sleep(1500)
+  const dropped = await page.$$eval('.annotation-card .ann-row', (all) =>
+    all.map((row) => row.dataset.id).filter((id) => id !== 'demo-loops' && id !== 'demo-atac'),
+  )
+  console.log('file rows:', JSON.stringify(dropped))
+  await shot('om13-file-dropped-on-the-third-map')
+  if (dropped.length > 0) {
+    const row = await openRow(dropped[0])
+    await shotOf(row, 'om14-dropped-file-row-on-1-of-3')
+  }
+
   // The lane beside it: its location keeps four edges a map.
   const atac = await openRow('demo-atac')
-  await shotOf(atac, 'om10-atac-row-location')
+  await shotOf(atac, 'om15-atac-row-location')
 
   // Both ticked: the batch box carries the two fields, each for its own rows.
   for (const id of ['demo-loops', 'demo-atac']) {
@@ -233,7 +296,7 @@ try {
   // shot one at a time, each scrolled into view.
   const batchField = (label) =>
     page.locator('.ann-batch .field', { has: page.locator(':scope > .field-label', { hasText: new RegExp(`^${label}$`) }) })
-  for (const [label, name] of [['location', 'om11-batch-location'], ['maps', 'om12-batch-maps']]) {
+  for (const [label, name] of [['location', 'om16-batch-location'], ['maps', 'om17-batch-maps']]) {
     await batchField(label).first().scrollIntoViewIfNeeded()
     await sleep(400)
     await batchField(label).first().screenshot({ path: `${OUT}/${name}.png` })
@@ -250,7 +313,7 @@ try {
   await sleep(1200)
   const titles = await page.$$eval('.analysis-row-title', (all) => all.map((n) => n.textContent.trim()))
   console.log('tasks:', JSON.stringify(titles.filter((t) => /Compartments|Reproducibility/.test(t))))
-  for (const [title, name] of [['Compartments', 'om13-analysis-compartments'], ['Reproducibility', 'om14-analysis-reproducibility']]) {
+  for (const [title, name] of [['Compartments', 'om18-analysis-compartments'], ['Reproducibility', 'om19-analysis-reproducibility']]) {
     const row = page.locator('.analysis-row', { has: page.locator('.analysis-row-title', { hasText: new RegExp(`^${title}$`) }) })
     await row.first().scrollIntoViewIfNeeded()
     await sleep(600)

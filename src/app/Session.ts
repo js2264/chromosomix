@@ -6695,8 +6695,10 @@ export class Session {
           // exists, because `begin` places every new track on the lead — which
           // is what importing has always meant and is right for every drop but
           // this one.
+          // `null` is the middle of the map, *on this map* (§8.1): no edge is
+          // named, so a track takes its usual one and an overlay the map's face.
           loadOnEdge: (files, edge) => {
-            this.droppedAll(files, placementOn(edge), map)
+            this.droppedAll(files, edge === null ? undefined : placementOn(edge), map)
           },
           // The same aim, at a row out of the Files panel. Resolved here rather
           // than in the panel that took the drop, because reading the file is a
@@ -6707,7 +6709,7 @@ export class Session {
           pickOnEdge: (event, edge) => {
             void readFileDrag(event).then((picked) => {
               if (picked === null || this.destroyed) return
-              void this.addPicked(picked, placementOn(edge), map)
+              void this.addPicked(picked, edge === null ? undefined : placementOn(edge), map)
             })
           },
         }

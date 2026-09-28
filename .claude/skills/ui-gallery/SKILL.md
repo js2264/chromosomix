@@ -38,7 +38,7 @@ node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and i
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
-node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, pressed through every state, and the batch box: om01 … om14
+node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -211,11 +211,15 @@ to `analysis/insulation.ts`, to `analysis/hicrep.ts`, or to how the deck tells t
 `scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
 yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the
 loops row's *maps* field and the deck at each state — imported onto the first map, the Hi-C map's
-mark pressed, *every map*, the first map's mark pressed off, *no map* — then the ATAC row's
-*location* beside it, the batch box's two fields with both rows ticked, and the Analysis column's
-*Compartments* and *Reproducibility* rows. It prints the lit marks and the count at every step. Run
-it after any change to `ui/lanePlacement.ts`, to how `MatrixPanel` paints its overlays, or to
-`AnnotationStore.overlays`.
+mark pressed, *every map*, the first map's mark pressed off, *no map* — then the two drops onto a
+map's middle, *on this map*: the loops row carried onto the Hi-C map, with the middle the only
+rectangle lit for it, and a loop *file* dropped on the third map, all five lit, which opens there
+alone. Dispatched with a real `DataTransfer` rather than dragged by the mouse, so the rectangles
+can be shot while the hand is still in the air. Then the ATAC row's *location* beside it, the batch
+box's two fields with both rows ticked, and the Analysis column's *Compartments* and
+*Reproducibility* rows. It prints the lit marks, the lit rectangles and the count at every step.
+Run it after any change to `ui/lanePlacement.ts`, to how `MatrixPanel` paints its overlays or takes
+a drop, or to `AnnotationStore.overlays`.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

@@ -2111,6 +2111,15 @@ draw on, and *no map* leaves an overlay placed in one where it is. With one map 
 shown — the eye on the head already hides the overlay there — unless the overlay is drawn on no map,
 which a deck closed after *no map* leaves it, and then it is the one mark that puts it back.
 
+**It is dropped on a map as a track is dropped on an edge.** The middle of every map is a fifth
+rectangle, *on this map*, lit with the four strips at its edges while a file or a row is dragged —
+and **alone** while an overlay's row is, since the strips name stacks and an overlay has none. A
+file dropped there opens onto that map only, an overlay on its face and a track on its usual edge,
+where a file dropped in the middle of a companion used to land on the first map; a row of the Tracks
+card dropped there is drawn on that map **as well** as wherever it was, as the marks put it. An
+overlay's row let go on a strip is taken the same way, and given no edge. A lane carried by its
+grip is not offered the face: that gesture is about an edge.
+
 **Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
 sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
 map's own cells. Discovered rather than loaded, so it is the one card whose contents nobody had to
@@ -7492,7 +7501,8 @@ marks, on a gallery card and on the tray under a portal. Clicking a folder row's
 verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
-stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks card, onto the content
+stack (§8.9), onto the rectangle in the middle of a map for that map alone — an overlay's one target
+(§8.1) — onto a companion for a track on that map (§16), onto the Tracks card, onto the content
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 

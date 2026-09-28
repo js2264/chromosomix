@@ -247,6 +247,38 @@ function fieldsOf(host: Element): Map<string, HTMLElement> {
   return out
 }
 
+describe('an overlay row, dragged', () => {
+  it('says it is one, so a map can offer it its face alone', () => {
+    const held = store()
+    loops(held)
+    const bigwig = held.begin({
+      card: 'linear',
+      kind: 'track',
+      id: 'atac',
+      label: 'atac',
+      source: { kind: 'remote', url: 'atac.bw', name: 'atac.bw' },
+    })
+    held.update(bigwig.id, { status: 'ready' })
+    const made = card(held)
+    const typesOf = (id: string): string[] => {
+      const set = new Map<string, string>()
+      const start = new window.Event('dragstart', { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperty(start, 'dataTransfer', {
+        value: {
+          effectAllowed: 'none',
+          setData: (type: string, value: string) => set.set(type, value),
+          setDragImage: () => {},
+        },
+      })
+      made.el.querySelector(`[data-grip="${id}"]`)?.dispatchEvent(start)
+      return [...set.keys()]
+    }
+    expect(typesOf('loops')).toContain('application/x-metacooler-overlay')
+    expect(typesOf('loops')).toContain('application/x-metacooler-track')
+    expect(typesOf('atac')).not.toContain('application/x-metacooler-overlay')
+  })
+})
+
 describe('on the Tracks card, in a deck', () => {
   it('gives an overlay row its maps, and a lane row its location', () => {
     const held = store()

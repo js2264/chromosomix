@@ -41,6 +41,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   saved before this brings its overlays back on its own map, one press of *every map* from where
   they were.
 
+- **The middle of a map is a drop target: *on this map* (§8.1).** A fifth rectangle, lit with the
+  four strips at a map's edges while a file or a Tracks card row is dragged, and alone while an
+  overlay's row is. A file dropped there opens onto that map only — a loop set on its face, a track
+  on its usual edge — where a file dropped in the middle of a deck's third map used to land on the
+  first; a row dropped there is drawn on that map as well as wherever it already was. An overlay's
+  row let go on one of the strips is taken the same way.
+
 - **Peak calling, a 1D task (§18.8, §18.9).** yapc (Jänes et al. 2018) ported: a peak is where a
   coverage track's smoothed second derivative turns negative — where the signal curves down — found by
   its shape rather than its height, so it needs no background model of normalised signal and splits
