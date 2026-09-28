@@ -1,6 +1,13 @@
 {
-  "latest": "1c3600b",
+  "latest": "a80410c",
   "versions": [
+    {
+      "commit": "a80410c",
+      "version": "0.13.0",
+      "date": "2026-09-28T19:59:24+02:00",
+      "subject": "Overlay map selection and validation notebook (#79)",
+      "tag": ""
+    },
     {
       "commit": "1c3600b",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "6ce6e01",
-      "version": "0.12.0",
-      "date": "2026-09-16T14:44:16+02:00",
-      "subject": "Draw a GFF row that names no parent: a bacterial annotation is 5,870 features, not 87 (#64)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -206,13 +206,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 79,
-      "commit": "fe5bcc2",
-      "title": "Overlay map selection and validation notebook",
-      "branch": "js/validation-notebook",
-      "date": "2026-09-28T17:05:32Z"
-    },
     {
       "number": 78,
       "commit": "614be1f",
