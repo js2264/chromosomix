@@ -678,19 +678,18 @@ describe('two files reduced to one number', () => {
     expect([...out.values]).toEqual([2, 0, 6, 1])
   })
 
-  it('applies the depth gain to the second file before either operation', () => {
-    // The whole reason the gain matters more here than to the split: two
-    // libraries at different depth have a *constant* ratio, so without this the
-    // picture is a flat wash whose colour is the depth ratio.
+  it('takes each file as read: a depth difference is the total’s to remove, not a gain’s', () => {
+    // Two libraries at different depth have a constant ratio. Nothing here
+    // divides it out — the contacts box draws both to one total first (§6.5).
     const deep = block(1, 1, () => 10)
     const shallow = block(1, 1, () => 5)
-    expect(combine(deep, shallow, { op: 'ratio', gain: 2 }).values[0]).toBeCloseTo(1, 6)
-    expect(combine(deep, shallow, { op: 'difference', gain: 2 }).values[0]).toBeCloseTo(0, 6)
+    expect(combine(deep, shallow, { op: 'ratio' }).values[0]).toBeCloseTo(2, 6)
+    expect(combine(deep, shallow, { op: 'difference' }).values[0]).toBeCloseTo(5, 6)
   })
 
   it('leaves the split exactly as it was', () => {
-    const split = combine(a, b, { op: 'split', gain: 3 })
-    const legacy = blendAcrossDiagonal(a, b, { gain: 3 })
+    const split = combine(a, b, { op: 'split' })
+    const legacy = blendAcrossDiagonal(a, b)
     expect(split.neutral).toBeNull()
     expect([...split.values]).toEqual([...legacy.values])
     expect(split.lower).toBe(legacy.lower)

@@ -24,7 +24,7 @@ import { MatrixPanel, axisRegion, blockSummary,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
-} from './MatrixPanel'
+ type FigureSubject} from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { typedLocusToRegion } from '../genome/assembly'
@@ -99,7 +99,7 @@ export interface PairViewProps {
    */
   annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
 }
 
 export class PairView {

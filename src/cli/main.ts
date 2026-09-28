@@ -120,6 +120,7 @@ import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
+import { contactsText, depthPhrase, parseContacts, type DrawnDepth } from '../contacts'
 import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
@@ -207,14 +208,31 @@ function pairsBinningOf(args: Args): PairsBinning | undefined {
  * `--value`, `--circular` and `--cell`: the framing a session sets from the
  * picture, spelled as flags (see `RESERVED`).
  */
-function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins'> {
+function framingFlags(
+  args: Args,
+): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts'> {
   const value = one(args, 'value')
+  const contacts = contactsOf(args)
   return {
     ...(value === undefined || value === '' ? {} : { value }),
+    ...(contacts === undefined ? {} : { contacts }),
     circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     cells: all(args, 'cell').flatMap((item) => item.split(',')).filter((item) => item !== ''),
     origins: originsOf(all(args, 'origin')),
   }
+}
+
+/**
+ * `--contacts N`: the total to draw the map to (§6.5), typed as the breadcrumb's
+ * box takes it — `10M`, `23,000,000`, `2.5e7`.
+ */
+function contactsOf(args: Args): number | undefined {
+  const text = one(args, 'contacts')
+  if (text === undefined) return undefined
+  const parsed = parseContacts(text)
+  if (parsed === null) return undefined
+  if (typeof parsed !== 'number') throw new Error(`--contacts: ${parsed.refused}`)
+  return parsed
 }
 
 /**
@@ -396,6 +414,10 @@ const RESERVED = new Set([
   'bin-size',
   'binsize',
   'rungs',
+  // The total the map is drawn to before any task reads it (§6.5): a subsample
+  // below the file's own, an oversample through Boost-HiC above it. A property
+  // of the input, like the binning, so every task reads the drawn map.
+  'contacts',
 ])
 
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
@@ -472,6 +494,31 @@ interface RunOptions {
   quiet: boolean
   /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
   binning?: PairsBinning | undefined
+  /** The total the map is drawn to before the task reads it (§6.5). */
+  contacts?: number | undefined
+}
+
+/**
+ * Draw an open map to `contacts` (§6.5), saying on stderr what the census counted
+ * and which way it went; `null` when no total was asked for.
+ */
+async function drawnTo(
+  mc: MetaCooler,
+  contacts: number | undefined,
+  quiet: boolean,
+): Promise<DrawnDepth | null> {
+  if (contacts === undefined) return null
+  const plan = await mc.resample({ contacts })
+  if (plan === null) return null
+  const depth: DrawnDepth = { contacts: plan.contacts, total: plan.total, mode: plan.mode }
+  if (!quiet) {
+    process.stderr.write(
+      depth.mode === 'none'
+        ? `  ${contactsText(depth.total)} contacts, the file's own: read as stored\n`
+        : `  ${depthPhrase(depth)}\n`,
+    )
+  }
+  return depth
 }
 
 /** A map opened for a run, with the one fact an import carries that a mount does not. */
@@ -655,6 +702,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       }
       mc.selectCells(options.cells)
     }
+    // Drawn to the total asked for before anything reads it, as the analysis
+    // worker draws its mount (§6.5); the seed is the app's, so the pixels are.
+    const depth = await drawnTo(mc, options.contacts, options.quiet)
     const value = options.value ?? DEFAULT_COUNT_COLUMN
     if (value !== DEFAULT_COUNT_COLUMN && !mc.scoreColumns.includes(value)) {
       throw new Error(
@@ -698,9 +748,11 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
         `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
-        `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}`,
+        `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}` +
+        `${depth === null || depth.mode === 'none' ? '' : `, ${depthPhrase(depth)}`}`,
       ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
       ...(Object.keys(options.origins).length === 0 ? {} : { origins: { ...options.origins } }),
+      ...(options.contacts === undefined ? {} : { contacts: options.contacts }),
     }
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -774,6 +826,14 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       // pair beside the map opens by the same road the map did.
       peer: async (map) => {
         const other = await openLocal(resolve(map.uri), options)
+        // Every map of a comparison at the one depth (§6.5).
+        try {
+          await drawnTo(other.mc, options.contacts, options.quiet)
+        } catch (error) {
+          other.mc.close()
+          other.source.close()
+          throw error
+        }
         return {
           mc: other.mc,
           close: () => {
@@ -1497,6 +1557,12 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            or separate with commas
       --cell <name>        a cell of an .scool to sum into the map; repeat or
                            separate with commas. Default: every cell
+      --contacts <n>       draw the map to n contacts before the task reads it:
+                           below the file's own total, an exact subsample
+                           (cooltools random-sample --count n --exact); above
+                           it, an oversample through Boost-HiC. Takes 10M,
+                           23,000,000 or 2.5e7; --against maps are drawn to it
+                           too. The same seed as the app, so the same pixels
       --bin-size <bp>      required for a .pairs input, which states no
                            resolution of its own; ignored for every other format
       --rungs <n>          how many ladder resolutions to build from it

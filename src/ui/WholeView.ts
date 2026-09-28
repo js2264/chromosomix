@@ -50,7 +50,7 @@ import {
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
-} from './MatrixPanel'
+ type FigureSubject} from './MatrixPanel'
 import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
@@ -266,7 +266,7 @@ export interface WholeViewProps {
    */
   compare?: CompareRead
   /** File and genome context for the exported figure's caption. */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
 }
 
 export class WholeView {

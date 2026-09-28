@@ -707,6 +707,21 @@ describe('the framing a session sets from the picture', () => {
     expect(notesOf(unnamed.text).join(' ')).toContain('--cell <name>')
   })
 
+  it('names the total the map was drawn to, where it was drawn to one (§6.5)', () => {
+    const drawn = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { contacts: 10_000_000 }),
+      context: context(),
+    })
+    expect(commandOf(drawn.text)).toContain('--contacts 10000000')
+    const stored = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(commandOf(stored.text)).not.toContain('--contacts')
+  })
+
   it('writes the bin size an imported .pairs was framed at', () => {
     // A contact list declares no resolution; the session answered a dialog and
     // the shell's answer is `--bin-size`. Without it the line dies at the open.

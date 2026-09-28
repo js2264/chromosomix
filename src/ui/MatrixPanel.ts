@@ -86,9 +86,7 @@ import {
   COMPARE_OPS,
   alignable,
   combine,
-  depthMatchDefault,
   isCompareOp,
-  matchGain,
   type CompareOp,
 } from '../render/compare'
 import {
@@ -156,7 +154,7 @@ import {
   type RefineView,
 } from './refine'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
-import { inverseTransform, transformValue, type Scale } from '../render/scale'
+import { inverseTransform, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
@@ -204,6 +202,7 @@ import {
   trimNumber,
 } from './dom'
 import { resolutionLabel } from '../units'
+import { depthPhrase, type DrawnDepth } from '../contacts'
 import { dragHasFileRow } from './fileDrag'
 import { filesFrom } from './chooseFiles'
 import { MapKey } from './MapKey'
@@ -495,7 +494,7 @@ export interface MatrixPanelOptions {
    * which file or which genome, because it is mounted by five different views
    * over the same data. The router does, and passes it down.
    */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
   /**
    * An axis label was clicked. `name` is the block's own name — a genome in the
    * whole-metagenome overview, a contig everywhere else — and the view opens
@@ -955,25 +954,27 @@ const CORRELATE_HINT =
   'counts; one file, square blocks, up to ' +
   `${MAP_CORRELATION_BINS.toLocaleString()} bins a side — a fraction of a second at a thousand, a few at the most.`
 
+/**
+ * What a figure is a picture *of*: the file, the genome, and the total the map
+ * was drawn to (§6.5) — the three things a panel cannot know from its block.
+ */
+export interface FigureSubject {
+  file: string
+  genome?: string
+  /**
+   * What the map is drawn to, or `null` for the file as stored. A function,
+   * because the reader's answer lands after the panel is built, and a figure
+   * saved later has to say what it shows.
+   */
+  depth?: () => DrawnDepth | null
+}
+
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
   labels: [string, string]
   /** How the two are put together — the split, or one derived field. */
   op: CompareOp
   onOpChange(op: CompareOp): void
-  /**
-   * Whether the second file's counts are scaled to the first's bright end, or
-   * `undefined` where the reader has not said and the default stands.
-   *
-   * Three states rather than two, because the default is not a constant: it
-   * depends on the operation and on whether the cells are balanced, and a plain
-   * boolean could not tell "the reader wants it off" from "nobody has chosen
-   * yet" — which is what made a ratio silently rescale itself. See
-   * {@link HeatmapPanel.compareNormalising} for the rule and for why balanced
-   * values want the opposite default from raw counts.
-   */
-  normalise?: boolean
-  onNormaliseChange(on: boolean): void
 }
 
 /** What the panel needs to draw annotations against this file. */
@@ -1250,14 +1251,14 @@ export class MatrixPanel {
    */
   private refineListener: ((view: RefineView) => void) | null = null
   /**
-   * The second file's block, when one is open, and the factor applied to it.
+   * The second file's block, when one is open.
    *
    * Kept beside the merged values rather than only merged into them, because a
    * reader hovering a cell wants *both* numbers — the whole question a compared
    * map asks is how the two differ here — and after the merge only one of them
    * is still in the matrix.
    */
-  private second: { data: MatrixResult; gain: number } | null = null
+  private second: { data: MatrixResult } | null = null
   /**
    * What this block was turned into, kept for the readout and the colourbar.
    *
@@ -2114,30 +2115,6 @@ export class MatrixPanel {
 
     if (options.compare !== undefined) {
       const compare = options.compare
-      // Under every operation, not only the split. It used to be hidden under a
-      // ratio and a difference on the grounds that they force it on — but the
-      // force was itself the bug ({@link compareNormalising}), and a rescale a
-      // reader can neither see nor switch off is the one kind of arithmetic a
-      // viewer must not do to a quantitative field. The setting now starts where
-      // the operation and the units say it should and moves when they say so.
-      {
-        const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
-        normalise.checked = this.compareNormalising(compare.op)
-        normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
-        controls.unshift(
-          field(
-            'match depth',
-            normalise,
-            // Two sentences, as a tooltip is. The hundred words this replaces
-            // argued when to use it and what it costs under each operation;
-            // that argument is §5.7's and §16.2's, where it can be read twice.
-            `Scale ${compare.labels[1]}’s counts so its 99th percentile meets ${compare.labels[0]}’s, ` +
-              'so the two saturate together. Off, one colour is one count on both sides of the ' +
-              'diagonal — the stronger claim, and wrong to read when the files differ in depth.',
-          ),
-        )
-      }
-
       const opSelect = el('select', { class: 'select' })
       for (const name of COMPARE_OPS) {
         opSelect.appendChild(el('option', { value: name, text: COMPARE_OP_LABELS[name] }))
@@ -4112,6 +4089,12 @@ export class MatrixPanel {
 
     const parts: string[] = []
     if (context?.file !== undefined && context.file !== '') parts.push(context.file)
+    // A map drawn to another total than the file's (§6.5), said beside the file
+    // it was drawn from: a subsample is not the file, and an oversample is an
+    // inference, and a figure that travels without its controls has to carry
+    // which of the three it is.
+    const depth = context?.depth?.() ?? null
+    if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     if (this.options.binsize > 0) parts.push(`${resolutionLabel(this.options.binsize)} bins`)
     if (this.level === 'contig') parts.push('contig level')
     if (this.options.balance === true) parts.push('balanced')
@@ -4195,6 +4178,11 @@ export class MatrixPanel {
     const score = choice?.label ?? value
     if (balance && score !== 'balanced') parts.push('balanced')
     parts.push(score)
+    // The total the map was drawn to (§6.5), which every count a task reads is a
+    // count *of*: in the drawer's header, the provenance line and the command
+    // that reproduces it.
+    const depth = this.options.caption?.depth?.() ?? null
+    if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     return {
       uri,
       rows: [data.rowExtent[0], data.rowExtent[1]],
@@ -4206,6 +4194,7 @@ export class MatrixPanel {
       normalise,
       level: data.level,
       label: parts.join(' · '),
+      ...(depth === null ? {} : { contacts: depth.contacts }),
     }
   }
 
@@ -5587,10 +5576,9 @@ export class MatrixPanel {
     // field, so the second strip would be a second scale for numbers that do
     // not exist.
     this.syncLegendSlots()
-    // The second legend is a function of the gain as well as of the colour
-    // scale, and the gain is recomputed per block. Without this the legend
-    // redraw is skipped whenever a *pinned* clip survives a navigation, and the
-    // second file's ticks keep the previous block's numbers.
+    // Both legends redrawn for the new block, even where a *pinned* clip
+    // survives a navigation and the scale itself has not moved: the second key
+    // comes and goes with the second file, and names it.
     this.painted = null
     // Which edge of the box the band stands on. A band fills its box by
     // construction, so this is not slack being distributed — it is which end of
@@ -6251,16 +6239,7 @@ export class MatrixPanel {
           deriveBlock(aligned, { ...derivation, smoothed: undefined }, runs)
 
     const op = this.options.compare?.op ?? 'split'
-    // Measured on the *derived* blocks, not the raw ones: a normalisation may
-    // already have removed the depth difference the gain exists to correct, and
-    // matching again on top of it would scale one file for a reason that is no
-    // longer there. Where nothing is derived the two are the same array, so this
-    // is byte for byte the number it always was.
-    const gain =
-      aligned !== undefined && this.compareNormalising(op)
-        ? matchGain({ ...data, values: mine.values }, { ...aligned, values: theirs!.values })
-        : 1
-    this.second = aligned === undefined ? null : { data: aligned, gain }
+    this.second = aligned === undefined ? null : { data: aligned }
 
     // Two aligned blocks with two axes each — under the split the merged values
     // are the first file's above the diagonal and the second's below, and
@@ -6275,7 +6254,7 @@ export class MatrixPanel {
         : combine(
             { ...data, values: mine.values },
             { ...aligned!, values: theirs.values },
-            { op, gain },
+            { op },
           )
     this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
     const presentationMoved = this.syncDivergingScale()
@@ -6808,10 +6787,12 @@ export class MatrixPanel {
    * Whether the second file's key is on screen.
    *
    * Only under the **split**, where the square really does hold two files'
-   * counts and a colour is worth a different number in each. Under a ratio or a
-   * difference there is one derived field over the whole square — `neutral` is
-   * what says so — and a second key would be a second scale for numbers that no
-   * longer exist.
+   * counts, on one scale — which is what the second key, with the first's
+   * numbers, says; a second file of another depth is brought to the first's by
+   * drawing both to one total (§6.5), not by rescaling its colours. Under a
+   * ratio or a difference there is one derived field over the whole square —
+   * `neutral` is what says so — and a second key would be a second scale for
+   * numbers that no longer exist.
    */
   private syncLegendSlots(): void {
     this.key2.el.classList.toggle('hidden', this.second === null || this.neutral !== null)
@@ -6927,7 +6908,7 @@ export class MatrixPanel {
         ctx,
         right,
         box.y + box.height + 4,
-        this.keyFor(rescaledBy(painted, this.second.gain), this.secondMark()),
+        this.keyFor(painted, this.secondMark()),
         style,
       )
     }
@@ -7137,44 +7118,6 @@ export class MatrixPanel {
       balanced: this.options.balance === true,
       ...(this.neutral === null ? {} : { neutral: this.neutral }),
     }
-  }
-
-  /**
-   * Whether the second file's counts are scaled to the first's bright end.
-   *
-   * The reader's choice everywhere, and only the *default* differs by operation.
-   * Two libraries at different depth differ by roughly a scalar; under the split
-   * that scalar is a real reading about two real files and the honest default is
-   * to leave it in, while a ratio of raw counts *is* that scalar everywhere — a
-   * flat wash whose colour is the depth difference and whose structure is
-   * invisible — so there it is divided out unless the reader says otherwise.
-   *
-   * **Balanced values are the exception, and they are the common case.** ICE
-   * puts every bin's marginal at 1, so two balanced matrices already carry one
-   * normalisation and there is no depth left in them to correct: on an E. coli
-   * pair at 5 kb the two marginals agree to 0.2%, and matching the 99th
-   * percentiles on top of that rescaled the second file by 1.48 — a uniform
-   * `log2` shift of −0.56 applied to every cell of the ratio. On the ±1 scale a
-   * ratio map is drawn with, that is a quarter of the picture's whole range: the
-   * near-diagonal band that a separate tool draws at +0.60 came out at +0.04,
-   * white instead of red, and the map disagreed with the same comparison made
-   * anywhere else.
-   *
-   * The reason it fails there is worth naming, because it is not a matter of
-   * degree. The 99th percentile of a Hi-C map lives entirely in the first few
-   * diagonals, which is exactly where two conditions differ — so matching on it
-   * does not remove a depth difference, it removes the finding. It is the right
-   * statistic for the split, whose question is "can I see both triangles", and
-   * the wrong one for a ratio, whose question is "by how much do these differ".
-   *
-   * Forced off for neither: a reader comparing two raw-count files still has the
-   * tickbox, which is now offered under all three operations rather than hidden
-   * under two of them.
-   */
-  private compareNormalising(op: CompareOp): boolean {
-    const chosen = this.options.compare?.normalise
-    if (chosen !== undefined) return chosen
-    return depthMatchDefault(op, this.options.balance === true)
   }
 
   /**
@@ -7455,12 +7398,11 @@ export class MatrixPanel {
       if (!sameColorScale(effective, this.painted)) {
         this.painted = { ...effective }
         this.key.set(this.keyFor(effective))
-        // The second file's key measures the same colours in *its* counts. With
-        // no gain the two carry identical numbers, and the second is still
-        // worth drawing: what it says then is that the two are on one scale,
-        // which is exactly the claim the reader is relying on.
+        // The second file's key carries the same numbers as the first, and is
+        // worth drawing for that: what it says is that the two triangles are on
+        // one scale, which is exactly the claim the reader is relying on.
         if (this.second !== null) {
-          this.key2.set(this.keyFor(rescaledBy(effective, this.second.gain), this.secondMark()))
+          this.key2.set(this.keyFor(effective, this.secondMark()))
         }
         this.placeKey()
       }
@@ -8705,9 +8647,9 @@ export class MatrixPanel {
       return
     }
     // `cell.value` is what was *drawn*, which below the diagonal of a compared
-    // map is the second file's count with any gain already in it. Neither half
-    // of that is what a reader is asking about, so the numbers here come from
-    // the blocks themselves: each file's own count, unscaled, at this cell.
+    // map is the second file's count, and under a ratio neither file's. So the
+    // numbers here come from the blocks themselves: each file's own count at
+    // this cell.
     const compare = this.options.compare
     const slot = square.row * data.ncols + square.col
     const mine = this.second === null ? cell.value : data.values[slot]
@@ -9803,25 +9745,6 @@ export function blockSummary(
     parts.push(el('strong', { text: resolution }))
   }
   return parts
-}
-
-/**
- * The same colours, measured in the second file's counts.
- *
- * A gain of `g` multiplies the second file's values before they are coloured, so
- * a colour standing at transformed level `t` is `T⁻¹(t)` contacts in the first
- * file and `T⁻¹(t) / g` in the second. Converting the *bounds* that way and
- * handing the result to a second colourbar is all it takes: every tick it
- * derives is then in the second file's units, from the one implementation that
- * already knows how to derive them.
- */
-function rescaledBy(scale: ColorScale, gain: number): ColorScale {
-  if (!(gain > 0) || gain === 1) return scale
-  const back = (value: number): number =>
-    Number.isFinite(value)
-      ? transformValue(inverseTransform(value, scale.transform) / gain, scale.transform)
-      : value
-  return { ...scale, vmin: back(scale.vmin), vmax: back(scale.vmax) }
 }
 
 /** Adapt a worker result to the renderer's {@link DenseMatrix}. */

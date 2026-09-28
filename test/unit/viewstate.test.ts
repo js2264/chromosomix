@@ -19,6 +19,7 @@ import {
   SCALE_KEYS,
   selectionOf,
   serialiseViewState,
+  SUBJECT_KEYS,
   ViewStore,
   viewStateEquals,
 } from '../../src/state/ViewState'
@@ -107,6 +108,7 @@ const CASES: ViewState[] = [
     region2: 'chr2',
     focus: 'chr1:200-400',
     regions: 'chr1,chr2',
+    contacts: 10_000_000,
     locus: 'chr1:1-500',
     level: 'contig',
     transform: 'log2',
@@ -176,6 +178,38 @@ describe('serialiseViewState / parseViewState', () => {
       genome: '',
     })
     expect(parseViewState('#uri=a&view=genome')).toStrictEqual({ uri: 'a', view: 'genome' })
+  })
+})
+
+describe('the total the maps are drawn to (§6.5)', () => {
+  const base = { uri: 'yeast.cool', view: 'region', region: 'IV' } as const
+
+  it('round-trips as the whole number it is, with no grouping in the link', () => {
+    const hash = serialiseViewState({ ...base, contacts: 10_000_000 })
+    expect(hash).toContain('contacts=10000000')
+    expect(parseViewState(hash)?.contacts).toBe(10_000_000)
+  })
+
+  it('is absent where the files are read as stored, so a plain link stays plain', () => {
+    expect(serialiseViewState({ ...base })).not.toContain('contacts')
+  })
+
+  it('drops a total that is not a positive whole number rather than rounding it', () => {
+    for (const bad of ['0', '-5', '1.5', '10M', 'lots', '1e400', '']) {
+      const parsed = parseViewState(`uri=yeast.cool&view=region&region=IV&contacts=${bad}`)
+      expect(parsed?.contacts, bad).toBeUndefined()
+    }
+  })
+
+  it('is removed by a patch that sets it to undefined — the box emptied', () => {
+    const store = new ViewStore()
+    store.set({ ...base, contacts: 10_000_000 })
+    store.patch({ contacts: undefined })
+    expect(store.state !== null && 'contacts' in store.state).toBe(false)
+  })
+
+  it('outlives a navigation of the same file, as the cell set does', () => {
+    expect(SUBJECT_KEYS).toContain('contacts')
   })
 })
 

@@ -416,6 +416,23 @@ export interface ViewState {
    */
   cells?: string
   /**
+   * The total every map of the tab is drawn to, in contacts (§6.5).
+   *
+   * Typed in the breadcrumb's *contacts* box, or set there by the deck's two
+   * chevrons. Each map is drawn to it on its own: subsampled where it holds
+   * more — cooltools' `random-sample --count --exact` — oversampled through
+   * Boost-HiC where it holds fewer, left alone where it holds exactly this
+   * many. Every picture and every task reads the drawn maps, which is the point:
+   * two libraries compared at one depth.
+   *
+   * **Part of the shared view**, for the reason {@link balance} is — a map at
+   * ten million contacts is a different picture from the file — and carried
+   * across a navigation with the cell set (`SUBJECT_KEYS`), since it is which
+   * data the file is read through rather than which part of it is on screen.
+   * Absent is every file as stored.
+   */
+  contacts?: number
+  /**
    * What one row of the matrix is.
    *
    * `bin` and `contig` are the aggregation levels of a genome, pair, region or

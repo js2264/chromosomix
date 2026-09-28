@@ -11,13 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import {
-  alignable,
-  blendAcrossDiagonal,
-  combine,
-  depthMatchDefault,
-  matchGain,
-} from '../../src/render/compare'
+import { alignable, blendAcrossDiagonal } from '../../src/render/compare'
 import { compareRefusal } from '../../src/ui/CompareCard'
 import type { OpenResult } from '../../src/worker/protocol'
 
@@ -63,12 +57,14 @@ describe('blendAcrossDiagonal', () => {
     expect([...b.values]).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 2])
   })
 
-  it('scales the second file by the gain, and only the second', () => {
+  it('draws both files on one scale: each triangle holds its own file’s counts', () => {
+    // No gain between them, ever (§5.7): two files of different depth are
+    // compared by drawing both to one total (§6.5), not by rescaling one.
     const a = block(3, 3, () => 10)
     const b = block(3, 3, () => 4)
-    const { values } = blendAcrossDiagonal(a, b, { gain: 2.5 })
-    expect(values[1 * 3 + 0]).toBe(10) // below the diagonal: 4 * 2.5
-    expect(values[0 * 3 + 1]).toBe(10) // above it: untouched
+    const { values } = blendAcrossDiagonal(a, b)
+    expect(values[1 * 3 + 0]).toBe(4) // below the diagonal: the second file, as read
+    expect(values[0 * 3 + 1]).toBe(10) // above it: the first
   })
 
   it('judges an off-diagonal block by absolute bins, not by row and column', () => {
@@ -119,65 +115,6 @@ describe('alignable', () => {
   })
 })
 
-describe('matchGain', () => {
-  it('is the ratio of the two bright ends', () => {
-    const a = block(8, 8, (r, c) => (r + c) * 10)
-    const b = block(8, 8, (r, c) => r + c)
-    expect(matchGain(a, b)).toBeCloseTo(10, 6)
-  })
-
-  it('is 1 when either file has nothing positive to measure', () => {
-    expect(matchGain(block(4, 4, () => 1), block(4, 4, () => 0))).toBe(1)
-    expect(matchGain(block(4, 4, () => 0), block(4, 4, () => 1))).toBe(1)
-  })
-
-  it('ignores NaN, which is an unbalanced bin rather than a value', () => {
-    const a = block(8, 8, (r, c) => (r + c === 0 ? Number.NaN : (r + c) * 2))
-    const b = block(8, 8, (r, c) => (r + c === 0 ? Number.NaN : r + c))
-    expect(matchGain(a, b)).toBeCloseTo(2, 6)
-  })
-
-  it('measures the near diagonal, so a near-diagonal difference is what it removes', () => {
-    // Two maps of equal total mass that differ only close to the diagonal —
-    // the shape of every condition-versus-control comparison there is. The
-    // 99th percentile of a contact map is entirely made of these cells, so
-    // matching on it does not correct a depth difference: it cancels the one
-    // thing the ratio was opened to look at.
-    const decay = (r: number, c: number): number => 100 / (1 + Math.abs(r - c))
-    const control = block(32, 32, decay)
-    const condition = block(32, 32, (r, c) => decay(r, c) * (Math.abs(r - c) <= 2 ? 2 : 1))
-
-    const gain = matchGain(condition, control)
-    expect(gain).toBeGreaterThan(1.9)
-
-    // Applied, the two-fold near-diagonal enrichment reads as no enrichment.
-    const { values } = combine(condition, control, { op: 'ratio', gain })
-    expect(values[0]).toBeCloseTo(1, 2)
-    // …while the far field, which agreed, is pushed to a halving that is not there.
-    expect(values[31]).toBeCloseTo(0.5, 2)
-  })
-})
-
-describe('depthMatchDefault', () => {
-  it('leaves the split alone, whatever the units', () => {
-    expect(depthMatchDefault('split', false)).toBe(false)
-    expect(depthMatchDefault('split', true)).toBe(false)
-  })
-
-  it('matches depth on raw counts under a derived operation', () => {
-    expect(depthMatchDefault('ratio', false)).toBe(true)
-    expect(depthMatchDefault('difference', false)).toBe(true)
-  })
-
-  it('leaves balanced values alone, which already share a normalisation', () => {
-    // The regression: a ratio of two balanced matrices was rescaled by the
-    // gain above, with no control to turn it off and nothing on screen to say
-    // it had happened.
-    expect(depthMatchDefault('ratio', true)).toBe(false)
-    expect(depthMatchDefault('difference', true)).toBe(false)
-  })
-})
-
 // ---------------------------------------------------------------------------
 // The gate
 // ---------------------------------------------------------------------------
@@ -218,6 +155,7 @@ function opened(over: Partial<OpenResult> = {}): OpenResult {
     hasWeights: false,
     scoreColumns: ['count'],
     sourceBytes: 1,
+    contacts: null,
     sourceKind: 'remote',
     ...over,
   }

@@ -16,7 +16,7 @@ import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
-} from './MatrixPanel'
+ type FigureSubject} from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { SearchBox } from './SearchBox'
@@ -96,7 +96,7 @@ export interface GenomeViewProps {
    */
   annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
   /** Genomes one step away in display order, for the `‹ ›` buttons. */
   neighbours?: { prev: string | null; next: string | null }
   onStep?(delta: number): void

@@ -884,6 +884,14 @@ picture belong. It spent a release as the second crumb, between the file name an
 read as *this file, then this resolution, then these chromosomes* and put a control readers change
 constantly at the one end of the row they scroll past on the way to the box they type in.
 
+**Past the resolution, at the far end of the bar, the total the maps are drawn to** (§6.5): a box
+labelled *contacts*, empty and showing the map's own total in grey until a reader types one, and —
+with two maps or more on screen — two chevrons after it that type the shallowest map's total or the
+deepest's. It is on the bar rather than on a card for the reason the resolution is: it is a control
+over the whole picture, and over every task, not a step of the trail. It is one element for the life
+of the file, re-seated at the end of the row on every render rather than rebuilt with it, because the
+trail is redrawn on every pan and a box rebuilt under the cursor loses what is being typed into it.
+
 **A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
 `resolution  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an exception
 to it: a control that cannot keep its promise is absent rather than greyed, and a plain `.cool` is
@@ -971,16 +979,18 @@ reader closed nothing. What carries is the **bin size** rather than the URI, sin
 a ladder of its own: `rep2.mcool::/resolutions/1000` beside a 1 kb map is `…/5000` beside a 5 kb one,
 looked up in that file's own entries and refused where it has no such rung — which is the bin-size
 clause above, seen from the other side, and is said on the card rather than left to be discovered.
-The reading carries with it: the operation, the depth match, and whether the second triangle was
-hidden.
+The reading carries with it: the operation, and whether the second triangle was hidden.
 
 **Turned, the pair is two bands rather than two triangles** (§17.2). Either map, here or in a deck,
 can also be given a name of its own (§16.10).
 
-One colour scale by default, because the same colour meaning the same count is the stronger claim.
-A **match-depth** option scales the second file so its 99th percentile meets the first's — the same
-order statistic §7.1 picks `vmax` with — for the case that motivates it, two libraries of different
-depth. Two colourbars then read the same colours in each file's own counts.
+One colour scale, because the same colour meaning the same count is the stronger claim, and two
+libraries of different depth are brought to one depth by **drawing both to one total** (§6.5) — the
+chevrons after the breadcrumb's *contacts* box do it in one press — rather than by rescaling the
+colours of one. The second key carries the first's numbers, which is what it says: the two triangles
+are on one scale. A **match depth** switch used to scale the second file so its 99th percentile met
+the first's; it is gone, because it matched the picture and nothing else — the number under the
+pointer, and every task run on either file, were still each file's own depth.
 
 This is the design for **two** files and it stays exactly as it is. §16 is the design for N, which is
 a weaker claim on the files and therefore a different picture; the two compose, and a session may
@@ -1414,6 +1424,99 @@ for the bins actually on screen, never the whole column, never `/bins/chrom`, an
 the user asked for balanced counts. §3.3's rule is that *coordinates* never come from `/bins`; they
 still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbalanced path.
 
+### 6.5 Drawn to a total — subsampled or oversampled
+
+**The last box on the breadcrumb is a number of contacts** (§5.5), labelled *contacts*. Empty, it
+shows the map's own total in grey — the `sum` that `cooler info` prints, 179,175,551 for the yeast
+micro-C — and every file is read as stored. A total typed into it draws **every map of the tab to
+that many contacts, each on its own**: subsampled where a map holds more, oversampled where it holds
+fewer. It reads a total the way a methods section or `cooler info` prints one — `10M`,
+`23,000,000`, `2.5e7`, `500k`, `1.2G` — and refuses, in the box and with nothing redrawn, anything
+that is not a positive whole number of contacts (`contacts.ts`, the one parser the box and the shell
+share). It commits on Enter or on leaving the box rather than per keystroke: `1`, `10` and `10M` on
+the way to the number wanted are not three requests to walk the file. Escape puts back what is in
+force; an emptied box puts back the files as stored. The total is in the link (`contacts=`) and,
+like `cells` (§3.8), belongs to the file rather than to the view: it survives a navigation into a
+chromosome and back out.
+
+**A subsample is `cooltools random-sample --count N --exact`**: `N` of the file's `T` contacts, every
+subset of that size equally likely, so each pixel keeps a hypergeometric share of its own and the
+total is exactly `N`. `--exact` is not offered as a choice, because it is not one: a map captioned
+*10,000,000 contacts* that holds 9,998,213 is the thing this box exists not to draw. cooltools holds
+the whole map to do it, and a viewer reads a window at a time, so the draw is split where its
+distribution splits exactly (`metacooler/resample.ts`):
+
+1. **A census**, once per map: one walk over every stored pixel for each sequence pair's contacts.
+   It does not depend on `N`, so a second total costs no second walk.
+2. **A split**: each pair's share of `N`, hypergeometric in what is left — a handful of draws.
+3. **A band**, on the first read of a sequence: its own block and every block to its right, each
+   drawn to its share pixel by pixel in `(bin1, bin2)` order, from a generator seeded by the map's
+   seed and the block.
+
+The seed is fixed, so the same total is the same map in every view, in both workers, after a reload
+and in the shell. The pixels follow cooltools' distribution and not its generator: a numpy stream is
+not reproducible from here, and a subsample is a draw, not a file.
+
+**An oversample is Boost-HiC** (Carron et al., *Bioinformatics* 2019), ported from its Python
+(`metacooler/boost.ts`) and held to it by a golden file that Python writes
+(`scripts/make_boost_golden.py`): every contact the file has, plus `N − T` more drawn with
+replacement from a probability map. Within a sequence the map is Boost-HiC's boosted matrix —
+outlier bins taken out by a kernel density on their coverage, ten rounds of SCN, Floyd–Warshall on
+`1/cᵅ` with `main.py`'s `α = 0.2`, back to contacts, and the decay with distance put back window by
+window — returned **in the file's own counts** rather than in SCN units. Between sequences, which
+Boost-HiC does not model, the map is the file's own pixels. Each pair's share of the new contacts is
+binomial in its share of the old, so the total is again exactly `N`. An oversample is an
+**inference** where a subsample is not, and everything that names a drawn map says which it was.
+
+Floyd–Warshall is cubic in a sequence's bins. It runs as a WebAssembly SIMD kernel
+(`wasm/floyd.c`, built by `npm run wasm:floyd` and committed as base64, bit-identical to the
+TypeScript loop it falls back to), which walks yeast's chromosome IV at 1 kb — 1,532 bins — in about
+a second and a half. Past **3,000 bins** in one sequence the wait is a refusal better said than
+suffered, and it is said by name: the sequence, its bins, the limit, and a coarser resolution as the
+way out.
+
+**Balanced reads stay on the file's scale.** A drawn map is `N/T` times the file in expectation, so
+each bin's weight is read times `√(T/N)` — where ICE run on the drawn map converges, up to the noise
+the draw added. Without it a subsample balanced with the file's weights reads `N/T` times fainter,
+and two maps drawn to one total would not be on one colour scale.
+
+**Every task reads the drawn map.** The drawn pixels stand behind the one `PixelStore` every read
+goes through (`metacooler/store.ts`), so the views, the pooled reads and every task of §18 get them
+without knowing. The analysis worker opens its own mount drawn to the same total and seed, handed the
+reader's census rather than walking the file again, and a block the view holds is lent to a task
+only when the two were drawn alike (§18.3). A task's framing says the depth —
+`subsampled to 10,000,000 contacts (of 179,175,551)` — and its line in the console carries
+`--contacts 10000000`, which `metacooler-run` takes with the same parser and the same seed (§23). A
+figure says it in its caption (§7.2).
+
+**Two maps or more are drawn map by map**, each to the one total, each subsampled or oversampled as
+its own depth requires. With two or more on screen — a deck (§16), or a second file in the lower
+triangle (§5.7) — two chevrons follow the box: **down** types the shallowest map's total, so every
+map is subsampled to it, and **up** the deepest's, so every map is oversampled to it through
+Boost-HiC. Matching depth is what a comparison draws a map to another total for, and those are the
+two totals it is matched at. A chevron is lit while the box holds its total and names, in its
+tooltip, the map whose total that is; both wait, disabled, while a map's total is still being
+counted, and the box's own tooltip lists every map's.
+
+**A `.hic` is counted.** Its header's `sumCounts` counts every contact off a chromosome's diagonal
+twice — the matrix both ways round — and the demo `.hic` declares 23,827,759 for its 13,681,280
+contacts, so that number would have sent the up chevron to a total the file never held. The reader
+counts the contacts instead, in the background, on the coarsest rung of the file (the same contacts
+in the fewest pixels), and the box shows them when they land.
+
+**What is refused, by name:** counts that are not whole or are negative (there is no contact to
+draw); a `square` file, which stores every contact twice; an `.scool`, whose map is a sum of cells
+rather than one library; a value column other than `count` while the map is drawn, since a drawn map
+is drawn from its contacts; and, for an oversample, a sequence past Boost-HiC's limit. The refusal
+takes the map's place — the tab's first map's page offers **read as stored**, and a companion says it
+in its own frame — and the box turns red with the reason as its tooltip: a map drawn from the stored
+counts under a total that says otherwise would be the one wrong answer.
+
+**What it costs is a walk and a band.** The census reads every stored pixel once per map, and is
+handed to every worker that draws the same map. A drawn band is kept while 192 MiB allows, the
+oldest redrawn identically when it is read again past that; an oversample adds Boost-HiC for each
+sequence as its band is drawn.
+
 ---
 
 ## 7. Rendering
@@ -1581,6 +1684,10 @@ a raster rasterised at a number they could no longer see or change.
 **The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
 what it shows: the region on the first line, then the file, the bins, the score, the colour range
 and when it was made; a 1D browser figure names its genome, its window and the date on one line.
+A map drawn to another total than its file's (§6.5) says so after the file's name —
+`subsampled to 10,000,000 contacts (of 179,175,551)`, or `oversampled to … (of …, Boost-HiC)` —
+because a figure travels without the box that drew it, and a subsample, an inference and the file
+itself are three different claims; a map read as stored says nothing, as it always has.
 Both are set in the axis labels' grey — the region at 11 px and weight 600, the rest at 10 px,
 before the text size is applied — because at 15 px and semibold in the page's ink the region was the
 largest type on the page and drew the eye away from the picture it names. Both Export cards carry a
@@ -4438,9 +4545,11 @@ a black rectangle. There it takes the transform and the ramp and finds its own b
 The clip is still the panel's own from then on. `vmax` is a number of contacts, and two libraries sequenced to
 different depths do not have the same one — one clip across a deck draws the shallower file as an
 empty rectangle. This is §5.7's argument reached from the other side: there, one grid forces one
-scale and the second file is rescaled onto it with **match depth**; here, two grids allow two scales,
-and a reader who knows the libraries are comparable presses **match all scales**, which copies the
-starred map's clip onto every panel once (§16.5). A press rather than a setting, because a setting
+scale, and a second file of another depth is drawn to the first's total (§6.5) rather than rescaled;
+here, two grids allow two scales. Drawing every map to one total, with the chevrons after the
+breadcrumb's *contacts* box, puts the libraries themselves at one depth; a reader who knows they are
+comparable as stored presses **match all scales**, which copies the starred map's clip onto every
+panel once (§16.5). A press rather than a setting, because a setting
 could not keep its promise: left on, every later nudge of any panel's clip either had to be undone
 or left the deck claiming a shared scale it no longer had. After the press each clip is honestly its
 panel's own again, which is the stronger claim made only where it is true.
@@ -5638,8 +5747,8 @@ which would neuter the array the heatmap is drawing from.
 ### 18.4 The framing is an input, and it is a snapshot
 
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
-row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
-is on.
+row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
+is on, and the total the map is drawn to (§6.5).
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's

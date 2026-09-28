@@ -2637,6 +2637,69 @@ p {
   border-color: var(--border);
 }
 
+/* The *contacts* box (§6.5), past the resolution at the far end of the row:
+   the total every map is drawn to. It takes the free space itself where there
+   is no resolution row before it — a lone map with no ladder — and sits beside
+   that row where there is, the two of them reading as *how the picture is
+   drawn*. Kept whole when the trail scrolls, as the resolution is. */
+.crumb-contacts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-left: 0.75rem;
+  flex: 0 0 auto;
+}
+
+.breadcrumb > .crumb-contacts {
+  margin-left: auto;
+}
+
+.breadcrumb > .crumb-res + .crumb-contacts {
+  margin-left: 0;
+}
+
+/* Wide enough for a total in the hundreds of millions, grouped; its numbers
+   right-aligned and in the stops' face, so a total and a bin size are read the
+   same way along the row. The file's own total is the placeholder, in the grey
+   the origin column's `1` is in: shown, and not yet a choice. */
+.input.contacts-input {
+  width: 7.2rem;
+  padding: 0.1rem 0.35rem;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+
+.input.contacts-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* A number in force: every map on screen is drawn to it, and nothing on the
+   maps themselves looks different, so the box is where that is said. */
+.input.contacts-input.is-set {
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.input.contacts-input.is-refused {
+  border-color: var(--danger);
+}
+
+/* Refused while the reader is still in it: the focus ring says so too, since a
+   ring in the accent colour over a red border reads as accepted. */
+.input.contacts-input.is-refused:focus {
+  outline-color: var(--danger);
+}
+
+/* The two chevrons of a deck: match every map to the shallowest or the
+   deepest. The size of the `+` beside the ladder. */
+.contacts-match {
+  padding: 0.1rem 0.15rem;
+  line-height: 0;
+}
+
 /* --- asking for one (`ui/ResolutionDialog.ts`) -------------------------- */
 
 .res-ask-row {

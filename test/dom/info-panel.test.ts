@@ -69,6 +69,7 @@ function openResult(over: Partial<OpenResult> = {}): OpenResult {
     hasWeights: true,
     scoreColumns: ['count'],
     sourceBytes: 1_234_567,
+    contacts: null,
     sourceKind: 'local',
     ...over,
   }

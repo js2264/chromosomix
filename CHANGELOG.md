@@ -14,6 +14,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every map drawn to one number of contacts (§6.5).** A box labelled *contacts* ends the
+  breadcrumb, showing the map's own total in grey — the `sum` of `cooler info`, 179,175,551 for the
+  yeast micro-C. A total typed into it — `10M`, `23,000,000`, `2.5e7` — draws every map of the tab
+  to that many contacts, **the whole file, not the window on screen**: subsampled where a map holds
+  more, exactly as `cooltools random-sample --count N --exact` does (a uniform subset of `N`
+  contacts, drawn a sequence at a time from a census of the map rather than held whole), and
+  oversampled where it holds fewer, through a port of Boost-HiC (Carron et al. 2019): every stored
+  contact kept, and `N − T` more drawn from the boosted map within each sequence and from the file's
+  own pixels between them. Every picture, pooled read and task reads the drawn map, balanced values
+  stay on the file's scale, and the total is in the link (`contacts=`) and survives a navigation. A
+  task's framing and its console command say it (`--contacts N`, which `metacooler-run` takes with
+  the same parser and the same seed), and so does an exported figure's caption:
+  `subsampled to 10,000,000 contacts (of 179,175,551)`. With two maps or more on screen — a deck,
+  or a second file under the diagonal — two chevrons follow the box: down draws every map to the
+  shallowest one's total, up to the deepest one's. A `.hic`'s total is counted rather than taken
+  from its header, which counts each contact off a chromosome's diagonal twice. Refused by name: a
+  total that is not a whole number, counts that are not contacts, a `square` file, an `.scool`, and
+  an oversample of a sequence past 3,000 bins — Boost-HiC's Floyd–Warshall, run here as a
+  WebAssembly SIMD kernel, is cubic in them — with *read as stored* offered where the map was.
+
 - **Maps are reordered on the Contact maps card (§16.9).** The card lists the maps in the grid's
   order — the first map where its cell stands, no longer always first — and a row dragged up or down
   it moves the map's cell: let go above another map's row it goes before it, below it after it, and
@@ -1304,6 +1324,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   first column rather than printing the index its bar stands at.
 
 ### Removed
+
+- **Match depth, on a map with a second file under the diagonal (§5.7).** The switch scaled the
+  second file's counts so its 99th percentile met the first's: it matched the picture, and left the
+  number under the pointer and every task at each file's own depth. The chevrons after the
+  breadcrumb's *contacts* box match the files themselves (§6.5). A ratio or a difference of raw
+  counts, which the switch was on for by default, is now of the counts as drawn: across two depths,
+  draw both files to one total first. Sessions that stored the switch open without it.
 
 - **Panning round a circular chromosome (§8.15).** A pan past the end of a declared circle no
   longer reads its way round to the beginning: it stops at the sequence's end, as on a line. `ori`

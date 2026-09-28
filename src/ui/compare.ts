@@ -30,8 +30,6 @@ export function presentationOf(compare: CompareRead | undefined): ComparePresent
   if (compare === undefined) return undefined
   return {
     labels: compare.labels,
-    normalise: compare.normalise,
-    onNormaliseChange: (on) => compare.onNormaliseChange(on),
     op: compare.op,
     onOpChange: (op) => compare.onOpChange(op),
   }

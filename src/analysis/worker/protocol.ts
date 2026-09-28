@@ -37,6 +37,7 @@ import type {
   SourceSpec,
 } from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
+import type { Census } from '../../metacooler/resample'
 import type { SmoothedField } from '../../render/derive'
 import type { Smoothing } from '../../render/smooth'
 import type { AnalysisFraming, Params, TaskResult } from '../types'
@@ -98,6 +99,23 @@ export interface PeerMap {
   source: SourceSpec
   cells?: readonly string[]
   binning?: PairsBinning
+  /** The total this map is drawn to, as the reader draws it (§6.5). */
+  resample?: ResampleTarget
+}
+
+/**
+ * A map drawn to another total (§6.5), as a mount in this worker is told it.
+ *
+ * The same spec the reader was given, so the two mounts draw the same pixels —
+ * the draw is seeded, and the seed and total are all it depends on — and the
+ * reader's census of the map, so this mount need not walk every pixel again to
+ * learn what the reader already counted.
+ */
+export interface ResampleTarget {
+  contacts: number
+  seed?: number
+  alpha?: number
+  census?: Census
 }
 
 export interface TaskInputs {
@@ -213,6 +231,12 @@ export type AnalysisRequest =
        * the mount with a refusal the reader had already answered.
        */
       binning?: PairsBinning
+      /**
+       * The total the reader drew this map to (§6.5). Absent is the file as
+       * stored. Every task reads the drawn map, so a task run at a matched depth
+       * measures that depth and not the file's.
+       */
+      resample?: ResampleTarget
     }
   | {
       id: number

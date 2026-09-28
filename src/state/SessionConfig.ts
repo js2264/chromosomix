@@ -207,8 +207,6 @@ export interface SessionConfig {
   /** Per-group stacking and scaling, by group name. */
   groups: GroupModes
   scaling: GroupModes
-  /** Whether the compared file's counts are scaled to the first's bright end. */
-  compareNormalise: boolean
   /** Sort, search and column filters for the two tables. */
   tables: { genomes?: TableUiState; contigs?: TableUiState }
   /**
@@ -442,7 +440,6 @@ const SCOPES = {
   resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
-  normalise: 'compare:normalise',
   genomes: 'table:genomes',
   contigs: 'table:contigs',
   analysis: ANALYSIS_SCOPE,
@@ -510,7 +507,6 @@ export function buildConfig(options: {
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
-    compareNormalise: recall<boolean>(key, SCOPES.normalise) ?? false,
     tables: {
       ...tableOf('genomes', recall<TableUiState>(key, SCOPES.genomes)),
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
@@ -616,7 +612,6 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   }
   remember(key, SCOPES.groups, config.groups)
   remember(key, SCOPES.scaling, config.scaling)
-  remember(key, SCOPES.normalise, config.compareNormalise)
   if (config.tables.genomes !== undefined) remember(key, SCOPES.genomes, config.tables.genomes)
   if (config.tables.contigs !== undefined) remember(key, SCOPES.contigs, config.tables.contigs)
   // Absent from every config written before §18 existed, and a missing key is
@@ -805,7 +800,6 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     // did not know about left at their defaults.
     analysis: analysisRecord(row['analysis']),
     figures: analysisRecord(row['figures']) as FigureMemory,
-    compareNormalise: row['compareNormalise'] === true,
     tables: {
       ...tableOf('genomes', table(tables['genomes'])),
       ...tableOf('contigs', table(tables['contigs'])),

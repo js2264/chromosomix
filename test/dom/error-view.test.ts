@@ -54,22 +54,31 @@ interface Built {
   pickers: number
   retries: number
   signedIn: number
+  asStored: number
   entries: string[]
 }
 
 function build(
   error: unknown,
-  options: { onRetry?: boolean; onOpenEntry?: boolean; onSignedIn?: boolean } = {},
+  options: { onRetry?: boolean; onOpenEntry?: boolean; onSignedIn?: boolean; onReadAsStored?: boolean } = {},
 ): Built {
   let pickers = 0
   let retries = 0
   let signedIn = 0
+  let asStored = 0
   const entries: string[] = []
   const view = new ErrorView({
     error,
     onOpenFilePicker: () => {
       pickers++
     },
+    ...(options.onReadAsStored === true
+      ? {
+          onReadAsStored: (): void => {
+            asStored++
+          },
+        }
+      : {}),
     ...(options.onRetry === true
       ? {
           onRetry: (): void => {
@@ -100,6 +109,9 @@ function build(
     },
     get signedIn() {
       return signedIn
+    },
+    get asStored() {
+      return asStored
     },
   }
 }
@@ -191,6 +203,41 @@ describe('what it offers to do about it', () => {
       new ViewerError('entry-not-found', 'no such entry', { entries: 'rep1' }),
       { onOpenEntry: true },
     )
+    expect(buttonLabels(built.view.el)).toEqual(['open another file'])
+  })
+})
+
+describe('a total the contacts box asked for that a map cannot be drawn to', () => {
+  // `unsupported` by code, like the operations the browser deliberately never
+  // runs — but the CLI refuses this one in the same words, so its advice would
+  // send a reader to the same refusal (§6.5).
+  const boost = (): ViewerError =>
+    new ViewerError(
+      'unsupported',
+      'NC_000913.3 is 4,642 bins at this resolution, and Boost-HiC — which oversamples it — walks every path between them: at most 3,000. Open a coarser resolution to oversample this map.',
+      { sequence: 'NC_000913.3', bins: 4642, limit: 3000, resample: true },
+    )
+
+  it('names the box as the way out, not a terminal', () => {
+    const { view } = build(boost())
+    expect(title(view)).toBe('Not drawn to that total')
+    expect(message(view)).toContain('at most 3,000')
+    const advice = textsOf(view.el, '.advice li').join(' ')
+    expect(advice).toContain('Empty the box')
+    expect(advice).not.toContain('metacooler CLI but not here')
+  })
+
+  it('offers the files as stored, where the caller can put them back', () => {
+    expect(buttonLabels(build(boost()).view.el)).toEqual(['open another file'])
+    const built = build(boost(), { onReadAsStored: true })
+    expect(buttonLabels(built.view.el)).toEqual(['read as stored', 'open another file'])
+    buttonNamed(built.view.el, 'read as stored')?.click()
+    expect(built.asStored).toBe(1)
+  })
+
+  it('leaves every other unsupported operation’s advice as it was', () => {
+    const built = build(new ViewerError('unsupported', 'no such read here'), { onReadAsStored: true })
+    expect(title(built.view)).toBe('Not available in the viewer')
     expect(buttonLabels(built.view.el)).toEqual(['open another file'])
   })
 })

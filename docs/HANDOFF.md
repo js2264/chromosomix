@@ -60,8 +60,11 @@ this is the index.
 - **ICE has a cell-visit budget** (`BALANCE_CELL_BUDGET`), because 200 rounds over
   a 4096² block is 3.3 billion visits on the main thread. It reports
   `converged: false` and the caption says so.
-- **Depth matching is forced on for `ratio` and `difference`** and its checkbox
-  hidden: there the depth scalar is a nuisance parameter with no reading.
+- **Two files of different depth are matched by drawing both to one total**
+  (SPECS §6.5, the breadcrumb's *contacts* box), never by a gain on one file's
+  colours: the *match depth* switch, which scaled the second file to the first's
+  99th percentile, is gone. A `ratio` or `difference` of raw counts across two
+  depths is that depth ratio everywhere until both are drawn to one total.
 
 **Diverging values needed three things to change together** — `log2` in
 `Transform`, `autoSymmetricRange`, and `RdBu_r`. Changing fewer produces a
