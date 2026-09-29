@@ -1,6 +1,13 @@
 {
-  "latest": "a80410c",
+  "latest": "ac37032",
   "versions": [
+    {
+      "commit": "ac37032",
+      "version": "0.13.0",
+      "date": "2026-09-29T10:58:10+02:00",
+      "subject": "Draw every map to one number of contacts: subsample or Boost-HiC (§6.5) (#78)",
+      "tag": ""
+    },
     {
       "commit": "a80410c",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "0a68e2b",
-      "version": "0.12.0",
-      "date": "2026-09-16T14:48:29+02:00",
-      "subject": "Redefine HiC score as mean of bin's line across near-diagonal (#63)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -205,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 78,
-      "commit": "20dead1",
-      "title": "Draw maps to a chosen number of contacts (§6.5)",
-      "branch": "js/relaxed-clarke-466ofi",
-      "date": "2026-09-28T18:00:54Z"
-    }
-  ]
+  "pulls": []
 }
