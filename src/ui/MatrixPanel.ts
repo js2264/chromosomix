@@ -7756,8 +7756,15 @@ export class MatrixPanel {
     // pointed at in the structure cell is a line down and a line across the
     // map, where the tick at the edge alone left the reader to find it.
     const rows = this.locusAxes.rows?.locusToUnits(locus.contig, locus.bp) ?? []
+    // Turned, the echo is the V the place makes, and a place just off the side
+    // of the block still has an arm reaching into it — placed by extending its
+    // stretch, as a line the reader drew is (`drawManualLines`). The tick at the
+    // lanes' edge above needs an edge to stand on, and keeps the landing alone.
+    const cols =
+      units[0] ??
+      (this.turned === null ? null : (this.locusAxes.cols?.locusToUnit(locus.contig, locus.bp) ?? null))
     this.heatmap.setLocusEcho(
-      units.length === 0 && rows.length === 0 ? null : { rows: rows[0] ?? null, cols: units[0] ?? null },
+      cols === null && rows.length === 0 ? null : { rows: rows[0] ?? null, cols },
     )
   }
 

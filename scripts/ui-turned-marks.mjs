@@ -10,11 +10,17 @@
  * zoom out that re-cuts the band (the V follows the new depth), and a pan that
  * leaves a place just off the side of the picture with one arm reaching in.
  *
- * It prints, for every step, where each line lands on the map's axis, so a V
- * that is not standing on its lane line is a line here too.
+ * Last, a bead of the demo's structure hovered in the 3D cell beside the turned
+ * map (§25.4): its echo on the map is the same V, dashed, where it was a dashed
+ * line straight up the band.
+ *
+ * It prints what each step framed, and the bead the readout named, so a hover
+ * that found nothing is a line here too.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-turned-marks.mjs [out-dir]
+ *
+ * `GALLERY_ONLY=lines` or `bead` runs one part.
  */
 
 import { createRequire } from 'node:module'
@@ -35,6 +41,7 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
+const ONLY = process.env.GALLERY_ONLY ?? ''
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath =
@@ -44,12 +51,21 @@ const browser = await chromium.launch({
   ...(executablePath === undefined ? {} : { executablePath }),
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 })
-const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 })).newPage()
 const errors = []
-page.on('pageerror', (e) => errors.push(String(e)))
-page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text())
-})
+let page = null
+/**
+ * A browser with no memory of the part before it. The app keeps its workspace
+ * across a reload — the turn, the window, the marks — so a second part opened
+ * in the first one's context arrives turned and panned where the first left it.
+ */
+const fresh = async () => {
+  if (page !== null) await page.context().close()
+  page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 })).newPage()
+  page.on('pageerror', (e) => errors.push(String(e)))
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text())
+  })
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const shot = async (name) => {
   await page.screenshot({ path: `${OUT}/${name}.png` })
@@ -89,6 +105,19 @@ const regions = async () =>
       lanes: box(document.querySelector('.lane-stack, .lanes-bottom, .annotation-lanes')),
     }
   })
+const readout = () =>
+  page.evaluate(() => document.querySelector('.status-readout, .statusbar, footer')?.textContent ?? '')
+/** Open the yeast demo and turn its map; the turn is on the Map card, in Aesthetics. */
+const openTurned = async () => {
+  await fresh()
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
+  await page.waitForFunction(
+    () => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null,
+    null,
+    { timeout: 180000 },
+  )
+  await settle()
+}
 const settle = async () => {
   await sleep(1500)
   await page
@@ -102,13 +131,8 @@ const settle = async () => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
-  await page.waitForFunction(
-    () => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null,
-    null,
-    { timeout: 180000 },
-  )
-  await settle()
+  if (ONLY === '' || ONLY === 'lines') {
+  await openTurned()
   await fold('Fold the General panel')
   await fold('Fold the Aesthetics panel')
   await fold('Show the Annotations panel')
@@ -160,6 +184,53 @@ try {
   await settle()
   console.log('panned:', await page.evaluate(() => decodeURIComponent(location.hash).match(/region=[^&]*/)?.[0] ?? ''))
   await shot('tm05-turned-off-side')
+  }
+
+  if (ONLY === '' || ONLY === 'bead') {
+    // A bead of the structure, hovered beside the turned map: its echo on the
+    // map is the V its place makes, dashed.
+    await openTurned()
+    await fold('Fold the General panel')
+    await fold('Show the Annotations panel')
+    await page.evaluate(async (url) => {
+      const card = document.querySelector('.structure-card')
+      if (card === null) throw new Error('no Structures card')
+      const bytes = await (await fetch(url)).arrayBuffer()
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([bytes], 'Yeast_structure.g3d.gz', { type: 'application/gzip' }))
+      for (const kind of ['dragenter', 'dragover', 'drop']) {
+        card.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      }
+    }, `${BASE}/demo/yeast/Yeast_structure.g3d.gz`)
+    await page.waitForSelector('.deck-structure', { timeout: 60000 })
+    await sleep(5000)
+    await fold('Fold the Annotations panel')
+    await fold('Show the Aesthetics panel')
+    await page.locator('button[aria-label="Turn this map 45°, onto its diagonal"]').first().click()
+    await fold('Fold the Aesthetics panel')
+    await settle()
+    await page.click('.structure-frame').catch(() => {})
+    await sleep(1500)
+    // Sweep the model until the readout names a bead inside the map's window.
+    const canvas = page.locator('.structure-wrap canvas').first()
+    const b = await canvas.boundingBox()
+    let found = ''
+    if (b !== null) {
+      for (let j = 4; j < 28 && found === ''; j += 2) {
+        for (let i = 4; i < 28 && found === ''; i += 2) {
+          await page.mouse.move(b.x + (b.width * i) / 32, b.y + (b.height * j) / 32)
+          await sleep(40)
+          const said = await readout()
+          const at = /IV:([\d,]+)/.exec(said)
+          const bp = at === null ? NaN : Number(at[1].replaceAll(',', ''))
+          if (/bead \d+ of/.test(said) && bp > 1_060_000 && bp < 1_340_000) found = said
+        }
+      }
+    }
+    console.log('hovered bead:', found === '' ? 'none found in the window' : found.slice(0, 80))
+    await sleep(600)
+    await shot('tm06-bead-echo')
+  }
 } catch (error) {
   console.log('ERROR', error)
   await shot('tm-error')

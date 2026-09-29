@@ -42,7 +42,7 @@ node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reprod
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
 node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
 node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the lab's toy library: the .pairs binned on the fly, then a .pairs dropped on the .mcool's form, and an address: st01 … st09
-node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side: tm01 … tm05
+node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

@@ -18,6 +18,7 @@ import { applyColormap, colormapIndex } from './colormaps'
 import {
   anchorRays,
   cellAt as squareOf,
+  placeRays,
   rowForSeparation,
   turnedCentre,
   type RotateDirection,
@@ -1751,7 +1752,8 @@ export class HeatmapView {
    * A place named by a cell that is not a map — a bead of the structure cell
    * (§25.4) — as full lines across the plot on the axes that carry it, so a
    * reader looking at the map sees *where* the bead is, not a tick at the
-   * edge. `null` on an axis the place is not on.
+   * edge; on a turned map, as the V the place makes. `null` on an axis the
+   * place is not on.
    */
   private locusEcho: { rows: number | null; cols: number | null } | null = null
   /** The cell under the pointer, for the crosshair. `null` when outside. */
@@ -4340,7 +4342,19 @@ export class HeatmapView {
     this.changed()
   }
 
-  /** The lines of {@link locusEcho}: dashed, the crosshair's colour, the plot's height and width. */
+  /**
+   * The lines of {@link locusEcho}: dashed, the crosshair's colour, the plot's
+   * height and width — and on a turned map the V the place makes.
+   *
+   * **Turned, a place is not a column.** A column of a turned picture is
+   * contacts between two *other* places the whole height of the band, one of
+   * which is the bead only where it meets the diagonal; the contacts the bead's
+   * own place is in leave the diagonal along two 45° rays. So the echo is that
+   * V, one per band of a mirrored pair — the guide a pointer on a track draws
+   * across a turned map, and what a line the reader drew becomes there (§17.4),
+   * dashed as the echo always is. No snap: a 45° line cannot be put on the
+   * device grid.
+   */
   private drawLocusEcho(): void {
     const at = this.locusEcho
     if (at === null || this.matrix === null) return
@@ -4356,19 +4370,28 @@ export class HeatmapView {
     ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
     ctx.setLineDash([4, 3])
     ctx.beginPath()
-    if (at.cols !== null) {
-      const x = this.snap(origin.x + this.colScale.toPixel(at.cols))
-      if (x >= plot.x && x <= plot.x + plot.width) {
-        ctx.moveTo(x, plot.y)
-        ctx.lineTo(x, plot.y + plot.height)
+    const turn = this.turn
+    if (turn !== null) {
+      if (at.cols !== null) {
+        for (const ray of placeRays({ ...turn, nrows: this.matrix.nrows }, at.cols)) {
+          ctx.moveTo(origin.x + this.colScale.toPixel(ray.from.col), origin.y + this.rowScale.toPixel(ray.from.row))
+          ctx.lineTo(origin.x + this.colScale.toPixel(ray.to.col), origin.y + this.rowScale.toPixel(ray.to.row))
+        }
       }
-    }
-    // A turned map has one axis of position; its rows are separation.
-    if (at.rows !== null && this.turn === null) {
-      const y = this.snap(origin.y + this.rowScale.toPixel(at.rows))
-      if (y >= plot.y && y <= plot.y + plot.height) {
-        ctx.moveTo(plot.x, y)
-        ctx.lineTo(plot.x + plot.width, y)
+    } else {
+      if (at.cols !== null) {
+        const x = this.snap(origin.x + this.colScale.toPixel(at.cols))
+        if (x >= plot.x && x <= plot.x + plot.width) {
+          ctx.moveTo(x, plot.y)
+          ctx.lineTo(x, plot.y + plot.height)
+        }
+      }
+      if (at.rows !== null) {
+        const y = this.snap(origin.y + this.rowScale.toPixel(at.rows))
+        if (y >= plot.y && y <= plot.y + plot.height) {
+          ctx.moveTo(plot.x, y)
+          ctx.lineTo(plot.x + plot.width, y)
+        }
       }
     }
     ctx.stroke()

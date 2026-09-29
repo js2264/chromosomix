@@ -571,7 +571,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now as the two 45° rays of contacts its place anchors, standing on the axis at its position — the
   same V a pointer on a track draws there — and carries on straight down the lanes from the V's apex.
   One V per band of a mirrored pair; a horizontal line is the same V, and now continues down the lanes
-  too; and a place just off the side of the picture still draws the arm that reaches into it.
+  too; and a place just off the side of the picture still draws the arm that reaches into it. A bead
+  hovered in the structure cell is echoed on a turned map as the same V, dashed, where it was a dashed
+  line straight up the band (§25.4).
 
 - **P(s) asks for no file on a map binned from a `.pairs` (§18.8).** The import counts the four
   orientations in its own pass (§3.7), and the run already took them from there when the address box

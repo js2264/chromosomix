@@ -9314,8 +9314,10 @@ offered, having nothing to act on. The deck's count of maps says nothing of a de
 ### 25.4 Hover, both ways
 
 A bead under the pointer is a place on every map and every lane: the maps draw it as a **dashed line
-down and across the heatmap** on each axis the place is on (one line on a turned map, whose rows are
-separation), and as the tick at the edge of the stacks the lanes already give a pointer on another
+down and across the heatmap** on each axis the place is on — on a turned map, whose rows are
+separation, as the dashed **V** the place makes, the two 45° rays of contacts it anchors, as a line
+the reader drew is (§17.4), where a straight line up the band ran through contacts between two other
+places — and as the tick at the edge of the stacks the lanes already give a pointer on another
 panel's track; the status bar names the bead, **and so does the cell's own corner**, which is where
 a reader looking at the model is looking — one place for a bead, the pair and their distance for a
 contact named by a map. The corner is not gated with the *tooltip* switch: that switch is about the
