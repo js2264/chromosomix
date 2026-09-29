@@ -40,12 +40,70 @@ export interface LocusSegment {
   unitStart: number
   /** One past its last cell. */
   unitEnd: number
-  /** Base-pair position of the left edge of cell {@link unitStart}. */
+  /**
+   * Base-pair position of the left edge of cell {@link unitStart}. On a
+   * reversed stretch that edge is the stretch's **high** end.
+   */
   bpStart: number
-  /** Base pairs per matrix cell: the bin size, or the whole contig above it. */
+  /** Base pairs per matrix cell: the bin size, or the whole contig above it. Always positive. */
   bpPerUnit: number
   /** The contig's length, which is where its coordinates stop. */
   contigLength: number
+  /**
+   * Which way the stretch reads along the axis (SPECS §27.2). `-1` is a piece
+   * of an edited sequence read backwards: base pairs *fall* as the unit rises.
+   * Absent is `1`, which is every axis there is without an edit — so no caller
+   * that never meets an edit has to know this exists. Read it through
+   * {@link bpAt} and {@link unitAt}, never by hand.
+   */
+  strand?: 1 | -1
+  /**
+   * The stretch of {@link contig} this segment may draw, half-open — the piece
+   * of an edited sequence it is. Absent is the whole contig. A query is clipped
+   * to it: a window padded past a piece's end would fetch the next stretch of
+   * the original and draw it inside whatever piece comes next on the axis.
+   */
+  bpFrom?: number
+  bpTo?: number
+}
+
+/** The strand a segment reads in. */
+export function strandOf(segment: LocusSegment): 1 | -1 {
+  return segment.strand ?? 1
+}
+
+/**
+ * Matrix coordinate → base pair within one stretch, either way round.
+ *
+ * The one place the arithmetic is written. It was written inline at a dozen
+ * call sites, each assuming a forward stretch — which was true until an edit
+ * could turn a piece round (§27.2), and then would have been true nowhere that
+ * mattered.
+ */
+export function bpAt(segment: LocusSegment, unit: number): number {
+  const offset = (unit - segment.unitStart) * segment.bpPerUnit
+  return strandOf(segment) === 1 ? segment.bpStart + offset : segment.bpStart - offset
+}
+
+/** Base pair → matrix coordinate within one stretch, either way round. */
+export function unitAt(segment: LocusSegment, bp: number): number {
+  const offset = (strandOf(segment) === 1 ? bp - segment.bpStart : segment.bpStart - bp) / segment.bpPerUnit
+  return segment.unitStart + offset
+}
+
+/** The stretch of its contig a segment may draw: its piece, or the whole contig. */
+export function stretchOf(segment: LocusSegment): [number, number] {
+  return [segment.bpFrom ?? 0, segment.bpTo ?? segment.contigLength]
+}
+
+/**
+ * A feature `[start, end)` placed on a stretch: its two unit edges, lowest
+ * first — a reversed stretch draws a feature's end on its left.
+ */
+export function unitSpan(segment: LocusSegment, start: number, end: number): [number, number] {
+  const a = unitAt(segment, start)
+  const b = unitAt(segment, end)
+  return a <= b ? [a, b] : [b, a]
 }
 
 /** A base-pair position on a named contig. */
@@ -126,6 +184,18 @@ export class LocusAxis {
   }
 
   /**
+   * **Every** stretch of a contig on this axis, in axis order.
+   *
+   * One on most axes. Two where a circular sequence is panned across its own
+   * junction (§8.15), and as many as there are pieces of it where the axis is
+   * of an edited sequence (§27.2) — each drawing only its own stretch, which is
+   * why a renderer that places data asks this rather than {@link segmentOf}.
+   */
+  segmentsOf(contig: string): LocusSegment[] {
+    return this.segments.filter((segment) => segment.contig === contig)
+  }
+
+  /**
    * This axis's copy of a stretch that came from **another** axis.
    *
    * Both axes of a symmetric block carry the same sequences, and on a circular
@@ -141,7 +211,7 @@ export class LocusAxis {
     let fallback: LocusSegment | null = null
     for (const candidate of this.segments) {
       if (candidate.contig !== segment.contig) continue
-      if (candidate.bpStart === segment.bpStart) return candidate
+      if (candidate.bpStart === segment.bpStart && strandOf(candidate) === strandOf(segment)) return candidate
       if (fallback === null) fallback = candidate
     }
     // A block whose two axes are windows on *different* parts of one sequence is
@@ -176,8 +246,8 @@ export class LocusAxis {
   unitToLocus(unit: number): Locus | null {
     const segment = this.segmentAt(unit)
     if (segment === null) return null
-    const bp = segment.bpStart + (unit - segment.unitStart) * segment.bpPerUnit
-    return { contig: segment.contig, bp: clamp(bp, 0, segment.contigLength) }
+    const [from, to] = stretchOf(segment)
+    return { contig: segment.contig, bp: clamp(bpAt(segment, unit), from, to) }
   }
 
   /**
@@ -188,9 +258,26 @@ export class LocusAxis {
    * rather than one that resolves a place.
    */
   locusToUnit(contig: string, bp: number): number | null {
-    const segment = this.byContig.get(contig)
+    const segment = this.holding(contig, bp) ?? this.byContig.get(contig)
     if (segment === undefined || segment.bpPerUnit <= 0) return null
-    return segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
+    return unitAt(segment, bp)
+  }
+
+  /**
+   * The first stretch of a contig whose piece holds `bp`, or `undefined`.
+   *
+   * On an axis with no edit every stretch of a contig may draw the whole of
+   * it, so this is the first stretch, as it always was; on an edited one the
+   * pieces of one original are disjoint, and a place belongs to the piece
+   * that holds it — or, set aside, to none.
+   */
+  private holding(contig: string, bp: number): LocusSegment | undefined {
+    for (const segment of this.segments) {
+      if (segment.contig !== contig) continue
+      const [from, to] = stretchOf(segment)
+      if (bp >= from && bp <= to) return segment
+    }
+    return undefined
   }
 
   /**
@@ -208,7 +295,9 @@ export class LocusAxis {
     const out: number[] = []
     for (const segment of this.segments) {
       if (segment.contig !== contig || !(segment.bpPerUnit > 0)) continue
-      const unit = segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
+      const [from, to] = stretchOf(segment)
+      if (bp < from || bp > to) continue
+      const unit = unitAt(segment, bp)
       // Only where it actually falls inside this stretch: a lap's worth of axis
       // is a window on the sequence, and a position outside it is drawn by the
       // stretch that does hold it — or by none, which is right.
@@ -237,13 +326,17 @@ export class LocusAxis {
       const from = Math.max(segment.unitStart, d0)
       const to = Math.min(segment.unitEnd, d1)
       if (!(to > from)) continue
-      const bpFrom = segment.bpStart + (from - segment.unitStart) * segment.bpPerUnit
-      const bpTo = segment.bpStart + (to - segment.unitStart) * segment.bpPerUnit
-      const margin = (bpTo - bpFrom) * pad
+      // Low and high, whichever way the stretch reads.
+      const a = bpAt(segment, from)
+      const b = bpAt(segment, to)
+      const bpLow = Math.min(a, b)
+      const bpHigh = Math.max(a, b)
+      const margin = (bpHigh - bpLow) * pad
+      const [low, high] = stretchOf(segment)
       out.push({
         contig: segment.contig,
-        start: Math.max(0, Math.floor(bpFrom - margin)),
-        end: Math.min(segment.contigLength, Math.ceil(bpTo + margin)),
+        start: Math.max(low, Math.floor(bpLow - margin)),
+        end: Math.min(high, Math.ceil(bpHigh + margin)),
         unitFrom: from,
         unitTo: to,
         segment,
@@ -254,14 +347,10 @@ export class LocusAxis {
 
   /** Every stretch, as a whole-contig window. The widest a query can be. */
   fullWindows(): LocusWindow[] {
-    return this.segments.map((segment) => ({
-      contig: segment.contig,
-      start: 0,
-      end: segment.contigLength,
-      unitFrom: segment.unitStart,
-      unitTo: segment.unitEnd,
-      segment,
-    }))
+    return this.segments.map((segment) => {
+      const [start, end] = stretchOf(segment)
+      return { contig: segment.contig, start, end, unitFrom: segment.unitStart, unitTo: segment.unitEnd, segment }
+    })
   }
 }
 

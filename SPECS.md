@@ -10075,6 +10075,12 @@ beside the map on the stage.
 
 ### 27.2 The lens
 
+*Built so far*: the model — the steps, the history and its cursor, the names, and both directions
+of the mapping (`genome/edit.ts`) — and the axis every track, feature, sequence letter, read and
+overlay is drawn through, which now reads a stretch either way round and clips what it draws to the
+piece it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). Nothing on screen is edited until the
+stage is (§27.3).
+
 **An edit is drawn, never written back.** The file is read exactly as it would be without one; the
 lens maps between the original and the edited assembly, and everything on screen goes through it.
 Taking the lens away is taking the edit away.

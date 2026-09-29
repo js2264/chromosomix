@@ -139,7 +139,7 @@ import {
   type NameBox,
   progressDetail,
 } from '../render/laneLabel'
-import type { LocusAxis, LocusWindow } from '../render/locus'
+import { bpAt, type LocusAxis, type LocusWindow } from '../render/locus'
 import type { MapId } from '../annotations/placement'
 import { setHoverPlace } from './hoverLocus'
 import { Scale } from '../render/scale'
@@ -1592,10 +1592,13 @@ export class BrowserView {
       const lo = Math.max(d0, segment.unitStart)
       const hi = Math.min(d1, segment.unitEnd)
       if (!(hi > lo)) continue
+      // Low and high, whichever way the stretch reads (§27.2).
+      const a = bpAt(segment, lo)
+      const b = bpAt(segment, hi)
       out.push({
         contig: segment.contig,
-        start: segment.bpStart + (lo - segment.unitStart) * segment.bpPerUnit,
-        end: segment.bpStart + (hi - segment.unitStart) * segment.bpPerUnit,
+        start: Math.min(a, b),
+        end: Math.max(a, b),
         unitFrom: lo,
         unitTo: hi,
         segment,

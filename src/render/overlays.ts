@@ -21,7 +21,7 @@ import { featureRange } from '../annotations/featureset'
 import type { ManualArrowhead, ManualLine, ManualRect, ManualSpan } from '../annotations/manual'
 import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
 import type { Rect } from './heatmap'
-import type { LocusAxis } from './locus'
+import { stretchOf, unitSpan, type LocusAxis } from './locus'
 import { placeRays, rowForSeparation, type RotateDirection } from './rotate'
 import type { Scale } from './scale'
 
@@ -223,10 +223,15 @@ export function drawDiagonalFeatures(
       // draw everything on the far side of the join a sequence out (§8.15).
       const segment = window.segment
       if (!(segment.bpPerUnit > 0)) continue
-      const at = (bp: number): number =>
-        segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
-      const colFrom = at(set.start[i])
-      const colTo = at(set.end[i])
+      // Clipped to the piece this stretch is, and ordered: a reversed piece of
+      // an edited sequence (§27.2) puts a feature's end on its left. On an axis
+      // with no edit the stretch is the whole contig and the order already right.
+      const [colFrom, colTo] = unitSpan(
+        segment,
+        Math.max(set.start[i], stretchOf(segment)[0]),
+        Math.min(set.end[i], stretchOf(segment)[1]),
+      )
+      if (!(colTo > colFrom)) continue
 
       if (turn !== null) {
         const base = toY(frame, axisRow(turn))
@@ -277,10 +282,11 @@ export function drawDiagonalFeatures(
       // stretch there is, and `at` and `rowAt` are the same mapping.
       const rowSegment = rows?.like(segment) ?? null
       if (rowSegment === null || !(rowSegment.bpPerUnit > 0)) continue
-      const rowAt = (bp: number): number =>
-        rowSegment.unitStart + (bp - rowSegment.bpStart) / rowSegment.bpPerUnit
-      const rowFrom = rowAt(set.start[i])
-      const rowTo = rowAt(set.end[i])
+      const [rowFrom, rowTo] = unitSpan(
+        rowSegment,
+        Math.max(set.start[i], stretchOf(rowSegment)[0]),
+        Math.min(set.end[i], stretchOf(rowSegment)[1]),
+      )
 
       if (paint.shape === 'border') {
         // A short rule *across* the diagonal at the feature's midpoint: it

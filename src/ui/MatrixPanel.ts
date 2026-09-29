@@ -62,7 +62,7 @@ import {
   type KeyContent,
 } from '../render/legend'
 import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
-import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
+import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from '../render/locus'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
@@ -965,7 +965,7 @@ export function armsFor(
     const out = new Int32Array(count)
     for (const segment of axis?.segments ?? []) {
       for (let i = Math.max(0, segment.unitStart); i < Math.min(count, segment.unitEnd); i++) {
-        const bp = segment.bpStart + (i - segment.unitStart + 0.5) * segment.bpPerUnit
+        const bp = bpAt(segment, i + 0.5)
         const cell = Math.floor(bp / bpPerCell)
         out[i] = ((cell % cells) + cells) % cells
       }
@@ -9601,14 +9601,18 @@ export function onDiagonal(box: SelectionBox): boolean {
 export function bandRegion(axis: LocusAxis, span: [number, number]): PickedLocus | null {
   const segment = axis.segmentAt(span[0])
   if (segment === null) return null
-  const last = Math.min(Math.max(span[0], span[1] - 1), segment.unitEnd - 1)
-  const from = axis.unitToLocus(span[0])
-  const to = axis.unitToLocus(last)
-  if (from === null || to === null) return null
+  // The band's far edge: a cell on from where the hand went down at the least,
+  // and never past the stretch it went down in.
+  const far = Math.min(Math.max(span[0] + 1, span[1]), segment.unitEnd)
+  // Low and high, whichever way the stretch reads — a piece of an edited
+  // sequence turned round names its stretch from its right edge (§27.2).
+  const a = bpAt(segment, span[0])
+  const b = bpAt(segment, far)
+  const [low, high] = stretchOf(segment)
   return {
-    contig: from.contig,
-    start: Math.max(0, Math.round(from.bp)),
-    end: Math.min(segment.contigLength, Math.round(to.bp + segment.bpPerUnit)),
+    contig: segment.contig,
+    start: Math.max(low, Math.round(Math.min(a, b))),
+    end: Math.min(high, Math.round(Math.max(a, b))),
   }
 }
 

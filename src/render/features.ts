@@ -69,7 +69,7 @@ import {
   valueAcross,
   type LaneFrame,
 } from './lane'
-import type { LocusAxis } from './locus'
+import { stretchOf, strandOf, unitAt, type LocusAxis } from './locus'
 
 /** Where one feature ended up. `along` is in canvas pixels. */
 export interface FeaturePlacement {
@@ -78,6 +78,22 @@ export interface FeaturePlacement {
   along0: number
   along1: number
   row: number
+  /**
+   * Placed on a stretch read backwards — a reversed piece of an edited
+   * sequence (§27.2): its blocks run the other way along the axis, and the
+   * strand it is drawn with is its own turned round ({@link placedStrand}).
+   */
+  reversed?: boolean
+}
+
+/**
+ * The strand a placed feature has **on the axis**: its own, turned round where
+ * the stretch it is placed on is read backwards. What the arrow points by, the
+ * band it is packed in and the colour a strand key gives it.
+ */
+export function placedStrand(set: FeatureSet, placement: FeaturePlacement): number {
+  const own = sign(set.strand[placement.index])
+  return placement.reversed === true ? -own : own
 }
 
 export interface FeatureLayout {
@@ -177,6 +193,11 @@ export function layoutFeatures(
     // twice, and `segmentOf` would place the far half a sequence out (§8.15).
     const segment = window.segment
     if (!(segment.bpPerUnit > 0)) continue
+    // The piece this stretch is, on an edited axis: a feature across a cut is
+    // drawn to the cut and no further, since the rest of it is somewhere else
+    // on the axis — or, set aside, nowhere (§27.2). The whole contig otherwise.
+    const [lowBp, highBp] = stretchOf(segment)
+    const reversed = strandOf(segment) === -1
     const [from, to] = featureRange(set, contig, window.start, window.end)
     for (let i = from; i < to; i++) {
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue
@@ -188,11 +209,17 @@ export function layoutFeatures(
       // carry once it has stopped resolving individuals; it must be the truth.
       total++
       if (placements.length >= LAYOUT_CAP) continue
-      const u0 = segment.unitStart + (set.start[i] - segment.bpStart) / segment.bpPerUnit
-      const u1 = segment.unitStart + (set.end[i] - segment.bpStart) / segment.bpPerUnit
+      const u0 = unitAt(segment, Math.max(set.start[i], lowBp))
+      const u1 = unitAt(segment, Math.min(set.end[i], highBp))
       const along0 = frame.toPixel(u0)
       const along1 = frame.toPixel(u1)
-      placements.push({ index: i, along0: Math.min(along0, along1), along1: Math.max(along0, along1), row: 0 })
+      placements.push({
+        index: i,
+        along0: Math.min(along0, along1),
+        along1: Math.max(along0, along1),
+        row: 0,
+        ...(reversed ? { reversed: true } : {}),
+      })
     }
   }
 
@@ -231,7 +258,7 @@ export function layoutFeatures(
       : Math.max(
           ...spread.map(
             (strand) =>
-              placements.filter((placement) => sign(set.strand[placement.index]) === strand).length,
+              placements.filter((placement) => placedStrand(set, placement) === strand).length,
           ),
         )
   const dense = fullest > span / needed
@@ -275,7 +302,7 @@ export function layoutFeatures(
     let offset = 0
     for (let band = 0; band < bands.length; band++) {
       packRows(
-        placements.filter((placement) => sign(set.strand[placement.index]) === bands[band]),
+        placements.filter((placement) => placedStrand(set, placement) === bands[band]),
         offset,
         shares[band],
       )
@@ -417,7 +444,7 @@ export interface FeaturePaint {
    * The index is into the {@link FeatureSet}, not into the layout, because that
    * is what a placement carries and what the label pass already uses.
    */
-  colourOf?: (index: number) => string
+  colourOf?: (index: number, reversed?: boolean) => string
   /**
    * Point a stranded feature the way it runs.
    *
@@ -931,7 +958,11 @@ function forEachBlock(
   visit: (along0: number, along1: number, coding: boolean, point: number) => void,
 ): void {
   const index = placement.index
+  // The file's own strand picks *which* block is the tip, in base-pair order;
+  // the placed one says which way along the axis it points — the other way on
+  // a reversed piece, where the tip block is also mirrored to the other end.
   const strand = sign(set.strand[index])
+  const pointing = placedStrand(set, placement)
   const first = set.exonAt[index]
   const last = set.exonAt[index + 1]
   const cdsFrom = set.cdsStart[index]
@@ -941,12 +972,15 @@ function forEachBlock(
     // No parts: the feature is its own single block, at the placement's own
     // extent — which carries a variant's floor, so the mark drawn is the mark
     // the pointer finds (§8.14).
-    visit(placement.along0, placement.along1, true, strand)
+    visit(placement.along0, placement.along1, true, pointing)
     return
   }
   const start = set.start[index]
   const scale = (placement.along1 - placement.along0) / Math.max(1, set.end[index] - start)
-  const at = (bp: number): number => placement.along0 + (bp - start) * scale
+  const at = (bp: number): number =>
+    placement.reversed === true
+      ? placement.along1 - (bp - start) * scale
+      : placement.along0 + (bp - start) * scale
   // Each exon, split where the coding span begins and ends: an exon can hold an
   // untranslated end, the coding span, or — in a gene of one exon — both ends
   // and the span between them.
@@ -969,7 +1003,9 @@ function forEachBlock(
   for (let i = 0; i < parts.length; i++) {
     const [from, to, isCoding] = parts[i]
     if (!(to > from)) continue
-    visit(at(from), at(to), isCoding, i === tip ? strand : 0)
+    const a = at(from)
+    const b = at(to)
+    visit(Math.min(a, b), Math.max(a, b), isCoding, i === tip ? pointing : 0)
   }
 }
 
@@ -992,8 +1028,14 @@ function intronPath(
   if (last - first < 2) return
   const start = set.start[index]
   const scale = (placement.along1 - placement.along0) / Math.max(1, set.end[index] - start)
-  const from = placement.along0 + (set.exonEnd[first] - start) * scale
-  const to = placement.along0 + (set.exonStart[last - 1] - start) * scale
+  const at = (bp: number): number =>
+    placement.reversed === true
+      ? placement.along1 - (bp - start) * scale
+      : placement.along0 + (bp - start) * scale
+  const a = at(set.exonEnd[first])
+  const b = at(set.exonStart[last - 1])
+  const from = Math.min(a, b)
+  const to = Math.max(a, b)
   if (!(to > from)) return
   const [x, y, width, height] = laneRect(frame, from, to, centre - line / 2, centre + line / 2)
   ctx.rect(x, y, width, height)
@@ -1084,7 +1126,8 @@ function groupByInk(
 ): Map<string, FeaturePlacement[]> {
   const byInk = new Map<string, FeaturePlacement[]>()
   for (const placement of layout.placements) {
-    const ink = paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index)
+    const ink =
+      paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index, placement.reversed === true)
     const held = byInk.get(ink)
     if (held === undefined) byInk.set(ink, [placement])
     else held.push(placement)

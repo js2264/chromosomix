@@ -122,6 +122,26 @@ function nameOf(decoder: TextDecoder, bytes: Uint8Array, from: number, to: numbe
  * drawn window, and because it makes case-folding free — a soft-masked genome
  * writes its repeats in lower case, and a repeat is still a G.
  */
+/**
+ * The base on the other strand, byte for byte and case kept: `A`↔`T`, `C`↔`G`,
+ * and anything else — `N`, an IUPAC code — as it is. What a sequence lane draws
+ * on a reversed piece of an edited sequence (§27.2), and what an exported FASTA
+ * writes there.
+ */
+export function complementByte(byte: number): number {
+  switch (byte) {
+    case 65: return 84 // A → T
+    case 84: return 65
+    case 67: return 71 // C → G
+    case 71: return 67
+    case 97: return 116 // a → t
+    case 116: return 97
+    case 99: return 103 // c → g
+    case 103: return 99
+    default: return byte
+  }
+}
+
 export const BASE_CODE = ((): Uint8Array => {
   const table = new Uint8Array(256).fill(4)
   const set = (letter: string, code: number): void => {
