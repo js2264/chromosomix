@@ -70,6 +70,7 @@ function mount(options: { rename?: boolean } = {}): Mounted {
       nContigs: 16,
       binsize: 1000,
       sourceBytes: 1024,
+      contacts: null,
     } as never,
   })
   document.body.append(card.el)

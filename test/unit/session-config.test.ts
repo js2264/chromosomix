@@ -100,7 +100,6 @@ describe('buildConfig', () => {
     remember(key, 'bookmarks', [
       { id: 'b1', label: 'anchor_A', contig: 'IV', start: 400000, end: 460000, binsize: 1000 },
     ])
-    remember(key, 'compare:normalise', true)
     remember(key, 'table:contigs', { filters: {}, search: 'chr', sortKey: 'length', sortDir: -1 })
     remember(key, 'deck:starred', 'p2')
     remember(key, 'deck:columns', 3)
@@ -124,7 +123,6 @@ describe('buildConfig', () => {
     expect(config.sequences).toEqual(['IV', 'XII'])
     expect(config.groups).toEqual({ reads: 'overlay' })
     expect(config.scaling).toEqual({ reads: 'each' })
-    expect(config.compareNormalise).toBe(true)
     expect(config.tables.contigs?.search).toBe('chr')
     // Absent rather than present-and-empty: a table nobody sorted has no state,
     // and writing one would put a default back over a later default.
@@ -187,7 +185,6 @@ describe('buildConfig', () => {
     })
     expect(config.tracks).toEqual([])
     expect(config.sequences).toEqual([])
-    expect(config.compareNormalise).toBe(false)
   })
 })
 
@@ -360,7 +357,6 @@ describe('parseTab', () => {
     expect(read?.bookmarks).toEqual([])
     expect(read?.sequences).toEqual([])
     expect(read?.groups).toEqual({})
-    expect(read?.compareNormalise).toBe(false)
     expect(read?.tables).toEqual({})
   })
 

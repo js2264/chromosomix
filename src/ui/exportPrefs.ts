@@ -94,8 +94,9 @@ export function captionField(): HTMLElement {
     {
       class: 'field field-check',
       title:
-        'Write under the saved figure what it shows — the region, then the file, bins, score, ' +
-        'colour range and date. Off, the figure ends at its lowest track.',
+        'Write under the saved figure what it shows — the region, then the file, the total it ' +
+        'was drawn to where that is not the file’s own, bins, score, colour range and date. ' +
+        'Off, the figure ends at its lowest track.',
     },
     box,
     el('span', { class: 'field-label', text: 'caption' }),

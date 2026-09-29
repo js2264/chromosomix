@@ -25,9 +25,10 @@
  * regions is four unrelated pictures that happen to be adjacent. The colour
  * scale is per panel, and it has to be: `vmax` is a number of contacts, and two
  * libraries at different depths do not have the same one, so one clip across a
- * deck would draw the shallower file as an empty rectangle. That is the same
- * argument the two-file split settles with its "match depth" control, arrived
- * at from the other side.
+ * deck would draw the shallower file as an empty rectangle. Where the reader
+ * wants the files at one depth, the breadcrumb's *contacts* box draws every map
+ * to one total (§6.5) — which changes the contacts, and leaves each panel's
+ * scale its own.
  *
  * The **transform and the colormap** are seeded from the lead and then belong to
  * each panel, and "one scale for all" pushes the lead's clip down for the case
@@ -255,6 +256,11 @@ export interface PanelDeckProps {
    * entry rather than five that each undo a file.
    */
   onMapsChange(maps: string | undefined): void
+  /**
+   * A companion's file answered for the contacts it holds, or for what it was
+   * drawn to (§6.5): the breadcrumb's contacts box reads every map's.
+   */
+  onDrawn?(): void
   /** Where the per-file preferences are remembered — the session's memory key. */
   memoryKey(): string
   /**
@@ -1904,6 +1910,7 @@ export class PanelDeck {
       // makes the fourth read smaller (§16.7).
       budgetBytes: () => panelBudgetBytes(this.filled, deviceDenseBudgetBytes()),
       onSettled: () => this.settle(slot),
+      onDrawn: () => this.props.onDrawn?.(),
       onClose: () => this.hideMap(slot),
       onToggleLock: () => this.toggleLock(slot),
       onStar: () => this.setStarred(slot.id),
@@ -3590,9 +3597,9 @@ export class PanelDeck {
     // now* — and the very next nudge is honestly their own again.
     //
     // **`match`, not `fix`.** Nothing here is broken, and a reader who has used
-    // Juicebox or HiGlass reads *fix* as repair; `match` is the verb §5.7
-    // already uses for the one-off act of putting a second picture on the
-    // first's footing (*match depth*), which is exactly what these two do.
+    // Juicebox or HiGlass reads *fix* as repair; `match` is the verb for the
+    // one-off act of putting every picture on one map's footing, which is
+    // exactly what these two do.
     //
     // Both read from the **starred** map, which is the one every other "all of
     // them" in this app is measured from: it is what a task runs against

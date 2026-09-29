@@ -32,7 +32,6 @@
  */
 
 import type { BlockValues } from './derive'
-import { percentileOf } from './scale'
 import type { CompareOp } from '../types'
 
 export type { CompareOp }
@@ -79,23 +78,19 @@ export function alignable(a: CompareBlock, b: CompareBlock): boolean {
 /**
  * Merge two aligned blocks across the matrix diagonal.
  *
- * `gain` multiplies the second file's counts, which is how the two are made
- * comparable when they differ in depth — see {@link matchGain}. `1` leaves them
- * on one scale, which is the default and the honest one: the same colour then
- * means the same number of contacts on both sides of the line.
+ * On one scale, always: the same colour means the same number of contacts on
+ * both sides of the line. Two files sequenced to different depths are made
+ * comparable by drawing both to one total (§6.5) — the breadcrumb's *contacts*
+ * box — which changes the contacts rather than the colours, so the two
+ * triangles are then two libraries of one depth and not one library rescaled.
  *
  * The diagonal itself stays with the *first* file. A cell on it is one bin
  * against itself and is the brightest cell in any Hi-C map; handing alternate
  * diagonal cells to different files would draw a dashed line down the middle of
  * the picture that is an artefact of nothing.
  */
-export function blendAcrossDiagonal(
-  primary: CompareBlock,
-  second: CompareBlock,
-  options: { gain?: number } = {},
-): Blend {
+export function blendAcrossDiagonal(primary: CompareBlock, second: CompareBlock): Blend {
   const { nrows, ncols } = primary
-  const gain = options.gain ?? 1
   const values = new Float32Array(primary.values.subarray(0, nrows * ncols))
   let lower = 0
 
@@ -112,7 +107,7 @@ export function blendAcrossDiagonal(
     for (let r = 0; r < nrows; r++) {
       const row = r * ncols
       for (let c = 0; c < r; c++) {
-        values[row + c] = second.values[row + c] * gain
+        values[row + c] = second.values[row + c]
         lower++
       }
     }
@@ -126,7 +121,7 @@ export function blendAcrossDiagonal(
     const row = r * ncols
     for (let c = 0; c < ncols; c++) {
       if (primary.colExtent[0] + c * colStep >= rowBin) continue
-      values[row + c] = second.values[row + c] * gain
+      values[row + c] = second.values[row + c]
       lower++
     }
   }
@@ -148,36 +143,6 @@ export function isCompareOp(value: string): value is CompareOp {
   return (COMPARE_OPS as readonly string[]).includes(value)
 }
 
-/**
- * Whether {@link matchGain} should be applied when the reader has not said.
- *
- * Two facts decide it, and the second is the one that was missing.
- *
- * The **operation**: under the split the depth difference is a real reading
- * about two real files and is left in, while a ratio or a difference of raw
- * counts *is* that difference everywhere — a flat wash whose colour is the
- * sequencing depth and whose structure is invisible — so there it is divided
- * out.
- *
- * The **units**: balanced values have already had it divided out. ICE puts every
- * bin's marginal at 1, so two balanced matrices arrive on one normalisation and
- * there is nothing left for a gain to correct — on an E. coli pair at 5 kb the
- * two marginals agree to 0.2%. Matching them again is not a no-op, because
- * {@link matchGain} does not measure depth: it measures the 99th percentile,
- * which in a Hi-C map lives entirely in the first few diagonals — which is
- * exactly where two conditions differ. On that pair it returned 1.48 and shifted
- * every cell of the ratio by −0.56 in `log2`, turning a near-diagonal band drawn
- * at +0.60 by another tool into +0.04. The scale factor was not a nuisance
- * parameter being removed; it was the finding being removed.
- *
- * So: on for raw counts under a derived operation, off everywhere else. The
- * reader can still say otherwise — `ui/MatrixPanel.ts` offers the tickbox under
- * all three operations — and this is only where the tickbox starts.
- */
-export function depthMatchDefault(op: CompareOp, balanced: boolean): boolean {
-  return op !== 'split' && !balanced
-}
-
 export interface Combined extends Blend {
   /**
    * The value that means "these two agree", or `null` for the split, which is
@@ -192,13 +157,12 @@ export interface Combined extends Blend {
 /**
  * Put two aligned blocks together, whichever way was asked for.
  *
- * `gain` is applied to the second file in every case, and it matters far more
- * here than it does to the split: two libraries at different depth differ by
- * roughly a scalar, so their *ratio* is that scalar everywhere and the picture
- * is a flat wash whose colour is the depth ratio and whose structure is
- * invisible. `matchGain` divides it out, which is why the ratio and difference
- * turn depth matching on by default where the split leaves it off — see
- * `ui/MatrixPanel.ts`, which owns that default because it owns the control.
+ * Two libraries at different depth differ by roughly a scalar, so the *ratio* of
+ * their raw counts is that scalar everywhere — a flat wash whose colour is the
+ * sequencing depth. The answer is not to divide a guess at that scalar out of
+ * the picture but to compare the libraries at one depth: the breadcrumb's
+ * *contacts* box draws both files to one total before either is read (§6.5).
+ * Balanced values need neither, having already been put on one normalisation.
  *
  * The arithmetic is deliberately plain, because JavaScript's own division
  * already produces the three answers a reader needs and a guarded version would
@@ -211,17 +175,16 @@ export interface Combined extends Blend {
 export function combine(
   primary: CompareBlock,
   second: CompareBlock,
-  options: { op: CompareOp; gain?: number },
+  options: { op: CompareOp },
 ): Combined {
-  const gain = options.gain ?? 1
-  if (options.op === 'split') return { ...blendAcrossDiagonal(primary, second, { gain }), neutral: null }
+  if (options.op === 'split') return { ...blendAcrossDiagonal(primary, second), neutral: null }
 
   const { nrows, ncols } = primary
   const cells = nrows * ncols
   const values = new Float32Array(cells)
   const ratio = options.op === 'ratio'
   for (let i = 0; i < cells; i++) {
-    const other = second.values[i] * gain
+    const other = second.values[i]
     values[i] = ratio ? primary.values[i] / other : primary.values[i] - other
   }
   // Both files are drawn over the whole square rather than a triangle each, so
@@ -229,52 +192,4 @@ export function combine(
   // block for both, which is what a caller counting "cells from file 2" has to
   // be told when the answer is "all of them, and from file 1 as well".
   return { values, lower: cells, upper: cells, neutral: ratio ? 1 : 0 }
-}
-
-/**
- * How many values to look at when measuring a block's bright end.
- *
- * A whole-genome block is 4096² cells and the number wanted from it is one
- * percentile. Two full passes over 33.5 M floats is a visible freeze at the
- * moment a second file is dropped; a uniform subsample of a quarter of a
- * million answers the same question to more decimal places than the picture has.
- */
-const GAIN_SAMPLE = 1 << 18
-
-/**
- * The factor that puts the second file's bright end where the first file's is.
- *
- * Two Hi-C maps of the same genome at different sequencing depth differ, to
- * first order, by a scalar: the deeper one has more contacts everywhere. On one
- * shared scale the shallower of the two is a pale triangle in which nothing can
- * be read, and the reader learns only that it was sequenced less — which they
- * already knew.
- *
- * So the ratio of the two 99th percentiles is offered as a correction. It is the
- * same order statistic §7.1 uses to pick `vmax`, which is what makes the result
- * "both files saturate together" rather than an arbitrary stretch. It is offered
- * and not applied: the same colour meaning the same count is the stronger claim,
- * and it is the one a reader gets unless they ask otherwise.
- *
- * Returns `1` where either file has nothing positive to measure — an empty
- * triangle is not evidence about depth.
- */
-export function matchGain(primary: CompareBlock, second: CompareBlock, percentile = 99): number {
-  const top = brightEnd(primary.values, primary.nrows * primary.ncols, percentile)
-  const other = brightEnd(second.values, second.nrows * second.ncols, percentile)
-  if (!(top > 0) || !(other > 0)) return 1
-  return top / other
-}
-
-/** One order statistic over the positive values, from a uniform subsample. */
-function brightEnd(values: Float32Array, length: number, percentile: number): number {
-  const step = Math.max(1, Math.floor(length / GAIN_SAMPLE))
-  const kept = new Float32Array(Math.ceil(length / step))
-  let at = 0
-  for (let i = 0; i < length; i += step) {
-    const value = values[i]
-    if (Number.isFinite(value) && value > 0) kept[at++] = value
-  }
-  if (at === 0) return 0
-  return percentileOf(kept.subarray(0, at), percentile)
 }

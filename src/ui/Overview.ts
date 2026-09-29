@@ -43,7 +43,7 @@ import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel, blockSummary, type AnnotationContext } from './MatrixPanel'
+import { MatrixPanel, blockSummary, type AnnotationContext, type FigureSubject} from './MatrixPanel'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 
 /**
@@ -168,7 +168,7 @@ export interface OverviewProps {
    */
   annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
 }
 
 export class Overview {

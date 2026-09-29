@@ -597,6 +597,18 @@ export interface AnalysisFraming {
    * one on, and shown in the Chromosomes table.
    */
   origins?: Readonly<Record<string, number>>
+  /**
+   * The total the map was drawn to when the view was read (§6.5): a subsample
+   * or an oversample of the file to this many contacts. Absent is the file as
+   * stored.
+   *
+   * In the framing because it is in every number a task produces — a P(s) at
+   * ten million contacts is not the curve at a hundred and seventy-nine million
+   * — and so in the provenance of each, in the command line that reproduces it,
+   * and in the test that decides whether the block on screen may stand in for a
+   * read.
+   */
+  contacts?: number
 }
 
 // ---------------------------------------------------------------------------

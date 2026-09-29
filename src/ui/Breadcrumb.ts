@@ -163,6 +163,15 @@ export interface BreadcrumbProps {
   onAddResolution?(): void
   /** The × on an added resolution was pressed — take it back off the ladder. */
   onDropResolution?(binsize: number): void
+  /**
+   * The *contacts* box (§6.5), at the far end past the resolution.
+   *
+   * An element the session owns and this bar only seats, because the bar is
+   * rebuilt on every change of the view — every pan — and a box rebuilt under
+   * the reader's cursor loses what they were typing. Absent in a bar with no map
+   * behind it.
+   */
+  contacts?: { el: HTMLElement; sync(): void }
 }
 
 /**
@@ -239,15 +248,22 @@ export class Breadcrumb {
 
   /** Re-render for a state. Safe to call on every state change. */
   render(state: ViewState | null): void {
-    this.el.replaceChildren()
+    // Everything but the contacts box goes, and the trail is built in front of
+    // it: moving a focused input — even to where it already is — blurs it.
+    const tail = this.props.contacts?.el
+    for (const child of [...this.el.childNodes]) if (child !== tail) child.remove()
     if (state === null) {
-      this.el.appendChild(el('span', { class: 'crumb current', text: 'open a file' }))
+      tail?.remove()
+      this.append(el('span', { class: 'crumb current', text: 'open a file' }))
       return
     }
     this.trail(state)
     // No ladder in a browser: there is no matrix to read at a coarser grid, and
-    // often no cooler behind the tracks at all.
-    if (state.view === 'browser') return
+    // often no cooler behind the tracks at all — and so no contacts to draw.
+    if (state.view === 'browser') {
+      tail?.remove()
+      return
+    }
     // **Last, after the place.** The resolution is not a step of the trail: it
     // does not contain the crumbs before it and clicking it does not go
     // anywhere — it is how finely the same place is drawn. It spent a release as
@@ -256,6 +272,19 @@ export class Breadcrumb {
     // reader changes often at the one end of the bar they scroll past on the way
     // to the coordinates.
     this.pushResolution()
+    // …and after it, the total the maps are drawn to (§6.5): another answer to
+    // *how the picture is drawn*, at the end of the bar where those live.
+    if (this.props.contacts !== undefined) {
+      if (tail !== undefined && tail.parentNode !== this.el) this.el.appendChild(tail)
+      this.props.contacts.sync()
+    }
+  }
+
+  /** Add to the bar, in front of the contacts box where it is seated. */
+  private append(node: Node): void {
+    const tail = this.props.contacts?.el
+    if (tail !== undefined && tail.parentNode === this.el) this.el.insertBefore(node, tail)
+    else this.el.appendChild(node)
   }
 
   /** The trail proper: file → table → genome → contig → region. */
@@ -414,7 +443,7 @@ export class Breadcrumb {
     crumb.addEventListener('click', () =>
       this.props.onNavigate({ uri: state.uri, view: 'cells', cells: state.cells }),
     )
-    this.el.appendChild(crumb)
+    this.append(crumb)
   }
 
   /**
@@ -437,7 +466,7 @@ export class Breadcrumb {
     if (currentEntry !== undefined) select.value = currentEntry
     select.addEventListener('change', () => onSelectEntry(select.value))
     this.separator()
-    this.el.appendChild(select)
+    this.append(select)
   }
 
   /**
@@ -697,7 +726,7 @@ export class Breadcrumb {
       if (picked !== undefined && rungs.indexOf(picked) !== at) this.pick(picked)
     })
 
-    this.el.appendChild(
+    this.append(
       el(
         'div',
         {
@@ -772,7 +801,7 @@ export class Breadcrumb {
     )
 
     if (rootChoices.length < 2) {
-      this.el.appendChild(label)
+      this.append(label)
       return
     }
 
@@ -838,7 +867,7 @@ export class Breadcrumb {
         window.addEventListener('keydown', onKey, true)
       }
     })
-    this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))
+    this.append(el('span', { class: 'crumb-group' }, label, arrow, menu))
   }
 
   /** The active root, as a label — the shell uses it for the greyed entries. */
@@ -847,8 +876,9 @@ export class Breadcrumb {
   }
 
   private separator(): void {
-    if (this.el.childNodes.length > 0) {
-      this.el.appendChild(el('span', { class: 'crumb-sep' }, icon('chevron-right', { size: 14 })))
+    const first = this.el.firstChild
+    if (first !== null && first !== this.props.contacts?.el) {
+      this.append(el('span', { class: 'crumb-sep' }, icon('chevron-right', { size: 14 })))
     }
   }
 
@@ -859,11 +889,11 @@ export class Breadcrumb {
     // does, so it is the one that has to say.
     const title = extra === 'file' ? `${label} — click to open another file` : label
     if (onClick === undefined || current) {
-      this.el.appendChild(el('span', { class: className, text: label, title }))
+      this.append(el('span', { class: className, text: label, title }))
       return
     }
     const node = el('button', { class: className, type: 'button', text: label, title })
     node.addEventListener('click', onClick)
-    this.el.appendChild(node)
+    this.append(node)
   }
 }

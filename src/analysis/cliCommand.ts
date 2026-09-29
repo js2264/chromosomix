@@ -232,6 +232,10 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     if (framing.value !== '' && framing.value !== COUNT_COLUMN) {
       args.push('--value', quote(framing.value))
     }
+    // The total the map was drawn to (§6.5) — an input to every count the task
+    // read, and one a shell has no picture to take it from. The seed is the
+    // shell's default as it is the session's, so the same pixels are drawn.
+    if (framing.contacts !== undefined) args.push('--contacts', String(framing.contacts))
     // The ticked cells of an `.scool` are the session's and not the record's
     // (§3.8), so they are read off the context, and a command written with no
     // context to ask is told what it cannot say.

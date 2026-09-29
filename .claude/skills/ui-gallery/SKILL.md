@@ -39,6 +39,7 @@ node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone a
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
+node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -220,6 +221,19 @@ box's two fields with both rows ticked, and the Analysis column's *Compartments*
 *Reproducibility* rows. It prints the lit marks, the lit rectangles and the count at every step.
 Run it after any change to `ui/lanePlacement.ts`, to how `MatrixPanel` paints its overlays or takes
 a drop, or to `AnnotationStore.overlays`.
+
+`scripts/ui-contacts.mjs` drives the **contacts box** at the end of the breadcrumb (§6.5): the yeast
+micro-C as stored, its own total in grey; `10M` typed and the map redrawn from ten million contacts;
+a figure saved with the caption that says so, P(s) run on the drawn map with its framing line and the
+console's `metacooler-run … --contacts` printed; a total that is not one, refused in the box; the
+box emptied. Then the deck demo, a cooler beside a `.hic` whose total is counted: the chevrons
+pressed down and up (through Boost-HiC), and the deck's figure. Then two files in one square — the
+second named in `GALLERY_PAIR`, since the demo has no second yeast map with the cooler's sequences —
+with the Map card's fields printed to show *match depth* is gone. Last, E. coli at 1 kb asked for
+500M: the Boost-HiC refusal, *read as stored*, and the same total at 2 kb. Every step prints the
+box's value, placeholder, title and chevrons, and the hash. `GALLERY_ONLY=map`, `deck`, `pair` or
+`refusal` runs one part. Run it after any change to the box, to resampling, or to what names a drawn
+map.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

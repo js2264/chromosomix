@@ -59,6 +59,7 @@ import {
   BLOCK_COPY_LIMIT_BYTES,
   type BlockInput,
   type PeerMap,
+  type ResampleTarget,
   type TaskInputs,
 } from './worker/protocol'
 
@@ -107,6 +108,8 @@ export interface RunnerHost {
     cells?: readonly string[]
     binning?: PairsBinning
     orientation?: OrientationSummary
+    /** The total the map is drawn to, where it is drawn to one (§6.5). */
+    resample?: ResampleTarget
     /** What the reader calls this map (§16.10), which its results are named by. */
     label?: string
   } | null
@@ -221,6 +224,8 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     a.balance === b.balance &&
     a.value === b.value &&
     a.level === b.level &&
+    // The total the map is drawn to changes every count a task reads (§6.5).
+    (a.contacts ?? null) === (b.contacts ?? null) &&
     // What the molecules are declared to be changes the numbers as surely as
     // the window does (§8.15): a decay measured along a line is not the one a
     // circle has, and an arm read from another origin is another arm.
@@ -306,13 +311,23 @@ export const RUN_HISTORY = 8
  * different measurements, and a mount cached on the URI alone would give the
  * second the first one's answer with nothing on screen to say so.
  */
-function mountKey(uri: string, cells?: readonly string[], binning?: PairsBinning): string {
+function mountKey(
+  uri: string,
+  cells?: readonly string[],
+  binning?: PairsBinning,
+  resample?: ResampleTarget,
+): string {
   const base =
     cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
   // The base resolution and the rung count, because an imported map at 1 kb and
   // the same file at 10 kb are two maps behind one uri (§3.7) — and a mount kept
   // for the uri alone would answer a task about the second with the first.
-  return binning === undefined ? base : `${base}\u0000${binning.base}:${binning.rungs}`
+  const binned = binning === undefined ? base : `${base}\u0000${binning.base}:${binning.rungs}`
+  // And the total it is drawn to (§6.5): the same file at ten million contacts
+  // and at its own depth are two maps as surely as two resolutions are.
+  return resample === undefined
+    ? binned
+    : `${binned}\u0000contacts:${resample.contacts}:${resample.seed ?? ''}:${resample.alpha ?? ''}`
 }
 
 /**
@@ -373,6 +388,14 @@ export interface RunTarget {
    * files, and a curve measured on one is not a fact about the other.
    */
   orientation?: OrientationSummary
+  /**
+   * The total this map is drawn to (§6.5), where the reader has asked for one.
+   *
+   * On the target for {@link binning}'s reason: it is a property of the map on
+   * screen, every task reads the drawn map, and a mount keyed without it would
+   * answer a task at ten million contacts with the file's own depth.
+   */
+  resample?: ResampleTarget
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -720,6 +743,10 @@ export class AnalysisRunner {
       // set lost here is lost for every single-map run — which is all of them
       // outside a batch (§3.8).
       ...(source?.cells === undefined ? {} : { cells: source.cells }),
+      // Drawn as the view draws it (§6.5): a plain Run is the commonest way a
+      // task reaches a resampled map, and dropping the total here would measure
+      // the file as stored under a header that says otherwise.
+      ...(source?.resample === undefined ? {} : { resample: source.resample }),
       // The map's name where the host has one — the tab, the lane and every
       // figure that names the map take it from here — and the framing's address
       // where it has none, which is a genome browsed as tracks.
@@ -1057,7 +1084,7 @@ export class AnalysisRunner {
     // Keyed on the cell set as well as the file: an scool re-ticked between two
     // runs is the same URI and a different map, and a mount kept for the name
     // alone would answer the second question with the first one's cells.
-    const key = mountKey(source.uri, source.cells, source.binning)
+    const key = mountKey(source.uri, source.cells, source.binning, source.resample)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -1077,6 +1104,7 @@ export class AnalysisRunner {
       source: source.source,
       ...(source.cells === undefined ? {} : { cells: source.cells }),
       ...(source.binning === undefined ? {} : { binning: source.binning }),
+      ...(source.resample === undefined ? {} : { resample: source.resample }),
     })
     this.mounted = key
   }
@@ -1341,6 +1369,9 @@ export class AnalysisRunner {
           source: target.source,
           ...(target.cells === undefined ? {} : { cells: target.cells }),
           ...(target.binning === undefined ? {} : { binning: target.binning }),
+          // Each map at the depth it is drawn to: reproducibility between two
+          // maps matched to one depth is the comparison §6.5 exists for.
+          ...(target.resample === undefined ? {} : { resample: target.resample }),
         })
       }
       if (peers.length > 0) inputs.peers = peers
@@ -1361,7 +1392,11 @@ export class AnalysisRunner {
     // the numbers agreed with themselves everywhere a reader would think to
     // check.
     const block = this.hostBlockFor(job)
-    if (block !== null && blockWorthCopying(block) && blockMatches(block, framing)) {
+    // A block drawn at another total than the job's map now is — read before the
+    // number in the contacts box changed, and not yet read again — is not a
+    // picture of that map, and the job reads for itself instead (§6.5).
+    const drawnAlike = (framing.contacts ?? null) === (job.target.resample?.contacts ?? null)
+    if (block !== null && drawnAlike && blockWorthCopying(block) && blockMatches(block, framing)) {
       // **Copied, never transferred**, which is why the size gate above is
       // worth having at all. `Transferable` is the optimisation that looks free
       // here and is the one that blanks the map: the buffer handed away is the

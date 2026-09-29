@@ -19,6 +19,7 @@ import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/p
 import { ScoolStore } from '../metacooler/scool'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
+import type { ResampleSpec } from '../metacooler/resample'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -55,6 +56,7 @@ import {
   type PairsBinning,
   type PairsImportSummary,
   type PairsProbeResult,
+  type ResampleResult,
   type SourceKind,
   type StatsResult,
   type WorkerRequest,
@@ -122,6 +124,14 @@ interface Session {
    * `.mcool` export is written from the same arrays the map is drawn from.
    */
   pairs: PairsImport | null
+  /**
+   * The total the reader drew this map to, or `null` for the file as stored
+   * (§6.5). Held on the session rather than only on the open map so that a
+   * sibling rung opened later for a zoom is drawn to it as well: a picture that
+   * went back to the stored counts at the next zoom out would be the one lie a
+   * resampled map must not tell.
+   */
+  resample: ResampleSpec | null
 }
 
 /**
@@ -179,6 +189,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       indexed: active.pairs.indexed,
       declaredRecords: active.pairs.declaredRecords,
     })
+    drawnAsSession(active, built)
     active.rungs.set(rung, built)
     touchRung(active, rung)
     while (active.recent.length > MAX_RUNGS) {
@@ -199,6 +210,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     // answers the same question at a different resolution.
     return active.mc
   }
+  drawnAsSession(active, opened)
   active.rungs.set(rung, opened)
   touchRung(active, rung)
   while (active.recent.length > MAX_RUNGS) {
@@ -208,6 +220,17 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     active.rungs.delete(oldest)
   }
   return opened
+}
+
+/**
+ * A sibling rung drawn to the session's total, as the open map is (§6.5).
+ *
+ * Not awaited: the rung takes its own census when it is first read, and its
+ * reads wait for it; a refusal is what those reads then answer with.
+ */
+function drawnAsSession(active: Session, rung: MetaCooler): void {
+  if (active.resample === null) return
+  rung.resample(active.resample).catch(() => undefined)
 }
 
 function touchRung(active: Session, rung: string): void {
@@ -463,6 +486,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     rungs: new Map(),
     recent: [],
     pairs,
+    resample: null,
   }
 
   return {
@@ -496,6 +520,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     hasWeights: mc.hasWeights,
     scoreColumns: mc.scoreColumns,
     sourceBytes: source.size,
+    contacts: mc.declaredContacts,
     sourceKind: request.source.kind,
   }
 }
@@ -1377,7 +1402,10 @@ function displayableContigs(mc: MetaCooler): number[] {
 async function handleOverviewSidecar(
   request: Extract<WorkerRequest, { kind: 'overviewSidecar' }>,
 ): Promise<OverviewResult> {
-  const { mc } = requireSession()
+  const { mc, resample } = requireSession()
+  // The edge list counts the file as stored. A resampled map's overview is the
+  // resampled map's, so it is taken the way any other file's is (§6.5).
+  if (resample !== null) return handleOverview({ id: request.id, kind: 'overview', level: 'genome' })
   const response = await fetch(request.url)
   if (!response.ok) {
     throw new ViewerError(
@@ -1456,6 +1484,68 @@ async function handleValidateDeep(
   return result
 }
 
+/**
+ * Draw the open map to a total, or put back the file as stored (§6.5).
+ *
+ * The census is the one long part — a walk over every stored pixel, once per
+ * map — and it reports as it goes, in pixels. It is handed back with the answer
+ * so the analysis worker's mount of the same map need not walk them again: a
+ * copy, since the answer's buffers move to the main thread and the census stays
+ * with the map here.
+ */
+async function handleResample(
+  request: Extract<WorkerRequest, { kind: 'resample' }>,
+): Promise<ResampleResult> {
+  const active = requireSession()
+  const spec: ResampleSpec | null =
+    request.contacts === null
+      ? null
+      : {
+          contacts: request.contacts,
+          ...(request.seed === undefined ? {} : { seed: request.seed }),
+          ...(request.alpha === undefined ? {} : { alpha: request.alpha }),
+        }
+  active.resample = spec
+  for (const rung of active.rungs.values()) {
+    rung.resample(spec).catch(() => undefined)
+  }
+  const say = reporter(request.id)
+  const plan = await active.mc.resample(spec, {
+    onProgress: (done, total) => say(done, total, 'counting contacts'),
+    cancelled: () => cancelled.has(request.id),
+  })
+  const census = await active.mc.takenCensus()
+  return {
+    mode: plan?.mode ?? 'none',
+    contacts: spec?.contacts ?? null,
+    total: census?.total ?? null,
+    census:
+      census === null
+        ? null
+        : { ...census, a: census.a.slice(), b: census.b.slice(), sum: census.sum.slice() },
+  }
+}
+
+/**
+ * The contacts the open map holds, counted where the file does not say (§6.5).
+ *
+ * Every rung of a ladder holds the same contacts, so the coarsest is counted:
+ * the same contacts in the fewest stored pixels. A map with no ladder is
+ * counted itself, by the census a resample of it would take anyway and then
+ * keeps.
+ */
+async function handleContacts(request: Extract<WorkerRequest, { kind: 'contacts' }>): Promise<{ total: number | null }> {
+  const active = requireSession()
+  const declared = active.mc.declaredContacts
+  if (declared !== null) return { total: declared }
+  const ladder = active.mc.entries
+    .filter((name) => /^\d+$/.test(name))
+    .sort((a, b) => Number(b) - Number(a))
+  const map = ladder.length > 0 ? await mapFor(ladder[0]) : active.mc
+  const say = reporter(request.id)
+  return { total: await map.countContacts({ onProgress: (done, total) => say(done, total, 'counting contacts') }) }
+}
+
 function handleStats(): StatsResult {
   const { source } = requireSession()
   return { total: source.stats(), lastOp: { ...lastOp }, calls }
@@ -1512,6 +1602,10 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleOverviewSidecar(request)
     case 'validateDeep':
       return handleValidateDeep(request)
+    case 'resample':
+      return handleResample(request)
+    case 'contacts':
+      return handleContacts(request)
     case 'stats':
       return handleStats()
     case 'cancel':

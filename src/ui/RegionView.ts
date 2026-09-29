@@ -49,7 +49,7 @@ import {
   type DerivePresentation,
   type FramedRegion,
   type TurnPresentation,
-} from './MatrixPanel'
+ type FigureSubject} from './MatrixPanel'
 import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
@@ -161,7 +161,7 @@ export interface RegionViewProps {
    */
   compare?: CompareRead
   /** File and genome context for the exported figure's caption. */
-  caption?: { file: string; genome?: string }
+  caption?: FigureSubject
   /**
    * Contigs one step away in file order. Absent for a two-contig block, which
    * has two axes and so no single neighbour to step to.

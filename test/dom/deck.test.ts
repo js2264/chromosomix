@@ -1073,6 +1073,7 @@ describe('one resolution across the deck', () => {
       hasWeights: false,
       scoreColumns: ['count'],
       sourceBytes: 1024,
+      contacts: null,
       sourceKind: 'remote',
     }
   }

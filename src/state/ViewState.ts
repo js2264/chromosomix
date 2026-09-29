@@ -52,6 +52,7 @@ const KEY_ORDER = [
   'focus',
   'regions',
   'cells',
+  'contacts',
   'locus',
   'level',
   'coarsen',
@@ -80,6 +81,7 @@ const OPTIONAL_KEYS = [
   'focus',
   'regions',
   'cells',
+  'contacts',
   'locus',
   'level',
   'coarsen',
@@ -203,6 +205,15 @@ export function parseViewState(hash: string): ViewState | null {
   if (locus !== undefined && locus !== '') state.locus = locus
   const colormap = raw.get('colormap')
   if (colormap !== undefined) state.colormap = colormap
+
+  // The total the maps are drawn to (§6.5), believed only as a positive whole
+  // number: a link naming anything else is the files as stored, which is what
+  // an unreadable value in this hash has always meant.
+  const contacts = raw.get('contacts')
+  if (contacts !== undefined && contacts !== '') {
+    const parsed = Number(contacts)
+    if (Number.isSafeInteger(parsed) && parsed > 0) state.contacts = parsed
+  }
 
   const level = raw.get('level')
   if (level !== undefined && (LEVELS as readonly string[]).includes(level)) {
@@ -346,8 +357,8 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * scan back behind its button, so ticking a box makes the map disappear.
  *
  * `op` is deliberately *not* here. Which of split, ratio and difference is in
- * force decides which controls the panel draws — the depth tickbox is offered
- * under one and not the others — and controls are built once, at construction.
+ * force decides how the panel is built — the split keeps each file's block and
+ * a second key, a ratio neither — and a panel is built once, at construction.
  */
 export const DERIVED_KEYS = ['oe', 'arms', 'smooth', 'flip'] as const
 
@@ -427,18 +438,22 @@ export const READING_KEYS = ['flip', 'oe', 'arms', 'smooth'] as const
  * The keys that say **which data the file is being read through**, and outlive
  * a navigation for a different reason than {@link READING_KEYS} do.
  *
- * One member, and it is the cell set of an `.scool` (§3.8). It is carried not
+ * Two members. The cell set of an `.scool` (§3.8) is carried not
  * because it is a preference — it is the opposite, it is the subject — but
  * because a container of four thousand cells is browsed the way a file is: you
  * choose the cells once, in the cells table, and then look at chromosome 3, and
  * then a locus on it, and then back out. Dropping the set on the way into a
  * chromosome would silently re-read every cell in the file, which is both the
- * wrong picture and the most expensive read the format has.
+ * wrong picture and the most expensive read the format has. The total the maps
+ * are drawn to (§6.5) is the same kind of fact: the reader draws the maps to one
+ * depth once and then goes to look at things, and a chromosome opened from the
+ * table at the file's own depth would be a different library under the same
+ * number in the box.
  *
  * The same believe-what-was-said rule as the other two: a state that names a
  * cell set has one, including the sentinel that names all of them.
  */
-export const SUBJECT_KEYS = ['cells'] as const
+export const SUBJECT_KEYS = ['cells', 'contacts'] as const
 
 /**
  * `true` when two states select the same block and differ only in how it is

@@ -47,6 +47,11 @@ export interface ErrorViewProps {
    * their way back to it.
    */
   onSignedIn?(): void
+  /**
+   * Offered when the refusal is the *contacts* box's (§6.5) — a total this map
+   * cannot be drawn to — and puts every file back as stored.
+   */
+  onReadAsStored?(): void
 }
 
 interface Guidance {
@@ -237,12 +242,28 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
   },
 }
 
+/**
+ * A total the *contacts* box asked for that this map cannot be drawn to (§6.5).
+ *
+ * `unsupported` by code, and not by advice: `metacooler-run --contacts` refuses
+ * the same total in the same words, so *run it locally* would send a reader to
+ * the same refusal, and the fix is in the box they just typed in.
+ */
+const RESAMPLE_GUIDANCE: Guidance = {
+  title: 'Not drawn to that total',
+  advice: [
+    'The contacts box draws every map to the total typed in it — subsampled where a map holds more, oversampled through Boost-HiC where it holds fewer — and this map cannot be drawn to that one.',
+    'Empty the box to read the files as stored, or type a total this map can be drawn to.',
+  ],
+}
+
 export class ErrorView {
   readonly el: HTMLElement
 
   constructor(props: ErrorViewProps) {
     const error = props.error
     const viewerError = error instanceof ViewerError ? error : null
+    const resample = viewerError?.detail['resample'] === true
     const guidance =
       viewerError === null
         ? {
@@ -252,7 +273,9 @@ export class ErrorView {
                 'failure. Try again, and copy that message if you report it.',
             ],
           }
-        : GUIDANCE[viewerError.code]
+        : resample
+          ? RESAMPLE_GUIDANCE
+          : GUIDANCE[viewerError.code]
 
     const entries = extractEntries(viewerError)
     const actions: HTMLElement[] = []
@@ -290,6 +313,9 @@ export class ErrorView {
         { class: 'btn btn-primary' },
       )
       actions.push(signInButton)
+    }
+    if (resample && props.onReadAsStored) {
+      actions.push(button('read as stored', props.onReadAsStored, { class: 'btn btn-primary' }))
     }
     if (props.onRetry) actions.push(button('try again', props.onRetry))
     actions.push(button('open another file', props.onOpenFilePicker, { class: 'btn btn-quiet' }))

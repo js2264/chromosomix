@@ -28,6 +28,9 @@ import { DECK_DRAG_TYPE, mapStarTitle, type DeckLook } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
+import type { DrawnDepth } from '../contacts'
+import type { Census } from '../metacooler/resample'
+import type { ResampleTarget } from '../analysis/worker/protocol'
 import type {
   ContigsResult,
   GenomesResult,
@@ -159,6 +162,11 @@ export interface MapPanelProps {
   budgetBytes(): number
   /** The panel finished a read, or failed one; the deck relocks and repaints. */
   onSettled(): void
+  /**
+   * The panel's file answered for the total it holds, or for what it was drawn
+   * to (§6.5) — the breadcrumb's contacts box re-reads every map's.
+   */
+  onDrawn?(): void
   /** The × on this panel's heading: the map is hidden, not let go (§16.9). */
   onClose(): void
   /** The chain on this panel's heading — follow the deck, or go it alone. */
@@ -540,6 +548,100 @@ export class MapPanel {
    */
   get openInfo(): OpenResult | null {
     return this.opened
+  }
+
+  /**
+   * What the worker was last told to draw this map to (§6.5), and what it
+   * answered. `undefined` after an open, which puts a map back as stored.
+   */
+  private drawnAt: number | null | undefined = undefined
+  private depthHeld: DrawnDepth | null = null
+  private refusalHeld: string | null = null
+  /** The census this map was counted by: kept across totals, since it does not depend on one. */
+  private census: Census | null = null
+  /**
+   * The contacts the reader counted, for a file that does not say how many it
+   * holds (a `.hic`); `null` while counting, `undefined` before asking.
+   */
+  private counted: number | null | undefined = undefined
+
+  /** The contacts this map holds as stored: counted, where a census has, else as the file says. */
+  get contactsTotal(): number | null {
+    return this.census?.total ?? this.counted ?? this.opened?.contacts ?? null
+  }
+
+  /** Ask the reader to count this map's contacts, once per open, where its file does not say. */
+  private countContacts(info: OpenResult): void {
+    if (info.contacts !== null || this.counted !== undefined) return
+    this.counted = null
+    this.client
+      .request<'contacts'>({ kind: 'contacts' })
+      .then(({ total }) => {
+        if (this.disposed || this.opened !== info) return
+        this.counted = total
+        this.props.onDrawn?.()
+      })
+      .catch(() => undefined)
+  }
+
+  /** Why this map could not be drawn to the tab's total, or `null`. */
+  get drawRefusal(): string | null {
+    return this.refusalHeld
+  }
+
+  /** What this map is drawn to, as its caption says it; `null` as stored. */
+  get drawnDepth(): DrawnDepth | null {
+    return this.depthHeld
+  }
+
+  /**
+   * The total a task on this map is drawn to, with the census it can skip
+   * (§6.5). The deck's — the state this panel was last handed — and not what
+   * the worker has answered yet: a task run while the draw is still counting
+   * must still read the drawn map.
+   */
+  resampleTarget(): { resample?: ResampleTarget } {
+    const contacts = this.state?.contacts ?? null
+    if (contacts === null) return {}
+    return { resample: { contacts, ...(this.census === null ? {} : { census: this.census }) } }
+  }
+
+  /**
+   * Tell the worker what to draw this map to, where it was told otherwise.
+   * Awaited: a refusal is this panel's to say in its own frame, and the read
+   * after it would only say the same thing.
+   */
+  private async drawTo(contacts: number | null): Promise<void> {
+    if (this.drawnAt === undefined ? contacts === null : this.drawnAt === contacts) {
+      const opened = this.drawnAt === undefined
+      this.drawnAt = contacts
+      // The first answer since an open, as stored: the file's own total is
+      // known now, and the box's chevrons count this map.
+      if (opened) this.props.onDrawn?.()
+      return
+    }
+    this.drawnAt = contacts
+    this.depthHeld = null
+    this.refusalHeld = null
+    const file = this.opened
+    try {
+      const result = await this.client.request<'resample'>({ kind: 'resample', contacts })
+      // An answer about the file before the one now open is not about this one.
+      if (this.disposed || this.opened !== file) return
+      if (result.census !== null) this.census = result.census
+      if (this.drawnAt !== contacts) return
+      this.depthHeld =
+        contacts === null || result.total === null
+          ? null
+          : { contacts, total: result.total, mode: result.mode }
+    } catch (error) {
+      if (this.drawnAt === contacts && this.opened === file) {
+        this.refusalHeld = error instanceof Error ? error.message : String(error)
+      }
+      throw error
+    } finally {
+      this.props.onDrawn?.()
+    }
   }
   /**
    * A bin size the deck asked for **before this panel had opened**, held until
@@ -1382,6 +1484,13 @@ export class MapPanel {
     this.read = null
     this.facts = null
     this.preparing = null
+    // Another rung is another map: as stored until it is told otherwise, and
+    // counted by a census of its own (§6.5).
+    this.drawnAt = undefined
+    this.depthHeld = null
+    this.refusalHeld = null
+    this.census = null
+    this.counted = undefined
     this.nameEl.title = uri
     this.props.onResolved(uri)
     this.panel?.setBusy(true)
@@ -1451,6 +1560,7 @@ export class MapPanel {
       const info = await this.open()
       if (this.disposed) return
       this.opened = info
+      this.countContacts(info)
       this.paintEntries(info)
       // The ladder is known now, so a press this panel was too early to answer
       // can be answered honestly: either this *is* the rung it asked for and
@@ -1471,6 +1581,11 @@ export class MapPanel {
         const was = this.uri
         if (this.useBinsize(wanted) && this.uri !== was) return
       }
+      // Drawn to the tab's total before anything is read from it (§6.5). The
+      // worker queues the read behind the census either way; awaiting it here
+      // is what lets a refusal be said once, in this panel's own frame.
+      await this.drawTo(state.contacts ?? null)
+      if (this.disposed) return
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
       this.read = key
@@ -1527,6 +1642,8 @@ export class MapPanel {
       this.scoreOf(info, state).id,
       this.props.naming?.() ?? null,
       sequence !== null && (this.props.circular?.() ?? []).includes(sequence),
+      // The total it is drawn to (§6.5): another number is another map.
+      state.contacts ?? null,
     ])
   }
 
@@ -1766,7 +1883,7 @@ export class MapPanel {
         ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
         hideTitle: true,
-        caption: { file: fileLabel(this.uri) },
+        caption: { file: fileLabel(this.uri), depth: () => this.depthHeld },
         // Built from **this** file's columns, not from the lead's: what a
         // companion's cells can be is a fact about its own `/pixels`, and a
         // dropdown offering a column this file has not got would refuse the one

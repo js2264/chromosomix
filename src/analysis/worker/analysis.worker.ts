@@ -45,6 +45,7 @@ import { RUNNERS } from '../run/index'
 import type { TaskResult } from '../types'
 import {
   analysisTransfers,
+  type ResampleTarget,
   type AnalysisRequest,
   type AnalysisResponse,
   type AnalysisResultMap,
@@ -134,6 +135,9 @@ async function handleOpen(
   // the pseudo-bulk here would answer a question about four thousand cells with
   // the same number every time and no way to tell (§3.8).
   if (request.cells !== undefined && mc.cells.length > 0) mc.selectCells(request.cells)
+  // Drawn as the reader drew it, before any task reads it (§6.5). Awaited here,
+  // so a refusal fails the mount by name rather than every task after it.
+  if (request.resample !== undefined) await drawnAs(mc, request.resample, request.id)
   session = { mc, source }
 
   // Two numbers and no table. Everything else about the file is already on the
@@ -142,6 +146,25 @@ async function handleOpen(
   // `toBins` below is defined in terms of one of them and the caller has a right
   // to check that the two mounts agree about the file.
   return { nBins: mc.nBins, binsize: mc.binsize }
+}
+
+/**
+ * Draw a mount to the reader's total (§6.5), with the reader's census where it
+ * was handed one — the same pixels, without walking the file a second time.
+ */
+async function drawnAs(mc: MetaCooler, target: ResampleTarget, id: number): Promise<void> {
+  await mc.resample(
+    {
+      contacts: target.contacts,
+      ...(target.seed === undefined ? {} : { seed: target.seed }),
+      ...(target.alpha === undefined ? {} : { alpha: target.alpha }),
+    },
+    {
+      ...(target.census === undefined ? {} : { census: target.census }),
+      onProgress: (done, total) => post({ type: 'progress', id, done, total, note: 'counting contacts' }),
+      cancelled: () => cancelled.has(id),
+    },
+  )
 }
 
 /**
@@ -230,6 +253,15 @@ async function handleRun(
       })
       if (map.cells !== undefined && opened.mc.cells.length > 0) {
         opened.mc.selectCells(map.cells)
+      }
+      if (map.resample !== undefined) {
+        try {
+          await drawnAs(opened.mc, map.resample, id)
+        } catch (error) {
+          opened.mc.close()
+          opened.source.close()
+          throw error
+        }
       }
       return {
         mc: opened.mc,

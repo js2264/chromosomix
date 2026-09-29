@@ -22,6 +22,7 @@ import { ViewerError, type ErrorCode } from '../errors'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
+import type { Census, ResampleMode } from '../metacooler/resample'
 
 // ---------------------------------------------------------------------------
 // Byte sources
@@ -379,6 +380,13 @@ export interface OpenResult {
   scoreColumns: string[]
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
+  /**
+   * The contacts the file says it holds (§6.5): cooler's `attrs['sum']`, a pairs
+   * import's records — what the *contacts* box shows before anything is typed
+   * in it. `null` where the file does not say exactly, a `.hic` among them, and
+   * a `contacts` request then counts them.
+   */
+  contacts: number | null
   /** Present only when this map was imported from a `.pairs` (§3.7). */
   pairs?: PairsImportSummary
   sourceKind: SourceKind
@@ -694,6 +702,24 @@ export interface OverviewResult {
   totalUnits: number
 }
 
+/**
+ * What a map was drawn to (§6.5).
+ *
+ * `total` is the contacts the file holds, counted by the census — the number the
+ * box shows as the map's own once one has been taken, where the file's own
+ * claim ({@link OpenResult.contacts}) may be absent or rounded. The census rides
+ * along so the analysis worker's mount of the same map is handed it rather than
+ * walking every pixel a second time.
+ */
+export interface ResampleResult {
+  mode: ResampleMode
+  /** The total asked for, or `null` for the file as stored. */
+  contacts: number | null
+  /** Contacts in the file, counted; `null` before any census. */
+  total: number | null
+  census: Census | null
+}
+
 export interface StatsResult {
   /** Everything the byte source has fetched since the file was opened. */
   total: SourceStats
@@ -721,6 +747,8 @@ export interface ResultMap {
   validateDeep: DeepValidation
   stats: StatsResult
   exportMcool: McoolExport
+  resample: ResampleResult
+  contacts: { total: number | null }
   cancel: null
   close: null
 }
@@ -902,6 +930,18 @@ export type WorkerRequest =
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
   | { id: number; kind: 'validateDeep' }
+  /**
+   * Draw the open map to `contacts` contacts, or back to the file as stored
+   * (`null`) — §6.5. Every read after it, of this map and of any rung of it,
+   * is of the drawn map; reads already queued behind it wait for the census.
+   */
+  | { id: number; kind: 'resample'; contacts: number | null; seed?: number; alpha?: number }
+  /**
+   * Count the contacts the open map holds, where the file does not say (§6.5):
+   * a census of the **coarsest** rung of its ladder, which holds every contact
+   * in the fewest pixels, or of the map itself where it has no ladder.
+   */
+  | { id: number; kind: 'contacts' }
   | { id: number; kind: 'stats' }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }

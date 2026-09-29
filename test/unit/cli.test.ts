@@ -224,6 +224,32 @@ describe('running a task', () => {
     expect(complained()).toMatch(/has no parameter --windwo/)
   })
 
+  it('draws the map to --contacts before the task reads it, and says so in the framing', async () => {
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--quiet', '--contacts', '5k'])).toBe(0)
+    const sub = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
+    expect(sub).toMatch(/^# framing: whole file at 1000 bp.*, subsampled to 5,000 contacts \(of [\d,]+\)$/m)
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--quiet', '--contacts', '2,000,000'])).toBe(0)
+    const over = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
+    expect(over).toMatch(/, oversampled to 2,000,000 contacts \(of [\d,]+, Boost-HiC\)$/m)
+  })
+
+  it('says on stderr what the map was drawn to, unless told to be quiet', async () => {
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--contacts', '5k'])).toBe(0)
+    expect(complained()).toMatch(/^ {2}subsampled to 5,000 contacts \(of [\d,]+\)$/m)
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--quiet', '--contacts', '5k'])).toBe(0)
+    expect(complained()).not.toMatch(/subsampled/)
+  })
+
+  it('refuses a --contacts that is not a number of contacts', async () => {
+    reset()
+    expect(await main(['expected', sample, '--out', out, '--quiet', '--contacts', 'lots'])).not.toBe(0)
+    expect(complained()).toMatch(/--contacts: “lots” is not a number of contacts/)
+  })
+
   it('narrows to a window, and says so in the framing', async () => {
     reset()
     expect(

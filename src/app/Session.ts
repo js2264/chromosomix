@@ -104,6 +104,7 @@ import type {
   PairsBinning,
   PairsImportSummary,
   PairsProbeResult,
+  ResampleResult,
   SourceSpec,
   TablePayload,
 } from '../worker/protocol'
@@ -133,6 +134,10 @@ import { placementOn, type AnnotationEntry, type Placement } from '../annotation
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { StructureCard } from '../ui/StructureCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
+import { ContactsBox, type MapTotal } from '../ui/ContactsBox'
+import type { DrawnDepth } from '../contacts'
+import type { Census } from '../metacooler/resample'
+import type { ResampleTarget } from '../analysis/worker/protocol'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, LEAD_ROW, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
@@ -149,7 +154,7 @@ import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
-import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
+import type { AnnotationContext, FigureSubject, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
@@ -493,6 +498,13 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   twobit: 'the .2bit index',
 }
 
+/** What a reader was last told to draw its map to, and what it answered (§6.5). */
+interface DrawnState {
+  contacts: number | null
+  result: ResampleResult | null
+  refusal: string | null
+}
+
 /** The second file of a comparison, and what the gate had to read to accept it. */
 interface OpenCompare {
   uri: string
@@ -647,6 +659,31 @@ export class Session {
 
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
+  /**
+   * The *contacts* box at the end of the breadcrumb (§6.5), built with the bar
+   * it sits in and re-seated by it on every render rather than rebuilt.
+   */
+  private contactsBox: ContactsBox | null = null
+  /**
+   * What each reader this session holds was last told to draw its map to, and
+   * what it answered (§6.5). By client: the lead's worker outlives the files it
+   * opens — and each open puts its map back as stored — while the second
+   * file's is replaced with the file.
+   */
+  private readonly drawn = new WeakMap<ReaderClient, DrawnState>()
+  /**
+   * The census each reader's map was counted by, kept across totals: it does
+   * not depend on the total, and a task handed it need not walk the map again.
+   */
+  private readonly censuses = new WeakMap<ReaderClient, Census>()
+  /** Contacts a reader counted for a file that does not say how many it holds. */
+  private readonly counted = new WeakMap<ReaderClient, number>()
+  /**
+   * Which of a reader's opens an answer about its map belongs to. The lead's
+   * worker outlives the files it opens, so a census or a count can land after
+   * the next file has opened, and it is not a fact about that one.
+   */
+  private readonly opens = new WeakMap<ReaderClient, number>()
   private infoPanel: InfoPanel | null = null
   /**
    * The genome strip, where this session's genome is one worth drawing.
@@ -2361,6 +2398,14 @@ export class Session {
         (done, total, note) => screen.report(done, total, note),
       )
       const info = await task.promise
+      // A new map in the worker is a map as stored (§6.5): whatever it was told
+      // to draw the last one to went with it, and the render below tells it
+      // again.
+      this.drawn.delete(client)
+      this.censuses.delete(client)
+      this.counted.delete(client)
+      this.opens.set(client, (this.opens.get(client) ?? 0) + 1)
+      this.countOf(client, info)
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       // The console's line for the file (§23). Here rather than at the door,
@@ -2460,6 +2505,7 @@ export class Session {
         onSelectDerived: (binsize) => this.openDerived(binsize),
         onAddResolution: () => this.askResolution(),
         onDropResolution: (binsize) => this.dropResolution(binsize),
+        contacts: this.contactsBoxFor(),
       })
       this.infoPanel = new InfoPanel({
         info,
@@ -5821,6 +5867,11 @@ export class Session {
       }
       this.compare?.client.terminate()
       this.compare = { uri, source, client, info, contigs: contigPairs(contigs) }
+      // Drawn to the tab's total before the remount below reads it (§6.5): the
+      // second triangle is a map like any other, and a comparison at one depth
+      // is what the total is for.
+      this.drawReader(client, this.contactsTarget)
+      this.countOf(client, info)
       this.compareCard?.set({ kind: 'open', label: fileLabel(uri), info })
       this.infoPanel?.setCompare(info)
       // A remote second file survives being shared; a local one cannot be
@@ -5944,15 +5995,13 @@ export class Session {
    * What the whole-file view's cache key has to carry about the comparison.
    *
    * That slot holds the result of a full pass over every stored pixel, keyed on
-   * *what was read*. A second file arriving, leaving, or being rescaled all
-   * change what the picture is of, so each of them has to miss the cache — the
-   * alternative is a whole-genome map that keeps showing one file after a second
-   * has been dropped on it.
+   * *what was read*. A second file arriving, leaving, or being put together
+   * with the first another way all change what the picture is of, so each of
+   * them has to miss the cache — the alternative is a whole-genome map that
+   * keeps showing one file after a second has been dropped on it.
    */
   private compareKey(): string {
-    return this.compare === null
-      ? ''
-      : `${this.compare.uri}|${String(this.normalising())}|${this.compareOp()}`
+    return this.compare === null ? '' : `${this.compare.uri}|${this.compareOp()}`
   }
 
   /**
@@ -6084,24 +6133,6 @@ export class Session {
     void this.openCompare(moved, carried.source)
   }
 
-  /**
-   * Whether the second file's counts are scaled to the first's bright end.
-   *
-   * A preference rather than view state: it changes how the picture is drawn and
-   * not what is in it, and it is per session because it is a fact about *these
-   * two files* — one being shallower than the other — rather than about the
-   * viewer.
-   *
-   * `undefined` where nothing has been remembered, and the panel takes it from
-   * there: the sensible default differs between the split and the derived
-   * operations and between balanced values and raw counts, and only the panel
-   * knows which of those it is drawing. Collapsing the absent case to `false`
-   * here would hand it a choice the reader never made.
-   */
-  private normalising(): boolean | undefined {
-    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') ?? undefined
-  }
-
   /** What a heatmap view needs to read and label the second file, or `undefined`. */
   private compareContext(): CompareRead | undefined {
     const held = this.compare
@@ -6110,22 +6141,14 @@ export class Session {
     return {
       client: held.client,
       labels: [this.mapLabel(file.uri), this.mapLabel(held.uri)],
-      normalise: this.normalising(),
-      onNormaliseChange: (on) => {
-        remember(this.memoryKey(file.uri), 'compare:normalise', on)
-        this.remount()
-      },
-      // In the view state rather than in session memory, unlike the depth match
-      // beside it: that one changes how the picture is drawn, this one changes
-      // what is in it. A link naming a ratio has to produce a ratio.
+      // In the view state rather than in session memory: it changes what is in
+      // the picture, and a link naming a ratio has to produce a ratio.
       op: this.compareOp(),
       onOpChange: (op) => {
         this.store.patch(op === 'split' ? { op: undefined } : { op })
         // A remount, unlike the baseline beside it: the split needs the second
-        // file's own block kept per-file and the derived operations do not, so
-        // the *controls* differ between them — the depth tickbox is there under
-        // one and not under the others — and the controls are built once, at
-        // construction.
+        // file's own block kept per-file and the derived operations do not, and
+        // the panel is built for one or the other at construction.
         this.remount()
       },
       onFailure: (message) => {
@@ -6285,6 +6308,7 @@ export class Session {
       // history entry rather than five that each undo a file — the same rule
       // the colour controls follow, and for the same reason: adding a map to
       // what is on screen is not a navigation away from it.
+      onDrawn: () => this.contactsBox?.sync(),
       onMapsChange: (maps) => {
         this.store.patch({ maps }, { replace: true })
         // The Contact maps card lists the deck's maps, so it follows the list.
@@ -7556,6 +7580,10 @@ export class Session {
     // block drawn from the previous set would be a picture of the wrong cells.
     await this.syncCells(state)
     if (this.destroyed || this.store.state !== state) return
+    // …and the total the maps are drawn to (§6.5), for the same reason. Told,
+    // not awaited: the view's reads queue behind the census in the worker, under
+    // the view's own veil, and the answer arrives for the box and the captions.
+    this.syncContacts(state)
     this.mounted = state
 
     switch (state.view) {
@@ -7717,6 +7745,144 @@ export class Session {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // The total the maps are drawn to (§6.5)
+  // -------------------------------------------------------------------------
+
+  /** The total the tab's maps are drawn to, or `null` for the files as stored. */
+  private get contactsTarget(): number | null {
+    return this.store.state?.contacts ?? null
+  }
+
+  /** Draw every map of the tab to `contacts`, or put the files back (`null`). */
+  private setContacts(contacts: number | null): void {
+    if (contacts === this.contactsTarget) return
+    this.store.patch({ contacts: contacts ?? undefined })
+  }
+
+  /** The box, with its questions answered by this session. */
+  private contactsBoxFor(): ContactsBox {
+    this.contactsBox = new ContactsBox({
+      value: () => this.contactsTarget,
+      own: () => this.totalOf(this.reader, this.file?.info.contacts ?? null),
+      maps: () => this.mapTotals(),
+      refusal: () => this.contactsRefusal(),
+      onCommit: (contacts) => this.setContacts(contacts),
+    })
+    return this.contactsBox
+  }
+
+  /**
+   * Tell a reader what to draw its map to, where it was last told something
+   * else. Not awaited: the reads a view issues next queue behind the census in
+   * the worker, and the answer arrives for the box, the captions and the tasks.
+   */
+  private drawReader(client: ReaderClient, contacts: number | null): void {
+    const held = this.drawn.get(client)
+    if (held === undefined ? contacts === null : held.contacts === contacts) return
+    const entry: DrawnState = { contacts, result: null, refusal: null }
+    this.drawn.set(client, entry)
+    const open = this.opens.get(client)
+    client
+      .request<'resample'>({ kind: 'resample', contacts })
+      .then((result) => {
+        if (this.opens.get(client) !== open) return
+        // Kept whatever total was asked for since: the census does not depend
+        // on one, and the next draw of this map can skip the walk.
+        if (result.census !== null) this.censuses.set(client, result.census)
+        if (this.drawn.get(client) !== entry) return
+        entry.result = result
+        this.contactsBox?.sync()
+      })
+      .catch((error: unknown) => {
+        if (this.drawn.get(client) !== entry || isCancellation(error)) return
+        entry.refusal = error instanceof Error ? error.message : String(error)
+        this.contactsBox?.sync()
+      })
+  }
+
+  /** Every reader this session holds, drawn to the state's total. */
+  private syncContacts(state: ViewState): void {
+    const contacts = state.contacts ?? null
+    if (this.reader !== null && this.file !== null) this.drawReader(this.reader, contacts)
+    if (this.compare !== null) this.drawReader(this.compare.client, contacts)
+  }
+
+  /** What a reader's map is drawn to, as a caption and a framing say it. */
+  private depthOf(client: ReaderClient | null): DrawnDepth | null {
+    const held = client === null ? undefined : this.drawn.get(client)
+    const result = held?.result ?? null
+    if (held === undefined || held.contacts === null || result === null || result.total === null) {
+      return null
+    }
+    return { contacts: held.contacts, total: result.total, mode: result.mode }
+  }
+
+  /** A reader's map's contacts as stored: counted, where a census has, else as the file says. */
+  private totalOf(client: ReaderClient | null, declared: number | null): number | null {
+    if (client === null) return declared
+    return this.censuses.get(client)?.total ?? this.counted.get(client) ?? declared
+  }
+
+  /**
+   * Count the contacts a reader's map holds, where its file does not say — a
+   * `.hic`, whose header counts each contact off a chromosome's diagonal twice.
+   * In the background: the box shows the number when it lands, and the
+   * chevrons wait for it.
+   */
+  private countOf(client: ReaderClient, info: OpenResult): void {
+    if (info.contacts !== null) return
+    const open = this.opens.get(client)
+    client
+      .request<'contacts'>({ kind: 'contacts' })
+      .then(({ total }) => {
+        if (total === null || this.opens.get(client) !== open) return
+        this.counted.set(client, total)
+        this.contactsBox?.sync()
+      })
+      .catch(() => undefined)
+  }
+
+  /** The total a task on a reader's map is drawn to, with the census it can skip (§6.5). */
+  private resampleOf(client: ReaderClient | null): { resample?: ResampleTarget } {
+    const contacts = this.contactsTarget
+    if (contacts === null || client === null) return {}
+    const census = this.censuses.get(client)
+    return { resample: { contacts, ...(census === undefined ? {} : { census }) } }
+  }
+
+  /** Every map on screen and what it holds, for the box's two chevrons. */
+  private mapTotals(): MapTotal[] {
+    const file = this.file
+    if (file === null) return []
+    const out: MapTotal[] = [
+      { label: this.mapLabel(file.uri), total: this.totalOf(this.reader, file.info.contacts) },
+    ]
+    const second = this.compare
+    if (second !== null) {
+      out.push({ label: this.mapLabel(second.uri), total: this.totalOf(second.client, second.info.contacts) })
+    }
+    for (const { panel } of this.deck?.analysable() ?? []) {
+      if (panel.openInfo === null) continue
+      out.push({ label: this.mapLabel(panel.uri), total: panel.contactsTotal })
+    }
+    return out
+  }
+
+  /** The first map that could not be drawn to the total, and why. */
+  private contactsRefusal(): string | null {
+    const lead = this.reader === null ? undefined : this.drawn.get(this.reader)
+    if (lead?.refusal != null) return lead.refusal
+    const second = this.compare
+    const theirs = second === null ? undefined : this.drawn.get(second.client)
+    if (second !== null && theirs?.refusal != null) return `${this.mapLabel(second.uri)}: ${theirs.refusal}`
+    for (const { panel } of this.deck?.analysable() ?? []) {
+      const refusal = panel.drawRefusal
+      if (refusal !== null) return `${this.mapLabel(panel.uri)}: ${refusal}`
+    }
+    return null
+  }
+
   /**
    * File and genome context for the exported figure's caption.
    *
@@ -7724,10 +7890,13 @@ export class Session {
    * it drew it *from*; that is the router's, because the uri and the genome are
    * view state.
    */
-  private captionFor(state: ViewState): { file: string; genome?: string } {
+  private captionFor(state: ViewState): FigureSubject {
     return {
       file: this.mapLabel(state.uri),
       ...(state.genome === undefined ? {} : { genome: state.genome }),
+      // Asked when the figure is drawn, since the reader's answer lands after
+      // the view is built (§6.5).
+      depth: () => this.depthOf(this.reader),
     }
   }
 
@@ -7981,7 +8150,7 @@ export class Session {
       // block a whole-file view holds *is* the picture, and a reader stepping
       // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
       // one under a bar that says 3 kb (§3.4).
-      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}|${state.coarsen ?? 0}`,
+      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}|${state.coarsen ?? 0}|${state.contacts ?? 0}`,
       () => {
         return new WholeView({
           client: this.clientOf(),
@@ -8698,6 +8867,12 @@ export class Session {
         uri !== undefined && source !== undefined
           ? () => void this.open(uri, source)
           : undefined,
+      // A total the contacts box asked for that this map cannot be drawn to
+      // (§6.5): the way out is the files as stored, one press away.
+      onReadAsStored:
+        err instanceof ViewerError && err.detail['resample'] === true && this.contactsTarget !== null
+          ? () => this.setContacts(null)
+          : undefined,
     })
     this.showContent(view.el)
   }
@@ -8796,6 +8971,7 @@ export class Session {
             source: starred.source,
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
+            ...(this.deck?.starredPanel?.resampleTarget() ?? {}),
             // What a plain Run names the map it measured (§16.10), as a batch
             // names each of its maps (`readyTargets`).
             label: this.mapLabel(starred.uri),
@@ -8812,6 +8988,7 @@ export class Session {
             source: file.source,
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
+            ...this.resampleOf(this.reader),
             label: this.mapLabel(file.uri),
           }
         }
@@ -9027,6 +9204,7 @@ export class Session {
         source: file.source,
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
+        ...this.resampleOf(this.reader),
         // What the reader calls it (§16.10), which is what every tab, legend,
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.
@@ -9045,6 +9223,7 @@ export class Session {
         source: facts.source,
         ...cellsOfMap(facts.info),
         ...binningOfMap(facts.info),
+        ...panel.resampleTarget(),
         label: this.mapLabel(facts.uri),
       })
     }

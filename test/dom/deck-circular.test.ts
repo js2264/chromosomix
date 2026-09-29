@@ -64,6 +64,7 @@ function opened(uri: string): unknown {
     hasWeights: false,
     scoreColumns: ['count'],
     sourceBytes: 4096,
+    contacts: null,
     sourceKind: 'remote',
   }
 }

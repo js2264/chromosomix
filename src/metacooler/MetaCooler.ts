@@ -70,6 +70,13 @@ import {
   resolveCountKind,
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
+import {
+  ResampledStore,
+  takeCensus,
+  type Census,
+  type ResamplePlan,
+  type ResampleSpec,
+} from './resample'
 import { resolveCells, ScoolStore, type PerCellScanOptions } from './scool'
 import { HicFile } from '../hic/HicFile'
 import { isHicMagic } from '../hic/format'
@@ -293,7 +300,33 @@ export class MetaCooler {
    */
   readonly contigGenomeIds: Int32Array
 
-  readonly handle: Hdf5Handle
+  /**
+   * The file, as opened — what {@link handle} answers from when nothing is
+   * resampled, and what closes.
+   */
+  private readonly rawHandle: Hdf5Handle
+
+  /**
+   * The file's groups and datasets, with its weights on the resampled map's
+   * scale when there is one (§6.5).
+   *
+   * Every balanced read multiplies by `bins/weight` through here — the dense
+   * block, the pooled and aggregated roll-ups, the tasks' own reads — so scaling
+   * the one column here is scaling it everywhere, and a subsample balanced with
+   * the file's weights cannot read `N/T` times fainter in one place and not in
+   * another. Everything else passes through untouched.
+   */
+  get handle(): Hdf5Handle {
+    const scale = this.resampled?.weightScale ?? 1
+    if (scale === 1) return this.rawHandle
+    if (this.weighted?.scale !== scale) {
+      this.weighted = { scale, handle: scaledWeights(this.rawHandle, scale) }
+    }
+    return this.weighted.handle
+  }
+
+  /** The weight-scaling view of {@link rawHandle}, for the scale it was made at. */
+  private weighted: { scale: number; handle: Hdf5Handle } | null = null
   /**
    * The pixels, behind the one interface both containers implement.
    *
@@ -312,8 +345,26 @@ export class MetaCooler {
   private pixelStore: PixelStore
 
   get store(): PixelStore {
+    return this.resampled ?? this.pixelStore
+  }
+
+  /**
+   * The pixels exactly as the file stores them, whatever is drawn over them.
+   *
+   * What the deep check walks (§6.3): it reconciles the stored counts against
+   * `attrs['sum']`, and a resampled map would fail it by construction.
+   */
+  get storedPixels(): PixelStore {
     return this.pixelStore
   }
+
+  /** The map drawn to another total, or `null` for the file as stored (§6.5). */
+  private resampled: ResampledStore | null = null
+  /**
+   * Every sequence pair's contacts, taken once and kept: it does not depend on
+   * the total, so a second number typed costs no second walk.
+   */
+  private census: Promise<Census> | null = null
   private readonly chromOffset: Float64Array
   private readonly genomeOffset: Float64Array
   private readonly genomeIds: Map<string, number>
@@ -689,7 +740,7 @@ export class MetaCooler {
 
   constructor(init: MetaCoolerInit) {
     this.uri = init.uri
-    this.handle = init.handle
+    this.rawHandle = init.handle
     this.tables = init.tables ?? init.handle
     this.layout = init.layout
     this.entries = init.handle.rootEntries
@@ -733,7 +784,7 @@ export class MetaCooler {
     this.countKind = resolveCountKind(this.tables.dtype('pixels/count'))
     // After `countKind` and after `chromOffset`, because the default store is
     // built from both. A supplied one already knows its own answers.
-    this.pixelStore = init.store ?? new CoolerStore(this.handle, this.nBins, this.countKind)
+    this.pixelStore = init.store ?? new CoolerStore(this.rawHandle, this.nBins, this.countKind)
     this.validateLight()
   }
 
@@ -1396,6 +1447,10 @@ export class MetaCooler {
     }
     const from = Math.max(0, Math.min(lo, this.nBins))
     const to = Math.max(from, Math.min(hi, this.nBins))
+    if (column === DEFAULT_WEIGHT_COLUMN && this.tables === this.rawHandle) {
+      // Through the handle, so a resampled map's weights are on its scale.
+      return this.handle.readNumeric(path, from, to)
+    }
     return columnIsText(this.tables.dtype(path)) === true
       ? this.tables.readStrings(path, from, to)
       : this.tables.readNumeric(path, from, to)
@@ -1626,7 +1681,9 @@ export class MetaCooler {
     let owner = 0
     let row = 0
     const cancelled = options?.cancelled
-    await this.scanPixels({
+    // The stored pixels, never a resampled draw of them: this reconciles the
+    // file against its own `attrs['sum']`.
+    await this.pixelStore.scanAll({
       onProgress: options?.onProgress,
       onChunk: (chunk) => {
         if (cancelled?.() === true) return false
@@ -1763,12 +1820,164 @@ export class MetaCooler {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Resampling (§6.5)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Draw this map to `spec.contacts`, or put back the file as stored (`null`).
+   *
+   * The resampled pixels replace the stored ones behind {@link store} at once,
+   * before the census is taken, so a read already queued behind this waits for
+   * the draw rather than reading the file as stored in between. A refusal —
+   * counts that are not contacts, a file that stores both triangles, a
+   * container of cells, a sequence Boost-HiC cannot walk — stays installed and
+   * is what every read then answers with: a map drawn from the stored counts
+   * under a header that says otherwise would be the one wrong answer.
+   *
+   * `census` is a census another mount of this same map already took; it is
+   * checked against this map's bins and used rather than walking every pixel
+   * again.
+   */
+  async resample(
+    spec: ResampleSpec | null,
+    options: {
+      census?: Census
+      onProgress?(done: number, total: number): void
+      cancelled?(): boolean
+    } = {},
+  ): Promise<ResamplePlan | null> {
+    if (spec === null) {
+      this.resampled = null
+      return null
+    }
+    const refusal = this.resampleRefusal()
+    if (options.census !== undefined) this.census = Promise.resolve(options.census)
+    let census: Promise<Census>
+    if (refusal !== null) {
+      census = Promise.reject(refusal)
+    } else {
+      this.census ??= takeCensus(this.pixelStore, this.chromOffset, {
+        ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
+        cancelled: () => this.closed || options.cancelled?.() === true,
+      })
+      census = this.census
+      // A census that was called off is not an answer about the map: the next
+      // request walks it again rather than inheriting the cancellation.
+      census.catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError' && this.census === census) {
+          this.census = null
+        }
+      })
+    }
+    const store = new ResampledStore(
+      this.pixelStore,
+      { starts: this.chromOffset, names: this.chromnames },
+      spec,
+      census,
+    )
+    this.resampled = store
+    return store.ready()
+  }
+
+  /**
+   * The contacts this map says it holds, before anything is drawn from it:
+   * cooler's `attrs['sum']`, a pairs import's records. `null` where the file
+   * does not say — an old cooler written before `sum` was an attribute, a
+   * container of cells — and **for a `.hic`**, whose per-matrix `sumCounts`
+   * counts every contact off the diagonal of a chromosome twice (the matrix both
+   * ways round) and so is not the number of contacts at all. A census counts
+   * those ({@link countContacts}).
+   */
+  get declaredContacts(): number | null {
+    const sum = this.info.sum
+    if (typeof sum === 'number' && Number.isFinite(sum) && sum >= 0) return sum
+    return null
+  }
+
+  /**
+   * The contacts this map holds as stored: as the file says where it says so
+   * exactly, and counted by the census otherwise — the one a resample takes,
+   * kept for it. `null` for a map whose stored values are not contacts.
+   */
+  async countContacts(options: { onProgress?(done: number, total: number): void } = {}): Promise<number | null> {
+    const declared = this.declaredContacts
+    if (declared !== null) return declared
+    if (this.resampleRefusal() !== null) return null
+    this.census ??= takeCensus(this.pixelStore, this.chromOffset, {
+      ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
+      cancelled: () => this.closed,
+    })
+    try {
+      return (await this.census).total
+    } catch {
+      return null
+    }
+  }
+
+  /** The census, where one has been taken and has finished. */
+  async takenCensus(): Promise<Census | null> {
+    if (this.census === null) return null
+    try {
+      return await this.census
+    } catch {
+      return null
+    }
+  }
+
+  /** Why this map cannot be resampled at all, or `null`. */
+  private resampleRefusal(): ViewerError | null {
+    if (this.layout.kind === 'scool') {
+      return new ViewerError(
+        'unsupported',
+        'A single-cell container’s map is a sum of its cells rather than one library, so it is not ' +
+          'resampled as one. Open one cell, or a pseudo-bulk written as a cooler, to resample it.',
+        { resample: true, layout: 'scool' },
+      )
+    }
+    if (this.storageMode !== 'symmetric-upper') {
+      return new ViewerError(
+        'unsupported',
+        'This map stores both triangles, so each contact would be drawn twice. Resampling reads ' +
+          'upper-triangular files — cooler’s default.',
+        { resample: true, storageMode: this.storageMode },
+      )
+    }
+    return null
+  }
+
   /** Release the handle and its byte source. Idempotent. */
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.handle.close()
+    this.rawHandle.close()
   }
+}
+
+/**
+ * `handle` with `bins/weight` multiplied by `scale`, and nothing else touched.
+ *
+ * A proxy rather than a wrapper class because a handle is an interface with a
+ * dozen methods and one of them differs; every other call is forwarded to the
+ * handle itself, bound to it.
+ */
+function scaledWeights(handle: Hdf5Handle, scale: number): Hdf5Handle {
+  const path = `bins/${DEFAULT_WEIGHT_COLUMN}`
+  return new Proxy(handle, {
+    get(target, property) {
+      if (property === 'readNumeric') {
+        return (at: string, lo?: number, hi?: number): Float64Array => {
+          const values = target.readNumeric(at, lo, hi)
+          if (at !== path) return values
+          const out = new Float64Array(values.length)
+          for (let i = 0; i < values.length; i++) out[i] = values[i] * scale
+          return out
+        }
+      }
+      const value: unknown = Reflect.get(target, property, target)
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    },
+  })
 }
 
 /**
