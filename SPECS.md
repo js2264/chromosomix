@@ -5376,9 +5376,14 @@ turned when they pressed the button would be the picture editing their settings 
 Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
 where a locus is:
 
-- a **line** stays a line at the same place on the genome, joining up with the same line in the lane
-  below it — a mark stored as horizontal is drawn too, the axis it was drawn against being gone but
-  the locus it names not;
+- a **line** becomes the **V** its place makes: the two 45° rays of contacts that place anchors,
+  standing on the axis at its position and opening to the far edge of the band — one V in each band of
+  a mirrored pair — and it carries on **straight down the lanes** from the V's apex, where the x axis
+  is the tracks' own. Drawn straight up the band, as it was, it crossed contacts between two *other*
+  places the whole height of it, a column of a turned picture not being a place; the V is what a
+  pointer on a track draws there too. A mark stored as horizontal is the same V, and continues down the
+  lanes too, the axis it was drawn against being gone but the locus it names not; and a place just off
+  the side of the picture still draws the arm that reaches into it;
 - a **domain** becomes a triangle standing on the axis, apex over its own midpoint at the height of
   its own span;
 - a **loop** becomes one dot at that height — the pair and its mirror rotate to the same point, so

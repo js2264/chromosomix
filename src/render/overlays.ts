@@ -22,7 +22,7 @@ import type { ManualArrowhead, ManualLine, ManualRect, ManualSpan } from '../ann
 import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
 import type { Rect } from './heatmap'
 import type { LocusAxis } from './locus'
-import { rowForSeparation, type RotateDirection } from './rotate'
+import { placeRays, rowForSeparation, type RotateDirection } from './rotate'
 import type { Scale } from './scale'
 
 /** The plot geometry an overlay is drawn against. */
@@ -46,9 +46,11 @@ export interface OverlayFrame {
  *
  * Which means every mark changes shape, and each change is the useful one:
  *
- * - a **line** stays a line, at the same place on the genome, joining up with
- *   the same line drawn in the lane below it — the whole reason to turn a map is
- *   that its x axis becomes the tracks' axis;
+ * - a **line** becomes the V its place makes — the two 45° rays of contacts it
+ *   anchors, standing on the axis where the same line carries on, vertical,
+ *   down the lanes below: the whole reason to turn a map is that its x axis
+ *   becomes the tracks' axis, and a column of the turned picture is not a place
+ *   ({@link placeRays});
  * - a **domain** becomes a triangle standing on the axis, its apex over its own
  *   midpoint at the height of its own span;
  * - a **loop** becomes a dot at the height of its own span, which is the single
@@ -65,6 +67,10 @@ export interface OverlayTurn {
   direction: RotateDirection
   /** Base pairs per bin, for turning a distance into a row. */
   binsize: number
+  /** Rows of the turned block — where a line's V ends ({@link placeRays}). */
+  nrows: number
+  /** The first row of a mirrored pair's second band, where there is one. */
+  fold?: number
 }
 
 /** The two axes an overlay places itself on. */
@@ -446,21 +452,54 @@ export function drawManualLines(
   const turn = axes.turn ?? null
   ctx.save()
   ctx.lineWidth = Math.max(1 / frame.dpr, 1)
+  // A V is an extent, and its arms run past the band's far edge by design.
+  if (turn !== null) clipToData(ctx, frame)
   for (const line of lines) {
     ctx.strokeStyle = line.colour
     ctx.fillStyle = line.colour
-    // A mark names one locus and stores which axis it was drawn against. On a
-    // turned map only one of those axes is still a place, so every line is drawn
-    // against it — including the ones that were horizontal, which would
-    // otherwise be marks the reader put down and can no longer find. This is
-    // also what keeps a line joined to the same line in the lane below it.
-    const wantsVertical = turn !== null || line.axis !== 'horizontal'
-    const wantsHorizontal = turn === null && line.axis !== 'vertical'
 
     // Every landing, not the first: a hand-drawn rule on a circular sequence is
     // on screen twice while the junction is (§8.15), and drawing one of them
     // makes the mark flicker in and out as the reader slides past the join.
-    if (wantsVertical && axes.cols !== null) {
+    if (turn !== null) {
+      // **Turned, a line is the V its place makes.** A mark names one locus and
+      // stores which axis it was drawn against; on a turned map only one of
+      // those axes is still a place, and what a place is there is not a column
+      // but the two 45° rays of contacts it anchors — the V a pointer on a track
+      // draws, standing on the axis where the same line carries on down the
+      // lanes. Drawn straight up, it crossed contacts between two *other*
+      // places the whole height of the band. A horizontal mark names a place
+      // too, and is the same V: the axis it was drawn against is gone, the
+      // locus is not.
+      if (axes.cols === null) continue
+      const units = axes.cols.locusToUnits(line.at.contig, line.at.bp)
+      // A place off the side of the block still has arms reaching into it, so
+      // it is placed by extending its sequence's stretch past the block's edge —
+      // a turned map is one sequence, laid out once unless it is a circle panned
+      // across its join (whose landings the list above already has).
+      if (units.length === 0) {
+        const beyond = axes.cols.locusToUnit(line.at.contig, line.at.bp)
+        if (beyond !== null) units.push(beyond)
+      }
+      for (const unit of units) {
+        ctx.beginPath()
+        for (const ray of placeRays(turn, unit)) {
+          const x0 = toX(frame, ray.from.col)
+          const x1 = toX(frame, ray.to.col)
+          // Culled on the arm rather than on the apex: a place just off the
+          // side of the picture still has an arm reaching into it.
+          if (Math.max(x0, x1) < frame.data.x || Math.min(x0, x1) > frame.data.x + frame.data.width) {
+            continue
+          }
+          ctx.moveTo(x0, toY(frame, ray.from.row))
+          ctx.lineTo(x1, toY(frame, ray.to.row))
+        }
+        ctx.stroke()
+      }
+      continue
+    }
+
+    if (line.axis !== 'horizontal' && axes.cols !== null) {
       for (const unit of axes.cols.locusToUnits(line.at.contig, line.at.bp)) {
         const x = snap(toX(frame, unit), frame.dpr)
         if (!insideX(frame, x)) continue
@@ -470,7 +509,7 @@ export function drawManualLines(
         ctx.stroke()
       }
     }
-    if (wantsHorizontal && axes.rows !== null) {
+    if (line.axis !== 'vertical' && axes.rows !== null) {
       for (const unit of axes.rows.locusToUnits(line.at.contig, line.at.bp)) {
         const y = snap(toY(frame, unit), frame.dpr)
         if (!insideY(frame, y)) continue

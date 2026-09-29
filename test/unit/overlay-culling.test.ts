@@ -243,7 +243,7 @@ describe('a domain on a turned map, against the edges of the view', () => {
         contigLength: NBINS * BINSIZE,
       },
     ]),
-    turn: { maxSeparation: MAX_SEPARATION, direction: 'up', binsize: BINSIZE },
+    turn: { maxSeparation: MAX_SEPARATION, direction: 'up', binsize: BINSIZE, nrows: MAX_SEPARATION + 1 },
   })
 
   /** A turned view showing columns `[from, to]`; the band is as deep as always. */

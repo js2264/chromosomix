@@ -106,14 +106,13 @@ import { isCancellation, type Cancellable } from '../worker/client'
 import {
   BIN_FRACTION,
   anchorColumns,
-  anchorRays,
   bandAt,
   binsForColumns,
   cellAt,
   cellLoci,
   isTurnable,
+  placeRays,
   rotateBlock,
-  rowForSeparation,
   separationCoords,
   reachForRows,
   rowsForReach,
@@ -4414,39 +4413,20 @@ export class MatrixPanel {
     ctx.beginPath()
     const turned = this.turned
     if (turned !== null && laneIsHorizontal(guide.edge)) {
-      // The apex is on the diagonal under the pointer — separation zero, which
-      // is the bottom row of an ordinary turned band and the top row of the
-      // mirrored half — and the rays go from there towards the far edge only.
-      // Both ways along the genome, because a place is an anchor of everything
-      // to its left as well as everything to its right.
+      // The V on the diagonal under the pointer, one per band of a mirrored
+      // pair: the place being pointed at is on the genome rather than in a file,
+      // and it anchors contacts in both maps (`placeRays`). The same V a line
+      // the reader drew there becomes (`drawManualLines`).
       const col = frame.colScale.toUnit(guide.along - frame.plot.x)
-      // One V per band, because a mirrored pair has two diagonals and the place
-      // being pointed at is on the genome rather than in a file: it anchors
-      // contacts in both maps, and a guide drawn in one of them would say
-      // otherwise.
-      const arms: Array<{ apex: { col: number; row: number }; far: number }> =
-        turned.fold === undefined
-          ? [
-              {
-                apex: { col, row: rowForSeparation(turned, 0) + 0.5 },
-                far: turned.direction === 'up' ? 0 : turned.nrows,
-              },
-            ]
-          : [
-              { apex: { col, row: rowForSeparation(turned, 0) + 0.5 }, far: 0 },
-              { apex: { col, row: turned.fold + 0.5 }, far: turned.nrows },
-            ]
-      for (const arm of arms) {
-        for (const ray of anchorRays(arm.apex, [arm.far])) {
-          ctx.moveTo(
-            frame.plot.x + frame.colScale.toPixel(ray.from.col),
-            frame.plot.y + frame.rowScale.toPixel(ray.from.row),
-          )
-          ctx.lineTo(
-            frame.plot.x + frame.colScale.toPixel(ray.to.col),
-            frame.plot.y + frame.rowScale.toPixel(ray.to.row),
-          )
-        }
+      for (const ray of placeRays(turned, col)) {
+        ctx.moveTo(
+          frame.plot.x + frame.colScale.toPixel(ray.from.col),
+          frame.plot.y + frame.rowScale.toPixel(ray.from.row),
+        )
+        ctx.lineTo(
+          frame.plot.x + frame.colScale.toPixel(ray.to.col),
+          frame.plot.y + frame.rowScale.toPixel(ray.to.row),
+        )
       }
     } else if (laneIsHorizontal(guide.edge)) {
       ctx.moveTo(at, data.y)
@@ -6050,6 +6030,8 @@ export class MatrixPanel {
           maxSeparation: turned.maxSeparation,
           direction: turned.direction,
           binsize: this.options.binsize,
+          nrows: turned.nrows,
+          ...(turned.fold === undefined ? {} : { fold: turned.fold }),
         },
       },
       square,
@@ -6731,7 +6713,13 @@ export class MatrixPanel {
     // band that puts one is a function of the depth (`render/overlays.ts`), so
     // this has to move with the ruler beside it.
     const turn = this.locusAxes.turn
-    if (turn !== undefined && turn !== null) turn.maxSeparation = next.maxSeparation
+    if (turn !== undefined && turn !== null) {
+      turn.maxSeparation = next.maxSeparation
+      // And where the band ends, which is how far a line's V reaches.
+      turn.nrows = next.nrows
+      if (next.fold === undefined) delete turn.fold
+      else turn.fold = next.fold
+    }
     this.lanes.setAxes(this.locusAxes)
   }
 

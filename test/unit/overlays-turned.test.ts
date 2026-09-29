@@ -114,7 +114,7 @@ const frameFor = (rows: number): OverlayFrame => ({
 const turnedAxes = (direction: 'up' | 'down' = 'up'): OverlayAxes => ({
   rows: null,
   cols: turnedCols(),
-  turn: { maxSeparation: MAX_SEPARATION, direction, binsize: BINSIZE },
+  turn: { maxSeparation: MAX_SEPARATION, direction, binsize: BINSIZE, nrows: MAX_SEPARATION + 1 },
 })
 
 /** The turned block is `maxSeparation + 1` rows tall. */
@@ -296,27 +296,118 @@ describe('a hand-drawn line on a turned map', () => {
     colour: '#f00',
   })
 
-  it('stays where it is on the genome, so it joins the lane below it', () => {
+  /** Canvas y of a row of the turned block. */
+  const yOf = (row: number, rows = MAX_SEPARATION + 1): number => (row / rows) * PLOT
+  /** Canvas x of a column of the turned block. */
+  const xAt = (col: number): number => (col / NCOLS) * PLOT
+  /** The place, in columns: 25 kb is 50 half-bins along. */
+  const PLACE = 25_000 / (BINSIZE * BIN_FRACTION)
+
+  // It was drawn straight up the band, as it is on the square. A column of a
+  // turned picture is not a place: it is contacts between two *other* places
+  // the whole height of it, and a reader's line named one — whose contacts on a
+  // turned map are the two 45° rays leaving it, the V a pointer on a track
+  // draws. The line carries on, vertical, down the lanes from the V's apex.
+  it('is the V its place makes, standing on the axis', () => {
     const rec = ctx()
     drawManualLines(as2d(rec), frame(), turnedAxes(), [line('vertical')])
-    // Half a pixel off exact: a hairline is snapped to the device-pixel grid.
-    expect(rec.moves[0][0]).toBeCloseTo(xOf(25_000), -0.5)
-    expect(rec.moves).toHaveLength(1)
+    expect(rec.moves).toHaveLength(2)
+    for (const [x, y] of rec.moves) {
+      expect(x).toBeCloseTo(xOf(25_000), 6)
+      expect(y).toBeCloseTo(axisY(), 6)
+    }
+    // To the far edge, one each way along the genome: a row further from the
+    // diagonal is a column further along, so the rays reach as far across as
+    // the apex is deep.
+    const ends = [...rec.lines].sort((a, b) => a[0] - b[0])
+    expect(ends[0][0]).toBeCloseTo(xAt(PLACE - (MAX_SEPARATION + 0.5)), 6)
+    expect(ends[1][0]).toBeCloseTo(xAt(PLACE + (MAX_SEPARATION + 0.5)), 6)
+    expect(ends.map(([, y]) => y)).toEqual([0, 0])
+    expect(rec.didClip).toBe(true)
   })
 
-  it('is drawn for a mark that was horizontal, at the locus it names', () => {
-    // The axis it was drawn against is gone; the locus is not. A horizontal
-    // silently dropped is a mark the reader put down and cannot find.
-    const rec = ctx()
-    drawManualLines(as2d(rec), frame(), turnedAxes(), [line('horizontal')])
-    expect(rec.moves).toHaveLength(1)
-    expect(rec.moves[0][0]).toBeCloseTo(xOf(25_000), -0.5)
+  it('is the same V for a mark that was horizontal, and for a crosshair', () => {
+    // The axis it was drawn against is gone; the locus is not. And one place is
+    // one V, however many axes the mark was drawn against on the square.
+    for (const axis of ['horizontal', 'both'] as const) {
+      const rec = ctx()
+      drawManualLines(as2d(rec), frame(), turnedAxes(), [line(axis)])
+      expect(rec.moves, axis).toHaveLength(2)
+      expect(rec.moves[0][0]).toBeCloseTo(xOf(25_000), 6)
+    }
   })
 
-  it('draws a crosshair once rather than twice at the same x', () => {
+  it('opens downwards on a band turned the other way', () => {
     const rec = ctx()
-    drawManualLines(as2d(rec), frame(), turnedAxes(), [line('both')])
+    drawManualLines(as2d(rec), frame(), turnedAxes('down'), [line('vertical')])
+    expect(rec.moves[0][1]).toBeCloseTo(axisY('down'), 6)
+    expect(rec.lines.map(([, y]) => y)).toEqual([PLOT, PLOT])
+  })
+
+  it('stands in each band of a mirrored pair, the same place in two maps', () => {
+    const rows = 2 * (MAX_SEPARATION + 1)
+    const rec = ctx()
+    drawManualLines(
+      as2d(rec),
+      frameFor(rows),
+      {
+        ...turnedAxes(),
+        turn: {
+          maxSeparation: MAX_SEPARATION,
+          direction: 'up',
+          binsize: BINSIZE,
+          nrows: rows,
+          fold: MAX_SEPARATION + 1,
+        },
+      },
+      [line('vertical')],
+    )
+    expect(rec.moves).toHaveLength(4)
+    const apexes = rec.moves.map(([, y]) => y)
+    expect(apexes.filter((y) => Math.abs(y - yOf(MAX_SEPARATION + 0.5, rows)) < 1e-6)).toHaveLength(2)
+    expect(apexes.filter((y) => Math.abs(y - yOf(MAX_SEPARATION + 1.5, rows)) < 1e-6)).toHaveLength(2)
+    expect(rec.lines.map(([, y]) => y).sort((a, b) => a - b)).toEqual([0, 0, PLOT, PLOT])
+  })
+
+  it('still draws the arm that reaches in when its place is off the side', () => {
+    // Columns 60 to 200 on screen: the place, at 50, is off the left edge, and
+    // its right arm runs into the picture. Culled on the apex, the whole V went.
+    const rec = ctx()
+    const view: OverlayFrame = { ...frame(), colScale: new Scale([60, NCOLS], PLOT) }
+    drawManualLines(as2d(rec), view, turnedAxes(), [line('vertical')])
     expect(rec.moves).toHaveLength(1)
+    expect(rec.lines[0][0]).toBeGreaterThan(0)
+  })
+
+  it('draws the arm of a place outside the block, where it reaches in', () => {
+    // A window from 50 kb: the place, at 45 kb, is not on the block at all —
+    // ten columns left of its first — and its right arm crosses the band.
+    const rec = ctx()
+    const windowed: OverlayAxes = {
+      ...turnedAxes(),
+      cols: new LocusAxis([
+        {
+          contig: 'chrI',
+          unitStart: 0,
+          unitEnd: NCOLS,
+          bpStart: 50_000,
+          bpPerUnit: BINSIZE * BIN_FRACTION,
+          contigLength: 400_000,
+        },
+      ]),
+    }
+    drawManualLines(as2d(rec), frame(), windowed, [{ ...line('vertical'), at: { contig: 'chrI', bp: 45_000 } }])
+    expect(rec.moves).toHaveLength(1)
+    expect(rec.moves[0][0]).toBeCloseTo(xAt(-10), 6)
+    expect(rec.lines[0][0]).toBeCloseTo(xAt(-10 + MAX_SEPARATION + 0.5), 6)
+  })
+
+  it('draws nothing for a place the axis does not reach', () => {
+    const rec = ctx()
+    drawManualLines(as2d(rec), frame(), turnedAxes(), [
+      { ...line('vertical'), at: { contig: 'chrI', bp: 400_000 } },
+    ])
+    expect(rec.moves).toHaveLength(0)
   })
 })
 

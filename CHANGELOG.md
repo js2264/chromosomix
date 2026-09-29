@@ -565,6 +565,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A line on a turned map is the V its place makes (§17.4).** A line from the Manual annotations
+  card was drawn straight up a turned map, as it is on the square, and a column of a turned picture is
+  not a place: it crossed contacts between two other places the whole height of the band. It is drawn
+  now as the two 45° rays of contacts its place anchors, standing on the axis at its position — the
+  same V a pointer on a track draws there — and carries on straight down the lanes from the V's apex.
+  One V per band of a mirrored pair; a horizontal line is the same V, and now continues down the lanes
+  too; and a place just off the side of the picture still draws the arm that reaches into it.
+
 - **P(s) asks for no file on a map binned from a `.pairs` (§18.8).** The import counts the four
   orientations in its own pass (§3.7), and the run already took them from there when the address box
   was left empty — but the box was on the form all the same, under a hint about leaving it empty, and
