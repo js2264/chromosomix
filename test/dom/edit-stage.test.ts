@@ -12,10 +12,13 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { findCorners } from '@/edit/corners'
 import { EditStage } from '@/edit/EditStage'
+import { expectedOf } from '@/edit/method'
 import { EditStore } from '@/state/referenceEdit'
 import type { PictureResult } from '@/worker/protocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
+import { simulate } from '../support/simulatedMap'
 
 let teardown: DomTeardown
 /** Every stage a test opened, closed after it — each listens on the window. */
@@ -146,5 +149,102 @@ describe('the stage', () => {
     await open()
     sequence('I').click()
     expect(textsOf(document.body, '.edit-act span')).toEqual(['turn', 'copy', 'own sequence', 'set aside'])
+  })
+})
+
+describe('the suggestions', () => {
+  /**
+   * A stage over a simulated map whose first sequence reads `[60, 120)`
+   * backwards — the method's one suggestion is to turn it back.
+   */
+  async function openOnATurn(): Promise<{ store: EditStore }> {
+    const simulated = await simulate([[[0, 0, 60, 1], [0, 60, 120, -1], [0, 120, 180, 1]], [[1, 0, 120, 1]]])
+    const expected = expectedOf(simulated.contacts, true)
+    const n = simulated.contacts.n
+    const result: PictureResult = {
+      ...picture(),
+      n,
+      sequences: simulated.names.map((name, i) => ({
+        name,
+        length: simulated.lengths[i],
+        firstCell: simulated.offsets[i],
+        cells: simulated.offsets[i + 1] - simulated.offsets[i],
+      })),
+      levels: [{ n, cells: new Uint8Array((n * (n + 1)) / 2).fill(100) }],
+      method: { contacts: simulated.contacts, expected, corners: findCorners(simulated.contacts, expected) },
+    }
+    const store = new EditStore('stage|turned.cool', { names: simulated.names, lengths: simulated.lengths })
+    const stage = new EditStage({
+      title: 'turned.cool',
+      memoryKey: () => 'stage|turned.cool',
+      store,
+      readPicture: () => ({ promise: Promise.resolve(result), cancel: () => {} }),
+      colormap: 'default',
+      onClose: () => {},
+    })
+    opened.push(stage)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return { store }
+  }
+  /** Long enough for the stage to count the suggestions again after a step. */
+  const recount = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 60))
+
+  it('lists what the method suggests, and takes one as a step the suggestion made', async () => {
+    const { store } = await openOnATurn()
+    expect(textsOf(document.body, '.edit-suggestion-words')).toEqual(['turn s1:60,001-120,000'])
+    button('take').click()
+    expect(store.edit.history).toHaveLength(1)
+    expect(store.edit.history[0]).toMatchObject({ by: 'suggestion', step: { op: 'invert', sequence: 's1', from: 60_000, to: 120_000 } })
+    expect(store.edit.history[0].suggestion).toMatch(/^turn s1:60,001-120,000 · \d+% · map/)
+    await recount()
+    expect(textsOf(document.body, '.edit-suggestion-words')).toEqual([])
+    expect(textsOf(document.body, '.edit-history-by')).toEqual(['suggested'])
+  })
+
+  it('turns one down with N while it is lit, keeps it turned down, and learns from it', async () => {
+    const { store } = await openOnATurn()
+    const row = document.querySelector('.edit-suggestion') as HTMLElement
+    row.dispatchEvent(new Event('pointerenter'))
+    expect(row.classList.contains('is-lit')).toBe(true)
+    key('n')
+    await recount()
+    expect(textsOf(document.body, '.edit-suggestion-words')).toEqual([])
+    expect(textsOf(document.body, '.edit-declined-words')).toEqual(['turn s1:60,001-120,000'])
+    expect(store.learned.rejected).toHaveLength(1)
+    expect(store.learned.answers).toBe(1)
+    expect(store.edit.history).toHaveLength(0)
+    // Offered again, from the list of those turned down.
+    ;(document.querySelector('.edit-declined-list button') as HTMLButtonElement).click()
+    await recount()
+    expect(textsOf(document.body, '.edit-suggestion-words')).toEqual(['turn s1:60,001-120,000'])
+  })
+
+  it('works through them in review, answering with the keys it prints', async () => {
+    const { store } = await openOnATurn()
+    button('review').click()
+    expect(document.querySelector('.edit-review-where')?.textContent).toBe('1 of 1')
+    expect(textsOf(document.body, '.edit-review .kbd')).toEqual(['Y', 'N', '←', '→', 'space'])
+    key('y')
+    expect(store.edit.history[0].by).toBe('suggestion')
+    await recount()
+    expect(document.querySelector('.edit-review-words')?.textContent).toBe('review · nothing left to answer')
+  })
+
+  it('lets go of the map as it would be when the window loses focus with Space held', async () => {
+    await openOnATurn()
+    button('review').click()
+    key(' ')
+    expect(document.querySelector('.edit-review-state')?.textContent).toBe('as it would be')
+    // No key-up comes for a key held as the window goes.
+    window.dispatchEvent(new Event('blur'))
+    expect(document.querySelector('.edit-review-state')).toBeNull()
+  })
+
+  it('applies every one at even odds or more in auto, each a step marked auto', async () => {
+    const { store } = await openOnATurn()
+    button('auto').click()
+    button('apply 1 at 50% or more').click()
+    expect(store.edit.history.map((entry) => entry.by)).toEqual(['auto'])
+    expect(document.querySelector('.edit-suggestions-card .edit-acts button')?.textContent).toBe('none at 50% or more')
   })
 })

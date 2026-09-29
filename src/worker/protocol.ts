@@ -20,6 +20,9 @@
 
 import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
+import type { FileCorner } from '../edit/corners'
+import type { Expected } from '../edit/method'
+import type { PictureContacts } from '../metacooler/picture'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
@@ -755,6 +758,12 @@ export interface PictureResult {
   balanced: boolean
   /** Stored pixels walked. */
   pixels: number
+  /**
+   * What the method that proposes edits weighs (§27.5), from the same pass: the
+   * contacts as numbers, what the map is expected to hold, and the corners of
+   * the file in its own order. Absent where the request did not ask for them.
+   */
+  method?: { contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
 }
 
 export interface StatsResult {
@@ -1005,7 +1014,7 @@ export type WorkerRequest =
    * The stage's whole-genome picture (§27.9), at the finest rung of the ladder
    * that fits `cells` a side — pooled a few bins a cell where none does.
    */
-  | { id: number; kind: 'picture'; cells?: number; balance?: boolean; value?: string }
+  | { id: number; kind: 'picture'; cells?: number; balance?: boolean; value?: string; method?: boolean }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

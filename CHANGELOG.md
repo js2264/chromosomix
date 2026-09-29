@@ -14,6 +14,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Suggestions drawn over the map on the stage that edits the reference — a dev feature (§27.5,
+  §27.6).** The stage now says where it thinks the reference is wrong, on the picture the reader is
+  judging it by. Its own method measures the file's contact law and trans level in the pass that
+  reads the picture, finds the junctions the map refuses along the diagonal and the corners where two
+  ends meet off it, and weighs every split, turn, move and join as a trade of junctions — adjacency
+  asked against the window's own level, so telomeres and centromeres clustering never read as one.
+  Each suggestion is drawn in the accent: a diamond where it cuts, with ticks on the pieces bars, a
+  corner where two ends belong together, a number, and on hover what it would do — a turning arrow
+  over a turned stretch, an arrow from a moved one to where it goes. Its label stands on a rail beside
+  the map at the height of what it concerns, lit with its marks and its row in the list; the pointer
+  snaps to its points and, in the plane, to its corners, and the readout names them. `Y` takes it as a
+  step the history marks *suggested*, `N` turns it down; *review* works through them best first,
+  `Space` held showing the map as it would be, and every answer re-ranks the rest and is kept with the
+  file; *auto* applies every one at 50% or more, each a step marked *auto*. The yeast micro-C draws
+  none as it is; a stretch turned by hand draws one, to turn it back, at 98%. Not yet: exports, the
+  evidence beyond the map, and finer placement than the picture's cell.
+
 - **The session drawn through the edit of the reference — a dev feature (§27.7).** Closing the stage
   on an edit now redraws the whole session through it: the file is opened again as the edited assembly
   — `IV_e1` in the heading, the Chromosomes table, every view and every task — with the window carried
@@ -37,7 +54,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   end joining the two. A drag off the diagonal boxes two stretches, with what two stretches admit. Every
   act is a step in a history with undo and redo, kept with the file, carried in a saved workspace, and
   counted in the heading — *edited · 2 steps*, with an arrow back to the file. The stage is closed by
-  its × only: Escape lets go of the drag or the selection. There are no suggestions or exports yet.
+  its × only: Escape lets go of the drag or the selection. There are no exports yet.
 
 - **Dev features: a switch in *About* that shows what is still being built (§29).** A feature can
   now live on `main` — specified, tested and deployed like any other — and be **invisible** to a reader

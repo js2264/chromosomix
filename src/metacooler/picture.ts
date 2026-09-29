@@ -189,6 +189,63 @@ function rangeOf(values: Float32Array): Quantizer | null {
 /** Twenty decades: balanced values and raw counts alike, drawn coarsely. */
 const FALLBACK: Quantizer = { low: -12, high: 8 }
 
+/**
+ * The contacts the same pass keeps as numbers, for the method that proposes
+ * edits (§27.5): the picture is bytes and nothing else, so what the method
+ * weighs is gathered beside it, from the same floats, before they are
+ * quantized.
+ *
+ * Every value is the **mean over a cell's bin pairs** — the balanced value, or
+ * the raw count, of one pair of bins — so a pooled cell and a single bin speak
+ * one unit, and a cell part of whose bins the balancer dropped is the mean of
+ * the ones it kept.
+ */
+export interface PictureContacts {
+  /** Cells a side, as the picture has them. */
+  n: number
+  /** The original sequence each cell is in, as the file orders them. */
+  sequenceOf: Int32Array
+  /** Cells past the diagonal the band keeps, the diagonal included. */
+  width: number
+  /**
+   * The cells nearest the diagonal, as they are: `band[a * width + k]` is cell
+   * `(a, a + k)`, inside one sequence; `NaN` past its end, and where the
+   * balancer dropped every bin of either cell.
+   */
+  band: Float32Array
+  /**
+   * The whole map on a coarser grid, `factor` cells a coarse cell, anchored to
+   * every sequence as the picture's grid is: each coarse cell the mean of the
+   * cells in it that hold anything the balancer kept, `NaN` where none does.
+   * An upper triangle, {@link triangleIndex} over `n`.
+   */
+  coarse: { n: number; factor: number; of: Int32Array; values: Float32Array }
+  /** Each cell's row sum of those means over the whole map — its coverage. */
+  marginal: Float64Array
+  /** Bins of each cell the balancer kept: every one of them, unbalanced. */
+  kept: Uint16Array
+}
+
+/** What the gathering keeps: how wide a band, and how coarse a whole. */
+export interface GatherOptions {
+  /** Cells past the diagonal the band keeps. */
+  width: number
+  /** The most coarse cells a side. */
+  coarseCells: number
+}
+
+/** The fewest cells a coarse cell for the coarse grid to fit `cap` a side, anchored to every sequence. */
+export function coarseFactor(offsets: Int32Array, cap: number): number {
+  const at = (factor: number): number => {
+    let total = 0
+    for (let c = 0; c + 1 < offsets.length; c++) total += Math.ceil((offsets[c + 1] - offsets[c]) / factor)
+    return total
+  }
+  let factor = 1
+  while (at(factor) > cap && factor < 1 << 20) factor++
+  return factor
+}
+
 /** What a read of the picture hands back, before the pyramid is built on it. */
 export interface PictureRead {
   /** The upper triangle, `n` a side: {@link triangleIndex} addresses it. */
@@ -198,6 +255,8 @@ export interface PictureRead {
   histogram: Float64Array
   /** Stored pixels walked. */
   pixels: number
+  /** What the method weighs, where it was asked for. */
+  contacts?: PictureContacts
 }
 
 /**
@@ -217,6 +276,8 @@ export async function readPicture(options: {
   weights: Float64Array | null
   value?: string
   bandBytes?: number
+  /** Keep the contacts the method weighs as well (§27.5), and how. */
+  gather?: GatherOptions
   cancelled?: () => boolean
   onProgress?: (done: number, total: number) => void
 }): Promise<PictureRead | null> {
@@ -226,6 +287,7 @@ export async function readPicture(options: {
   const nBins = slot.length
   const cells = new Uint8Array(triangleSize(n))
   const histogram = new Float64Array(256)
+  const gather = options.gather === undefined ? null : gathering(layout, weights, options.gather)
 
   // The first bin of each cell, so a band of cell rows is a band of bins.
   const firstBin = new Int32Array(n + 1)
@@ -296,13 +358,81 @@ export async function readPicture(options: {
         cells[at] = byte
         histogram[byte]++
       }
+      gather?.row(r, band, row)
     }
     done = offsets !== null ? offsets[firstBin[r1]] - offsets[0] : r1
     options.onProgress?.(done, total)
     await yieldToEventLoop()
   }
 
-  return { cells, quantizer: quantizer ?? FALLBACK, histogram, pixels }
+  return {
+    cells,
+    quantizer: quantizer ?? FALLBACK,
+    histogram,
+    pixels,
+    ...(gather === null ? {} : { contacts: gather.finish() }),
+  }
+}
+
+/**
+ * The method's share of the pass (§27.5): a row of the picture's floats at a
+ * time, as each band is quantized, into the band along the diagonal, the coarse
+ * whole and the coverage. The floats are sums over a cell's bin pairs; each is
+ * divided by how many pairs the balancer kept, so every value is one pair's.
+ */
+function gathering(
+  layout: PictureLayout,
+  weights: Float64Array | null,
+  options: GatherOptions,
+): { row(r: number, band: Float32Array, at: number): void; finish(): PictureContacts } {
+  const n = layout.n
+  const width = Math.max(1, Math.trunc(options.width))
+  const kept = new Uint16Array(n)
+  for (let bin = 0; bin < layout.slot.length; bin++) {
+    if (weights === null || weights[bin] > 0) kept[layout.slot[bin]]++
+  }
+  const sequenceOf = new Int32Array(n)
+  for (let c = 0; c + 1 < layout.offsets.length; c++) sequenceOf.fill(c, layout.offsets[c], layout.offsets[c + 1])
+
+  const factor = coarseFactor(layout.offsets, Math.max(1, options.coarseCells))
+  const of = new Int32Array(n)
+  let coarseN = 0
+  for (let c = 0; c + 1 < layout.offsets.length; c++) {
+    const first = layout.offsets[c]
+    for (let cell = first; cell < layout.offsets[c + 1]; cell++) of[cell] = coarseN + Math.floor((cell - first) / factor)
+    coarseN += Math.ceil((layout.offsets[c + 1] - first) / factor)
+  }
+
+  const bandOut = new Float32Array(n * width).fill(Number.NaN)
+  const sums = new Float64Array(triangleSize(coarseN))
+  const counts = new Uint32Array(triangleSize(coarseN))
+  const marginal = new Float64Array(n)
+
+  return {
+    row(r, band, at) {
+      const kr = kept[r]
+      if (kr === 0) return
+      const sequence = sequenceOf[r]
+      const coarseRow = of[r]
+      const coarseAt = triangleIndex(coarseRow, coarseRow, coarseN) - coarseRow
+      for (let c = r; c < n; c++) {
+        const kc = kept[c]
+        if (kc === 0) continue
+        const v = band[at + c] / (kr * kc)
+        if (c - r < width && sequenceOf[c] === sequence) bandOut[r * width + (c - r)] = v
+        const index = coarseAt + of[c]
+        sums[index] += v
+        counts[index]++
+        marginal[r] += v
+        if (c !== r) marginal[c] += v
+      }
+    },
+    finish() {
+      const values = new Float32Array(sums.length)
+      for (let i = 0; i < sums.length; i++) values[i] = counts[i] === 0 ? Number.NaN : sums[i] / counts[i]
+      return { n, sequenceOf, width, band: bandOut, coarse: { n: coarseN, factor, of, values }, marginal, kept }
+    },
+  }
 }
 
 /** One level of the pyramid: an upper triangle `n` a side. */

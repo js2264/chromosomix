@@ -18,6 +18,8 @@ import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
 import { PICTURE_CELLS, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
+import { findCorners } from '../edit/corners'
+import { BAND_WIDTH, COARSE_CELLS, expectedOf } from '../edit/method'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
@@ -728,10 +730,17 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   const read = await mc.picture(layout, {
     balance: balanced,
     ...(request.value === undefined ? {} : { value: request.value }),
+    ...(request.method === true ? { gather: { width: BAND_WIDTH, coarseCells: COARSE_CELLS } } : {}),
     ...scanHooks(request.id),
   })
   if (read === null || cancelled.has(request.id)) throw abortError()
   const { vmin, vmax } = displayRange(read.histogram, read.quantizer)
+  // What the map is expected to hold, and its corners, once per file (§27.5):
+  // the stage weighs every edit against these.
+  const contacts = read.contacts
+  const expected = contacts === undefined ? null : expectedOf(contacts, balanced)
+  const method =
+    contacts === undefined || expected === null ? undefined : { contacts, expected, corners: findCorners(contacts, expected) }
   return {
     rung: seen === open ? null : (rung ?? null),
     binsize: mc.binsize * stride,
@@ -750,6 +759,7 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     vmax,
     balanced,
     pixels: read.pixels,
+    ...(method === undefined ? {} : { method }),
   }
 }
 

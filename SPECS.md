@@ -10047,11 +10047,12 @@ and a gap are read beside the contacts that are being judged; and the app says w
 reference is wrong, in the picture, where the reader's eye already is.
 
 **Status: partly built.** Every subsection below describes what will be, and says *built* as it
-lands: so far the model of an edit and its lens on the axes (§27.2), the stage in manual mode with its
-picture (§27.3, §27.4, §27.9), the edit kept with the file, and the session drawn through it — the
-map, its tracks, the Chromosomes table and every task (§27.7). There are not yet suggestions (§27.5)
-or exports (§27.8). It is a **dev feature** (§29) throughout: on `main`, and invisible until the
-switch in *About* is on. The design it was written from — the method in full, the architecture with the
+lands: so far the model of an edit and its lens on the axes (§27.2), the stage with its picture
+(§27.3, §27.4, §27.9), the edit kept with the file, the session drawn through it — the map, its
+tracks, the Chromosomes table and every task (§27.7) — and the suggestions: the method, drawn over the
+stage's map and snapped to, and answered in all three modes (§27.5, §27.6). There are not yet exports
+(§27.8), nor any evidence beyond the map. It is a **dev feature** (§29) throughout: on `main`, and
+invisible until the switch in *About* is on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
 It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
@@ -10178,23 +10179,37 @@ What is on it:
   diagonal; what it snapped to; and, while a stretch is dragged, the step the drop would make. *Built.*
 - **The rail**, beside the map: each suggestion's label at the height of its position, with a leader
   to it, packed so that no two overlap. Hovering a label lights its marks on the map; hovering a mark
-  lights its label. It is one highlight in two places. Not yet: it comes with the suggestions.
+  lights its label. It is one highlight in two places. *Built*, left of the map: a bracket for each
+  suggestion spanning what it concerns — a turned or moved stretch and where it goes, two joined ends,
+  a split's one point — and a label, its number, its kind and its confidence (`1 turn 98%`), at the
+  bracket's middle, pushed apart and kept inside the map's height, only for what is in view; a press
+  frames it. The list in the sidebar is lit with them.
 - **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6 — the last two greyed until there are
   suggestions to work through); **selection**, what is selected and what can be done with it, each act
   printing its key; **history**, every step in words, the cursor lit and undone steps greyed, a press
   on a row going back or forward to it; **sequences**, the edited assembly — a press selects a whole
-  sequence and frames it — with what was set aside, and why, at the foot; **suggestions**, which says
-  the method is not built yet; and **picture**, what the stage's picture is. *Built.* Still to come:
-  suggestions sorted by confidence with their evidence chips, a rename and a circular tick on a
-  sequence, a sort by length, **export** (§27.8) and **settings** — the evidence the method may use,
-  the resolution it works at, and what it has learned, with *forget* beside it.
+  sequence and frames it — with what was set aside, and why, at the foot; **suggestions**, sorted by
+  confidence, each its number, its kind, its words, its confidence, the chips of its evidence and its
+  two answers, *take* `Y` and *turn down* `N`, those turned down struck through beneath with *offer
+  again*, and what the answers taught with *forget*; and **picture**, what the stage's picture is.
+  *Built*, the suggestions first under the modes, and a step a suggestion made is tagged in the
+  history — *suggested* or *auto* — with what it rested on. Still to come: a rename and a circular
+  tick on a sequence, a sort by length, **export** (§27.8) and **settings** — the evidence the method
+  may use and the resolution it works at.
 
 **On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
 (§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
 of two short strokes opening towards its quadrant — for two ends that meet; on hover, a **bracket with a
 turning arrow** for an inversion, an **arrow** to an insertion line for a move. An edit already made is
 ink: a thin rule at every junction between parts, and a stronger one at every edge between sequences
-(*built*). The selection is an outline in the accent with a halo, and no wash over the picture: a wash
+(*built*). *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
+diamond at every junction a suggestion takes away, with its ticks across both pieces bars; a corner at
+every junction it makes, in both triangles; its number in a disc beside its first mark; and for the one
+lit — on the map, the rail or the list — what it would do: the stretch it turns outlined, dashed, with
+a two-headed arrow bowed off the diagonal; the stretch it moves outlined, with an arrow to a line across
+the diagonal where it goes in; a cut across the diagonal where it splits; an arrow between two ends it
+joins. None is drawn while a drag or review's preview shows another edit than the one they were found
+for. The selection is an outline in the accent with a halo, and no wash over the picture: a wash
 changes the colour of the contacts being judged, and over the darkest of them reads as another colour
 altogether. A rejected suggestion leaves the map and is struck through in the list. Nothing is drawn in
 `--warn` or `--danger`: a suggestion is an offer, not a caution.
@@ -10221,11 +10236,14 @@ a suggestion beats an edit end beats a contig boundary. **A snap is a proposal t
 moves the pointer, never the reference. Off every target the pointer rests on the nearest cell edge,
 since a cell is what the picture can place (§4.9 of the design note: *placed by the map, to one cell*).
 
-*Built*: snapping along each axis to the edit ends — every junction, and every edge between two
+*Built*: snapping along each axis to the suggestions' points — every junction one takes away or makes,
+and where a move puts its stretch — and to the edit ends — every junction, and every edge between two
 sequences, which the readout names as the edge it is (`between IV and V`) — and to the selection's own
-two ends; ⌥ frees it, except while a stretch is being dragged, where ⌥ is the copy. Not yet: the
-suggestions and the corners in the plane, which come with the method, and contig boundaries, which come
-with reading an AGP.
+two ends, in that order at equal distance; to a suggestion's corner in the plane, within 10 pixels,
+both axes at once; the readout names what it snapped to (`snapped to 1 · turn · IV_e1:400,001`,
+`corner of 1 · turn · IV_e1:900,001 × IV_e1:400,001`), and a suggestion under the pointer is lit, its
+label with it. ⌥ frees it, except while a stretch is being dragged, where ⌥ is the copy. Not yet:
+contig boundaries, which come with reading an AGP.
 
 **On the stage a drag selects**, because selecting is what the stage is for; the map's own drag,
 which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms as it does on every map.
@@ -10319,6 +10337,61 @@ would accept this* — with initial weights stated in the code beside the reason
 across samples, and nothing is reported as a variant: it edits one reference to fit one map. A cancer
 line's rearranged karyotype is a fair use of it, and what comes out is that line's reference.
 
+*Built* (`edit/method.ts`, `edit/corners.ts`, `edit/suggest.ts`), at the stage picture's cells, and
+where it went further than the text above:
+
+- **What it reads.** The same pass that reads the stage's picture keeps, from the same floats before
+  they are bytes, the cells within 64 of the diagonal as they are, the whole map on a coarse grid of at
+  most 2,048 cells a side (never across a sequence's edge), and each cell's coverage — every value the
+  mean of one pair of bins, so a pooled cell and a single bin speak one unit
+  (`metacooler/picture.ts`). From them, once per file in the reader's worker: the law, the trans level
+  and the dispersion as above — the law measured cell by cell near the diagonal and from the coarse
+  grid beyond, the dispersion the median variance over mean near the diagonal — and the corners.
+- **The window is the law's.** `W` is half the distance at which the law falls to eight times the
+  trans level, between 4 and 16 cells: as far as an adjacency stands well out of the background and no
+  further, since past that a window weighs clustering as if it were adjacency.
+- **Two questions, two backgrounds.** *Is this junction refused?* is asked against the trans level,
+  as above: a **breakpoint** is an edge whose score is under a fifth of a unit below nought and the
+  lowest within half a window. *Do these two ends meet?* is asked against the window's own mean, where
+  that is above the trans level: an adjacency's contacts fall away from the corner, and telomeres or
+  centromeres clustering light a window evenly, which against its own level is no evidence of meeting
+  at all. What a trade makes and what it takes away are both weighed the second way, so a trade is two
+  configurations compared. The **unit** a gain is counted in is the score of a window that holds
+  exactly the law: one adjacency made is about one, one clean misjoin taken away about two thirds.
+- **Corners** are found as above, on the coarse grid, from a smoothed log of observed over expected:
+  a point whose quadrant stands three times above expectation and three times above both quadrants it
+  shares a side with, four coarse cells a quadrant, the 240 strongest kept, each placed at the most
+  refused junction within a coarse cell of it, else a sequence's end there — in the file's own order,
+  once, and carried through the edit each time the suggestions are counted.
+- **Candidates** are every sequence's two ends, every junction an edit made, every breakpoint and both
+  ends of every corner, wherever the edit put them; points within a quarter of a window are one.
+- **The trades**: a **split** where a junction is refused; a **turn** of a stretch one of whose ends is
+  refused, or between two points corners name; a **move** of a stretch between refused junctions or a
+  refused one and a sequence's end to any point, either way round, the flanks closing behind it — and
+  of a whole sequence only into another's interior, where a corner pairs one of its ends with the point
+  it goes in at (end to end is a join); a **join** of two sequences' free ends, every pair up to 64
+  sequences and past that only the ends a corner pairs, so that an assembly of thousands of contigs
+  costs what its corners name rather than every pair of its ends. A junction an edit made that the map
+  cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
+  but the hand is behind it; one of the file's own is trusted.
+- **The confidence** is a logistic over four features — `log₂(1 + gain)`, a penalty for a stretch of
+  fewer than four cells, the share of its windows that held anything, and how far past two and a half
+  times the law the brightest corner it makes stands (`brighter than an adjacency`: the elements every
+  telomere carries light the corner between two chromosomes' ends brighter than any true adjacency) —
+  with the initial weights and their reasons in `edit/suggest.ts`. The suggestions are the best of each
+  point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
+  offered — a suggestion a curator would take one time in seven or less is noise on the map — though
+  it is still ranked, and an answer about another can raise it.
+- **Placed by the map, to one cell** of the picture; no finer rung is read, and no evidence below the
+  map places it to the base.
+
+Not yet: the refinement at finer rungs; suggestions to set a stretch aside or to copy one; the
+evidence beyond the map — gaps, telomeric repeats, the skew of a circle, coverage and mappability,
+candidate sites, split reads, pair orientations; circles and their arms in the expected (§8.15) — on
+the E. coli demo, a circle with its arms, it offers nothing, the arms' contacts falling far short of an
+adjacency's; contig boundaries from an AGP. A stretch turned inside a window's length is below what the
+map can place: across its ends the walk reaches its far end, which truly belongs there.
+
 ### 27.6 Manual, review, auto
 
 The three modes are three answers to one question, **who presses accept**, on one surface:
@@ -10340,6 +10413,22 @@ The three modes are three answers to one question, **who presses accept**, on on
 **`metacooler-run edit`** is auto mode from a shell — the same runner, the same threshold, `--weights`
 for what review mode learned, `--from` for an AGP to start from — writing everything §27.8 lists to
 `--out`, and the console writes that line for every auto run on the stage.
+
+*Built*, the three modes on one surface, an answer the same whichever mode asked it. **Manual**: `Y`
+or *take* makes the step of the suggestion lit under the hand or pressed in the list, `N` or *turn
+down* turns it down. **Review**: the best not turned down is framed, a line under the toolbar says
+which of how many, what it is and its keys, and `Space` held draws the map, its bars and its lanes as
+they would be with it taken; `Y`, `N`, `→` and `←` answer and move, and the next best is framed. Every
+answer is one step of the regression, a learning rate of a tenth and a pull of 0.15 towards the
+initial weights — three rejections of a suggestion at 92% leave it above even odds, thirty-three put it
+below — and the rest are ranked again at once; what it taught — the weights, how many answers, what
+was turned down, by keys that name the file's own cells so a suggestion stays turned down after
+another edit moves it — is kept per file beside the edit (`map:edit-learned`), said under the list,
+and forgotten by *forget*; *offer again* brings back one turned down, what its answer taught kept.
+**Auto**: *apply* takes every suggestion at 50% or more, best first,
+counting again after each, forty at most a run, each a step marked `auto` with what it rested on.
+Not yet: dragging a suggestion's ends to adjust it, what was learned in a saved workspace, and the
+command line.
 
 ### 27.7 The session through the lens
 
@@ -10458,15 +10547,24 @@ from the truth in bases, orientation, the N50 of correctly assembled stretches, 
 would still need. `metacooler-run edit --simulate` runs one scramble; `notebooks/validation.qmd`
 runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a unit test.
 
+*Built*: maps simulated from a chosen law with Poisson noise, read through the picture's own pass and
+misassembled on purpose — a turned stretch, two chromosomes joined, a stretch moved into the other, one
+cut in two, a stretch dropped against a masked end — each put back by the first suggestion, and nothing
+at even odds on the assembly as it was drawn (`test/unit/edit-method.test.ts`); and the demo `.hic` at
+16 kb, as it is — nothing at even odds — and scrambled through the lens by a turn, a move turned, a
+split and a join, the four put back and nothing else offered at even odds
+(`test/unit/edit-method-demo.test.ts`). On the 1 kb micro-C the same scramble's six breakpoints are
+found to the kilobase. Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
+
 ### 27.12 Costs
 
 | Operation | Budget |
 |---|---|
-| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel; not yet estimated before it starts) |
+| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel; not yet estimated before it starts) — and, in the same pass, what the method weighs, then its law and its corners in the reader's worker: about two seconds more for a yeast genome at 1 kb |
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
-| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer on the stage's own thread once the hand has let go: about a fifth of a second for a yeast genome at 1 kb; not yet in a worker, not yet refined |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held |
 
@@ -10475,12 +10573,13 @@ runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a
 Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
 more than one map; a stage on an assembly of more sequences than its picture has cells; a lifted
 `.cool` above the memory it would take, with the way out; for now, an edit drawn on a `.metacool` or a
-single-cell file. Built: the model and the axis (§27.2), the stage in manual mode and its picture
-(§27.3, §27.4, §27.9), the edit kept with the file and carried in a workspace, and the session drawn
-through it (§27.7). Not yet built, in the order it will be (`docs/reference-editing.md` §10): the
-exports; the method, with the rail and the corners; review and auto with the command line; the
-evidence beyond the map; metagenomes — and, left over from the lens, the zoom past the stage's picture
-and the gaps §27.7 lists.
+single-cell file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4,
+§27.9), the edit kept with the file and carried in a workspace, the session drawn through it (§27.7),
+and the method with its suggestions — drawn with the rail and the corners, snapped to, and answered in
+manual, review and auto (§27.5, §27.6). Not yet built, in the order it will be
+(`docs/reference-editing.md` §10): the exports; the command line; the evidence beyond the map;
+metagenomes — and, left over, the zoom past the stage's picture, the gaps §27.7 lists, and the
+method's refinement at finer rungs.
 
 ## 28. Two sequences on two axes
 

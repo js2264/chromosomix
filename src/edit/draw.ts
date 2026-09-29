@@ -64,6 +64,8 @@ export type BarEdge = 'top' | 'left'
  * @param toPixel A unit of the edited axis to a pixel along the bar.
  * @param lit A stretch of the axis to light — the selection — in units.
  * @param mark A unit to mark with a caret — where a dragged stretch would go.
+ * @param ticks The points suggestions name, each a tick across the pieces —
+ *   the axes' share of a breakpoint's diamond (§27.3) — the lit ones stronger.
  */
 export function drawBar(
   ctx: CanvasRenderingContext2D,
@@ -74,6 +76,7 @@ export function drawBar(
   ink: StageInk,
   lit: readonly [number, number] | null,
   mark: number | null,
+  ticks: ReadonlyArray<{ unit: number; lit: boolean }> = [],
 ): void {
   const across = BAR_THICKNESS
   // Along and across, to x and y: the top bar reads left to right, the left
@@ -167,6 +170,20 @@ export function drawBar(
     }
   }
 
+  // The points suggestions name.
+  for (const tick of ticks) {
+    const at = toPixel(tick.unit)
+    if (at < -2 || at > length + 2) continue
+    const half = tick.lit ? 1.75 : 1
+    ctx.fillStyle = ink.background
+    ctx.globalAlpha = 0.8
+    rect(at - half - 1, at + half + 1, PIECES_FROM - 3, across)
+    ctx.globalAlpha = tick.lit ? 1 : 0.85
+    ctx.fillStyle = ink.accent
+    rect(at - half, at + half, PIECES_FROM - 3, across)
+    ctx.globalAlpha = 1
+  }
+
   // Where a dragged stretch would go.
   if (mark !== null) {
     const at = toPixel(mark)
@@ -202,6 +219,8 @@ export interface OverlayFrame {
   box: { rows: readonly [number, number]; cols: readonly [number, number] } | null
   /** The pointer, snapped: a column and a row, in units, and whether each snapped. */
   cross: { x: number; y: number; snappedX: boolean; snappedY: boolean } | null
+  /** What else is drawn over the picture and under the selection: the suggestions (`marks.ts`). */
+  under?: (ctx: CanvasRenderingContext2D) => void
 }
 
 /**
@@ -239,6 +258,8 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
   for (const unit of grid.boundaries()) if (unit > 0 && unit < grid.n) rule(unit)
   ctx.stroke()
   ctx.globalAlpha = 1
+
+  frame.under?.(ctx)
 
   // An outline and no fill: a wash over the picture changes the colours of
   // the contacts being judged, and over the darkest of them it reads as a

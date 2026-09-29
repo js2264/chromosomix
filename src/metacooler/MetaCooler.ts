@@ -70,7 +70,15 @@ import {
   resolveCountKind,
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
-import { pyramid, readPicture, type PictureLayout, type PictureLevel, type Quantizer } from './picture'
+import {
+  pyramid,
+  readPicture,
+  type GatherOptions,
+  type PictureContacts,
+  type PictureLayout,
+  type PictureLevel,
+  type Quantizer,
+} from './picture'
 import { BinLens, LensStore, lensFor, lensedHandle, sequenceTable } from './lens'
 import type { ReferenceEdit } from '../genome/edit'
 import {
@@ -1473,8 +1481,14 @@ export class MetaCooler {
    */
   async picture(
     layout: PictureLayout,
-    options: SpanScanOptions & { balance?: boolean } = {},
-  ): Promise<{ levels: PictureLevel[]; quantizer: Quantizer; histogram: Float64Array; pixels: number } | null> {
+    options: SpanScanOptions & { balance?: boolean; gather?: GatherOptions } = {},
+  ): Promise<{
+    levels: PictureLevel[]
+    quantizer: Quantizer
+    histogram: Float64Array
+    pixels: number
+    contacts?: PictureContacts
+  } | null> {
     const whole: Extent = [0, this.nBins]
     const weights = options.balance === true ? this.weightSlices(whole, whole).rows : null
     const read = await readPicture({
@@ -1483,12 +1497,19 @@ export class MetaCooler {
       layout,
       weights,
       ...(options.value === undefined ? {} : { value: options.value }),
+      ...(options.gather === undefined ? {} : { gather: options.gather }),
       ...(options.cancelled === undefined ? {} : { cancelled: options.cancelled }),
       ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
     })
     if (read === null) return null
     const levels = pyramid({ n: layout.n, cells: read.cells }, read.quantizer)
-    return { levels, quantizer: read.quantizer, histogram: read.histogram, pixels: read.pixels }
+    return {
+      levels,
+      quantizer: read.quantizer,
+      histogram: read.histogram,
+      pixels: read.pixels,
+      ...(read.contacts === undefined ? {} : { contacts: read.contacts }),
+    }
   }
 
   /**

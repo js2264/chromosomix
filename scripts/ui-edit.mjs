@@ -1,24 +1,28 @@
 /**
  * The stage that edits the reference (§27), in headless Chromium, on the yeast
  * micro-C demo with its tracks: the heading's word on the reference, the stage
- * open on the whole genome, the pointer snapping to a sequence's edge, a stretch
- * selected along the diagonal and lit on the map, the bars and the lanes, the
- * same stretch turned round, a zoom onto the bow-tie that makes, a stretch
- * dragged into another chromosome with the map rearranged under the hand, the
- * drop, a box of two stretches off the diagonal, the menu that sets a stretch
- * aside, an undo, a second turn inside the window behind the stage, the session
+ * open on the whole genome with nothing to suggest, the pointer snapping to a
+ * sequence's edge, a stretch selected along the diagonal and lit on the map, the
+ * bars and the lanes, the same stretch turned round, the method's suggestion to
+ * turn it back — its diamonds, its corners, its label on the rail — lit from the
+ * rail, a zoom onto its corner with the pointer snapped to it, a stretch dragged
+ * into another chromosome with the map rearranged under the hand, the drop, a
+ * box of two stretches off the diagonal, the menu that sets a stretch aside, an
+ * undo, review mode on the suggestion, the map as it would be with Space held,
+ * the suggestion taken, a second turn inside the window behind the stage, the session
  * redrawn through the edit once the stage is closed — the map, its tracks, a box
  * drawn on it and a line typed at a place in the file, both kept in the file's
- * coordinates, and the Chromosomes table — the stage in the dark theme, the file
- * put back by the heading's arrow with the marks where the file has them, and
- * the chip gone with the dev features off.
+ * coordinates, and the Chromosomes table — the stage in the dark theme, a
+ * suggestion turned down and offered again, auto mode and what it applied, the
+ * file put back by the heading's arrow with the marks where the file has them,
+ * and the chip gone with the dev features off.
  *
  * It prints what each step found — the selection, the history, the readout —
  * so a step that did not happen is a line in the log rather than something to
  * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit.mjs [out-dir]     # e01 … e17
+ *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25
  */
 
 import { createRequire } from 'node:module'
@@ -141,6 +145,21 @@ async function diagonalAt(name) {
   }
 }
 
+/** Wait for the suggestions to be counted again after an edit. */
+async function settled() {
+  for (let i = 0; i < 40; i++) {
+    await sleep(150)
+    const weighing = await page.evaluate(() => /weighing/.test(document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent ?? ''))
+    if (!weighing) break
+  }
+  await sleep(300)
+}
+/** The suggestions the list shows, as words and confidence. */
+const suggestions = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.edit-suggestion-main')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim()),
+  )
+
 async function openStage() {
   await page.click('.crumb-reference-button')
   for (let i = 0; i < 240; i++) {
@@ -167,6 +186,8 @@ await shot('e01-heading')
 await openStage()
 let box = await mapBox()
 console.log('stage:', box.n, 'cells a side ·', await text('.edit-readout'))
+await settled()
+console.log('suggested at open:', await suggestions(), '·', await text('.edit-suggestions-card .edit-empty'))
 await shot('e02-stage')
 
 // The pointer near the edge between IV and V: it snaps, and the readout says so.
@@ -190,19 +211,41 @@ await sleep(600)
 console.log('history:', await history())
 await shot('e05-turned')
 
-// Zoomed onto it: the bow-tie a turned stretch draws at its two ends.
-p = at(box, (a + b) / 2, (a + b) / 2)
+// The method sees the bow-tie the turn drew and offers to turn it back: a
+// diamond at each end, the two corners where the ends belong, a number, and
+// its label on the rail at the height of the stretch. (The selection let go
+// of, so its outline is not over the corners.)
+await page.keyboard.press('Escape')
+await settled()
+console.log('suggested:', await suggestions())
+await shot('e06-suggested')
+
+// Its label on the rail, hovered: its marks lit on the map, and what it would do.
+await page.hover('.edit-rail-label')
+await sleep(400)
+console.log('lit rows:', await page.evaluate(() => document.querySelectorAll('.edit-suggestion.is-lit').length))
+await shot('e07-lit')
+
+// Zoomed onto the corner — the stretch's two ends meeting off the diagonal —
+// and the pointer snapping to it in the plane.
+p = at(box, b, a)
 await page.mouse.move(p.x, p.y)
-for (let k = 0; k < 7; k++) {
+for (let k = 0; k < 5; k++) {
   await page.mouse.wheel(0, -240)
   await sleep(80)
 }
 await sleep(500)
-console.log('zoomed view:', (await mapBox()).x0.toFixed(0), '→', (await mapBox()).x1.toFixed(0))
-await shot('e06-zoomed')
+box = await mapBox()
+p = at(box, b, a)
+await page.mouse.move(p.x + 5, p.y - 4)
+await sleep(300)
+console.log('near the corner:', await text('.edit-readout'))
+await shot('e08-corner')
 await page.keyboard.press('0')
 await sleep(400)
 box = await mapBox()
+// The stretch selected again, to be moved by its square.
+await drag(at(box, a, a), at(box, b, b))
 
 // The stretch dragged into X, the map rearranged under the hand.
 const x = await cellsOf('X')
@@ -211,17 +254,29 @@ const target = x[0] + 300 + (b - a) / 2
 await drag(at(box, mid, mid), at(box, target, target), 14, async () => {
   await sleep(300)
   console.log('while dragging:', await text('.edit-readout'))
-  await shot('e07-dragging')
+  await shot('e09-dragging')
 })
 console.log('history:', await history())
-await shot('e08-dropped')
+await settled()
+console.log('suggested after the move:', await suggestions())
+await shot('e10-dropped')
+
+// The move back, lit from its label on the rail: the stretch outlined where it
+// is, an arrow to the line where it goes in.
+await page.keyboard.press('Escape')
+await page.hover('.edit-rail-label')
+await sleep(400)
+console.log('lit:', await page.evaluate(() => document.querySelector('.edit-suggestion.is-lit .edit-suggestion-words')?.textContent ?? null))
+await shot('e10b-move-lit')
+await page.mouse.move(5, 5)
+await sleep(200)
 
 // A box off the diagonal: two stretches, and what two stretches admit.
 const xv = await cellsOf('XV')
 const vii = await cellsOf('VII')
 await drag(at(box, xv[0] + 100, vii[0] + 100), at(box, xv[0] + 500, vii[0] + 400))
 console.log('box:', await page.evaluate(() => [...document.querySelectorAll('.edit-box-row')].map((row) => row.textContent)))
-await shot('e09-box')
+await shot('e11-box')
 await page.keyboard.press('Escape')
 await sleep(200)
 
@@ -231,7 +286,7 @@ await drag(at(box, xvi[0] + 300, xvi[0] + 300), at(box, xvi[0] + 500, xvi[0] + 5
 await page.keyboard.press('Delete')
 await sleep(400)
 console.log('menu:', await page.evaluate(() => [...document.querySelectorAll('.context-menu button, .context-menu .context-menu-head')].map((row) => row.textContent)))
-await shot('e10-aside-menu')
+await shot('e12-aside-menu')
 await page.keyboard.press('Escape')
 await sleep(200)
 
@@ -239,13 +294,37 @@ await sleep(200)
 await page.keyboard.press('Escape')
 await page.keyboard.press('Control+z')
 await sleep(600)
+await settled()
 console.log('after undo:', await history())
-await shot('e11-undone')
+await shot('e13-undone')
+
+// Review: the suggestions as a queue, the one it is on framed, and its keys.
+await page.click('.edit-modes >> text=review')
+await sleep(900)
+console.log('review:', await text('.edit-review'))
+await shot('e14-review')
+
+// Space held: the map as it would be with the suggestion taken.
+await page.keyboard.down(' ')
+await sleep(900)
+console.log('held:', await text('.edit-review'))
+await shot('e15-as-it-would-be')
+await page.keyboard.up(' ')
+await sleep(300)
+
+// Y: taken — a step marked as the suggestion's, and nothing left to suggest.
+await page.keyboard.press('y')
+await sleep(600)
+await settled()
+console.log('after taking it:', await history(), '· suggested:', await suggestions())
+await shot('e16-taken')
+await page.click('.edit-modes >> text=manual')
+await sleep(300)
 
 // A second turn, inside the window the map behind the stage is showing: the
 // map's own view is IV:1,000,001-1,400,000, and this is its middle.
 box = await mapBox()
-const ivNow = await cellsOf('IV_e1')
+const ivNow = (await cellsOf('IV_e1')) ?? (await cellsOf('IV'))
 await drag(at(box, ivNow[0] + 1100, ivNow[0] + 1100), at(box, ivNow[0] + 1300, ivNow[0] + 1300))
 await page.keyboard.press('i')
 await sleep(500)
@@ -260,7 +339,7 @@ for (let i = 0; i < 60; i++) {
 }
 await sleep(4000)
 console.log('heading says:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
-await shot('e12-session-edited')
+await shot('e17-session-edited')
 
 // Marks on the edited map, from the Manual annotations card: a box drawn inside
 // the turned stretch, and a line typed at a place in the file. Both are kept in
@@ -281,13 +360,13 @@ await form('Lines').locator('button', { hasText: /^add$/ }).click()
 await sleep(1200)
 const marks = () => page.evaluate(() => [...document.querySelectorAll('.manual-mark .manual-where')].map((row) => row.textContent))
 console.log('marks kept at:', await marks())
-await shot('e13-marks')
+await shot('e18-marks')
 
 // The Chromosomes table, which lists the edited assembly.
 await page.click('.breadcrumb >> text=Chromosomes')
 await sleep(2500)
 console.log('table names IV_e1:', /IV_e1/.test(await page.evaluate(() => document.body.innerText)))
-await shot('e14-chromosomes')
+await shot('e19-chromosomes')
 await page.goBack()
 await sleep(3000)
 
@@ -295,7 +374,36 @@ await sleep(3000)
 await page.emulateMedia({ colorScheme: 'dark' })
 await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
 await openStage()
-await shot('e15-dark')
+await settled()
+console.log('suggested in the dark:', await suggestions())
+await shot('e20-dark')
+
+// Turned down, from the rail with N: struck through in the list, gone from the
+// map, and learned from — then offered again.
+await page.hover('.edit-rail-label')
+await sleep(300)
+await page.keyboard.press('n')
+await sleep(200)
+await settled()
+await page.click('.edit-declined > summary')
+await sleep(300)
+console.log('turned down:', await page.evaluate(() => [...document.querySelectorAll('.edit-declined-words')].map((row) => row.textContent)))
+await shot('e21-turned-down')
+await page.click('.edit-declined-list button')
+await sleep(200)
+await settled()
+
+// Auto: every suggestion at even odds or more, applied best first, each a step
+// marked auto.
+await page.click('.edit-modes >> text=auto')
+await sleep(400)
+console.log('auto offers:', await text('.edit-suggestions-card .edit-acts'))
+await shot('e22-auto')
+await page.click('.edit-suggestions-card .edit-acts button')
+await sleep(600)
+await settled()
+console.log('after auto:', await history())
+await shot('e23-auto-applied')
 await page.click('.modal-panel .btn-close')
 await sleep(800)
 await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
@@ -310,14 +418,14 @@ for (let i = 0; i < 60; i++) {
 await sleep(3000)
 console.log('after revert:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
 console.log('marks still at:', await marks())
-await shot('e16-reverted')
+await shot('e24-reverted')
 
 // The dev features off: no word on the reference, no command.
 await page.evaluate(() => localStorage.removeItem('metacooler-viewer:dev-features'))
 await page.reload()
 await sleep(7000)
 console.log('dev off · heading has the reference:', (await page.$('.crumb-reference')) !== null)
-await shot('e17-dev-off')
+await shot('e25-dev-off')
 
 if (errors.length > 0) console.log('page errors:', errors)
 await browser.close()

@@ -13020,6 +13020,212 @@ span.deck-name {
 .edit-aside-why {
   color: var(--text-dim);
 }
+.edit-history-by {
+  margin-left: auto;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.5;
+}
+
+/* The rail (§27.3): each suggestion's label at the height of what it
+   concerns, beside the map, with a leader to a bracket that spans it. */
+.edit-rail {
+  position: absolute;
+  z-index: 2;
+}
+.edit-rail-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.edit-rail-labels {
+  position: absolute;
+  inset: 0;
+}
+.edit-rail-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0 0.4rem 0 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  font: inherit;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.edit-rail-label:hover,
+.edit-rail-label.is-lit,
+.edit-rail-label:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.edit-rail-label.is-current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.edit-rail-number,
+.edit-suggestion-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Review (§27.6): where it is, and what its keys do. */
+.edit-review {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.edit-review.hidden {
+  display: none;
+}
+.edit-review-where {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.edit-review-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-review-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.edit-review-state {
+  margin-right: 0.4rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* The list of suggestions, best first. */
+.edit-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.edit-suggestion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.edit-suggestion.is-lit {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.edit-suggestion.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.edit-suggestion-main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.edit-suggestion-main > svg {
+  color: var(--accent);
+}
+.edit-suggestion.is-lit .edit-suggestion-main,
+.edit-suggestion-main:hover {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+.edit-suggestion-words {
+  overflow-wrap: anywhere;
+}
+.edit-suggestion-confidence {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.edit-suggestion-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0 0.5rem 0.35rem 2.1rem;
+}
+.edit-suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.edit-chip {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.6;
+}
+.edit-suggestion-acts {
+  display: flex;
+  gap: 0.25rem;
+}
+.edit-suggestion-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+}
+.edit-declined > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.edit-declined-list {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.edit-declined-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.1rem 0 0.1rem 0.5rem;
+}
+.edit-declined-words {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
 
 /* The word on the reference (§27.3), before the resolution: it takes the free
    space the resolution would otherwise take, and the two read on from it. */

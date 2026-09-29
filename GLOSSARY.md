@@ -704,9 +704,12 @@ which is the point: the method's objects are the interface's.
 A **suggestion** is an edit the app proposes, with its **evidence** and its **confidence** — *the
 chance a curator would accept it*, a logistic model over its features, which review mode re-tunes from
 the reader's answers. The **junction score** is the log-likelihood that two ends are adjacent against
-their being apart; a suggestion's gain is the junction scores it adds less the ones it removes. A
-suggestion is an offer, never a result: it enters the reference only when accepted, or when auto mode
-applies it and writes down that it did.
+their being apart — apart at the trans level when the question is whether a junction the reference
+makes is refused, and at the window's own level when it is whether two ends meet, so a cluster that
+lights a window evenly is not an adjacency. A suggestion's gain is the scores of the junctions it
+makes less those it takes away, counted in **units** of one adjacency. A suggestion is an offer, never
+a result: it enters the reference only when accepted, or when auto mode applies it and writes down
+that it did.
 
 ### manual, review, auto
 
@@ -735,9 +738,9 @@ beside an edited one reverts to the file, which is one more undo.
 
 ### the rail
 
-The column of labels beside the map on the stage, each suggestion's label at the height of its
-position with a leader to it. Hovering a label lights its marks on the map and hovering a mark lights
-its label: one highlight in two places.
+The column of labels beside the map on the stage, each suggestion's label — its number, its kind, its
+confidence — at the height of what it concerns, with a leader to a bracket that spans it. Hovering a
+label lights its marks on the map and hovering a mark lights its label: one highlight in two places.
 
 ### dot plot, anchor, streak
 

@@ -38,6 +38,40 @@ import { recall, remember } from './UiMemory'
 /** The `UiMemory` scope this is kept under. Also in `SessionConfig`'s table. */
 export const EDIT_SCOPE = 'map:edit'
 
+/** The scope what review mode learned about a file is kept under (§27.6). */
+export const LEARNED_SCOPE = 'map:edit-learned'
+
+/**
+ * What the reader's answers taught the stage about one file (§27.6): the
+ * confidence model's weights, how many answers moved them, and the suggestions
+ * turned down, by their keys — kept per file beside the edit, so a suggestion
+ * turned down stays turned down, and what a curation taught is there next time.
+ */
+export interface Learned {
+  /** `null` for the initial weights: nothing has been answered. */
+  weights: number[] | null
+  answers: number
+  rejected: string[]
+}
+
+/** A stored record of what was learned, checked on the way in; nothing learned where it will not read. */
+export function readLearned(stored: unknown): Learned {
+  const none: Learned = { weights: null, answers: 0, rejected: [] }
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return none
+  const value = stored as Record<string, unknown>
+  const weights = value['weights']
+  const answers = value['answers']
+  const rejected = value['rejected']
+  return {
+    weights:
+      Array.isArray(weights) && weights.length > 0 && weights.every((w) => typeof w === 'number' && Number.isFinite(w))
+        ? (weights as number[])
+        : null,
+    answers: typeof answers === 'number' && Number.isInteger(answers) && answers >= 0 ? answers : 0,
+    rejected: Array.isArray(rejected) ? rejected.filter((key): key is string => typeof key === 'string') : [],
+  }
+}
+
 /**
  * A stored edit, checked field by field on the way in: storage outlives code,
  * and a workspace is a file somebody may have written by hand.
@@ -129,9 +163,26 @@ export class EditStore {
     return withStep(this.held, step, 'reader', this.clock())
   }
 
-  /** Make a step. Any steps that had been undone are dropped, as every editor drops them. */
-  apply(step: EditStep, by: StepAuthor = 'reader'): void {
-    this.set(withStep(this.held, step, by, this.clock()))
+  /**
+   * Make a step. Any steps that had been undone are dropped, as every editor
+   * drops them.
+   *
+   * @param suggestion For a step a suggestion made, the suggestion as the
+   *   history keeps it: what it was, and what it rested on.
+   */
+  apply(step: EditStep, by: StepAuthor = 'reader', suggestion?: string): void {
+    this.set(withStep(this.held, step, by, this.clock(), suggestion))
+  }
+
+  /** What the reader's answers have taught the stage about this file (§27.6). */
+  get learned(): Learned {
+    return readLearned(recall<unknown>(this.key, LEARNED_SCOPE))
+  }
+
+  /** Keep what was learned; nothing at all where nothing was. */
+  keepLearned(learned: Learned): void {
+    const empty = learned.weights === null && learned.answers === 0 && learned.rejected.length === 0
+    remember(this.key, LEARNED_SCOPE, empty ? null : learned)
   }
 
   undo(): void {

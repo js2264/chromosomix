@@ -5515,7 +5515,7 @@ export class Session {
       title: this.mapLabel(file.uri),
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
-      readPicture: (onProgress) => reader.cancellable<'picture'>({ kind: 'picture', balance }, onProgress),
+      readPicture: (onProgress) => reader.cancellable<'picture'>({ kind: 'picture', balance, method: true }, onProgress),
       colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
       ...(lanes === undefined
         ? {}

@@ -21,12 +21,18 @@ export interface Stretch {
 export interface SnapTarget {
   unit: number
   /**
-   * `end`: where two parts meet, or a sequence ends — an edit end (§27.4).
-   * `selection`: an end of what is selected, so a stretch can be dropped
-   * against its own edge. The first beats the second at equal distance.
+   * `suggestion`: a point a suggestion names — a breakpoint, or where it would
+   * put a stretch (§27.4). `end`: where two parts meet, or a sequence ends — an
+   * edit end. `selection`: an end of what is selected, so a stretch can be
+   * dropped against its own edge. At equal distance each beats the next.
    */
-  kind: 'end' | 'selection'
+  kind: 'suggestion' | 'end' | 'selection'
+  /** The suggestion it belongs to, for a `suggestion`. */
+  key?: string
 }
+
+/** Which of two targets at one distance wins: a suggestion, then an edit end, then the selection. */
+const PRIORITY: Record<SnapTarget['kind'], number> = { suggestion: 0, end: 1, selection: 2 }
 
 /** Where the pointer came to rest along one axis, and what it snapped to. */
 export interface Snapped {
@@ -57,7 +63,7 @@ export function snapUnit(unit: number, targets: readonly SnapTarget[], reach: nu
       if (distance > reach) continue
       const better =
         distance < bestDistance ||
-        (distance === bestDistance && best !== null && best.kind === 'selection' && target.kind === 'end')
+        (distance === bestDistance && best !== null && PRIORITY[target.kind] < PRIORITY[best.kind])
       if (better) {
         best = target
         bestDistance = distance

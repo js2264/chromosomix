@@ -1,8 +1,10 @@
 # Editing the reference — design note
 
 > **Status, 2026-09-29.** Partly built: the dev features (§29), the model of an edit and the axis it
-> is drawn through, the stage in manual mode with its picture, and the session drawn through the
-> edit — steps 1, 2 and 3 of §10, less the zoom past the stage's picture.
+> is drawn through, the stage with its picture, the session drawn through the edit, and the method
+> with its suggestions drawn over the stage's map and answered in all three modes — steps 1, 2, 3 and
+> 5 of §10 and most of 6, less the zoom past the stage's picture, the refinement at finer rungs and the
+> command line. Exports (step 4) come next.
 > `SPECS.md` §27 (editing the reference), §28 (two sequences on two axes) and §29 (dev features) are
 > the contract, and each subsection there says *built* as it lands; this note is the design they were
 > written from — the method in full, the architecture with the code it lands in, the alternatives
@@ -19,7 +21,12 @@
 > sequence table, its bin columns and a pixel store that reads the original rows a window needs, or
 > from a `.hic` the original rectangles, and carries each pixel to where it lands — so no view, table
 > or task learns there is an edit, and a change of edit opens the file again as a change of
-> resolution does.
+> resolution does. And the method (§4) went further in three places the data asked for: the window
+> is set by the file's own contact law, not fixed; a junction's score asks two questions against two
+> backgrounds — *is it refused* against the trans level, *do these ends meet* against the window's own
+> level, which is what keeps telomeres and centromeres clustering from reading as adjacencies; and the
+> confidence carries a fourth feature, a corner brighter than any adjacency, which is the repeats every
+> telomere carries (SPECS §27.5 says what is built).
 
 The feature in one sentence: **a stage where the reader edits the reference a contact map was built
 against — cut, invert, move, join, duplicate, set aside — with the map, its tracks and every later

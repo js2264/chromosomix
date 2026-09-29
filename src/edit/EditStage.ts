@@ -53,8 +53,12 @@ import {
   type Stretch,
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
+import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
 import { paintPicture, pictureColours } from './paint'
+import { Rail, type RailItem } from './rail'
+import { INITIAL_WEIGHTS, learn, suggest, type Suggested, type Suggestion } from './suggest'
 import { stepText } from './words'
+import type { Learned } from '../state/referenceEdit'
 
 /** The lanes the stage draws, as the map they were placed on has them. */
 export interface StageLanes {
@@ -116,6 +120,32 @@ const DIAGONAL_PX = 12
 const DRAG_PX = 4
 /** The fewest cells a view may show a side. */
 const MIN_SPAN = 12
+/** Pixels within which the pointer snaps to a corner, measured in the plane (§27.4). */
+const CORNER_PX = 10
+/** The rail's width, beside the map. */
+const RAIL_WIDTH = 150
+/** The confidence auto mode applies at and above (§27.6). */
+const AUTO_THRESHOLD = 0.5
+/**
+ * The least confidence a suggestion is offered at: one a curator would take one
+ * time in seven or less is noise on the map, drawn where the reader is judging.
+ * Still ranked — an answer about another can raise it — and still listed among
+ * those turned down, to be offered again.
+ */
+const OFFER_FLOOR = 0.15
+/** The most steps one run of auto mode makes. */
+const AUTO_MOST = 40
+
+/** Who presses accept (§27.6). */
+type Mode = 'manual' | 'review' | 'auto'
+
+/** A confidence, as the stage writes it. */
+function percent(confidence: number): string {
+  return `${Math.round(confidence * 100)}%`
+}
+
+/** A suggestion's kind, in a word. */
+const KIND_WORD: Record<Suggestion['kind'], string> = { split: 'split', turn: 'turn', move: 'move', join: 'join' }
 
 const REASONS: Array<{ why: AsideReason; label: string; title: string }> = [
   { why: 'debris', label: 'debris', title: 'Short, unplaceable sequence the assembler left over' },
@@ -145,6 +175,10 @@ export class EditStage {
   private readonly historyCard: HTMLElement
   private readonly sequencesCard: HTMLElement
   private readonly pictureCard: HTMLElement
+  private readonly suggestionsCard: HTMLElement
+  private readonly modes: Record<Mode, HTMLButtonElement>
+  private readonly rail: Rail
+  private readonly reviewBar: HTMLElement
 
   private request: PictureRequest | null = null
   private picture: PictureResult | null = null
@@ -170,11 +204,28 @@ export class EditStage {
   private mapAt: { x: number; y: number } = { x: 0, y: 0 }
   /** The grid the lanes were last pointed at. */
   private lanesGrid: LensGrid | null = null
+  /** What the method weighs, read with the picture (§27.5). */
+  private method: NonNullable<PictureResult['method']> | null = null
+  /** The suggestions for the edit as it stands, and a recount pending. */
+  private suggested: Suggested | null = null
+  private suggesting = 0
+  /** What the reader's answers have taught the stage about this file (§27.6). */
+  private learned: Learned
+  /** The suggestion lit — hovered on the map, the rail or the list — by key. */
+  private lit: string | null = null
+  private mode: Mode = 'manual'
+  /** The suggestion review mode is on, by key. */
+  private current: string | null = null
+  /** Space held in review mode: the map as it would be with the current suggestion done. */
+  private previewing = false
+  /** What the rail was last painted from, so a frame that changes none of it leaves it be. */
+  private railSignature = ''
   private closed = false
   private readonly stopStore: () => void
   private readonly observer: ResizeObserver | null
   private readonly onKey: (event: KeyboardEvent) => void
   private readonly onKeyUp: (event: KeyboardEvent) => void
+  private readonly onBlur: () => void
 
   constructor(props: EditStageProps) {
     this.props = props
@@ -218,6 +269,9 @@ export class EditStage {
       }
     }
     this.plot.append(...Object.values(this.laneBands))
+    this.rail = new Rail({ hover: (key) => this.setLit(key), pick: (key) => this.pick(key) })
+    this.plot.append(this.rail.element)
+    this.learned = props.store.learned
 
     this.readoutEl = el('div', { class: 'edit-readout', attrs: { 'aria-live': 'polite' } })
     const fitButton = iconButton('maximize', 'Show the whole assembly (0, or a double click)', () => this.fit(), {
@@ -241,28 +295,45 @@ export class EditStage {
       this.readoutEl,
       el('div', { class: 'edit-tools' }, this.undoButton, this.redoButton),
     )
-    this.root = el('div', { class: 'edit-stage' }, toolbar, this.plot)
+    this.reviewBar = el('div', { class: 'edit-review hidden', attrs: { 'aria-live': 'polite' } })
+    this.root = el('div', { class: 'edit-stage' }, toolbar, this.reviewBar, this.plot)
 
     this.selectionCard = el('section', { class: 'edit-card' })
     this.historyCard = el('section', { class: 'edit-card' })
     this.sequencesCard = el('section', { class: 'edit-card' })
     this.pictureCard = el('section', { class: 'edit-card' })
+    this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
+    const mode = (name: Mode, title: string): HTMLButtonElement =>
+      el('button', {
+        class: 'btn btn-toggle',
+        text: name,
+        title,
+        attrs: { type: 'button', 'aria-pressed': String(name === 'manual') },
+        on: { click: () => this.setMode(name) },
+      })
+    this.modes = {
+      manual: mode('manual', 'The suggestions are guides — drawn, labelled, snapped to — and never apply themselves'),
+      review: mode('review', 'Work through the suggestions, best first: Y takes one, N turns it down, and every answer teaches the ranking'),
+      auto: mode('auto', `Apply every suggestion at ${percent(AUTO_THRESHOLD)} or more, best first — each a step to undo like any other`),
+    }
     this.side = el(
       'div',
       { class: 'edit-side-body' },
-      this.modeRow(),
+      el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, ...Object.values(this.modes)),
+      this.suggestionsCard,
       this.selectionCard,
       this.historyCard,
       this.sequencesCard,
-      this.suggestionsCard(),
       this.pictureCard,
     )
 
     this.wireCanvas()
     this.onKey = (event) => this.key(event)
     this.onKeyUp = (event) => this.keyUp(event)
+    this.onBlur = () => this.letGo()
     window.addEventListener('keydown', this.onKey, true)
     window.addEventListener('keyup', this.onKeyUp, true)
+    window.addEventListener('blur', this.onBlur)
     this.stopStore = props.store.subscribe(() => this.edited())
 
     this.modal = stageDialog({
@@ -308,10 +379,12 @@ export class EditStage {
         if (this.closed || this.request !== request) return
         this.request = null
         this.picture = picture
+        this.method = picture.method ?? null
         this.layout = { binsize: picture.binsize, sequences: picture.sequences }
         this.colours = pictureColours(this.props.colormap, { low: picture.low, high: picture.high }, picture.vmin, picture.vmax)
         this.hideStatus()
         this.rebuild(true)
+        this.computeSuggestions()
         this.paintSide()
       })
       .catch((error: unknown) => {
@@ -353,6 +426,7 @@ export class EditStage {
   private edited(): void {
     this.rebuild(false)
     this.paintSide()
+    this.scheduleSuggestions()
   }
 
   /** The grid for the store's assembly, keeping the view where it can be kept. */
@@ -528,13 +602,15 @@ export class EditStage {
     const right = thickness('right')
     const bottom = thickness('bottom')
     const left = thickness('left')
+    // The rail takes the room left of the map and its lanes (§27.3).
+    const rail = RAIL_WIDTH
     const size = Math.max(
       160,
-      Math.floor(Math.min(box.width - left - BAR_THICKNESS - right - 12, box.height - top - BAR_THICKNESS - bottom - 12)),
+      Math.floor(Math.min(box.width - rail - left - BAR_THICKNESS - right - 12, box.height - top - BAR_THICKNESS - bottom - 12)),
     )
     this.size = size
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
-    const x = Math.max(0, Math.floor((box.width - (left + BAR_THICKNESS + size + right)) / 2)) + left + BAR_THICKNESS
+    const x = Math.max(0, Math.floor((box.width - (rail + left + BAR_THICKNESS + size + right)) / 2)) + rail + left + BAR_THICKNESS
     const y = top + BAR_THICKNESS + 4
     const place = (node: HTMLElement, px: number, py: number, width: number, height: number): void => {
       node.style.left = `${px}px`
@@ -564,6 +640,8 @@ export class EditStage {
       canvases.right.style.left = `${x + size}px`
       canvases.right.style.top = `${y}px`
     }
+    this.rail.place(x - BAR_THICKNESS - left - rail, y, rail - 4, size, this.dpr)
+    this.railSignature = ''
     this.mapAt = { x, y }
     this.sx.setPixels(size)
     this.sy.setPixels(size)
@@ -676,6 +754,9 @@ export class EditStage {
     this.overlayCanvas.dataset.view = [vx0, vx1, vy0, vy1].map((value) => value.toFixed(3)).join(' ')
     const overlay = this.overlayCanvas.getContext('2d')
     const lit = this.litUnits(grid)
+    // The suggestions are about the edit as it stands: while a drag or a
+    // preview shows another, they are not drawn over it.
+    const marks = this.preview === null ? this.marks() : []
     if (overlay !== null) {
       overlay.setTransform(dpr, 0, 0, dpr, 0, 0)
       const box = this.selection?.kind === 'box' && this.drag === null ? this.boxUnits(grid, this.selection) : this.dragBox()
@@ -685,6 +766,7 @@ export class EditStage {
         toX,
         toY,
         ink,
+        under: (ctx) => drawSuggestions(ctx, { size, toX, toY, ink, marks }),
         square: box === null ? lit : null,
         box,
         cross:
@@ -700,18 +782,22 @@ export class EditStage {
     }
 
     const mark = this.drag?.kind === 'move' ? this.drag.mark : null
+    const ticks = marks.flatMap(({ suggestion, lit: shining }) =>
+      [...suggestion.breaks, ...(suggestion.target === null ? [] : [suggestion.target])].map((unit) => ({ unit, lit: shining })),
+    )
     const top = this.topBar.getContext('2d')
     if (top !== null) {
       top.setTransform(dpr, 0, 0, dpr, 0, 0)
       const cols = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.cols ?? null : lit
-      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? mark : null)
+      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? mark : null, ticks)
     }
     const left = this.leftBar.getContext('2d')
     if (left !== null) {
       left.setTransform(dpr, 0, 0, dpr, 0, 0)
       const rows = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.rows ?? null : lit
-      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, null)
+      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, null, ticks)
     }
+    this.paintRail(marks, toY, ink)
 
     if (this.lanes !== null) {
       // The lanes are drawn through whichever grid is on screen, the preview's
@@ -831,6 +917,14 @@ export class EditStage {
     if (this.selection?.kind === 'stretch') {
       const units = stretchUnits(grid, this.selection.stretch)
       if (units !== null) out.push({ unit: units[0], kind: 'selection' }, { unit: units[1], kind: 'selection' })
+    }
+    // Every point a suggestion names: its breakpoints, and where it would put a stretch.
+    for (const suggestion of this.open()) {
+      for (const unit of suggestion.breaks) out.push({ unit, kind: 'suggestion', key: suggestion.key })
+      if (suggestion.target !== null) out.push({ unit: suggestion.target, kind: 'suggestion', key: suggestion.key })
+      for (const corner of suggestion.corners) {
+        out.push({ unit: corner.row, kind: 'suggestion', key: suggestion.key }, { unit: corner.col, kind: 'suggestion', key: suggestion.key })
+      }
     }
     return out
   }
@@ -983,6 +1077,7 @@ export class EditStage {
     canvas.addEventListener('pointerleave', () => {
       if (this.drag !== null) return
       this.hover = null
+      this.setLit(null)
       this.paintReadout()
       this.schedule()
     })
@@ -1018,10 +1113,31 @@ export class EditStage {
     })
   }
 
-  /** The pointer at `(x, y)` on the map, snapped, and said in the readout. */
+  /**
+   * The pointer at `(x, y)` on the map, snapped, and said in the readout: to a
+   * suggestion's corner in the plane where one is within reach (§27.4), else
+   * along each axis; and a suggestion's mark under it lit, with its label.
+   */
   private pointAt(x: number, y: number): void {
     if (this.grid === null) return
-    this.hover = { x: this.snapX(this.sx.toUnit(x)), y: this.snapY(this.sy.toUnit(y)), px: x, py: y }
+    const spots = this.preview === null && this.drag?.kind !== 'move' ? markSpots({ size: this.size, toX: (u) => this.sx.toPixel(u), toY: (u) => this.sy.toPixel(u), marks: this.marks() }) : []
+    let nearest: (typeof spots)[number] | null = null
+    let distance = Number.POSITIVE_INFINITY
+    for (const spot of spots) {
+      const d = Math.hypot(spot.x - x, spot.y - y)
+      if (d < distance) {
+        nearest = spot
+        distance = d
+      }
+    }
+    const within = nearest !== null && distance <= CORNER_PX ? nearest : null
+    if (within !== null && within.corner && !this.alt) {
+      const target = { kind: 'suggestion' as const, key: within.key }
+      this.hover = { x: { unit: within.col, target: { ...target, unit: within.col } }, y: { unit: within.row, target: { ...target, unit: within.row } }, px: x, py: y }
+    } else {
+      this.hover = { x: this.snapX(this.sx.toUnit(x)), y: this.snapY(this.sy.toUnit(y)), px: x, py: y }
+    }
+    if (this.drag === null) this.setLit(within?.key ?? this.hover.x.target?.key ?? this.hover.y.target?.key ?? null)
     this.paintReadout()
     this.schedule()
   }
@@ -1101,6 +1217,8 @@ export class EditStage {
     } else if (key === ' ') {
       this.space = true
       this.overlayCanvas.classList.add('is-panning')
+      // In review, held: the map as it would be with the suggestion taken.
+      if (this.mode === 'review' && !event.repeat) this.startPreview()
     } else if (mod && (key === 'z' || key === 'Z')) {
       if (event.shiftKey) this.props.store.redo()
       else this.props.store.undo()
@@ -1125,6 +1243,14 @@ export class EditStage {
         const rect = this.overlayCanvas.getBoundingClientRect()
         this.asideMenu(this.selection.stretch, rect.left + rect.width / 2, rect.top + rect.height / 2)
       } else handled = false
+    } else if (key === 'y' || key === 'Y' || key === 'n' || key === 'N') {
+      // Review answers the one it is on; elsewhere, the one lit under the hand.
+      const suggestion = this.byKey(this.mode === 'review' ? this.current : this.lit)
+      if (suggestion === null) handled = false
+      else if (key === 'y' || key === 'Y') this.accept(suggestion)
+      else this.reject(suggestion)
+    } else if (this.mode === 'review' && (key === 'ArrowRight' || key === 'ArrowLeft')) {
+      this.moveCurrent(key === 'ArrowRight' ? 1 : -1)
     } else if (key === '0') {
       this.fit()
     } else if (key === '+' || key === '=') {
@@ -1142,10 +1268,19 @@ export class EditStage {
 
   private keyUp(event: KeyboardEvent): void {
     if (event.key === 'Alt') this.alt = false
-    if (event.key === ' ') {
-      this.space = false
-      this.overlayCanvas.classList.remove('is-panning')
-    }
+    if (event.key === ' ') this.letGoOfSpace()
+  }
+
+  /** The window left with keys held: no key-up comes for them, so they are let go of here. */
+  private letGo(): void {
+    this.alt = false
+    this.letGoOfSpace()
+  }
+
+  private letGoOfSpace(): void {
+    this.space = false
+    this.overlayCanvas.classList.remove('is-panning')
+    this.stopPreview()
   }
 
   /** The right-click menu: what can be done with what is selected, or here. */
@@ -1206,7 +1341,20 @@ export class EditStage {
     const row = offDiagonal ? describe(hover.y.unit) : ''
     const edge = hover.x.target?.kind === 'end' ? this.edgeName(grid, hover.x.unit) : null
     const col = edge ?? describe(hover.x.unit)
-    const snapped = hover.x.target !== null && edge === null ? 'edit end · ' : this.alt ? 'free · ' : ''
+    // A suggestion's point names the suggestion: its number, its kind; a corner
+    // is two points at once.
+    const onKey = hover.x.target?.kind === 'suggestion' ? hover.x.target.key : hover.y.target?.kind === 'suggestion' ? hover.y.target.key : undefined
+    const suggestion = onKey === undefined ? null : this.byKey(onKey)
+    const number = suggestion === null ? 0 : this.open().indexOf(suggestion) + 1
+    const corner = suggestion !== null && hover.x.target?.kind === 'suggestion' && hover.y.target?.kind === 'suggestion' && offDiagonal
+    const snapped =
+      suggestion !== null
+        ? `${corner ? 'corner of' : 'snapped to'} ${number} · ${KIND_WORD[suggestion.kind]} · `
+        : hover.x.target !== null && edge === null
+          ? 'edit end · '
+          : this.alt
+            ? 'free · '
+            : ''
     this.readoutEl.textContent = `${snapped}${col}${row === '' ? '' : ` × ${row}`}`
   }
 
@@ -1235,24 +1383,9 @@ export class EditStage {
   // The sidebar
   // -------------------------------------------------------------------------
 
-  private modeRow(): HTMLElement {
-    const manual = el('button', { class: 'btn btn-toggle', text: 'manual', attrs: { type: 'button', 'aria-pressed': 'true' } })
-    const soon = 'Works through the suggestions, which are not built yet'
-    const review = el('button', { class: 'btn btn-toggle', text: 'review', title: soon, attrs: { type: 'button', 'aria-pressed': 'false' }, disabled: true })
-    const auto = el('button', { class: 'btn btn-toggle', text: 'auto', title: soon, attrs: { type: 'button', 'aria-pressed': 'false' }, disabled: true })
-    return el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, manual, review, auto)
-  }
-
-  private suggestionsCard(): HTMLElement {
-    return el(
-      'section',
-      { class: 'edit-card' },
-      el('h3', { class: 'edit-card-head', text: 'suggestions' }),
-      el('p', { class: 'edit-empty', text: 'The method that proposes edits is not built yet, so the stage is manual: every step is the reader’s.' }),
-    )
-  }
-
   private paintSide(): void {
+    this.paintSuggestions()
+    this.paintReview()
     this.paintSelection()
     this.paintHistory()
     this.paintSequences()
@@ -1261,6 +1394,369 @@ export class EditStage {
     const store = this.props.store
     this.undoButton.disabled = !store.canUndo
     this.redoButton.disabled = !store.canRedo
+    for (const [name, button] of Object.entries(this.modes) as Array<[Mode, HTMLButtonElement]>) {
+      button.setAttribute('aria-pressed', String(name === this.mode))
+      button.disabled = name !== 'manual' && this.suggested === null
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Suggestions
+  // -------------------------------------------------------------------------
+
+  /** The suggestions offered: not turned down, and at the floor or above, best first. */
+  private open(): Suggestion[] {
+    const rejected = new Set(this.learned.rejected)
+    return (this.suggested?.list ?? []).filter((suggestion) => !rejected.has(suggestion.key) && suggestion.confidence >= OFFER_FLOOR)
+  }
+
+  /** The ones turned down, which the list strikes through. */
+  private declined(): Suggestion[] {
+    const rejected = new Set(this.learned.rejected)
+    return (this.suggested?.list ?? []).filter((suggestion) => rejected.has(suggestion.key))
+  }
+
+  private byKey(key: string | null | undefined): Suggestion | null {
+    if (key === null || key === undefined) return null
+    return this.suggested?.list.find((suggestion) => suggestion.key === key) ?? null
+  }
+
+  /** The suggestions as the map draws them, numbered as the rail and the list number them. */
+  private marks(): MarkedSuggestion[] {
+    return this.open().map((suggestion, i) => ({
+      suggestion,
+      number: i + 1,
+      lit: suggestion.key === this.lit || suggestion.key === this.current,
+    }))
+  }
+
+  /** Count the suggestions again once the hand has let go — after an edit, or an answer. */
+  private scheduleSuggestions(): void {
+    if (this.method === null || this.closed) return
+    window.clearTimeout(this.suggesting)
+    this.suggesting = window.setTimeout(() => {
+      this.suggesting = 0
+      if (this.closed) return
+      this.computeSuggestions()
+      this.paintSide()
+      this.schedule()
+    }, 30)
+    this.paintSuggestions()
+  }
+
+  /** The suggestions for the edit as it stands (§27.5). */
+  private computeSuggestions(): void {
+    const method = this.method
+    const grid = this.grid
+    if (method === null || grid === null) return
+    this.suggested = suggest({ ...method, grid, weights: this.learned.weights ?? INITIAL_WEIGHTS })
+    const open = this.open()
+    if (this.current !== null && !open.some((suggestion) => suggestion.key === this.current)) this.current = null
+    if (this.mode === 'review' && this.current === null) this.current = open[0]?.key ?? null
+    if (this.lit !== null && this.byKey(this.lit) === null) this.lit = null
+    this.railSignature = ''
+  }
+
+  /** Light a suggestion — its marks, its label and its row at once — or none. */
+  private setLit(key: string | null): void {
+    if (key === this.lit) return
+    this.lit = key
+    for (const row of this.suggestionsCard.querySelectorAll<HTMLElement>('.edit-suggestion')) {
+      row.classList.toggle('is-lit', row.dataset.key === key)
+    }
+    this.schedule()
+  }
+
+  /** A suggestion pressed, on the rail or in the list: framed, and the one review is on. */
+  private pick(key: string): void {
+    const suggestion = this.byKey(key)
+    if (suggestion === null) return
+    if (this.mode === 'review') this.current = key
+    this.frameSuggestion(suggestion)
+    this.paintSide()
+  }
+
+  /** Frame what a suggestion concerns, with room round it to see the evidence. */
+  private frameSuggestion(suggestion: Suggestion): void {
+    const [a, b] = suggestion.extent
+    const room = Math.max(12, (b - a) * 0.4)
+    this.frameUnits(a - room, b + room)
+  }
+
+  /** Take a suggestion: its step made, with what it rested on kept in the history. */
+  private accept(suggestion: Suggestion, by: 'suggestion' | 'auto' = 'suggestion'): void {
+    if (by === 'suggestion') this.answer(suggestion, true)
+    if (this.current === suggestion.key) this.current = null
+    this.selection = null
+    this.props.store.apply(suggestion.step, by, `${suggestion.words} · ${percent(suggestion.confidence)} · ${suggestion.evidence.join(', ')}`)
+  }
+
+  /** Turn a suggestion down: gone from the map, struck through in the list, and learned from. */
+  private reject(suggestion: Suggestion): void {
+    this.answer(suggestion, false)
+    this.learned = { ...this.learned, rejected: [...this.learned.rejected, suggestion.key] }
+    this.props.store.keepLearned(this.learned)
+    if (this.current === suggestion.key) this.current = null
+    if (this.lit === suggestion.key) this.lit = null
+    this.scheduleSuggestions()
+  }
+
+  /** An answer, learned: one step of the confidence model towards it (§27.6). */
+  private answer(suggestion: Suggestion, accepted: boolean): void {
+    const weights = learn(this.learned.weights ?? INITIAL_WEIGHTS, suggestion.features, accepted)
+    this.learned = { ...this.learned, weights, answers: this.learned.answers + 1 }
+    this.props.store.keepLearned(this.learned)
+  }
+
+  /** A suggestion turned down, offered again. */
+  private restore(key: string): void {
+    this.learned = { ...this.learned, rejected: this.learned.rejected.filter((held) => held !== key) }
+    this.props.store.keepLearned(this.learned)
+    this.scheduleSuggestions()
+  }
+
+  /** Everything the answers taught, forgotten: the initial weights, nothing turned down. */
+  private forget(): void {
+    this.learned = { weights: null, answers: 0, rejected: [] }
+    this.props.store.keepLearned(this.learned)
+    this.scheduleSuggestions()
+  }
+
+  /**
+   * Auto mode's run (§27.6): the best suggestion at the threshold or above,
+   * applied as a step marked `auto`, the rest counted again, until none is left
+   * above it.
+   */
+  private runAuto(): void {
+    for (let k = 0; k < AUTO_MOST; k++) {
+      const next = this.open().find((suggestion) => suggestion.confidence >= AUTO_THRESHOLD)
+      if (next === undefined) break
+      const before = this.props.store.applied
+      this.accept(next, 'auto')
+      window.clearTimeout(this.suggesting)
+      this.suggesting = 0
+      if (this.props.store.applied === before) break
+      this.computeSuggestions()
+    }
+    this.paintSide()
+    this.schedule()
+  }
+
+  private setMode(mode: Mode): void {
+    if (mode !== 'manual' && this.suggested === null) return
+    this.mode = mode
+    this.stopPreview()
+    this.current = mode === 'review' ? (this.open()[0]?.key ?? null) : null
+    const current = this.byKey(this.current)
+    if (current !== null) this.frameSuggestion(current)
+    this.paintSide()
+    this.schedule()
+  }
+
+  /** Review's next suggestion, or the one before. */
+  private moveCurrent(delta: 1 | -1): void {
+    const open = this.open()
+    if (open.length === 0) return
+    const at = open.findIndex((suggestion) => suggestion.key === this.current)
+    const next = open[(Math.max(0, at) + delta + open.length) % open.length]
+    this.current = next.key
+    this.frameSuggestion(next)
+    this.paintSide()
+  }
+
+  /** Space held in review: the map, its bars and its lanes, as they would be with the suggestion taken. */
+  private startPreview(): void {
+    const current = this.byKey(this.current)
+    const layout = this.layout
+    if (current === null || layout === null || this.drag !== null) return
+    this.previewing = true
+    this.preview = { grid: LensGrid.of(EditedAssembly.of(this.props.store.tentative(current.step)), layout), units: null }
+    this.pictureDirty = true
+    this.paintReview()
+    this.schedule()
+  }
+
+  private stopPreview(): void {
+    if (!this.previewing) return
+    this.previewing = false
+    this.preview = null
+    this.pictureDirty = true
+    this.paintReview()
+    this.schedule()
+  }
+
+  /** The rail, painted again only when something it shows has changed. */
+  private paintRail(marks: readonly MarkedSuggestion[], toY: (unit: number) => number, ink: StageInk): void {
+    const [y0, y1] = this.sy.domain
+    const signature = `${y0.toFixed(3)}:${y1.toFixed(3)}:${this.lit}:${this.current}:${marks.map((m) => m.suggestion.key).join('|')}`
+    if (signature === this.railSignature) return
+    this.railSignature = signature
+    const items: RailItem[] = marks.map(({ suggestion, number }) => ({
+      key: suggestion.key,
+      number,
+      text: `${KIND_WORD[suggestion.kind]} ${percent(suggestion.confidence)}`,
+      title: suggestion.words,
+      extent: suggestion.extent,
+      lit: suggestion.key === this.lit,
+      current: suggestion.key === this.current,
+    }))
+    this.rail.paint(items, toY, ink)
+  }
+
+  /** The line under the toolbar that says where review is, and what its keys do. */
+  private paintReview(): void {
+    const bar = this.reviewBar
+    const current = this.byKey(this.current)
+    if (this.mode !== 'review') {
+      bar.classList.add('hidden')
+      bar.replaceChildren()
+      return
+    }
+    bar.classList.remove('hidden')
+    const open = this.open()
+    if (current === null) {
+      bar.replaceChildren(el('span', { class: 'edit-review-words', text: open.length === 0 ? 'review · nothing left to answer' : 'review' }))
+      return
+    }
+    const key = (text: string): HTMLElement => el('kbd', { class: 'kbd', text })
+    bar.replaceChildren(
+      el('span', { class: 'edit-review-where', text: `${open.indexOf(current) + 1} of ${open.length}` }),
+      el('span', { class: 'edit-review-words', text: `${current.words} · ${percent(current.confidence)}` }),
+      el(
+        'span',
+        { class: 'edit-review-keys' },
+        this.previewing ? el('span', { class: 'edit-review-state', text: 'as it would be' }) : '',
+        key('Y'),
+        ' take it ',
+        key('N'),
+        ' turn it down ',
+        key('←'),
+        key('→'),
+        ' the others ',
+        key('space'),
+        ' held: as it would be',
+      ),
+    )
+  }
+
+  /** The card of suggestions: the list, best first, each with its answer. */
+  private paintSuggestions(): void {
+    const card = this.suggestionsCard
+    const open = this.open()
+    const weighing = this.suggesting !== 0
+    const head = el('h3', {
+      class: 'edit-card-head',
+      text: this.suggested === null ? 'suggestions' : `suggestions · ${open.length}${weighing ? ' · weighing…' : ''}`,
+    })
+    if (this.method === null || this.suggested === null) {
+      card.replaceChildren(
+        head,
+        el('p', {
+          class: 'edit-empty',
+          text:
+            this.picture === null
+              ? 'Weighed once the picture is read: the map’s own contact law, then every junction the reference makes, and every two ends that might meet.'
+              : 'The map gave the method nothing to weigh.',
+        }),
+      )
+      return
+    }
+    const children: HTMLElement[] = [head]
+    if (this.mode === 'auto') {
+      const ready = open.filter((suggestion) => suggestion.confidence >= AUTO_THRESHOLD).length
+      const run = this.act(
+        ready === 0 ? `none at ${percent(AUTO_THRESHOLD)} or more` : `apply ${ready} at ${percent(AUTO_THRESHOLD)} or more`,
+        'play',
+        'Apply them best first, counting again after each: every one a step marked auto, to undo like any other',
+        () => this.runAuto(),
+      )
+      run.disabled = ready === 0
+      children.push(el('div', { class: 'edit-acts' }, run))
+    }
+    if (open.length === 0) {
+      children.push(
+        el('p', {
+          class: 'edit-empty',
+          text:
+            this.declined().length > 0
+              ? 'Nothing left to answer: what was turned down is below, to offer again. Drag along the diagonal to edit by hand.'
+              : 'Nothing to suggest: every junction the reference makes is one the map supports, and no two ends it leaves apart meet. Drag along the diagonal to edit by hand.',
+        }),
+      )
+    } else {
+      const list = el('ol', { class: 'edit-suggestions' })
+      open.forEach((suggestion, i) => list.append(this.suggestionRow(suggestion, i + 1)))
+      children.push(list)
+    }
+    const declined = this.declined()
+    if (declined.length > 0) {
+      const details = el('details', { class: 'edit-declined' })
+      details.append(el('summary', { text: `turned down · ${declined.length}` }))
+      const list = el('ul', { class: 'edit-declined-list' })
+      for (const suggestion of declined) {
+        const restore = el('button', {
+          class: 'btn btn-icon',
+          title: 'Offer it again',
+          attrs: { type: 'button', 'aria-label': `Offer ${suggestion.words} again` },
+          on: { click: () => this.restore(suggestion.key) },
+        })
+        restore.append(icon('undo-2', { size: 13 }))
+        list.append(el('li', {}, el('span', { class: 'edit-declined-words', text: suggestion.words }), restore))
+      }
+      details.append(list)
+      children.push(details)
+    }
+    if (this.learned.answers > 0) {
+      children.push(
+        el(
+          'p',
+          { class: 'edit-note' },
+          `ranked by what ${this.learned.answers} ${this.learned.answers === 1 ? 'answer' : 'answers'} taught it · `,
+          el('button', { class: 'btn-link', text: 'forget', attrs: { type: 'button' }, title: 'Back to the initial weights, with nothing turned down', on: { click: () => this.forget() } }),
+        ),
+      )
+    }
+    card.replaceChildren(...children)
+  }
+
+  private suggestionRow(suggestion: Suggestion, number: number): HTMLElement {
+    const lit = suggestion.key === this.lit
+    const current = suggestion.key === this.current
+    const row = el('li', {
+      class: `edit-suggestion${lit ? ' is-lit' : ''}${current ? ' is-current' : ''}`,
+      attrs: { 'data-key': suggestion.key },
+      on: { pointerenter: () => this.setLit(suggestion.key), pointerleave: () => this.setLit(null) },
+    })
+    const main = el('button', {
+      class: 'edit-suggestion-main',
+      title: 'Frame it on the map',
+      attrs: { type: 'button' },
+      on: { click: () => this.pick(suggestion.key), focus: () => this.setLit(suggestion.key) },
+    })
+    const kindIcon = { split: 'split', turn: 'flip-horizontal', move: 'move', join: 'merge' } as const
+    main.append(
+      el('span', { class: 'edit-suggestion-n', text: String(number) }),
+      icon(kindIcon[suggestion.kind], { size: 14 }),
+      el('span', { class: 'edit-suggestion-words', text: suggestion.words }),
+      el('span', { class: 'edit-suggestion-confidence', text: percent(suggestion.confidence) }),
+    )
+    const chips = el('div', { class: 'edit-suggestion-chips' }, ...suggestion.evidence.map((chip) => el('span', { class: 'edit-chip', text: chip })))
+    const take = el('button', {
+      class: 'btn edit-suggestion-act',
+      title: 'Take it: its step, made (Y)',
+      attrs: { type: 'button', 'aria-label': `Take ${suggestion.words}` },
+      on: { click: () => this.accept(suggestion) },
+    })
+    take.append(icon('check', { size: 13 }), el('span', { text: 'take' }), el('kbd', { class: 'kbd', text: 'Y' }))
+    const down = el('button', {
+      class: 'btn edit-suggestion-act',
+      title: 'Turn it down: gone from the map, and learned from (N)',
+      attrs: { type: 'button', 'aria-label': `Turn down ${suggestion.words}` },
+      on: { click: () => this.reject(suggestion) },
+    })
+    down.append(icon('x', { size: 13 }), el('span', { text: 'turn down' }), el('kbd', { class: 'kbd', text: 'N' }))
+    row.append(main, el('div', { class: 'edit-suggestion-foot' }, chips, el('div', { class: 'edit-suggestion-acts' }, take, down)))
+    return row
   }
 
   private act(label: string, name: Parameters<typeof icon>[0], title: string, run: () => void, key?: string): HTMLButtonElement {
@@ -1363,7 +1859,16 @@ export class EditStage {
       return item
     }
     list.append(row(0, 'the file as it is'))
-    history.forEach((entry, i) => list.append(row(i + 1, stepText(entry.step))))
+    history.forEach((entry, i) => {
+      const item = row(i + 1, stepText(entry.step))
+      // A step a suggestion made says so, and what it rested on (§27.2).
+      if (entry.by !== 'reader') {
+        const by = el('span', { class: 'edit-history-by', text: entry.by === 'auto' ? 'auto' : 'suggested' })
+        if (entry.suggestion !== undefined) by.title = entry.suggestion
+        item.querySelector('.edit-history-button')?.append(by)
+      }
+      list.append(item)
+    })
     const refusal = store.refusal === null ? null : el('p', { class: 'edit-note', text: store.refusal })
     this.historyCard.replaceChildren(
       el('h3', { class: 'edit-card-head', text: `history${history.length > 0 ? ` · ${cursor} of ${history.length}` : ''}` }),
@@ -1457,9 +1962,11 @@ export class EditStage {
     this.closed = true
     this.request?.cancel()
     this.request = null
+    window.clearTimeout(this.suggesting)
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     window.removeEventListener('keydown', this.onKey, true)
     window.removeEventListener('keyup', this.onKeyUp, true)
+    window.removeEventListener('blur', this.onBlur)
     this.observer?.disconnect()
     this.stopStore()
     this.lanes?.destroy()
