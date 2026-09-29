@@ -303,6 +303,11 @@ export function resultKey(map: MapId, taskId: string): string {
  */
 export const RUN_HISTORY = 8
 
+/** Where a {@link HeldFile} is kept: a task's parameter, since a key alone repeats across tasks. */
+function heldKey(taskId: string, key: string): string {
+  return `${taskId}\u0000${key}`
+}
+
 /**
  * What the analysis worker's mount is identified by.
  *
@@ -400,6 +405,27 @@ export interface RunTarget {
   label: string
 }
 
+/**
+ * A file handed to a task's `file` parameter (§18.8): what the parameter's value
+ * is while this is the file, and where its bytes are.
+ *
+ * Held here rather than in the parameters, which are posted, stored and printed
+ * and cannot carry a `File`; the value is the file's name — or, for a row picked
+ * out of a connected place, its address — and the run is handed the source only
+ * while the value still names it.
+ */
+export interface HeldFile {
+  value: string
+  source: SourceSpec
+  /**
+   * What the drop area calls it, where the value does not say: a Drive file's
+   * address ends in an id, and a picked row brings its name with it.
+   */
+  name?: string
+  /** Bytes, where known, for the drop area to say. */
+  size?: number
+}
+
 interface Job {
   task: AnalysisTask
   params: Params
@@ -471,6 +497,8 @@ export class AnalysisRunner {
   private readonly resultTargets = new Map<string, RunTarget>()
   private readonly queue: Job[] = []
   private current: Job | null = null
+  /** Files handed to a task's `file` parameter, by task and key; see {@link holdFile}. */
+  private readonly held = new Map<string, HeldFile>()
 
   private readonly listeners = new Set<() => void>()
   private lastNotifiedAt = 0
@@ -490,6 +518,26 @@ export class AnalysisRunner {
 
   stateOf(taskId: string): JobState {
     return this.states.get(taskId) ?? { status: 'idle' }
+  }
+
+  /**
+   * Keep the file a form was handed for one of a task's parameters, or let it go.
+   *
+   * Here because the runner outlives the form: the drawer builds a new one
+   * whenever the task changes, and a file dropped on P(s) must still be there
+   * when the reader comes back to it. Per session, like every run, and never
+   * written anywhere — a `File` does not survive a reload, and the form empties
+   * a name whose file is not held (`ParamForm`).
+   */
+  holdFile(taskId: string, key: string, held: HeldFile | null): void {
+    const at = heldKey(taskId, key)
+    if (held === null) this.held.delete(at)
+    else this.held.set(at, held)
+  }
+
+  /** The file {@link holdFile} kept for this task's parameter, if any. */
+  heldFile(taskId: string, key: string): HeldFile | undefined {
+    return this.held.get(heldKey(taskId, key))
   }
 
   /**
@@ -743,6 +791,14 @@ export class AnalysisRunner {
       // set lost here is lost for every single-map run — which is all of them
       // outside a batch (§3.8).
       ...(source?.cells === undefined ? {} : { cells: source.cells }),
+      // And the two facts an imported `.pairs` carries (§3.7), which were being
+      // dropped here: the worker's own mount of a contact list is refused
+      // without the grid the reader chose, so every plain Run on a map binned
+      // from one failed with *choose a bin size*, and P(s) never saw the
+      // orientation curves the import had counted. A batch built its targets
+      // elsewhere and carried both, which is why *run on all maps* worked.
+      ...(source?.binning === undefined ? {} : { binning: source.binning }),
+      ...(source?.orientation === undefined ? {} : { orientation: source.orientation }),
       // Drawn as the view draws it (§6.5): a plain Run is the commonest way a
       // task reaches a resampled map, and dropping the total here would measure
       // the file as stored under a header that says otherwise.
@@ -1330,7 +1386,18 @@ export class AnalysisRunner {
       }
     }
 
+    // The files handed to the step's `file` parameters, while the value still
+    // names them: a reader who typed an address over a dropped file meant the
+    // address, and the file is not sent.
+    const sources: Record<string, SourceSpec> = {}
+    for (const spec of step.task.params) {
+      if (spec.kind !== 'file') continue
+      const held = this.held.get(heldKey(step.task.id, spec.key))
+      if (held !== undefined && held.value === step.params[spec.key]) sources[spec.key] = held.source
+    }
+
     const inputs: TaskInputs = {}
+    if (Object.keys(sources).length > 0) inputs.sources = sources
     if (Object.keys(features).length > 0) inputs.features = features
     if (Object.keys(pairs).length > 0) inputs.pairs = pairs
     if (Object.keys(labels).length > 0) inputs.labels = labels

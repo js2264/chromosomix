@@ -9384,6 +9384,16 @@ export class Session {
         : {}),
       resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
       peers: this.peersOf(uri),
+      // The starred map's import, where it was binned from a `.pairs`: P(s)
+      // then has its four orientations already, and asks for no file (§18.8).
+      ...(info.pairs === undefined
+        ? {}
+        : {
+            binnedFrom: {
+              name: fileBaseLabel(uri),
+              orientation: info.pairs.orientation !== null,
+            },
+          }),
     })
   }
 

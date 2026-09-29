@@ -219,12 +219,26 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'From the .pairs file',
   },
   {
-    kind: 'text',
+    // **A drop area that is also a button, and an address under it.** It was an
+    // address box alone, which asked a reader holding the file on their disk to
+    // go and find somewhere to host it — and on a map binned from a `.pairs` it
+    // asked for the file the map was binned from, whose four curves the import
+    // had already counted. The key keeps its old name, because stored sessions
+    // and `metacooler-run --pairsUri` lines carry it, and a local file's name is
+    // what this app calls its address everywhere else.
+    kind: 'file',
     key: 'pairsUri',
-    label: '.pairs URL',
-    placeholder: 'https://… or s3://…',
-    hint: 'Empty reads the file this map was imported from; drop a local .pairs on the app instead.',
+    label: '.pairs file',
+    accept: ['.pairs', '.pairs.gz'],
+    prompt: 'Drop a .pairs here, or click to choose one',
+    placeholder: 'or its address: https://… or s3://…',
+    hint: 'Read for its records alone: nothing is binned and no map changes.',
     when: (params) => params.stranded === true,
+    // Not asked of a map whose own import counted the four curves (§3.7): the
+    // run takes them from there, and a box asking for a file here read as if
+    // they could not be had without one.
+    askedOf: (context) => context.binnedFrom?.orientation !== true,
+    settled: '',
     section: 'From the .pairs file',
   },
   BALANCE_PARAM,
@@ -272,28 +286,55 @@ function boundedRequests(balance: boolean): number {
  */
 const SQUARES_WORTH_READING = 4
 
+/**
+ * The run's price: the matrix's curve, and then wherever the four orientations
+ * are coming from.
+ *
+ * A refusal about the matrix wins, and it used to be skipped: a named `.pairs`
+ * was priced first and returned, so a form with no sequence ticked and a file
+ * named offered a Run that could only produce an empty figure.
+ */
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  const scope = scopeOf(params)
-  const balance = balanceOf(params)
+  const matrix = matrixEstimate(context, params)
+  if (params.stranded !== true || matrix.refusal !== undefined) return matrix
 
-  // **A named `.pairs` dominates every other cost here**, so it is priced first
-  // and the matrix's own road is described inside the same note rather than
-  // beside it. Reading somebody else's contact list is a pass over gigabytes of
-  // text; the curve it produces is a few hundred points.
-  const named =
-    params.stranded === true && typeof params.pairsUri === 'string'
-      ? params.pairsUri.trim()
-      : ''
+  // **A named `.pairs` dominates every other cost here**, so the whole run is
+  // priced as its pass. Reading a contact list is a pass over gigabytes of text;
+  // the curve it produces is a few hundred points.
+  const named = typeof params.pairsUri === 'string' ? params.pairsUri.trim() : ''
   if (named !== '') {
     return {
       class: 'scan',
       requests: null,
       bytes: null,
       note:
-        `The matrix’s own curve as below, and then one pass over the whole of ${named} for the ` +
-        'four orientations — a contact list has no index to reach into.',
+        `${matrix.note} Then one pass over the whole of ${named} for the four orientations — ` +
+        'a contact list has no index to reach into.',
     }
   }
+  // The import counted them in its own pass (§3.7), so they cost nothing now —
+  // and the sentence says where they come from, since the form no longer asks.
+  const binned = context.binnedFrom
+  if (binned !== undefined && binned.orientation) {
+    return {
+      ...matrix,
+      note: `${matrix.note} The four orientations were counted as ${binned.name} was binned.`,
+    }
+  }
+  return {
+    ...matrix,
+    note:
+      binned === undefined
+        ? `${matrix.note} The four orientations need a .pairs: choose one above.`
+        : `${matrix.note} ${binned.name} has no strand columns, so the four orientations need ` +
+          'another .pairs: choose one above.',
+  }
+}
+
+/** What the matrix's own curve costs, which every run pays. */
+function matrixEstimate(context: AnalysisContext, params: Params): CostEstimate {
+  const scope = scopeOf(params)
+  const balance = balanceOf(params)
 
   const genomes = context.hasGenomes ? context.genomes : null
   if (scope === 'genome' && (genomes === null || genomes.length === 0)) {

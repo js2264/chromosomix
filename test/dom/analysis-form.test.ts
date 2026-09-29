@@ -50,6 +50,7 @@ import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure
 import { ORITER_TASK } from '@/analysis/tasks/oriter'
 import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
 import { ParamForm, resolveEntryDefaults } from '@/ui/ParamForm'
+import type { HeldFile } from '@/analysis/runner'
 import { pickLocus, resetPick } from '@/ui/mapPick'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -252,6 +253,202 @@ describe('P(s)', () => {
     const spec = EXPECTED_TASK.params.find((param) => param.key === 'minSeparation')
     expect(spec?.kind === 'number' && spec.unit).toBe('bins')
     view.destroy()
+  })
+})
+
+/**
+ * **P(s)'s `.pairs`: a drop area that is also a button, and an address under
+ * it (§18.8)** — and no question at all on a map whose own import counted the
+ * four orientations.
+ *
+ * It was an address box alone, which sent a reader holding the file on their
+ * disk off to find somewhere to host it, and on a map binned from a `.pairs`
+ * asked for the very file the map was binned from.
+ */
+describe('the .pairs P(s) reads its four orientations from', () => {
+  const stranded = (value: Params): Params => ({ ...value, stranded: true })
+
+  /** A form with the four orientations on, and the shelf a drawer would lend it. */
+  function pairsForm(
+    ctx = context(),
+    start: Params = stranded(defaultParams(EXPECTED_TASK.params)),
+    shelf = new Map<string, HeldFile>(),
+  ): { view: ParamForm; latest: () => Params; shelf: Map<string, HeldFile> } {
+    let params = start
+    const view = new ParamForm({
+      specs: EXPECTED_TASK.params,
+      context: ctx,
+      value: start,
+      onChange: (next) => {
+        params = next
+      },
+      files: {
+        get: (key) => shelf.get(key),
+        set: (key, held) => {
+          if (held === null) shelf.delete(key)
+          else shelf.set(key, held)
+        },
+      },
+    })
+    params = view.value
+    return { view, latest: () => params, shelf }
+  }
+
+  /** A drop of `files` on `target`, as an operating system hands one over. */
+  function drop(target: Element, files: File[]): Event {
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { files, items: [], types: ['Files'] },
+    })
+    target.dispatchEvent(event)
+    return event
+  }
+
+  const zoneOf = (view: ParamForm): HTMLElement | null => view.el.querySelector('.param-drop')
+  const addressOf = (view: ParamForm): HTMLInputElement | null =>
+    view.el.querySelector('.param-address')
+  const pairs = (name = 'library.pairs.gz'): File => new File(['## pairs format v1.0\n'], name)
+
+  it('asks with a drop area that is a button, and an address box, once the toggle is on', () => {
+    const off = form(EXPECTED_TASK)
+    expect(zoneOf(off)).toBeNull()
+    off.destroy()
+
+    const { view } = pairsForm()
+    const zone = zoneOf(view)
+    expect(zone?.getAttribute('role')).toBe('button')
+    expect(zone?.getAttribute('tabindex')).toBe('0')
+    expect(zone?.textContent).toContain('Drop a .pairs here, or click to choose one')
+    expect(addressOf(view)?.placeholder).toMatch(/address/)
+    view.destroy()
+  })
+
+  it('takes a dropped .pairs for itself, keeps the file and records its name', () => {
+    const { view, latest, shelf } = pairsForm()
+    document.body.appendChild(view.el)
+    let reachedTheApp = false
+    const app = (): void => {
+      reachedTheApp = true
+    }
+    document.body.addEventListener('drop', app)
+    const file = pairs()
+    const event = drop(zoneOf(view)!, [file])
+    document.body.removeEventListener('drop', app)
+
+    // Taken here and not let through: the app would *open* a dropped `.pairs`,
+    // as a map, behind a dialog.
+    expect(reachedTheApp).toBe(false)
+    expect(event.defaultPrevented).toBe(true)
+    expect(latest().pairsUri).toBe('library.pairs.gz')
+    expect(shelf.get('pairsUri')?.source).toEqual({ kind: 'local', file })
+    expect(zoneOf(view)?.classList.contains('is-held')).toBe(true)
+    expect(zoneOf(view)?.textContent).toContain('library.pairs.gz')
+    view.destroy()
+  })
+
+  it('opens the picker when pressed, and takes what is chosen', async () => {
+    const file = pairs('chosen.pairs')
+    const picker = async (): Promise<Array<{ getFile(): Promise<File> }>> => [
+      { getFile: async () => file },
+    ]
+    Object.defineProperty(window, 'showOpenFilePicker', { value: picker, configurable: true })
+    try {
+      const { view, latest } = pairsForm()
+      zoneOf(view)!.click()
+      for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(latest().pairsUri).toBe('chosen.pairs')
+      view.destroy()
+    } finally {
+      Reflect.deleteProperty(window, 'showOpenFilePicker')
+    }
+  })
+
+  it('refuses a file that is not a .pairs, and says so under the area', () => {
+    const { view, latest } = pairsForm()
+    drop(zoneOf(view)!, [new File(['x'], 'reads.bam')])
+    expect(latest().pairsUri).toBe('')
+    expect(view.el.textContent).toContain('reads.bam is not a .pairs or .pairs.gz file.')
+    view.destroy()
+  })
+
+  it('takes an address, which replaces a dropped file', () => {
+    const { view, latest, shelf } = pairsForm()
+    drop(zoneOf(view)!, [pairs()])
+    const box = addressOf(view)!
+    box.value = 'https://example.org/library.pairs.gz'
+    box.dispatchEvent(new Event('change'))
+    expect(latest().pairsUri).toBe('https://example.org/library.pairs.gz')
+    expect(shelf.has('pairsUri')).toBe(false)
+    expect(zoneOf(view)?.classList.contains('is-held')).toBe(false)
+    view.destroy()
+  })
+
+  it('refuses a name typed where an address goes', () => {
+    const { view, latest } = pairsForm()
+    const box = addressOf(view)!
+    box.value = 'library.pairs.gz'
+    box.dispatchEvent(new Event('change'))
+    expect(latest().pairsUri).toBe('')
+    expect(view.el.textContent).toMatch(/An address starts with https:\/\/ or s3:\/\//)
+    view.destroy()
+  })
+
+  it('empties a name whose file is no longer held, and keeps an address', () => {
+    const named = { ...stranded(defaultParams(EXPECTED_TASK.params)), pairsUri: 'library.pairs.gz' }
+    expect(pairsForm(context(), named).latest().pairsUri).toBe('')
+    const held = new Map<string, HeldFile>([
+      ['pairsUri', { value: 'library.pairs.gz', source: { kind: 'local', file: pairs() } }],
+    ])
+    expect(pairsForm(context(), named, held).latest().pairsUri).toBe('library.pairs.gz')
+    const url = { ...named, pairsUri: 's3://bucket/library.pairs.gz' }
+    expect(pairsForm(context(), url).latest().pairsUri).toBe('s3://bucket/library.pairs.gz')
+  })
+
+  it('asks nothing on a map whose import counted the four, and records the import', () => {
+    const binned = { ...context(), binnedFrom: { name: 'CG002.pairs.gz', orientation: true } }
+    const url = { ...stranded(defaultParams(EXPECTED_TASK.params)), pairsUri: 's3://b/x.pairs.gz' }
+    const { view, latest } = pairsForm(binned, url)
+    expect(zoneOf(view)).toBeNull()
+    expect(addressOf(view)).toBeNull()
+    // Settled, so the run is recorded as what it read: the import's own curves.
+    expect(latest().pairsUri).toBe('')
+    expect(EXPECTED_TASK.estimate(binned, latest()).note).toContain(
+      'The four orientations were counted as CG002.pairs.gz was binned.',
+    )
+    view.destroy()
+  })
+
+  it('still asks on a map binned from a .pairs that had no strands', () => {
+    const binned = { ...context(), binnedFrom: { name: 'CG002.pairs.gz', orientation: false } }
+    const { view, latest } = pairsForm(binned)
+    expect(zoneOf(view)).not.toBeNull()
+    expect(EXPECTED_TASK.estimate(binned, latest()).note).toContain(
+      'CG002.pairs.gz has no strand columns',
+    )
+    view.destroy()
+  })
+
+  it('says a matrix opened on its own needs one, and prices one given as its pass', () => {
+    const asked = stranded(defaultParams(EXPECTED_TASK.params))
+    const ctx = context()
+    const resolved = resolveEntryDefaults(EXPECTED_TASK.params, ctx, asked)
+    expect(EXPECTED_TASK.estimate(ctx, resolved).note).toContain(
+      'The four orientations need a .pairs: choose one above.',
+    )
+    const given = { ...resolved, pairsUri: 'library.pairs.gz' }
+    const priced = EXPECTED_TASK.estimate(ctx, given)
+    expect(priced.class).toBe('scan')
+    expect(priced.note).toContain('one pass over the whole of library.pairs.gz')
+  })
+
+  it('still refuses a run with nothing ticked when a .pairs is given', () => {
+    const ctx = context()
+    const given = {
+      ...resolveEntryDefaults(EXPECTED_TASK.params, ctx, stranded(defaultParams(EXPECTED_TASK.params))),
+      pairsUri: 'library.pairs.gz',
+      sequences: [],
+    }
+    expect(EXPECTED_TASK.estimate(ctx, given).refusal).toBe('Tick at least one sequence.')
   })
 })
 

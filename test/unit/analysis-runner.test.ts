@@ -307,6 +307,73 @@ describe('the file the analysis worker is asked to mount', () => {
     expect((opens(fake)[0] as { cells?: readonly string[] }).cells).toEqual(['cell_a', 'cell_b'])
   })
 
+  it('carries the grid and the orientation curves of a map binned from a .pairs', async () => {
+    // A contact list has no resolution of its own, so this worker's mount of
+    // one is refused without the grid the reader chose (§3.7) — and a plain Run
+    // used to leave it behind, along with the four curves the import counted:
+    // every task on such a map failed with *choose a bin size*.
+    const binning = { base: 2000, rungs: 5 }
+    const orientation = {
+      edges: Float64Array.of(0, 1, 2),
+      counts: [
+        Float64Array.of(0, 1),
+        Float64Array.of(0, 2),
+        Float64Array.of(0, 3),
+        Float64Array.of(0, 4),
+      ] as [Float64Array, Float64Array, Float64Array, Float64Array],
+      total: 10,
+    }
+    const { runner, fake } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => ({
+        uri: URI,
+        source: { kind: 'local', file: new File([], URI) },
+        binning,
+        orientation,
+      }),
+    })
+    runner.run(task('expected'), {})
+    await settle()
+    expect((opens(fake)[0] as { binning?: unknown }).binning).toEqual(binning)
+    const run = fake.seen.find((request) => request.kind === 'run')
+    expect(run?.kind === 'run' ? run.inputs.orientation : undefined).toEqual(orientation)
+    runner.destroy()
+  })
+
+  it('hands a job the file a form was given, while its parameter still names it', async () => {
+    const file = new File(['## pairs format v1.0\n'], 'library.pairs.gz')
+    const withFile = task('expected', {
+      params: [
+        {
+          kind: 'file',
+          key: 'pairsUri',
+          label: '.pairs file',
+          accept: ['.pairs', '.pairs.gz'],
+          prompt: 'Drop a .pairs here',
+        },
+      ],
+    })
+    const { runner, fake } = harness()
+    runner.holdFile('expected', 'pairsUri', {
+      value: 'library.pairs.gz',
+      source: { kind: 'local', file },
+    })
+    runner.run(withFile, { pairsUri: 'library.pairs.gz' })
+    await settle()
+    const first = fake.seen.find((request) => request.kind === 'run')
+    expect(first?.kind === 'run' ? first.inputs.sources : undefined).toEqual({
+      pairsUri: { kind: 'local', file },
+    })
+    fake.finish()
+    await settle()
+
+    // An address typed over it is what the reader meant, and the file stays home.
+    runner.run(withFile, { pairsUri: 'https://example.org/other.pairs.gz' })
+    await settle()
+    const second = fake.seen.filter((request) => request.kind === 'run')[1]
+    expect(second?.kind === 'run' ? second.inputs.sources : 'missing').toBeUndefined()
+    runner.destroy()
+  })
+
   it('says nothing about cells for a file that has none', async () => {
     // Absent rather than empty: the protocol reads *absent* as "every cell",
     // which is what every other container trivially is.

@@ -36,6 +36,7 @@ import type { MetaCooler } from '../metacooler/MetaCooler'
 import type { ByteSource } from '../types'
 import type { AnalysisFraming, Params, ParamValue, TaskOutput } from './types'
 import type { PeerMap, TaskInputs } from './worker/protocol'
+import type { SourceSpec } from '../worker/protocol'
 
 export interface JobContext {
   /** The file, mounted by this worker and nobody else. */
@@ -108,8 +109,7 @@ export interface JobContext {
    * source can answer, and a runner that needs one says so in a sentence.
    *
    * Remote addresses only. A local file has no address — it arrives as a `File`
-   * from a drop target — so the road for one is to drop it on the app, which
-   * imports it and counts the same curves in the same pass.
+   * from a drop target — and is opened through {@link openSource} instead.
    */
   openBytes?(url: string): Promise<ByteSource>
   /**
@@ -123,6 +123,16 @@ export interface JobContext {
    * venue it is in (`analysis/run/expected.ts`).
    */
   openFile?(path: string): Promise<ByteSource>
+  /**
+   * Open a file the form was **handed** for its bytes — a dropped `File`, or a
+   * row out of a connected place with whatever authorises it (`TaskInputs.sources`).
+   *
+   * The road {@link openBytes} could not take: a local file has no address, so
+   * it used to be sent to the app to be *imported* instead, which is an open and
+   * a map rather than a read. Optional for {@link peer}'s reason, and closed by
+   * the caller.
+   */
+  openSource?(source: SourceSpec): Promise<ByteSource>
 }
 
 /** What a task actually does. Registered in `analysis/run/index.ts`. */

@@ -161,6 +161,16 @@ export interface TaskInputs {
    */
   orientation?: OrientationSummary
   /**
+   * Files handed to the task's `file` parameters, by parameter key (§18.8).
+   *
+   * A dropped `File`, or a row picked out of a connected place with whatever
+   * authorises it — the same `SourceSpec` a map is opened from, and structured
+   * cloneable for the same reason: a `File` crosses by reference and its bytes
+   * are read here, never on the main thread (§11). The parameter's own value is
+   * the file's name, for the record; this is where its bytes are.
+   */
+  sources?: Record<string, SourceSpec>
+  /**
    * The other maps of a deck, for the one task whose unit is a pair of files.
    *
    * Empty or absent everywhere else. This worker mounts **one** file (§18.3) and

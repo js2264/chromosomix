@@ -892,11 +892,19 @@ export class AnalysisDrawer {
       return
     }
     this.params = recallParamsFor(task, context.uri)
+    const runner = this.options.runner
     const form = new ParamForm({
       specs: task.params,
       context,
       value: this.params,
       onChange: (next) => this.onParams(next),
+      // The runner's, because this form is rebuilt whenever the task changes
+      // and a `.pairs` dropped on P(s) must still be there on the way back —
+      // and because the run is where the file is read from.
+      files: {
+        get: (key) => runner.heldFile(task.id, key),
+        set: (key, held) => runner.holdFile(task.id, key, held),
+      },
     })
     this.form = form
     // Read back what the entry resolution decided. The form deliberately fires

@@ -244,6 +244,9 @@ async function handleRun(
     // not mount — see `JobContext.openBytes`. Detached from the mount cache for
     // the same reason `peer` is.
     openBytes: async (url) => await createDetachedSource({ kind: 'remote', url }),
+    // And a file the form was handed rather than told the address of — a
+    // dropped `File`, or a picked row carrying what authorises it.
+    openSource: async (spec) => await createDetachedSource(spec),
     peer: async (map) => {
       const opened = await openMap(map.uri, map.source, {
         report: (done, total, note) => post({ type: 'progress', id, done, total, note }),

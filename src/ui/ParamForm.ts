@@ -30,13 +30,14 @@
  */
 
 import { makeRandom } from '../analysis/random'
-import { paramDerived, paramVisible } from '../analysis/types'
+import { isAddress, paramAsked, paramDerived, paramVisible } from '../analysis/types'
 import type {
   AnalysisContext,
   ChoiceOption,
   ChoiceParam,
   ColumnParam,
   EntryParam,
+  FileParam,
   NumberParam,
   ParamSpec,
   ParamValue,
@@ -47,9 +48,12 @@ import type {
   TextParam,
   ToggleParam,
 } from '../analysis/types'
+import type { HeldFile } from '../analysis/runner'
 import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
-import { button, el, fmt } from './dom'
+import { button, dragHasFiles, el, fmt } from './dom'
+import { chooseFiles, filesFrom } from './chooseFiles'
+import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { typedLocusToRegion } from '../genome/assembly'
 import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
 import { iconButton } from './icons'
@@ -137,6 +141,38 @@ export interface ParamFormOptions {
   context: AnalysisContext
   value: Params
   onChange(next: Params): void
+  /**
+   * Where a {@link FileParam}'s file is kept, by parameter key.
+   *
+   * The form's own when absent — a test, a host with nothing to run — and the
+   * runner's in the drawer, since the form is rebuilt whenever the task changes
+   * and the run is where the file is read back (`AnalysisRunner.holdFile`).
+   */
+  files?: FileShelf
+}
+
+/** Somewhere a {@link FileParam}'s file outlives the form it was handed to. */
+export interface FileShelf {
+  get(key: string): HeldFile | undefined
+  set(key: string, held: HeldFile | null): void
+}
+
+/** A shelf of the form's own, for a form nobody gave one. */
+function ownShelf(): FileShelf {
+  const held = new Map<string, HeldFile>()
+  return {
+    get: (key) => held.get(key),
+    set: (key, file) => {
+      if (file === null) held.delete(key)
+      else held.set(key, file)
+    },
+  }
+}
+
+/** Whether `name` ends in one of a {@link FileParam}'s endings. */
+function accepts(spec: FileParam, name: string): boolean {
+  const lower = name.toLowerCase()
+  return spec.accept.some((ending) => lower.endsWith(ending))
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +479,7 @@ export function resolveEntryDefaults(
   // was something it was not. See {@link ParamBase.settled}.
   for (const spec of specs) {
     if (spec.settled === undefined) continue
-    if (spec.needsNoGenomes === true && context.hasGenomes) out[spec.key] = spec.settled
+    if (!paramAsked(spec, context)) out[spec.key] = spec.settled
   }
   // After the entries, because a choice can be filtered by what is loaded and
   // the entry repair above is what decides whether anything is.
@@ -594,12 +630,15 @@ export class ParamForm {
   /** Unsubscribes for the controls that listen to something outside this form. */
   private readonly teardown: Array<() => void> = []
   private readonly id = `pf${forms++}`
+  private readonly shelf: FileShelf
 
   constructor(private readonly options: ParamFormOptions) {
     this.specs = options.specs
     this.context = options.context
+    this.shelf = options.files ?? ownShelf()
     this.params = { ...resolveEntryDefaults(options.specs, options.context, options.value) }
     this.fillRegions()
+    this.forgetUnheld()
 
     this.el = el('div', { class: 'param-form' })
     for (const section of this.sections()) this.el.appendChild(this.group(section))
@@ -658,6 +697,7 @@ export class ParamForm {
   setValue(value: Params): void {
     this.params = { ...resolveEntryDefaults(this.specs, this.context, value) }
     this.fillRegions()
+    this.forgetUnheld()
     for (const control of this.controls) {
       control.refill?.()
       control.sync()
@@ -858,6 +898,29 @@ export class ParamForm {
     }
   }
 
+  /**
+   * Empty a file parameter whose file is not held any more.
+   *
+   * A local file's value is its name ({@link FileParam}), and a name outlives
+   * the file: a form recalled after a reload holds one with nothing behind it,
+   * and a run would reach the worker with a name no browser can open and come
+   * back with a sentence about addresses. Emptied, the drop area asks again.
+   * An address is its own value and is kept.
+   *
+   * Only where a value arrives — built, or recalled — and not on a change of
+   * context, which is every pan: nothing a reader has handed the form goes
+   * missing while they look at the map.
+   */
+  private forgetUnheld(): void {
+    for (const spec of this.specs) {
+      if (spec.kind !== 'file') continue
+      const value = stringOr(this.params[spec.key], '').trim()
+      if (value === '' || isAddress(value)) continue
+      if (this.shelf.get(spec.key)?.value === value) continue
+      this.params[spec.key] = ''
+    }
+  }
+
   // -------------------------------------------------------------------------
   // The seven kinds
   // -------------------------------------------------------------------------
@@ -883,6 +946,8 @@ export class ParamForm {
         return this.locusControl(spec)
       case 'text':
         return this.textControl(spec)
+      case 'file':
+        return this.fileControl(spec)
       case 'seed':
         return this.seedControl(spec)
     }
@@ -1506,6 +1571,184 @@ export class ParamForm {
         sync()
       },
     }
+  }
+
+  /**
+   * A file the task reads: a drop area that is also a button, and an address
+   * box under it (§18.8).
+   *
+   * **The drop area is the Tracks card's**, `.ann-drop`, so asking for a file
+   * looks the same wherever a file is asked for, and pressing it opens the
+   * picker the landing page opens (`chooseFiles`). It takes a row dragged out of
+   * the Files column as well as a file off the desktop — the same gesture with
+   * the bytes somewhere else — and it takes the drop **for itself**: a `.pairs`
+   * let through to the app would be *opened*, as a map, behind a dialog, which
+   * is the opposite of what was asked.
+   *
+   * The address box is for a file nobody has on their disk. A local file and an
+   * address are one answer, so each replaces the other; a word typed that is
+   * not an address is refused under the box rather than committed, since no
+   * browser can open a bare name and the run would say so only afterwards.
+   */
+  private fileControl(spec: FileParam): Control {
+    const labelId = `${this.id}-${spec.key}-label`
+    const addressId = `${this.id}-${spec.key}`
+    const title = el('span', { class: 'ann-drop-label' })
+    const detail = el('span', { class: 'ann-drop-hint' })
+    const zone = el(
+      'div',
+      {
+        class: 'ann-drop param-drop',
+        attrs: { tabindex: '0', role: 'button', 'aria-labelledby': labelId },
+      },
+      title,
+      detail,
+    )
+    const forget = iconButton('x', 'Forget this file', () => this.chooseFile(spec, null), {
+      class: 'btn btn-icon param-drop-forget',
+    })
+    const address = el('input', {
+      class: 'input param-address',
+      type: 'text',
+      attrs: { id: addressId, 'aria-label': `${spec.label}: address` },
+      ...(spec.placeholder === undefined ? {} : { placeholder: spec.placeholder }),
+    })
+    const status = el('p', { class: 'hint param-file-note hidden' })
+    const say = (text: string): void => {
+      status.textContent = text
+      status.classList.toggle('hidden', text === '')
+    }
+
+    const take = (file: File): void => {
+      if (!accepts(spec, file.name)) {
+        say(`${file.name} is not a ${spec.accept.join(' or ')} file.`)
+        return
+      }
+      say('')
+      this.chooseFile(spec, {
+        value: file.name,
+        source: { kind: 'local', file },
+        size: file.size,
+      })
+    }
+    const pick = (): void => {
+      void chooseFiles({ multiple: false }).then((files) => {
+        if (files.length > 0) take(files[0])
+      })
+    }
+    zone.addEventListener('click', pick)
+    zone.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      pick()
+    })
+    zone.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event) && !dragHasFileRow(event)) return
+      event.preventDefault()
+      zone.classList.add('over')
+    })
+    zone.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget instanceof Node && zone.contains(event.relatedTarget)) return
+      zone.classList.remove('over')
+    })
+    zone.addEventListener('drop', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      zone.classList.remove('over')
+      if (dragHasFileRow(event)) {
+        // A key in a connected place: its bytes and whatever authorises them
+        // travel as its source, and its address is what the run records.
+        void readFileDrag(event).then((picked) => {
+          if (picked === null) return
+          const name = picked.name ?? picked.uri.split(/[\\/]/).pop() ?? picked.uri
+          if (!accepts(spec, name)) {
+            say(`${name} is not a ${spec.accept.join(' or ')} file.`)
+            return
+          }
+          say('')
+          this.chooseFile(spec, {
+            value: picked.source.kind === 'local' ? picked.source.file.name : picked.uri,
+            source: picked.source,
+            name,
+            ...(picked.source.kind === 'local' ? { size: picked.source.file.size } : {}),
+          })
+        })
+        return
+      }
+      const files = filesFrom(event.dataTransfer)
+      if (files.length > 0) take(files[0])
+    })
+
+    const commitAddress = (): void => {
+      const typed = address.value.trim()
+      if (typed !== '' && !isAddress(typed)) {
+        say('An address starts with https:// or s3:// — a file on this computer is dropped above.')
+        return
+      }
+      say('')
+      this.shelf.set(spec.key, null)
+      this.commit(spec.key, typed)
+    }
+    address.addEventListener('change', commitAddress)
+    address.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        // As the text box does: the drawer's own Enter must not run a form the
+        // box has not handed its value to.
+        event.preventDefault()
+        commitAddress()
+      }
+    })
+
+    const sync = (): void => {
+      const value = stringOr(this.params[spec.key], '').trim()
+      const held = this.shelf.get(spec.key)
+      const local = held !== undefined && held.value === value && value !== '' && !isAddress(value)
+      // A picked row's address is held too, and reads as the file it is.
+      const picked = held !== undefined && held.value === value && isAddress(value)
+      zone.classList.toggle('is-held', local || picked)
+      if (local || picked) {
+        title.textContent = held.name ?? (local ? value : (value.split(/[\\/]/).pop() ?? value))
+        detail.textContent =
+          held.size === undefined
+            ? 'drop or click to choose another'
+            : `${fmt.bytes(held.size)} · drop or click to choose another`
+      } else {
+        title.textContent = spec.prompt
+        detail.textContent = spec.accept.join(' or ')
+      }
+      forget.classList.toggle('hidden', !(local || picked))
+      if (document.activeElement === address) return
+      address.value = local || picked ? '' : value
+    }
+    sync()
+
+    const group = el(
+      'div',
+      { class: 'param-file' },
+      el('div', { class: 'param-file-row' }, zone, forget),
+      address,
+    )
+    return {
+      spec,
+      wrapper: this.wrap(spec, this.named(spec, group, labelId), status),
+      shown: false,
+      sync,
+    }
+  }
+
+  /** Hand a file to a {@link FileParam}, or take it back with `null`. */
+  private chooseFile(spec: FileParam, held: HeldFile | null): void {
+    this.shelf.set(spec.key, held)
+    // Committed even where the value is unchanged, and synced by hand: the same
+    // name dropped again is a different `File`, and `commit` returns early on a
+    // value it already holds.
+    const value = held?.value ?? ''
+    if (sameValue(this.params[spec.key], value)) {
+      for (const control of this.controls) control.sync()
+      this.options.onChange(this.value)
+      return
+    }
+    this.commit(spec.key, value)
   }
 
   /**

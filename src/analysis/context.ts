@@ -60,6 +60,8 @@ export interface ContextInput {
   /** The sequences declared circular, and the declared origins (§8.15). */
   circular?: readonly string[]
   origins?: Readonly<Record<string, number>>
+  /** The `.pairs` the map was binned from on open, where it was (§3.7). */
+  binnedFrom?: { name: string; orientation: boolean }
 }
 
 function strings(
@@ -174,6 +176,7 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
             : { selectedCells: input.selectedCells }),
         }),
     ...(input.peers === undefined || input.peers.length === 0 ? {} : { peers: input.peers }),
+    ...(input.binnedFrom === undefined ? {} : { binnedFrom: { ...input.binnedFrom } }),
   }
 }
 
