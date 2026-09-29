@@ -6679,6 +6679,10 @@ export class Session {
   private rederive(): void {
     const state = this.store.state
     if (state === null) return
+    // The list first: a circle ticked or unticked on the sequence on screen
+    // offers the baseline along its arms or takes it away (§8.15), and the
+    // derivation below is of whichever score the state resolves to *now*.
+    this.current?.panel?.offerScores(scoreChoices(this.scoreProps(state)), this.scoreOf(state).id)
     this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
   }
 
@@ -7000,6 +7004,8 @@ export class Session {
       // is an answer to what the cells are, not a second switch beside the one
       // that divides by it (`ui/scores.ts`).
       baseline: this.scoreOf(state).baseline === true,
+      // …and so is taking it along a circle's two arms (§8.15).
+      alongArms: this.scoreOf(state).alongArms === true,
       onCorrelateChange: (on) => {
         // There is no correlation toggle to flip any more, so the only caller is
         // the failure path below, and the only thing "off" can mean is the score
@@ -7114,7 +7120,7 @@ export class Session {
                 // and a navigation to it moves nothing. The view is rebuilt on
                 // its own region instead.
                 const moved = centred
-                  ? this.navigate({ uri: file.uri, view: 'region', region: name })
+                  ? this.navigate(keepingScore(this.store.state, { uri: file.uri, view: 'region', region: name }))
                   : this.centreOnOrigin(file.uri, name, this.originStore()?.get(name)?.at ?? 0)
                 if (!moved) this.remount()
               },
@@ -7142,7 +7148,7 @@ export class Session {
     if (length === undefined || !(length > 2)) return true
     const from = (origin + Math.ceil(length / 2)) % length
     const to = (from - 1 + length) % length
-    return this.navigate({ uri, view: 'region', region: `${name}:${from}-${to}` })
+    return this.navigate(keepingScore(this.store.state, { uri, view: 'region', region: `${name}:${from}-${to}` }))
   }
 
   /**
@@ -7203,14 +7209,33 @@ export class Session {
   private scoreProps(state: ViewState): {
     hasWeights: boolean
     scoreColumns: readonly string[]
+    circle: boolean
     score?: string
   } {
     const info = this.file?.info
     return {
       hasWeights: info?.hasWeights === true,
       scoreColumns: info?.scoreColumns ?? ['count'],
+      circle: this.onOneCircle(state),
       ...(state.score === undefined ? {} : { score: state.score }),
     }
+  }
+
+  /**
+   * Whether the view is a window on one sequence declared circular — the one
+   * view with two arms to read the baseline along (§8.15).
+   *
+   * Asked of the arms the map is offered, so the two cannot disagree: the
+   * frame the `arms` toggle reads is the one `arm decay` is drawn in.
+   */
+  private onOneCircle(state: ViewState): boolean {
+    // Asked on every resolution of the score, so the commonest answers — not a
+    // region, or a file with no circle at all — are given before the walk
+    // along the sequences that placing the arms costs.
+    if (state.view !== 'region' || state.region2 !== undefined) return false
+    if ((this.circularStore()?.list().length ?? 0) === 0) return false
+    const arms = this.armsOf(state).arms
+    return arms !== undefined && arms.refusal === null && arms.frame?.circular === true
   }
 
   /** The colour scale in force: the state's fields over the file's defaults. */
@@ -9880,6 +9905,32 @@ function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): Sc
  */
 export function withoutSecond(state: ViewState): ViewState {
   return { ...state, uri2: undefined }
+}
+
+/**
+ * The state a press of `ori` navigates to, with the score of the map it was
+ * pressed on (§8.15).
+ *
+ * A navigation starts from the file's own score, and for most of them that is
+ * right: another sequence, or a box drawn on the map, is another picture. `ori`
+ * is not — it frames the same sequence another way, the origin in the middle or
+ * the first base at the corner, and a reader who picked `arm decay` pressed it to
+ * see the two diagonals as an X, not to be put back on balanced counts. So the
+ * score comes with it, and the balancing that is the other half of a score
+ * (`Session.setScore`). The same file only, and a state that has said something
+ * about either key is believed, as `Session.navigate` believes one about the
+ * keys it carries.
+ *
+ * Exported for the test, as {@link compareRung} is: the press itself needs a
+ * worker, an open file and a circle to reach.
+ */
+export function keepingScore(held: ViewState | null, next: ViewState): ViewState {
+  if (held === null || held.uri !== next.uri) return next
+  return {
+    ...next,
+    ...(held.score === undefined || 'score' in next ? {} : { score: held.score }),
+    ...(held.balance === undefined || 'balance' in next ? {} : { balance: held.balance }),
+  }
 }
 
 /**

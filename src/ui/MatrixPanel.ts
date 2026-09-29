@@ -390,6 +390,14 @@ const BASELINE_HINT =
   'this block at that bin separation. Worth a look because an O/E is only as trustworthy as ' +
   'the curve underneath it, and at long separations that curve is averaged over few cells.'
 
+const ARM_BASELINE_HINT =
+  'The expected along both arms of a circular chromosome, drawn: every cell replaced by the mean ' +
+  'of the cells as far apart along the arms, on one arm or across the two, so both diagonals are ' +
+  'in it — the main one and the secondary one through the origin, which expected averages away.'
+
+const ARMS_ON_ARM_BASELINE_HINT =
+  'The cells already are the expected along both arms. Choose another score to get the toggle back.'
+
 /**
  * What a dragged box resolves to: one block, and how much of it.
  *
@@ -804,6 +812,15 @@ export interface DerivePresentation {
    */
   baseline: boolean
   /**
+   * Take that baseline along both arms of a circular chromosome (§8.15) — the
+   * score picker's `arm decay`.
+   *
+   * Read along {@link arms} whether or not the toggle is on, at its window or
+   * the one it turns on at: this is the arm-frame baseline and no other, so the
+   * toggle is greyed while it is drawn, as the O/E's is under any baseline.
+   */
+  alongArms?: boolean
+  /**
    * Compute one, off the main thread.
    *
    * A callback rather than a client, so this file keeps knowing nothing about
@@ -883,6 +900,23 @@ function armsKey(arms: ArmsPresentation | undefined): string {
 }
 
 /**
+ * The arms a derivation is read against: the presentation's own, and under
+ * `arm decay` the same frame at the window `arms` turns on at while the toggle
+ * is off — that baseline is read along the arms whatever the toggle says
+ * (§8.15).
+ *
+ * One function for the read and for every key it is cached on, so an origin
+ * moved under that baseline with the toggle off is a change of what is drawn:
+ * keyed on the presentation's own arms, it was `''` before and after, and the
+ * map kept the arms of the old origin.
+ */
+function armsInForce(derive: DerivePresentation | undefined): ArmsPresentation | undefined {
+  const arms = derive?.arms
+  if (arms === undefined || derive?.baseline !== true || derive.alongArms !== true) return arms
+  return arms.window === undefined ? { ...arms, window: DEFAULT_ARM_WINDOW } : arms
+}
+
+/**
  * Whether a circle's origin is in the middle of the picture, to within
  * `tolerance` base pairs — what lights `ori` (§8.15).
  *
@@ -953,6 +987,21 @@ const CORRELATE_HINT =
   'A/B compartments — the same matrix the Compartments task solves. Implies O/E and balanced ' +
   'counts; one file, square blocks, up to ' +
   `${MAP_CORRELATION_BINS.toLocaleString()} bins a side — a fraction of a second at a thousand, a few at the most.`
+
+/**
+ * One entry of the score picker.
+ *
+ * The entries that are a pipeline or a model rather than a reading carry a
+ * note of their own, because the field's hint has no room to say what each
+ * does or what it refuses — and a reader hovering that entry is the one
+ * asking.
+ */
+function scoreOption(choice: ScoreChoice): HTMLOptionElement {
+  const option = el('option', { value: choice.id, text: choice.label })
+  if (choice.correlate === true) option.title = CORRELATE_HINT
+  if (choice.baseline === true) option.title = choice.alongArms === true ? ARM_BASELINE_HINT : BASELINE_HINT
+  return option
+}
 
 /**
  * What a figure is a picture *of*: the file, the genome, and the total the map
@@ -2067,18 +2116,13 @@ export class MatrixPanel {
     if (scores !== undefined && scores.choices.length > 1) {
       const select = el('select', { class: 'select' })
       this.scoreSelect = select
-      for (const choice of scores.choices) {
-        const option = el('option', { value: choice.id, text: choice.label })
-        // One entry in this list is a pipeline rather than a reading, and the
-        // field's own hint below has no room to say what it does or what it
-        // refuses. Per-option, because it is the only one that needs it.
-        if (choice.correlate === true) option.title = CORRELATE_HINT
-        if (choice.baseline === true) option.title = BASELINE_HINT
-        select.appendChild(option)
-      }
+      select.append(...scores.choices.map(scoreOption))
       select.value = scores.current
       select.addEventListener('change', () => {
-        const picked = scores.choices.find((choice) => choice.id === select.value)
+        // Through the list held now rather than the one built with: a circle
+        // ticked since offers an entry the first never had ({@link offerScores}).
+        const choices = this.options.scores?.choices ?? scores.choices
+        const picked = choices.find((choice) => choice.id === select.value)
         if (picked !== undefined) scores.onChange(picked)
       })
       // No transform is forced by any of these. Balanced values are fractions, so
@@ -3104,12 +3148,16 @@ export class MatrixPanel {
     const button = this.armsButton
     if (button === null) return
     button.classList.toggle('hidden', arms?.onChange === undefined)
-    const on = arms?.window !== undefined && arms.refusal === null
+    // Greyed under `arm decay`, as the O/E is under any baseline: that one is
+    // read along the arms whatever the toggle says, so a press would change
+    // nothing on screen (§8.15).
+    const alongArms = this.options.derive?.baseline === true && this.options.derive.alongArms === true
+    const on = arms?.window !== undefined && arms.refusal === null && !alongArms
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
     const refused = arms === undefined || arms.refusal !== null
-    button.disabled = refused
-    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : ARMS_HINT
+    button.disabled = refused || alongArms
+    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : alongArms ? ARMS_ON_ARM_BASELINE_HINT : ARMS_HINT
     button.title = hint
     button.setAttribute('aria-label', hint)
   }
@@ -3446,7 +3494,7 @@ export class MatrixPanel {
       String(derivation.expected === true),
       String(derivation.baseline === true),
       derivation.smooth ?? '0',
-      armsKey(this.options.derive?.arms),
+      armsKey(armsInForce(this.options.derive)),
     ].join('|')
   }
 
@@ -6194,7 +6242,7 @@ export class MatrixPanel {
     }
     // `options.binsize` is the block's own — the read's bin size times its
     // pooling, set from the block before it is derived (`setResolution`).
-    const arms = armsFor(data, this.options.derive?.arms, this.options.binsize)
+    const arms = armsFor(data, armsInForce(this.options.derive), this.options.binsize)
     if (arms !== undefined) derivation.arms = arms
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
     // A compared pair is never deferred: two blocks would need two jobs, and a
@@ -6962,7 +7010,8 @@ export class MatrixPanel {
       (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
       (held?.correlate === true) === (derive?.correlate === true) &&
       (held?.baseline === true) === (derive?.baseline === true) &&
-      armsKey(held?.arms) === armsKey(derive?.arms)
+      (held?.alongArms === true) === (derive?.alongArms === true) &&
+      armsKey(armsInForce(held)) === armsKey(armsInForce(derive))
     this.options.derive = derive
     this.paintArms(derive?.arms)
     // The toggle holds no state of its own — the setting is the session's, and
@@ -7199,7 +7248,15 @@ export class MatrixPanel {
    * than the value. The caption has room for both and says both.
    */
   private derivedLabel(): string | null {
-    if (this.options.derive?.baseline === true) return this.comparisonLabel() ?? 'expected'
+    // A baseline is called what the picker calls it — `expected`, or `arm decay`
+    // for the one along the arms — which is also what keeps the key from saying
+    // it twice: the picker's word leads the key, and this is left off when it
+    // matches (`derive`).
+    if (this.options.derive?.baseline === true) {
+      const scores = this.options.scores
+      const picked = scores?.choices.find((choice) => choice.id === scores.current)
+      return this.comparisonLabel() ?? (picked?.baseline === true ? picked.label : 'expected')
+    }
     // Which decay was divided out, where it was not the ordinary one: the two
     // pictures differ by exactly the X a figure of a bacterial map is about.
     // Two words, because the key is one line the width of its two numbers and
@@ -7846,6 +7903,31 @@ export class MatrixPanel {
     }
     const select = this.scoreSelect
     if (select !== null && select.value !== id) select.value = id
+  }
+
+  /**
+   * Offer another list of scores, and point the picker at the one drawn.
+   *
+   * What the cells can be is a fact about the view as well as the file: a
+   * circle ticked on the sequence on screen — by the reader, or by a first
+   * open that measured it after the view was built — offers the baseline
+   * along its arms, and unticked takes it away (§8.15). The declaration does
+   * not rebuild the view, so the picker is told here rather than built again;
+   * a list with the same entries leaves the options alone and is
+   * {@link syncScoreChoice} exactly.
+   */
+  offerScores(choices: readonly ScoreChoice[], id: string): void {
+    const scores = this.options.scores
+    if (scores === undefined) return
+    const same =
+      scores.choices.length === choices.length &&
+      scores.choices.every((choice, i) => choice.id === choices[i].id && choice.label === choices[i].label)
+    if (!same) {
+      this.options.scores = { ...scores, choices }
+      this.painted = null
+      this.scoreSelect?.replaceChildren(...choices.map(scoreOption))
+    }
+    this.syncScoreChoice(id)
   }
 
   /**

@@ -48,6 +48,19 @@
  * those; this entry is the one you can *see*, not a claim that it is the only
  * one there is.
  *
+ * **On a circle the baseline has a second shape, and it is in the list for
+ * the same reason.** Taken along a bacterial chromosome's two arms (§8.15) the
+ * baseline is an X: the main diagonal's decay down each arm, and the inter-arm
+ * decay either side of the secondary diagonal through the origin — where the
+ * plain one has only the first, and averages the second into it. `arm decay`
+ * is that baseline drawn, which answers "what are these numbers" exactly as
+ * `expected` does. It is the picture `expected` draws while `arms` is on,
+ * offered as one choice so that looking at both diagonals does not depend on a
+ * toggle; and it is offered on a view of one sequence declared circular and
+ * nowhere else, because nowhere else are there two arms to read it along. A
+ * link naming it anywhere else lands on counts, as one naming a column the
+ * file lacks does.
+ *
  * **The correlation is in the list, and the O/E argument is exactly why.** It is
  * the one derived field that does not compose with anything: the cell no longer
  * holds a contact at all, it holds a coefficient between −1 and 1 for a *pair of
@@ -104,6 +117,16 @@ export interface ScoreChoice {
    * on every map.
    */
   baseline?: boolean
+  /**
+   * Take that baseline along both arms of a circular chromosome — both of its
+   * diagonals, the main one and the secondary one through the origin — whether
+   * or not the `arms` toggle is on (`analysis/arms.ts`, §8.15).
+   *
+   * Always beside {@link baseline}, which is what it is a shape of, so
+   * everything the baseline sets aside — the O/E toggle, the ramp's middle —
+   * this sets aside too.
+   */
+  alongArms?: boolean
 }
 
 /** The id of the plain, always-present choice. */
@@ -124,6 +147,8 @@ export const CORRELATION_SCORE = 'correlation'
  * they are looking for on the thing this computes.
  */
 export const BASELINE_SCORE = 'baseline'
+/** The id of the baseline along a circle's two arms — `score=armbaseline` in a link. */
+export const ARM_BASELINE_SCORE = 'armbaseline'
 
 /**
  * Everything this file can be drawn from, in the order it should be offered.
@@ -141,10 +166,15 @@ export const BASELINE_SCORE = 'baseline'
  * both. They should agree, and where they do not the file's own weights are the
  * better answer: a real balancing run filters bins before it starts, and this
  * one deliberately does not (`render/derive.ts`).
+ *
+ * `circle` is whether the view is a window on one sequence declared circular
+ * (§8.15) — the only view with two arms to read the baseline along, and so the
+ * only one that is offered on.
  */
 export function scoreChoices(info: {
   hasWeights: boolean
   scoreColumns?: readonly string[]
+  circle?: boolean
 }): ScoreChoice[] {
   const columns = info.scoreColumns ?? [COUNT_SCORE]
   const extras = columns.filter((key) => key !== COUNT_SCORE)
@@ -159,6 +189,14 @@ export function scoreChoices(info: {
     // correlation is taken over, and the list runs outward from the numbers in
     // the file.
     { id: BASELINE_SCORE, label: 'expected', balance: false, baseline: true },
+    // Right under the baseline it is a shape of, and only where there are two
+    // arms to read it along. Two short words, because the dropdown beside its
+    // label is 97 pixels and `arm expected` would lose its last letters there;
+    // `decay` is the arms toggle's own word for the thing divided out, and the
+    // caption, which has the room, says `expected along the arms`.
+    ...(info.circle === true
+      ? [{ id: ARM_BASELINE_SCORE, label: 'arm decay', balance: false, baseline: true, alongArms: true }]
+      : []),
     // Only on a file that carries weights, and that is the pipeline's own
     // requirement rather than a preference: a correlation of unbalanced O/E is a
     // correlation of the coverage bias, which is per-bin and therefore looks
@@ -184,7 +222,16 @@ export function scoreChoices(info: {
 }
 
 /** Labels {@link scoreChoices} computes, which a `/pixels` column may not reuse. */
-const DERIVED_LABELS = new Set(['counts', 'balanced', 'VC', 'VC √', 'ICE', 'expected', 'correlation'])
+const DERIVED_LABELS = new Set([
+  'counts',
+  'balanced',
+  'VC',
+  'VC √',
+  'ICE',
+  'expected',
+  'arm decay',
+  'correlation',
+])
 
 /**
  * The choice a view state names, or counts.

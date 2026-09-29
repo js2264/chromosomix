@@ -650,6 +650,22 @@ describe('the baseline along both arms', () => {
     expect(along.label).toBe('O/E along the arms')
     expect(along.neutral).toBe(1)
   })
+
+  // What the score picker's `arm decay` draws (§7.5, §8.15): the denominator
+  // above, shown — both diagonals, where the plain baseline has one.
+  it('draws the baseline along the arms as both diagonals, every cell of the square', () => {
+    const drawn = deriveBlock(b, { baseline: true, arms }, axes)
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) expect(drawn.values[r * N + c], `${r},${c}`).toBeCloseTo(cell(r, c), 3)
+    }
+    // The secondary diagonal is in it — the mirror cell holds its own decay —
+    // where the plain baseline puts the mean of its separation there.
+    expect(drawn.values[mirror]).toBeCloseTo(0.5 * decay(0), 3)
+    expect(deriveBlock(b, { baseline: true }, axes).values[mirror]).not.toBeCloseTo(0.5 * decay(0), 1)
+    expect(drawn.label).toBe('expected along the arms')
+    // A mean of counts, like every baseline: no middle, a sequential ramp.
+    expect(drawn.neutral).toBeNull()
+  })
 })
 
 describe('two files reduced to one number', () => {

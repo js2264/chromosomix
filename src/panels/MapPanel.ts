@@ -1129,6 +1129,7 @@ export class MapPanel {
       smooth: this.smoothOwn ?? shared.smooth,
       correlate: choice === null ? shared.correlate : choice.correlate === true,
       baseline: choice === null ? shared.baseline : choice.baseline === true,
+      alongArms: choice === null ? shared.alongArms === true : choice.alongArms === true,
       onExpectedChange: (on) => this.useExpected(on),
       onSmoothChange: (token) => this.useSmooth(token),
       // The one caller is a correlation that failed, and "off" can only mean
@@ -1665,9 +1666,19 @@ export class MapPanel {
     return scoreFor(choices, shared === undefined ? state : { ...state, score: shared })
   }
 
-  /** What this file's cells could be — its weights, and its extra columns. */
+  /**
+   * What this file's cells could be — its weights, and its extra columns — and,
+   * where the first map is on one sequence declared circular, the baseline
+   * along its two arms: the arms are the first map's frame, which is this map's
+   * too (§8.15).
+   */
   private scoreChoicesOf(info: OpenResult) {
-    return scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns })
+    const arms = this.props.derive()?.arms
+    return scoreChoices({
+      hasWeights: info.hasWeights,
+      scoreColumns: info.scoreColumns,
+      circle: arms !== undefined && arms.refusal === null && arms.frame?.circular === true,
+    })
   }
 
   /**
@@ -1930,8 +1941,9 @@ export class MapPanel {
     // …and the picker, which is not the source of the answer while this panel is
     // still following the deck: the lead's own picker, a link and the back
     // button can all move the shared score, and a dropdown left on the previous
-    // one is a control lying about the map it sits on.
-    this.panel.syncScoreChoice(score.id)
+    // one is a control lying about the map it sits on. The list with it, since
+    // a circle ticked under the deck offers the baseline along its arms (§8.15).
+    this.panel.offerScores(this.scoreChoicesOf(info), score.id)
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
     // Both on every block, not only at construction: a panel outlives a change

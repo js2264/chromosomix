@@ -1861,6 +1861,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
+| **Baseline** — the expected along both arms, on one sequence declared circular | `arm decay`, an entry in the score picker (§8.15) | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
 | **Correlation** — Pearson's r between the rows of the O/E | an entry in the score picker | one matrix product, on the analysis thread and its helpers; square blocks up to 4,096 bins a side |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
@@ -1915,6 +1916,23 @@ the arms. **It is weakest where
 the two diagonals cross**, at the origin and at the terminus, where a pair close
 along the DNA is averaged with pairs that are not; that is stated rather than
 modelled, because the model would be of two small stretches of a chromosome.
+
+**On a circle it is an entry in the picker as well.** Taken along the arms the baseline is an X —
+the main diagonal's decay down each arm, and the inter-arm decay either side of the secondary
+diagonal through the origin — where `expected` has the main diagonal alone and averages the
+secondary one into it. **`arm decay`**, the score picker's entry right under `expected`, is that
+baseline drawn: the picture `expected` draws while `arms` is on, offered as one choice so that
+looking at both diagonals does not take a score and a toggle. It is read along the arms whether or
+not `arms` is on — at its window, or the 50 bins it turns on at — so `arms` greys while it is drawn,
+and says why, as the O/E does under any baseline; `ori` stays, and frames it best, the secondary
+diagonal then the square's antidiagonal. It is offered **on a view of one sequence declared circular
+and nowhere else** — the one view with two arms to read it along — including on a companion of a
+deck whose first map is one (§16), and a circle ticked or unticked under the view offers it or takes
+it away without rebuilding the view. It is a baseline and computed from the counts, as `expected` is.
+The key calls it `Arm decay` — the picker's own word, since `arm expected` does not fit the dropdown
+and `decay` is the `arms` toggle's word for what it divides by — and the caption `expected along the
+arms`. A link carries it as `score=armbaseline`, and lands on counts on a view it is not offered on,
+as one naming a column the file lacks does.
 
 **Normalisation and baseline compose, and their order is fixed.** Normalise first: the decay curve is
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on
@@ -2132,7 +2150,9 @@ edge in a control becomes a ramp and the ratio against it spikes at exactly the 
 mattered. A derived lane fetches nothing of its own — both operands go through the ordinary sample
 cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
 
-**What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
+**What a link carries.** The normalisation is a `score` and needs no key of its own, and so is the
+baseline drawn instead of divided by, plain or along the arms (`score=baseline`,
+`score=armbaseline`); the baseline divided by is
 `oe`, and `arms` its window along the arms in bins where it is taken along them (`arms=50`); the
 comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
 radius (`smooth=2` is 5 × 5) or the adaptive window (`smooth=a50`). All of them are part of *what is
@@ -3554,9 +3574,13 @@ figure of one is drawn as. `ori` is **lit while the origin is in the middle of
 what is drawn**, to within two bins or a pixel — a zoom about the middle keeps it
 lit, a pan does not — and pressed while lit it frames the sequence from its first
 base again, as a view of it opens. Either press after a pan, which the address
-does not follow, rebuilds the view on the window it names. **`arms`** takes the O/E along both arms instead of
+does not follow, rebuilds the view on the window it names. **Either press keeps the score**: it
+frames the same sequence another way, so what the cells are — the score picker's choice, and the
+balancing that is half of it — comes with it, where every other navigation starts from the file's
+own. **`arms`** takes the O/E along both arms instead of
 along the diagonal alone (§7.5), read from the origin in the column — the first
-base where none has been set.
+base where none has been set. And on a circle the score picker offers **`arm decay`**: that
+baseline itself, both diagonals drawn (§7.5).
 
 **Every map of a deck takes them** (§16). The declarations are the session's, about the molecules of
 the first map's file, and a deck is maps of one genome: a companion takes each circle and each origin

@@ -121,6 +121,12 @@ export interface RegionViewProps {
   value?: string
   /** Value columns this file carries, for the score picker (`ui/scores.ts`). */
   scoreColumns?: readonly string[]
+  /**
+   * Whether the window is on one sequence declared circular, along whose two
+   * arms the score picker then offers the baseline (§8.15). Told again through
+   * the panel when a tick moves under the view.
+   */
+  circle?: boolean
   /** The picker's current choice, by id; `count` when absent. */
   score?: string
   /** What one sequence is called here: a contig, or a chromosome. */

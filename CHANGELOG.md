@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Both diagonals of a bacterial chromosome's expected, from the score picker (§7.5, §8.15).** On a
+  view of one sequence declared circular the picker offers `arm decay`, right under `expected`: the
+  baseline taken along the two arms, drawn — the main diagonal's decay down each arm and the inter-arm
+  decay either side of the secondary diagonal through the origin, the X a figure of a bacterial map is
+  about, where `expected` has the main diagonal alone and averages the secondary one into it. It is
+  the picture `expected` draws with `arms` on, made one choice: read along the arms whether or not
+  `arms` is on, at its window or 50 bins, so `arms` greys while it is drawn, as the O/E does. Offered
+  on a deck's companions too, and offered or withdrawn as a circle is ticked or unticked, without a
+  rebuild. The key says `Arm decay`, the caption `expected along the arms`, and a link carries
+  `score=armbaseline`.
+
 - **Every map drawn to one number of contacts (§6.5).** A box labelled *contacts* ends the
   breadcrumb, showing the map's own total in grey — the `sum` of `cooler info`, 179,175,551 for the
   yeast micro-C. A total typed into it — `10M`, `23,000,000`, `2.5e7` — draws every map of the tab
@@ -540,6 +551,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **`ori` keeps the score (§8.15).** Either press — framing the circle on its origin, or the sequence
+  from its first base again — frames the same sequence another way, and it now keeps what the cells
+  are: the score picker's choice and the balancing with it. It started from the file's own score, as
+  every navigation does, so a reader looking at `expected`, a correlation or `arm decay` was put back
+  on balanced counts by every press and had to pick the score again.
 
 - **The tasks are called *Compartments* and *Reproducibility* (§18.8).** The words in brackets,
   *eigenvectors* and *HiCRep*, named a method where every other title in the column names what is

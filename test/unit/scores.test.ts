@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ARM_BASELINE_SCORE,
   BALANCED_SCORE,
   BASELINE_SCORE,
   CORRELATION_SCORE,
@@ -214,5 +215,57 @@ describe('a choice unflattened, which is what an analysis needs', () => {
     // The path a stored session takes when it names a column this file lost.
     expect(scoreFor(choices, { score: 'qvalue' }).id).toBe(COUNT_SCORE)
     expect(scoreFor(choices, { score: 'qvalue' }).value).toBeUndefined()
+  })
+})
+
+/**
+ * The baseline along both arms (§7.5, §8.15), on a view of one circle: both
+ * diagonals, the main one and the secondary one through the origin.
+ *
+ * Offered where there are two arms to read it along and nowhere else, so the
+ * question is asked of the view rather than of the file: the same cooler offers
+ * it on its chromosome's map and not on its whole-genome one.
+ */
+describe('the baseline along both arms', () => {
+  it('is offered only on a view of one circle, right under the baseline it is a shape of', () => {
+    const plain = scoreChoices({ hasWeights: true, scoreColumns: ['count'] })
+    expect(plain.some((c) => c.id === ARM_BASELINE_SCORE)).toBe(false)
+    expect(scoreChoices({ hasWeights: true, scoreColumns: ['count'], circle: false })).toEqual(plain)
+    const circle = scoreChoices({ hasWeights: true, scoreColumns: ['count'], circle: true })
+    expect(circle.map((c) => c.id)).toEqual([
+      COUNT_SCORE,
+      BALANCED_SCORE,
+      'vc',
+      'vcsqrt',
+      'ice',
+      BASELINE_SCORE,
+      ARM_BASELINE_SCORE,
+      CORRELATION_SCORE,
+    ])
+  })
+
+  it('is a baseline, and so reads the counts and asks the file for nothing', () => {
+    const entry = scoreChoices({ hasWeights: false, circle: true }).find((c) => c.id === ARM_BASELINE_SCORE)
+    expect(entry).toMatchObject({ label: 'arm decay', balance: false, baseline: true, alongArms: true })
+    expect(entry?.value).toBeUndefined()
+    expect(entry?.normalise).toBeUndefined()
+    expect(entry?.correlate).toBeUndefined()
+    // The plain baseline stays the plain one, arms or not.
+    expect(scoreChoices({ hasWeights: false, circle: true }).find((c) => c.id === BASELINE_SCORE)?.alongArms)
+      .toBeUndefined()
+  })
+
+  it('resolves from a link on a circle, and lands on counts anywhere else', () => {
+    const circle = scoreChoices({ hasWeights: true, circle: true })
+    expect(scoreFor(circle, { score: ARM_BASELINE_SCORE }).alongArms).toBe(true)
+    const line = scoreChoices({ hasWeights: true })
+    expect(scoreFor(line, { score: ARM_BASELINE_SCORE }).id).toBe(COUNT_SCORE)
+  })
+
+  it('does not take the name of a column a file may carry', () => {
+    const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count', 'arm decay'], circle: true })
+    const labels = choices.map((c) => c.label)
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(choices.find((c) => c.value === 'arm decay')?.label).toBe('arm decay (column)')
   })
 })
