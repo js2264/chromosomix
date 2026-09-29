@@ -170,17 +170,17 @@ afterEach(() => {
 })
 
 /** The first map's arms, as `Session.armsOf` presents them: the frame of the molecule. */
-function armsOf(window: number | undefined): DerivePresentation['arms'] {
+function armsOf(window: number | undefined, circular = true): DerivePresentation['arms'] {
   return {
     window,
-    frame: { startBin: 0, n: BINS, origin: 25, circular: true, binsize: BINSIZE, length: BINS * BINSIZE, originBp: 250_000 },
+    frame: { startBin: 0, n: BINS, origin: 25, circular, binsize: BINSIZE, length: BINS * BINSIZE, originBp: 250_000 },
     refusal: null,
     onCentre: () => {},
   }
 }
 
 /** A deck of the first map and one companion, over a circle the session may or may not declare. */
-async function deckOver(options: { circular: readonly string[]; region: string; arms?: number }) {
+async function deckOver(options: { circular: readonly string[]; region: string; arms?: number; line?: boolean }) {
   let maps: string | undefined
   let arms = options.arms
   const deck = new PanelDeck({
@@ -193,7 +193,7 @@ async function deckOver(options: { circular: readonly string[]; region: string; 
       ({
         expected: arms !== undefined,
         smooth: '0',
-        arms: armsOf(arms),
+        arms: armsOf(arms, options.line !== true),
       }) as unknown as DerivePresentation,
   })
   document.body.append(deck.el)
@@ -296,5 +296,48 @@ describe('the arms on a companion', () => {
     await setArms(20)
     await setArms(undefined)
     expect(wordsOf(card)['arms']?.on).toBe(true)
+  })
+})
+
+/** The options of a card's score picker, by value. */
+function scoresOf(card: HTMLElement | null | undefined): string[] {
+  for (const field of card?.querySelectorAll('.field') ?? []) {
+    if (field.querySelector('.field-label')?.textContent !== 'score') continue
+    return [...(field.querySelector('select')?.options ?? [])].map((option) => option.value)
+  }
+  return []
+}
+
+/**
+ * The baseline's inter-arm half on a companion (§7.5, §8.15): offered where the
+ * first map's frame is a circle — the molecule's, and so this map's too — and
+ * drawn, once picked, from this map's own cells.
+ */
+describe('the inter-arm half on a companion', () => {
+  it('is offered on the companion’s picker where the first map is on a circle, and not on a line', async () => {
+    const circle = await deckOver({ circular: [SEQUENCE], region: SEQUENCE })
+    expect(scoresOf(circle.companion()?.controlsEl)).toContain('interarm')
+    circle.deck.destroy()
+    const line = await deckOver({ circular: [], region: SEQUENCE, line: true })
+    expect(scoresOf(line.companion()?.controlsEl)).not.toContain('interarm')
+  })
+
+  it('is drawn once picked there, with `arms` greyed on that card', async () => {
+    const { deck, companion } = await deckOver({ circular: [SEQUENCE], region: SEQUENCE })
+    const id = deck.analysable()[0]?.map
+    if (id === undefined) throw new Error('no companion')
+    deck.setStarred(id)
+    const select = [...(companion()?.controlsEl.querySelectorAll<HTMLSelectElement>('select') ?? [])].find(
+      (node) => [...node.options].some((option) => option.value === 'interarm'),
+    )
+    if (select === undefined) throw new Error('no score picker offering inter-arm')
+    select.value = 'interarm'
+    select.dispatchEvent(new Event('change'))
+    await settled()
+    expect(companion()?.figureCaption(new Date()).detail).toContain('inter-arm expected')
+    const arms = [...(companion()?.controlsEl.querySelectorAll<HTMLButtonElement>('.btn-word') ?? [])].find(
+      (node) => node.textContent?.trim() === 'arms',
+    )
+    expect(arms?.disabled).toBe(true)
   })
 })

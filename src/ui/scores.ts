@@ -48,6 +48,17 @@
  * those; this entry is the one you can *see*, not a claim that it is the only
  * one there is.
  *
+ * **On a circle the baseline has a half of its own, and it is in the list for
+ * the same reason.** Taken along a bacterial chromosome's two arms (§8.15) the
+ * baseline is an X: the main diagonal's decay down each arm, and the inter-arm
+ * decay either side of the secondary diagonal through the origin. `inter-arm`
+ * is the second alone — every cell across the arms replaced by its arm-frame
+ * expectation, and every cell of one arm left as paper — which answers "what
+ * are these numbers" exactly as the whole baseline does. It is offered on a
+ * view of one sequence declared circular and nowhere else, because nowhere
+ * else are there two arms to be across; a link naming it anywhere else lands
+ * on counts, as one naming a column the file lacks does.
+ *
  * **The correlation is in the list, and the O/E argument is exactly why.** It is
  * the one derived field that does not compose with anything: the cell no longer
  * holds a contact at all, it holds a coefficient between −1 and 1 for a *pair of
@@ -104,6 +115,16 @@ export interface ScoreChoice {
    * on every map.
    */
   baseline?: boolean
+  /**
+   * Of that baseline, only the half across the two arms of a circular
+   * chromosome — the inter-arm decay, with the main diagonal's left out
+   * (`render/derive.ts`, §8.15).
+   *
+   * Always beside {@link baseline}, which is what it is half of, so everything
+   * the baseline sets aside — the O/E toggle, the ramp's middle — this sets
+   * aside too.
+   */
+  interArm?: boolean
 }
 
 /** The id of the plain, always-present choice. */
@@ -124,6 +145,8 @@ export const CORRELATION_SCORE = 'correlation'
  * they are looking for on the thing this computes.
  */
 export const BASELINE_SCORE = 'baseline'
+/** The id of the baseline's half across a circle's two arms — `score=interarm` in a link. */
+export const INTERARM_SCORE = 'interarm'
 
 /**
  * Everything this file can be drawn from, in the order it should be offered.
@@ -141,10 +164,15 @@ export const BASELINE_SCORE = 'baseline'
  * both. They should agree, and where they do not the file's own weights are the
  * better answer: a real balancing run filters bins before it starts, and this
  * one deliberately does not (`render/derive.ts`).
+ *
+ * `circle` is whether the view is a window on one sequence declared circular
+ * (§8.15) — the only view with two arms for the baseline's inter-arm half to be
+ * across, and so the only one it is offered on.
  */
 export function scoreChoices(info: {
   hasWeights: boolean
   scoreColumns?: readonly string[]
+  circle?: boolean
 }): ScoreChoice[] {
   const columns = info.scoreColumns ?? [COUNT_SCORE]
   const extras = columns.filter((key) => key !== COUNT_SCORE)
@@ -159,6 +187,13 @@ export function scoreChoices(info: {
     // correlation is taken over, and the list runs outward from the numbers in
     // the file.
     { id: BASELINE_SCORE, label: 'expected', balance: false, baseline: true },
+    // Right under the baseline it is half of, and only where there are two arms
+    // to be across. One word, because the dropdown beside its label is 97
+    // pixels and `inter-arm expected` would lose its second word there: the key
+    // and the caption, which have the room, say `inter-arm expected`.
+    ...(info.circle === true
+      ? [{ id: INTERARM_SCORE, label: 'inter-arm', balance: false, baseline: true, interArm: true }]
+      : []),
     // Only on a file that carries weights, and that is the pipeline's own
     // requirement rather than a preference: a correlation of unbalanced O/E is a
     // correlation of the coverage bias, which is per-bin and therefore looks
@@ -184,7 +219,16 @@ export function scoreChoices(info: {
 }
 
 /** Labels {@link scoreChoices} computes, which a `/pixels` column may not reuse. */
-const DERIVED_LABELS = new Set(['counts', 'balanced', 'VC', 'VC √', 'ICE', 'expected', 'correlation'])
+const DERIVED_LABELS = new Set([
+  'counts',
+  'balanced',
+  'VC',
+  'VC √',
+  'ICE',
+  'expected',
+  'inter-arm',
+  'correlation',
+])
 
 /**
  * The choice a view state names, or counts.

@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The inter-arm decay, drawn alone (§7.5, §8.15).** On a view of one sequence declared circular
+  the score picker offers `inter-arm`, right under `expected`: the half of the baseline taken along
+  the two arms that is across them — every cell whose two bins are on opposite sides of the origin
+  replaced by the mean of the cells across the arms as far from the secondary diagonal and about as
+  far from the origin — with every cell of one arm, the main diagonal's decay, left out. Under
+  `expected` with `arms` the main diagonal sets the top of the ramp (2,513 contacts on
+  *P. aeruginosa* PAK at 8 kb, where the half across the arms tops out at 743); here the ramp is the
+  secondary diagonal's alone, framed best by `ori`, where it is the antidiagonal. Read along the
+  arms whether or not `arms` is on, at its window or 50 bins, so `arms` greys while it is drawn, as
+  the O/E does; offered on a deck's companions too, and offered or withdrawn as a circle is ticked
+  or unticked, without a rebuild. The key and the caption say `inter-arm expected`, and a link
+  carries `score=interarm`.
+
 - **Every map drawn to one number of contacts (§6.5).** A box labelled *contacts* ends the
   breadcrumb, showing the map's own total in grey — the `sum` of `cooler info`, 179,175,551 for the
   yeast micro-C. A total typed into it — `10M`, `23,000,000`, `2.5e7` — draws every map of the tab

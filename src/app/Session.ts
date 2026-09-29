@@ -6679,6 +6679,10 @@ export class Session {
   private rederive(): void {
     const state = this.store.state
     if (state === null) return
+    // The list first: a circle ticked or unticked on the sequence on screen
+    // offers the baseline's inter-arm half or takes it away (§8.15), and the
+    // derivation below is of whichever score the state resolves to *now*.
+    this.current?.panel?.offerScores(scoreChoices(this.scoreProps(state)), this.scoreOf(state).id)
     this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
   }
 
@@ -7000,6 +7004,8 @@ export class Session {
       // is an answer to what the cells are, not a second switch beside the one
       // that divides by it (`ui/scores.ts`).
       baseline: this.scoreOf(state).baseline === true,
+      // …and so is its half across a circle's two arms (§8.15).
+      interArm: this.scoreOf(state).interArm === true,
       onCorrelateChange: (on) => {
         // There is no correlation toggle to flip any more, so the only caller is
         // the failure path below, and the only thing "off" can mean is the score
@@ -7203,14 +7209,33 @@ export class Session {
   private scoreProps(state: ViewState): {
     hasWeights: boolean
     scoreColumns: readonly string[]
+    circle: boolean
     score?: string
   } {
     const info = this.file?.info
     return {
       hasWeights: info?.hasWeights === true,
       scoreColumns: info?.scoreColumns ?? ['count'],
+      circle: this.onOneCircle(state),
       ...(state.score === undefined ? {} : { score: state.score }),
     }
+  }
+
+  /**
+   * Whether the view is a window on one sequence declared circular — the one
+   * view with two arms for the baseline's inter-arm half to be across (§8.15).
+   *
+   * Asked of the arms the map is offered, so the two cannot disagree: the
+   * frame they are read in is the one that half is drawn in.
+   */
+  private onOneCircle(state: ViewState): boolean {
+    // Asked on every resolution of the score, so the commonest answers — not a
+    // region, or a file with no circle at all — are given before the walk
+    // along the sequences that placing the arms costs.
+    if (state.view !== 'region' || state.region2 !== undefined) return false
+    if ((this.circularStore()?.list().length ?? 0) === 0) return false
+    const arms = this.armsOf(state).arms
+    return arms !== undefined && arms.refusal === null && arms.frame?.circular === true
   }
 
   /** The colour scale in force: the state's fields over the file's defaults. */

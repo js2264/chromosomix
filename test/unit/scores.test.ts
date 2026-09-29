@@ -15,6 +15,7 @@ import {
   BASELINE_SCORE,
   CORRELATION_SCORE,
   COUNT_SCORE,
+  INTERARM_SCORE,
   scoreChoices,
   scoreFor,
 } from '@/ui/scores'
@@ -214,5 +215,56 @@ describe('a choice unflattened, which is what an analysis needs', () => {
     // The path a stored session takes when it names a column this file lost.
     expect(scoreFor(choices, { score: 'qvalue' }).id).toBe(COUNT_SCORE)
     expect(scoreFor(choices, { score: 'qvalue' }).value).toBeUndefined()
+  })
+})
+
+/**
+ * The baseline's inter-arm half (§7.5, §8.15), on a view of one circle.
+ *
+ * Offered where there are two arms to be across and nowhere else, so the
+ * question is asked of the view rather than of the file: the same cooler offers
+ * it on its chromosome's map and not on its whole-genome one.
+ */
+describe('the inter-arm half of the baseline', () => {
+  it('is offered only on a view of one circle, right under the baseline it is half of', () => {
+    const plain = scoreChoices({ hasWeights: true, scoreColumns: ['count'] })
+    expect(plain.some((c) => c.id === INTERARM_SCORE)).toBe(false)
+    expect(scoreChoices({ hasWeights: true, scoreColumns: ['count'], circle: false })).toEqual(plain)
+    const circle = scoreChoices({ hasWeights: true, scoreColumns: ['count'], circle: true })
+    expect(circle.map((c) => c.id)).toEqual([
+      COUNT_SCORE,
+      BALANCED_SCORE,
+      'vc',
+      'vcsqrt',
+      'ice',
+      BASELINE_SCORE,
+      INTERARM_SCORE,
+      CORRELATION_SCORE,
+    ])
+  })
+
+  it('is a baseline, and so reads the counts and asks the file for nothing', () => {
+    const entry = scoreChoices({ hasWeights: false, circle: true }).find((c) => c.id === INTERARM_SCORE)
+    expect(entry).toMatchObject({ label: 'inter-arm', balance: false, baseline: true, interArm: true })
+    expect(entry?.value).toBeUndefined()
+    expect(entry?.normalise).toBeUndefined()
+    expect(entry?.correlate).toBeUndefined()
+    // The whole baseline stays whole.
+    expect(scoreChoices({ hasWeights: false, circle: true }).find((c) => c.id === BASELINE_SCORE)?.interArm)
+      .toBeUndefined()
+  })
+
+  it('resolves from a link on a circle, and lands on counts anywhere else', () => {
+    const circle = scoreChoices({ hasWeights: true, circle: true })
+    expect(scoreFor(circle, { score: INTERARM_SCORE }).interArm).toBe(true)
+    const line = scoreChoices({ hasWeights: true })
+    expect(scoreFor(line, { score: INTERARM_SCORE }).id).toBe(COUNT_SCORE)
+  })
+
+  it('does not take the name of a column a file may carry', () => {
+    const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count', 'inter-arm'], circle: true })
+    const labels = choices.map((c) => c.label)
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(choices.find((c) => c.value === 'inter-arm')?.label).toBe('inter-arm (column)')
   })
 })

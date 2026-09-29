@@ -38,6 +38,12 @@
  * kind and separation on the sequence, which is the arm-frame reading of the
  * ordinary chromosome-wide expected.
  *
+ * The two kinds are two separate tables, so the expectation of a cell across
+ * the arms is measured on cells across the arms alone: it *is* the inter-arm
+ * decay — how contacts fall away either side of the secondary diagonal — with
+ * nothing of the main diagonal's in it but what the crossings below put there.
+ * The map's `inter-arm` score draws that half by itself (`render/derive.ts`).
+ *
  * **Where the two diagonals cross — at the origin and at the terminus — the
  * expectation is at its weakest.** A pair straddling either is close along the
  * DNA however far apart the two arms put it, and the window averages it with
@@ -75,6 +81,16 @@ export function armOffsets(frame: ArmFrame): Int32Array {
     out[i] = circular ? ((((raw + half) % n) + n) % n) - half : raw
   }
   return out
+}
+
+/**
+ * Whether two bins are on opposite arms, from their offsets: a cell of the
+ * inter-arm half of the map, which holds the secondary diagonal, rather than of
+ * one arm's, which holds the main one. The origin bin is on the first arm,
+ * which is the whole of what `>= 0` says.
+ */
+export function acrossArms(ur: number, uc: number): boolean {
+  return ur >= 0 !== uc >= 0
 }
 
 /** How far along its arm the farthest bin is — `max |u|`. */
@@ -133,8 +149,7 @@ export function armExpected(
     const uc = offsets[colBins[c]]
     const ar = Math.abs(ur)
     const ac = Math.abs(uc)
-    // The origin bin is on the first arm, which is the whole of what `>= 0` says.
-    const kind: 0 | 1 = ur >= 0 === uc >= 0 ? 0 : 1
+    const kind: 0 | 1 = acrossArms(ur, uc) ? 1 : 0
     return { kind, delta: Math.abs(ar - ac), slot: Math.floor((ar + ac) / bucket) }
   }
 
@@ -224,7 +239,7 @@ export function interArmProfile(
     const ar = Math.abs(ur)
     for (let c = 0; c < n; c++) {
       const uc = offsets[c]
-      if (ur >= 0 === uc >= 0) continue
+      if (!acrossArms(ur, uc)) continue
       const ac = Math.abs(uc)
       if (Math.abs(ar - ac) > reach) continue
       const straight = Math.abs(r - c)
