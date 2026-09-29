@@ -4335,11 +4335,13 @@ handed to the browser to save (§26.6); none of them touches the thing that was 
 them needs a server. The distinction is between authoring an output and editing an input, and only the
 second is refused.
 
-Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
-contact-based contig reordering or scaffolding; ~~no writing of `.cool`, `.mcool` or
-`.metacool`~~ — **narrowed**, see §18.9 and §3.7: writing a matrix *derived from an opened map* is
-still refused, and writing the **primary reduction of a `.pairs` file** is not; and no differential
-APA.
+Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling;
+~~no contact-based contig reordering or scaffolding~~ — **reversed**, see §18.9 and §27: an edit of
+the reference is a lens over the opened file, and what it produces is new files; ~~no writing of
+`.cool`, `.mcool` or `.metacool`~~ — **narrowed**, see §18.9, §3.7 and §27.8: writing a matrix
+*derived from an opened map* is still refused, and writing the **primary reduction of a `.pairs`
+file**, or a **rearrangement** of an opened map's stored counts through a declared edit, is not; and
+no differential APA.
 
 Five more arrive with §8.13, each with its own reason rather than one shared one: no **mate
 fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
@@ -6965,9 +6967,16 @@ fit at the commit yapc cites — compared region for region, summit for summit a
 candidate list with no significance claimed, rather than cut at a valley in its histogram or at a
 score that looked about right, because yapc's cut is IDR and nobody published another.
 
-**No contact-based contig reordering or scaffolding.** It would only be useful if the reordering could
-be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
-with nowhere to go.
+**Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
+reordering or scaffolding. It would only be useful if the reordering could be written back into a
+file, and it cannot — see the next paragraph — so it would produce an ordering with nowhere to go.~~
+The argument was right about its premise and is overtaken by it: an ordering now has three places to
+go, and none of them is back into the file. It is a **lens** the whole session is drawn through
+(§27.2), so an edit is useful the moment it is made — the map, the tracks and every task after it are
+in its coordinates. It is **written as new files** — an AGP, a Juicebox `.assembly`, a chain, a
+FASTA, lifted tracks — each of which is authoring an output, which §13 never refused. And it is
+**re-applied** from any of them to the same library's other files. What stays refused is what the
+rule was protecting: the file that was opened is never modified.
 
 **No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
 `.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
@@ -7017,6 +7026,18 @@ One structural difference from `cooler cload` is stated rather than left to be d
 no way to construct an enum type. cooler reads it, and `Cooler.bins()` returns integer codes where a
 file from `cooler cload` returns a categorical of chromosome names. Everything numeric is identical.
 
+**A rearrangement is not a derivation, and the lifted contacts of §27.8 are the second case this
+admits.** A map moved through an edit of the reference computes no count. From a `.pairs`, every
+record is binned once, through the lens — the primary reduction of a primary file under a declared
+transform. From a stored map, every stored count is moved, whole, to the bin the edit puts it in:
+nothing is summed, smoothed, balanced or re-binned, except at a junction, where two stored bins may
+share an edited bin and the provenance counts where. The three questions are answered as they are
+answered above: **the bin table** from the edited assembly's lengths and the opened map's bin size;
+**provenance** as the source file, the AGP of the edit, and the count of approximate junctions and
+duplicated stretches; **balancing** none, `generated-by` saying *unbalanced*. And the checks are the
+same two: read back through this app's own reader, and compared with an independent re-binning of the
+same records through the same edit, written the slow obvious way in `test/support/`.
+
 **No differential APA**, and **no differential insulation task**. Two insulation tracks from two files
 are two synthetic tracks, and comparing tracks is something the app already does; a task that only
 subtracts one from the other would be a worse version of a picture the reader can already make.
@@ -7043,6 +7064,20 @@ pairs against a stated null, which is a summary of the file in the sense the int
 one. A **call** needs false-discovery control and a golden built from `hic_breakfinder`'s or
 `EagleC`'s own output, which is the bar the first paragraph of this section sets for any second
 caller, and neither is attempted.
+
+**The reference editor's suggestions are the one method this section admits without a port, and the
+exception is stated rather than slipped in.** §27.5 is the app's own — designed here, to be published
+as a method of its own, and different in parts from everything it was weighed against — so there is
+no upstream whose output could be its golden, and *the port does not get to improve on it* has nothing
+to bind. What the first paragraph fears is a half-good caller whose output *looks like a result*.
+Three things keep §27 on the right side of that line. **A suggestion is an offer, not a result**: in
+manual and review mode nothing enters the reference without a press, on a mark drawn over the very
+contacts it is about. **What auto mode applies is written down**: every step with the evidence it was
+taken on, undoable, in the history every export quotes. **And it is held to a truth known by
+construction** (§27.11): scrambles of good assemblies whose inverse is known exactly, recovered or
+not, reported with the grid they were drawn from — a bar a port does not meet, since a port is held
+to another program's answer rather than to the right one. It reports no variant, and the paragraph
+above stands for anything that would.
 
 **And, restating C1 because this is the section most likely to erode it:** no analysis runs anywhere but
 in the reader's own browser. There is no compute service, no offloading of the expensive cases, and no
@@ -9987,3 +10022,443 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 
 A thing that can run says exactly one of: **never run**, **queued**, **running**, **done**,
 **failed**, **cancelled**, or **reading…** while it fetches. No surface invents a seventh.
+
+## 27. Editing the reference
+
+A stage where the reader edits the reference a contact map was built against — cut, invert, move,
+join, split, duplicate, set aside — with the map, its tracks and every later analysis redrawn through
+the edit as it is made, guided by **suggestions** the app computes from the map, the sequence, the
+tracks and the reads, drawn over the map and snapped to under the pointer. It is the work Juicebox
+Assembly Tools and PretextView do by hand, and it is here for three reasons neither of them has:
+nothing is installed or uploaded (C1, §11); the tracks move with the map, so a coverage dip, a gene
+and a gap are read beside the contacts that are being judged; and the app says where it thinks the
+reference is wrong, in the picture, where the reader's eye already is.
+
+**Status: specified, not yet built.** Every subsection below describes what will be; each says
+*built* as it lands. It is a **dev feature** (§29) throughout: on `main`, and invisible until the
+switch in *About* is on. The design it was written from — the method in full, the architecture with the
+code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
+
+It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
+reordering is no longer refused, because an ordering now has three places to go; a matrix this app
+writes may now be a *rearrangement* of an opened map; and the suggestions are the app's **own method**,
+admitted on its own validation (§27.11) rather than a port's golden. §13's first rule is untouched and
+is the ground all three stand on: **the app never modifies a file it opened.** An edit is a lens over
+the file, and what it produces is new files.
+
+### 27.1 Words
+
+The **original** is the assembly the file names: its sequences, as spelt, at their lengths. An **edit**
+is what the reader has done to it — an ordered **history** of **steps**, each one operation. Its result
+is the **edited assembly**: **edited sequences**, each an ordered list of **pieces** — a stretch of one
+original sequence, forward or reversed — and **gaps** of `N`. A stretch taken out of the assembly is
+**set aside**, with a reason. The mapping between the two assemblies is the **lens**, and the whole
+session is drawn through it.
+
+A **breakpoint** is a place where the map says the reference is discontinuous. An **end** is a point
+and a side — the sequence just left of a point, or just right of it. A **corner** is a point off the
+diagonal where two ends meet: the corner of a block of contacts that stops. A **suggestion** is an
+edit the app proposes, with its **confidence** and its **evidence**. The **rail** is the column of labels
+beside the map on the stage.
+
+### 27.2 The lens
+
+**An edit is drawn, never written back.** The file is read exactly as it would be without one; the
+lens maps between the original and the edited assembly, and everything on screen goes through it.
+Taking the lens away is taking the edit away.
+
+- **Edited → original is a function**: every edited base lies in one piece or one gap, and so has one
+  original base, or none, and a strand.
+- **Original → edited is a relation**: an original base lands **once**, **not at all** (it was set aside),
+  or **more than once** (it was duplicated). A mark or a feature is drawn at every place its locus
+  lands, which is the rule circular sequences already hold (§8.15) and the code that holds it.
+
+**The steps**: `cut`, `invert`, `move` (within a sequence or to another, either way round),
+`duplicate`, `join` (two sequences end to end, either orientation, with an `N` gap), `split` (the
+right half becomes a sequence of its own), `set aside` (as *debris*, *contaminant*, *haplotig* or
+*unplaced*), `rotate` (a circular sequence's first base), `rename` and `reorder`, and on a metagenome
+`reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
+reader, a suggestion, or auto mode — **when**, and for a suggestion **the evidence it was accepted
+on**. The history is the provenance: the console writes it, an exported AGP quotes it, the command
+line replays it. **Undo** and **redo** move a cursor along it; a step made after an undo drops the
+steps past the cursor.
+
+**Names.** A sequence that is exactly one whole original sequence, forward, keeps its name, so an edit to
+one chromosome leaves every other name in every link, table and track as it was. Any other sequence
+gets a new one, suffixed `_e1`, `_e2`, … per original — never a suffix §5.9's matcher strips, since
+`IV.1` would be matched to `IV` by the `version` tier, and the tracks of `IV` drawn on a sequence that is
+not it. The reader renames, and a rename is a step.
+
+**It is a fact about the file**, like the circular declarations and the origins, and kept with them:
+per file in the session, in a saved workspace and in a link's `s=` payload. An edit carries the
+names and lengths of the assembly it was made against and is refused on a file whose sequences
+differ, naming the first that does (§10); the same edit therefore applies to the `.hic` of the same
+library, and to the `.pairs` it was binned from. **An AGP or a Juicebox `.assembly` dropped on a map is
+read as an edit** and offered — never applied without the reader's say, since it would replace one
+they may have spent an hour on.
+
+**Bins and bases.** A cut lands on any base. From a **`.pairs`** the contacts are exact at any cut:
+every record is mapped through the lens before it is binned, so each lands in the edited bin it
+belongs in — the primary reduction of a primary file, through a declared edit (§3.7). From a **stored
+map** a bin is never divided: a piece whose end falls inside a bin takes the nearest bin edge for its
+contacts, so every count stays the integer the file stored and every bin inside a piece *is* a stored
+bin, while the piece's bases stay exact in the sequence and the AGP. What is approximate is the
+**junction** — the edited bin where two pieces meet may hold two stored bins' contacts, or none — at
+most one bin per junction, and counted wherever it matters (§27.8). The rule for the picture is the
+rule for the export: what is drawn is what is written.
+
+**A duplicated stretch** is drawn with its contacts in both copies, which is the only way to show the
+structure, and the readout says a cell is a copy. It is not what a map of reads re-aligned to the
+edited sequence would show — those reads would map twice and be dropped — and the export says so
+rather than pretend otherwise.
+
+### 27.3 The stage
+
+The third caller of the stage dialog, after the enlarged model (§25.3) and a figure's *customise*
+(§18.13): the picture, a sidebar of what is done to it, the grip between them and the button that puts
+the sidebar away. It opens from a button in the map's corner, from the palette, and from a suggestion's
+row in the Analysis drawer. **One map and its tracks**: the starred map, or the only one, moved onto
+the stage with the lanes placed on it — moved and moved back, never copied, so the zoom, the colours and
+the lanes are what the reader comes back to. A deck's other cells stay behind the stage, untouched; the
+stage is not a deck and never becomes one.
+
+**Escape never closes it.** Escape cancels, innermost first — a drag, a selection, a mode — and a
+stage holding an hour of work is closed by its `×` or `⌘W`. The Analysis drawer is not a modal because
+a modal "answers Escape by destroying what is being read"; a stage that must be modal has to answer it
+some other way, and this is that way.
+
+**Its keys exist only while it is open**, as the enlarged model's do: they are commands in the palette,
+printed on the controls that perform them (§26.4), and take no letter from the panels behind.
+
+What is on it:
+
+- **The map**, square, the whole edited assembly by default, zoomed and panned as every map is. Its
+  whole-genome picture is §27.9's.
+- **Two pieces bars**, along its top and left edges: every piece a block in its **original sequence's
+  hue**, with a chevron for its strand. A moved piece keeps its colour, so the bar says at a glance where
+  each stretch came from, and a reversed one points the other way. A piece is selected, moved and turned
+  from its bar as it is from the map.
+- **The lanes** placed on the map, drawn through the lens.
+- **The rail**, beside the map: each suggestion's label at the height of its position, with a leader
+  to it, packed so that no two overlap. Hovering a label lights its marks on the map; hovering a mark
+  lights its label. It is one highlight in two places.
+- **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6); **suggestions**, sorted by confidence,
+  filtered by kind, each row its kind, position, confidence, the chips of its evidence — `map`, `gap`,
+  `telomeric`, `coverage`, `reads` — and its state; **history**; **sequences**, the edited assembly with
+  its pieces, a rename, a circular tick, a sort by length, and what was set aside at the foot;
+  **export** (§27.8); **settings** — the evidence the method may use, the resolution it works at, and
+  what it has learned, with *forget* beside it.
+
+**On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
+(§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
+of two short strokes opening towards its quadrant — for two ends that meet; on hover, a **bracket with a
+turning arrow** for an inversion, an **arrow** to an insertion line for a move. An edit already made is
+ink: a thin rule at every junction between parts. A rejected suggestion leaves the map and is struck
+through in the list. Nothing is drawn in `--warn` or `--danger`: a suggestion is an offer, not a
+caution.
+
+**Closing the stage leaves the session edited** (§27.7), and the heading above the map says so — a
+chip, `edited · 7 steps`, whose press reopens the stage and whose menu offers *revert to the file*.
+
+### 27.4 Gestures, and what snaps
+
+Direct manipulation, and every act is also on the right-click menu and in the sidebar, printing its
+key.
+
+**Snapping.** Within 8 pixels of a target along the axis the pointer is moving on — within 10 of a
+corner, measured in the plane — the crosshair jumps to it, the target lights, its label lights on the
+rail, and the readout names it: `snapped to 2 · inversion · XIII:412,301`. Holding **⌥** frees the
+pointer while it is held, and the readout says `free`. The targets are **the suggestions** (breakpoints
+on either axis, corners in the plane), **edit ends** (every junction between two parts) and **contig
+boundaries** (the components inside each sequence, from an AGP the reader dropped as the original's own
+description — which is where a curator looks for a misjoin first). The nearest wins; at equal distance
+a suggestion beats an edit end beats a contig boundary. **A snap is a proposal the hand can refuse**: it
+moves the pointer, never the reference.
+
+- **Select along the diagonal**: a drag, both ends snapped; the stretch lights on the diagonal, the
+  axes, the pieces bars and the lanes.
+- **Select off the diagonal**: a drag in the body of the map draws a box whose sides snap to corners
+  and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a
+  press on one corner names the stretch between its two ends. What is offered is what two stretches
+  admit: bring the rows' stretch next to the columns', swap them, turn either. This is the gesture the
+  off-diagonal signal is for: the corner of a block that stops is where two ends meet, and grabbing it
+  is grabbing both breakpoints at once.
+- **Move**: drag the selection, by its square on the diagonal or its band on a pieces bar. A ghost
+  follows, an insertion line snaps between parts, and the map rearranges under the hand: while the
+  pointer is down the block in hand is regathered on the main thread through the tentative edit, cells
+  whole, at frame rate, and on the drop the worker reads the settled edit exactly and the refine path's
+  swap (§2) replaces the preview. `I` during the drag turns the stretch on the way.
+- **Invert** `I`; **cut** `C`, at the snapped position or at both ends of a selection; **set aside**
+  `⌫`, whose menu asks why; **duplicate** by `⌥`-drag, the platform's own *drag a copy*; **split into a
+  new sequence** `S`; **join** by dragging one sequence's end onto another's on a pieces bar; **set the
+  origin** `O` on a circular sequence.
+- **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it.
+
+### 27.5 Suggestions: ends and corners
+
+The app's own method; its name is still to be chosen. A reference is a list of **adjacencies** —
+every base is next to the one after it — and a contact map tests every one of them, because contacts
+fall off with distance along the molecule: two stretches that are truly adjacent share the densest
+contacts there are, two that are not share the background. So every place the reference could be wrong
+is a pair of **ends** that either do or do not belong together, and the map answers in the four
+quadrants around the point where their rows and columns cross.
+
+**The expected** is measured from the map itself: a contact law `P(d)` along each edited sequence — a
+trimmed mean of `O / ββ` per distance, made non-increasing, extended past the longest sequence by the
+power law of its last decade — and a trans level `T` between sequences, trimmed the same way so that
+the rearrangements being looked for, centromere clusters and a Rabl configuration do not lift the
+baseline they are judged against. Counts are divided by a measured overdispersion per distance, so a
+junction score means the same thing in a deep file and a shallow one. On a circle the distance is the shorter way
+round; on a circle with an origin the expected includes the inter-arm decay (§7.5), because an
+anti-diagonal read as an inversion would be the largest bow-tie in any bacterial file. Masked and
+uncovered bins are **no evidence**, never evidence of a break.
+
+**The junction score** of two ends `e`, `f` is the log-likelihood that they are adjacent against their
+being apart, over the `W × W` window of their first bins:
+`S(e, f) = Σ_{i,j<W} [ O_ij · log(P(i+j+1)/T) − β_iβ_j (P(i+j+1) − T) ] / φ`. A **breakpoint** is a
+junction the reference makes and the map refuses, `S < 0` across a point — which a TAD boundary, whose
+contacts drop but nowhere near trans, is not. A **corner** is a point off the diagonal whose four
+quadrants are four hypotheses: the two ends *left of* each point meeting, or the two *right of* each, is
+an **inversion** of the stretch between (the two arms of a bow-tie); left-of-the-first meeting
+right-of-the-second is an **excision** — the stretch does not belong there; right-of-the-first meeting
+left-of-the-second is a **tandem duplication**, or a circle. Corners are found by a detector run over
+the whole picture — each point's brightest quadrant over the other three, from an integral image of
+observed over expected, tile by tile — and every peak, and every pair of breakpoints, is then scored
+exactly.
+
+**Every edit trades junctions**: it removes some and adds others, and its gain is the sum of the added
+junction scores less the removed ones. An inversion is two corners, a move three, a set-aside one, a join one.
+A suggestion is the best edit its corners admit, and carries those corners — which is what the stage
+draws when it is hovered and what the pointer snaps to when it is adjusted. The whole assembly is
+searched at the picture's resolution and each candidate refined at every finer rung by bounded reads;
+the map places a junction to the bin, and the evidence below places it to the base — a split-read
+cluster exactly, else an `N` gap, a candidate site, a contig boundary, else the bin edge, with the
+readout saying which.
+
+**Evidence beyond the map** enters as features of a suggestion, never as filters on it: a cut in an
+`N` gap or at a contig boundary; telomeric repeats inside a sequence, or at an end a join would bury;
+the GC skew of a circle (an inversion inside a replichore breaks its V); coverage and mappability under
+each window, which shrink the map's term rather than vote; a candidate site from a chosen feature set;
+split reads joining the two ends; read pairs whose orientation flips across the junction; and the
+edit's size. **The confidence** is a logistic model over them, the map's gain first — *the chance a curator
+would accept this* — with initial weights stated in the code beside the reason for each.
+
+**It is not a structural-variant caller.** No genotype, no allele fraction, no false-discovery control
+across samples, and nothing is reported as a variant: it edits one reference to fit one map. A cancer
+line's rearranged karyotype is a fair use of it, and what comes out is that line's reference.
+
+### 27.6 Manual, review, auto
+
+The three modes are three answers to one question, **who presses accept**, on one surface:
+
+- **Manual**: the suggestions are guides — drawn, labelled, snapped to — and never apply themselves.
+- **Review**: the suggestions are a queue, best first. The stage frames the current one and shows it
+  as it is and as it would be — **`Space` held** shows the map with it applied — and waits: `Y` accepts,
+  `N` rejects, its ends are dragged to adjust it (snapped), `→` skips, `←` goes back. **Every answer
+  re-tunes the confidence**: an accept is a `1` and a reject a `0` for that suggestion's features, one step
+  of logistic regression moves the weights, pulled back towards the initial ones by a prior strong
+  enough that three answers cannot overturn the map and weak enough that thirty can teach it what this
+  file's coverage dips mean. The rest are re-ranked at once, so one answer can sink another suggestion
+  or raise one. What it learned is kept **per file**, with the edit, shown in the settings beside the
+  answers it came from, and replayable by the command line.
+- **Auto**: every suggestion above the threshold is applied, best first, re-scoring what each one
+  touched, until none is left above it; a last pass tries each remaining stretch in every candidate
+  position. Every application is a step marked `auto` with its evidence, undoable like any other.
+
+**`metacooler-run edit`** is auto mode from a shell — the same runner, the same threshold, `--weights`
+for what review mode learned, `--from` for an AGP to start from — writing everything §27.8 lists to
+`--out`, and the console writes that line for every auto run on the stage.
+
+### 27.7 The session through the lens
+
+**An edit reaches the whole session.** Every view, table and track, every task run after it and
+every export is in the edited assembly until the reader reverts: the Chromosomes table lists edited
+sequences, a locus names one (`IV_e1:1,000,001-1,200,000`), and the readout gives the original beside
+it (`← IV:2,310,441, reversed`).
+
+- **Tracks** are fetched in original coordinates and drawn through the lens, so the annotations worker
+  does not know there is one: a signal is mirrored in a reversed piece, a feature's strand is its own
+  times the piece's, a feature across a cut is drawn in two, bases are reverse-complemented, an arc's two
+  anchors are each lifted alone.
+- **Marks and bookmarks** stay in original coordinates, as they are stored, and are drawn wherever
+  their loci land.
+- **Tasks are framed with the edit** (§18.4), as they are with the circular declarations, so a result
+  is in the coordinates it was computed in; a further edit makes it stale and offers *recompute*, as a
+  moved view does.
+- **A deck** built beside an edited map draws its companions through the same lens where their
+  sequences are the original's, and refuses a companion whose are not, in its cell, with the sentence.
+
+### 27.8 What comes out
+
+From the stage's export section and from `metacooler-run edit`, each a new file through the save
+dialog (§26.6), none of them touching the file that was opened:
+
+| File | From | Notes |
+|---|---|---|
+| **FASTA** of the edited assembly | a FASTA or `.2bit` in the session | streamed piece by piece through the worker's ranged reads, reversed pieces reverse-complemented, gaps `N`; a `.2bit`'s soft-masking is not carried |
+| **AGP 2.1** and **chrom.sizes** | always | the edited sequences as pieces of the original's; gaps typed `scaffold`, evidence `proximity_ligation`; the history in the comment header; read back as an edit |
+| **Juicebox `.assembly`** | always | for round trips with JBAT, 3D-DNA and YaHS; read back too |
+| **liftOver chain** | always | original → edited, for `liftOver` or `CrossMap` over anything else |
+| **Lifted contacts** | the map | `.cool` or `.mcool`, **raw counts**, `generated-by` saying *unbalanced* as §3.7's does; exact from a `.pairs`, bins moved whole from a stored map, with the junctions that are approximate and the stretches that are duplicated counted in its provenance |
+| **Lifted tracks** | each track | a signal as bigWig or bedGraph, features as BED (strands turned, features across a cut split), pairs as BEDPE, marks as the Manual card writes them |
+| **Contig → MAG table**, FASTA and AGP per MAG | a metagenome | §27.10 |
+
+The contacts writer holds the whole file in memory, as the `.pairs` import's does; a lifted map
+that will not fit is refused with its size and the two ways out — a coarser rung, or the command line,
+which writes to disk.
+
+### 27.9 The whole-genome picture: 16,384 cells
+
+The stage's whole-genome picture is **16,384 cells a side**, fixed — about 190 kb a cell for a human
+genome, near PretextView's 32,768-pixel map, so that a 100 kb contig can be seen and grabbed without a
+zoom — or the finest bins the file stores, where that is fewer. It is held **quantized**, one byte a
+cell, the log of the balanced value over the map's own range, the upper triangle: about 134 MB, where
+32-bit floats would be a gigabyte. **It is a picture and nothing else**: every number the reader is
+shown — a readout, a confidence, an export — is read from the file, never from the byte.
+
+It is read once per file, by a pass over the stored pixels of the rung nearest the cell size —
+§7.3's cost class, priced and gated as that is, with a bar and a cancel — and held in **original** order,
+drawn through the lens: an edit changes the mapping, never the picture, which is what makes one instant
+at this scale. It exists only while a stage is open. §2's other maps keep the 4,096-cell ceiling
+(`RASTER_MAX_DIM`); this is the one picture that does not, and for the one reason a reader cannot curate
+a genome they cannot see.
+
+### 27.10 Metagenomes
+
+On a `.metacool` the edited assembly keeps its genome layer, and two more steps are offered: a contig
+**moved to another MAG** (or to none), and contigs within a MAG **ordered, turned and joined into
+scaffolds**. C4 is untouched — the file is still read in genome-then-length order, and the lens is what
+reorders it. What comes out is what the tools downstream take: the contig → MAG table
+`metacooler create` reads, and a FASTA and an AGP per MAG.
+
+### 27.11 Validation
+
+The method is its own upstream, so it is held to a truth known by construction rather than to another
+tool's output (§18.9). The harness uses the lens against itself: a good assembly and its `.pairs`
+(`demo/yeast/`; `demo/ecoli/`, a circle with its arms; a human chromosome from a public `.pairs`) are
+**scrambled** by a random edit of known steps — cuts, inversions, moves within and between sequences,
+duplications, stretches set aside, sizes log-uniform from five bins to a fifth of a sequence, seeded —
+the contacts re-binned exactly through it, and auto mode is run on the scramble. What it recovers is
+scored against the scramble's inverse: junction precision and recall, the distance of each breakpoint
+from the truth in bases, orientation, the N50 of correctly assembled stretches, and the steps a reader
+would still need. `metacooler-run edit --simulate` runs one scramble; `notebooks/validation.qmd`
+runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a unit test.
+
+### 27.12 Costs
+
+| Operation | Budget |
+|---|---|
+| Open the stage, picture already read | 0 requests |
+| Read the whole-genome picture | one pass over one rung, estimated before it starts, a bar and a cancel |
+| An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
+| An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) |
+| Review: an answer | 0 requests; the re-rank is arithmetic |
+| Export FASTA | one ranged read per piece; no whole sequence held |
+
+### 27.13 Refused, and not yet built
+
+Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
+more than one map; a lifted `.cool` above the memory it would take, with the way out. Not yet built,
+in the order it will be (`docs/reference-editing.md` §10): the lens drawn, the stage in manual mode,
+the exports, the method, review and auto with the command line, the evidence beyond the map,
+metagenomes.
+
+## 28. Two sequences on two axes
+
+A dot plot: one sequence set along the x axis, another along the y, and a mark wherever the two
+share sequence — so that a reordering, an inversion or a translocation between two assemblies is seen at
+a glance, as the line that jumps, turns or leaves. Related to §27 and independent of it: it needs no
+contact map and no edit, only two FASTA or `.2bit` files, and it is computed here, in the browser. A
+**dev feature** (§29) until it is validated; **status: specified, not yet built.**
+
+### 28.1 Matches
+
+Canonical minimizers of `k = 19` over both strands, their window chosen so that the first set's
+minimizers stay under a budget — every minimizer of a yeast genome at the densest window, about one in
+150 bases of a human one — sorted by hash in typed arrays on each side and **merge-joined**, which needs
+no hash table and holds nothing but the two sorted lists. A hash seen more than 50 times on either side is
+dropped, as minimap2 drops its most frequent minimizers, so that a repeat family is not a square of noise.
+An **anchor** is one shared minimizer — a position on each axis and a strand. Anchors along one diagonal
+band — `x − y` forward, `x + y` reversed — with gaps under a few kilobases chain into a **streak**: one
+line of the plot, with its anchor count and its extent on both axes.
+
+### 28.2 The view
+
+A view of its own, `view=dotplot`, with the two sequence sets' addresses in the link, drawn by the map's
+machinery over two assemblies instead of one: the density of anchors in each cell, **signed** —
+forward positive, reversed negative — in `RdBu_r` about zero, so that a reordering is a red line that
+jumps and an inversion a blue one. It zooms from the two assemblies end to end down to the anchors
+themselves, drawn as dots once a cell is a few bases wide. The x edges carry the first assembly's
+tracks and the y edges the second's, each matched by name to its own sequences; the readout gives both
+loci and the strand. A zoom past what the sample can show recomputes the window at a denser sampling,
+which is bounded work.
+
+### 28.3 The figure, and the command line
+
+A task in the Analysis panel's 1D group, *Two sequences against each other*, taking the two sets from
+the session's sequences: its figure in the drawer is the same signed density at the task's resolution,
+restylable and exported like every figure (§18.13), with the streaks as a table (TSV) and as BEDPE,
+which the app reads back as an overlay. `metacooler-run dotplot a.fa b.fa --out results/` writes the
+same two.
+
+### 28.4 What it says about itself
+
+The caption says what was sampled — `exact 19-mers, one in about 150 bases; hashes above 50 copies
+dropped` — because a dot plot's blank is only as good as its sampling, and a reader must know which
+blank they are looking at. A dot plot of two human genomes is a picture of chromosome-scale structure
+and says so; it is not an alignment, and it writes none.
+
+## 29. Dev features
+
+A feature on `main` — built, specified, tested and released like any other — that a reader **does not
+see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
+finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
+
+### 29.1 One switch
+
+In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
+kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
+dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
+on or off takes effect at once: the window rebuilds its columns and its landing page, and the open tabs
+are kept.
+
+### 29.2 Off is absent
+
+Not greyed, not listed with an instruction, not mentioned. §8.5 as corrected by §18.1 would list a
+control the reader could make work and say what to load; a dev feature is the one case where there is
+something the reader could do and they are deliberately not told. So a dev feature, switched off, leaves
+no row in a table, no task in the Analysis panel, no command in the palette or the shortcuts, no example
+on the landing page, no store row, no format in a file picker's list, no clause in a sentence — in
+*About* included, whose first line names what the viewer opens.
+
+### 29.3 What is dev today
+
+The registry is one file, each entry a name and a line of why; making a feature public is deleting its
+line.
+
+- **`metacool`** — both containers (§3.2, §3.4), the genomes table (§5.1), the genome and genome-pair
+  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the mock
+  community example, and every sentence that names any of them. **Switched off, a `.metacool` or an
+  `.mmetacool` is refused like any file the app does not read**, in that refusal's words. A `.metacool`
+  also passes cooler's own test (§3.1), so this is a refusal the detection makes, not a branch it skips —
+  or it would open as a cooler of twenty thousand contigs.
+- **`edit`** — the stage, its task, its keys, its chip in the heading, and every surface of the lens
+  (§27).
+- **`dotplot`** — the task, the view and its links (§28).
+
+### 29.4 What a dev feature left in a session
+
+**Kept, and not applied.** A link or a workspace carrying an edit, or naming a dot plot, opens while
+the switch is off as if it did not: the view falls back to the one it would have without the feature,
+and the record is left exactly as it was, so turning the switch on brings it back. A dev feature is
+never the reason a session is lost.
+
+### 29.5 Where the switch is not
+
+- **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
+  browser.
+- **Not on the command line**: `metacooler-run` is a developer's tool, lists every task and runs every
+  one.
+- **Not in the static text** around the app — the page's description, the install prompt's — which
+  cannot follow a switch, so it names nothing that is dev. The name stays **(meta)cooler**.

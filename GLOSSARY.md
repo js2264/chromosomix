@@ -26,7 +26,8 @@ code disagree, the code is right and this file is a bug.
 - [Annotations](#annotations) — track, lane, placement, group, mark, bookmark, structure
 - [The picture](#the-picture) — score, transform, clip, the turn, refine
 - [Analysis](#analysis) — task, availability, result, synthetic track, figure spec and style
-- [Machinery](#machinery) — workers, sources, budgets, grants, buckets
+- [Editing the reference](#editing-the-reference) — original, edit, piece, lens, breakpoint, corner, suggestion, the dot plot
+- [Machinery](#machinery) — workers, sources, budgets, grants, buckets, dev features
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, CLI
 - [Overloaded words](#overloaded-words)
 - [Doctrines](#doctrines) — the rules cited by number everywhere
@@ -641,10 +642,90 @@ style be remembered per file, task and output while the spec is rebuilt on every
 ### the stage dialog
 
 A picture with its settings beside it, a grip between them and a way to put the settings away
-(`ui/StageDialog.ts`). Invented for the enlarged 3D model (§25.3) and now also what a figure's
-*customise* button opens (§18.13) — one shell with two callers, not two implementations. What goes
+(`ui/StageDialog.ts`). Invented for the enlarged 3D model (§25.3), and also what a figure's
+*customise* button opens (§18.13) and what the reference is edited on (§27.3) — one shell with three
+callers, not three implementations. What goes
 on the stage is *moved* in and moved back, never copied, so the camera or the zoom the reader left
 it at is what they come back to.
+
+---
+
+## Editing the reference
+
+The vocabulary of §27, which is a dev feature (§29). It needed words of its own because the obvious
+ones were taken: *source* is a byte source here, *score* is what a map's cells are, *layout* is a
+file's shape and *block* is a read. So the file's assembly is the **original**, a suggestion's number
+is its **confidence**, and a dot plot's line is a **streak**.
+
+### original, and the edited assembly
+
+The **original** is the assembly the opened file names — its sequences, as spelt, at their lengths.
+The **edited assembly** is what the reader has made of it: **edited sequences**, each an ordered list
+of pieces and gaps. A sequence that is exactly one whole original sequence, forward, keeps its name;
+any other gets a new one (`IV_e1`), because §5.9's matcher would take `IV.1` for `IV`.
+
+### edit, step, history
+
+An **edit** is everything done to the original, kept as a **history** of **steps** — `cut`, `invert`,
+`move`, `duplicate`, `join`, `split`, `set aside`, `rotate`, `rename`, `reorder`, `reassign` — each a pure
+function of the edit before it, and each recording who made it (the reader, a suggestion, auto mode),
+when, and the evidence a suggestion was accepted on. Undo and redo move a cursor along the history. An
+edit is a fact about a **file**, kept where its circular declarations are (§27.2).
+
+### piece, gap
+
+A **piece** is a stretch of one original sequence, forward or reversed, placed in an edited sequence;
+a **gap** is a run of `N` between two pieces, as an AGP types it. A piece's ends may fall on any base.
+
+### set aside
+
+Taken out of the edited assembly and listed apart with a reason — *debris*, *contaminant*, *haplotig*
+or *unplaced* — rather than deleted: nothing the reader removes is lost, and an AGP writes it as an
+unplaced sequence of its own.
+
+### lens
+
+The mapping between the original and the edited assembly, through which the whole session is drawn
+(§27.2). **Edited → original is a function** (every edited base has one original base, or none in a
+gap); **original → edited is a relation** (a base lands once, not at all, or twice). It is what makes
+an edit a way of *looking at* a file rather than a change *to* it: the file is read exactly as it
+would be without one.
+
+### breakpoint, end, corner
+
+A **breakpoint** is a place where the map says the reference is discontinuous. An **end** is a point
+and a side — the sequence just left of it, or just right. A **corner** is a point off the diagonal
+where two ends meet: the corner of a block of contacts that stops, and whichever of its four quadrants
+is bright says which two ends belong together (§27.5). A corner is also a thing the pointer snaps to,
+which is the point: the method's objects are the interface's.
+
+### suggestion, confidence, junction score
+
+A **suggestion** is an edit the app proposes, with its **evidence** and its **confidence** — *the
+chance a curator would accept it*, a logistic model over its features, which review mode re-tunes from
+the reader's answers. The **junction score** is the log-likelihood that two ends are adjacent against
+their being apart; a suggestion's gain is the junction scores it adds less the ones it removes. A
+suggestion is an offer, never a result: it enters the reference only when accepted, or when auto mode
+applies it and writes down that it did.
+
+### manual, review, auto
+
+The stage's three modes, and three answers to one question — **who presses accept** (§27.6). In
+*manual* the suggestions are guides; in *review* they are a queue the reader answers; in *auto* the
+task applies every one above a threshold. `metacooler-run edit` is *auto* from a shell.
+
+### the rail
+
+The column of labels beside the map on the stage, each suggestion's label at the height of its
+position with a leader to it. Hovering a label lights its marks on the map and hovering a mark lights
+its label: one highlight in two places.
+
+### dot plot, anchor, streak
+
+A **dot plot** is one sequence set against another on the map's two axes (§28). An **anchor** is one
+minimizer the two share — a position on each axis and a strand; a **streak** is anchors chained along
+one diagonal, a line of the plot. Forward is drawn positive and reversed negative, so an inversion is
+the colour a reordering is not.
 
 ---
 
@@ -674,6 +755,15 @@ counted access.
 A guess at what this tab may hold, from `navigator.deviceMemory` where it exists. It refuses a block
 that would not fit, and a deck divides it by the panel count, so reads get smaller as a deck grows.
 The reader is in a position to know better than the guess, and can override it.
+
+### dev feature
+
+A feature on `main` that a reader **does not see at all** until the *dev features* switch in *About*
+is on (§29) — built, specified and tested like any other, and absent rather than greyed while the
+switch is off, which is the one place §8.5's corrected form does not apply. The switch is a
+preference, in `localStorage`; the registry of what is dev is one file; making a feature public is
+deleting its line. Today: everything `.metacool`, the reference editor, and the dot plot. Never in an
+embed; not in the CLI, which shows everything.
 
 ### bucket and scope
 

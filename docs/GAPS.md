@@ -301,6 +301,11 @@ wrong*.
 
 ### G9. Contig reassignment proposals, as a table
 
+> **Since:** reordering itself is specified, as the reference editor (SPECS §27, a dev feature):
+> an edit is a lens over the opened file, and what it produces is new files, so the ordering
+> §18.9 said had nowhere to go now has three places to go. The reassignment table this entry asks
+> for is part of it (§27.10).
+
 §18.9 declines contact-based reordering *because the ordering would have nowhere to go* — the app
 cannot write a `.metacool`. That argument is sound for **ordering** and does not carry to
 **assignment**: a corrected contig→MAG mapping is a two-column TSV, and DAS_Tool, anvi'o and
