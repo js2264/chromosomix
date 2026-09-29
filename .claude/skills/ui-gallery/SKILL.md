@@ -35,7 +35,7 @@ node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchor
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table with the control row on E. coli and on P. aeruginosa PAK (read from the zoo), printed: ia1 … ia5
-node scripts/ui-interarm-expected.mjs gallery  # the score picker's inter-arm on PAK: offered once the first open ticks the circle, expected / along the arms / inter-arm on ori, the card, a hover, the link, unticked and ticked, and not on yeast: ie01 … ie11
+node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
@@ -176,20 +176,20 @@ column; the model with no centre of rotation, key or buttons. It prints each PNG
 corner said. Run it after any change to a right-click menu, to what a renderer draws round its data,
 or to `copyPicture`.
 
-`scripts/ui-interarm-expected.mjs` drives the baseline's **inter-arm half** (§7.5, §8.15) on *P.
+`scripts/ui-arm-baseline.mjs` drives the **baseline along both arms** (§7.5, §8.15) on *P.
 aeruginosa* PAK at 8 kb, opened on its chromosome for the first time — so the circle is ticked by
-the first open after the view is built, and the score picker has to be *told* to offer `inter-arm`
-(`ie01` is the picker opened out as a list, since a native dropdown's popup is not in a
-screenshot). Then, framed on the origin with `ori` first — its press is a navigation, which starts
-from the file's own score as every navigation does — `expected`, the same with `arms`, and
-`inter-arm`: the two quadrants across the arms and nothing on either arm, the O/E and `arms` greyed
-with their reasons, the key `Inter-arm expected`, and a hover's readout; then the link to it from
-the sequence's first base, the circle unticked on the Chromosomes table (the entry goes and the
-link lands on counts) and ticked again, and the yeast demo's picker without it (`ie11`). It prints
-the picker's options, the key, the toggles and the hash at every step. Where the browser cannot
+the first open after the view is built, and the score picker has to be *told* to offer `arm decay`
+(`ab01` is the picker opened out as a list, since a native dropdown's popup is not in a
+screenshot). Then `arm decay` from the first base with `arms` off — both diagonals over the whole
+square, the O/E and `arms` greyed with their reasons, the key `Arm decay` — then `ori` pressed on it,
+which must keep the score, a hover's readout, `expected` beside it for the one diagonal it has, and
+`ori` pressed again, which must keep that one; then a link naming it, the circle unticked on the
+Chromosomes table (the entry goes and the link lands on counts) and ticked again, and the yeast
+demo's picker without it (`ab10`). It prints the picker's options, the key, the toggles and the hash
+at every step, so a score an `ori` press dropped is a line in the log. Where the browser cannot
 reach the zoo, serve `PAK_MM142.mcool` with `python3 scripts/DBZ_store.py serve <folder>` and name
 the folder in `GALLERY_DATA`. Run it after any change to the score picker, to `render/derive.ts`'s
-baselines, to `analysis/arms.ts`, or to how a circle is offered.
+baselines, to `analysis/arms.ts`, to `ori`, or to how a circle is offered.
 
 `scripts/ui-peaks.mjs` drives **Peak calling** on the 1D browser demo's ATAC bigWig (§18.8): the task
 on the 1D card, its form, a run on the one track — the note that says no test was made, the violin of every

@@ -309,17 +309,17 @@ function scoresOf(card: HTMLElement | null | undefined): string[] {
 }
 
 /**
- * The baseline's inter-arm half on a companion (§7.5, §8.15): offered where the
+ * The baseline along both arms on a companion (§7.5, §8.15): offered where the
  * first map's frame is a circle — the molecule's, and so this map's too — and
  * drawn, once picked, from this map's own cells.
  */
-describe('the inter-arm half on a companion', () => {
+describe('the baseline along both arms on a companion', () => {
   it('is offered on the companion’s picker where the first map is on a circle, and not on a line', async () => {
     const circle = await deckOver({ circular: [SEQUENCE], region: SEQUENCE })
-    expect(scoresOf(circle.companion()?.controlsEl)).toContain('interarm')
+    expect(scoresOf(circle.companion()?.controlsEl)).toContain('armbaseline')
     circle.deck.destroy()
     const line = await deckOver({ circular: [], region: SEQUENCE, line: true })
-    expect(scoresOf(line.companion()?.controlsEl)).not.toContain('interarm')
+    expect(scoresOf(line.companion()?.controlsEl)).not.toContain('armbaseline')
   })
 
   it('is drawn once picked there, with `arms` greyed on that card', async () => {
@@ -328,13 +328,13 @@ describe('the inter-arm half on a companion', () => {
     if (id === undefined) throw new Error('no companion')
     deck.setStarred(id)
     const select = [...(companion()?.controlsEl.querySelectorAll<HTMLSelectElement>('select') ?? [])].find(
-      (node) => [...node.options].some((option) => option.value === 'interarm'),
+      (node) => [...node.options].some((option) => option.value === 'armbaseline'),
     )
-    if (select === undefined) throw new Error('no score picker offering inter-arm')
-    select.value = 'interarm'
+    if (select === undefined) throw new Error('no score picker offering the baseline along the arms')
+    select.value = 'armbaseline'
     select.dispatchEvent(new Event('change'))
     await settled()
-    expect(companion()?.figureCaption(new Date()).detail).toContain('inter-arm expected')
+    expect(companion()?.figureCaption(new Date()).detail).toContain('expected along the arms')
     const arms = [...(companion()?.controlsEl.querySelectorAll<HTMLButtonElement>('.btn-word') ?? [])].find(
       (node) => node.textContent?.trim() === 'arms',
     )

@@ -31,7 +31,7 @@
 // worker and no wire format. It is shared rather than copied for the reason
 // `correlationField` is: the O/E a reader looks at and the one the compartment
 // chain correlates must be one implementation, or they agree until they do not.
-import { acrossArms, armExpected, armOffsets, type ArmFrame } from '../analysis/arms'
+import { armExpected, type ArmFrame } from '../analysis/arms'
 import {
   adaptiveSmoothValues,
   parseSmooth,
@@ -777,19 +777,6 @@ export interface Derivation {
    */
   baseline?: boolean
   /**
-   * Of that baseline, only the half **across the two arms** of a bacterial
-   * chromosome (§7.5, §8.15): every cell whose two bins are on opposite sides
-   * of the origin replaced by its arm-frame expectation — the inter-arm decay,
-   * how contacts fall away either side of the secondary diagonal — and every
-   * cell on one arm, whose expectation is the main diagonal's decay, left as
-   * paper.
-   *
-   * Read with {@link baseline} and not without it, and it needs {@link arms}
-   * to say where the arms are: with none, nothing is drawn and the scope says
-   * why.
-   */
-  interArm?: boolean
-  /**
    * How much despeckling, as the token the picker and the link carry — a fixed
    * radius (`1` is 3 × 3) or an adaptive target (`a200`); `0` or absent for none
    * (`render/smooth.ts`).
@@ -846,41 +833,6 @@ function armValues(block: BlockValues, arms: NonNullable<Derivation['arms']>): F
     out[i] = Number.isFinite(block.values[i]) && e > 0 ? e : Number.NaN
   }
   return out
-}
-
-/**
- * The inter-arm half of {@link armValues}: the same expectation, masked the
- * same way, on every cell across the two arms, and paper on every cell of one.
- *
- * The two kinds are two tables in `armExpected`, so nothing on one arm went
- * into what is drawn here — dropping those cells is dropping the main
- * diagonal's decay, not a mask over a mean that still holds it. `across`
- * counts the cells that were across, so a window that holds none can say so
- * rather than draw an empty square with nothing to explain it.
- */
-function interArmValues(
-  block: BlockValues,
-  arms: NonNullable<Derivation['arms']>,
-): { values: Float32Array; across: number } {
-  const expected = armExpected(block.values, arms.rowBins, arms.colBins, arms.frame, arms.window)
-  const offsets = armOffsets(arms.frame)
-  const { nrows, ncols } = block
-  const out = new Float32Array(nrows * ncols)
-  let across = 0
-  for (let r = 0; r < nrows; r++) {
-    const ur = offsets[arms.rowBins[r]]
-    for (let c = 0; c < ncols; c++) {
-      const i = r * ncols + c
-      if (!acrossArms(ur, offsets[arms.colBins[c]])) {
-        out[i] = Number.NaN
-        continue
-      }
-      across++
-      const e = expected[i]
-      out[i] = Number.isFinite(block.values[i]) && e > 0 ? e : Number.NaN
-    }
-  }
-  return { values: out, across }
 }
 
 /**
@@ -1097,27 +1049,7 @@ export function deriveBlock(
   // gets the baseline rather than a field of ones.
   let smoothed: Smoothed
   const arms = derivation.arms
-  if (derivation.baseline === true && derivation.interArm === true) {
-    // The secondary diagonal's decay and nothing of the main one's. Under
-    // `expected` the main diagonal's half sets the top of the ramp — 2,513
-    // contacts on *P. aeruginosa* PAK at 8 kb, where the half across the arms
-    // tops out at 743 — and with the cells of one arm made paper, the ramp is
-    // spent on the other half alone.
-    const half = arms === undefined ? null : interArmValues({ ...block, values }, arms)
-    values = half?.values ?? new Float32Array(block.nrows * block.ncols).fill(Number.NaN)
-    parts.push('inter-arm expected')
-    // Said rather than left as an empty square: a window on one arm has no pair
-    // across the two, and a block with no arms has nothing to measure them on.
-    const note =
-      half === null
-        ? 'no arms to read on this block'
-        : half.across === 0
-          ? 'no pair of bins here is across the two arms'
-          : null
-    if (note !== null) scope = scope === null ? note : `${scope} · ${note}`
-    smoothed = despeckle(values)
-    values = smoothed.values
-  } else if (derivation.baseline === true) {
+  if (derivation.baseline === true) {
     values = arms === undefined ? expectedValues({ ...block, values }, runs) : armValues({ ...block, values }, arms)
     parts.push(arms === undefined ? 'expected' : 'expected along the arms')
     // Last, and it barely matters: a distance curve is a mean over many cells

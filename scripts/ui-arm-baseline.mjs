@@ -1,21 +1,20 @@
 /**
- * The baseline's inter-arm half on the map, in headless Chromium (§7.5, §8.15).
+ * The baseline along both arms on the map, in headless Chromium (§7.5, §8.15).
  *
  * *P. aeruginosa* PAK from the DNA Bacterial Zoo at 8 kb, opened on its
  * chromosome for the first time — so the circle is ticked by the first open
  * *after* the view is built, and the score picker has to be told to offer
- * `inter-arm` rather than being built with it. Then the three baselines side
- * by side, framed on the origin with `ori` first — a press of it is a
- * navigation, which starts from the file's own score as every navigation does:
- * `expected`, the same along the arms, and `inter-arm`, the O/E and `arms`
- * greyed under it, the key and a hover under the pointer; then the link to it,
- * from the sequence's first base; the circle unticked on the Chromosomes table,
- * where that link lands on counts, and ticked again; and the yeast demo, which
- * has no circle and is not offered it. Every step prints the picker's options,
- * what is selected, the key, the toggles' state and the hash.
+ * `arm decay` rather than being built with it. Then `arm decay` from the first
+ * base, with `arms` off — both diagonals over the whole square, the O/E and
+ * `arms` greyed — then `ori` pressed on it, which must keep the score, a hover,
+ * `expected` beside it for the one diagonal it has, and `ori` pressed again,
+ * which must keep that one; then a link naming it, the circle unticked on the
+ * Chromosomes table, where that link lands on counts, and ticked again; and the
+ * yeast demo, which has no circle and is not offered it. Every step prints the
+ * picker's options, what is selected, the key, the toggles' state and the hash.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-interarm-expected.mjs [out-dir]
+ *   node scripts/ui-arm-baseline.mjs [out-dir]
  *
  * The zoo is read over the network. Behind a proxy (`HTTPS_PROXY`) the browser
  * is sent through it, the dev server excepted; `GALLERY_DATA` names a folder
@@ -138,67 +137,56 @@ const options = async (name) => {
 try {
   // The chromosome itself, on the file's first open: the circle is measured
   // and ticked once the view is already on screen, so the picker is offered
-  // `inter-arm` after it was built.
+  // `arm decay` after it was built.
   await page.goto(`${BASE}/#uri=${encodeURIComponent(MAP)}&view=region&region=${SEQUENCE}`)
   await until('reads as circular')
   await sleep(6000)
   for (const name of ['General', 'Annotations', 'Analysis']) await fold(`Fold the ${name} panel`)
   await sleep(3000)
   await report('opened, the circle ticked by the first open')
-  await options('ie01-picker-on-a-circle')
+  await options('ab01-picker-on-a-circle')
 
-  // Framed on the origin first: `ori` is a navigation, and a navigation starts
-  // from the file's own score, as it does for every score.
-  await word('ori').click()
-  await sleep(8000)
-  await report('framed on the origin')
-  await shot('ie02-ori')
-
-  await pick('baseline')
-  await report('expected')
-  await shot('ie03-expected')
-
-  await word('arms').click()
-  await sleep(6000)
-  await report('expected, arms on')
-  await shot('ie04-expected-along-the-arms')
-
-  await pick('interarm')
-  await report('inter-arm')
-  await shot('ie05-inter-arm')
-  await card('ie06-inter-arm-card')
-  console.log('  inter-arm option title:', await scoreSelect().locator('option[value="interarm"]').getAttribute('title'))
+  // From the first base, `arms` off: both diagonals, whatever the toggle says.
+  await pick('armbaseline')
+  await report('arm decay, from the first base')
+  await shot('ab02-arm-decay')
+  await card('ab03-arm-decay-card')
+  console.log('  arm decay option title:', await scoreSelect().locator('option[value="armbaseline"]').getAttribute('title'))
   console.log('  arms title:', await word('arms').getAttribute('title'))
   console.log('  O/E title:', await word('O/E').getAttribute('title'))
 
-  // A cell on the secondary diagonal, three quarters of the way up it, and the
-  // readout it gives.
+  // Framed on the origin: a navigation, and the score comes with it.
+  await word('ori').click()
+  await sleep(8000)
+  await report('ori pressed on it')
+  await shot('ab04-arm-decay-ori')
+  // A cell on the secondary diagonal, a fifth of the way from the corner.
   const box = await heatmap().boundingBox()
   if (box !== null) {
     await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.2)
     await sleep(800)
     console.log('  hover:', await page.evaluate(() => document.querySelector('.status-coords')?.textContent ?? ''))
-    await page.screenshot({ path: `${OUT}/ie07-inter-arm-hover.png` })
-    console.log('shot ie07-inter-arm-hover')
+    await page.screenshot({ path: `${OUT}/ab05-arm-decay-hover.png` })
+    console.log('shot ab05-arm-decay-hover')
   }
 
-  // The link, as a reader would send it — this one, with the region put back
-  // to the whole sequence from its first base: the secondary diagonal is then
-  // the square's antidiagonal, crossing the main one at the terminus.
-  await page.evaluate((sequence) => {
-    location.hash = location.hash.replace(/region=[^&]*/, `region=${sequence}`)
-  }, SEQUENCE)
+  // The plain baseline beside it: the main diagonal alone.
+  await pick('baseline')
+  await report('expected, on the origin')
+  await shot('ab06-expected-ori')
+  // And `ori` pressed while lit, back to the first base, keeping that one.
+  await word('ori').click()
   await sleep(8000)
-  await report('a link naming it, from the first base')
-  await shot('ie08-inter-arm-first-base')
+  await report('ori pressed again, back to the first base')
+  await shot('ab07-expected-first-base')
 
   // Unticked on the Chromosomes table: the entry goes, and a link naming it
-  // lands on counts; ticked again, it is back. A link with the score alone, so
-  // what it lands on is the counts and not the O/E `arms` turned on above.
+  // lands on counts; ticked again, it is back.
   await page.evaluate(({ map, sequence }) => {
-    location.hash = `#uri=${encodeURIComponent(map)}&view=region&region=${sequence}&balance=false&score=interarm`
+    location.hash = `#uri=${encodeURIComponent(map)}&view=region&region=${sequence}&balance=false&score=armbaseline`
   }, { map: MAP, sequence: SEQUENCE })
   await sleep(8000)
+  await report('a link naming it')
   const tick = async (on) => {
     await page.evaluate(() => { location.hash = location.hash.replace(/view=region/, 'view=contigs') })
     await sleep(4000)
@@ -212,10 +200,10 @@ try {
   }
   await tick(false)
   await report('the circle unticked, back on the link')
-  await shot('ie09-unticked')
+  await shot('ab08-unticked')
   await tick(true)
   await report('ticked again')
-  await shot('ie10-ticked-again')
+  await shot('ab09-ticked-again')
 
   // No circle, and not offered: the yeast demo, in a tab of its own.
   page = await fresh()
@@ -224,7 +212,7 @@ try {
   await scoreSelect().waitFor({ timeout: 60000 })
   await sleep(4000)
   await report('yeast demo, a linear chromosome')
-  await options('ie11-picker-on-a-line')
+  await options('ab10-picker-on-a-line')
 } finally {
   if (errors.length > 0) console.log('\npage errors:\n' + [...new Set(errors)].join('\n'))
   await browser.close()

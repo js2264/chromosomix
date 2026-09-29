@@ -548,8 +548,8 @@ What the numbers in the cells *are* — the one question the picture cannot answ
 (`src/ui/scores.ts`). A `/pixels` column (`count`, or any extra column the file carries), or one of
 the normalisations: the file's own `balanced` weights, or VC, VC √ and ICE computed here. Or a
 reading computed from the block: the `expected` an O/E divides by, drawn instead; on a view of one
-circular sequence its **`inter-arm`** half, the decay across the two arms with every cell of one arm
-left out (§8.15); and the `correlation` the compartments are read from.
+circular sequence **`arm decay`**, the same taken along both arms, so both diagonals are in it
+(§8.15); and the `correlation` the compartments are read from.
 
 Part of the shared view rather than a preference: two people looking at the same link have to be
 looking at the same numbers.

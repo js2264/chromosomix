@@ -48,16 +48,18 @@
  * those; this entry is the one you can *see*, not a claim that it is the only
  * one there is.
  *
- * **On a circle the baseline has a half of its own, and it is in the list for
+ * **On a circle the baseline has a second shape, and it is in the list for
  * the same reason.** Taken along a bacterial chromosome's two arms (§8.15) the
  * baseline is an X: the main diagonal's decay down each arm, and the inter-arm
- * decay either side of the secondary diagonal through the origin. `inter-arm`
- * is the second alone — every cell across the arms replaced by its arm-frame
- * expectation, and every cell of one arm left as paper — which answers "what
- * are these numbers" exactly as the whole baseline does. It is offered on a
- * view of one sequence declared circular and nowhere else, because nowhere
- * else are there two arms to be across; a link naming it anywhere else lands
- * on counts, as one naming a column the file lacks does.
+ * decay either side of the secondary diagonal through the origin — where the
+ * plain one has only the first, and averages the second into it. `arm decay`
+ * is that baseline drawn, which answers "what are these numbers" exactly as
+ * `expected` does. It is the picture `expected` draws while `arms` is on,
+ * offered as one choice so that looking at both diagonals does not depend on a
+ * toggle; and it is offered on a view of one sequence declared circular and
+ * nowhere else, because nowhere else are there two arms to read it along. A
+ * link naming it anywhere else lands on counts, as one naming a column the
+ * file lacks does.
  *
  * **The correlation is in the list, and the O/E argument is exactly why.** It is
  * the one derived field that does not compose with anything: the cell no longer
@@ -116,15 +118,15 @@ export interface ScoreChoice {
    */
   baseline?: boolean
   /**
-   * Of that baseline, only the half across the two arms of a circular
-   * chromosome — the inter-arm decay, with the main diagonal's left out
-   * (`render/derive.ts`, §8.15).
+   * Take that baseline along both arms of a circular chromosome — both of its
+   * diagonals, the main one and the secondary one through the origin — whether
+   * or not the `arms` toggle is on (`analysis/arms.ts`, §8.15).
    *
-   * Always beside {@link baseline}, which is what it is half of, so everything
-   * the baseline sets aside — the O/E toggle, the ramp's middle — this sets
-   * aside too.
+   * Always beside {@link baseline}, which is what it is a shape of, so
+   * everything the baseline sets aside — the O/E toggle, the ramp's middle —
+   * this sets aside too.
    */
-  interArm?: boolean
+  alongArms?: boolean
 }
 
 /** The id of the plain, always-present choice. */
@@ -145,8 +147,8 @@ export const CORRELATION_SCORE = 'correlation'
  * they are looking for on the thing this computes.
  */
 export const BASELINE_SCORE = 'baseline'
-/** The id of the baseline's half across a circle's two arms — `score=interarm` in a link. */
-export const INTERARM_SCORE = 'interarm'
+/** The id of the baseline along a circle's two arms — `score=armbaseline` in a link. */
+export const ARM_BASELINE_SCORE = 'armbaseline'
 
 /**
  * Everything this file can be drawn from, in the order it should be offered.
@@ -166,8 +168,8 @@ export const INTERARM_SCORE = 'interarm'
  * one deliberately does not (`render/derive.ts`).
  *
  * `circle` is whether the view is a window on one sequence declared circular
- * (§8.15) — the only view with two arms for the baseline's inter-arm half to be
- * across, and so the only one it is offered on.
+ * (§8.15) — the only view with two arms to read the baseline along, and so the
+ * only one that is offered on.
  */
 export function scoreChoices(info: {
   hasWeights: boolean
@@ -187,12 +189,13 @@ export function scoreChoices(info: {
     // correlation is taken over, and the list runs outward from the numbers in
     // the file.
     { id: BASELINE_SCORE, label: 'expected', balance: false, baseline: true },
-    // Right under the baseline it is half of, and only where there are two arms
-    // to be across. One word, because the dropdown beside its label is 97
-    // pixels and `inter-arm expected` would lose its second word there: the key
-    // and the caption, which have the room, say `inter-arm expected`.
+    // Right under the baseline it is a shape of, and only where there are two
+    // arms to read it along. Two short words, because the dropdown beside its
+    // label is 97 pixels and `arm expected` would lose its last letters there;
+    // `decay` is the arms toggle's own word for the thing divided out, and the
+    // caption, which has the room, says `expected along the arms`.
     ...(info.circle === true
-      ? [{ id: INTERARM_SCORE, label: 'inter-arm', balance: false, baseline: true, interArm: true }]
+      ? [{ id: ARM_BASELINE_SCORE, label: 'arm decay', balance: false, baseline: true, alongArms: true }]
       : []),
     // Only on a file that carries weights, and that is the pipeline's own
     // requirement rather than a preference: a correlation of unbalanced O/E is a
@@ -226,7 +229,7 @@ const DERIVED_LABELS = new Set([
   'VC √',
   'ICE',
   'expected',
-  'inter-arm',
+  'arm decay',
   'correlation',
 ])
 

@@ -11,7 +11,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  acrossArms,
   armExpected,
   armOffsets,
   interArmProfile,
@@ -48,13 +47,6 @@ describe('offsets from the origin', () => {
     expect([...armOffsets({ n: 8, origin: 0, circular: true })]).toEqual([0, 1, 2, 3, -4, -3, -2, -1])
     expect([...armOffsets({ n: 8, origin: 6, circular: true })]).toEqual([2, 3, -4, -3, -2, -1, 0, 1])
     expect([...armOffsets({ n: 5, origin: 2, circular: false })]).toEqual([-2, -1, 0, 1, 2])
-  })
-
-  it('puts the origin on the first arm, so a pair across the arms is one either side of it', () => {
-    expect(acrossArms(0, -1)).toBe(true)
-    expect(acrossArms(-4, 3)).toBe(true)
-    expect(acrossArms(0, 3)).toBe(false)
-    expect(acrossArms(-4, -1)).toBe(false)
   })
 })
 

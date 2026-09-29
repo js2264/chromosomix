@@ -390,15 +390,13 @@ const BASELINE_HINT =
   'this block at that bin separation. Worth a look because an O/E is only as trustworthy as ' +
   'the curve underneath it, and at long separations that curve is averaged over few cells.'
 
-const INTERARM_HINT =
-  'The inter-arm decay alone: every cell across the two arms replaced by the mean of those as far ' +
-  'from the secondary diagonal and about as far from the origin, and every cell of one arm left ' +
-  'blank. Where the two diagonals cross, at the origin and the terminus, pairs close along the ' +
-  'DNA are in that mean too.'
+const ARM_BASELINE_HINT =
+  'The expected along both arms of a circular chromosome, drawn: every cell replaced by the mean ' +
+  'of the cells as far apart along the arms, on one arm or across the two, so both diagonals are ' +
+  'in it — the main one and the secondary one through the origin, which expected averages away.'
 
-const ARMS_ON_INTERARM_HINT =
-  'The cells are the expected across the arms, which is always read along them. Choose another ' +
-  'score to get the toggle back.'
+const ARMS_ON_ARM_BASELINE_HINT =
+  'The cells already are the expected along both arms. Choose another score to get the toggle back.'
 
 /**
  * What a dragged box resolves to: one block, and how much of it.
@@ -814,15 +812,14 @@ export interface DerivePresentation {
    */
   baseline: boolean
   /**
-   * Of that baseline, only the half across the two arms of a circular
-   * chromosome (§8.15) — the score picker's `inter-arm`.
+   * Take that baseline along both arms of a circular chromosome (§8.15) — the
+   * score picker's `arm decay`.
    *
    * Read along {@link arms} whether or not the toggle is on, at its window or
-   * the one it turns on at: it is a half of the arm-frame baseline and of no
-   * other, so the toggle is greyed while this is drawn, as the O/E's is under
-   * the whole baseline.
+   * the one it turns on at: this is the arm-frame baseline and no other, so the
+   * toggle is greyed while it is drawn, as the O/E's is under any baseline.
    */
-  interArm?: boolean
+  alongArms?: boolean
   /**
    * Compute one, off the main thread.
    *
@@ -903,19 +900,19 @@ function armsKey(arms: ArmsPresentation | undefined): string {
 }
 
 /**
- * The arms a derivation is read against: the presentation's own, and under the
- * baseline's inter-arm half the same frame at the window `arms` turns on at
- * while the toggle is off — that half is read along the arms whatever the
- * toggle says (§8.15).
+ * The arms a derivation is read against: the presentation's own, and under
+ * `arm decay` the same frame at the window `arms` turns on at while the toggle
+ * is off — that baseline is read along the arms whatever the toggle says
+ * (§8.15).
  *
  * One function for the read and for every key it is cached on, so an origin
- * moved under an inter-arm map with the toggle off is a change of what is
- * drawn: keyed on the presentation's own arms, it was `''` before and after,
- * and the map kept the arms of the old origin.
+ * moved under that baseline with the toggle off is a change of what is drawn:
+ * keyed on the presentation's own arms, it was `''` before and after, and the
+ * map kept the arms of the old origin.
  */
 function armsInForce(derive: DerivePresentation | undefined): ArmsPresentation | undefined {
   const arms = derive?.arms
-  if (arms === undefined || derive?.baseline !== true || derive.interArm !== true) return arms
+  if (arms === undefined || derive?.baseline !== true || derive.alongArms !== true) return arms
   return arms.window === undefined ? { ...arms, window: DEFAULT_ARM_WINDOW } : arms
 }
 
@@ -1002,7 +999,7 @@ const CORRELATE_HINT =
 function scoreOption(choice: ScoreChoice): HTMLOptionElement {
   const option = el('option', { value: choice.id, text: choice.label })
   if (choice.correlate === true) option.title = CORRELATE_HINT
-  if (choice.baseline === true) option.title = choice.interArm === true ? INTERARM_HINT : BASELINE_HINT
+  if (choice.baseline === true) option.title = choice.alongArms === true ? ARM_BASELINE_HINT : BASELINE_HINT
   return option
 }
 
@@ -3151,16 +3148,16 @@ export class MatrixPanel {
     const button = this.armsButton
     if (button === null) return
     button.classList.toggle('hidden', arms?.onChange === undefined)
-    // Greyed under the baseline's inter-arm half, as the O/E is under the whole
-    // baseline: that half is read along the arms whatever the toggle says, so a
-    // press would change nothing on screen (§8.15).
-    const interArm = this.options.derive?.baseline === true && this.options.derive.interArm === true
-    const on = arms?.window !== undefined && arms.refusal === null && !interArm
+    // Greyed under `arm decay`, as the O/E is under any baseline: that one is
+    // read along the arms whatever the toggle says, so a press would change
+    // nothing on screen (§8.15).
+    const alongArms = this.options.derive?.baseline === true && this.options.derive.alongArms === true
+    const on = arms?.window !== undefined && arms.refusal === null && !alongArms
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
     const refused = arms === undefined || arms.refusal !== null
-    button.disabled = refused || interArm
-    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : interArm ? ARMS_ON_INTERARM_HINT : ARMS_HINT
+    button.disabled = refused || alongArms
+    const hint = refused ? (arms?.refusal ?? ARMS_HINT) : alongArms ? ARMS_ON_ARM_BASELINE_HINT : ARMS_HINT
     button.title = hint
     button.setAttribute('aria-label', hint)
   }
@@ -3496,7 +3493,6 @@ export class MatrixPanel {
       derivation.normalise ?? '',
       String(derivation.expected === true),
       String(derivation.baseline === true),
-      String(derivation.interArm === true),
       derivation.smooth ?? '0',
       armsKey(armsInForce(this.options.derive)),
     ].join('|')
@@ -6239,9 +6235,6 @@ export class MatrixPanel {
       // on and then asked to see the baseline gets the baseline, not a field of
       // ones. The toggle is greyed to say so rather than silently ignored.
       baseline: this.options.derive?.baseline === true,
-      // Of that baseline, its half across the two arms (§8.15) — read along
-      // them below whether or not `arms` is on.
-      interArm: this.options.derive?.interArm === true,
       // Applied inside `deriveBlock`, which is what puts it on *each file* and
       // ahead of `combine` — the whole reason a ratio can be smoothed at all
       // (`render/smooth.ts`).
@@ -7017,7 +7010,7 @@ export class MatrixPanel {
       (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
       (held?.correlate === true) === (derive?.correlate === true) &&
       (held?.baseline === true) === (derive?.baseline === true) &&
-      (held?.interArm === true) === (derive?.interArm === true) &&
+      (held?.alongArms === true) === (derive?.alongArms === true) &&
       armsKey(armsInForce(held)) === armsKey(armsInForce(derive))
     this.options.derive = derive
     this.paintArms(derive?.arms)
@@ -7255,7 +7248,15 @@ export class MatrixPanel {
    * than the value. The caption has room for both and says both.
    */
   private derivedLabel(): string | null {
-    if (this.options.derive?.baseline === true) return this.comparisonLabel() ?? 'expected'
+    // A baseline is called what the picker calls it — `expected`, or `arm decay`
+    // for the one along the arms — which is also what keeps the key from saying
+    // it twice: the picker's word leads the key, and this is left off when it
+    // matches (`derive`).
+    if (this.options.derive?.baseline === true) {
+      const scores = this.options.scores
+      const picked = scores?.choices.find((choice) => choice.id === scores.current)
+      return this.comparisonLabel() ?? (picked?.baseline === true ? picked.label : 'expected')
+    }
     // Which decay was divided out, where it was not the ordinary one: the two
     // pictures differ by exactly the X a figure of a bacterial map is about.
     // Two words, because the key is one line the width of its two numbers and
@@ -7909,8 +7910,8 @@ export class MatrixPanel {
    *
    * What the cells can be is a fact about the view as well as the file: a
    * circle ticked on the sequence on screen — by the reader, or by a first
-   * open that measured it after the view was built — offers the baseline's
-   * inter-arm half, and unticked takes it away (§8.15). The declaration does
+   * open that measured it after the view was built — offers the baseline
+   * along its arms, and unticked takes it away (§8.15). The declaration does
    * not rebuild the view, so the picker is told here rather than built again;
    * a list with the same entries leaves the options alone and is
    * {@link syncScoreChoice} exactly.

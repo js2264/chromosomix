@@ -650,79 +650,21 @@ describe('the baseline along both arms', () => {
     expect(along.label).toBe('O/E along the arms')
     expect(along.neutral).toBe(1)
   })
-})
 
-/**
- * The inter-arm half of that baseline, drawn alone (§7.5, §8.15).
- *
- * The same zipped circle: across the arms every cell is half what its own arm
- * holds the same distance apart along the arms. The half across is that decay
- * and nothing else — the secondary diagonal's — and every cell of one arm, the
- * main diagonal's, is paper.
- */
-describe('the inter-arm half of the baseline', () => {
-  const N = 40
-  const frame = { n: N, origin: 0, circular: true }
-  const u = armOffsets(frame)
-  const decay = (s: number): number => 100 / (1 + s)
-  const across = (r: number, c: number): boolean => u[r] >= 0 !== u[c] >= 0
-  const delta = (r: number, c: number): number => Math.abs(Math.abs(u[r]) - Math.abs(u[c]))
-  const b = block(N, N, (r, c) => (across(r, c) ? 0.5 : 1) * decay(delta(r, c)))
-  const axes = { rows: [{ label: 'chr', start: 0, end: N }], cols: [{ label: 'chr', start: 0, end: N }] }
-  const bins = Int32Array.from({ length: N }, (_, i) => i)
-  const arms = { frame, rowBins: bins, colBins: bins, window: 0 }
-
-  it('draws the decay across the arms and leaves every cell of one arm as paper', () => {
-    const half = deriveBlock(b, { baseline: true, interArm: true, arms }, axes)
+  // What the score picker's `arm decay` draws (§7.5, §8.15): the denominator
+  // above, shown — both diagonals, where the plain baseline has one.
+  it('draws the baseline along the arms as both diagonals, every cell of the square', () => {
+    const drawn = deriveBlock(b, { baseline: true, arms }, axes)
     for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        const value = half.values[r * N + c]
-        if (across(r, c)) expect(value, `${r},${c}`).toBeCloseTo(0.5 * decay(delta(r, c)), 3)
-        else expect(Number.isNaN(value), `${r},${c}`).toBe(true)
-      }
+      for (let c = 0; c < N; c++) expect(drawn.values[r * N + c], `${r},${c}`).toBeCloseTo(cell(r, c), 3)
     }
-    expect(half.label).toBe('inter-arm expected')
-    // A mean of counts, like the whole baseline: no middle, a sequential ramp.
-    expect(half.neutral).toBeNull()
-    expect(half.scope).toBeNull()
-  })
-
-  it('is the half of the expected along the arms that is across them, cell for cell', () => {
-    const whole = deriveBlock(b, { baseline: true, arms }, axes)
-    const half = deriveBlock(b, { baseline: true, interArm: true, arms }, axes)
-    expect(whole.label).toBe('expected along the arms')
-    for (let i = 0; i < N * N; i++) {
-      const r = Math.floor(i / N)
-      const c = i % N
-      if (across(r, c)) expect(half.values[i]).toBe(whole.values[i])
-    }
-  })
-
-  it('overrides the O/E exactly as the whole baseline does', () => {
-    const plain = deriveBlock(b, { baseline: true, interArm: true, arms }, axes)
-    const withRatio = deriveBlock(b, { baseline: true, interArm: true, expected: true, arms }, axes)
-    expect([...withRatio.values]).toEqual([...plain.values])
-    expect(withRatio.neutral).toBeNull()
-  })
-
-  it('says so when the window holds no pair across the arms', () => {
-    // The first ten bins after the origin: all on one arm.
-    const oneArm = block(10, 10, (r, c) => decay(Math.abs(r - c)), [1, 11], [1, 11])
-    const within = Int32Array.from({ length: 10 }, (_, i) => i + 1)
-    const half = deriveBlock(
-      oneArm,
-      { baseline: true, interArm: true, arms: { frame, rowBins: within, colBins: within, window: 0 } },
-      { rows: [{ label: 'chr', start: 0, end: 10 }], cols: [{ label: 'chr', start: 0, end: 10 }] },
-    )
-    expect([...half.values].every(Number.isNaN)).toBe(true)
-    expect(half.scope).toBe('no pair of bins here is across the two arms')
-  })
-
-  it('draws nothing where there are no arms to read, and says why', () => {
-    const half = deriveBlock(b, { baseline: true, interArm: true }, axes)
-    expect([...half.values].every(Number.isNaN)).toBe(true)
-    expect(half.label).toBe('inter-arm expected')
-    expect(half.scope).toBe('no arms to read on this block')
+    // The secondary diagonal is in it — the mirror cell holds its own decay —
+    // where the plain baseline puts the mean of its separation there.
+    expect(drawn.values[mirror]).toBeCloseTo(0.5 * decay(0), 3)
+    expect(deriveBlock(b, { baseline: true }, axes).values[mirror]).not.toBeCloseTo(0.5 * decay(0), 1)
+    expect(drawn.label).toBe('expected along the arms')
+    // A mean of counts, like every baseline: no middle, a sequential ramp.
+    expect(drawn.neutral).toBeNull()
   })
 })
 

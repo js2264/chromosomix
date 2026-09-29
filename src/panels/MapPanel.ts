@@ -1129,7 +1129,7 @@ export class MapPanel {
       smooth: this.smoothOwn ?? shared.smooth,
       correlate: choice === null ? shared.correlate : choice.correlate === true,
       baseline: choice === null ? shared.baseline : choice.baseline === true,
-      interArm: choice === null ? shared.interArm === true : choice.interArm === true,
+      alongArms: choice === null ? shared.alongArms === true : choice.alongArms === true,
       onExpectedChange: (on) => this.useExpected(on),
       onSmoothChange: (token) => this.useSmooth(token),
       // The one caller is a correlation that failed, and "off" can only mean
@@ -1668,9 +1668,9 @@ export class MapPanel {
 
   /**
    * What this file's cells could be — its weights, and its extra columns — and,
-   * where the first map is on one sequence declared circular, the baseline's
-   * half across its two arms: the arms are the first map's frame, which is this
-   * map's too (§8.15).
+   * where the first map is on one sequence declared circular, the baseline
+   * along its two arms: the arms are the first map's frame, which is this map's
+   * too (§8.15).
    */
   private scoreChoicesOf(info: OpenResult) {
     const arms = this.props.derive()?.arms
@@ -1942,7 +1942,7 @@ export class MapPanel {
     // still following the deck: the lead's own picker, a link and the back
     // button can all move the shared score, and a dropdown left on the previous
     // one is a control lying about the map it sits on. The list with it, since
-    // a circle ticked under the deck offers the inter-arm half (§8.15).
+    // a circle ticked under the deck offers the baseline along its arms (§8.15).
     this.panel.offerScores(this.scoreChoicesOf(info), score.id)
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
