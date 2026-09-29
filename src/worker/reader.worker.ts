@@ -21,6 +21,7 @@ import { PICTURE_CELLS, displayRange, pictureLayout, pictureStride } from '../me
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
+import type { ReferenceEdit } from '../genome/edit'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -135,6 +136,13 @@ interface Session {
    */
   resample: ResampleSpec | null
   /**
+   * The edit of the reference the map is drawn through (§27.7), or `null` for
+   * the file as it is. Held for the reason {@link resample} is: a rung opened
+   * later for a zoom is drawn through it too, or the next zoom out would show
+   * the file's own sequences under the edited names.
+   */
+  lens: ReferenceEdit | null
+  /**
    * The page's answer about the multi-genome containers (§29), as the open
    * that made this session carried it, so a sibling rung is opened under the
    * same one. A rung of a file that passed is a rung of the same file; this is
@@ -198,8 +206,9 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       indexed: active.pairs.indexed,
       declaredRecords: active.pairs.declaredRecords,
     })
-    drawnAsSession(active, built)
-    active.rungs.set(rung, built)
+    const seen = throughLens(active, built)
+    drawnAsSession(active, seen)
+    active.rungs.set(rung, seen)
     touchRung(active, rung)
     while (active.recent.length > MAX_RUNGS) {
       const oldest = active.recent.pop()
@@ -207,7 +216,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       active.rungs.get(oldest)?.close()
       active.rungs.delete(oldest)
     }
-    return built
+    return seen
   }
   const group = active.mc.entryGroup === '' ? 'entries' : active.mc.entryGroup
   const { path } = parseUri(active.mc.uri)
@@ -223,6 +232,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     // answers the same question at a different resolution.
     return active.mc
   }
+  opened = throughLens(active, opened)
   drawnAsSession(active, opened)
   active.rungs.set(rung, opened)
   touchRung(active, rung)
@@ -233,6 +243,20 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     active.rungs.delete(oldest)
   }
   return opened
+}
+
+/**
+ * A sibling rung drawn through the session's edit, as the open map is (§27.7).
+ * A rung the edit cannot be drawn on is answered by the open map, which is
+ * what `mapFor` does for a rung that will not open: the same question at
+ * another resolution, rather than the file's own sequences under the edit's names.
+ */
+function throughLens(active: Session, rung: MetaCooler): MetaCooler {
+  if (active.lens === null) return rung
+  const { map, refusal } = MetaCooler.withLens(rung, active.lens)
+  if (refusal === null) return map
+  rung.close()
+  return active.mc
 }
 
 /**
@@ -498,6 +522,16 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
       })
     }
   }
+  // Through the edit, where the reader asked for one (§27.7): the file was
+  // opened as it is, and from here on it is presented as the edited assembly.
+  let lens: ReferenceEdit | null = null
+  let lensRefusal: string | null = null
+  if (request.edit !== undefined) {
+    const seen = MetaCooler.withLens(mc, request.edit)
+    mc = seen.map
+    lensRefusal = seen.refusal
+    if (seen.refusal === null) lens = request.edit
+  }
   session = {
     mc,
     source,
@@ -506,6 +540,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     recent: [],
     pairs,
     resample: null,
+    lens,
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
   }
 
@@ -513,6 +548,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     ...(pairs === null || request.binning === undefined
       ? {}
       : { pairs: summarise(pairs, request.binning.download === true, request.binning) }),
+    ...(request.edit === undefined ? {} : { edit: { refusal: lensRefusal } }),
     uri: mc.uri,
     layout: mc.layout,
     info: mc.info,
@@ -673,8 +709,12 @@ function hintFor(rows: Extent, cols: Extent): string {
 async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }>): Promise<PictureResult> {
   const open = requireSession().mc
   const cap = Math.max(256, Math.min(PICTURE_CELLS, Math.trunc(request.cells ?? PICTURE_CELLS)))
-  const rung = pictureRung(open, cap)
-  const mc = await mapFor(rung)
+  // The file's own order, whatever the session is drawn through: the stage
+  // draws the edit through the picture, not the picture through the edit —
+  // and so the rung is the one whose bins of the file's own sequences fit.
+  const rung = pictureRung(open.unlensed ?? open, cap)
+  const seen = await mapFor(rung)
+  const mc = seen.unlensed ?? seen
   const stride = pictureStride(mc.coords, cap)
   if (stride === null) {
     throw new ViewerError(
@@ -693,7 +733,7 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   if (read === null || cancelled.has(request.id)) throw abortError()
   const { vmin, vmax } = displayRange(read.histogram, read.quantizer)
   return {
-    rung: mc === open ? null : (rung ?? null),
+    rung: seen === open ? null : (rung ?? null),
     binsize: mc.binsize * stride,
     stride,
     n: layout.n,

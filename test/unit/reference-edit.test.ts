@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EditedAssembly,
+  editFingerprint,
   emptyEdit,
   isGap,
   mismatch,
@@ -224,6 +225,20 @@ describe('the history', () => {
     edit = withStep(edit, { op: 'invert', sequence: 'II', from: 0, to: 600 }, 'reader', 2)
     expect(edit.history).toHaveLength(2)
     expect(edit.history[1].step.op).toBe('invert')
+  })
+
+  it('fingerprints the steps an edit applies, and nothing undone past them', () => {
+    const one = withStep(emptyEdit(ORIGINAL), { op: 'invert', sequence: 'I', from: 0, to: 500 }, 'reader', 0)
+    const two = withStep(one, { op: 'cut', sequence: 'II', at: 300 }, 'reader', 1)
+    expect(editFingerprint(undone(two))).toBe(editFingerprint(one))
+    expect(editFingerprint(two)).not.toBe(editFingerprint(one))
+    // Who made a step, and when, is its history rather than its assembly.
+    expect(editFingerprint(withStep(emptyEdit(ORIGINAL), { op: 'invert', sequence: 'I', from: 0, to: 500 }, 'auto', 9))).toBe(
+      editFingerprint(one),
+    )
+    expect(editFingerprint(withStep(emptyEdit(ORIGINAL), { op: 'invert', sequence: 'I', from: 0, to: 501 }, 'reader', 0))).not.toBe(
+      editFingerprint(one),
+    )
   })
 
   it('refuses a file whose sequences are not the ones it was made on, naming the first', () => {

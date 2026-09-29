@@ -63,6 +63,9 @@ import {
 } from '../render/legend'
 import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
 import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from '../render/locus'
+import { axisThroughEdit } from '../edit/axis'
+import { stretchInFile } from '../edit/places'
+import type { EditedAssembly } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
@@ -1055,6 +1058,16 @@ export interface AnnotationContext {
    */
   contigLength(name: string): number | undefined
   /**
+   * The edited assembly this map is drawn through, where it is drawn through
+   * one (§27.7) — and `null` for the file as it is.
+   *
+   * The reader answers in the edited assembly; the tracks, marks and features
+   * are in the file's. Asked each time an axis is built, so a map whose edit
+   * changes is drawn through the new one from the next block on
+   * (`edit/axis.ts`).
+   */
+  edited?(): EditedAssembly | null
+  /**
    * Where the file's own columns come from (§8.12).
    *
    * Absent on a surface that draws no metadata lanes — the 1D browser, a panel
@@ -1600,6 +1613,14 @@ export class MatrixPanel {
    * dead on every turned map, which is the presentation a region view opens in.
    */
   private squareAxes: OverlayAxes = { rows: null, cols: null }
+  /**
+   * The drawn axes in the reader's own coordinates, where the map is drawn
+   * through an edit (§27.7) — the edited sequences, as the region box, the
+   * heading and a band dragged for a form name them. {@link locusAxes} is the
+   * same picture in the file's coordinates, which the lanes, the marks and
+   * every other surface speak. The same object as that one without an edit.
+   */
+  private ownAxes: OverlayAxes = { rows: null, cols: null }
   /**
    * The block the colour range is measured from, and how much genome it covers.
    *
@@ -4636,7 +4657,19 @@ export class MatrixPanel {
       axis?.range === undefined ? null : orderedSpan(axis.label, axis.range[0], axis.range[1])
     const rows = span(this.axisSelection(rowGroup, box.rows, data.rowExtent[0]))
     const cols = span(this.axisSelection(colGroup, box.cols, data.colExtent[0]))
-    return rows === null || cols === null ? null : { rows, cols }
+    if (rows === null || cols === null) return null
+    // In the file's coordinates where the map is drawn through an edit (§27.7),
+    // as every mark is kept and as a clicked place already is: a box laid across
+    // a junction is of the piece the drag began in, as one across an edge is of
+    // the sequence.
+    const edited = this.options.annotations?.edited?.() ?? null
+    if (edited === null) return { rows, cols }
+    const binsize = this.options.binsize
+    const inFile = {
+      rows: stretchInFile(edited, rows, bpWithin(rowGroup, box.anchor.row + 0.5, data.rowExtent[0], binsize)),
+      cols: stretchInFile(edited, cols, bpWithin(colGroup, box.anchor.col + 0.5, data.colExtent[0], binsize)),
+    }
+    return inFile.rows === null || inFile.cols === null ? null : { rows: inFile.rows, cols: inFile.cols }
   }
 
   private boxDrawn(box: DrawnBox): void {
@@ -4769,7 +4802,7 @@ export class MatrixPanel {
 
   /** A band of one axis of the block on screen, as a locus, or `null`. */
   private bandLocus(which: 'rows' | 'cols', span: [number, number]): PickedLocus | null {
-    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
+    const axis = which === 'rows' ? this.ownAxes.rows : this.ownAxes.cols
     // **Above bin level a drag names a unit, not a span.** There is no
     // `LocusAxis` on a genome × genome picture — a cell is a whole MAG and a
     // base pair inside one would be an invention — and until this the gesture
@@ -5685,6 +5718,7 @@ export class MatrixPanel {
     const axes = this.locusAxesOf(data, turned)
     this.locusAxes = axes.drawn
     this.squareAxes = axes.square
+    this.ownAxes = axes.own
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -5796,6 +5830,7 @@ export class MatrixPanel {
     this.heatmap.setTurnLabels(this.bandLabels(turned))
     this.locusAxes = axes.drawn
     this.squareAxes = axes.square
+    this.ownAxes = axes.own
     if (presentationMoved) {
       this.options.onScaleChange?.({
         transform: this.transform,
@@ -6001,38 +6036,48 @@ export class MatrixPanel {
   private locusAxesOf(
     data: MatrixResult,
     turned: RotatedBlock | null,
-  ): { drawn: OverlayAxes; square: OverlayAxes } {
+  ): { drawn: OverlayAxes; square: OverlayAxes; own: OverlayAxes } {
     const context = this.options.annotations
     const shared = {
       level: data.level,
       binsize: this.options.binsize,
       contigLength: context?.contigLength ?? ((): number | undefined => undefined),
     }
-    const square: OverlayAxes = {
+    // Through the edit, where the map is drawn through one: the reader's runs
+    // are edited sequences, and the lanes are drawn in the file's (§27.7).
+    const edited = context?.edited?.() ?? null
+    const ownSquare: OverlayAxes = {
       rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
       cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
     }
+    const square: OverlayAxes =
+      edited === null
+        ? ownSquare
+        : { rows: axisThroughEdit(ownSquare.rows, edited), cols: axisThroughEdit(ownSquare.cols, edited) }
     // A turned block has one genomic axis and one that is not: x is position,
     // measured in the half-bin columns the rotation produced, and y is distance
     // from the diagonal, which is not a place and has no locus. `null` on rows
     // is exactly right for the lanes — a stack drawn against a genomic axis has
     // nothing to draw itself against up the side, which is why a turn moves
     // every track to the bottom.
-    if (turned === null) return { drawn: square, square }
+    if (turned === null) return { drawn: square, square, own: ownSquare }
+    const ownCols = this.turnedLocus(turned, data)
+    const turn = {
+      maxSeparation: turned.maxSeparation,
+      direction: turned.direction,
+      binsize: this.options.binsize,
+      nrows: turned.nrows,
+      ...(turned.fold === undefined ? {} : { fold: turned.fold }),
+    }
     return {
+      own: { rows: null, cols: ownCols, turn },
       drawn: {
         rows: null,
-        cols: this.turnedLocus(turned, data),
+        cols: axisThroughEdit(ownCols, edited),
         // What an overlay is placed by once there is no row axis to ask: a
         // mark names one locus or two, and the turn is a function of those
         // two (`render/overlays.ts`).
-        turn: {
-          maxSeparation: turned.maxSeparation,
-          direction: turned.direction,
-          binsize: this.options.binsize,
-          nrows: turned.nrows,
-          ...(turned.fold === undefined ? {} : { fold: turned.fold }),
-        },
+        turn,
       },
       square,
     }
@@ -8216,7 +8261,7 @@ export class MatrixPanel {
    */
   framedRegion(): FramedRegion | null {
     if (this.data === null) return null
-    const windows = this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX)
+    const windows = this.framedWindows(this.ownAxes.cols, this.heatmap.scaleX)
     // **Two runs of one sequence is one window on a circle**, not two places: a
     // wrapped axis carries the sequence's tail and then its head, with the
     // second run a lap along (§8.15). Reported as the window a reader would
@@ -8431,7 +8476,7 @@ export class MatrixPanel {
    * picture's own analogue of a whole-file map.
    */
   framedLocus(): string | undefined {
-    const windows = this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY)
+    const windows = this.framedWindows(this.ownAxes.rows, this.heatmap.scaleY)
     const only = windows.length === 1 ? windows[0] : undefined
     return only === undefined ? undefined : formatLocus(only)
   }
@@ -8476,8 +8521,8 @@ export class MatrixPanel {
    */
   private viewPhrase(): string {
     return framedPhrase(
-      this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY),
-      this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX),
+      this.framedWindows(this.ownAxes.rows, this.heatmap.scaleY),
+      this.framedWindows(this.ownAxes.cols, this.heatmap.scaleX),
     )
   }
 

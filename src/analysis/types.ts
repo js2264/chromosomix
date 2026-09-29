@@ -671,6 +671,12 @@ export interface AnalysisFraming {
    * read.
    */
   contacts?: number
+  /**
+   * The edit of the reference the map was drawn through (§27.7), as its
+   * fingerprint (`genome/edit.ts`); absent for the file as it is. A result is of
+   * the edited assembly it was computed on, and the next edit makes it stale.
+   */
+  edit?: string
 }
 
 // ---------------------------------------------------------------------------

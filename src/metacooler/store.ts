@@ -93,6 +93,15 @@ export interface PixelStore {
   binOffsets(): Float64Array
 
   /**
+   * `true` where {@link forEachWindow} reads the blocks of the rectangle and no
+   * more — a two-dimensional index, as a `.hic` has — rather than the whole row
+   * band a CSR index can only locate. A reader that needs several rectangles,
+   * the lens of an edit (`lens.ts`), reads such a store a rectangle at a time
+   * and any other a band at a time. Absent is `false`.
+   */
+  readonly rectangular?: boolean
+
+  /**
    * Walk the stored pixels a rectangle needs.
    *
    * `plan` is what `planRead` decided about the storage mode — whether the

@@ -236,6 +236,15 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     // read, and one a shell has no picture to take it from. The seed is the
     // shell's default as it is the session's, so the same pixels are drawn.
     if (framing.contacts !== undefined) args.push('--contacts', String(framing.contacts))
+    // The edit the map was drawn through (§27.7) is an input as surely as the
+    // total, and one the shell cannot yet be given: said, rather than a line
+    // that measures the file as it is under a record that says otherwise.
+    if (framing.edit !== undefined) {
+      notes.push(
+        'The map was drawn through an edit of its reference, which the command line cannot yet ' +
+          'apply: this line measures the file as it is.',
+      )
+    }
     // The ticked cells of an `.scool` are the session's and not the record's
     // (§3.8), so they are read off the context, and a command written with no
     // context to ask is told what it cannot say.

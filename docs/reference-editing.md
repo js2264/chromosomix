@@ -1,7 +1,8 @@
 # Editing the reference — design note
 
 > **Status, 2026-09-29.** Partly built: the dev features (§29), the model of an edit and the axis it
-> is drawn through, and the stage in manual mode with its picture — steps 1, most of 2 and 3 of §10.
+> is drawn through, the stage in manual mode with its picture, and the session drawn through the
+> edit — steps 1, 2 and 3 of §10, less the zoom past the stage's picture.
 > `SPECS.md` §27 (editing the reference), §28 (two sequences on two axes) and §29 (dev features) are
 > the contract, and each subsection there says *built* as it lands; this note is the design they were
 > written from — the method in full, the architecture with the code it lands in, the alternatives
@@ -12,7 +13,13 @@
 > moving the map's panel onto it (§3.1 below) — the picture is finer than a panel's and in the file's
 > order, which is the whole trick of §3.7 — and draws the map's own lanes beside it through the lens;
 > on the stage **a drag selects** and *Space*-drag pans; the move's live preview is the picture itself
-> redrawn through the tentative edit, since at the whole-genome scale that *is* the settled edit.
+> redrawn through the tentative edit, since at the whole-genome scale that *is* the settled edit. And
+> the map's lens is not a slot map in the selection read (§2.4 below) but a map of its own under the
+> reader (`metacooler/lens.ts`): the file opened as it is and presented as the edited assembly — its
+> sequence table, its bin columns and a pixel store that reads the original rows a window needs, or
+> from a `.hic` the original rectangles, and carries each pixel to where it lands — so no view, table
+> or task learns there is an edit, and a change of edit opens the file again as a change of
+> resolution does.
 
 The feature in one sentence: **a stage where the reader edits the reference a contact map was built
 against — cut, invert, move, join, duplicate, set aside — with the map, its tracks and every later

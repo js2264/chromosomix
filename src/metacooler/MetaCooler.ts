@@ -71,6 +71,8 @@ import {
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
 import { pyramid, readPicture, type PictureLayout, type PictureLevel, type Quantizer } from './picture'
+import { BinLens, LensStore, lensFor, lensedHandle, sequenceTable } from './lens'
+import type { ReferenceEdit } from '../genome/edit'
 import {
   ResampledStore,
   takeCensus,
@@ -173,6 +175,12 @@ export interface MetaCoolerInit {
   genomes?: Table
   /** `indexes/genome_offset`, length `nGenomes + 1`; absent for a cooler. */
   genomeOffset?: Float64Array
+  /**
+   * The map this one is an edit of (§27.7), where it is drawn through one —
+   * {@link MetaCooler.withLens} sets it, and the one read that must see the
+   * file's own order, the editing stage's picture (§27.9), reads through it.
+   */
+  unlensed?: MetaCooler
 }
 
 /** Anything `MetaCooler.open` needs that is not the file or its bytes. */
@@ -254,6 +262,8 @@ export class MetaCooler {
   readonly contigs: Table
   /** Uniform bin size in bp. Never `null` here — §3.2 refuses variable bins. */
   readonly binsize: number
+  /** The map this one is an edit of, or `null` for a map that is the file (§27.7). */
+  readonly unlensed: MetaCooler | null
   /** `symmetric-upper` or `square`, read from the attribute, never assumed. */
   readonly storageMode: StorageMode
   /** Dtype kind of `pixels/count`, resolved once (correction #2). */
@@ -753,6 +763,7 @@ export class MetaCooler {
 
   constructor(init: MetaCoolerInit) {
     this.uri = init.uri
+    this.unlensed = init.unlensed ?? null
     this.rawHandle = init.handle
     this.tables = init.tables ?? init.handle
     this.layout = init.layout
@@ -1413,6 +1424,41 @@ export class MetaCooler {
       ids: pooling.ids,
       pooling,
     }
+  }
+
+  /**
+   * This map through an edit of its reference (§27.2, §27.7): the edited
+   * sequences as its own, and every pixel carried to the edited bins it lands
+   * at — see `metacooler/lens.ts`. Everything above sees an ordinary map.
+   *
+   * A new map over the same handle and the same store, so the file is read
+   * exactly as it was; closing it closes the file, and the map it was made
+   * from is not closed again. The map as it was where the edit changes
+   * nothing, and a refusal, with the map as it was, where it cannot be drawn
+   * here: an edit made on another assembly, or a container whose sequences
+   * are not one list — a metagenome's genome layer and a single-cell file's
+   * cells are not yet drawn through one.
+   */
+  static withLens(mc: MetaCooler, edit: ReferenceEdit): { map: MetaCooler; refusal: string | null } {
+    if (mc.hasGenomes) return { map: mc, refusal: 'An edit is not yet drawn on a map of several genomes.' }
+    if (mc.layout.kind === 'scool') return { map: mc, refusal: 'An edit is not yet drawn on a single-cell file.' }
+    const found = lensFor(edit, mc.chromnames, mc.contigLengths)
+    if (found === null) return { map: mc, refusal: null }
+    if ('refusal' in found) return { map: mc, refusal: found.refusal }
+    const lens = BinLens.of(mc.coords, mc.chromnames, found.assembly)
+    const table = sequenceTable(lens)
+    const attrs = { ...mc.rawHandle.attrs(), nchroms: lens.names.length, nbins: lens.nBins }
+    const map = new MetaCooler({
+      uri: mc.uri,
+      handle: lensedHandle(mc.rawHandle, lens, table, attrs),
+      layout: mc.layout,
+      attrs,
+      contigs: table,
+      chromOffset: lens.chromOffset,
+      store: new LensStore(mc.store, lens, mc.storageMode === 'symmetric-upper'),
+      unlensed: mc,
+    })
+    return { map, refusal: null }
   }
 
   /**

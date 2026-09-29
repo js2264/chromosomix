@@ -741,6 +741,21 @@ export function redone(edit: ReferenceEdit): ReferenceEdit {
 }
 
 /**
+ * The steps an edit applies, as a short string that changes whenever they do
+ * and never with what was undone past them: two edits with one fingerprint draw
+ * one assembly. What a mount is keyed by and a task's framing carries (§27.7).
+ */
+export function editFingerprint(edit: ReferenceEdit): string {
+  const text = JSON.stringify(edit.history.slice(0, edit.cursor).map((entry) => entry.step))
+  let hash = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${edit.cursor}:${(hash >>> 0).toString(36)}`
+}
+
+/**
  * Whether an edit applies to a file's sequences: the same names, at the same
  * lengths, in the same order. `null` when it does; otherwise the first that
  * differs, for the refusal to name (§10).

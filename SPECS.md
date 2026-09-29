@@ -10048,8 +10048,9 @@ reference is wrong, in the picture, where the reader's eye already is.
 
 **Status: partly built.** Every subsection below describes what will be, and says *built* as it
 lands: so far the model of an edit and its lens on the axes (§27.2), the stage in manual mode with its
-picture (§27.3, §27.4, §27.9), and the edit kept with the file. The session is not yet drawn through
-the edit (§27.7), nor are there suggestions (§27.5) or exports (§27.8). It is a **dev feature** (§29) throughout: on `main`, and invisible until the
+picture (§27.3, §27.4, §27.9), the edit kept with the file, and the session drawn through it — the
+map, its tracks, the Chromosomes table and every task (§27.7). There are not yet suggestions (§27.5)
+or exports (§27.8). It is a **dev feature** (§29) throughout: on `main`, and invisible until the
 switch in *About* is on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
@@ -10342,6 +10343,31 @@ for what review mode learned, `--from` for an AGP to start from — writing ever
 
 ### 27.7 The session through the lens
 
+*Built so far*: the map is drawn through the edit **in the reader** (`metacooler/lens.ts`). A file
+with an edit kept for it is opened as it is and then presented as the edited assembly — its sequences,
+their bins and every pixel carried to the bins it lands at — and so is each rung opened after it for a
+zoom, so every view, the Chromosomes table and the heading name the edited sequences and nothing above
+the reader knows there is an edit. The analysis worker's mount is opened through the same edit and
+keyed by its steps, so a task measures the edited assembly; the edit is in a result's framing, and the
+next one makes the result stale. The tracks, the marks and the features are fetched in the file's
+coordinates and drawn through it (`edit/axis.ts`): each stretch of an edited sequence on an axis
+becomes the pieces it is made of, each a stretch of its original sequence, forward or backwards. A
+mark placed on the map or the tracks is recorded in the file's coordinates — a click where it lands, a
+box laid across a junction as the stretch of the piece the drag began in, as one laid across a
+sequence's edge is of the sequence (`edit/places.ts`) — and so is the place under the pointer that a
+model's beads and a deck's companions light. The session is **redrawn through the edit** when the
+stage closes on a different one and when the heading's arrow puts the file back: the file opened
+again, as a change of resolution opens it, with the window carried to wherever its middle went, the
+same width and turned where the stretch was turned (`edit/places.ts`) — to the table where the place
+did not survive, and a selection to the table, since an edit renames what it names. An edit kept for a
+file it cannot be drawn on is not drawn, and a line says why: one made on another assembly, and for
+now a `.metacool`'s genome layer and a single-cell file's cells (§27.10). Not yet: the original beside
+the edited locus in the readout; bookmarks, which are taken where the view is, in the edited assembly,
+and not carried across a later edit; a deck's companions, drawn as they are; a `.pairs` re-binned
+exactly through the edit, where it is binned and then moved as a stored map is; the link's `s=`
+payload; and the command line, whose line for a task on an edited map says it will measure the file as
+it is.
+
 **An edit reaches the whole session.** Every view, table and track, every task run after it and
 every export is in the edited assembly until the reader reverts: the Chromosomes table lists edited
 sequences, a locus names one (`IV_e1:1,000,001-1,200,000`), and the readout gives the original beside
@@ -10439,6 +10465,7 @@ runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a
 | Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel; not yet estimated before it starts) |
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
+| A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
 | Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held |
@@ -10447,12 +10474,13 @@ runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a
 
 Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
 more than one map; a stage on an assembly of more sequences than its picture has cells; a lifted
-`.cool` above the memory it would take, with the way out. Built: the model and the axis (§27.2), the
-stage in manual mode and its picture (§27.3, §27.4, §27.9), the edit kept with the file and carried in
-a workspace. Not yet built, in the order it will be (`docs/reference-editing.md` §10): the session
-drawn through the lens (§27.7), with the worker's reads through it and the zoom past the picture; the
+`.cool` above the memory it would take, with the way out; for now, an edit drawn on a `.metacool` or a
+single-cell file. Built: the model and the axis (§27.2), the stage in manual mode and its picture
+(§27.3, §27.4, §27.9), the edit kept with the file and carried in a workspace, and the session drawn
+through it (§27.7). Not yet built, in the order it will be (`docs/reference-editing.md` §10): the
 exports; the method, with the rail and the corners; review and auto with the command line; the
-evidence beyond the map; metagenomes.
+evidence beyond the map; metagenomes — and, left over from the lens, the zoom past the stage's picture
+and the gaps §27.7 lists.
 
 ## 28. Two sequences on two axes
 

@@ -722,6 +722,21 @@ describe('the framing a session sets from the picture', () => {
     expect(commandOf(stored.text)).not.toContain('--contacts')
   })
 
+  it('says that the map was drawn through an edit, which the shell cannot yet apply (§27.7)', () => {
+    const edited = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { edit: '2:1x2y3z' }),
+      context: context(),
+    })
+    expect(notesOf(edited.text).join(' ')).toContain('drawn through an edit of its reference')
+    const stored = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(notesOf(stored.text).join(' ')).not.toContain('edit')
+  })
+
   it('writes the bin size an imported .pairs was framed at', () => {
     // A contact list declares no resolution; the session answered a dialog and
     // the shell's answer is `--bin-size`. Without it the line dies at the open.

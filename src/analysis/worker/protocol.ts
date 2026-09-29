@@ -30,6 +30,7 @@
  */
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
+import type { ReferenceEdit } from '../../genome/edit'
 import type {
   OrientationSummary,
   PairsBinning,
@@ -247,6 +248,12 @@ export type AnalysisRequest =
        * measures that depth and not the file's.
        */
       resample?: ResampleTarget
+      /**
+       * The edit of the reference the reader's map is drawn through (§27.7),
+       * applied to this mount as the reader applied it to its own — so a task
+       * reads the edited assembly, as the view shows it, or is refused by name.
+       */
+      edit?: ReferenceEdit
     }
   | {
       id: number

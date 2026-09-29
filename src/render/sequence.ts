@@ -165,16 +165,21 @@ export function letterOf(byte: number): string {
  * A linear scan of the windows in hand, which are the windows on screen: three
  * of them at most, and a binary search over a `Uint8Array` whose start is known
  * is arithmetic anyway.
+ *
+ * @param reversed The position is in a stretch drawn the other way round
+ *   (§27.2), whose letters are the other strand's: the complement.
  */
 export function baseAt(
   regions: readonly BaseRegion[],
   contig: string,
   bp: number,
+  reversed = false,
 ): string | null {
   const at = Math.floor(bp)
   for (const region of regions) {
     if (region.contig !== contig || at < region.start || at >= region.end) continue
-    return letterOf(region.bases[at - region.start])
+    const byte = region.bases[at - region.start]
+    return letterOf(reversed ? complementByte(byte) : byte)
   }
   return null
 }

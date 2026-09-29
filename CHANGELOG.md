@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The session drawn through the edit of the reference — a dev feature (§27.7).** Closing the stage
+  on an edit now redraws the whole session through it: the file is opened again as the edited assembly
+  — `IV_e1` in the heading, the Chromosomes table, every view and every task — with the window carried
+  to where its place went, and the tracks, features and marks fetched where the file has them and drawn
+  where the edit puts them, a turned stretch's signal mirrored and its bases complemented. A mark drawn
+  on the edited map or tracks is kept in the file's coordinates, so it survives the next edit and a
+  revert; a task's result is stale once the edit changes; the heading's arrow puts the file back the
+  same way. The edit is read under the reader, so the file is untouched and a view costs the rows it
+  shows — from a `.hic`, only the blocks it needs. Not yet: the original locus in the readout,
+  bookmarks carried across edits, a deck's companions, the link, and the command line, whose line for
+  such a task says it measures the file as it is.
+
 - **A stage that edits the reference, in manual mode — a dev feature (§27).** With *dev features* on,
   the heading says *reference · as in the file* before the resolution; pressing it, or *Edit the
   reference* in the palette, opens the whole map on a stage of its own, read once at up to 16,384 cells
@@ -25,8 +37,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   end joining the two. A drag off the diagonal boxes two stretches, with what two stretches admit. Every
   act is a step in a history with undo and redo, kept with the file, carried in a saved workspace, and
   counted in the heading — *edited · 2 steps*, with an arrow back to the file. The stage is closed by
-  its × only: Escape lets go of the drag or the selection. The rest of the session is not yet drawn
-  through the edit, and there are no suggestions or exports yet.
+  its × only: Escape lets go of the drag or the selection. There are no suggestions or exports yet.
 
 - **Dev features: a switch in *About* that shows what is still being built (§29).** A feature can
   now live on `main` — specified, tested and deployed like any other — and be **invisible** to a reader

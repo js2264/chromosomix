@@ -19,6 +19,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import type { ReferenceEdit } from '../genome/edit'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
@@ -389,6 +390,12 @@ export interface OpenResult {
   contacts: number | null
   /** Present only when this map was imported from a `.pairs` (§3.7). */
   pairs?: PairsImportSummary
+  /**
+   * What became of the edit the open asked for (§27.7): `null` where the map is
+   * drawn through it, the reason where it is not — an edit made on another
+   * assembly, or a container it is not yet drawn on. Absent where none was asked.
+   */
+  edit?: { refusal: string | null }
   sourceKind: SourceKind
 }
 
@@ -803,6 +810,14 @@ export type WorkerRequest =
        * worker cannot read `localStorage`. Absent reads them.
        */
       metacool?: boolean
+      /**
+       * An edit of the reference to draw the map through (§27.7): the file is
+       * opened as it is, then presented as the edited assembly — its sequences,
+       * its bins, its pixels carried to where they land (`metacooler/lens.ts`) —
+       * and so is every rung opened for a zoom after it. Sent only while the dev
+       * features are on (§29), and only for an edit that changes something.
+       */
+      edit?: ReferenceEdit
     }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own

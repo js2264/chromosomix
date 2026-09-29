@@ -957,6 +957,17 @@ describe('sameRecipe', () => {
     expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 11 } } })).toBe(false)
     expect(sameRecipe(round, { params, framing: { ...FRAMING, circular: ['chrI'], origins: { chrI: 10 } } })).toBe(true)
   })
+
+  it('rejects a result of another edit of the reference, though its window is the same bins (§27.7)', () => {
+    // An inversion leaves a whole-genome window where it was and moves every
+    // contact in it: the edit is compared, and the file as it is is no edit.
+    const { params } = provenance
+    const edited = { ...provenance, framing: { ...FRAMING, edit: '1:abc' } }
+    expect(sameRecipe(provenance, { params, framing: { ...FRAMING, edit: '1:abc' } })).toBe(false)
+    expect(sameRecipe(edited, { params, framing: { ...FRAMING, edit: '2:def' } })).toBe(false)
+    expect(sameRecipe(edited, { params, framing: FRAMING })).toBe(false)
+    expect(sameRecipe(edited, { params, framing: { ...FRAMING, edit: '1:abc' } })).toBe(true)
+  })
 })
 
 /**

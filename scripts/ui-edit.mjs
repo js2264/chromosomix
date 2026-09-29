@@ -6,15 +6,19 @@
  * same stretch turned round, a zoom onto the bow-tie that makes, a stretch
  * dragged into another chromosome with the map rearranged under the hand, the
  * drop, a box of two stretches off the diagonal, the menu that sets a stretch
- * aside, an undo, the heading once the stage is closed, the stage in the dark
- * theme, and the chip gone with the dev features off.
+ * aside, an undo, a second turn inside the window behind the stage, the session
+ * redrawn through the edit once the stage is closed — the map, its tracks, a box
+ * drawn on it and a line typed at a place in the file, both kept in the file's
+ * coordinates, and the Chromosomes table — the stage in the dark theme, the file
+ * put back by the heading's arrow with the marks where the file has them, and
+ * the chip gone with the dev features off.
  *
  * It prints what each step found — the selection, the history, the readout —
  * so a step that did not happen is a line in the log rather than something to
  * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit.mjs [out-dir]     # e01 … e14
+ *   node scripts/ui-edit.mjs [out-dir]     # e01 … e17
  */
 
 import { createRequire } from 'node:module'
@@ -94,6 +98,47 @@ async function drag(from, to, steps = 12, hold = null) {
   if (hold !== null) await hold()
   await page.mouse.up()
   await sleep(400)
+}
+
+/** A panel's fold button, by the start of its title. */
+async function fold(title) {
+  for (const b of await page.$$(`button[title^="${title}"]`)) {
+    if (await b.isVisible()) {
+      await b.click()
+      await sleep(600)
+      return
+    }
+  }
+}
+const manual = () => page.locator('.annotation-card').filter({ has: page.locator('.card-head', { hasText: /Manual annotations/i }) }).first()
+const form = (title) =>
+  manual()
+    .locator('.manual-form')
+    .filter({ has: page.locator('.manual-form-title', { hasText: new RegExp(`^${title}$`) }) })
+    .first()
+
+/**
+ * Where a base of an edited sequence is on the session's map, along its
+ * diagonal: two points hovered, their readouts read, and the line between them.
+ */
+async function diagonalAt(name) {
+  const r = await page.evaluate(() => {
+    const box = document.querySelector('.heatmap-canvas').getBoundingClientRect()
+    return { left: box.left, top: box.top, width: box.width, height: box.height }
+  })
+  const read = async (f) => {
+    await page.mouse.move(r.left + f * r.width, r.top + f * r.height)
+    await sleep(250)
+    const found = new RegExp(`${name}:([\\d,]+)`).exec((await text('.status-coords')) ?? '')
+    return found === null ? null : Number(found[1].replaceAll(',', ''))
+  }
+  const [f0, f1] = [0.3, 0.7]
+  const [b0, b1] = [await read(f0), await read(f1)]
+  if (b0 === null || b1 === null) return null
+  return (bp) => {
+    const f = f0 + ((bp - b0) / (b1 - b0)) * (f1 - f0)
+    return { x: r.left + f * r.width, y: r.top + f * r.height }
+  }
 }
 
 async function openStage() {
@@ -197,28 +242,82 @@ await sleep(600)
 console.log('after undo:', await history())
 await shot('e11-undone')
 
-// Closed: the heading says the session is edited.
+// A second turn, inside the window the map behind the stage is showing: the
+// map's own view is IV:1,000,001-1,400,000, and this is its middle.
+box = await mapBox()
+const ivNow = await cellsOf('IV_e1')
+await drag(at(box, ivNow[0] + 1100, ivNow[0] + 1100), at(box, ivNow[0] + 1300, ivNow[0] + 1300))
+await page.keyboard.press('i')
+await sleep(500)
+console.log('history:', await history())
+
+// Closed: the session is redrawn through the edit — the map behind, its
+// tracks mirrored through the turned stretch, and the heading edited.
 await page.click('.modal-panel .btn-close')
-await sleep(800)
-console.log('heading says:', (await text('.crumb-reference'))?.trim())
-await shot('e12-closed')
+for (let i = 0; i < 60; i++) {
+  await sleep(500)
+  if (/IV_e1/.test((await text('.breadcrumb')) ?? '')) break
+}
+await sleep(4000)
+console.log('heading says:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
+await shot('e12-session-edited')
+
+// Marks on the edited map, from the Manual annotations card: a box drawn inside
+// the turned stretch, and a line typed at a place in the file. Both are kept in
+// the file's coordinates — the card's rows say where — and drawn where the edit
+// puts them: the box where it was drawn, the line mirrored through the turn.
+await fold('Show the Annotations panel')
+const along = await diagonalAt('IV_e1')
+if (along === null) console.log('marks: no readout to place the box by')
+else {
+  await form('Rectangles').locator('button', { hasText: /^draw on map$/ }).click()
+  await sleep(300)
+  await drag(along(1_120_000), along(1_160_000))
+  await page.keyboard.press('Escape')
+  await sleep(300)
+}
+await form('Lines').locator('input.input').first().fill('IV:1,250,000')
+await form('Lines').locator('button', { hasText: /^add$/ }).click()
+await sleep(1200)
+const marks = () => page.evaluate(() => [...document.querySelectorAll('.manual-mark .manual-where')].map((row) => row.textContent))
+console.log('marks kept at:', await marks())
+await shot('e13-marks')
+
+// The Chromosomes table, which lists the edited assembly.
+await page.click('.breadcrumb >> text=Chromosomes')
+await sleep(2500)
+console.log('table names IV_e1:', /IV_e1/.test(await page.evaluate(() => document.body.innerText)))
+await shot('e14-chromosomes')
+await page.goBack()
+await sleep(3000)
 
 // The dark theme.
 await page.emulateMedia({ colorScheme: 'dark' })
 await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
 await openStage()
-await shot('e13-dark')
+await shot('e15-dark')
 await page.click('.modal-panel .btn-close')
-await sleep(400)
+await sleep(800)
 await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
 await page.emulateMedia({ colorScheme: 'light' })
+
+// Reverted: the arrow beside the chip puts the file back, as one more undo.
+await page.click('.crumb-reference-revert')
+for (let i = 0; i < 60; i++) {
+  await sleep(500)
+  if (!/IV_e1/.test((await text('.breadcrumb')) ?? '')) break
+}
+await sleep(3000)
+console.log('after revert:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
+console.log('marks still at:', await marks())
+await shot('e16-reverted')
 
 // The dev features off: no word on the reference, no command.
 await page.evaluate(() => localStorage.removeItem('metacooler-viewer:dev-features'))
 await page.reload()
 await sleep(7000)
 console.log('dev off · heading has the reference:', (await page.$('.crumb-reference')) !== null)
-await shot('e14-dev-off')
+await shot('e17-dev-off')
 
 if (errors.length > 0) console.log('page errors:', errors)
 await browser.close()

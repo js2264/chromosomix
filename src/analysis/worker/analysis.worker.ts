@@ -30,6 +30,7 @@
 
 import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
+import { ViewerError } from '../../errors'
 import { MetaCooler } from '../../metacooler/MetaCooler'
 import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
@@ -123,13 +124,27 @@ async function handleOpen(
   // and no HDF5 at all, and calling the HDF5 road directly reached h5wasm with a
   // `.matrix` and failed inside it — `error - name not defined!` — for every
   // task on a map that was on screen and perfectly fine (`worker/open.ts`).
-  const { mc, source } = await openMap(request.uri, request.source, {
+  const opened = await openMap(request.uri, request.source, {
     report: (done, total, note) => post({ type: 'progress', id: request.id, done, total, note }),
     cancelled: () => cancelled.has(request.id),
     // Carried rather than re-asked: a contact list has no resolution of its own
     // and the reader chose one when the *first* worker opened it (§3.7).
     ...(request.binning === undefined ? {} : { binning: request.binning }),
   })
+  const source = opened.source
+  let mc = opened.mc
+  // Through the edit the reader's map is drawn through (§27.7), before anything
+  // reads it: a task on an edited map measures the edited assembly. Refused by
+  // name where it cannot be, rather than measuring the file as it was under a
+  // view that says otherwise.
+  if (request.edit !== undefined) {
+    const seen = MetaCooler.withLens(mc, request.edit)
+    if (seen.refusal !== null) {
+      mc.close()
+      throw new ViewerError('unsupported', seen.refusal)
+    }
+    mc = seen.map
+  }
   // The cells the reader has ticked, not the file's whole set. A task measures
   // what is on screen, and an scool with two cells selected draws two: opening
   // the pseudo-bulk here would answer a question about four thousand cells with

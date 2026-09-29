@@ -24,6 +24,8 @@
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { devFeature } from '../state/devFeatures'
 import { EDIT_SCOPE, EditStore, readEdit } from '../state/referenceEdit'
+import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
+import { carryRegion } from '../edit/places'
 import { EditStage } from '../edit/EditStage'
 import { ReferenceChip } from '../edit/ReferenceChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
@@ -2421,11 +2423,22 @@ export class Session {
     try {
       // `pairs/import.ts` weights its pass against the rungs so the bar does
       // not stall at 99%; the other two report bytes and then pixels.
+      // Through the edit kept for this file, where there is one to draw (§27.7).
+      const edit = this.editToOpen(uri)
       task = client.cancellable<'open'>(
-        { kind: 'open', uri, source, ...(binning === undefined ? {} : { binning }) },
+        {
+          kind: 'open',
+          uri,
+          source,
+          ...(binning === undefined ? {} : { binning }),
+          ...(edit === undefined ? {} : { edit }),
+        },
         (done, total, note) => screen.report(done, total, note),
       )
       const info = await task.promise
+      this.lens = edit !== undefined && info.edit?.refusal === null ? { edit, assembly: EditedAssembly.of(edit) } : null
+      const refusal = info.edit?.refusal ?? null
+      if (refusal !== null) this.host.notify(`The edit kept for this file is not drawn. ${refusal}`)
       // A new map in the worker is a map as stored (§6.5): whatever it was told
       // to draw the last one to went with it, and the render below tells it
       // again.
@@ -3654,6 +3667,8 @@ export class Session {
       assembly,
       store: held.store,
       client: held.client,
+      // A map read as tracks is read through its edit, as the map is (§27.7).
+      edited: () => this.lens?.assembly ?? null,
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
@@ -5386,12 +5401,79 @@ export class Session {
     const contigs = this.file?.contigs ?? null
     if (key === null || contigs === null) return null
     if (this.editHeld?.key !== key) {
+      // The file's own sequences — which, where the session is drawn through an
+      // edit, are the ones the edit was made on rather than the ones the
+      // reader now answers with (§27.7).
       const pairs = contigPairs(contigs)
-      const store = new EditStore(key, { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) })
+      const original = this.lens?.edit.original ?? { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
+      const store = new EditStore(key, original)
       store.subscribe(() => this.referenceChip?.sync())
       this.editHeld = { key, store }
     }
     return this.editHeld.store
+  }
+
+  /**
+   * The edit the reader's map is drawn through (§27.7), as the reader accepted
+   * it when the file opened; `null` for the file as it is. The edit store may
+   * run ahead of it while the stage is open: the session is redrawn through the
+   * store's when the stage closes ({@link redrawThroughEdit}).
+   */
+  private lens: { edit: ReferenceEdit; assembly: EditedAssembly } | null = null
+
+  /** The edit to open a file through: the one kept for it, where the dev features are on and it has a step. */
+  private editToOpen(uri: string): ReferenceEdit | undefined {
+    if (!devFeature('edit')) return undefined
+    const stored = readEdit(recall<unknown>(this.memoryKey(uri), EDIT_SCOPE))
+    return stored === null || stored.cursor === 0 ? undefined : stored
+  }
+
+  /**
+   * Draw the session through the edit as it now stands, where the stage has
+   * changed it (§27.7): the file opened again through it — as a change of
+   * resolution opens it again — with the view carried to where its place went.
+   */
+  private async redrawThroughEdit(): Promise<void> {
+    const file = this.file
+    const state = this.store.state
+    if (file === null || state === null || !devFeature('edit')) return
+    const next = this.editToOpen(file.uri)
+    const before = this.lens?.assembly ?? null
+    const after = next === undefined ? null : EditedAssembly.of(next)
+    if ((before === null && (after === null || after.isIdentity)) || (before !== null && after !== null && sameSteps(this.lens?.edit, next))) {
+      return
+    }
+    const drawn = after === null || after.isIdentity ? null : after
+    const carried = this.carryAcrossEntries(file.uri)
+    if (carried === undefined) return
+    const move = (region: string | undefined): string | null | undefined =>
+      region === undefined ? undefined : carryRegion(region, before, drawn)
+    const region = move(carried.region)
+    const region2 = move(carried.region2)
+    const focus = move(carried.focus)
+    const lost = region === null || region2 === null
+    const view: ViewState = lost
+      ? { ...carried, view: 'contigs', region: undefined, region2: undefined, focus: undefined, regions: undefined }
+      : {
+          ...carried,
+          ...(region === undefined ? {} : { region }),
+          ...(region2 === undefined ? {} : { region2 }),
+          ...(focus === undefined ? {} : focus === null ? { focus: undefined } : { focus }),
+          // A selection names sequences, and an edit renames them: the table,
+          // where the reader chose them, is where to choose them again.
+          ...(carried.view === 'selection' ? { view: 'contigs' as const, regions: undefined } : {}),
+        }
+    await this.open(file.uri, file.source, view)
+  }
+
+  /**
+   * A framing of the session's own map with the edit it is drawn through
+   * (§27.7), so a result carries the assembly it was computed on and the next
+   * edit makes it stale; a companion's, and the file as it is, unchanged.
+   */
+  private withEditOf(framing: AnalysisFraming | null): AnalysisFraming | null {
+    if (framing === null || this.lens === null || framing.uri !== this.file?.uri) return framing
+    return { ...framing, edit: editFingerprint(this.lens.edit) }
   }
 
   /** Steps applied to the file's reference — from the store, or from the record it will read. */
@@ -5442,6 +5524,7 @@ export class Session {
         this.editStage = null
         this.referenceChip?.sync()
         this.host.sessionChanged(this)
+        void this.redrawThroughEdit()
       },
     })
     this.host.sessionChanged(this)
@@ -5452,6 +5535,7 @@ export class Session {
     await this.contigs().catch(() => null)
     this.editStore()?.revert()
     this.referenceChip?.sync()
+    await this.redrawThroughEdit()
   }
 
   /**
@@ -6826,6 +6910,10 @@ export class Session {
           client: held.client,
           groups: held.groups,
           contigLength: held.contigLength,
+          // The edit the session's own map is drawn through (§27.7), for its
+          // lanes. The lead's alone: a companion is a file of its own, drawn
+          // as it is until companions are drawn through the lens too.
+          ...(map === undefined || map === LEAD_MAP ? { edited: () => this.lens?.assembly ?? null } : {}),
           // The file's own columns (§8.12). Handed to every panel, including a
           // deck's companions: a lane is placed per map like any other, so a
           // MAG's contamination can be drawn beside the replicate it belongs to
@@ -9160,6 +9248,7 @@ export class Session {
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
             ...this.resampleOf(this.reader),
+            ...(this.lens === null ? {} : { edit: this.lens.edit }),
             label: this.mapLabel(file.uri),
           }
         }
@@ -9190,20 +9279,20 @@ export class Session {
         if (starred !== null) {
           const facts = starred.analysisFacts()
           const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
-          return withCircularNames(
-            framed,
-            this.circularStore()?.list() ?? [],
-            this.originStore()?.record() ?? {},
+          return this.withEditOf(
+            withCircularNames(framed, this.circularStore()?.list() ?? [], this.originStore()?.record() ?? {}),
           )
         }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
-          : withCircularNames(
-              panel.analysisFraming(file.uri),
-              this.circularStore()?.list() ?? [],
-              this.originStore()?.record() ?? {},
+          : this.withEditOf(
+              withCircularNames(
+                panel.analysisFraming(file.uri),
+                this.circularStore()?.list() ?? [],
+                this.originStore()?.record() ?? {},
+              ),
             )
       },
       block: () => {
@@ -9376,6 +9465,7 @@ export class Session {
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
         ...this.resampleOf(this.reader),
+        ...(this.lens === null ? {} : { edit: this.lens.edit }),
         // What the reader calls it (§16.10), which is what every tab, legend,
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.
@@ -9496,10 +9586,12 @@ export class Session {
     // The framing a task is **run** on, and so the one that has to carry the
     // declarations: the drawer's header was given them and the run was not, so
     // a circle ticked on the table was still measured as a line (§8.15).
-    const framing = withCircularNames(
-      panel === undefined || panel === null ? null : panel.analysisFraming(uri),
-      declared.circular,
-      declared.origins,
+    const framing = this.withEditOf(
+      withCircularNames(
+        panel === undefined || panel === null ? null : panel.analysisFraming(uri),
+        declared.circular,
+        declared.origins,
+      ),
     )
     const block = panel === undefined || panel === null ? null : panel.analysisBlock()
     return buildAnalysisContext({
@@ -10231,4 +10323,12 @@ function levelChoices(
     return { options: refuse(pair('chromosome')), current: matrixLevel(state) }
   }
   return null
+}
+
+/** Whether two edits apply the same steps — the same assembly, whatever was undone after them. */
+function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b
+  if (a.cursor !== b.cursor) return false
+  return JSON.stringify(a.history.slice(0, a.cursor).map((entry) => entry.step)) ===
+    JSON.stringify(b.history.slice(0, b.cursor).map((entry) => entry.step))
 }
