@@ -48,6 +48,7 @@ function scanCost(note: string): CostEstimate {
 
 export const MAG_QC_TASK: AnalysisTask = {
   id: 'magqc',
+  dev: 'metacool',
   title: 'MAG contact QC',
   blurb: 'Per genome: how much contact it has, and how much of it stays inside.',
   group: 'metagenome',
@@ -74,6 +75,7 @@ export const MAG_QC_TASK: AnalysisTask = {
 
 export const MAG_NETWORK_TASK: AnalysisTask = {
   id: 'magnetwork',
+  dev: 'metacool',
   title: 'Inter-MAG network',
   blurb: 'Which MAGs touch which, as a ranked edge list.',
   group: 'metagenome',
@@ -128,6 +130,7 @@ export const MAG_NETWORK_TASK: AnalysisTask = {
 
 export const MAG_PURITY_TASK: AnalysisTask = {
   id: 'magpurity',
+  dev: 'metacool',
   title: 'MAG purity and contamination',
   blurb: 'Per contig: how much of its contact leaves its MAG, and where it goes.',
   group: 'metagenome',
@@ -166,6 +169,7 @@ export const MAG_PURITY_TASK: AnalysisTask = {
 
 export const MAG_SPLIT_TASK: AnalysisTask = {
   id: 'magsplit',
+  dev: 'metacool',
   title: 'Split-MAG detection',
   blurb: 'MAGs whose own contigs fall into two blocks that barely touch.',
   group: 'metagenome',

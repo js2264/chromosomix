@@ -155,6 +155,6 @@ module.exports = {
     // A `noreply` address rather than a personal one, because this is baked
     // into a public package and cannot be quietly changed afterwards.
     maintainer: 'Jacques Serizay <js2264@users.noreply.github.com>',
-    synopsis: 'Viewer for .metacool multi-genome Hi-C contact maps',
+    synopsis: 'Viewer for Hi-C contact maps, genome tracks and 3D models',
   },
 }

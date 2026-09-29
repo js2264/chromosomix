@@ -122,12 +122,16 @@ export function buildMenu(): Menu {
   template.push({
     label: '&Go',
     submenu: [
-      mirror('Genomes table', 'go-genomes', 'G'),
+      // A static menu cannot follow the page's dev features switch (§29.5), so
+      // its words are the ones true for every page: the file's own landing
+      // table is a metagenome's genomes or an scool's cells, and a step is a
+      // step to the next sequence, whichever kind it is.
+      mirror('Landing table', 'go-genomes', 'G'),
       mirror('Contigs table', 'go-contigs', 'C'),
       mirror('Whole genome', 'go-overview', 'W'),
       { type: 'separator' },
-      mirror('Previous genome or contig', 'go-prev', '['),
-      mirror('Next genome or contig', 'go-next', ']'),
+      mirror('Previous sequence', 'go-prev', '['),
+      mirror('Next sequence', 'go-next', ']'),
     ],
   })
 

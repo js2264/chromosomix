@@ -187,6 +187,12 @@ export interface OpenOptions {
    * this exists to have fixed rather than a defensive flag.
    */
   listingAgreed?: boolean
+  /**
+   * Whether the multi-genome containers are read (§29) — `false` while the
+   * *dev features* switch is off, and absent on the command line, which reads
+   * everything. See `DetectOptions.metacool`.
+   */
+  metacool?: boolean
 }
 
 /** The §7.4 QC statistic: how much of the file binning failed to assign. */
@@ -423,11 +429,16 @@ export class MetaCooler {
     // is worth pre-empting: h5wasm answers a request for the root attributes of
     // a non-HDF5 file with `error - name not defined!`, which is neither the
     // sentence §10 requires nor recognisably about the file the reader dropped.
+    // The containers a refusal may name: the multi-genome one only while it
+    // is read (§29), since a sentence naming a format this page refuses would
+    // be the one place the reader was told it exists.
+    const containers =
+      options.metacool === false ? '.cool, .mcool or .scool' : '.cool, .mcool, .scool or .metacool'
     if (isGzipMagic(source.readBytes(0, 2))) {
       throw new ViewerError(
         'not-hdf5',
         'This file is gzip-compressed. HDF5 is read in place and cannot be decompressed on ' +
-          'the fly, so a .cool, .mcool or .metacool must be decompressed first. A .pairs.gz ' +
+          `the fly, so a ${containers} must be decompressed first. A .pairs.gz ` +
           'is read compressed — but this one carries no `## pairs format` line, so it is not ' +
           'one.',
         {},
@@ -442,8 +453,8 @@ export class MetaCooler {
     if (!hasHdf5Signature(source)) {
       throw new ViewerError(
         'not-hdf5',
-        `${parseUri(uri).path} does not start with the HDF5 signature, so it is not a .cool, ` +
-          '.mcool, .scool or .metacool whatever its name says. A download that stopped ' +
+        `${parseUri(uri).path} does not start with the HDF5 signature, so it is not a ` +
+          `${containers} whatever its name says. A download that stopped ` +
           'short, an HTML page saved under the file’s name, or a text matrix look like this.',
         {},
       )
@@ -453,7 +464,7 @@ export class MetaCooler {
     const handle = await openHdf5(uri, source, parseUri(uri).group)
     try {
       if (options.listingAgreed !== true) assertListingAffordable(handle, source)
-      return MetaCooler.fromHandle(handle)
+      return MetaCooler.fromHandle(handle, options)
     } catch (error) {
       handle.close()
       // h5wasm's own failures are a sentence about nothing — `error - name
@@ -675,13 +686,14 @@ export class MetaCooler {
    *   `bad-format-version`, `bad-ordering`, `variable-bins`), and
    *   MetaCoolerFormatError for a metacool missing `indexes/genome_offset`.
    */
-  static fromHandle(handle: Hdf5Handle): MetaCooler {
+  static fromHandle(handle: Hdf5Handle, options: OpenOptions = {}): MetaCooler {
     // Read **once**. Three enumerations of the root attribute block cost three
     // wasm round trips per fixed-length string attribute, for a set of values
     // that cannot change between them.
     const attrs = handle.attrs()
-    const layout = detectLayout(handle, attrs)
-    assertAcceptable(handle, layout, attrs)
+    const gate = options.metacool === undefined ? {} : { metacool: options.metacool }
+    const layout = detectLayout(handle, attrs, gate)
+    assertAcceptable(handle, layout, attrs, gate)
 
     // A plain cooler — including one resolution of an mcool — is opened as
     // itself: its `/chroms` is the contig table, and there is no genome layer

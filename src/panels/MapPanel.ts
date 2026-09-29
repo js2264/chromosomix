@@ -23,6 +23,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { devFeature } from '../state/devFeatures'
 import { describeTier, type NameContext, type NameMatch } from '../genome/naming'
 import { DECK_DRAG_TYPE, mapStarTitle, type DeckLook } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
@@ -144,7 +145,12 @@ export function planFor(state: ViewState): BlockPlan {
       // is not the same genomes table, it is another file's.
       return {
         kind: 'none',
-        reason: 'this view is of one file — pick a region, a genome or a selection',
+        // A genome is one of the places a second file can show only on a
+        // multi-genome file, a dev feature (§29): the sentence offers what the
+        // reader's page can open.
+        reason: devFeature('metacool')
+          ? 'this view is of one file — pick a region, a genome or a selection'
+          : 'this view is of one file — pick a region or a selection',
       }
   }
 }

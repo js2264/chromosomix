@@ -760,7 +760,19 @@ export type RequestKind = keyof ResultMap
 // ---------------------------------------------------------------------------
 
 export type WorkerRequest =
-  | { id: number; kind: 'open'; uri: string; source: SourceSpec; binning?: PairsBinning }
+  | {
+      id: number
+      kind: 'open'
+      uri: string
+      source: SourceSpec
+      binning?: PairsBinning
+      /**
+       * Whether the multi-genome containers are read — the page's *dev
+       * features* switch (§29), stamped on every open by the client, since a
+       * worker cannot read `localStorage`. Absent reads them.
+       */
+      metacool?: boolean
+    }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
   // progress and its own cancel, and because a reader who cancelled the

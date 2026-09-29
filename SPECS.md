@@ -115,6 +115,11 @@ testing for cooler first would silently downgrade every metacool to a contig-onl
 
 ### 3.2 `.metacool` — the primary case
 
+**A dev feature (§29).** Everything in this section, §3.4, §5.1–§5.3, §7.3 and the metagenome tasks of
+§18.8 is read, drawn and offered only while the *dev features* switch is on; switched off, a
+`.metacool` and an `.mmetacool` are refused as files this viewer does not read, and nothing on screen
+names either.
+
 Accepted when:
 
 - `metacooler-format-version == 1`
@@ -4135,7 +4140,8 @@ in the same view. Concretely:
   (§7.3) still costs a full pixel pass, because summing genome pairs has no index to shortcut
 - the vocabulary follows the file: a cooler's sequences are **chromosomes**, and the genomes table is
   shown greyed out with the reason rather than hidden, so "does this viewer have one" is answered
-  rather than raised
+  rather than raised — while the multi-genome format is a dev feature that is **on** (§29). Off, the
+  row is absent: the question is not one that page raises, and a greyed row would raise it
 - whole-genome and whole-chromosome selections are size-guarded. Two guards, in order:
   `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a browser-side *estimate against a
   budget* — the dense values at 4 B per cell, the raster at 16 B per pooled pixel (a constant
@@ -9884,6 +9890,12 @@ in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the 
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
 
+**One toggle is drawn as a slider** — *dev features* in *About* (§29.1), a track and a knob, because a
+switch that reloads the window should look like the switch it is rather than like one more button in
+a dialog of facts. It is still a `button` with `aria-pressed`, lit by the same rule as every other
+toggle; the knob is `currentColor`, so *lit* is the knob in the accent, moved across. The slider is how
+it is drawn, never a second way of saying it is on.
+
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
@@ -10414,14 +10426,24 @@ and says so; it is not an alignment, and it writes none.
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
 see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
+**Built**: the switch, the registry (`state/devFeatures.ts`), and the `metacool` gate below; `edit` and
+`dotplot` are gated from their first line, as they are built.
 
 ### 29.1 One switch
 
 In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
 kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
 dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
-on or off takes effect at once: the window rebuilds its columns and its landing page, and the open tabs
-are kept.
+on or off **reloads the window**, which keeps its tabs: every surface is then built from scratch with
+the new answer, so no card, task list, worker or cached command list can disagree with it — which a
+live re-render of every surface could not promise. The answer is read once per page for the same
+reason. The price is the reload's: a file dropped without a handle comes back as a name to drop again,
+as it does after any reload (§20). A worker has no `localStorage`, so the answer is stamped on every
+open the page sends it — once, in the client, where the credentials are.
+
+**The registry is one file**, each entry a name and the reason it is not public yet, and the names are
+a type: making a feature public is deleting its line, and the compiler then names every gate it left
+behind, rather than each one quietly always opening.
 
 ### 29.2 Off is absent
 
@@ -10434,15 +10456,19 @@ on the landing page, no store row, no format in a file picker's list, no clause 
 
 ### 29.3 What is dev today
 
-The registry is one file, each entry a name and a line of why; making a feature public is deleting its
-line.
+What is dev, and what switched off means for each:
 
 - **`metacool`** — both containers (§3.2, §3.4), the genomes table (§5.1), the genome and genome-pair
   views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the mock
   community example, and every sentence that names any of them. **Switched off, a `.metacool` or an
   `.mmetacool` is refused like any file the app does not read**, in that refusal's words. A `.metacool`
   also passes cooler's own test (§3.1), so this is a refusal the detection makes, not a branch it skips —
-  or it would open as a cooler of twenty thousand contigs.
+  or it would open as a cooler of twenty thousand contigs. The refusals a *plain* file can meet stop
+  naming it too: an unknown HDF5 file, a gzip, a file with no HDF5 signature and a variable-bin cooler
+  each say what they said, less the multi-genome container and the command that makes one. The lab's
+  store drops the mock community's figure and its two files; the rest of what the switch hides — the
+  genomes table, the genome views, the metagenome tasks and their options — can only be reached with a
+  multi-genome file open, and so goes with it.
 - **`edit`** — the stage, its task, its keys, its chip in the heading, and every surface of the lens
   (§27).
 - **`dotplot`** — the task, the view and its links (§28).

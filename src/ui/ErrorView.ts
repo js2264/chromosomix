@@ -26,6 +26,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import { devFeature } from '../state/devFeatures'
 import { button, el } from './dom'
 import { GOOGLE_HOSTS, GOOGLE_SIGN_IN_AVAILABLE, googleState, signIn } from '../auth/google'
 
@@ -243,6 +244,86 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
 }
 
 /**
+ * The same guidance, as a page with the multi-genome format switched off reads
+ * it (§29).
+ *
+ * Only for the refusals a *plain* file can meet — an unknown HDF5, a variable-bin
+ * cooler, a label that names no sequence — and only where the words above name
+ * the format, its genomes or its command line: a refusal is the last place a
+ * reader should learn of a format this page will not open. The codes only a
+ * multi-genome file raises (`mmetacool-root`, `bad-ordering`, `unbinned-…`,
+ * `genome-coordinate-suffix`) cannot be reached with it off, and keep theirs.
+ */
+const PLAIN_GUIDANCE: Partial<Record<ErrorCode, Guidance>> = {
+  'not-hdf5': {
+    title: 'This is not an HDF5 file',
+    advice: [
+      'The first bytes are not an HDF5 signature, so it is not a cooler, an mcool or an scool.',
+      'If it is compressed (.gz, .zip), decompress it first — HDF5 is read in place and cannot be decompressed on the fly.',
+    ],
+  },
+  'not-a-cooler': {
+    title: 'HDF5, but not a contact map',
+    advice: [
+      'The file opened as HDF5 but is not a cooler, an mcool or an scool.',
+      'Check you picked the right file; h5ls <file> lists what is actually there.',
+    ],
+  },
+  'bad-format-version': {
+    title: 'Unsupported format version',
+    advice: [
+      'This file declares a format version this viewer does not implement.',
+      'Re-create the file with a current release of the tool that wrote it, or use a viewer build that matches the file.',
+    ],
+  },
+  'variable-bins': {
+    title: 'Variable-bin file',
+    advice: [
+      'This viewer supports fixed-bin files only.',
+      'Bin the contacts at a fixed size — cooler cload pairs does, from the pairs the file was made from — and open that.',
+    ],
+  },
+  'unknown-label': {
+    title: 'Unknown sequence',
+    advice: ['The label before the colon matched no sequence in this file.'],
+  },
+  unsupported: {
+    title: 'Not available in the viewer',
+    advice: [
+      'This operation needs a table the browser reader deliberately never reads.',
+      'Run the equivalent command on a local copy.',
+    ],
+  },
+  'bigwig-no-overlap': {
+    title: 'This bigWig names different sequences',
+    advice: [
+      'bigWig files are keyed on sequence names, and this one shares none with the map.',
+      'Check the track was made against the same assembly as this map.',
+    ],
+  },
+  'remote-too-large': {
+    title: 'Too much to download for this operation',
+    advice: [
+      'This action reads every pixel, which over the network means fetching the whole file.',
+      'Run it on a local copy.',
+    ],
+  },
+  'bad-uri': {
+    title: 'That URI does not parse',
+    advice: ['Expected file, or file::group — for example file.mcool::resolutions/1000.'],
+  },
+  format: {
+    title: 'This file does not match the format',
+    advice: ['The reader stopped at the first thing the file does not do as its format says; the message above names it.'],
+  },
+}
+
+/** The guidance for a code, as this page reads it (§29). */
+function guidanceFor(code: ErrorCode): Guidance {
+  return devFeature('metacool') ? GUIDANCE[code] : (PLAIN_GUIDANCE[code] ?? GUIDANCE[code])
+}
+
+/**
  * A total the *contacts* box asked for that this map cannot be drawn to (§6.5).
  *
  * `unsupported` by code, and not by advice: `metacooler-run --contacts` refuses
@@ -275,7 +356,7 @@ export class ErrorView {
           }
         : resample
           ? RESAMPLE_GUIDANCE
-          : GUIDANCE[viewerError.code]
+          : guidanceFor(viewerError.code)
 
     const entries = extractEntries(viewerError)
     const actions: HTMLElement[] = []

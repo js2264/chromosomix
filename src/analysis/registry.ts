@@ -23,6 +23,7 @@
  */
 
 import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
+import { devFeature } from '../state/devFeatures';
 import { CELL_QC_TASK } from "./tasks/cellqc";
 import { HICREP_TASK } from "./tasks/hicrep";
 import { CIS_TRANS_TASK } from "./tasks/cistrans";
@@ -149,12 +150,22 @@ export function taskById(id: string): AnalysisTask | undefined {
  * reader the feature does not exist. See {@link TaskAvailability}.
  */
 export function tasksFor(context: AnalysisContext): AnalysisTask[] {
-  return TASKS.filter((task) => task.availability(context).state !== 'absent');
+  return TASKS.filter((task) => shown(task) && task.availability(context).state !== 'absent');
 }
 
 /** The tasks that could be run right now — what the panel counts as usable. */
 export function runnableTasks(context: AnalysisContext): AnalysisTask[] {
-  return TASKS.filter((task) => task.availability(context).state === 'ready');
+  return TASKS.filter((task) => shown(task) && task.availability(context).state === 'ready');
+}
+
+/**
+ * Whether a task is offered at all: always, unless it belongs to a dev feature
+ * that is off (§29) — which is *absent*, the strongest answer, since a greyed
+ * row with *load a metagenome* on it is exactly the sentence the switch exists
+ * to keep off the screen.
+ */
+function shown(task: AnalysisTask): boolean {
+  return task.dev === undefined || devFeature(task.dev);
 }
 
 /**

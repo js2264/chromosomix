@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Dev features: a switch in *About* that shows what is still being built (§29).** A feature can
+  now live on `main` — specified, tested and deployed like any other — and be **invisible** to a reader
+  until they turn *dev features* on, under the version in *About*: no row, task, command, example or
+  clause in a sentence gives it away, and the switch is the only trace. It is a preference kept in this
+  browser, off by default, never on in an embed, and turning it reloads the window, keeping its tabs,
+  so that nothing built under one answer survives into the other. The registry is one file
+  (`state/devFeatures.ts`) whose names are a type, so making a feature public is deleting its line and
+  letting the compiler name the gates it leaves behind. The command line has no switch and shows
+  everything. The slider it is drawn as is the one toggle in the app with a knob, lit by the same rule
+  as every other (§26.3).
+
 - **A `.pairs` for P(s)'s four orientations is dropped on the form, or chosen through it (§18.8).**
   Under *four orientations* the drawer asked for the file by address alone, so a reader with the
   `.pairs` on their disk had to host it somewhere first — or drop it on the app, which *opens* it, as
@@ -564,6 +575,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **`.metacool` and `.mmetacool` are a dev feature (§3.2, §29.3).** With the switch off, both are
+  refused as files this viewer does not read — in the sentence any unknown HDF5 file gets, which names
+  neither — rather than a `.metacool` opening as the cooler of twenty thousand contigs it also is. The
+  refusals a plain file can meet (an unknown HDF5, a gzip, no HDF5 signature, variable bins) stop
+  naming the format and its commands; *About* describes the viewer without it; the lab's store drops
+  the mock community's figure and its two files; and the genomes table, the genome views and the
+  metagenome tasks go with it, since only such a file reaches them. The page's description and the
+  install prompt's no longer name it. The name stays (meta)cooler.
+
+- **A link that names a genome on a file with none lands on the file's chromosomes (§9).** `view=genome`
+  and `view=pair` on a cooler, a `.hic` or a `.pairs` used to end on a refusal about genomes; a region or
+  a selection carrying a genome name now opens as the same view without it. And a locus that names no
+  sequence of such a file is refused as *not a sequence of this file*, listing its sequences, where it
+  listed an empty `Genomes: []` first — `ops/range.py`'s sentence is kept word for word for the files
+  that have genomes, which are the only ones it was written for. The desktop build's *Go* menu says
+  *Landing table* and *Previous / Next sequence*, words true on every file.
 
 - **A line on a turned map is the V its place makes (§17.4).** A line from the Manual annotations
   card was drawn straight up a turned map, as it is on the square, and a column of a turned picture is

@@ -228,9 +228,20 @@ function scoolCells(
  *
  * @throws ViewerError `not-a-cooler` when nothing matches.
  */
-export function detectLayout(h: Hdf5Handle, rootAttrs?: Record<string, AttrValue>): Layout {
+export function detectLayout(
+  h: Hdf5Handle,
+  rootAttrs?: Record<string, AttrValue>,
+  options: DetectOptions = {},
+): Layout {
   const attrs = rootAttrs ?? h.attrs()
   const format = strAttr(attrs, 'format')
+
+  // Switched off (§29), a multi-genome container is a file this viewer does
+  // not read — and refused *here*, as the first question, because a
+  // `.metacool` also passes the cooler test below and would otherwise open as
+  // a cooler of twenty thousand contigs. The sentence is the one any unknown
+  // HDF5 file gets, and names neither container.
+  if (options.metacool === false && isMultiGenome(h, attrs, format)) refuseUnknown(h)
 
   if (format === MMETACOOLER_FORMAT && h.has('entries')) {
     return { kind: 'mmetacool', group: h.group, entries: listEntryNames(h) }
@@ -273,6 +284,7 @@ export function detectLayout(h: Hdf5Handle, rootAttrs?: Record<string, AttrValue
     return { kind: 'cool', group: h.group }
   }
 
+  if (options.metacool === false) refuseUnknown(h)
   throw new ViewerError(
     'not-a-cooler',
     `${h.uri} is HDF5 but not a cooler or metacool file: its 'format' attribute is ` +
@@ -280,6 +292,44 @@ export function detectLayout(h: Hdf5Handle, rootAttrs?: Record<string, AttrValue
       `Top-level keys: ${pyList(h.keys('').slice(0, 20))}. ` +
       `Convert a plain cooler with \`metacooler create cool\`.`,
     { format, group: h.group },
+  )
+}
+
+/** Anything {@link detectLayout} and {@link assertAcceptable} are told besides the file. */
+export interface DetectOptions {
+  /**
+   * Whether the multi-genome containers are read (§29).
+   *
+   * `false` while the *dev features* switch is off: a `.metacool` and an
+   * `.mmetacool` are refused as files this viewer does not read, and no
+   * refusal a plain file can meet names either. Absent reads them, which is
+   * what the command line — which has no switch — wants.
+   */
+  metacool?: boolean
+}
+
+/** Either multi-genome container, asked of its root attributes alone. */
+function isMultiGenome(h: Hdf5Handle, attrs: Record<string, AttrValue>, format: string | null): boolean {
+  return (
+    (format === MMETACOOLER_FORMAT && h.has('entries')) ||
+    strAttr(attrs, 'metacooler-format') === METACOOLER_FORMAT
+  )
+}
+
+/**
+ * The refusal an HDF5 file this viewer does not read gets while the
+ * multi-genome containers are a dev feature that is off (§29).
+ *
+ * The same code as any other file that is not a cooler, so the view, the
+ * console and a test all treat it as one; words that name no container this
+ * page cannot open, and no command that would make one.
+ */
+function refuseUnknown(h: Hdf5Handle): never {
+  throw new ViewerError(
+    'not-a-cooler',
+    `${h.uri} is an HDF5 file, but not a contact map this viewer reads: it is not a cooler, ` +
+      `an .mcool or an .scool. Top-level keys: ${pyList(h.keys('').slice(0, 20))}.`,
+    { group: h.group },
   )
 }
 
@@ -416,6 +466,7 @@ export function assertAcceptable(
   h: Hdf5Handle,
   layout: Layout,
   rootAttrs?: Record<string, AttrValue>,
+  options: DetectOptions = {},
 ): void {
   if (layout.kind === 'mmetacool') refuseMMetacoolRoot(h)
   // Before the bin-geometry gate, not after: an mcool root carries only
@@ -477,10 +528,17 @@ export function assertAcceptable(
   if (binType === 'variable' || binSize === null || binSize <= 0) {
     throw new ViewerError(
       'variable-bins',
-      `The viewer supports fixed-bin files only; this file's bin-type is ` +
-        `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}. Fragment-level and ` +
-        `contig-level metacools are variable-bin by construction. Produce a fixed-bin file ` +
-        `with \`metacooler binnify --binsize <bp>\` and open that.`,
+      options.metacool === false
+        ? // A plain cooler meets this refusal too, so switched off (§29) it
+          // names the fix a cooler has rather than the metacool one.
+          `The viewer supports fixed-bin files only; this file's bin-type is ` +
+          `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}. Bin its contacts at a ` +
+          `fixed size — \`cooler cload pairs\` does, from the pairs it was made from — and ` +
+          `open that.`
+        : `The viewer supports fixed-bin files only; this file's bin-type is ` +
+          `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}. Fragment-level and ` +
+          `contig-level metacools are variable-bin by construction. Produce a fixed-bin file ` +
+          `with \`metacooler binnify --binsize <bp>\` and open that.`,
       { 'bin-type': binType, 'bin-size': binSize },
     )
   }

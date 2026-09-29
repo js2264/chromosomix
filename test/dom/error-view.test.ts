@@ -28,6 +28,7 @@ vi.mock('@/config/siteDefaults', () => ({
 }))
 
 import { SITE_DEFAULTS } from '@/config/siteDefaults'
+import { resetDevFeatures } from '@/state/devFeatures'
 
 /** The site's registrations, as this file sets them: the build's values, mocked mutable. */
 const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
@@ -40,6 +41,9 @@ beforeEach(() => {
   window.localStorage.clear()
   setTokenClientFactory(null)
   signOut()
+  // The refusals below are written for a page that reads the multi-genome
+  // format; the ones a page with it switched off gives are the last block.
+  resetDevFeatures(true)
 })
 
 afterEach(() => {
@@ -47,6 +51,7 @@ afterEach(() => {
   setTokenClientFactory(null)
   signOut()
   window.localStorage.clear()
+  resetDevFeatures()
 })
 
 interface Built {
@@ -409,5 +414,34 @@ describe('a Google host saying “not you”', () => {
 
     expect(built.view.el.querySelector('.inline-error')?.textContent).toContain('access_denied')
     expect(built.signedIn).toBe(0)
+  })
+})
+
+describe('with the multi-genome format switched off (§29)', () => {
+  beforeEach(() => resetDevFeatures(false))
+
+  /** Everything the view says, bar the reader's own sentence, which names the file. */
+  const said = (view: ErrorView): string =>
+    [title(view), ...textsOf(view.el, '.advice li')].join(' ')
+
+  it.each([
+    ['not-hdf5', 'This is not an HDF5 file'],
+    ['not-a-cooler', 'HDF5, but not a contact map'],
+    ['variable-bins', 'Variable-bin file'],
+    ['unknown-label', 'Unknown sequence'],
+    ['unsupported', 'Not available in the viewer'],
+    ['bigwig-no-overlap', 'This bigWig names different sequences'],
+    ['remote-too-large', 'Too much to download for this operation'],
+    ['bad-uri', 'That URI does not parse'],
+    ['format', 'This file does not match the format'],
+  ] as const)('%s names neither the format nor its genomes', (code, heading) => {
+    const { view } = build(new ViewerError(code, 'the reader’s sentence'))
+    expect(title(view)).toBe(heading)
+    expect(said(view)).not.toMatch(/\.?m?metacool|metacooler|genome|MAG/i)
+  })
+
+  it('still names the fix a plain file has', () => {
+    const { view } = build(new ViewerError('variable-bins', 'the reader’s sentence'))
+    expect(textsOf(view.el, '.advice li').join(' ')).toContain('cooler cload pairs')
   })
 })

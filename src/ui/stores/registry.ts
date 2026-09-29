@@ -38,6 +38,7 @@
  */
 
 import { demosStore } from '../examples'
+import { devFeature } from '../../state/devFeatures'
 import { DBZ_MARK_IMAGE } from './dbz-mark.generated'
 import { RSG_MARK_IMAGE } from './rsg-mark.generated'
 import { STORE_LOGOS } from './logos.generated'
@@ -304,7 +305,12 @@ export function builtinStores(): StoreFront[] {
     {
       id: 'rsg',
       label: 'RSG lab data',
-      blurb: 'Composed figures over the lab’s published yeast and metagenome data, one click each.',
+      // The metagenome's figure is a dev feature (§29), so the blurb names it
+      // only while the switch is on: it is the drawer's header and the tile's
+      // tooltip, the first sentence about the store a reader sees.
+      blurb: devFeature('metacool')
+        ? 'Composed figures over the lab’s published yeast and metagenome data, one click each.'
+        : 'Composed figures over the lab’s published yeast data, one click each.',
       tagline: 'The lab’s published figures, one click each.',
       kind: 'gallery',
       mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },

@@ -132,6 +132,13 @@ interface Session {
    * resampled map must not tell.
    */
   resample: ResampleSpec | null
+  /**
+   * The page's answer about the multi-genome containers (§29), as the open
+   * that made this session carried it, so a sibling rung is opened under the
+   * same one. A rung of a file that passed is a rung of the same file; this is
+   * the second lock on a door the first already shut.
+   */
+  metacool?: boolean
 }
 
 /**
@@ -204,7 +211,11 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
   const { path } = parseUri(active.mc.uri)
   let opened: MetaCooler
   try {
-    opened = await MetaCooler.open(`${path}::${group}/${rung}`, active.source)
+    opened = await MetaCooler.open(
+      `${path}::${group}/${rung}`,
+      active.source,
+      active.metacool === undefined ? {} : { metacool: active.metacool },
+    )
   } catch {
     // A rung that will not open is not a reason to fail the read: the open map
     // answers the same question at a different resolution.
@@ -439,7 +450,13 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // it is *imported*, at a resolution the file does not carry — so that one is
   // reached through the refusal the mount raises, below.
   const say = reporter(request.id)
-  const hooks = { report: say, cancelled: () => cancelled.has(request.id) }
+  const hooks = {
+    report: say,
+    cancelled: () => cancelled.has(request.id),
+    // The page's dev features switch (§29), carried on each open because a
+    // worker has no `localStorage` of its own to read it from.
+    ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
+  }
   let mc: MetaCooler
   let source: ByteSource
   let pairs: PairsImport | null = reusable?.pairs ?? null
@@ -487,6 +504,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     recent: [],
     pairs,
     resample: null,
+    ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
   }
 
   return {

@@ -2,7 +2,7 @@
   "name": "metacooler-viewer",
   "version": "0.13.0",
   "type": "module",
-  "description": "Browser-based viewer for .metacool multi-genome Hi-C contact maps. No backend, no preprocessing.",
+  "description": "Browser-based viewer for Hi-C contact maps, genome tracks and 3D models. No backend, no preprocessing.",
   "keywords": [
     "hi-c",
     "metagenomics",

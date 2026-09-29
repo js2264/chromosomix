@@ -59,6 +59,7 @@ import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
 import { isMapRef, parseMaps } from '../../src/panels/deck'
 import { parseUri } from '../../src/uri'
+import { resetDevFeatures } from '../../src/state/devFeatures'
 
 const DIR = decodeURIComponent(new URL('../../demo/', import.meta.url).pathname)
 
@@ -392,16 +393,40 @@ describe('the lab’s store', () => {
     ])
   })
 
-  it('offers every published workspace as a figure, and every data file as a row', () => {
-    const workspaces = demosStore().entries.filter((entry) => entry.kind === 'workspace')
-    expect(workspaces).toHaveLength(DEMO_FILES.length)
-    for (const entry of workspaces) {
-      expect(entry.uri, `${entry.label} is a workspace row that does not name a .json`).toMatch(
-        /\.metacooler\.json$/,
-      )
+  it('offers every published workspace as a figure, and every data file as a row, with dev features on', () => {
+    resetDevFeatures(true)
+    try {
+      const workspaces = demosStore().entries.filter((entry) => entry.kind === 'workspace')
+      expect(workspaces).toHaveLength(DEMO_FILES.length)
+      for (const entry of workspaces) {
+        expect(entry.uri, `${entry.label} is a workspace row that does not name a .json`).toMatch(
+          /\.metacooler\.json$/,
+        )
+      }
+      const files = demosStore().entries.filter((entry) => entry.kind !== 'workspace')
+      expect(files).toHaveLength(DEMO_DATA_FILES.length)
+    } finally {
+      resetDevFeatures()
     }
-    const files = demosStore().entries.filter((entry) => entry.kind !== 'workspace')
-    expect(files).toHaveLength(DEMO_DATA_FILES.length)
+  })
+
+  it('lists nothing of the multi-genome format while dev features are off (§29)', () => {
+    resetDevFeatures(false)
+    try {
+      const entries = demosStore().entries
+      for (const entry of entries) {
+        expect(entry.uri, `${entry.label} is a dev feature's row`).not.toMatch(/metacool$|mock-community/)
+        // `.metacooler.json` is the app's own workspace file, named after the
+        // app, and stays; the containers and their genomes are what go.
+        expect(JSON.stringify(entry), `${entry.label} names the multi-genome format`).not.toMatch(
+          /\.m?metacool(?!er)|\bMAGs?\b/,
+        )
+      }
+      // Everything else is still offered.
+      expect(entries.length).toBeGreaterThan(0)
+    } finally {
+      resetDevFeatures()
+    }
   })
 
   /**

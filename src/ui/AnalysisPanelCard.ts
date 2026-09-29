@@ -24,6 +24,7 @@
  */
 
 import { TASK_GROUP_LABELS, tasksFor } from '../analysis/registry'
+import { devFeature } from '../state/devFeatures'
 import type { AnalysisRunner, JobState } from '../analysis/runner'
 import type { AnalysisContext, AnalysisTask, TaskGroup } from '../analysis/types'
 import { el, fmt } from './dom'
@@ -289,8 +290,12 @@ export class AnalysisPanelCard {
           class: 'analysis-empty',
           text:
             'This file offers no analyses. A task that could never mean anything here is absent ' +
-            'rather than greyed — a metagenome task on a plain cooler, say. Everything that is ' +
-            'one file away is listed, waiting, with a line saying what to load.',
+            // The example is a dev feature's (§29), so it is given only where
+            // the reader can see the thing it is an example of.
+            (devFeature('metacool')
+              ? 'rather than greyed — a metagenome task on a plain cooler, say. '
+              : 'rather than greyed. ') +
+            'Everything that is one file away is listed, waiting, with a line saying what to load.',
         }),
       )
       return

@@ -33,6 +33,7 @@
  */
 
 import type { ParsedRange } from '../types'
+import { devFeature } from '../state/devFeatures'
 import type { MatrixResult } from '../worker/protocol'
 import { parseRegion } from '../annotations/bookmarks'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
@@ -402,7 +403,9 @@ export class RegionView {
       // the app names a sequence.
       placeholder: locusPlaceholder({
         first: props.region.includes(':') ? props.region.split(':')[0] : props.noun,
-        accepts: { sequence: true, genome: true, gene: store !== undefined },
+        // A genome name is something only a multi-genome file answers — a dev
+        // feature (§29) — so a page with it off does not offer one.
+        accepts: { sequence: true, genome: devFeature('metacool'), gene: store !== undefined },
       }),
       title:
         store === undefined

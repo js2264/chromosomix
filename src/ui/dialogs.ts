@@ -13,6 +13,7 @@ import { versionPicker } from './VersionPicker'
 import { el } from './dom'
 import { groupRank, isMac, keyLabel, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
+import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
 
 /**
  * The modifier a gesture actually wants, on the machine reading the dialog.
@@ -221,11 +222,19 @@ export function openAbout(
         // page's drop target, where it was a paragraph that cost the page its
         // fold (`ui/LoadBox.ts`); said here it is a clause in the sentence that
         // was already naming what opens.
+        // The first thing the dialog says is what the viewer opens, so it is
+        // the first sentence a dev feature (§29) must stay out of: switched
+        // off, `.metacool` is not something this viewer reads, and a sentence
+        // selling it would be the one place the reader was told otherwise.
         el('p', {
           text:
-            'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files they ' +
-            'extend, and for the tracks, genomes and 3D models beside them — with or without a ' +
-            'map. It runs entirely in this page: there is no backend, no upload and no ' +
+            (devFeature('metacool')
+              ? 'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files ' +
+                'they extend, and for the tracks, genomes and 3D models beside them — with or ' +
+                'without a map. '
+              : 'A viewer for Hi-C contact maps — cooler, .hic, .pairs and HiC-Pro — and for the ' +
+                'tracks, genomes and 3D models beside them, with or without a map. ') +
+            'It runs entirely in this page: there is no backend, no upload and no ' +
             'preprocessing step.',
         }),
         // Same substitution as `FilePicker.ts`, and for the same reason: the
@@ -253,6 +262,11 @@ export function openAbout(
         // on the desktop target, where an installer is versioned by being an
         // installer and there is no site to hold the other builds.
         versionPicker(),
+        // The one trace a dev feature leaves anywhere a reader looks (§29), and
+        // the only way to them: under the version, because a developer who
+        // wants the unfinished half of a build asks for it where they ask
+        // which build this is.
+        devSwitch(),
         // The runtime, read from `process.versions` at preload time rather than
         // written down anywhere: Electron's Chromium and Node move within a
         // major, and a number pinned in the repository would be wrong within a
@@ -282,4 +296,37 @@ export function openAbout(
           : []),
       ),
   })
+}
+
+/**
+ * The *dev features* switch (§29.1): a slider, lit when on, and one sentence.
+ *
+ * A `button` with `aria-pressed` rather than a checkbox, so that the one rule
+ * that lights every toggle in the application lights this one too (§26.3) —
+ * the slider is how it is drawn, not a second way of saying it is on. Pressing
+ * it rebuilds the window, which is why the sentence says so: a switch whose
+ * press reloads the page without warning reads as a crash.
+ */
+function devSwitch(): HTMLElement {
+  const on = devFeaturesOn()
+  const toggle = el(
+    'button',
+    {
+      class: 'btn btn-switch',
+      type: 'button',
+      title: on ? 'Turn dev features off' : 'Turn dev features on',
+      attrs: { 'aria-pressed': String(on), 'aria-label': 'dev features' },
+      on: { click: () => setDevFeatures(!on) },
+    },
+    el('span', { class: 'btn-switch-knob', attrs: { 'aria-hidden': 'true' } }),
+  )
+  return el(
+    'div',
+    { class: 'about-dev' },
+    el('label', { class: 'about-dev-row' }, toggle, el('span', { text: 'dev features' })),
+    el('p', {
+      class: 'about-dev-hint',
+      text: 'Shows what is still being built, and reloads the window to do it, keeping its tabs.',
+    }),
+  )
 }

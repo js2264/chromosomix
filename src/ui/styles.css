@@ -2183,6 +2183,7 @@ p {
    button says the opposite of what it is. */
 .btn-toggle[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-pressed='true']:not(:disabled),
+.btn-switch[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-expanded='true']:not(:disabled),
 .ann-flip.is-on,
 .structure-select.is-on,
@@ -5359,6 +5360,79 @@ canvas.is-frozen {
   border-top: 1px solid var(--border);
   padding-top: 0.6rem;
   user-select: text;
+}
+
+/* The dev features switch (§29.1), under the version picker and set off from
+   it by a rule: it is the one control in a dialog of facts, and the one trace a
+   dev feature leaves anywhere a reader looks. */
+.about-dev {
+  border-top: 1px solid var(--border);
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+
+.about-dev-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.about-dev-hint {
+  margin: 0.3rem 0 0;
+  font-size: var(--step--1);
+  color: var(--text-faint);
+}
+
+/* A slider: the one toggle in the application drawn as a track and a knob.
+
+   It is lit by the rule that lights every toggle (§26.3) — border, fill and
+   colour, from `aria-pressed` — and the knob is `currentColor`, so on is the
+   knob in the accent, moved across. The slider is how it is drawn, never a
+   second way of saying it is on. */
+.btn-switch {
+  position: relative;
+  flex: none;
+  width: 2.2rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-faint);
+}
+
+.btn-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
+  transition: left 120ms ease;
+}
+
+.btn-switch[aria-pressed='true'] .btn-switch-knob {
+  left: calc(100% - 1rem);
+}
+
+/* Pointed at while off, the knob darkens rather than taking the accent: an
+   accent knob on the left read as half on, and the accent means *on* here and
+   nothing else (§26.5). */
+.btn-switch:hover:not(:disabled):not([aria-pressed='true']) {
+  border-color: var(--text-dim);
+  background: var(--bg-muted);
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-switch-knob {
+    transition: none;
+  }
 }
 
 /* The version picker, directly under that stamp and deliberately continuous

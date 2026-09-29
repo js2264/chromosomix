@@ -25,6 +25,7 @@
  */
 
 import type { GroupMode } from '../annotations/groups'
+import type { DevFeature } from '../state/devFeatures'
 import type {
   AnnotationEntry,
   AnnotationKind,
@@ -1397,5 +1398,11 @@ export interface AnalysisTask {
   outputs: ReadonlyArray<TaskOutput['kind']>
   /** Ids of tasks whose results are inputs to this one (§18.2's composites). */
   requires?: readonly string[]
+  /**
+   * The dev feature this task belongs to (§29), if it is one: absent from the
+   * Analysis panel — not greyed, not waiting — while the switch is off. The
+   * command line runs it regardless, having no switch.
+   */
+  dev?: DevFeature
   estimate(context: AnalysisContext, params: Params): CostEstimate
 }

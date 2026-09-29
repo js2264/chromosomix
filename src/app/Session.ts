@@ -22,6 +22,7 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
+import { devFeature } from '../state/devFeatures'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -1659,22 +1660,29 @@ export class Session {
         enabled: this.current?.panel?.canCentreOnDiagonal === true,
         run: () => this.current?.panel?.centreOnDiagonal(),
       },
-      {
-        // One command and one key for the file's own landing table, whichever
-        // of the two it is: a metacool's genomes, or an scool's cells. No file
-        // has both, so a second entry would be a second key that is disabled on
-        // every file the first one works on.
-        id: 'go-genomes',
-        group: 'Go',
-        title: isScool ? 'Cells table' : 'Genomes table',
-        keys: KEYS.genomes,
-        enabled: file !== null && (isMetacool || isScool),
-        run: () => {
-          if (state !== null) {
-            this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
-          }
-        },
-      },
+      // One command and one key for the file's own landing table, whichever
+      // of the two it is: a metacool's genomes, or an scool's cells. No file
+      // has both, so a second entry would be a second key that is disabled on
+      // every file the first one works on. While the multi-genome format is a
+      // dev feature that is off (§29), it is the Cells table or nothing: a
+      // greyed *Genomes table* in the palette of every tab would be the one
+      // place a reader was told the format exists.
+      ...(isScool || devFeature('metacool')
+        ? [
+            {
+              id: 'go-genomes',
+              group: 'Go',
+              title: isScool ? 'Cells table' : 'Genomes table',
+              keys: KEYS.genomes,
+              enabled: file !== null && (isMetacool || isScool),
+              run: () => {
+                if (state !== null) {
+                  this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
+                }
+              },
+            },
+          ]
+        : []),
       {
         id: 'go-contigs',
         group: 'Go',
@@ -2467,20 +2475,27 @@ export class Session {
         // view. A cooler offers its chromosomes and, when it fits, the whole
         // genome in one read — and still lists Genomes, greyed out, because
         // "this file has none" is a more useful answer than an absent entry.
+        // The greyed *Genomes* on a plain cooler is §9's answer to "does this
+        // viewer have one" — and while the multi-genome format is a dev feature
+        // that is off (§29), the question is not one this page raises, so the
+        // row is absent rather than greyed.
         rootChoices: isMetacool
           ? ['genomes', 'contigs', 'overview']
           : isScool
             ? ['cells', 'contigs', 'whole']
-            : ['genomes', 'contigs', 'whole'],
+            : devFeature('metacool')
+              ? ['genomes', 'contigs', 'whole']
+              : ['contigs', 'whole'],
         ...(isMetacool
           ? {}
           : {
-              disabledChoices: isScool
-                ? {}
-                : {
-                    genomes:
-                      'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
-                  },
+              disabledChoices:
+                isScool || !devFeature('metacool')
+                  ? {}
+                  : {
+                      genomes:
+                        'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
+                    },
               contigNoun: 'Chromosomes',
             }),
         fileLabel: fileLabel(uri),
@@ -7447,6 +7462,31 @@ export class Session {
       return
     }
 
+    // And the last of them: a link that names a genome on a file with no genome
+    // layer — the genome view, the pair view, or a region or a selection that
+    // carries one. None can be answered by a cooler, and each ended on a
+    // refusal about genomes: a sentence about a format the file is not, and,
+    // while that format is a dev feature that is off (§29), about one this
+    // page does not read. A view of genomes lands on the file's chromosomes; a
+    // view that merely carries a genome name is the same view without it.
+    if (!this.file.info.hasGenomes) {
+      if (state.view === 'genome' || state.view === 'pair') {
+        this.navigate({ uri: state.uri, view: 'contigs' }, { replace: true })
+        return
+      }
+      if (state.genome !== undefined || state.genome2 !== undefined || state.genomes !== undefined) {
+        const next: ViewState = { ...state }
+        delete next.genome
+        delete next.genome2
+        delete next.genomes
+        this.navigate(
+          next.view === 'selection' && next.regions === undefined ? { uri: state.uri, view: 'contigs' } : next,
+          { replace: true },
+        )
+        return
+      }
+    }
+
     // …and the mirror of it. A metagenome's whole-file map is the `bin` level of
     // `overview` rather than a view kind of its own (§7.3), so a link naming the
     // cooler's kind lands on the one this file has, at the level it asked for —
@@ -8864,8 +8904,10 @@ export class Session {
         class: 'inline-error',
         text:
           `This link points at ${fileLabel(uri)}, which is not a URL this page can fetch — it names ` +
-          'a local file. Drop the same file below to follow the link; the rest of the view (genome, ' +
-          'region, colour scale) will be restored.',
+          'a local file. Drop the same file below to follow the link; the rest of the view ' +
+          // A genome is a place only a multi-genome file has — a dev feature (§29).
+          (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
+          ' will be restored.',
       }),
       this.picker.el,
     )

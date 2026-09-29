@@ -81,8 +81,11 @@ describe('the range still resolves every name the file has, exactly as it did', 
   })
 
   it('still refuses a name that is nothing under any convention', () => {
+    // A file with no genome layer is told about its sequences alone; the
+    // genome-or-contig sentence is `ops/range.py`'s, kept for the files that
+    // have genomes (§9).
     expect(() => parseMetacoolerRange(ensembl, 'no_such_thing')).toThrowError(
-      /not a known genome or contig/,
+      /not a sequence of this file/,
     )
   })
 
@@ -126,13 +129,13 @@ describe('the range resolves a name from a file of another convention', () => {
     expect(parseMetacoolerRange(yeast, 'chrX', roman).label).toBe('10')
     // And refuses to guess it without that context, because `X` alone is the
     // sex chromosome far more often than it is ten.
-    expect(() => parseMetacoolerRange(yeast, 'chrX')).toThrowError(/not a known/)
+    expect(() => parseMetacoolerRange(yeast, 'chrX')).toThrowError(/not a sequence of this file/)
   })
 
   it('does not rename an assembler’s contig into a chromosome', () => {
     const mag = fileNaming(['NODE_1_length_500_cov_2', 'NODE_2_length_400_cov_3'])
-    expect(() => parseMetacoolerRange(mag, 'chr1')).toThrowError(/not a known/)
-    expect(() => parseMetacoolerRange(mag, '1')).toThrowError(/not a known/)
+    expect(() => parseMetacoolerRange(mag, 'chr1')).toThrowError(/not a sequence of this file/)
+    expect(() => parseMetacoolerRange(mag, '1')).toThrowError(/not a sequence of this file/)
   })
 })
 

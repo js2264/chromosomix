@@ -18,6 +18,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { resetDevFeatures } from '@/state/devFeatures'
 
 import { InfoPanel } from '@/ui/InfoPanel'
 import type { OpenResult } from '@/worker/protocol'
@@ -90,6 +91,18 @@ function table(view: InfoPanel, card = 0): Record<string, string> {
 }
 
 describe('the file card', () => {
+  // The card below is a metacool's, which a page shows only with the dev
+  // features switch on (§29); the case after it is the same card with it off.
+  beforeEach(() => resetDevFeatures(true))
+  afterEach(() => resetDevFeatures())
+
+  it('leaves out the ordering, the multi-genome format\'s word, while that format is off (§29)', () => {
+    resetDevFeatures(false)
+    const rows = table(panel(openResult()))
+    expect(rows['ordering']).toBeUndefined()
+    expect(rows['bin size']).toBe('1 kb')
+  })
+
   it('prints what the file says about itself', () => {
     const view = panel(openResult())
     const rows = table(view)
