@@ -140,6 +140,7 @@ function harness(size = 400): Harness {
     rect: () => {},
     roundRect: () => {},
     setTransform: () => {},
+    setLineDash: () => {},
     drawImage: () => {},
   }
   const listeners = new Map<string, (event: unknown) => void>()
@@ -440,6 +441,67 @@ describe('a place pointed at from a track beside another map', () => {
     expect(fit.guide()).toHaveLength(2)
     fit.heatmap.setPlotOptions({ crosshair: false })
     expect(fit.guide()).toHaveLength(0)
+  })
+})
+
+/**
+ * A bead of the structure cell, echoed on a turned map (§25.4).
+ *
+ * It was a dashed line straight up the band, which on a turned map runs through
+ * contacts between two *other* places the whole height of it. The place's own
+ * contacts leave the diagonal along two 45° rays, so the echo is that V — the
+ * full-size form of what a pointer on a track draws — dashed as the echo always
+ * is, and a cross of full lines on a square map as before.
+ */
+describe('a bead echoed on a turned map', () => {
+  it('is the V its place makes, standing on the diagonal and reaching the far edge', () => {
+    const fit = harness()
+    fit.heatmap.setLocusEcho({ rows: null, cols: 40 })
+    const drawn = fit.guide()
+    expect(drawn).toHaveLength(2)
+    expect(drawn.every(diagonal)).toBe(true)
+    const plot = fit.heatmap.plotRect
+    const apexX = plot.x + fit.heatmap.scaleX.toPixel(40)
+    const apexY = plot.y + fit.heatmap.scaleY.toPixel(SEPARATION + 0.5)
+    for (const ray of drawn) {
+      expect(ray.from[0]).toBeCloseTo(apexX, 6)
+      expect(ray.from[1]).toBeCloseTo(apexY, 6)
+      // To the band's far edge — its top, on a band that grows upward.
+      expect(ray.to[1]).toBeCloseTo(plot.y + fit.heatmap.scaleY.toPixel(0), 6)
+    }
+    const ends = drawn.map((ray) => ray.to[0]).sort((a, b) => a - b)
+    expect(ends[0]).toBeLessThan(apexX)
+    expect(ends[1]).toBeGreaterThan(apexX)
+  })
+
+  it('draws no vertical line through the band', () => {
+    const fit = harness()
+    fit.heatmap.setLocusEcho({ rows: null, cols: 40 })
+    expect(fit.guide().filter(vertical)).toHaveLength(0)
+  })
+
+  it('stands one V in each band of a mirrored pair', () => {
+    const fit = harness()
+    fit.heatmap.setMatrix({ ...band(), nrows: 2 * (SEPARATION + 1), values: new Float32Array(2 * (SEPARATION + 1) * (2 * BINS - 1)), rowExtent: [0, 2 * (SEPARATION + 1)] }, { rows: [], cols: [] })
+    fit.heatmap.setTurn({ maxSeparation: SEPARATION, direction: 'up', fold: SEPARATION + 1 })
+    fit.heatmap.setLocusEcho({ rows: null, cols: 40 })
+    const drawn = fit.guide()
+    expect(drawn).toHaveLength(4)
+    expect(drawn.every(diagonal)).toBe(true)
+  })
+
+  it('is still a cross of full lines on a square map', () => {
+    const fit = harness()
+    fit.heatmap.setTurn(null)
+    fit.heatmap.setSpanGestures(false)
+    fit.heatmap.setFitAxis('both')
+    fit.heatmap.setAnchor('middle')
+    fit.heatmap.setMatrix(square(), { rows: [], cols: [] })
+    fit.heatmap.setLocusEcho({ rows: 20, cols: 20 })
+    const drawn = fit.guide()
+    expect(drawn).toHaveLength(2)
+    expect(drawn.filter(vertical)).toHaveLength(1)
+    expect(drawn.some(diagonal)).toBe(false)
   })
 })
 

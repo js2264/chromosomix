@@ -411,6 +411,36 @@ export function anchorRays(
 }
 
 /**
+ * The rays a **place** casts on a turned map: the contacts it is an anchor of.
+ *
+ * A V standing on the axis at the place and opening to the far edge of the
+ * band — both ways along the genome, because a place anchors everything to its
+ * left as well as everything to its right — and one V per band of a mirrored
+ * pair, whose two diagonals are the same place in two maps. What a pointer on a
+ * track draws across the map, and what a line the reader drew becomes there
+ * (§17.4): on the square both are a column, and a column of a turned picture is
+ * not a place but contacts between two *other* places, all but the one at the
+ * V's apex.
+ *
+ * @param col The place, in the turned block's column units.
+ */
+export function placeRays(
+  turned: Pick<RotatedBlock, 'maxSeparation' | 'direction' | 'fold' | 'nrows'>,
+  col: number,
+): Array<{ from: TurnedPoint; to: TurnedPoint }> {
+  // The apex is the diagonal — separation zero, the bottom row of an ordinary
+  // turned band and the top row of the mirrored half.
+  const axis = rowForSeparation(turned, 0) + 0.5
+  if (turned.fold === undefined) {
+    return anchorRays({ col, row: axis }, [turned.direction === 'up' ? 0 : turned.nrows])
+  }
+  return [
+    ...anchorRays({ col, row: axis }, [0]),
+    ...anchorRays({ col, row: turned.fold + 0.5 }, [turned.nrows]),
+  ]
+}
+
+/**
  * The separation, in bins, that a row of the turned block stands for.
  *
  * Two lines on a mirrored block, meeting at the fold: the first band counts

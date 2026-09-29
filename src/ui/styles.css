@@ -11515,6 +11515,60 @@ span.deck-name {
   white-space: nowrap;
 }
 
+/* A file a task reads (§18.8): the Tracks card's drop area, which is also the
+   button that opens the picker, with the address box under it for a file that
+   is not on this computer. The field takes the locus field's wider cap — the
+   drop area has a sentence to say and a file name to show once it has one. */
+.param-file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.param-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.param-drop {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A name as long as a pipeline writes them — `CG002^mapped_…_pcrfree.pairs.gz`
+   — breaks where it has to rather than pushing the × out of the card. */
+.param-drop .ann-drop-label {
+  overflow-wrap: anywhere;
+}
+
+/* Held: the dashed edge says *put something here*, and once something is there
+   the edge is a plain one around the file it holds. */
+.param-drop.is-held {
+  border-style: solid;
+}
+
+.param-drop-forget {
+  flex: 0 0 auto;
+}
+
+/* The word beside the drop area's first line rather than floating between the
+   area and the address box, which is where centring put it: two stacked
+   controls centred against one label read as two questions with one name. */
+.param-row > .param-field:has(> .param-file) {
+  max-width: 31rem;
+  align-items: start;
+}
+
+.param-field:has(> .param-file) > .field-label {
+  padding-top: calc(0.4rem + 1px);
+}
+
+.param-file-note {
+  margin: 0.15rem 0 0;
+}
+
 /* A row that cannot run yet.
 
    Dimmed rather than hidden, which is a reversal of what §18.1 first said and is

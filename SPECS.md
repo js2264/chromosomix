@@ -5376,9 +5376,14 @@ turned when they pressed the button would be the picture editing their settings 
 Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
 where a locus is:
 
-- a **line** stays a line at the same place on the genome, joining up with the same line in the lane
-  below it — a mark stored as horizontal is drawn too, the axis it was drawn against being gone but
-  the locus it names not;
+- a **line** becomes the **V** its place makes: the two 45° rays of contacts that place anchors,
+  standing on the axis at its position and opening to the far edge of the band — one V in each band of
+  a mirrored pair — and it carries on **straight down the lanes** from the V's apex, where the x axis
+  is the tracks' own. Drawn straight up the band, as it was, it crossed contacts between two *other*
+  places the whole height of it, a column of a turned picture not being a place; the V is what a
+  pointer on a track draws there too. A mark stored as horizontal is the same V, and continues down the
+  lanes too, the axis it was drawn against being gone but the locus it names not; and a place just off
+  the side of the picture still draws the arm that reaches into it;
 - a **domain** becomes a triangle standing on the axis, apex over its own midpoint at the height of
   its own span;
 - a **loop** becomes one dot at that height — the pair and its mirror rotate to the same point, so
@@ -5719,10 +5724,24 @@ goes *under* the group rather than beside the word above it. A hint never repeat
 own label, options or state already say: a column of tick boxes that opens with every box ticked does
 not need a line saying that every sequence is read unless you say otherwise.
 
+**A file a task reads and does not open is dropped on the form.** One parameter is a file rather than a
+number or something loaded: P(s)'s `.pairs`, whose records are read for the four orientations and whose
+map is not wanted (§18.8). It is a **drop area that is also a button** — the Tracks card's, taking a file
+off the desktop, one chosen through the picker, or a row out of the Files column — with an **address
+box** under it for a file that is not on this computer, and each replaces the other; a word that is not
+an address is refused under the box, since no browser can open a bare name and the run would say so only
+afterwards. A drop on the area is the area's: let through, the app would open the file as a map. A
+`File` is not a parameter value — a parameter set is posted, stored and printed, and a `File` survives
+only the first — so the value is the file's **name**, which is what the record, a table's header and the
+`metacooler-run` line carry, and the file itself is held beside the form for the session, across the
+drawer's tasks, and handed to the run while the value still names it. A name recalled after a reload,
+whose file is gone, empties the area rather than reaching the worker.
+
 **A control the file cannot be asked about is not shown.** The descriptor still lists it and states the
 rule — an option that needs a `/genomes` table, a switch that is only a question where there is no such
-table (4C's *cis only* and *Normalisation*, §18.8) — and what varies per file is whether this one can
-answer it. This is the single way the *never a screen* rule bends, and it bends by declared data rather
+table (4C's *cis only* and *Normalisation*, §18.8), a question the file has already answered (P(s)'s
+`.pairs` on a map binned from one, whose import counted the four orientations, §3.7) — and what varies
+per file is whether this one can answer it. This is the single way the *never a screen* rule bends, and it bends by declared data rather
 than by building a descriptor per file. Two things follow, and both are load-bearing: the **runner**,
 not the form, settles a key whose control this file does not show, since a stored session and a form
 filled in on another file both leave a value behind; and the **estimate** prices what the runner will
@@ -6155,18 +6174,33 @@ compartment chain and the pileups **divide by**, and they reach it through `expe
 through the panel: the plotted curve is a figure and the denominator is a denominator, and changing what
 is on screen must not change what an O/E is taken against.
 
-**And, where the map was imported from a `.pairs`, the four orientations beside it.** Not a
-property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, in the
-import's own pass (§3.7), because binning sums the four together and destroys exactly the thing they
-are read for. The separation at which `++`, `+−`, `−+` and `−−` converge is the shortest one the
-library can be believed at, it is usually *below* whatever grid the reader chose, and the run reports
-it as a number under the plot. All four are normalised by **one shared denominator** rather than each
-by its own: ligation does not know which way a fragment pointed, so at long range the four are
-equally abundant and lie on top of each other, and scaling each by its own total would divide the
-short-range excess back out and take the convergence point with it. A `.pairs` that was never
-imported can be named in the form and is read for its records alone — no map changes and nothing is
-binned — and a local file has no address to name, so it is dropped on the app instead, which counts
-the same curves in the same pass. Absent, with a sentence, on a map that was opened as a matrix.
+**And the four orientations beside it, wherever there are records to count them from.** Not a
+property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, because
+binning sums the four together and destroys exactly the thing they are read for. The separation at
+which `++`, `+−`, `−+` and `−−` converge is the shortest one the library can be believed at, it is
+usually *below* whatever grid the reader chose, and the run reports it as a number under the plot. All
+four are normalised by **one shared denominator** rather than each by its own: ligation does not know
+which way a fragment pointed, so at long range the four are equally abundant and lie on top of each
+other, and scaling each by its own total would divide the short-range excess back out and take the
+convergence point with it.
+**Drawn on the edges they were counted on.** The records are counted at a fine factor of 1.05 and
+drawn at *log bins per step*, and every drawn edge is a counted one, each point divided by the width it
+actually covers — the correction the matrix's own curve makes (§18.10). Built on its own, the drawing
+axis beat against the counting one: at 1.1 over 1.05 every twenty-second drawn bin held one counted bin
+and was divided by the width of two, and all four curves fell by half there, together, every 0.9 of a
+decade. **No point is drawn empty or from a handful of records.** A bin with no record has no density
+on a log axis and broke the line, and a filtered library has runs of them at short range; a run of
+sparse bins is pooled into points of at least sixteen records — a counting error of a quarter, which is
+the tenth of a decade the convergence is read at — each over the whole stretch it spans, while a bin
+holding sixteen on its own is never widened, so a real spike is not averaged into the sparse bins beside
+it. The line runs from the first record to the last.
+**Where the records are.** A map **binned from a `.pairs`** had them counted in the import's own pass
+(§3.7), and the form asks for no file: *four orientations* is the only question, and the price beside
+**Run** says where the curves come from. On a map opened as a matrix, or binned from a file with no
+strand columns, the form asks for a `.pairs` — dropped on it, chosen through it, or named by its address
+(§18.2) — which is read for its records alone: no map changes and nothing is binned. A `.pairs`
+dropped on the app rather than on the form is *opened*, as a map. Absent, with a sentence, where there
+is nothing to count them from.
 
 *Scalogram*, which is P(s) with one summation left undone, and sits directly after it for that reason.
 The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;
@@ -9280,8 +9314,10 @@ offered, having nothing to act on. The deck's count of maps says nothing of a de
 ### 25.4 Hover, both ways
 
 A bead under the pointer is a place on every map and every lane: the maps draw it as a **dashed line
-down and across the heatmap** on each axis the place is on (one line on a turned map, whose rows are
-separation), and as the tick at the edge of the stacks the lanes already give a pointer on another
+down and across the heatmap** on each axis the place is on — on a turned map, whose rows are
+separation, as the dashed **V** the place makes, the two 45° rays of contacts it anchors, as a line
+the reader drew is (§17.4), where a straight line up the band ran through contacts between two other
+places — and as the tick at the edge of the stacks the lanes already give a pointer on another
 panel's track; the status bar names the bead, **and so does the cell's own corner**, which is where
 a reader looking at the model is looking — one place for a bead, the pair and their distance for a
 contact named by a map. The corner is not gated with the *tooltip* switch: that switch is about the

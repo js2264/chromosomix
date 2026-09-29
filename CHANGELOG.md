@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A `.pairs` for P(s)'s four orientations is dropped on the form, or chosen through it (§18.8).**
+  Under *four orientations* the drawer asked for the file by address alone, so a reader with the
+  `.pairs` on their disk had to host it somewhere first — or drop it on the app, which *opens* it, as
+  a map, behind the binning dialog. The *.pairs file* row is now the Tracks card's drop area, and
+  pressing it opens the file picker; it takes a row dragged out of the Files column as well, and keeps
+  the drop for itself. The file is read in the analysis worker for its records alone — nothing is
+  binned and no map changes — and its name is what the run records and what `metacooler-run
+  --pairsUri` is written with. The address box stays under the area for a file that is not on this
+  computer, and replaces a dropped file when one is typed; a word that is not an address is refused
+  under it rather than failing the run. A file is kept for the session, across the drawer's tasks,
+  and a name recalled after a reload, whose file is gone, empties the area rather than reaching the
+  worker.
+
 - **Both diagonals of a bacterial chromosome's expected, from the score picker (§7.5, §8.15).** On a
   view of one sequence declared circular the picker offers `arm decay`, right under `expected`: the
   baseline taken along the two arms, drawn — the main diagonal's decay down each arm and the inter-arm
@@ -551,6 +564,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **A line on a turned map is the V its place makes (§17.4).** A line from the Manual annotations
+  card was drawn straight up a turned map, as it is on the square, and a column of a turned picture is
+  not a place: it crossed contacts between two other places the whole height of the band. It is drawn
+  now as the two 45° rays of contacts its place anchors, standing on the axis at its position — the
+  same V a pointer on a track draws there — and carries on straight down the lanes from the V's apex.
+  One V per band of a mirrored pair; a horizontal line is the same V, and now continues down the lanes
+  too; and a place just off the side of the picture still draws the arm that reaches into it. A bead
+  hovered in the structure cell is echoed on a turned map as the same V, dashed, where it was a dashed
+  line straight up the band (§25.4).
+
+- **P(s) asks for no file on a map binned from a `.pairs` (§18.8).** The import counts the four
+  orientations in its own pass (§3.7), and the run already took them from there when the address box
+  was left empty — but the box was on the form all the same, under a hint about leaving it empty, and
+  read as the one thing the curves were waiting for. On such a map *four orientations* is now the only
+  question, and the price beside **Run** says where they come from: *The four orientations were
+  counted as CG002…pairs.gz was binned.* Where the file had no strand columns, or the map was opened as
+  a matrix, the drop area is there and the price says it needs one. A refusal about the map — no
+  sequence ticked — is no longer skipped when a `.pairs` is named.
 
 - **`ori` keeps the score (§8.15).** Either press — framing the circle on its origin, or the sequence
   from its first base again — frames the same sequence another way, and it now keeps what the cells
@@ -1415,6 +1447,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A plain Run on a map binned from a `.pairs` is no longer refused (§3.7, §18.3).** The analysis
+  worker opens the map for itself, and a contact list opened without the grid the reader chose is
+  refused with *choose a bin size* — which is what every task pressed on such a map said, P(s)
+  included, because the target a plain Run builds carried the ticked cells and the drawn total but
+  not the binning, nor the orientation curves the import had counted. *Run on all maps* built its
+  targets elsewhere and carried both, so it worked, which made the failure look like one about the
+  file.
+
+- **P(s) by pair orientation has no notches and no gaps (§18.8).** All four curves fell by half
+  together every 0.9 of a decade — at 200 bp, 1.6 kb, 12 kb, 98 kb and 730 kb on a *Lachancea
+  kluyveri* library — because the drawing axis was built on its own at *log bins per step* over counts
+  kept at 1.05: every twenty-second drawn bin held one counted bin and was divided by the width of
+  two. Every drawn edge is now a counted edge and each point is divided by the width it covers, which
+  is the correction the matrix's own curve already makes (§18.10); within 60 bp–1 Mb no point on that
+  library stands more than 6 % off its neighbours, where the notches were 50 %. And a bin with no
+  record, which a filtered library has plenty of at short range, broke the line: a run of sparse bins
+  is now pooled into points of at least sixteen records, each over the whole stretch it spans, while
+  a bin that holds sixteen on its own is never widened — so the curves start where the records do,
+  unbroken, and a real spike, `−−` at 36 bp on the same library, stays one. The detached source a
+  named `.pairs` was read through is also closed after its pass, where it was left mounted.
 
 - **`ori` and `arms` reach every map of a deck (§8.15, §16.2).** `ori` framed the first map across the
   circle's junction and left every other map saying *End coordinate less than start — unless the

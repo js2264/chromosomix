@@ -109,6 +109,21 @@ interface ParamBase {
    */
   needsNoGenomes?: boolean
   /**
+   * Whether the file in hand asks this question at all.
+   *
+   * {@link needsNoGenomes} generalised, for a question some files have already
+   * answered. The case is P(s)'s `.pairs` (§18.8): a map binned from one on
+   * open had its four orientations counted in that same pass (§3.7), so a
+   * control asking the reader for the file they opened it from is a question
+   * whose answer is on screen — and it read as if the curves could not be had
+   * without one. `false` hides the control as `needsNoGenomes` does, and
+   * {@link settled} is what the run is then recorded as.
+   *
+   * Pure, and about the file rather than the form: `when` is for the other
+   * answers on the form.
+   */
+  askedOf?(context: AnalysisContext): boolean
+  /**
    * What this parameter is worth on a file that is not asked about it.
    *
    * A hidden control still has a value, and that value is written into the
@@ -309,6 +324,40 @@ export interface TextParam extends ParamBase {
 }
 
 /**
+ * A file the task **reads** and the app does not open — a `.pairs` for P(s)'s
+ * four orientations (§18.8), whose records matter and whose map does not.
+ *
+ * Drawn as a drop area that is also a button, with an address box under it: a
+ * local file is dropped on it or chosen through the picker it opens, and a file
+ * somewhere else is named by URL. Not an {@link EntryParam}, because nothing is
+ * loaded — no lane, no row on a card, no map — and a `.pairs` dropped on the app
+ * itself is *opened*, as a map, which is a different gesture with a dialog in
+ * front of it.
+ *
+ * **The value is a string, and a `File` is not one.** An address is its own
+ * value. A local file's value is its **name**, which is what the provenance, a
+ * table's header and the `metacooler-run` line can say about it; the `File`
+ * itself is held beside the form by the runner (`AnalysisRunner.holdFile`),
+ * since a parameter set is posted, stored and printed and a `File` survives only
+ * the first of those. A name whose file is no longer held — a form recalled
+ * after a reload — is emptied rather than trusted.
+ */
+export interface FileParam extends ParamBase {
+  kind: 'file'
+  /** Name endings the drop area takes, lowercase: `.pairs`, `.pairs.gz` … */
+  accept: readonly string[]
+  /** What the drop area says while it is empty. */
+  prompt: string
+  /** Shown in the empty address box. An example, never a restatement. */
+  placeholder?: string
+}
+
+/** Whether a {@link FileParam}'s value is an address rather than a local file's name. */
+export function isAddress(value: string): boolean {
+  return /^(https?|s3):\/\//i.test(value.trim())
+}
+
+/**
  * A locus, in the syntax the views' own boxes take. Defaults to the framing.
  *
  * **A locus and nothing else.** This kind used to have a `sequences` flag that
@@ -418,6 +467,7 @@ export type ParamSpec =
   | ColumnParam
   | RegionParam
   | TextParam
+  | FileParam
   | SequencesParam
   | SeedParam
 
@@ -445,6 +495,10 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
       // in the header of an exported table.
       case 'text':
         out[spec.key] = spec.default ?? ''
+        break
+      // Nothing chosen, as an empty text box is.
+      case 'file':
+        out[spec.key] = ''
         break
       // `null` rather than `[]`, and the difference is the whole convention:
       // the form resolves *unanswered* to every sequence the file has, and `[]`
@@ -495,18 +549,25 @@ export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisConte
  * Whether `spec` is shown, given the rest of the form and the file.
  *
  * Two rules and they are different in kind: `when` is about the other answers on
- * this form and is re-read on every keystroke, while `needsNoGenomes` is about
- * the file and changes only when the drawer is handed another one. Both end in
- * the same place — a wrapper out of the document, with its control and its state
- * kept — so a form does not have to know which of the two hid a row.
+ * this form and is re-read on every keystroke, while `needsNoGenomes` and
+ * `askedOf` are about the file and change only when the drawer is handed
+ * another one. All end in the same place — a wrapper out of the document, with
+ * its control and its state kept — so a form does not have to know which of
+ * them hid a row.
  */
 export function paramVisible(
   spec: ParamSpec,
   params: Params,
   context: AnalysisContext,
 ): boolean {
-  if (spec.needsNoGenomes === true && context.hasGenomes) return false
+  if (!paramAsked(spec, context)) return false
   return spec.when === undefined || spec.when(params)
+}
+
+/** Whether this file asks `spec` at all — the half of {@link paramVisible} about the file. */
+export function paramAsked(spec: ParamSpec, context: AnalysisContext): boolean {
+  if (spec.needsNoGenomes === true && context.hasGenomes) return false
+  return spec.askedOf === undefined || spec.askedOf(context)
 }
 
 // ---------------------------------------------------------------------------
@@ -1250,6 +1311,15 @@ export interface AnalysisContext {
    */
   circular?: readonly string[]
   origins?: Readonly<Record<string, number>>
+  /**
+   * The `.pairs` this map was binned from on open (§3.7), where it was one.
+   *
+   * `orientation` is whether that pass counted the four orientation curves —
+   * it did wherever the records carried strands — which is what lets P(s) take
+   * them from the import instead of asking for the file the reader opened
+   * (§18.8). Absent on every map that was opened rather than binned.
+   */
+  binnedFrom?: { name: string; orientation: boolean }
 }
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ import { emptyStrata, smoothTileInto, stratumAdjusted, type Strata } from '@/ana
 // Aliased, because the kernel tests below build strata with a local helper of
 // the same name. This is the *parameter*: how many of them a run asks for.
 import { MAX_STRATA, strataOf as strataAsked } from '@/analysis/tasks/hicrep'
-import { orientationFigure } from '@/analysis/orientation'
+import { MIN_RECORDS, orientationFigure } from '@/analysis/orientation'
 import type { FeatureSet } from '@/annotations/types'
 
 const CONTIG_LENGTH = 1_000_000
@@ -596,8 +596,10 @@ describe('the orientation curves', () => {
     const figure = orientationFigure(
       {
         edges,
-        // Two orientations with the same *shape* and different abundance.
-        counts: counts(edges, (at, which) => (which < 2 ? (which + 1) * 1000 : 0) / at),
+        // Two orientations with the same *shape* and different abundance — by
+        // the thousand in every bin, so neither curve has a bin sparse enough to
+        // be pooled (`MIN_RECORDS`) and the two are drawn on the same points.
+        counts: counts(edges, (at, which) => (which < 2 ? (which + 1) * 1e9 : 0) / at),
         total: 0,
       },
       { factor: 1.4 },
@@ -636,6 +638,85 @@ describe('the orientation curves', () => {
     }
     expect(mass).toBeGreaterThan(0.9)
     expect(mass).toBeLessThan(1.1)
+  })
+
+  /** Records of a density `k / s` over each fine bin — the curve a smooth library draws. */
+  function powerLaw(edges: Float64Array, k: number): Float64Array {
+    const out = new Float64Array(edges.length - 1)
+    for (let bin = 1; bin < edges.length - 1; bin++) out[bin] = k * Math.log(edges[bin + 1] / edges[bin])
+    return out
+  }
+
+  it('draws no notch where the drawing axis and the counting axis beat', () => {
+    // Drawn at 1.1 over counts kept at 1.05, the old axis gave every
+    // twenty-second bin one fine bin's records and two fine bins' width: all
+    // four curves fell by half there, together, every 0.9 of a decade.
+    const edges = edgesTo(2_000_000)
+    const law = powerLaw(edges, 1e7)
+    for (const factor of [1.1, 1.2, 1.3]) {
+      const figure = orientationFigure(
+        { edges, counts: [law, law, law, law], total: 0 },
+        { factor },
+      )
+      const curve = figure!.curves[0]
+      // `y · x` is flat for a density `k / s`, wherever the point is drawn.
+      const flat: number[] = []
+      for (let i = 0; i < curve.x.length; i++) {
+        if (curve.x[i] >= 10) flat.push(curve.y[i] * curve.x[i])
+      }
+      expect(Math.max(...flat) / Math.min(...flat)).toBeLessThan(1.02)
+    }
+  })
+
+  it('draws at the counted resolution when asked for a finer one', () => {
+    const edges = edgesTo(100_000)
+    const law = powerLaw(edges, 1e7)
+    const figure = orientationFigure({ edges, counts: [law, law, law, law], total: 0 }, { factor: 1.01 })
+    // One drawn point per fine bin from 1 bp: nothing split, nothing empty.
+    expect(figure!.curves[0].x).toHaveLength(edges.length - 2)
+  })
+
+  it('pools a sparse stretch and leaves no gap in the line', () => {
+    // A filtered library at short range: one record every third base pair below
+    // 60 bp, then plenty. The empty bins between them were drawn as gaps.
+    const edges = edgesTo(200_000)
+    const sparse = powerLaw(edges, 1e6)
+    for (let bin = 0; bin < edges.length - 1; bin++) {
+      if (edges[bin] < 60) sparse[bin] = edges[bin] % 3 === 0 ? 1 : 0
+    }
+    const dense = powerLaw(edges, 1e6)
+    const figure = orientationFigure({ edges, counts: [sparse, dense, dense, dense], total: 0 })
+    const curve = figure!.curves[0]
+    expect(Array.from(curve.y).every((value) => Number.isFinite(value) && value > 0)).toBe(true)
+    // Starts where the records do, and not at the first bin of the axis.
+    expect(curve.x[0]).toBeGreaterThanOrEqual(3)
+    // Twenty records below 60 bp make one point of at least MIN_RECORDS, and
+    // the leftover joins it: never twenty points on one record each.
+    let records = 0
+    for (let bin = 0; bin < edges.length - 1; bin++) if (edges[bin] < 60) records += sparse[bin]
+    const below = Array.from(curve.x).filter((x) => x < 60).length
+    expect(below).toBeLessThanOrEqual(Math.max(1, Math.floor(records / MIN_RECORDS)))
+  })
+
+  it('keeps a spike that holds enough records on its own', () => {
+    // Thousands of records in one bin, a couple of hundred in the bins after it
+    // and a sparse few before it — the `−−` spike at 36 bp in a real library.
+    // Pooling the sparse bins must not reach into it and average it away.
+    const edges = edgesTo(200_000)
+    const spiked = powerLaw(edges, 4000)
+    let spikeAt = -1
+    for (let bin = 0; bin < edges.length - 1; bin++) {
+      if (edges[bin] < 36) spiked[bin] = edges[bin] % 4 === 0 ? 1 : 0
+      if (spikeAt < 0 && edges[bin] >= 36) spikeAt = bin
+    }
+    spiked[spikeAt] = 5000
+    const dense = powerLaw(edges, 1e6)
+    const figure = orientationFigure({ edges, counts: [spiked, dense, dense, dense], total: 0 })
+    const curve = figure!.curves[0]
+    const top = Array.from(curve.y).indexOf(Math.max(...Array.from(curve.y)))
+    expect(curve.x[top]).toBeGreaterThan(30)
+    expect(curve.x[top]).toBeLessThan(45)
+    expect(curve.y[top]).toBeGreaterThan(5 * curve.y[top + 1])
   })
 
   it('has nothing to say with fewer than two orientations', () => {

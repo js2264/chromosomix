@@ -67,6 +67,8 @@ import type { CurveSeries, TaskOutput } from '../types'
 import { binPairs } from '../../pairs/bin'
 import { readPairsHeader } from '../../pairs/format'
 import { orientationFigure, type OrientationCounts } from '../orientation'
+import type { ByteSource } from '../../types'
+import type { SourceSpec } from '../../worker/protocol'
 
 // ---------------------------------------------------------------------------
 // Spans and units
@@ -556,13 +558,14 @@ export const runExpected: TaskRunner = async (job) => {
 // ---------------------------------------------------------------------------
 
 /**
- * The orientation-resolved decay, from the import or from a named `.pairs`.
+ * The orientation-resolved decay, from the import or from a `.pairs` given here.
  *
  * Two sources and one figure. The **import's** curves cost nothing at all: they
  * were counted in the pass that built this map (§3.7), and they arrive on
  * `TaskInputs` because the records they came from no longer exist by the time
- * anything runs here. A **named** file is read on the spot, which is a pass over
- * somebody else's records and is priced as one in the note.
+ * anything runs here. A file **given** to the form — dropped on it, chosen
+ * through it, or named by its address — is read on the spot, which is a pass
+ * over somebody else's records and is priced as one in the note.
  *
  * `null` — with a sentence — wherever the reader asked for this and it cannot be
  * had. A curve silently missing from a figure the reader ticked a box for is the
@@ -579,15 +582,14 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
     if (held === undefined) {
       job.note(
         'The four orientations are counted from the records, and this map has none to count: it ' +
-          'was opened as a matrix rather than imported from a .pairs, or the file it was ' +
-          'imported from carried no strand1/strand2 columns. Name a .pairs above, or drop one on ' +
-          'the app.',
+          'was opened as a matrix rather than binned from a .pairs, or the file it was binned ' +
+          'from carried no strand1/strand2 columns. Drop a .pairs on the form, or give its address.',
       )
       return null
     }
     counts = held
   } else {
-    counts = await countNamed(job, named)
+    counts = await countNamed(job, named, job.inputs.sources?.['pairsUri'])
     if (counts === null) return null
   }
 
@@ -638,37 +640,72 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
  * clamping and the `#columns:` handling to be got right, and §3.7's record
  * reader is not a thing this application should have two of.
  */
-async function countNamed(job: JobContext, uri: string): Promise<OrientationCounts | null> {
-  const remote = /^(https?|s3):\/\//i.test(uri)
-  // A path is a shell's whole case and a worker's impossible one, and each
-  // venue says which it is by the capability it answers (`JobContext.openFile`).
-  if (!remote && job.openFile === undefined) {
-    job.note(
-      `“${uri}” is not an address this can fetch. A local file has none — drop it on the app, ` +
-        'which imports it and counts these curves in the same pass, or name it in a ' +
-        '`metacooler-run` line, which reads it from disk. Only http(s) and s3 URLs can be ' +
-        'named here, and a URL is fetched as it stands — a file behind a store, a share link, ' +
-        'Google Drive or Dropbox is authorised by a token this box has no way to carry, so those ' +
-        'are opened the usual way and imported.',
-    )
-    return null
-  }
-  const open = remote ? job.openBytes : job.openFile
-  if (open === undefined) {
-    job.note(
-      `Reading ${uri} needs a venue that can fetch an address, and this one reads local files ` +
-        'only. Fetch it first and name the file, or run it in the app.',
-    )
-    return null
-  }
-  let source
+async function countNamed(
+  job: JobContext,
+  uri: string,
+  handed?: SourceSpec,
+): Promise<OrientationCounts | null> {
+  const source = await openNamed(job, uri, handed)
+  if (source === null) return null
+  // Closed whatever happens: a detached source is the caller's (`JobContext`),
+  // and a gigabyte contact list left mounted after its one pass is memory the
+  // map on screen could have had.
   try {
-    source = await open(uri)
+    return await countOrientations(job, uri, source)
+  } finally {
+    source.close()
+  }
+}
+
+/**
+ * The bytes of the `.pairs` a run was given, by whichever road reaches them.
+ *
+ * A file **handed** to the form comes first — dropped, chosen, or picked out of a
+ * connected place — because its source is exactly what the reader gave and the
+ * name beside it is only the record of it. An address is fetched as it stands,
+ * and a path is read where the venue has a filesystem, which is a shell's whole
+ * case and a worker's impossible one: each venue says which it is by the
+ * capability it answers (`JobContext.openFile`).
+ */
+async function openNamed(
+  job: JobContext,
+  uri: string,
+  handed: SourceSpec | undefined,
+): Promise<ByteSource | null> {
+  const remote = /^(https?|s3):\/\//i.test(uri)
+  const open =
+    handed !== undefined && job.openSource !== undefined
+      ? () => job.openSource!(handed)
+      : remote && job.openBytes !== undefined
+        ? () => job.openBytes!(uri)
+        : !remote && job.openFile !== undefined
+          ? () => job.openFile!(uri)
+          : null
+  if (open === null) {
+    job.note(
+      remote
+        ? `Reading ${uri} needs a venue that can fetch an address, and this one reads local ` +
+            'files only. Fetch it first and name the file, or run it in the app.'
+        : `“${uri}” is not an address this can fetch, and the file is no longer in hand — a ` +
+            'dropped file is kept for the session it was dropped in. Drop it on the form again, ' +
+            'or name it in a `metacooler-run` line, which reads it from disk.',
+    )
+    return null
+  }
+  try {
+    return await open()
   } catch (error) {
     job.note(`Could not open ${uri}: ${error instanceof Error ? error.message : String(error)}`)
     return null
   }
+}
 
+/** One pass over a `.pairs`, for the four orientation curves and nothing else. */
+async function countOrientations(
+  job: JobContext,
+  uri: string,
+  source: ByteSource,
+): Promise<OrientationCounts | null> {
   job.progress(0, 1, 'reading records')
   const header = await readPairsHeader(source)
   if (header.columns.strand1 < 0 || header.columns.strand2 < 0) {

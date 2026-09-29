@@ -1576,10 +1576,16 @@ export class AnnotationLanes {
       // this edge measures: a vertical rule is a column and belongs over and
       // under the map, a horizontal one is a row and belongs beside it. A mark
       // drawn on the axis it does not name would point at the wrong coordinate.
+      //
+      // Every one of them under a turned map, whose bottom axis is the only place
+      // left: each line stands its V there, a horizontal one as much as a
+      // vertical (`drawManualLines`), and a V with nothing carrying on beneath
+      // it was a mark that stopped at the map's edge for no reason on screen.
       if (axis !== null) {
         const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
+        const everyLine = this.turned && laneIsHorizontal(edge)
         for (const line of this.manual.lines) {
-          if (line.axis !== 'both' && line.axis !== measures) continue
+          if (!everyLine && line.axis !== 'both' && line.axis !== measures) continue
           // Every place it lands, which on a circular axis panned across its
           // junction is two: a mark drawn at only one of them vanishes and
           // reappears as the reader slides (§8.15).

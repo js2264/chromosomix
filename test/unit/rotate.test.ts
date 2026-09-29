@@ -33,6 +33,7 @@ import {
   binsForColumns,
   cellAt,
   isTurnable,
+  placeRays,
   turnedAxis,
   positionAt,
   reachForRows,
@@ -735,5 +736,39 @@ describe('the rays a guide follows', () => {
     const row = rowForSeparation(rotated, 4)
     expect(turnedCentre(rotated, row, 10)).toEqual(turnedCentre(rotated, row, 11))
     expect(turnedCentre(rotated, row, 10).col).toBe(11)
+  })
+})
+
+/**
+ * What a **place** casts on a turned map — the V a pointer on a track draws, and
+ * what a line the reader drew becomes there (§17.4).
+ */
+describe('the rays a place casts', () => {
+  it('stands a V on the diagonal and opens it to the far edge', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    const rays = placeRays(rotated, 9)
+    expect(rays).toHaveLength(2)
+    const axis = rowForSeparation(rotated, 0) + 0.5
+    for (const ray of rays) expect(ray.from).toEqual({ col: 9, row: axis })
+    expect(rays.map((ray) => ray.to.row)).toEqual([0, 0])
+    // Each ray meets the columns of the contacts it anchors: one bin further
+    // apart per row, and a bin is two columns, of which the pair moves one.
+    expect(rays.map((ray) => ray.to.col).sort((a, b) => a - b)).toEqual([9 - axis, 9 + axis])
+  })
+
+  it('opens downwards on a band turned the other way', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6, direction: 'down' })
+    const rays = placeRays(rotated, 9)
+    for (const ray of rays) expect(ray.from.row).toBe(0.5)
+    expect(rays.map((ray) => ray.to.row)).toEqual([rotated.nrows, rotated.nrows])
+  })
+
+  it('stands one V in each band of a mirrored pair', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6, mirror: true })
+    const rays = placeRays(rotated, 9)
+    expect(rays).toHaveLength(4)
+    expect(rays.filter((ray) => ray.to.row === 0)).toHaveLength(2)
+    expect(rays.filter((ray) => ray.to.row === rotated.nrows)).toHaveLength(2)
+    expect(rays.filter((ray) => ray.from.row === rotated.fold! + 0.5)).toHaveLength(2)
   })
 })

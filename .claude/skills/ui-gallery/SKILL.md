@@ -41,6 +41,8 @@ node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps 
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
 node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
+node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the lab's toy library: the .pairs binned on the fly, then a .pairs dropped on the .mcool's form, and an address: st01 … st09
+node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -250,6 +252,19 @@ with the Map card's fields printed to show *match depth* is gone. Last, E. coli 
 box's value, placeholder, title and chevrons, and the hash. `GALLERY_ONLY=map`, `deck`, `pair` or
 `refusal` runs one part. Run it after any change to the box, to resampling, or to what names a drawn
 map.
+
+`scripts/ui-stranded.mjs` drives **P(s)'s four orientations** (§18.8) on the lab's toy *Lachancea
+kluyveri* library at the root of the `rsglab-data` bucket, which is there as a contact list and as the
+`.mcool` binned from it. First the `.pairs` opened and binned on the fly: the form with *four
+orientations* on, which must ask for no file, the price line naming the import the curves were counted
+in, and a plain Run's figure — four unbroken curves, with no notch where they fell by half together.
+Then the `.mcool`: the drop area empty, lit under a drag, holding the dropped `.pairs`, the run's
+figure from it (the same convergence as the binned road, printed), and the bucket's address typed
+over the file. It prints the *From the .pairs file* card and the price line at each step, and each
+run's notes. The contact list is 330 MB and is read twice on the binned road; where the browser
+cannot reach the bucket, serve a folder holding the two files under their bucket names and name its
+address in `GALLERY_DATA`. `GALLERY_ONLY=binned` or `matrix` runs one part. Run it after any change
+to the orientation figure, to P(s)'s form or estimate, or to a `file` parameter.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

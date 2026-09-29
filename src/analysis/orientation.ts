@@ -33,7 +33,7 @@ export interface OrientationCounts {
 /** One orientation's curve, re-binned and normalised. */
 export interface OrientationCurve {
   name: string
-  /** Bin centres, in base pairs. */
+  /** Point centres, in base pairs: a bin's geometric centre, or a pooled run's. */
   x: Float64Array
   /** Contacts per base pair of separation, over the records in all four. */
   y: Float64Array
@@ -59,6 +59,16 @@ export interface OrientationFigure {
 const NAMES = ['++', '+−', '−+', '−−'] as const
 
 /**
+ * The records a drawn point stands on before it is drawn on its own.
+ *
+ * Sixteen is a counting error of a quarter, which is a tenth of a decade — the
+ * tolerance the convergence below is read at, so no point is noisier than the
+ * question the figure asks of it. A bin holding fewer is pooled with the sparse
+ * bins beside it (see {@link drawnCurve}); one holding more is never touched.
+ */
+export const MIN_RECORDS = 16
+
+/**
  * Re-bin the import's fine histogram onto `factor`-spaced bins and normalise.
  *
  * Normalised by **one shared denominator** — the records in all four — and not
@@ -73,6 +83,18 @@ const NAMES = ['++', '+−', '−+', '−−'] as const
  * four lying on top of each other wherever they hold the same number of records,
  * which is the plot `pairtools` and `distiller` draw and the one the number
  * below is read off.
+ *
+ * **Every drawn edge is a counted edge.** The drawing axis used to be built on
+ * its own — `factor` steps from the first separation, rounded — with each fine
+ * bin filed under whichever drawn bin its lower edge fell in, and each drawn bin
+ * divided by its own nominal width. At the default 1.1 over the import's 1.05
+ * that is 1.95 fine bins to a drawn one: most drawn bins held two, and every
+ * twenty-second held one and was still divided by the width of two. All four
+ * curves fell by exactly half there, together, every 0.9 of a decade — at 200
+ * bp, 1.6 kb, 12 kb, 98 kb and 730 kb on a *Lachancea* library — which read as
+ * a notch in the data. Grouping whole fine bins ({@link drawnEdges}) and
+ * dividing by the width they actually cover is the same correction
+ * `densityCurve` makes for a matrix's lattice (§18.8).
  */
 export function orientationFigure(
   source: OrientationCounts,
@@ -83,21 +105,11 @@ export function orientationFigure(
   const fineEdges = source.edges
   if (fineEdges.length < 3) return null
 
-  const longest = fineEdges[fineEdges.length - 1]
-  const from = Math.max(1, minSeparation)
-  if (!(longest > from)) return null
+  const cuts = drawnEdges(fineEdges, Math.max(1, minSeparation), factor)
+  if (cuts === null || cuts.length < 3) return null
+  const edges = cuts.map((at) => fineEdges[at])
+  const bins = cuts.length - 1
 
-  // The coarse axis, built the same way the fine one was so that every coarse
-  // edge falls on a fine edge and no fine bin is split between two coarse ones.
-  const coarse: number[] = [from]
-  let at = from
-  while (at < longest) {
-    at = Math.max(at + 1, Math.round(at * factor))
-    coarse.push(at)
-  }
-  if (coarse.length < 3) return null
-
-  const bins = coarse.length - 1
   const sums: Float64Array[] = [
     new Float64Array(bins),
     new Float64Array(bins),
@@ -105,27 +117,25 @@ export function orientationFigure(
     new Float64Array(bins),
   ]
   const totals = [0, 0, 0, 0]
-
-  for (let fine = 0; fine < fineEdges.length - 1; fine++) {
-    // The fine bin's own **lower edge** decides which coarse bin it lands in.
-    // Its midpoint would be wrong at the bottom of the axis, where a fine bin
-    // spans a whole coarse one and its midpoint is in the next.
-    const lo = fineEdges[fine]
-    if (lo < from) continue
-    let target = bisect(coarse, lo)
-    if (target < 0) continue
-    if (target >= bins) target = bins - 1
-    for (let which = 0; which < 4; which++) {
-      const value = source.counts[which][fine]
-      if (value === 0) continue
-      sums[which][target] += value
-      totals[which] += value
+  for (let bin = 0; bin < bins; bin++) {
+    for (let fine = cuts[bin]; fine < cuts[bin + 1]; fine++) {
+      for (let which = 0; which < 4; which++) {
+        const value = source.counts[which][fine]
+        if (!(value > 0)) continue
+        sums[which][bin] += value
+        totals[which] += value
+      }
     }
   }
 
   const shared = totals[0] + totals[1] + totals[2] + totals[3]
   if (shared === 0) return null
 
+  // Two readings of the same sums. The **axis** keeps every bin, an empty one as
+  // `NaN`, because the convergence compares the four bin by bin and has to know
+  // where one of them has nothing; the **drawn** curves are what the figure
+  // shows, with no bin left empty and no point on a handful of records.
+  const axis: OrientationCurve[] = []
   const curves: OrientationCurve[] = []
   for (let which = 0; which < 4; which++) {
     if (totals[which] === 0) continue
@@ -134,17 +144,127 @@ export function orientationFigure(
     for (let bin = 0; bin < bins; bin++) {
       // The **geometric** centre, because the axis is logarithmic and the
       // arithmetic midpoint of a log bin sits visibly right of the middle of it.
-      x[bin] = Math.sqrt(coarse[bin] * coarse[bin + 1])
-      const width = coarse[bin + 1] - coarse[bin]
-      y[bin] = width > 0 ? sums[which][bin] / (shared * width) : Number.NaN
-      if (sums[which][bin] === 0) y[bin] = Number.NaN
+      x[bin] = Math.sqrt(edges[bin] * edges[bin + 1])
+      y[bin] =
+        sums[which][bin] > 0 ? sums[which][bin] / (shared * (edges[bin + 1] - edges[bin])) : Number.NaN
     }
-    curves.push({ name: NAMES[which], x, y, n: totals[which] })
+    axis.push({ name: NAMES[which], x, y, n: totals[which] })
+    curves.push({ name: NAMES[which], ...drawnCurve(sums[which], edges, shared), n: totals[which] })
   }
   if (curves.length < 2) return null
 
-  const found = convergenceOf(curves)
+  const found = convergenceOf(axis)
   return { curves, convergence: found.at, spreadAt: found.spread }
+}
+
+/**
+ * The drawing axis, as indices into the fine one: every edge drawn **is** an
+ * edge the records were counted on, so no fine bin is split or left out.
+ *
+ * Each step goes to the fine edge nearest `factor` times the last, on a log
+ * scale — at least one fine bin, so a factor below the import's own 1.05 draws
+ * at the resolution that was counted rather than at one that was not. `null`
+ * where nothing lies past `from`.
+ */
+function drawnEdges(fine: Float64Array, from: number, factor: number): number[] | null {
+  const last = fine.length - 1
+  let at = 0
+  while (at < last && fine[at] < from) at++
+  if (at >= last) return null
+  const cuts = [at]
+  while (at < last) {
+    const target = fine[at] * factor
+    let next = at + 1
+    while (
+      next < last &&
+      Math.abs(Math.log(fine[next + 1] / target)) < Math.abs(Math.log(fine[next] / target))
+    ) {
+      next++
+    }
+    cuts.push(next)
+    at = next
+  }
+  return cuts
+}
+
+/**
+ * One orientation as drawn: a bin on its own where it holds {@link MIN_RECORDS},
+ * and runs of sparser bins pooled.
+ *
+ * **No bin is drawn empty, and none is drawn from a handful of records.** A bin
+ * with no record has no density on a log axis, and was drawn as a gap: at short
+ * range, where a filtered library holds one record every few base pairs, the
+ * curves came apart into fragments. Dropping the empty bins alone joins the
+ * fragments with lines through single records — a density read off one count,
+ * divided by a width that ignores the empty bins either side of it — which is a
+ * zigzag of noise at the separations the figure is read at.
+ *
+ * So a run of sparse bins is pooled into points of at least {@link MIN_RECORDS},
+ * each divided by the whole width it spans, empty bins included: the average
+ * density over that stretch, which is what the records in it can say. A run
+ * holding fewer in all is one point. A bin that holds enough on its own is never
+ * widened, so a real spike — `−−` at 36 bp in the same *Lachancea* library,
+ * seven hundred records beside two hundred — stays a spike rather than being
+ * averaged into the sparse bins before it.
+ *
+ * The line starts at the first record and ends at the last: empty bins before
+ * and after are not a density of zero anybody measured.
+ */
+function drawnCurve(
+  sums: Float64Array,
+  edges: readonly number[],
+  shared: number,
+): { x: Float64Array; y: Float64Array } {
+  let first = 0
+  let last = sums.length - 1
+  while (first <= last && !(sums[first] > 0)) first++
+  while (last >= first && !(sums[last] > 0)) last--
+
+  const x: number[] = []
+  const y: number[] = []
+  /** One point over bins `lo` to `hi`, inclusive, holding `records`. */
+  const point = (lo: number, hi: number, records: number): void => {
+    const from = edges[lo]
+    const to = edges[hi + 1]
+    x.push(Math.sqrt(from * to))
+    y.push(records / (shared * (to - from)))
+  }
+
+  let bin = first
+  while (bin <= last) {
+    if (sums[bin] >= MIN_RECORDS) {
+      point(bin, bin, sums[bin])
+      bin++
+      continue
+    }
+    // The run of sparse bins starting here, up to the next that stands alone.
+    let end = bin
+    while (end < last && sums[end + 1] < MIN_RECORDS) end++
+    const pooled: Array<[number, number, number]> = []
+    let start = bin
+    let records = 0
+    for (let at = bin; at <= end; at++) {
+      records += sums[at]
+      if (records < MIN_RECORDS) continue
+      pooled.push([start, at, records])
+      start = at + 1
+      records = 0
+    }
+    // What is left over joins the last point of the run, or is the run's one
+    // point where it never reached the threshold.
+    if (start <= end) {
+      const tail = pooled[pooled.length - 1]
+      if (tail !== undefined) {
+        tail[1] = end
+        tail[2] += records
+      } else if (records > 0) {
+        pooled.push([start, end, records])
+      }
+    }
+    for (const [lo, hi, held] of pooled) point(lo, hi, held)
+    bin = end + 1
+  }
+  return { x: Float64Array.from(x), y: Float64Array.from(y) }
 }
 
 /**
@@ -190,17 +310,4 @@ function convergenceOf(curves: readonly OrientationCurve[]): { at: number | null
     spread = disagreement
   }
   return { at, spread }
-}
-
-/** The index of the bin `value` falls in, or `-1` below the first edge. */
-function bisect(edges: readonly number[], value: number): number {
-  if (value < edges[0]) return -1
-  let lo = 0
-  let hi = edges.length - 1
-  while (lo + 1 < hi) {
-    const mid = (lo + hi) >> 1
-    if (edges[mid] <= value) lo = mid
-    else hi = mid
-  }
-  return lo
 }
