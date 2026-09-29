@@ -10046,8 +10046,10 @@ nothing is installed or uploaded (C1, §11); the tracks move with the map, so a 
 and a gap are read beside the contacts that are being judged; and the app says where it thinks the
 reference is wrong, in the picture, where the reader's eye already is.
 
-**Status: specified, not yet built.** Every subsection below describes what will be; each says
-*built* as it lands. It is a **dev feature** (§29) throughout: on `main`, and invisible until the
+**Status: partly built.** Every subsection below describes what will be, and says *built* as it
+lands: so far the model of an edit and its lens on the axes (§27.2), the stage in manual mode with its
+picture (§27.3, §27.4, §27.9), and the edit kept with the file. The session is not yet drawn through
+the edit (§27.7), nor are there suggestions (§27.5) or exports (§27.8). It is a **dev feature** (§29) throughout: on `main`, and invisible until the
 switch in *About* is on. The design it was written from — the method in full, the architecture with the
 code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
 
@@ -10077,9 +10079,11 @@ beside the map on the stage.
 
 *Built so far*: the model — the steps, the history and its cursor, the names, and both directions
 of the mapping (`genome/edit.ts`) — and the axis every track, feature, sequence letter, read and
-overlay is drawn through, which now reads a stretch either way round and clips what it draws to the
-piece it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). Nothing on screen is edited until the
-stage is (§27.3).
+overlay is drawn through, which reads a stretch either way round and clips what it draws to the piece
+it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). The edit is kept per file with the circular
+declarations, carried in a saved workspace as `edit` and read back from one (`state/referenceEdit.ts`);
+a record made on another assembly is kept untouched, named in the stage's history, and not applied.
+Not yet: the link's `s=` payload, and an AGP or `.assembly` read as an edit.
 
 **An edit is drawn, never written back.** The file is read exactly as it would be without one; the
 lens maps between the original and the edited assembly, and everything on screen goes through it.
@@ -10134,49 +10138,71 @@ rather than pretend otherwise.
 
 The third caller of the stage dialog, after the enlarged model (§25.3) and a figure's *customise*
 (§18.13): the picture, a sidebar of what is done to it, the grip between them and the button that puts
-the sidebar away. It opens from a button in the map's corner, from the palette, and from a suggestion's
-row in the Analysis drawer. **One map and its tracks**: the starred map, or the only one, moved onto
-the stage with the lanes placed on it — moved and moved back, never copied, so the zoom, the colours and
-the lanes are what the reader comes back to. A deck's other cells stay behind the stage, untouched; the
-stage is not a deck and never becomes one.
+the sidebar away. It opens from **the heading's word on the reference** — *reference · as in the file*,
+before the resolution — and from the palette's *Edit the reference*; once there are suggestions, from
+a suggestion's row in the Analysis drawer too. **One map and its tracks**: the session's own map, its
+whole-genome picture drawn on the stage (§27.9), and the lanes placed on it drawn beside that picture
+through the lens — the same tracks with the same settings, since a lane's settings belong to the
+track and not to the surface drawing it. The stage draws a picture of its own rather than borrowing the
+map's panel, because it is finer than any map's and held in the file's order, which is what lets an
+edit redraw it without a read; the map behind the stage is left as the reader left it. A deck's other
+cells stay behind the stage, untouched; the stage is not a deck and never becomes one.
 
-**Escape never closes it.** Escape cancels, innermost first — a drag, a selection, a mode — and a
-stage holding an hour of work is closed by its `×` or `⌘W`. The Analysis drawer is not a modal because
-a modal "answers Escape by destroying what is being read"; a stage that must be modal has to answer it
-some other way, and this is that way.
+**Escape never closes it.** Escape cancels, innermost first — a menu, a drag, the selection — and when
+there is nothing to cancel it does nothing: the stage is closed by its `×` alone, and a press on the
+dimmed page around it does not close it either. The Analysis drawer is not a modal because a modal
+"answers Escape by destroying what is being read"; a stage that must be modal has to answer it some
+other way, and this is that way (`ModalProps.onEscape`). Closing loses nothing: every step is kept with
+the file as it is made.
 
-**Its keys exist only while it is open**, as the enlarged model's do: they are commands in the palette,
-printed on the controls that perform them (§26.4), and take no letter from the panels behind.
+**Its keys exist only while it is open**, as the enlarged model's do, printed on the controls that
+perform them (§26.4) and taking no letter from the panels behind: `I` turns, `C` cuts, `S` splits,
+*delete* sets aside, `⌘Z` and `⇧⌘Z` undo and redo, `0` fits, `+` and `−` zoom, *Space* held pans. Not
+yet in the palette while the stage is up.
 
 What is on it:
 
-- **The map**, square, the whole edited assembly by default, zoomed and panned as every map is. Its
-  whole-genome picture is §27.9's.
+- **The map**, square, the whole edited assembly by default; the wheel zooms about the pointer, a
+  sideways wheel and *Space*-drag pan, a double click and `0` fit. Its picture is §27.9's. *Built.*
 - **Two pieces bars**, along its top and left edges: every piece a block in its **original sequence's
-  hue**, with a chevron for its strand. A moved piece keeps its colour, so the bar says at a glance where
-  each stretch came from, and a reversed one points the other way. A piece is selected, moved and turned
-  from its bar as it is from the map.
-- **The lanes** placed on the map, drawn through the lens.
+  hue** (a golden angle apart, so neighbours never share one), with chevrons pointing the way it reads,
+  and every edited sequence's name over its span. A moved piece keeps its colour, so the bar says at a
+  glance where each stretch came from, and a reversed one points the other way. *Built*, as a picture:
+  a piece is selected, moved and turned from the map; from the bar itself, not yet.
+- **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
+  dragged, so a track moves with the stretch under the hand; the selection is lit across them.
+  *Built.*
+- **The readout** over the map: where the pointer is in the edited assembly and, where that is not
+  the same place, in the original (`IV_e1:650,001 ← IV:650,001, turned`); the row as well off the
+  diagonal; what it snapped to; and, while a stretch is dragged, the step the drop would make. *Built.*
 - **The rail**, beside the map: each suggestion's label at the height of its position, with a leader
   to it, packed so that no two overlap. Hovering a label lights its marks on the map; hovering a mark
-  lights its label. It is one highlight in two places.
-- **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6); **suggestions**, sorted by confidence,
-  filtered by kind, each row its kind, position, confidence, the chips of its evidence — `map`, `gap`,
-  `telomeric`, `coverage`, `reads` — and its state; **history**; **sequences**, the edited assembly with
-  its pieces, a rename, a circular tick, a sort by length, and what was set aside at the foot;
-  **export** (§27.8); **settings** — the evidence the method may use, the resolution it works at, and
-  what it has learned, with *forget* beside it.
+  lights its label. It is one highlight in two places. Not yet: it comes with the suggestions.
+- **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6 — the last two greyed until there are
+  suggestions to work through); **selection**, what is selected and what can be done with it, each act
+  printing its key; **history**, every step in words, the cursor lit and undone steps greyed, a press
+  on a row going back or forward to it; **sequences**, the edited assembly — a press selects a whole
+  sequence and frames it — with what was set aside, and why, at the foot; **suggestions**, which says
+  the method is not built yet; and **picture**, what the stage's picture is. *Built.* Still to come:
+  suggestions sorted by confidence with their evidence chips, a rename and a circular tick on a
+  sequence, a sort by length, **export** (§27.8) and **settings** — the evidence the method may use,
+  the resolution it works at, and what it has learned, with *forget* beside it.
 
 **On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
 (§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
 of two short strokes opening towards its quadrant — for two ends that meet; on hover, a **bracket with a
 turning arrow** for an inversion, an **arrow** to an insertion line for a move. An edit already made is
-ink: a thin rule at every junction between parts. A rejected suggestion leaves the map and is struck
-through in the list. Nothing is drawn in `--warn` or `--danger`: a suggestion is an offer, not a
-caution.
+ink: a thin rule at every junction between parts, and a stronger one at every edge between sequences
+(*built*). The selection is an outline in the accent with a halo, and no wash over the picture: a wash
+changes the colour of the contacts being judged, and over the darkest of them reads as another colour
+altogether. A rejected suggestion leaves the map and is struck through in the list. Nothing is drawn in
+`--warn` or `--danger`: a suggestion is an offer, not a caution.
 
-**Closing the stage leaves the session edited** (§27.7), and the heading above the map says so — a
-chip, `edited · 7 steps`, whose press reopens the stage and whose menu offers *revert to the file*.
+**Closing the stage leaves the session edited** (§27.7), and the heading above the map says so: the
+word on the reference reads `edited · 7 steps`, lit, its press reopens the stage, and the arrow beside
+it reverts to the file — every step undone and kept to be redone, so the arrow is one more undo and
+never a loss. *Built*; until §27.7 is, the maps and tracks behind the stage are still drawn as the file
+is.
 
 ### 27.4 Gestures, and what snaps
 
@@ -10191,26 +10217,53 @@ on either axis, corners in the plane), **edit ends** (every junction between two
 boundaries** (the components inside each sequence, from an AGP the reader dropped as the original's own
 description — which is where a curator looks for a misjoin first). The nearest wins; at equal distance
 a suggestion beats an edit end beats a contig boundary. **A snap is a proposal the hand can refuse**: it
-moves the pointer, never the reference.
+moves the pointer, never the reference. Off every target the pointer rests on the nearest cell edge,
+since a cell is what the picture can place (§4.9 of the design note: *placed by the map, to one cell*).
 
-- **Select along the diagonal**: a drag, both ends snapped; the stretch lights on the diagonal, the
-  axes, the pieces bars and the lanes.
+*Built*: snapping along each axis to the edit ends — every junction, and every edge between two
+sequences, which the readout names as the edge it is (`between IV and V`) — and to the selection's own
+two ends; ⌥ frees it, except while a stretch is being dragged, where ⌥ is the copy. Not yet: the
+suggestions and the corners in the plane, which come with the method, and contig boundaries, which come
+with reading an AGP.
+
+**On the stage a drag selects**, because selecting is what the stage is for; the map's own drag,
+which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms as it does on every map.
+
+- **Select along the diagonal**: a drag starting within 12 pixels of it, both ends snapped, kept inside
+  the sequence it started in; the stretch lights on the diagonal, the pieces bars and the lanes. A press
+  on the diagonal selects the piece under it. *Built.*
 - **Select off the diagonal**: a drag in the body of the map draws a box whose sides snap to corners
   and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a
   press on one corner names the stretch between its two ends. What is offered is what two stretches
   admit: bring the rows' stretch next to the columns', swap them, turn either. This is the gesture the
   off-diagonal signal is for: the corner of a block that stops is where two ends meet, and grabbing it
-  is grabbing both breakpoints at once.
+  is grabbing both breakpoints at once. *Built*, snapping to edit ends until there are corners: each
+  side of the box is kept inside the sequence it started in, the sidebar offers *rows before columns*,
+  *columns after rows*, *swap them* (two stretches of one sequence, as two steps) and *turn* either, and
+  a press off the diagonal selects the stretch between its row and its column where the two are one
+  sequence's, and boxes the two pieces under it where they are not.
 - **Move**: drag the selection, by its square on the diagonal or its band on a pieces bar. A ghost
   follows, an insertion line snaps between parts, and the map rearranges under the hand: while the
   pointer is down the block in hand is regathered on the main thread through the tentative edit, cells
   whole, at frame rate, and on the drop the worker reads the settled edit exactly and the refine path's
-  swap (§2) replaces the preview. `I` during the drag turns the stretch on the way.
+  swap (§2) replaces the preview. `I` during the drag turns the stretch on the way. *Built* from the
+  square on the map: the stretch's start snaps, or its end where that is nearer a target, the whole map
+  and its lanes are redrawn through the edit the drop would make at every move of the pointer, the
+  readout says that step, and the selection follows the stretch to where it lands. A stretch dropped
+  back on itself is left alone, or turned if it was flipped on the way. At the whole-genome scale the
+  picture *is* the settled edit, so there is nothing for the worker to read; the read on the drop comes
+  with the zoom past the picture (§27.9).
 - **Invert** `I`; **cut** `C`, at the snapped position or at both ends of a selection; **set aside**
   `⌫`, whose menu asks why; **duplicate** by `⌥`-drag, the platform's own *drag a copy*; **split into a
   new sequence** `S`; **join** by dragging one sequence's end onto another's on a pieces bar; **set the
-  origin** `O` on a circular sequence.
-- **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it.
+  origin** `O` on a circular sequence. *Built*: invert, cut and split at the pointer (or, with no pointer
+  on the map, at the selection's ends — a stretch made a sequence of its own), set aside with its menu
+  of reasons, duplicate by ⌥ held on the drop and as *copy* in the sidebar (the stretch again after
+  itself), and **join** by dropping a whole sequence — selected from the list or the diagonal — on
+  another's start or end, which puts a 100 bp `N` gap between them and lands the joined sequence where
+  the drop was. The right-click menu offers the same, for the selection and for the place under the
+  pointer. Not yet: the origin, which comes with circular sequences on the stage.
+- **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it. *Built.*
 
 ### 27.5 Suggestions: ends and corners
 
@@ -10341,6 +10394,23 @@ at this scale. It exists only while a stage is open. §2's other maps keep the 4
 (`RASTER_MAX_DIM`); this is the one picture that does not, and for the one reason a reader cannot curate
 a genome they cannot see.
 
+*Built* (`metacooler/picture.ts`, the reader's `picture` request): read from the finest rung of an
+`.mcool` whose bins fit, whatever rung is open, and pooled a few bins a cell, never across a sequence's
+edge, only where none does; balanced where the map is. **One pass, a band of rows at a time**: the
+pixels whose first bin is in the band — one ranged read of a cooler's pixel table — are summed into a
+band of floats and quantized before the next band is read, so no more than 64 MB of floats is ever in
+hand. The byte scale is set from the first band, a decade below its thousandth-lowest cell to half a
+decade above its highest, since every band carries the far contacts of its rows as well as their
+diagonal; anything past either end is drawn at that end rather than lost. Over it, a **pyramid** of
+means, four cells to one, down to 256 cells a side, and each pixel of the stage shows the level whose
+cell is nearest a pixel — a whole yeast genome is twelve cells to a pixel, and a pixel that showed one
+of them would sparkle where the map is sparse. It opens at the first and ninety-ninth percentiles of
+the cells that hold contacts, the rule every map's automatic range follows, in the map's colours.
+Read each time the stage opens and dropped when it closes: 13.7 million pixels of the yeast micro-C
+at 1 kb take a few seconds over the demo's local server. Refused, with the numbers, for an assembly of
+more sequences than the picture has cells, since a cell never holds two; a zoom past the picture's own
+cell is not yet read through the lens, so the stage shows the picture's cells enlarged.
+
 ### 27.10 Metagenomes
 
 On a `.metacool` the edited assembly keeps its genome layer, and two more steps are offered: a contig
@@ -10366,8 +10436,7 @@ runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a
 
 | Operation | Budget |
 |---|---|
-| Open the stage, picture already read | 0 requests |
-| Read the whole-genome picture | one pass over one rung, estimated before it starts, a bar and a cancel |
+| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel; not yet estimated before it starts) |
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) |
@@ -10377,10 +10446,13 @@ runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a
 ### 27.13 Refused, and not yet built
 
 Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
-more than one map; a lifted `.cool` above the memory it would take, with the way out. Not yet built,
-in the order it will be (`docs/reference-editing.md` §10): the lens drawn, the stage in manual mode,
-the exports, the method, review and auto with the command line, the evidence beyond the map,
-metagenomes.
+more than one map; a stage on an assembly of more sequences than its picture has cells; a lifted
+`.cool` above the memory it would take, with the way out. Built: the model and the axis (§27.2), the
+stage in manual mode and its picture (§27.3, §27.4, §27.9), the edit kept with the file and carried in
+a workspace. Not yet built, in the order it will be (`docs/reference-editing.md` §10): the session
+drawn through the lens (§27.7), with the worker's reads through it and the zoom past the picture; the
+exports; the method, with the rail and the corners; review and auto with the command line; the
+evidence beyond the map; metagenomes.
 
 ## 28. Two sequences on two axes
 
@@ -10475,8 +10547,9 @@ What is dev, and what switched off means for each:
   store drops the mock community's figure and its two files; the rest of what the switch hides — the
   genomes table, the genome views, the metagenome tasks and their options — can only be reached with a
   multi-genome file open, and so goes with it.
-- **`edit`** — the stage, its task, its keys, its chip in the heading, and every surface of the lens
-  (§27).
+- **`edit`** — the stage, its keys, the heading's word on the reference, the palette's *Edit the
+  reference*, the edit kept with a file, its task once there is one, and every surface of the lens
+  (§27). Switched off, none of them is drawn and a kept edit is left in storage as it was.
 - **`dotplot`** — the task, the view and its links (§28).
 
 ### 29.4 What a dev feature left in a session

@@ -164,6 +164,17 @@ const LUCIDE = [
   // map as a dashed square with that one edge drawn solid. Upstream has the top
   // one only; the other three are it turned, below in `HAND`.
   'square-dashed-top-solid',
+  // The stage that edits the reference (§27): a cut, a stretch turned round,
+  // one copied, one taken out as a sequence of its own, two joined end to end,
+  // and the history's two directions. Lucide's own, so the stage's row of acts
+  // reads as the rest of the app's marks do.
+  'scissors',
+  'copy',
+  'split',
+  'merge',
+  'arrow-left-right',
+  'undo-2',
+  'redo-2',
 ]
 
 /**

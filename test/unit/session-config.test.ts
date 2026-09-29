@@ -247,6 +247,38 @@ describe('the round trip', () => {
     expect(silent !== null && 'origins' in silent).toBe(false)
   })
 
+  /**
+   * The edit of the reference (§27.2), through JSON and back — the field every
+   * earlier addition to this file was written out with and dropped on the way
+   * in, until a test like this one held it.
+   */
+  it('carries the edit of the reference, its history and its cursor', () => {
+    const key = 'trip|yeast.cool'
+    const edit = {
+      version: 1,
+      original: { names: ['I', 'II'], lengths: [1000, 600] },
+      history: [
+        { step: { op: 'invert', sequence: 'I', from: 100, to: 300 }, by: 'reader', when: 1 },
+        { step: { op: 'cut', sequence: 'II', at: 50 }, by: 'reader', when: 2 },
+      ],
+      cursor: 1,
+    }
+    remember(key, 'map:edit', edit)
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    const read = roundTrip(config)
+    expect(read?.edit).toEqual(edit)
+    applyConfig(read as NonNullable<typeof read>, 's9|yeast.cool')
+    expect(recall('s9|yeast.cool', 'map:edit')).toEqual(edit)
+
+    // No steps, no field: a file nobody edited writes nothing about it.
+    remember(key, 'map:edit', null)
+    const none = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect('edit' in none).toBe(false)
+    // …and a hand-written one that is not an edit is left out rather than trusted.
+    const odd = parseTab({ state: STATE, edit: { version: 2, history: 'no' } })
+    expect(odd !== null && 'edit' in odd).toBe(false)
+  })
+
   it('carries the deck’s arrangement into the importing session', () => {
     const key = 'deck|six.cool'
     remember(key, 'deck:starred', 'p4')

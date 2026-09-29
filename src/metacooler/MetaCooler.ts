@@ -70,6 +70,7 @@ import {
   resolveCountKind,
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
+import { pyramid, readPicture, type PictureLayout, type PictureLevel, type Quantizer } from './picture'
 import {
   ResampledStore,
   takeCensus,
@@ -1412,6 +1413,36 @@ export class MetaCooler {
       ids: pooling.ids,
       pooling,
     }
+  }
+
+  /**
+   * The stage's whole-genome picture of this map (§27.9): every cell of it,
+   * `stride` bins a side, one byte each, with the pyramid over it.
+   *
+   * A pass over every stored pixel, a band of rows at a time, so the floats in
+   * hand never outnumber one band — see `metacooler/picture.ts`. Watched like
+   * the whole-genome read, with the same bar and the same way out.
+   *
+   * @returns `null` where the caller cancelled.
+   */
+  async picture(
+    layout: PictureLayout,
+    options: SpanScanOptions & { balance?: boolean } = {},
+  ): Promise<{ levels: PictureLevel[]; quantizer: Quantizer; histogram: Float64Array; pixels: number } | null> {
+    const whole: Extent = [0, this.nBins]
+    const weights = options.balance === true ? this.weightSlices(whole, whole).rows : null
+    const read = await readPicture({
+      store: this.store,
+      coords: this.coords,
+      layout,
+      weights,
+      ...(options.value === undefined ? {} : { value: options.value }),
+      ...(options.cancelled === undefined ? {} : { cancelled: options.cancelled }),
+      ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
+    })
+    if (read === null) return null
+    const levels = pyramid({ n: layout.n, cells: read.cells }, read.quantizer)
+    return { levels, quantizer: read.quantizer, histogram: read.histogram, pixels: read.pixels }
   }
 
   /**

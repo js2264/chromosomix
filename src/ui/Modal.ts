@@ -39,6 +39,15 @@ export interface ModalProps {
    * case has been changed is a different name.
    */
   titleIsName?: boolean
+  /**
+   * What Escape does instead of closing, for a dialog that holds work.
+   *
+   * The edit stage (§27.3) answers Escape by cancelling whatever is innermost —
+   * a drag, a selection — and never by closing: a key that means *stop what I
+   * am doing* must not also throw away an hour of it. Such a dialog is closed
+   * by its ✕ alone, and a press on the backdrop does nothing either.
+   */
+  onEscape?(): void
   /** Built once, when the modal opens. */
   body(close: () => void): HTMLElement
   /** Called however the modal was dismissed, so the opener can forget it. */
@@ -78,7 +87,7 @@ export class Modal {
           class: `modal-title${props.titleIsName === true ? ' is-name' : ''}`,
           text: props.title,
         }),
-        iconButton('x', 'Close (Esc)', close, { class: 'btn-close', size: 16 }),
+        iconButton('x', props.onEscape === undefined ? 'Close (Esc)' : 'Close', close, { class: 'btn-close', size: 16 }),
       ),
       body,
     )
@@ -89,13 +98,14 @@ export class Modal {
     // A click on the backdrop closes; a click inside the panel must not, or
     // selecting text in the dialog would dismiss it.
     this.root.addEventListener('mousedown', (event) => {
-      if (event.target === this.root) close()
+      if (event.target === this.root && props.onEscape === undefined) close()
     })
 
     this.onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        close()
+        if (props.onEscape !== undefined) props.onEscape()
+        else close()
         return
       }
       if (event.key !== 'Tab') return

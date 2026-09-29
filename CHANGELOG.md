@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A stage that edits the reference, in manual mode — a dev feature (§27).** With *dev features* on,
+  the heading says *reference · as in the file* before the resolution; pressing it, or *Edit the
+  reference* in the palette, opens the whole map on a stage of its own, read once at up to 16,384 cells
+  a side and one byte a cell (12,118 for the yeast micro-C at 1 kb), with a pieces bar along its top and
+  left in each original sequence's hue and the map's lanes beside it. A drag along the diagonal selects
+  a stretch, snapping to every junction and sequence edge; `I` turns it, `C` cuts, `S` splits, *delete*
+  sets it aside with a reason, and dragging its square moves it — the map and its lanes redrawn through
+  the edit under the hand, ⌥ copying, `I` turning it on the way, a whole sequence dropped on another's
+  end joining the two. A drag off the diagonal boxes two stretches, with what two stretches admit. Every
+  act is a step in a history with undo and redo, kept with the file, carried in a saved workspace, and
+  counted in the heading — *edited · 2 steps*, with an arrow back to the file. The stage is closed by
+  its × only: Escape lets go of the drag or the selection. The rest of the session is not yet drawn
+  through the edit, and there are no suggestions or exports yet.
+
 - **Dev features: a switch in *About* that shows what is still being built (§29).** A feature can
   now live on `main` — specified, tested and deployed like any other — and be **invisible** to a reader
   until they turn *dev features* on, under the version in *About*: no row, task, command, example or

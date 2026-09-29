@@ -1,10 +1,18 @@
 # Editing the reference — design note
 
-> **Status, 2026-09-29.** Specified, not built. `SPECS.md` §27 (editing the reference), §28 (two
-> sequences on two axes) and §29 (dev features) are the contract; this note is the design they were
+> **Status, 2026-09-29.** Partly built: the dev features (§29), the model of an edit and the axis it
+> is drawn through, and the stage in manual mode with its picture — steps 1, most of 2 and 3 of §10.
+> `SPECS.md` §27 (editing the reference), §28 (two sequences on two axes) and §29 (dev features) are
+> the contract, and each subsection there says *built* as it lands; this note is the design they were
 > written from — the method in full, the architecture with the code it lands in, the alternatives
 > weighed, and the order it will be built in. Both features are **dev features** (§29): on `main`,
 > invisible to a reader until the switch in *About* is on.
+>
+> Where the build went another way than this note: the stage draws **its own picture** rather than
+> moving the map's panel onto it (§3.1 below) — the picture is finer than a panel's and in the file's
+> order, which is the whole trick of §3.7 — and draws the map's own lanes beside it through the lens;
+> on the stage **a drag selects** and *Space*-drag pans; the move's live preview is the picture itself
+> redrawn through the tentative edit, since at the whole-genome scale that *is* the settled edit.
 
 The feature in one sentence: **a stage where the reader edits the reference a contact map was built
 against — cut, invert, move, join, duplicate, set aside — with the map, its tracks and every later

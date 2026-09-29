@@ -23,6 +23,10 @@
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { devFeature } from '../state/devFeatures'
+import { EDIT_SCOPE, EditStore, readEdit } from '../state/referenceEdit'
+import { EditStage } from '../edit/EditStage'
+import { ReferenceChip } from '../edit/ReferenceChip'
+import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -1350,6 +1354,8 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    // The stage goes with the tab; the edit it made is kept with the file.
+    this.editStage?.close()
     this.stopEdgeLanding()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
@@ -1567,6 +1573,20 @@ export class Session {
           file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deckIsPossible,
         run: () => this.addMap(),
       },
+      // The stage that edits the reference (§27.3), a dev feature (§29): absent,
+      // not greyed, while the switch is off.
+      ...(devFeature('edit') && file !== null
+        ? [
+            {
+              id: 'edit-reference',
+              group: 'View',
+              title: 'Edit the reference',
+              hint: 'Cut, turn, move, copy and join stretches of the assembly, with the map redrawn as you go.',
+              enabled: this.reader !== null && this.editStage === null,
+              run: () => void this.openEditStage(),
+            },
+          ]
+        : []),
       {
         id: 'hide-map',
         group: 'View',
@@ -2521,6 +2541,7 @@ export class Session {
         onAddResolution: () => this.askResolution(),
         onDropResolution: (binsize) => this.dropResolution(binsize),
         contacts: this.contactsBoxFor(),
+        ...(devFeature('edit') ? { reference: this.referenceChipFor() } : {}),
       })
       this.infoPanel = new InfoPanel({
         info,
@@ -5348,6 +5369,89 @@ export class Session {
     if (key === null) return null
     if (this.originsHeld?.key !== key) this.originsHeld = { key, store: new OriginStore(key) }
     return this.originsHeld.store
+  }
+
+  /**
+   * The edit of the file's reference (§27.2), held and keyed as the circular
+   * declarations are — a fact about the file's sequences, the same at every
+   * rung. Built once the contigs table is read, since an edit is checked
+   * against the names and lengths it was made on. A dev feature (§29): `null`
+   * while the switch is off, and the record is left as it was.
+   */
+  private editHeld: { key: string; store: EditStore } | null = null
+
+  private editStore(): EditStore | null {
+    if (!devFeature('edit')) return null
+    const key = this.sessionKey()
+    const contigs = this.file?.contigs ?? null
+    if (key === null || contigs === null) return null
+    if (this.editHeld?.key !== key) {
+      const pairs = contigPairs(contigs)
+      const store = new EditStore(key, { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) })
+      store.subscribe(() => this.referenceChip?.sync())
+      this.editHeld = { key, store }
+    }
+    return this.editHeld.store
+  }
+
+  /** Steps applied to the file's reference — from the store, or from the record it will read. */
+  private editSteps(): number {
+    if (this.editHeld !== null && this.editHeld.key === this.sessionKey()) return this.editHeld.store.applied
+    const key = this.sessionKey()
+    if (key === null) return 0
+    return readEdit(recall<unknown>(key, EDIT_SCOPE))?.cursor ?? 0
+  }
+
+  /** The heading's word on the reference, with its questions answered by this session. */
+  private referenceChip: ReferenceChip | null = null
+
+  private referenceChipFor(): ReferenceChip {
+    this.referenceChip = new ReferenceChip({
+      steps: () => this.editSteps(),
+      onOpen: () => void this.openEditStage(),
+      onRevert: () => void this.revertEdit(),
+    })
+    return this.referenceChip
+  }
+
+  /** The stage, while it is open. */
+  private editStage: EditStage | null = null
+
+  /** Open the stage on the file's map (§27.3): one map and its tracks, never a deck. */
+  private async openEditStage(): Promise<void> {
+    if (!devFeature('edit') || this.editStage !== null) return
+    const file = this.file
+    const reader = this.reader
+    if (file === null || reader === null) return
+    await this.contigs().catch(() => null)
+    const store = this.editStore()
+    if (store === null || this.destroyed || this.editStage !== null || this.file !== file) return
+    const state = this.store.state
+    const balance = file.info.hasWeights && state?.balance !== false
+    const lanes = this.annotationContext()
+    this.editStage = new EditStage({
+      title: this.mapLabel(file.uri),
+      memoryKey: () => this.sessionKey() ?? file.uri,
+      store,
+      readPicture: (onProgress) => reader.cancellable<'picture'>({ kind: 'picture', balance }, onProgress),
+      colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
+      ...(lanes === undefined
+        ? {}
+        : { lanes: { store: lanes.store, ...(lanes.map === undefined ? {} : { map: lanes.map }), manual: lanes.manual, client: lanes.client, groups: lanes.groups } }),
+      onClose: () => {
+        this.editStage = null
+        this.referenceChip?.sync()
+        this.host.sessionChanged(this)
+      },
+    })
+    this.host.sessionChanged(this)
+  }
+
+  /** Every step undone, and kept to be redone (§27.3). */
+  private async revertEdit(): Promise<void> {
+    await this.contigs().catch(() => null)
+    this.editStore()?.revert()
+    this.referenceChip?.sync()
   }
 
   /**

@@ -109,7 +109,20 @@ export type EditStep =
       at: number
       strand: 1 | -1
     }
-  | { op: 'join'; a: string; aEnd: SequenceEnd; b: string; bEnd: SequenceEnd; gap: number }
+  | {
+      op: 'join'
+      a: string
+      aEnd: SequenceEnd
+      b: string
+      bEnd: SequenceEnd
+      gap: number
+      /**
+       * Whose place in the order the joined sequence takes: `a`'s, which is
+       * the default, or `b`'s — a sequence dropped on another's start lands
+       * where the other was, as the hand said.
+       */
+      place?: 'a' | 'b'
+    }
   | { op: 'split'; sequence: string; at: number; name?: string }
   | { op: 'aside'; sequence: string; from: number; to: number; why: AsideReason }
   | { op: 'rotate'; sequence: string; at: number }
@@ -411,7 +424,13 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
         taken.delete(a.name)
         a.name = freshName(a.name, taken)
       }
-      next.sequences = next.sequences.filter((sequence) => sequence !== b)
+      if (step.place === 'b') {
+        // `a` leaves its own place and takes `b`'s.
+        next.sequences = next.sequences.filter((sequence) => sequence !== a)
+        next.sequences.splice(next.sequences.indexOf(b), 1, a)
+      } else {
+        next.sequences = next.sequences.filter((sequence) => sequence !== b)
+      }
       return next
     }
     case 'split': {

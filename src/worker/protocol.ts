@@ -720,6 +720,36 @@ export interface ResampleResult {
   census: Census | null
 }
 
+/**
+ * The stage's whole-genome picture (§27.9): every contact of a map at up to
+ * 16,384 cells a side, one byte a cell, in the file's order — see
+ * `metacooler/picture.ts` for how it is read and what a byte means.
+ */
+export interface PictureResult {
+  /** The rung it was read from, as `OpenResult.entries` names it; `null` for the open map. */
+  rung: string | null
+  /** Base pairs a cell a side: the rung's bin size times {@link stride}. */
+  binsize: number
+  /** Bins of that rung a cell a side. */
+  stride: number
+  /** Cells a side. */
+  n: number
+  /** The sequences, in file order, each with the cells it spans. */
+  sequences: Array<{ name: string; length: number; firstCell: number; cells: number }>
+  /** The picture and the pyramid over it, finest first: upper triangles. */
+  levels: Array<{ n: number; cells: Uint8Array }>
+  /** The base-10 logs bytes `1` and `255` stand for. */
+  low: number
+  high: number
+  /** The range the picture opens at, in base-10 logs. */
+  vmin: number
+  vmax: number
+  /** Whether the values are balanced, or the raw column. */
+  balanced: boolean
+  /** Stored pixels walked. */
+  pixels: number
+}
+
 export interface StatsResult {
   /** Everything the byte source has fetched since the file was opened. */
   total: SourceStats
@@ -749,6 +779,7 @@ export interface ResultMap {
   exportMcool: McoolExport
   resample: ResampleResult
   contacts: { total: number | null }
+  picture: PictureResult
   cancel: null
   close: null
 }
@@ -955,6 +986,11 @@ export type WorkerRequest =
    */
   | { id: number; kind: 'contacts' }
   | { id: number; kind: 'stats' }
+  /**
+   * The stage's whole-genome picture (§27.9), at the finest rung of the ladder
+   * that fits `cells` a side — pooled a few bins a cell where none does.
+   */
+  | { id: number; kind: 'picture'; cells?: number; balance?: boolean; value?: string }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

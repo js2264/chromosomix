@@ -714,6 +714,25 @@ The stage's three modes, and three answers to one question — **who presses acc
 *manual* the suggestions are guides; in *review* they are a queue the reader answers; in *auto* the
 task applies every one above a threshold. `metacooler-run edit` is *auto* from a shell.
 
+### the stage's picture
+
+The whole map, drawn once for the editing stage at up to 16,384 cells a side, one byte a cell, **in the
+file's order** (§27.9) — so an edit redraws it through the lens without reading a byte. Its own thing,
+finer than any map's (`RASTER_MAX_DIM` is 4,096), and dropped when the stage closes. A picture and
+nothing else: every number a reader is shown is read from the file.
+
+### pieces bar
+
+The strip along the stage's top and left edges: every piece of the edited assembly as a block in its
+**original sequence's hue**, chevrons pointing the way it reads, and each edited sequence's name over
+it. A moved piece keeps its colour, so the bar says where each stretch came from.
+
+### the word on the reference
+
+The heading's *reference · as in the file*, or *edited · 7 steps*, lit: the tab's one statement of
+whether what it draws is the file's sequences or an edit's (§27.3). A press opens the stage; the arrow
+beside an edited one reverts to the file, which is one more undo.
+
 ### the rail
 
 The column of labels beside the map on the stage, each suggestion's label at the height of its

@@ -17,6 +17,7 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
+import { PICTURE_CELLS, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
@@ -56,6 +57,7 @@ import {
   type PairsBinning,
   type PairsImportSummary,
   type PairsProbeResult,
+  type PictureResult,
   type ResampleResult,
   type SourceKind,
   type StatsResult,
@@ -658,6 +660,82 @@ function binLevelResult(mc: MetaCooler, dense: DenseMatrix, genomes = false): Ma
 /** The hint the CLI would print for this shape of selection (§10). */
 function hintFor(rows: Extent, cols: Extent): string {
   return rows[0] === cols[0] && rows[1] === cols[1] ? DENSE_HINTS.binSelection : DENSE_HINTS.range
+}
+
+/**
+ * The stage's whole-genome picture (§27.9).
+ *
+ * Read from the finest rung of the ladder whose bins fit the picture — a yeast
+ * `.mcool` gives its 1 kb rung, twelve thousand cells, whatever rung is open —
+ * and pooled a few bins a cell only where none does. One pass over that rung,
+ * watched like the whole-genome read: the bar, and Escape.
+ */
+async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }>): Promise<PictureResult> {
+  const open = requireSession().mc
+  const cap = Math.max(256, Math.min(PICTURE_CELLS, Math.trunc(request.cells ?? PICTURE_CELLS)))
+  const rung = pictureRung(open, cap)
+  const mc = await mapFor(rung)
+  const stride = pictureStride(mc.coords, cap)
+  if (stride === null) {
+    throw new ViewerError(
+      'unsupported',
+      `The stage draws the whole assembly at ${cap.toLocaleString('en-US')} cells a side, each inside one ` +
+        `sequence, and this one has ${mc.coords.nContigs.toLocaleString('en-US')} sequences.`,
+    )
+  }
+  const layout = pictureLayout(mc.coords, stride)
+  const balanced = request.balance === true && mc.hasWeights
+  const read = await mc.picture(layout, {
+    balance: balanced,
+    ...(request.value === undefined ? {} : { value: request.value }),
+    ...scanHooks(request.id),
+  })
+  if (read === null || cancelled.has(request.id)) throw abortError()
+  const { vmin, vmax } = displayRange(read.histogram, read.quantizer)
+  return {
+    rung: mc === open ? null : (rung ?? null),
+    binsize: mc.binsize * stride,
+    stride,
+    n: layout.n,
+    sequences: mc.chromnames.map((name, c) => ({
+      name,
+      length: mc.coords.contigLengths[c],
+      firstCell: layout.offsets[c],
+      cells: layout.offsets[c + 1] - layout.offsets[c],
+    })),
+    levels: read.levels,
+    low: read.quantizer.low,
+    high: read.quantizer.high,
+    vmin,
+    vmax,
+    balanced,
+    pixels: read.pixels,
+  }
+}
+
+/**
+ * The rung a picture of `cap` cells a side is read from: the finest whose bins
+ * fit, else the coarsest, which is then pooled. `undefined` for the open map —
+ * a file with no ladder, or one whose open rung is the answer.
+ *
+ * Counted from the open map's sequence lengths, so no rung is opened to be
+ * measured: an `.mcool`'s entries are its bin sizes.
+ */
+function pictureRung(open: MetaCooler, cap: number): string | undefined {
+  if (open.entryGroup !== 'resolutions') return undefined
+  const lengths = open.coords.contigLengths
+  const binsAt = (size: number): number => {
+    let total = 0
+    for (let c = 0; c < lengths.length; c++) total += Math.ceil(lengths[c] / size)
+    return total
+  }
+  const rungs = open.entries
+    .map((name) => ({ name, size: Number(name) }))
+    .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
+    .sort((a, b) => a.size - b.size)
+  if (rungs.length === 0) return undefined
+  const best = rungs.find((rung) => binsAt(rung.size) <= cap) ?? rungs[rungs.length - 1]
+  return best.size === open.binsize ? undefined : best.name
 }
 
 async function handleMatrix(
@@ -1626,6 +1704,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleContacts(request)
     case 'stats':
       return handleStats()
+    case 'picture':
+      return handlePicture(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

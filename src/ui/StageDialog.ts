@@ -47,6 +47,8 @@ export interface StageDialogProps {
   scope: string
   /** The stage's box changed — drag, toggle, keyboard nudge. */
   onResize?: () => void
+  /** What Escape does instead of closing — see `ModalProps.onEscape`. */
+  onEscape?: () => void
   onClose?: () => void
 }
 
@@ -143,6 +145,7 @@ export function stageDialog(props: StageDialogProps): Modal {
 
       return el('div', { class: 'stage-modal' }, stage, grip, side, toggle)
     },
+    ...(props.onEscape === undefined ? {} : { onEscape: props.onEscape }),
     onClose: props.onClose,
   })
 }
