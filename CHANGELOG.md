@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The assembly's own sequence beside the map, when the stage suggests — a dev feature (§27.5).**
+  Where the session holds the assembly's FASTA or `.2bit`, the stage reads it once: the ends of every
+  sequence for telomeric repeats — `TTAGGG` and its plant, insect and ciliate kin on either strand,
+  and a budding yeast's irregular `TG₁₋₃` — and every base of a genome up to 100 Mb for gaps of `N`. A
+  suggestion that would bury a telomere — a join, the turn of a chromosome's end, a chromosome moved
+  into another — counts against itself and says `a telomere`; a break beside a gap is
+  placed at the gap, to the base, and says `at a gap of N`; and the side panel says what was read. On
+  the yeast whose chromosome XVI carries the *M. mycoides* genome, auto mode now completes the fused
+  chromosome from telomere to telomere. A join across a gap the map measured writes it (`128,000 N
+  between`) rather than the stage's own hundred, and the AGP writes a join's hundred as a gap of
+  unknown size, `U`.
+
 - **Suggestions that scaffold a real long-read assembly — a dev feature (§27.5, §27.11).** Whether
   two contigs meet is now weighed at the picture's own resolution — the pass that reads the stage's
   picture keeps every pair of cells between sequence ends — by a score that fits the gap the assembly

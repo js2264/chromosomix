@@ -123,11 +123,15 @@ function provenance(context: ExportContext, what: string): string[] {
 /** The gap type, linkage and evidence of every gap the stage makes: a join the map supports. */
 const GAP_COLUMNS = ['scaffold', 'yes', 'proximity_ligation']
 
+/** AGP 2.1's length for a gap of unknown size, which a `U` line always has. */
+const UNKNOWN_GAP = 100
+
 /**
  * The edited assembly as an AGP 2.1: every sequence as the components it is
  * built from, 1-based and inclusive as the format counts, reversed pieces `-`,
  * each run of `N` a gap line typed `scaffold` with `proximity_ligation` as its
- * evidence — which is what a join on the stage is.
+ * evidence — which is what a join on the stage is: `U`, of unknown size, for a
+ * join's hundred bases, `N` for a length the map measured.
  */
 export function agpOf(assembly: EditedAssembly, context: ExportContext): string {
   const lines = ['##agp-version\t2.1', ...provenance(context, 'AGP')]
@@ -143,7 +147,10 @@ export function agpOf(assembly: EditedAssembly, context: ExportContext): string 
     let number = 1
     for (const part of object.parts) {
       if (isGap(part)) {
-        lines.push([object.name, at, at + part.gap - 1, number, 'N', part.gap, ...GAP_COLUMNS].join('\t'))
+        // A join's hundred `N` is a gap of unknown size, `U`; any other a
+        // length the map measured, `N`.
+        const type = part.gap === UNKNOWN_GAP ? 'U' : 'N'
+        lines.push([object.name, at, at + part.gap - 1, number, type, part.gap, ...GAP_COLUMNS].join('\t'))
         at += part.gap
       } else {
         const length = part.end - part.start

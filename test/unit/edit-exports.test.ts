@@ -64,7 +64,7 @@ describe('the AGP', () => {
       'I_e1\t151\t450\t2\tW\tI\t201\t500\t-',
       'I_e1\t451\t850\t3\tW\tI\t501\t900\t+',
       'II_e1\t1\t600\t1\tW\tII\t1\t600\t+',
-      'II_e1\t601\t700\t2\tN\t100\tscaffold\tyes\tproximity_ligation',
+      'II_e1\t601\t700\t2\tU\t100\tscaffold\tyes\tproximity_ligation',
       'II_e1\t701\t1000\t3\tW\tIII\t1\t300\t-',
       'I_unplaced1\t1\t50\t1\tW\tI\t1\t50\t+',
     ])

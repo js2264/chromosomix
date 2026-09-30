@@ -54,6 +54,7 @@ import {
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
 import { ExportCard, type ExportCardProps } from './ExportCard'
+import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
 import { paintPicture, pictureColours } from './paint'
 import { Rail, type RailItem } from './rail'
@@ -210,6 +211,10 @@ export class EditStage {
   private lanesGrid: LensGrid | null = null
   /** What the method weighs, read with the picture (§27.5). */
   private method: NonNullable<PictureResult['method']> | null = null
+  /** What the session's sequence says about the assembly (§27.5), once read; `null` until then or without one. */
+  private evidence: SequenceEvidence | null = null
+  /** Whether the sequence is being read for it. */
+  private readingEvidence = false
   /** The suggestions for the edit as it stands, and a recount pending. */
   private suggested: Suggested | null = null
   private suggesting = 0
@@ -399,6 +404,7 @@ export class EditStage {
         this.rebuild(true)
         this.computeSuggestions()
         this.paintSide()
+        void this.readEvidence()
       })
       .catch((error: unknown) => {
         if (this.closed || this.request !== request) return
@@ -410,6 +416,43 @@ export class EditStage {
           false,
         )
       })
+  }
+
+  /**
+   * The session's sequence read for what it says about the assembly — the
+   * telomeres at its ends, the gaps of `N` inside it — and the suggestions
+   * counted again with it (§27.5). Nothing where the session has no sequence.
+   */
+  private async readEvidence(): Promise<void> {
+    const lanes = this.props.lanes
+    const client = lanes?.client
+    const entry = lanes?.store.entries.find((candidate) => candidate.kind === 'sequence' && candidate.status === 'ready')
+    const original = this.props.store.edit.original
+    if (client === undefined || entry === undefined || this.readingEvidence) return
+    this.readingEvidence = true
+    this.paintPicture()
+    try {
+      const evidence = await readSequenceEvidence(
+        entry.source.name,
+        original.names,
+        original.lengths,
+        async (sequence, start, end) => {
+          const got = await client.request<'bases'>({ kind: 'bases', entry: entry.id, regions: [{ contig: sequence, start, end }] })
+          return got.regions[0]?.bases ?? null
+        },
+        { cancelled: () => this.closed },
+      )
+      if (evidence === null || this.closed) return
+      this.evidence = evidence
+      this.computeSuggestions()
+      this.paintSide()
+      this.schedule()
+    } catch {
+      // A sequence that cannot be read is no evidence either way.
+    } finally {
+      this.readingEvidence = false
+      if (!this.closed) this.paintPicture()
+    }
   }
 
   private showStatus(text: string, fraction: number | null, cancellable: boolean): void {
@@ -1462,7 +1505,7 @@ export class EditStage {
     const method = this.method
     const grid = this.grid
     if (method === null || grid === null) return
-    this.suggested = suggest({ ...method, grid, weights: this.learned.weights ?? INITIAL_WEIGHTS })
+    this.suggested = suggest({ ...method, grid, weights: this.learned.weights ?? INITIAL_WEIGHTS, ...(this.evidence === null ? {} : { evidence: this.evidence }) })
     const open = this.open()
     if (this.current !== null && !open.some((suggestion) => suggestion.key === this.current)) this.current = null
     if (this.mode === 'review' && this.current === null) this.current = open[0]?.key ?? null
@@ -1954,6 +1997,18 @@ export class EditStage {
 
   private paintPicture(): void {
     const picture = this.picture
+    const evidence = this.evidence
+    let sequence: string | null = null
+    if (this.readingEvidence) sequence = 'Reading the sequence for its telomeres and gaps…'
+    else if (evidence !== null) {
+      const facts = [...evidence.facts.values()]
+      const ends = facts.reduce((sum, fact) => sum + (fact.start === null ? 0 : 1) + (fact.end === null ? 0 : 1), 0)
+      const gaps = facts.reduce((sum, fact) => sum + fact.gaps.length, 0)
+      sequence =
+        `From ${evidence.from}: telomeric repeats at ${ends.toLocaleString('en-US')} of ${(2 * facts.length).toLocaleString('en-US')} ends` +
+        (evidence.gapsRead ? `, ${gaps.toLocaleString('en-US')} gap${gaps === 1 ? '' : 's'} of N` : '') +
+        ' — a join that would bury a telomere counts against itself, and a break beside a gap is placed at it.'
+    }
     this.pictureCard.replaceChildren(
       el('h3', { class: 'edit-card-head', text: 'picture' }),
       el('p', {
@@ -1963,6 +2018,7 @@ export class EditStage {
             ? 'The whole map, read once for the stage.'
             : `The whole map at ${fmt.bp(picture.binsize)} a cell, ${picture.n.toLocaleString('en-US')} cells a side, ${picture.balanced ? 'balanced' : 'raw counts'}; pieces move in whole cells, so a junction inside a cell is placed to the nearest edge.`,
       }),
+      ...(sequence === null ? [] : [el('p', { class: 'edit-note edit-evidence-note', text: sequence })]),
     )
   }
 

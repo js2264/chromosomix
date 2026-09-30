@@ -722,6 +722,16 @@ place of a sequence the others' own such places cluster with — a centromere, i
 centromeres cluster; a join that would give one sequence two far apart makes a chromosome of **two
 centromeres**, and counts against itself.
 
+### telomere, gap of N *(when editing)*
+
+What the assembly's own sequence says beside the map (§27.5). A **telomere** is a run of the
+telomeric repeat at a sequence's end — `TTAGGG` and its kin, or a budding yeast's irregular `TG₁₋₃`:
+a chromosome's end, which nothing follows, so an edit that would put one inside a sequence **buries**
+it and counts against itself. A **gap of N** is a run of ten `N` or more, where the assembler stopped
+being sure; a break the map finds beside one is placed at it, to the base. Not the **gap** of a
+meeting, which is what the map measures between two contigs' ends, and which a join then writes as
+`N`.
+
 ### manual, review, auto
 
 The stage's three modes, and three answers to one question — **who presses accept** (§27.6). In

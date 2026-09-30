@@ -10756,7 +10756,9 @@ span.deck-name {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  padding: 0.6rem 0.8rem;
+  /* Room at the foot for the toggle that floats over it, so the last line
+     scrolls clear of it. */
+  padding: 0.6rem 0.8rem 2.6rem;
   border-left: 1px solid var(--border);
   overflow-y: auto;
   font-size: calc(var(--step--1) * var(--text-scale, 1));
@@ -13021,6 +13023,10 @@ span.deck-name {
   color: var(--text-dim);
 }
 .edit-history-by {
+  /* On the step's first line, whatever its words wrap to: a chip stretched to
+     a two-line row is a blot. */
+  align-self: flex-start;
+  flex: none;
   margin-left: auto;
   padding: 0 0.35rem;
   border-radius: 999px;
@@ -13124,6 +13130,8 @@ span.deck-name {
   display: none;
 }
 .edit-review-where {
+  flex: none;
+  white-space: nowrap;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--accent);

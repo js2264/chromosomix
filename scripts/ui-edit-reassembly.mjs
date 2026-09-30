@@ -2,14 +2,14 @@
  * The stage on a real reassembly (§27.5, §27.11), in headless Chromium: a
  * long-read assembly of a yeast whose chromosome XVI carries the *Mycoplasma
  * mycoides* genome, 32 contigs, with its Hi-C map and its sequence — the stage
- * open with what the method offers, the join at the fused chromosome's working
- * centromere lit, auto mode's run, the fused chromosome framed with its GC
+ * open with what the method offers, what the sequence says about the contigs'
+ * ends, the join at the fused chromosome's working centromere lit, auto mode's run, the fused chromosome framed with its GC
  * showing the four stretches, what is left for review, and the AGP it writes.
  *
  * Reads `data/` (see `data/README.md`) through a session config under `out/`:
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit-reassembly.mjs [out-dir]     # r01 … r07
+ *   node scripts/ui-edit-reassembly.mjs [out-dir]     # r01 … r07, r02b
  */
 
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -31,9 +31,19 @@ await shot('r01-map')
 // The stage: the whole assembly at 1 kb, and what the method offers.
 await g.openStage()
 await g.settled()
+// The sequence, read once the picture is in, for its telomeres and gaps.
+await page.waitForFunction(() => /^From /.test(document.querySelector('.edit-evidence-note')?.textContent ?? ''), null, { timeout: 60_000 }).catch(() => undefined)
+await g.settled()
+console.log('sequence:', await text('.edit-evidence-note'))
 console.log('stage:', await text('.edit-readout'))
 console.log('offered:', await g.suggestions())
 await shot('r02-stage')
+// What the sequence said, at the foot of the side panel.
+await page.evaluate(() => document.querySelector('.edit-evidence-note')?.scrollIntoView({ block: 'end' }))
+await sleep(300)
+await shot('r02b-sequence')
+await page.evaluate(() => document.querySelector('.edit-modes')?.scrollIntoView({ block: 'start' }))
+await sleep(200)
 
 // The join at the working centromere, lit from its label on the rail.
 const lit = await page.evaluate(() => {

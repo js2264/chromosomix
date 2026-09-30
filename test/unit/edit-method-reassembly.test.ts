@@ -15,16 +15,22 @@
  * rebuild XII across its rDNA, XV whole, and the fused chromosome in the
  * theoretical order.
  *
+ * With the assembly's own sequence beside the map — the telomeres at contig
+ * ends — auto mode goes on to the fused chromosome's last two contigs, and
+ * stops with it whole from telomere to telomere.
+ *
  * The files are gitignored (70 MB, `data/README.md` says where they are), so
  * the suite is skipped without them.
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+import { parseFasta } from '../../src/annotations/fasta'
 import { findCorners } from '../../src/edit/corners'
 import { LensGrid } from '../../src/edit/grid'
 import { METHOD_GATHER, expectedOf, fociOf } from '../../src/edit/method'
+import { readSequenceEvidence, type SequenceEvidence } from '../../src/edit/sequenceEvidence'
 import { suggest } from '../../src/edit/suggest'
 import { EditedAssembly, emptyEdit, isGap, withStep, type ReferenceEdit } from '../../src/genome/edit'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
@@ -32,6 +38,7 @@ import { pictureLayout, pictureStride } from '../../src/metacooler/picture'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 
 const MCOOL = new URL('../../data/SGPMJH_1_MP366_1_Hi-C.mcool', import.meta.url).pathname
+const FASTA = new URL('../../data/SGPMJH_1_MP366_1_reference.fa', import.meta.url).pathname
 const present = existsSync(MCOOL)
 
 async function opened(): Promise<{
@@ -67,6 +74,18 @@ async function opened(): Promise<{
     lengths,
     close: () => map.close(),
   }
+}
+
+/** Auto mode: the best suggestion at even odds or better, taken, until there is none. */
+function auto(file: Awaited<ReturnType<typeof opened>>, evidence?: SequenceEvidence): EditedAssembly {
+  let edit: ReferenceEdit = emptyEdit({ names: file.names, lengths: file.lengths })
+  for (let round = 0; round < 40; round++) {
+    const found = suggest({ contacts: file.contacts, expected: file.expected, corners: file.corners, grid: file.gridOf(edit), ...(evidence === undefined ? {} : { evidence }) })
+    const next = found.list.find((s) => s.confidence >= 0.5)
+    if (next === undefined) break
+    edit = withStep(edit, next.step, 'auto', round)
+  }
+  return EditedAssembly.of(edit)
 }
 
 /** A sequence as its pieces, `39+ 34+ 61-`. */
@@ -124,14 +143,7 @@ describe.skipIf(!present)('the chrXVI–mycoides reassembly', () => {
   it('rebuilds XII across its rDNA, XV whole and the fused chromosome in auto mode', async () => {
     const file = await opened()
     try {
-      let edit: ReferenceEdit = emptyEdit({ names: file.names, lengths: file.lengths })
-      for (let round = 0; round < 40; round++) {
-        const found = suggest({ contacts: file.contacts, expected: file.expected, corners: file.corners, grid: file.gridOf(edit) })
-        const next = found.list.find((s) => s.confidence >= 0.5)
-        if (next === undefined) break
-        edit = withStep(edit, next.step, 'auto', round)
-      }
-      const assembly = EditedAssembly.of(edit)
+      const assembly = auto(file)
       const all = assembly.sequences.map((sequence) => pieces(assembly, sequence.name))
       expect(all).toContain('2- 3+')
       expect(all).toContain('33+ 56+')
@@ -148,4 +160,30 @@ describe.skipIf(!present)('the chrXVI–mycoides reassembly', () => {
       file.close()
     }
   }, 180_000)
+
+  it.skipIf(!existsSync(FASTA))('completes the fused chromosome from telomere to telomere with the sequence beside the map', async () => {
+    const file = await opened()
+    try {
+      const fasta = parseFasta(new Uint8Array(readFileSync(FASTA)))
+      const evidence = await readSequenceEvidence('SGPMJH_1_MP366_1_reference.fa', file.names, file.lengths, async (name, start, end) => fasta.bases.get(name)?.subarray(start, end) ?? null)
+      if (evidence === null) throw new Error('no evidence')
+      // The fused chromosome's two ends are telomeres: contig_39's start and contig_4's.
+      expect(evidence.facts.get('contig_39')?.start).not.toBeNull()
+      expect(evidence.facts.get('contig_4')?.start).not.toBeNull()
+      const assembly = auto(file, evidence)
+      const all = assembly.sequences.map((sequence) => pieces(assembly, sequence.name))
+      expect(all).toContain('2- 3+')
+      expect(all).toContain('33+ 56+')
+      // contig_5 and contig_4, the second myco stretch's last kilobases, turned
+      // and at its end — contig_4's telomere outermost — where the theoretical
+      // genome puts contig_5 between contig_59 and contig_6: the map and the
+      // telomere against it.
+      const fused = all.find((line) => line.startsWith('39+ 34+'))
+      expect(fused?.replace(/49[+-]/, '49')).toBe('39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54- 5- 4-')
+      // And the fifteen single contigs as they were.
+      expect(all.filter((line) => /^\d+\+$/.test(line))).toHaveLength(15)
+    } finally {
+      file.close()
+    }
+  }, 240_000)
 })

@@ -10376,13 +10376,16 @@ where it went further than the text above:
   adjacency is one however short its contigs, and at most 1.2 — a join makes one junction, and a
   window brighter than the law is no more of one. Two ends whose coarse cells hold no more than twice
   what strangers share are not weighed at all. The fitted gap is said on the suggestion (`a gap of
-  about 16 kb`).
+  about 16 kb`), and a join across more than a window's worth writes it — `128,000 N between` — since
+  joined with the stage's own hundred `N`, the next count would weigh the junction as a direct
+  adjacency, find it refused, and offer to split it again.
 - **An end has one neighbour.** Each end's offers are ranked by the weight of their evidence; a join's
   **exclusivity** is how many doublings its own offer stands above the best either of its ends has
   elsewhere, between −2 and 2 — a cluster of short contigs that all lie near each other, telomeres that
   all touch, are not each other's (`an end with a better offer`); an offer under a hundredth of an
   adjacency's evidence is nothing, so two ends whose best is the clustering of their telomeres are not
-  exclusive for lack of anything else. A join across a long gap — an rDNA array, a megabase no read
+  exclusive for lack of anything else. Only joins a curator might take are rivals: one that would bury a
+  telomere or make two centromeres takes no offer from anyone. A join across a long gap — an rDNA array, a megabase no read
   spanned — is a small share of an adjacency and still the only thing its two ends meet: offered on its
   exclusivity alone, a doubling or more.
 - **Clustering foci** (`fociOf`): each sequence is asked, of every other one, where in it the
@@ -10409,30 +10412,50 @@ where it went further than the text above:
   costs what its corners name rather than every pair of its ends. A junction an edit made that the map
   cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
   but the hand is behind it; one of the file's own is trusted.
-- **The confidence** is a logistic over six features — `log₂(1 + gain)`, a penalty for a stretch of
+- **The sequence** (`edit/sequenceEvidence.ts`), where the session holds the assembly's own FASTA or
+  `.2bit` — read once per stage after its picture, through the annotation worker's ranged reads, the
+  suggestions counted again when it is in: each original sequence's two terminal kilobases, and for an
+  assembly of at most 100 Mb every base. A **telomere** is a run of repeat at least a hundred bases
+  long, starting within an end's outermost hundred — read fifty bases at a time from the end inwards,
+  each fifty half covered by tandem copies of one canonical repeat on either strand, `TTAGGG`,
+  `TTTAGGG`, `TTAGG` or `TTGGGG`, the family covering most, or nine in ten `T` and `G` on one strand
+  and a third of them `G`: the irregular `TG₁₋₃` of budding yeasts, which no fixed unit matches, and
+  not a run of `T`, which is poly-A read backwards. A yeast's telomere is some 300 bases, and an
+  assembly often keeps less of it. A trade that would **bury** one — make a junction of an end whose
+  first base is its original sequence's telomeric one: a join, the turn of a sequence's last stretch, a
+  chromosome moved into another — says `a telomere` and counts against itself, and a join that would
+  is no rival to any other join of its ends. Where the map refuses a junction and every way to mend it
+  buries a telomere, the split is what is offered. A **gap** is a run of ten `N` or more; a break the map finds within a cell of one
+  is placed at the gap's middle, to the base, and says `at a gap of N`. The stage's side panel says
+  what it read: *From SGPMJH_1_MP366_1_reference.fa: telomeric repeats at 27 of 64 ends, 0 gaps of
+  N*.
+- **The confidence** is a logistic over eight features — `log₂(1 + gain)`, a penalty for a stretch of
   fewer than four cells, the share of its windows that held anything, how far past the law the
   brightest thing it makes stands (`brighter than an adjacency`: the elements every telomere carries
   light the corner between two chromosomes' ends brighter than any true adjacency — a trade's two
   corner cells past two and a half times the law, a join's whole window past 1.6 times, so that one
-  hot cell at a thinly covered end is not a bright corner), a join's exclusivity, and a join that makes
-  two centromeres — with the initial weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2,
-  2.5, 1.5 and 5. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
+  hot cell at a thinly covered end is not a bright corner), a join's exclusivity, a join that makes
+  two centromeres, a join that buries a telomere, and a break a gap of `N` places — with the initial
+  weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2, 2.5, 1.5, 5, 4 and 1. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
   point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
   offered — a suggestion a curator would take one time in seven or less is noise on the map — though
   it is still ranked, and an answer about another can raise it.
-- **Placed by the map, to one cell** of the picture; no finer rung is read, and no evidence below the
-  map places it to the base.
+- **Placed by the map, to one cell** of the picture, or by a gap of `N` to the base; no finer rung is
+  read.
 
 Tried on a real reassembly — a yeast whose chromosome XVI carries the *M. mycoides* genome, 32
 long-read contigs and a Hi-C map of the strain (§27.11) — the meeting, the exclusivity and the foci are
 what it took. Joins scored on the coarse grid never offered the join at the fused chromosome's working
 centromere, and turned chromosome XV's first 25 kb the wrong way round; a fixed-amplitude score
 penalised every true adjacency for the reads lost beside its break; telomeres paired by their
-clustering were the strongest joins in the file until two centromeres counted against them.
+clustering were the strongest joins in the file until two centromeres counted against them. The map
+alone leaves the fused chromosome two contigs short, and joins those two to each other; with the
+assembly's sequence beside it — telomeres at contig_39's start and contig_4's — auto mode completes
+it, telomere to telomere.
 
 Not yet: the refinement at finer rungs; suggestions to set a stretch aside or to copy one; the
-evidence beyond the map — gaps, telomeric repeats, the skew of a circle, coverage and mappability,
-candidate sites, split reads, pair orientations; circles and their arms in the expected (§8.15) — on
+rest of the evidence beyond the map — a telomere inside a sequence, the skew of a circle, coverage
+and mappability, candidate sites, split reads, pair orientations; circles and their arms in the expected (§8.15) — on
 the E. coli demo, a circle with its arms, it offers nothing, the arms' contacts falling far short of an
 adjacency's; contig boundaries from an AGP. A stretch turned inside a window's length is below what the
 map can place: across its ends the walk reaches its far end, which truly belongs there.
@@ -10545,7 +10568,8 @@ why not:
 
 - **AGP 2.1**: the header says whose edit it is, what wrote it and when, and lists the applied steps in
   words; each sequence is its components, 1-based and inclusive, a turned piece `-`, a run of `N` a gap
-  line `N  <length>  scaffold  yes  proximity_ligation`.
+  line `N  <length>  scaffold  yes  proximity_ligation` — `U  100` where it is a join's hundred, a gap
+  of unknown size, as AGP 2.1 writes one; `N` where the map measured it.
 - **What was set aside.** A stretch set aside as *unplaced* is still sequence of the assembly: every
   file writes it as a sequence of its own, `IV_unplaced1`, after the edited ones. One set aside as
   *debris*, a *contaminant* or a *haplotig* is not: the AGP names it on a comment line
@@ -10664,7 +10688,11 @@ them — and one of two myco contigs the map joins with no gap at the full law w
 genome does not; no join of two chromosomes' telomeres, which their clustering lights. Auto mode
 rebuilds XII, XV and the fused chromosome, `39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54-`, in the
 theoretical order and orientation but for contig_49 — fifteen kilobases, most of them emptied by the
-balancer, either way round — and those two. Not yet: the grid, `--simulate`, and the `.pairs`
+balancer, either way round — and those two. With the assembly's FASTA beside the map, the telomeres
+at contig_39's start and contig_4's end the chromosome, and auto mode completes it,
+`39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54- 5- 4-`, 2,118 kb: contig_5 and contig_4 at its end,
+contig_4's telomere outermost, where the theoretical genome puts contig_5 between contig_59 and
+contig_6 — the map and the telomere against it. Not yet: the grid, `--simulate`, and the `.pairs`
 re-binned exactly.
 
 ### 27.12 Costs
@@ -10689,8 +10717,9 @@ single-cell file. Built: the model and the axis (§27.2), the stage and its pict
 §27.9), the edit kept with the file and carried in a workspace, the session drawn through it (§27.7),
 and the method with its suggestions — drawn with the rail and the corners, snapped to, and answered in
 manual, review and auto (§27.5, §27.6), and the exports — the text files written from the edit and
-read back, the sequence, the map and the tracks lifted through it (§27.8). Not yet built, in the order
-it will be (`docs/reference-editing.md` §10): the evidence beyond the map; metagenomes; the command
+read back, the sequence, the map and the tracks lifted through it (§27.8) — and the sequence's own
+evidence, its telomeres and gaps (§27.5). Not yet built, in the order it will be
+(`docs/reference-editing.md` §10): the rest of the evidence beyond the map; metagenomes; the command
 line — and, left over, the zoom past the stage's picture, the gaps §27.7 lists, and the method's
 refinement at finer rungs.
 

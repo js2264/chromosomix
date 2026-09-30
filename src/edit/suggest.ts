@@ -25,6 +25,7 @@
 import type { EditStep } from '../genome/edit'
 import type { PictureContacts } from '../metacooler/picture'
 import type { FileCorner } from './corners'
+import type { SequenceEvidence } from './sequenceEvidence'
 import { JOIN_GAP } from './gestures'
 import type { GridSequence, LensGrid } from './grid'
 import {
@@ -122,8 +123,13 @@ export type Weights = readonly number[]
  *   sequence — two centromeres, in a genome whose centromeres cluster: no
  *   chromosome has two, and a join of two chromosomes' ends that the telomeres'
  *   clustering lit is exactly that, however much the two ends prefer each other.
+ * - **4** on a trade that would bury a telomere — make a junction of an end
+ *   the sequence says carries telomeric repeats: that end is a chromosome's,
+ *   and nothing follows it.
+ * - **1** on a break the sequence places — at a gap of `N` the assembler left,
+ *   where it stopped being sure: the map and the assembly agree on it.
  */
-export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5, 1.5, 5]
+export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5, 1.5, 5, 4, 1]
 
 /** Doublings of the contact law a junction's corner may stand at before it counts against it. */
 const EXCESS_FREE = Math.log2(2.5)
@@ -178,6 +184,8 @@ export interface SuggestInput {
   corners: readonly FileCorner[]
   grid: LensGrid
   weights?: Weights
+  /** What the session's sequence says: telomeres at ends, gaps of `N` inside. */
+  evidence?: SequenceEvidence
 }
 
 /** The suggestions, best first, and what they were found from. */
@@ -233,6 +241,10 @@ interface Trade {
   dicentric?: boolean
   /** A join's: the gap its meeting fitted, in cells. */
   gapCells?: number
+  /** It would make a junction of a telomere: a chromosome's end inside a sequence. */
+  buried?: boolean
+  /** A break it makes that a gap of `N` places. */
+  atGap?: boolean
 }
 
 /** The foci of a file, found once: they are in its own cells, which no edit moves. */
@@ -467,8 +479,49 @@ export function suggest(input: SuggestInput): Suggested {
   }
 
   const trades: Trade[] = []
-  const place = (sequence: GridSequence, x: number): number => edgeBp(grid, sequence, x)
-  const push = (trade: Omit<Trade, 'seen' | 'excess'>): void => {
+  const facts = input.evidence?.facts
+  /**
+   * The telomere an end would put against the junction it makes, where the
+   * sequence says there is one: the base the stretch begins with at the
+   * junction is its original sequence's first or last, and that end carries
+   * repeats. Any trade that makes a junction of one buries it — a join, a turn
+   * of a sequence's last stretch, a chromosome moved into another.
+   */
+  const telomereFacing = (e: End): string | null => {
+    if (facts === undefined) return null
+    const part = grid.partAt(e.cell)
+    const piece = part?.piece
+    if (part == null || piece == null) return null
+    // Read rightwards, the stretch meets the junction with its left edge.
+    const left = e.dir === 1
+    if (left ? e.cell !== part.from : e.cell !== part.to - 1) return null
+    const known = facts.get(piece.sequence)
+    if (known === undefined) return null
+    return left === (piece.strand === 1) ? (piece.start === 0 ? known.start : null) : piece.end === known.length ? known.end : null
+  }
+  const buries = (made: ReadonlyArray<[End, End]>): boolean => made.some(([e, f]) => telomereFacing(e) !== null || telomereFacing(f) !== null)
+  /** Where a break at edge `x` goes: the middle of a gap of `N` within a cell of it, where there is one. */
+  const gapNear = (sequence: GridSequence, x: number): number | null => {
+    if (facts === undefined || x <= sequence.from || x >= sequence.to) return null
+    const locus = grid.place(x)
+    const piece = locus?.part.piece
+    if (locus == null || piece == null || locus.sequence !== sequence.name) return null
+    const known = facts.get(piece.sequence)
+    if (known === undefined || known.gaps.length === 0) return null
+    const k = locus.bp - locus.part.offset
+    const at = piece.strand === 1 ? piece.start + k : piece.end - k
+    const reach = grid.binsize
+    for (const [lo, hi] of known.gaps) {
+      if (hi + reach < at || lo - reach > at) continue
+      const middle = Math.max(piece.start, Math.min(piece.end, Math.round((lo + hi) / 2)))
+      return locus.part.offset + (piece.strand === 1 ? middle - piece.start : piece.end - middle)
+    }
+    return null
+  }
+  const place = (sequence: GridSequence, x: number): number => gapNear(sequence, x) ?? edgeBp(grid, sequence, x)
+  /** Whether a trade's breaks are placed by gaps of `N`. */
+  const placedByGap = (points: readonly Point[]): boolean => points.some((point) => point.inside && gapNear(sequences[point.sequence], point.x) !== null)
+  const push = (trade: Omit<Trade, 'seen' | 'excess' | 'atGap' | 'buried'>): void => {
     // A join across a long gap — an rDNA array, a megabase no read spanned —
     // is a small share of an adjacency and still the only thing its two ends
     // meet: it is offered on the weight of its evidence and how alone it is.
@@ -499,7 +552,8 @@ export function suggest(input: SuggestInput): Suggested {
         ),
       0,
     )
-    trades.push({ ...trade, seen: reached === 0 ? 0 : seen / reached, excess })
+    const breaks = trade.kind === 'move' ? trade.points.slice(0, 2) : trade.kind === 'join' ? [] : trade.points
+    trades.push({ ...trade, seen: reached === 0 ? 0 : seen / reached, excess, atGap: placedByGap(breaks), buried: buries(trade.made) })
   }
   /** The junction a point makes, with a trade's walls, where it makes one. */
   const takenAt = (point: Point, walls: readonly Point[]): [End, End] | null => {
@@ -685,7 +739,14 @@ export function suggest(input: SuggestInput): Suggested {
   const offers = new Map<string, number[]>()
   const endKey = (point: Point, end: End): string => `${point.sequence}:${point.x}:${end.dir}`
   const evidenceOf = (meeting: Meeting): number => Math.max(0, meeting.score) / map.meetUnit
+  // A join no curator takes — one burying a telomere, one making two
+  // centromeres — is no rival to one they might: an end's offers are the joins
+  // it could make.
+  const possible = new Set(
+    joins.filter((join) => !buries([[join.e, join.f]]) && !dicentric(join.e, join.a, join.f, join.b, join.meeting.gap)),
+  )
   for (const join of joins) {
+    if (!possible.has(join)) continue
     for (const key of [endKey(join.pa, join.e), endKey(join.pb, join.f)]) {
       const list = offers.get(key) ?? []
       list.push(evidenceOf(join.meeting))
@@ -711,13 +772,19 @@ export function suggest(input: SuggestInput): Suggested {
     const own = evidenceOf(join.meeting)
     const rival = Math.max(elsewhere(endKey(join.pa, join.e), own), elsewhere(endKey(join.pb, join.f), own))
     const exclusivity = Math.max(-2, Math.min(2, Math.log2(Math.max(own, floor) / Math.max(rival, floor))))
+    // Two ends that meet across more than a window meet across a gap the map
+    // measured, and the join writes it: joined with the stage's own hundred
+    // `N`, the next count would weigh the junction as a direct adjacency and
+    // offer to split it again. A shorter gap is the unknown one a join makes.
+    const measured = join.meeting.gap > map.window ? join.meeting.gap * grid.binsize : 0
+    const step: EditStep = measured > 0 && join.step.op === 'join' ? { ...join.step, gap: measured } : join.step
     push({
       kind: 'join',
       gain: join.gain,
       points: [join.pa, join.pb],
       made: [[join.e, join.f]],
       taken: [],
-      step: join.step,
+      step,
       stretch: null,
       target: null,
       cells: Number.POSITIVE_INFINITY,
@@ -738,6 +805,8 @@ export function suggest(input: SuggestInput): Suggested {
       -Math.max(0, trade.excess - EXCESS_FREE),
       trade.exclusivity ?? 0,
       trade.dicentric === true ? -1 : 0,
+      trade.buried === true ? -1 : 0,
+      trade.atGap === true ? 1 : 0,
     ]
     return { trade, features, confidence: confidenceOf(features, weights) }
   })
@@ -808,6 +877,8 @@ function toSuggestion(
   if (trade.kind === 'join' && (trade.gapCells ?? 0) > 0) evidence.push(`a gap of about ${gapWords((trade.gapCells ?? 0) * grid.binsize)}`)
   if (features[4] < -0.5) evidence.push('an end with a better offer')
   if (trade.dicentric === true) evidence.push('two centromeres')
+  if (trade.buried === true) evidence.push('a telomere')
+  if (trade.atGap === true) evidence.push('at a gap of N')
   return {
     key: `${trade.kind}:${identity}`,
     kind: trade.kind,
