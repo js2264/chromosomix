@@ -10478,8 +10478,23 @@ where it went further than the text above:
   point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
   offered — a suggestion a curator would take one time in seven or less is noise on the map — though
   it is still ranked, and an answer about another can raise it.
-- **Placed by the map, to one cell** of the picture, or by a gap of `N` to the base; no finer rung is
-  read.
+- **Placed by the map, to one cell** of the picture, or by a gap of `N` to the base — and then
+  **placed again at the finer rungs** (`edit/refine.ts`): each point a suggestion puts inside a
+  sequence — where it splits, a turned or moved stretch's two ends, where a move puts it — not at a
+  junction the edit already makes, which is exact, nor beside a gap. From the picture's cell, each
+  time to the finest rung at least twice as fine and at most sixteen times — else the coarsest finer
+  one — never below the bin the map is deep enough to show (§27.9), the point is the cut within a
+  cell and a half of where the rung above put it that the map least supports: across it, sixteen
+  bins either side, the contacts over the square's own law, each distance's median over the cells no
+  cut in range crosses — so neither the balancing nor the rung's scale matter, and the junction being
+  placed does not lower the law it is measured against. Under half an adjacency's support, the rung
+  refuses the junction there and places it; else the point stays where the rung above put it and no
+  finer rung is read. One read a rung, through the stage's edit, in the reader's worker, kept by the
+  pieces around the point it covers, so an edit elsewhere reads nothing again; the offered
+  suggestions best first, 24 at most, after every count, the list saying each as it comes in —
+  *refined at 1 kb* among what it rests on — and auto mode taking each as placed. The confidence
+  stays the picture's: the method weighed the suggestion there. A suggestion whose ends the hand
+  dragged is the hand's, and says so instead.
 
 Tried on a real reassembly — a yeast whose chromosome XVI carries the *M. mycoides* genome, 32
 long-read contigs and a Hi-C map of the strain (§27.11) — the meeting, the exclusivity and the foci are
@@ -10491,7 +10506,7 @@ alone leaves the fused chromosome two contigs short, and joins those two to each
 assembly's sequence beside it — telomeres at contig_39's start and contig_4's — auto mode completes
 it, telomere to telomere.
 
-Not yet: the refinement at finer rungs; suggestions to set a stretch aside or to copy one; the
+Not yet: suggestions to set a stretch aside or to copy one; the
 rest of the evidence beyond the map — a telomere inside a sequence, the skew of a circle, coverage
 and mappability, candidate sites, split reads, pair orientations; circles and their arms in the expected (§8.15) — on
 the E. coli demo, a circle with its arms, it offers nothing, the arms' contacts falling far short of an
@@ -10804,7 +10819,14 @@ at contig_39's start and contig_4's end the chromosome, and auto mode completes 
 contig_4's telomere outermost, where the theoretical genome puts contig_5 between contig_61 and
 contig_6 (its dot plot, §28, reads `61- 5- 6+`) — the map and the telomere against it: in 30 kb at
 10 kb, contig_5's start meets contig_4's end at 87 times the trans level, and contig_6's start at 34.
-Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
+And the refinement (`test/unit/edit-refine-demo.test.ts`): the demo `.hic` scrambled at breakpoints no
+16 kb cell has an edge at — IV turned from 403 to 797 kb, 196 kb of XI moved into II at 303 kb turned,
+IX joined to III — and the method run on its 16 kb picture offers
+`move II_e1:304,001-496,000 after XI_e1:96,000, turned`, `turn IV_e1:400,001-800,000` and
+`split IX_e1 before 432,001`, each point within a cell of the truth; placed at the 1 kb rung through the
+same scramble, every point is the truth to the base — 303,000, 499,000 and 101,000; 403,000 and
+797,000 — and the split within a kilobase of IX's end, 439,888. Not yet: the grid, `--simulate`,
+and the `.pairs` re-binned exactly.
 
 ### 27.12 Costs
 
@@ -10815,7 +10837,7 @@ Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
-| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; until the first is in, the card says it is weighing, never that there is nothing to weigh; not yet refined |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; until the first is in, the card says it is weighing, never that there is nothing to weigh; then each offered suggestion's points, best first, 24 at most — *built*: one read a rung a point, a square of twice its reach and 96 bins a side — at most about 150, 22,500 cells — through the edit; 0 where the picture is at the finest rung or the map is too shallow for a finer one, or the pieces around a point are as they were |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held — *built*: 400,000 bases a request; the file itself is held whole before it is saved |
 | Export the lifted map | *built*: one pass over each rung's stored pixels, in the reader's worker; at most 60 million pixels gathered, 720 MB, and the `.mcool` built in memory as the `.pairs` import's is |
@@ -10835,7 +10857,8 @@ and gaps (§27.5), and the stage on one genome of a metagenome, its contigs sent
 brought in from them, and the contig → MAG table of every genome's edit (§27.10), and the stage closer
 than its picture's cell (§27.9). Not yet built, in the order it will be (`docs/reference-editing.md`
 §10): the rest of the evidence beyond the map; files for every genome of a metagenome at once; the
-command line — and, left over, the gaps §27.7 lists, and the method's refinement at finer rungs.
+command line — and, left over, the gaps §27.7 lists. Built since: each suggestion's points placed
+again at the finer rungs (§27.5).
 
 ## 28. Two sequences on two axes
 

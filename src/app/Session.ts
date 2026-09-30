@@ -5599,6 +5599,8 @@ export class Session {
       suggest: (input) => reader.cancellable<'suggest'>({ kind: 'suggest', ...input }),
       // Zoomed past the picture, the window on screen read finer (§27.9).
       readWindow: (request) => reader.cancellable<'stageWindow'>({ kind: 'stageWindow', ...request }),
+      // A suggestion's points placed again at the finer rungs (§27.5).
+      refine: (request) => reader.cancellable<'refine'>({ kind: 'refine', ...request }),
       // The circles the reader declared, whose origin the stage may set (§27.4).
       circular: () => this.circularStore()?.list() ?? [],
       // The binning every genome's edit makes, as the edits stand (§27.10).

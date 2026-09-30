@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage places a suggestion finer than its picture's cell — a dev feature (§27.5).** Each point a
+  suggestion puts inside a sequence — where it splits, a turned or moved stretch's ends, where a move
+  puts it — is placed again at the map's finer rungs, down to the finest it is deep enough for, by one
+  small read around it through the edit: the cut there the map least supports. The list says each as
+  it comes in, *refined at 1 kb*, and auto mode takes each as placed. On the demo scrambled at
+  breakpoints between its 16 kb cells, every point of what the 16 kb picture suggests is put back to
+  the base at 1 kb.
+
 - **The stage closer than its picture's cell — a dev feature (§27.9).** Zoomed in past two pixels a
   cell, the window on screen is read again from a finer rung, through the edit, in the reader's worker,
   and painted on the picture's own colour scale: the yeast assembly's 10 kb picture shows its 1 kb map

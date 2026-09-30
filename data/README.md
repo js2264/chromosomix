@@ -32,3 +32,15 @@ curl -O "$B/SGPMJH_1_MP366_1_reference.fa"
 curl -O "$B/W303_chrXVI-Mmmyco_inv870kb.fa"
 curl -O "$B/W303_chrXVI-Mmmyco_inv870kb.gtf"
 ```
+
+## The scrambled yeast demo (SPECS §27.5)
+
+The demo `.hic` with its assembly made wrong where no picture cell has an edge —
+IV turned from 403 to 797 kb, 196 kb of XI moved into II at 303 kb turned, IX
+joined to III — every rung lifted through the scramble and written as
+`scrambled/Yeast_scrambled.mcool`, with a session config under `out/scrambled/`
+for `scripts/ui-edit-refine.mjs`:
+
+```
+npx vite-node scripts/make-scrambled-demo.ts
+```

@@ -13,7 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { findCorners } from '@/edit/corners'
-import { EditStage } from '@/edit/EditStage'
+import { EditStage, type EditStageProps } from '@/edit/EditStage'
 import { expectedOf } from '@/edit/method'
 import type { Suggested } from '@/edit/suggest'
 import { EditStore } from '@/state/referenceEdit'
@@ -189,7 +189,7 @@ describe('the suggestions', () => {
    * A stage over a simulated map whose first sequence reads `[60, 120)`
    * backwards — the method's one suggestion is to turn it back.
    */
-  async function openOnATurn(): Promise<{ store: EditStore }> {
+  async function openOnATurn(extra: Partial<EditStageProps> = {}): Promise<{ store: EditStore }> {
     const simulated = await simulate([[[0, 0, 60, 1], [0, 60, 120, -1], [0, 120, 180, 1]], [[1, 0, 120, 1]]])
     const expected = expectedOf(simulated.contacts, true)
     const n = simulated.contacts.n
@@ -213,6 +213,7 @@ describe('the suggestions', () => {
       readPicture: () => ({ promise: Promise.resolve(result), cancel: () => {} }),
       colormap: 'default',
       onClose: () => {},
+      ...extra,
     })
     opened.push(stage)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -231,6 +232,26 @@ describe('the suggestions', () => {
     await recount()
     expect(textsOf(document.body, '.edit-suggestion-words')).toEqual([])
     expect(textsOf(document.body, '.edit-history-by')).toEqual(['suggested'])
+  })
+
+  it('says and takes a suggestion as the finer rungs place its points', async () => {
+    const asked: number[][] = []
+    const { store } = await openOnATurn({
+      refine: (request) => {
+        asked.push(request.points.map((point) => point.bp))
+        const placed = new Map([
+          [60_000, { bp: 61_500, binsize: 500, support: 0.1 }],
+          [120_000, { bp: 118_000, binsize: 500, support: 0.2 }],
+        ])
+        return { promise: Promise.resolve(request.points.map((point) => placed.get(point.bp) ?? null)), cancel: () => {} }
+      },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(asked).toEqual([[60_000, 120_000]])
+    expect(textsOf(document.body, '.edit-suggestion-words')).toEqual(['turn s1:61,501-118,000'])
+    expect(textsOf(document.body, '.edit-suggestion .edit-chip')).toContain('refined at 500 bp')
+    button('take').click()
+    expect(store.edit.history[0].step).toEqual({ op: 'invert', sequence: 's1', from: 61_500, to: 118_000 })
   })
 
   it('turns one down with N while it is lit, keeps it turned down, and learns from it', async () => {

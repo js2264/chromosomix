@@ -23,6 +23,7 @@ import type { ReferenceEdit } from '../genome/edit'
 import type { FileCorner } from '../edit/corners'
 import type { GridLayout } from '../edit/grid'
 import type { WindowRead } from '../edit/paint'
+import type { RefinedPoint, RefinePoint } from '../edit/refine'
 import type { Expected } from '../edit/method'
 import type { SequenceEvidence } from '../edit/sequenceEvidence'
 import type { Suggested } from '../edit/suggest'
@@ -852,6 +853,7 @@ export interface ResultMap {
   picture: PictureResult
   stageWindow: WindowRead | null
   suggest: Suggested
+  refine: Array<RefinedPoint | null>
   genomeLinks: GenomeLinksResult
   cancel: null
   close: null
@@ -1109,6 +1111,21 @@ export type WorkerRequest =
       coarser: number
       rows: StageWindowSide
       cols: StageWindowSide
+      balance: boolean
+    }
+  /**
+   * A suggestion's points placed again at the finer rungs (§27.5): each read
+   * around, through the stage's edit, at every rung from the picture's `cell`
+   * down to `least`, the finest bin the map is deep enough to show. One answer
+   * a point, in order: `null` where the first rung already could not.
+   */
+  | {
+      id: number
+      kind: 'refine'
+      edit: ReferenceEdit
+      points: RefinePoint[]
+      cell: number
+      least: number
       balance: boolean
     }
   /**

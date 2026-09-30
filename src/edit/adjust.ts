@@ -93,6 +93,12 @@ function adjusted(
     // Where the ends it would join now are is the hand's to say, not the
     // method's corners, which were for the ends it found.
     corners: [],
-    evidence: suggestion.evidence.includes('adjusted') ? suggestion.evidence : [...suggestion.evidence, 'adjusted'],
+    evidence: handled(suggestion.evidence),
   }
+}
+
+/** What an adjusted suggestion rests on: its ends are the hand's now, not the finer rungs' (§27.5). */
+function handled(evidence: readonly string[]): string[] {
+  const kept = evidence.filter((chip) => !chip.startsWith('refined at '))
+  return kept.includes('adjusted') ? kept : [...kept, 'adjusted']
 }

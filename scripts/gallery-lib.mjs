@@ -83,7 +83,7 @@ export async function gallery(out, { width = 1600, height = 1000 } = {}) {
   async function settled() {
     for (let i = 0; i < 80; i++) {
       await sleep(150)
-      const weighing = await page.evaluate(() => /weighing/.test(document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent ?? ''))
+      const weighing = await page.evaluate(() => /weighing|placing/.test(document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent ?? ''))
       if (!weighing) break
     }
     await sleep(300)

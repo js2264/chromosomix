@@ -149,7 +149,7 @@ async function diagonalAt(name) {
 async function settled() {
   for (let i = 0; i < 40; i++) {
     await sleep(150)
-    const weighing = await page.evaluate(() => /weighing/.test(document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent ?? ''))
+    const weighing = await page.evaluate(() => /weighing|placing/.test(document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent ?? ''))
     if (!weighing) break
   }
   await sleep(300)

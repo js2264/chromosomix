@@ -21,11 +21,12 @@ import { PICTURE_CELLS, depthFloor, depthStride, displayRange, pictureLayout, pi
 import { findCorners, type FileCorner } from '../edit/corners'
 import { LensGrid } from '../edit/grid'
 import { METHOD_GATHER, expectedOf, type Expected } from '../edit/method'
+import { REFINE_REACH, REFINE_WINDOW, refineChain, refinePoint, type ReadSquare, type RefinedPoint } from '../edit/refine'
 import { suggest, type Suggested } from '../edit/suggest'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
-import { EditedAssembly, type ReferenceEdit } from '../genome/edit'
+import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -174,6 +175,14 @@ interface Session {
    * of a window's read that is not the window's size.
    */
   stageWindowMap?: { key: string; map: MetaCooler }
+  /**
+   * Where the finer rungs placed the points the stage asked of them (§27.5),
+   * by the neighbourhood each read covers — the pieces of the edited sequence
+   * around it — so a point an edit elsewhere leaves as it was is not read
+   * again; and the rungs drawn through the edit last asked with.
+   */
+  refinePlaced?: Map<string, { delta: number; binsize: number; support: number } | null>
+  refineMaps?: { fingerprint: string; maps: Map<string, MetaCooler> }
 }
 
 /**
@@ -943,13 +952,7 @@ const STAGE_WINDOW_CELLS = 4_000_000
 async function handleStageWindow(request: Extract<WorkerRequest, { kind: 'stageWindow' }>): Promise<WindowRead | null> {
   const active = requireSession()
   const base = active.mc.unlensed ?? active.mc
-  const rungs =
-    base.entryGroup === 'resolutions'
-      ? base.entries
-          .map((name) => ({ name, size: Number(name) }))
-          .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
-          .sort((a, b) => a.size - b.size)
-      : [{ name: '', size: base.binsize }]
+  const rungs = rungsOf(base)
   const fits = rungs.filter((rung) => rung.size <= request.binsize)
   const chosen = fits.length > 0 ? fits[fits.length - 1] : rungs[0]
   if (chosen === undefined || !(chosen.size < request.coarser)) return null
@@ -989,6 +992,96 @@ async function handleStageWindow(request: Extract<WorkerRequest, { kind: 'stageW
     return out
   }
   return { binsize: size, rows: runsOf(dense.rowExtent), cols: runsOf(dense.colExtent), values: dense.values, ncols: dense.ncols }
+}
+
+/** A file's rungs, finest first, by entry name and bin size: the one it has, where it has one. */
+function rungsOf(base: MetaCooler): Array<{ name: string; size: number }> {
+  return base.entryGroup === 'resolutions'
+    ? base.entries
+        .map((name) => ({ name, size: Number(name) }))
+        .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
+        .sort((a, b) => a.size - b.size)
+    : [{ name: '', size: base.binsize }]
+}
+
+/** The most placements kept between edits before they are let go. */
+const REFINE_KEPT = 4096
+
+/**
+ * A suggestion's points placed again at the finer rungs (§27.5): each read
+ * around at every rung from the picture's cell to the finest the map is deep
+ * enough to show, through the stage's edit — the rungs drawn through it once
+ * for the edit — and kept by the neighbourhood the reads cover.
+ */
+async function handleRefine(request: Extract<WorkerRequest, { kind: 'refine' }>): Promise<Array<RefinedPoint | null>> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const rungs = rungsOf(base)
+  const chain = refineChain(
+    rungs.map((rung) => rung.size),
+    request.cell,
+    request.least,
+  )
+  if (chain.length === 0) return request.points.map(() => null)
+  const fingerprint = editFingerprint(request.edit)
+  if (active.refineMaps?.fingerprint !== fingerprint) active.refineMaps = { fingerprint, maps: new Map() }
+  const maps = active.refineMaps.maps
+  const placed = (active.refinePlaced ??= new Map())
+  if (placed.size > REFINE_KEPT) placed.clear()
+  const assembly = EditedAssembly.of(request.edit)
+  const lensedAt = async (size: number): Promise<MetaCooler | null> => {
+    const rung = rungs.find((candidate) => candidate.size === size)
+    if (rung === undefined) return null
+    let map = maps.get(rung.name)
+    if (map === undefined) {
+      const seen = rung.size === base.binsize ? base : await mapFor(rung.name)
+      // Not closed when let go: a map drawn through an edit shares its rung's
+      // file, which the rungs above hold and close.
+      const { map: lensed, refusal } = MetaCooler.withLens(seen.unlensed ?? seen, request.edit)
+      if (refusal !== null) throw new ViewerError('unsupported', refusal)
+      map = lensed
+      maps.set(rung.name, map)
+    }
+    return map
+  }
+  const read: ReadSquare = async (sequence, lo, hi, size) => {
+    if (cancelled.has(request.id)) throw abortError()
+    const map = await lensedAt(size)
+    const c = map === null ? -1 : map.chromnames.indexOf(sequence)
+    if (map === null || c < 0) return null
+    const offset = map.coords.chromOffset[c]
+    const rows: Extent = [offset + lo, offset + hi]
+    const dense = await map.matrix({ rows, cols: rows, balance: request.balance && map.hasWeights })
+    return dense.nrows === hi - lo && dense.ncols === hi - lo ? { n: hi - lo, values: dense.values } : null
+  }
+  // The farthest a point's reads reach: the first rung's, a cell and a half
+  // and three windows either side.
+  const span = (Math.ceil((REFINE_REACH * request.cell) / chain[0]) + 3 * REFINE_WINDOW + 1) * chain[0]
+  const out: Array<RefinedPoint | null> = []
+  for (const point of request.points) {
+    if (cancelled.has(request.id)) throw abortError()
+    const length = assembly.lengthOf(point.sequence)
+    if (length === null) {
+      out.push(null)
+      continue
+    }
+    const bp = point.bp
+    const lo = Math.max(0, bp - span)
+    const hi = Math.min(length, bp + span)
+    const pieces = assembly
+      .piecesIn(point.sequence, lo, hi)
+      .map(({ offset, piece }) => `${offset - bp}:${piece.sequence}:${piece.start}:${piece.end}:${piece.strand}`)
+      .join(';')
+    const key = [request.balance, request.cell, chain.join(','), chain.map((size) => bp % size).join(','), lo - bp, hi - bp, pieces].join('|')
+    let found = placed.get(key)
+    if (found === undefined) {
+      const refined = await refinePoint(point, length, request.cell, chain, read)
+      found = refined === null ? null : { delta: refined.bp - bp, binsize: refined.binsize, support: refined.support }
+      placed.set(key, found)
+    }
+    out.push(found === null ? null : { bp: bp + found.delta, binsize: found.binsize, support: found.support })
+  }
+  return out
 }
 
 /**
@@ -2106,6 +2199,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleSuggest(request)
     case 'stageWindow':
       return handleStageWindow(request)
+    case 'refine':
+      return handleRefine(request)
     case 'genomeLinks':
       return handleGenomeLinks(request)
     case 'cancel':

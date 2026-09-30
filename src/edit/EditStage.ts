@@ -54,6 +54,7 @@ import {
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
 import { adjustableEnds, adjustSuggestion } from './adjust'
+import { pointKey, pointsOf, refinedSuggestion, type RefinedPoint, type RefinePoint } from './refine'
 import { ExportCard, type ExportCardProps } from './ExportCard'
 import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
@@ -112,6 +113,12 @@ export interface EditStageProps {
    * picture's cell shows the cell enlarged.
    */
   readWindow?(request: WindowRequest): { promise: Promise<WindowRead | null>; cancel(): void }
+  /**
+   * Place a suggestion's points again at the finer rungs (§27.5), through the
+   * stage's edit, off its thread: one answer a point, `null` where no finer
+   * rung could. Absent, a suggestion is placed to the picture's cell.
+   */
+  refine?(request: RefineRequest): { promise: Promise<Array<RefinedPoint | null>>; cancel(): void }
   /** The map lifted through an edit, every rung, as an `.mcool` (§27.8). */
   liftContacts?: ExportCardProps['liftContacts']
   /** On a metagenome: the contig → MAG table every genome's edit makes (§27.10). */
@@ -139,6 +146,16 @@ export interface WindowRequest {
 }
 
 /** What a count of the suggestions off the stage's thread is asked for. */
+export interface RefineRequest {
+  edit: ReferenceEdit
+  points: RefinePoint[]
+  /** The picture's cell, in base pairs: where the method placed them. */
+  cell: number
+  /** The finest bin the map is deep enough to show. */
+  least: number
+  balance: boolean
+}
+
 export interface SuggestRequest {
   picture: number
   edit: ReferenceEdit
@@ -227,6 +244,8 @@ const AUTO_THRESHOLD = 0.5
 const OFFER_FLOOR = 0.15
 /** The most steps one run of auto mode makes. */
 const AUTO_MOST = 40
+/** The most suggestions, best first, whose points are placed at the finer rungs after a count (§27.5). */
+const PLACE_MOST = 24
 
 /** Who presses accept (§27.6). */
 type Mode = 'manual' | 'review' | 'auto'
@@ -308,6 +327,17 @@ export class EditStage {
   private autoRunning = false
   /** Suggestions whose ends the hand has dragged, by key, until the edit changes (§27.6). */
   private readonly adjustments = new Map<string, Suggestion>()
+  /**
+   * Where the finer rungs placed the points of the suggestions offered, for
+   * the edit as it stands (§27.5), by point — `null` where they could not —
+   * and the suggestions as they make them, until the placements change.
+   */
+  private readonly placements = new Map<string, RefinedPoint | null>()
+  private placedMemo = new WeakMap<Suggestion, Suggestion>()
+  /** The placement being read; the count it was for, which a newer one drops; and the whole run, which auto mode waits on. */
+  private refineRequest: { cancel(): void } | null = null
+  private refineRound = 0
+  private refining: Promise<void> | null = null
   /** Names this stage's edits to the reader's worker, a new one each time the edit changes (§27.9). */
   private readonly token = Math.random().toString(36).slice(2)
   private editVersion = 0
@@ -552,6 +582,7 @@ export class EditStage {
         this.drawn = contigs === undefined ? null : new Set(contigs)
         this.method = picture.method ?? null
         this.methodKept = picture.methodKept ?? null
+        this.dropPlacements()
         this.layout = { binsize: picture.binsize, sequences: picture.sequences }
         this.colours = pictureColours(this.props.colormap, { low: picture.low, high: picture.high }, picture.vmin, picture.vmax)
         this.hideStatus()
@@ -635,8 +666,10 @@ export class EditStage {
 
   /** The store changed: a step made, undone or redone. */
   private edited(): void {
-    // An adjusted suggestion was for the edit as it stood; so was a finer read.
+    // An adjusted suggestion was for the edit as it stood; so was a finer read,
+    // and where the finer rungs placed the points, named as the edit named them.
     this.adjustments.clear()
+    this.dropPlacements()
     this.editVersion++
     this.windowRead = null
     this.windowRequest?.cancel()
@@ -1944,7 +1977,82 @@ export class EditStage {
    */
   private effective(suggestion: Suggestion): Suggestion {
     const moved = this.adjustments.get(suggestion.key)
-    return moved === undefined ? suggestion : { ...moved, confidence: suggestion.confidence, features: suggestion.features, gain: suggestion.gain }
+    return moved === undefined ? this.placed(suggestion) : { ...moved, confidence: suggestion.confidence, features: suggestion.features, gain: suggestion.gain }
+  }
+
+  /** A suggestion with its points where the finer rungs placed them (§27.5), where they have. */
+  private placed(suggestion: Suggestion): Suggestion {
+    const grid = this.grid
+    if (grid === null || this.placements.size === 0) return suggestion
+    let placed = this.placedMemo.get(suggestion)
+    if (placed === undefined) {
+      placed = refinedSuggestion(grid, suggestion, (point) => this.placements.get(pointKey(point)))
+      this.placedMemo.set(suggestion, placed)
+    }
+    return placed
+  }
+
+  /** Let go of where the finer rungs placed the points: the edit, or the picture, they were read for is gone. */
+  private dropPlacements(): void {
+    this.refineRequest?.cancel()
+    this.refineRequest = null
+    this.refineRound++
+    this.refining = null
+    this.placements.clear()
+    this.placedMemo = new WeakMap()
+  }
+
+  /**
+   * Place the points of the suggestions offered at the finer rungs (§27.5),
+   * best first, one suggestion a read, off the stage's thread: each is said in
+   * the list as it comes in. A newer count, or an edit, drops what is still to
+   * come; a point placed already is not asked again.
+   */
+  private placeSuggestions(): void {
+    this.refineRequest?.cancel()
+    this.refineRequest = null
+    const round = ++this.refineRound
+    const ask = this.props.refine
+    const picture = this.picture
+    const suggested = this.suggested
+    if (ask === undefined || picture === null || suggested === null) {
+      this.refining = null
+      return
+    }
+    const rejected = new Set(this.learned.rejected)
+    const offered = suggested.list.filter((suggestion) => !rejected.has(suggestion.key) && suggestion.confidence >= OFFER_FLOOR).slice(0, PLACE_MOST)
+    const edit = this.props.store.edit
+    const assembly = EditedAssembly.of(edit)
+    const cell = picture.binsize
+    const run = async (): Promise<void> => {
+      for (const suggestion of offered) {
+        const points = pointsOf(suggestion, assembly, cell, this.evidence).filter((point) => !this.placements.has(pointKey(point)))
+        if (points.length === 0) continue
+        const request = ask({ edit, points, cell, least: picture.least ?? 0, balance: picture.balanced })
+        this.refineRequest = request
+        this.paintSuggestions()
+        let placed: Array<RefinedPoint | null>
+        try {
+          placed = await request.promise
+        } catch {
+          if (this.refineRequest === request) this.refineRequest = null
+          return
+        }
+        if (this.closed || round !== this.refineRound || this.props.store.edit !== edit) return
+        this.refineRequest = null
+        points.forEach((point, i) => this.placements.set(pointKey(point), placed[i] ?? null))
+        this.placedMemo = new WeakMap()
+        this.railSignature = ''
+        this.paintSide()
+        this.schedule()
+      }
+    }
+    const running = run().finally(() => {
+      if (this.refineRound !== round || this.closed) return
+      this.refining = null
+      this.paintSuggestions()
+    })
+    this.refining = running
   }
 
   /**
@@ -2077,6 +2185,7 @@ export class EditStage {
   /** A count of the suggestions, taken: the one review is on and the one lit kept where they still are. */
   private tookSuggestions(suggested: Suggested): void {
     this.suggested = suggested
+    this.placeSuggestions()
     const open = this.open()
     if (this.current !== null && !open.some((suggestion) => suggestion.key === this.current)) this.current = null
     if (this.mode === 'review' && this.current === null) this.current = open[0]?.key ?? null
@@ -2159,6 +2268,9 @@ export class EditStage {
     this.autoRunning = true
     try {
       for (let k = 0; k < AUTO_MOST; k++) {
+        // Each taken as the finer rungs place it, where they do.
+        if (this.refining !== null) await this.refining
+        if (this.closed) return
         const next = this.open().find((suggestion) => suggestion.confidence >= AUTO_THRESHOLD)
         if (next === undefined) break
         const before = this.props.store.applied
@@ -2279,12 +2391,14 @@ export class EditStage {
     const card = this.suggestionsCard
     const open = this.open()
     const weighing = this.suggesting !== 0 || this.recountRequest !== null || this.autoRunning
+    // Their points being placed at the finer rungs (§27.5), after the count.
+    const placing = !weighing && this.refineRequest !== null
     const head = el('h3', {
       class: 'edit-card-head',
       text:
         this.suggested === null
           ? `suggestions${weighing ? ' · weighing…' : ''}`
-          : `suggestions · ${open.length}${weighing ? ' · weighing…' : ''}`,
+          : `suggestions · ${open.length}${weighing ? ' · weighing…' : placing ? ' · placing…' : ''}`,
     })
     if (!this.weighs() || this.suggested === null) {
       card.replaceChildren(
@@ -2855,6 +2969,8 @@ export class EditStage {
     this.linksRequest = null
     this.recountRequest?.cancel()
     this.recountRequest = null
+    this.refineRequest?.cancel()
+    this.refineRequest = null
     this.windowRequest?.cancel()
     this.windowRequest = null
     window.clearTimeout(this.windowTimer)
