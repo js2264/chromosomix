@@ -79,6 +79,7 @@ import { liftedTable } from '../edit/liftedContacts'
 import { VERSION } from '../version'
 import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
+import { resolutionLabel } from '../units'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -857,6 +858,19 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   }
   const layout = pictureLayout(mc.coords, stride, drawn)
   const balanced = request.balance === true && mc.hasWeights
+  // What the pass will read, said as it starts (§27.12): the stored pixels of
+  // the rows it covers — every one where they are the whole map — at the
+  // rung's bins, and how many of those a cell pools.
+  const pixels = picturePixels(mc, offsets, drawn)
+  post({
+    type: 'progress',
+    id: request.id,
+    done: 0,
+    total: 1,
+    note:
+      `${pixels === null ? 'every stored pixel' : `${pixels.toLocaleString('en-US')} stored pixels`} at ${resolutionLabel(mc.binsize)}` +
+      (stride > 1 ? `, ${stride} bins a cell` : ''),
+  })
   const read = await mc.picture(layout, {
     balance: balanced,
     ...(request.value === undefined ? {} : { value: request.value }),
@@ -968,6 +982,22 @@ async function handleGenomeLinks(request: Extract<WorkerRequest, { kind: 'genome
   }
   outside.sort((x, y) => y.contacts / y.total - x.contacts / x.total || y.contacts - x.contacts)
   return { inside: insideRows, outside: outside.slice(0, 100), pixels }
+}
+
+/**
+ * The stored pixels a picture's pass reads (§27.12): the map's count where it
+ * reads every row, the rows of the sequences it draws where the per-bin index
+ * says, and `null` where neither is known.
+ */
+function picturePixels(mc: MetaCooler, offsets: Float64Array | null, drawn: readonly number[] | undefined): number | null {
+  if (drawn === undefined) return mc.nnz ?? (offsets === null ? null : offsets[offsets.length - 1])
+  if (offsets === null) return null
+  let total = 0
+  for (const c of drawn) {
+    const [first, end] = mc.coords.contigBinExtent(c)
+    total += offsets[end] - offsets[first]
+  }
+  return total
 }
 
 /**

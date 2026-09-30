@@ -6,7 +6,7 @@
  * another genome and one brought in, and the AGP of that genome alone.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g08, g04b, g06b
+ *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g08, g03b, g04b, g06b
  */
 
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -38,6 +38,13 @@ await page.fill('.genome-picker-filter', GENOME.replace(/^metator_/, ''))
 await sleep(300)
 await shot('g03-picker-filtered')
 await page.click('.genome-picker-row')
+// The read, saying what it reads as it starts (§27.12).
+for (let i = 0; i < 40; i++) {
+  await sleep(100)
+  if (/stored pixels|every stored pixel/.test((await text('.edit-status-text')) ?? '')) break
+}
+console.log('reading:', await text('.edit-status-text'))
+await shot('g03b-reading')
 for (let i = 0; i < 240; i++) {
   await sleep(500)
   if (await page.evaluate(() => document.querySelector('.edit-status')?.classList.contains('hidden'))) break

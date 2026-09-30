@@ -87,7 +87,7 @@ export interface EditStageProps {
    * of these sequences of the map alone, where they are given: one genome of a
    * metagenome and the contigs it may bring in (§27.10).
    */
-  readPicture(onProgress: (done: number, total: number) => void, contigs?: string[]): PictureRequest
+  readPicture(onProgress: (done: number, total: number, note?: string) => void, contigs?: string[]): PictureRequest
   /**
    * On one genome of a metagenome (§27.10): read every contact of the file for
    * where the genome's contigs, and the others, belong — without being asked
@@ -426,11 +426,15 @@ export class EditStage {
   private read(): void {
     this.request?.cancel()
     const genome = this.props.store.edit.original.genome
-    const reading = genome === undefined ? 'reading the whole map for the stage…' : `reading ${genome}’s contigs for the stage…`
-    this.showStatus(reading, 0, true)
+    const reading = genome === undefined ? 'reading the whole map for the stage' : `reading ${genome}’s contigs for the stage`
+    this.showStatus(`${reading}…`, 0, true)
     const contigs = this.drawnContigs()
-    const request = this.props.readPicture((done, total) => {
-      if (this.request === request && total > 0) this.showStatus(reading, done / total, true)
+    // What the pass reads, as the worker says it on the way in (§27.12): the
+    // stored pixels and the resolution, so a long read is a known one.
+    let what = ''
+    const request = this.props.readPicture((done, total, note) => {
+      if (note !== undefined) what = note
+      if (this.request === request && total > 0) this.showStatus(what === '' ? `${reading}…` : `${reading}: ${what}…`, done / total, true)
     }, contigs)
     this.request = request
     request.promise

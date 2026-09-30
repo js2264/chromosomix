@@ -14,6 +14,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage says what its picture reads as the read starts — a dev feature (§27.12):** *reading
+  the whole map for the stage: 13,735,472 stored pixels at 1 kb*, and how many bins a cell pools on a
+  shallow map, beside the bar and the cancel.
+
 - **A workspace keeps what the stage learned, and every genome's edit — a dev feature (§27.6,
   §27.10).** A saved workspace, and a shared link, now carry what the reader's answers taught the stage
   about a file — the weights, the count, what was turned down — and, on a metagenome, each genome's edit

@@ -10779,7 +10779,7 @@ Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
 
 | Operation | Budget |
 |---|---|
-| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel; not yet estimated before it starts) — and, in the same pass, what the method weighs, then its law and its corners in the reader's worker: about two seconds more for a yeast genome at 1 kb |
+| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel, and what the pass reads said as it starts — `13,735,472 stored pixels at 1 kb`, and how many bins a cell pools where it does; not a time, which a range request's speed decides) — and, in the same pass, what the method weighs, then its law and its corners in the reader's worker: about two seconds more for a yeast genome at 1 kb |
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |

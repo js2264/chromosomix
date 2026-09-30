@@ -22,7 +22,7 @@
  * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25, e17b, e24b
+ *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25, e01b, e17b, e24b
  */
 
 import { createRequire } from 'node:module'
@@ -160,8 +160,17 @@ const suggestions = () =>
     [...document.querySelectorAll('.edit-suggestion-main')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim()),
   )
 
-async function openStage() {
+async function openStage(reading = null) {
   await page.click('.crumb-reference-button')
+  // The read saying what it reads as it starts (§27.12), caught mid-read.
+  if (reading !== null) {
+    for (let i = 0; i < 100; i++) {
+      await sleep(50)
+      if (/stored pixel/.test((await text('.edit-status-text')) ?? '')) break
+    }
+    console.log('reading:', await text('.edit-status-text'))
+    await shot(reading)
+  }
   for (let i = 0; i < 240; i++) {
     await sleep(500)
     if (await page.evaluate(() => document.querySelector('.edit-status')?.classList.contains('hidden'))) break
@@ -183,7 +192,7 @@ console.log('heading says:', (await text('.crumb-reference'))?.trim())
 await shot('e01-heading')
 
 // ── The stage ────────────────────────────────────────────────────────────────
-await openStage()
+await openStage('e01b-reading')
 let box = await mapBox()
 console.log('stage:', box.n, 'cells a side ·', await text('.edit-readout'))
 await settled()
