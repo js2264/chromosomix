@@ -93,3 +93,23 @@ export function stretchInFile(
   }
   return null
 }
+
+/**
+ * A window of the edited assembly, as the same view of the file — how a
+ * bookmark is kept under an edit (§27.7), in the file's coordinates like a
+ * mark, and set down wherever it lands under the edit it is gone back to: the
+ * middle carried to where the file has it, and the window set down around it,
+ * the same width, as {@link carryRegion} carries a view across a change of
+ * edit. The window as it is where the edit left its sequence whole or does not
+ * name it; `null` where no base of its middle or its ends is in the file.
+ */
+export function windowInFile(
+  assembly: EditedAssembly | null,
+  window: { contig: string; start: number; end: number },
+): { contig: string; start: number; end: number } | null {
+  if (assembly === null || assembly.sequence(window.contig) === null) return window
+  const carried = carryRegion(`${window.contig}:${window.start}-${window.end}`, assembly, null)
+  if (carried === null) return null
+  const { name, start, end } = parse(carried)
+  return start === null || end === null ? null : { contig: name, start, end }
+}

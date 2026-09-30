@@ -63,7 +63,7 @@ import {
 } from '../render/legend'
 import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
 import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from '../render/locus'
-import { axisThroughEdit } from '../edit/axis'
+import { axisThroughEdit, originalOf } from '../edit/axis'
 import { stretchInFile } from '../edit/places'
 import type { EditedAssembly } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
@@ -8754,8 +8754,17 @@ export class MatrixPanel {
     // its own block starts at — they differ on a rectangular two-contig block.
     const rowStart = data.rowExtent[0]
     const colStart = data.colExtent[0]
-    const rowLabel = describeAxis(rowGroup, square.row, data.level, this.options.binsize, rowStart)
-    const colLabel = describeAxis(colGroup, square.col, data.level, this.options.binsize, colStart)
+    // Through an edit, each place with the original beside it (§27.7): where
+    // the base was in the file, and whether the piece reads it backwards.
+    const edited = this.options.annotations?.edited?.() ?? null
+    const beside = (group: AxisGroup | undefined, offset: number, blockStart: number): string => {
+      if (edited === null || group === undefined || data.level !== 'bin' || (group.merged?.length ?? 0) > 1) return ''
+      const at = originalOf(edited, group.label, bpWithin(group, offset, blockStart, this.options.binsize))
+      if (at === null) return ''
+      return at === 'gap' ? ' · in a gap' : ` ← ${formatPosition(at.sequence, at.bp)}${at.strand === -1 ? ', turned' : ''}`
+    }
+    const rowLabel = describeAxis(rowGroup, square.row, data.level, this.options.binsize, rowStart) + beside(rowGroup, square.row, rowStart)
+    const colLabel = describeAxis(colGroup, square.col, data.level, this.options.binsize, colStart) + beside(colGroup, square.col, colStart)
 
     // A turned map with a span modifier held is a reader about to name a stretch
     // of the genome, and the whole of what they are pointing at is *where along

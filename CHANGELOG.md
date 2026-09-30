@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The session through an edit gives the file's place beside its own, and keeps bookmarks where the
+  file has them — a dev feature (§27.7).** On a map drawn through an edit, the readout names each
+  place with where it was in the file, as the stage's does — `IV_e1:1,159,001 ← IV:1,241,000, turned`
+  — or says it is in a gap. A bookmark taken there is kept as the same view of the file, and going back
+  to it after the edit changed, or was put back, lands wherever the file's stretch now is; one whose
+  place was set aside says so. A shared link carries the edit, and the share dialog says it does: a
+  recipient with nothing kept opens the map drawn through it.
+
 - **Two sequences against each other — a dot plot, a dev feature (§28).** A task in the Analysis
   panel's 1D card sets one FASTA or `.2bit` of the session against another, or against itself: the
   exact 19-mers the two share, sampled to two million a set (one in about seven bases of a yeast), and

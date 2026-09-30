@@ -7,8 +7,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { axisThroughEdit } from '../../src/edit/axis'
-import { carryRegion, stretchInFile } from '../../src/edit/places'
+import { axisThroughEdit, originalOf } from '../../src/edit/axis'
+import { carryRegion, stretchInFile, windowInFile } from '../../src/edit/places'
 import { EditedAssembly, emptyEdit, withStep, type EditStep } from '../../src/genome/edit'
 import { locusAxisFrom } from '../../src/render/locus'
 
@@ -111,5 +111,61 @@ describe('a mark drawn on the edited map', () => {
     const name = joined.sequences[0].name
     expect(stretchInFile(joined, { contig: name, from: 1_499_990, to: 1_500_200 }, 1_500_050)).toBeNull()
     expect(stretchInFile(joined, { contig: name, from: 1_499_990, to: 1_500_200 }, 1_500_150)).toEqual({ contig: 'V', from: 0, to: 100 })
+  })
+})
+
+describe('the readout’s original beside the edited place', () => {
+  it('names where a base was in the file, and says a turned piece reads it backwards', () => {
+    const turned = assembly({ op: 'invert', sequence: 'IV', from: 1_100_000, to: 1_300_000 })
+    // Before the turn the base is where it was, in a sequence of another name.
+    expect(originalOf(turned, 'IV_e1', 500_000)).toEqual({ sequence: 'IV', bp: 500_000, strand: 1 })
+    // Inside it, the same bases counted from its other end.
+    expect(originalOf(turned, 'IV_e1', 1_100_000)).toEqual({ sequence: 'IV', bp: 1_299_999, strand: -1 })
+    expect(originalOf(turned, 'IV_e1', 1_299_999)).toEqual({ sequence: 'IV', bp: 1_100_000, strand: -1 })
+    // A sequence the edit left whole, and one it does not name.
+    expect(originalOf(turned, 'V', 10)).toBeNull()
+    expect(originalOf(turned, 'VI', 10)).toBeNull()
+  })
+
+  it('says a place in a join’s gap is in a gap', () => {
+    const joined = assembly({ op: 'join', a: 'IV', aEnd: 'end', b: 'V', bEnd: 'start', gap: 100 })
+    const name = joined.sequences[0].name
+    expect(originalOf(joined, name, 1_500_050)).toBe('gap')
+    expect(originalOf(joined, name, 1_500_100)).toEqual({ sequence: 'V', bp: 0, strand: 1 })
+  })
+})
+
+describe('a bookmark taken on the edited map', () => {
+  const turned = assembly({ op: 'invert', sequence: 'IV', from: 1_100_000, to: 1_300_000 })
+
+  it('is kept as the same view of the file, around where its middle was', () => {
+    // Inside the turn: the same bases, counted from the turn's other end.
+    expect(windowInFile(turned, { contig: 'IV_e1', start: 1_150_000, end: 1_200_000 })).toEqual({ contig: 'IV', start: 1_200_000, end: 1_250_000 })
+    // Across the turn's edge: the middle's place in the file, the view's width
+    // around it — a view, not the stretch of one piece.
+    expect(windowInFile(turned, { contig: 'IV_e1', start: 1_000_000, end: 1_400_000 })).toEqual({ contig: 'IV', start: 1_000_000, end: 1_400_000 })
+    // A sequence the edit left whole is kept as it is.
+    expect(windowInFile(turned, { contig: 'V', start: 10, end: 20 })).toEqual({ contig: 'V', start: 10, end: 20 })
+  })
+
+  it('is gone back to wherever a later edit puts it', () => {
+    const kept = windowInFile(turned, { contig: 'IV_e1', start: 1_150_000, end: 1_200_000 })
+    if (kept === null) throw new Error('kept nowhere')
+    const region = `${kept.contig}:${kept.start}-${kept.end}`
+    // Undone, it is where the file has it; moved into V, it went with the stretch.
+    expect(carryRegion(region, null, null)).toBe('IV:1200000-1250000')
+    const moved = assembly({ op: 'move', sequence: 'IV', from: 1_150_000, to: 1_300_000, into: 'V', at: 0, strand: 1 })
+    const landed = carryRegion(region, null, moved)
+    expect(landed).toMatch(/^V_e1:\d+-\d+$/)
+    const [, from, to] = /:(\d+)-(\d+)$/.exec(landed ?? '') ?? []
+    expect(Number(to) - Number(from)).toBe(50_000)
+    expect(Number(from)).toBe(50_000)
+  })
+
+  it('shows nothing of the file where the view is all gap', () => {
+    const joined = assembly({ op: 'join', a: 'IV', aEnd: 'end', b: 'V', bEnd: 'start', gap: 100 })
+    expect(windowInFile(joined, { contig: joined.sequences[0].name, start: 1_500_010, end: 1_500_090 })).toBeNull()
+    // A view whose middle is in the gap is kept where one of its ends is.
+    expect(windowInFile(joined, { contig: joined.sequences[0].name, start: 1_499_000, end: 1_501_100 })?.contig).toMatch(/^(IV|V)$/)
   })
 })

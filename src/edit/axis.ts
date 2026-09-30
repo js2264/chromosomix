@@ -19,7 +19,7 @@
  * its bases are.
  */
 
-import type { EditedAssembly } from '../genome/edit'
+import type { EditedAssembly, OriginalPlace } from '../genome/edit'
 import { LocusAxis, bpAt, strandOf, stretchOf, unitAt, type LocusSegment } from '../render/locus'
 
 /**
@@ -73,4 +73,18 @@ export function axisThroughEdit(axis: LocusAxis | null, assembly: EditedAssembly
   if (!changed) return axis
   segments.sort((x, y) => x.unitStart - y.unitStart)
   return segments.length === 0 ? null : new LocusAxis(segments)
+}
+
+/**
+ * Where a base of an edited sequence was in the file (§27.7) — its original
+ * sequence and 0-based position, and the strand of the piece it is in, `-1`
+ * where the piece reads the original backwards; `'gap'` in a gap of `N`.
+ * `null` where the base is where it was, under its own name — a sequence the
+ * edit left whole — or in a sequence the edit does not name.
+ */
+export function originalOf(assembly: EditedAssembly, sequence: string, bp: number): OriginalPlace | 'gap' | null {
+  if (assembly.sequence(sequence) === null) return null
+  const place = assembly.toOriginal(sequence, bp)
+  if (place === null) return 'gap'
+  return place.sequence === sequence && place.strand === 1 && place.bp === bp ? null : place
 }

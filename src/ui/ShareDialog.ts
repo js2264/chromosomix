@@ -42,6 +42,7 @@ import {
   shortenable,
 } from '../state/shareLink'
 import type { SessionConfig } from '../state/SessionConfig'
+import { devFeature } from '../state/devFeatures'
 
 export interface ShareDialogProps {
   config: SessionConfig
@@ -230,8 +231,13 @@ export function openShareDialog(props: ShareDialogProps): Modal {
           class: 'hint',
           text:
             'The link carries everything in this tab — the view, the tracks and their colours, ' +
-            'the marks and the bookmarks. No server holds it, so it cannot expire, and nothing ' +
-            'about it reaches the site serving this page.',
+            // The edit of the reference, where there is one and the switch
+            // that shows it is on (§27.2, §29.2): the recipient's map is drawn
+            // through it, which is worth being told before sending.
+            (props.config.edit !== undefined && devFeature('edit')
+              ? 'the marks, the bookmarks and the edit of the reference. '
+              : 'the marks and the bookmarks. ') +
+            'No server holds it, so it cannot expire, and nothing about it reaches the site serving this page.',
         }),
         el(
           'div',

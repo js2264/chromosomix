@@ -25,7 +25,7 @@ import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { devFeature } from '../state/devFeatures'
 import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
-import { carryRegion } from '../edit/places'
+import { carryRegion, windowInFile } from '../edit/places'
 import { EditStage } from '../edit/EditStage'
 import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
 import { UNBINNED, binningTable, type BinningTable } from '../edit/binning'
@@ -5032,7 +5032,14 @@ export class Session {
       // card is built once per file and the picture under it is rebuilt on every
       // navigation, so a held reference would save the window of a view the reader
       // left ten clicks ago.
-      framed: () => this.current?.panel?.framedRegion() ?? null,
+      // In the file's coordinates, through whatever edit the map is drawn
+      // through, so a later edit does not move it (§27.7).
+      framed: () => {
+        const framed = this.current?.panel?.framedRegion() ?? null
+        if (framed === null || this.lens === null) return framed
+        const kept = windowInFile(this.lens.assembly, framed)
+        return kept === null ? null : { ...kept, ...(framed.wrapped === undefined ? {} : { wrapped: framed.wrapped }) }
+      },
       binsize: () => this.file?.info.binsize ?? null,
     })
 
@@ -7116,11 +7123,21 @@ export class Session {
   private goToBookmark(mark: Bookmark): void {
     const state = this.store.state
     if (state === null) return
+    // Kept in the file's coordinates, it is set down wherever the edit the map
+    // is drawn through puts it (§27.7); one taken before bookmarks were, in an
+    // edited sequence's name, is gone to as it is.
+    const kept = formatRegion(mark)
+    const carried = this.lens === null || this.lens.assembly.sequence(mark.contig) !== null ? kept : carryRegion(kept, null, this.lens.assembly)
+    if (carried === null) {
+      this.bookmarksCard?.say(`${formatLocus(mark)} is set aside by the edit the map is drawn through.`)
+      return
+    }
+    const where = /^(.*):\d+-\d+$/.exec(carried)?.[1] ?? carried
     this.navigate({
       uri: this.uriAtBinsize(mark.binsize) ?? state.uri,
       view: 'region',
-      region: mark.contig,
-      focus: formatRegion(mark),
+      region: where,
+      focus: carried,
       ...(state.transform === undefined ? {} : { transform: state.transform }),
       ...(state.colormap === undefined ? {} : { colormap: state.colormap }),
       ...(state.level === undefined ? {} : { level: state.level }),

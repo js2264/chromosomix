@@ -22,7 +22,7 @@
  * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25
+ *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25, e17b, e24b
  */
 
 import { createRequire } from 'node:module'
@@ -341,6 +341,25 @@ await sleep(4000)
 console.log('heading says:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
 await shot('e17-session-edited')
 
+// The readout through the edit: each place with where it was in the file —
+// a column inside the turned stretch, a row before it.
+{
+  const r = await page.evaluate(() => {
+    const b = document.querySelector('.heatmap-canvas').getBoundingClientRect()
+    return { left: b.left, top: b.top, width: b.width, height: b.height }
+  })
+  await page.mouse.move(r.left + 0.45 * r.width, r.top + 0.2 * r.height)
+  await sleep(400)
+  console.log('readout through the edit:', await text('.status-coords'))
+  await shot('e17b-readout')
+}
+
+// A bookmark of the view, kept in the file's coordinates.
+await page.click('button[title^="Bookmark this view"]')
+await sleep(500)
+const bookmarks = () => page.evaluate(() => [...document.querySelectorAll('.bookmark-coords')].map((row) => row.textContent))
+console.log('bookmark kept at:', await bookmarks())
+
 // Marks on the edited map, from the Manual annotations card: a box drawn inside
 // the turned stretch, and a line typed at a place in the file. Both are kept in
 // the file's coordinates — the card's rows say where — and drawn where the edit
@@ -419,6 +438,24 @@ await sleep(3000)
 console.log('after revert:', (await text('.crumb-reference'))?.trim(), '·', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
 console.log('marks still at:', await marks())
 await shot('e24-reverted')
+
+// The bookmark taken on the edited map, gone back to on the file as it is:
+// where the file has that stretch.
+await fold('Show the Annotations panel')
+await page.evaluate(() => {
+  const card = [...document.querySelectorAll('.annotation-card')].find((c) => /Bookmarks/.test(c.querySelector('.card-head')?.textContent ?? ''))
+  if (card?.querySelector('.bookmark-go') === null || card?.querySelector('.bookmark-go')?.offsetParent === null) card?.querySelector('.card-head')?.click()
+  card?.scrollIntoView({ block: 'center' })
+})
+await sleep(400)
+const go = await page.$('.bookmark-go')
+if (go === null) console.log('bookmark: no row to go to')
+else {
+  await go.click()
+  await sleep(3500)
+  console.log('bookmark opened at:', (await text('.breadcrumb'))?.replace(/\s+/g, ' '))
+  await shot('e24b-bookmark-reverted')
+}
 
 // The dev features off: no word on the reference, no command.
 await page.evaluate(() => localStorage.removeItem('metacooler-viewer:dev-features'))

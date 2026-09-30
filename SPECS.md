@@ -10091,7 +10091,9 @@ overlay is drawn through, which reads a stretch either way round and clips what 
 it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). The edit is kept per file with the circular
 declarations, carried in a saved workspace as `edit` and read back from one (`state/referenceEdit.ts`);
 a record made on another assembly is kept untouched, named in the stage's history, and not applied.
-An AGP or a Juicebox `.assembly` is read back as an edit (§27.8). Not yet: the link's `s=` payload.
+An AGP or a Juicebox `.assembly` is read back as an edit (§27.8). A shared link carries it, in the
+workspace of one tab its `#session=` payload is (§5.5), and opens drawn through it; the share dialog
+says so.
 
 **An edit is drawn, never written back.** The file is read exactly as it would be without one; the
 lens maps between the original and the edited assembly, and everything on screen goes through it.
@@ -10120,7 +10122,7 @@ gets a new one, suffixed `_e1`, `_e2`, … per original — never a suffix §5.9
 not it. The reader renames, and a rename is a step.
 
 **It is a fact about the file**, like the circular declarations and the origins, and kept with them:
-per file in the session, in a saved workspace and in a link's `s=` payload. An edit carries the
+per file in the session, in a saved workspace and in a shared link's `#session=` payload. An edit carries the
 names and lengths of the assembly it was made against and is refused on a file whose sequences
 differ, naming the first that does (§10); the same edit therefore applies to the `.hic` of the same
 library, and to the `.pairs` it was binned from. **An AGP or a Juicebox `.assembly` dropped on a map is
@@ -10543,17 +10545,18 @@ again, as a change of resolution opens it, with the window carried to wherever i
 same width and turned where the stretch was turned (`edit/places.ts`) — to the table where the place
 did not survive, and a selection to the table, since an edit renames what it names. An edit kept for a
 file it cannot be drawn on is not drawn, and a line says why: one made on another assembly, and for
-now a `.metacool`'s genome layer and a single-cell file's cells (§27.10). Not yet: the original beside
-the edited locus in the readout; bookmarks, which are taken where the view is, in the edited assembly,
-and not carried across a later edit; a deck's companions, drawn as they are; a `.pairs` re-binned
-exactly through the edit, where it is binned and then moved as a stored map is; the link's `s=`
-payload; and the command line, whose line for a task on an edited map says it will measure the file as
-it is.
+now a `.metacool`'s genome layer and a single-cell file's cells (§27.10). The readout gives each place's
+original beside it, as the stage's does. A bookmark taken on the edited map is kept as the same view of
+the file — its middle where the file has it, the same width around — and gone back to wherever the edit
+the map is then drawn through puts it, as a view is carried when the stage closes; one whose place that
+edit set aside says so. Not yet: a deck's companions, drawn as they are; a `.pairs` re-binned exactly
+through the edit, where it is binned and then moved as a stored map is; and the command line, whose
+line for a task on an edited map says it will measure the file as it is.
 
 **An edit reaches the whole session.** Every view, table and track, every task run after it and
 every export is in the edited assembly until the reader reverts: the Chromosomes table lists edited
 sequences, a locus names one (`IV_e1:1,000,001-1,200,000`), and the readout gives the original beside
-it (`← IV:2,310,441, reversed`).
+it (`IV_e1:1,150,001 ← IV:1,250,000, turned`), or says the place is in a gap.
 
 - **Tracks** are fetched in original coordinates and drawn through the lens, so the annotations worker
   does not know there is one: a signal is mirrored in a reversed piece, a feature's strand is its own
@@ -10762,9 +10765,10 @@ theoretical order and orientation but for contig_49 — fifteen kilobases, most 
 balancer, either way round — and those two. With the assembly's FASTA beside the map, the telomeres
 at contig_39's start and contig_4's end the chromosome, and auto mode completes it,
 `39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54- 5- 4-`, 2,118 kb: contig_5 and contig_4 at its end,
-contig_4's telomere outermost, where the theoretical genome puts contig_5 between contig_59 and
-contig_6 — the map and the telomere against it. Not yet: the grid, `--simulate`, and the `.pairs`
-re-binned exactly.
+contig_4's telomere outermost, where the theoretical genome puts contig_5 between contig_61 and
+contig_6 (its dot plot, §28, reads `61- 5- 6+`) — the map and the telomere against it: in 30 kb at
+10 kb, contig_5's start meets contig_4's end at 87 times the trans level, and contig_6's start at 34.
+Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
 
 ### 27.12 Costs
 
