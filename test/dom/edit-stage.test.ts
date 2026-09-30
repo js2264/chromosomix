@@ -196,6 +196,20 @@ describe('the stage', () => {
     }
   })
 
+  it('puts back a stretch set aside, from its row, as a sequence of its own, last, selected', async () => {
+    const { store } = await open()
+    store.apply({ op: 'aside', sequence: 'I', from: 2000, to: 5000, why: 'debris' }, 'reader')
+    expect(textsOf(document.body, '.edit-aside-locus')).toEqual(['I:2,001-5,000'])
+    button('put back').click()
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'restore', sequence: 'I', start: 2000, end: 5000 })
+    expect(textsOf(document.body, '.edit-aside-locus')).toEqual([])
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['I_e1', 'II', 'I_e2'])
+    expect(document.querySelector('.edit-sequence.is-selected .edit-sequence-name')?.textContent).toBe('I_e2')
+    // One step, undone as any is: set aside again.
+    store.undo()
+    expect(textsOf(document.body, '.edit-aside-locus')).toEqual(['I:2,001-5,000'])
+  })
+
   it('orders its cards selection, sequences, history, suggestions, export and picture — the suggestions first in review', async () => {
     const { stage } = await open()
     void stage

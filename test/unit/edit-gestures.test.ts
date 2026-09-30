@@ -196,6 +196,40 @@ describe('↑ and ↓', () => {
   })
 })
 
+describe('a stretch set aside, put back', () => {
+  it('comes back last, a sequence of its own, as the file reads it, and leaves the list', () => {
+    const value = edit(
+      { op: 'invert', sequence: 'I', from: 2000, to: 6000 },
+      { op: 'aside', sequence: 'I_e1', from: 2000, to: 6000, why: 'debris' },
+    )
+    const before = EditedAssembly.of(value)
+    expect(before.aside.map((item) => [item.piece.sequence, item.piece.start, item.piece.end, item.piece.strand])).toEqual([['I', 2000, 6000, -1]])
+    const step: EditStep = { op: 'restore', sequence: 'I', start: 2000, end: 6000 }
+    expect(stepText(step)).toBe('put back I:2,001-6,000')
+    const after = EditedAssembly.of(withStep(value, step, 'reader', 2))
+    expect(after.aside).toEqual([])
+    expect(after.sequences.map((sequence) => [sequence.name, after.lengthOf(sequence.name)])).toEqual([
+      ['I_e1', 6000],
+      ['II', 6000],
+      ['III', 4000],
+      ['I_e2', 4000],
+    ])
+    // The way the file reads it, whatever way it was set aside.
+    expect(after.toOriginal('I_e2', 0)).toEqual({ sequence: 'I', bp: 2000, strand: 1 })
+    // And selected, whole, to be moved into place.
+    expect(landed(before, after, step)).toEqual({ sequence: 'I_e2', from: 0, to: 4000 })
+  })
+
+  it('takes its own name back where it is a sequence of the file whole, and changes nothing that is not set aside', () => {
+    const value = edit({ op: 'aside', sequence: 'II', from: 0, to: 6000, why: 'contaminant' })
+    const back = EditedAssembly.of(withStep(value, { op: 'restore', sequence: 'II', start: 0, end: 6000 }, 'reader', 1))
+    expect(back.sequences.map((sequence) => sequence.name)).toEqual(['I', 'III', 'II'])
+    const none = EditedAssembly.of(withStep(value, { op: 'restore', sequence: 'I', start: 0, end: 1000 }, 'reader', 1))
+    expect(none.sequences.map((sequence) => sequence.name)).toEqual(['I', 'III'])
+    expect(none.aside).toHaveLength(1)
+  })
+})
+
 describe('the selection follows the stretch', () => {
   it('to where a place put it, before the sequence it went before', () => {
     const before = EditedAssembly.of(emptyEdit(ORIGINAL))

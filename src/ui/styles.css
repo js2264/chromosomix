@@ -13197,12 +13197,25 @@ span.deck-name {
 }
 .edit-aside-list > li {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 0.5rem;
   padding: 0.15rem 0.5rem;
 }
+.edit-aside-locus {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .edit-aside-why {
   color: var(--text-dim);
+}
+/* What was set aside, put back (§27.4): quiet, as a row's own act is. */
+.edit-aside-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
 }
 .edit-history-by {
   /* On the step's first line, whatever its words wrap to: a chip stretched to

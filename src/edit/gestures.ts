@@ -264,6 +264,11 @@ export function landed(before: EditedAssembly, after: EditedAssembly, step: Edit
       const length = step.to - step.from
       return { sequence: name, from: step.at, to: step.at + length }
     }
+    case 'restore': {
+      // Put back last, whole: selected, to be moved into place.
+      const last = after.sequences[after.sequences.length - 1]
+      return last === undefined ? null : { sequence: last.name, from: 0, to: after.lengthOf(last.name) ?? 0 }
+    }
     case 'place': {
       // Before the sequence it was put before, in the order the step left.
       const at = index(step.sequence)

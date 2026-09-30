@@ -51,6 +51,8 @@ export function stepText(step: EditStep): string {
       return `rename ${step.sequence} to ${step.name}`
     case 'reorder':
       return 'reorder the sequences'
+    case 'restore':
+      return `put back ${span(step.sequence, step.start, step.end)}`
     case 'place': {
       const where = step.before === null ? 'last' : `before ${step.before}`
       const turned = step.strand === -1 ? ', turned' : ''

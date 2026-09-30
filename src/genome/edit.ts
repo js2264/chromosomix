@@ -176,6 +176,19 @@ export type EditStep =
       /** The whole sequence, as the hand held it: how the history says it. */
       whole?: boolean
     }
+  | {
+      /**
+       * A stretch set aside, put back (§27.4): the piece the set-aside list
+       * names — by the stretch of the original it is — returned as a sequence
+       * of its own, last, read as the file reads it, joined to nothing, to be
+       * moved into place as any sequence is. Sent to another genome of a
+       * metagenome, it comes back to this one.
+       */
+      op: 'restore'
+      sequence: string
+      start: number
+      end: number
+    }
   | LayoutStep
 
 /**
@@ -555,6 +568,15 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
       for (const part of middle) if (!isGap(part)) next.aside.push({ piece: part, why: step.why, ...(genome === undefined ? {} : { genome }) })
       target.parts = merge([...before, ...after])
       if (target.parts.length === 0) next.sequences = next.sequences.filter((sequence) => sequence !== target)
+      return next
+    }
+    case 'restore': {
+      const at = next.aside.findIndex(({ piece }) => piece.sequence === step.sequence && piece.start === step.start && piece.end === step.end)
+      if (at < 0) return state
+      const [item] = next.aside.splice(at, 1)
+      // A fresh name; an original put back whole takes its own again (`settleNames`).
+      const name = freshName(baseName(step.sequence), taken)
+      next.sequences.push({ name, parts: [{ ...item.piece, strand: 1 }] })
       return next
     }
     case 'bring': {

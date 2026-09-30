@@ -10116,7 +10116,8 @@ Taking the lens away is taking the edit away.
 right half becomes a sequence of its own), `set aside` (as *debris*, *contaminant*, *haplotig* or
 *unplaced*), `rotate` (a circular sequence's first base), `rename`, `reorder` and `place` (a stretch
 set in the order as a sequence of its own, taken out of its sequence, or a whole sequence moved in the
-order — before another, or last — which joins nothing), and on a metagenome `reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
+order — before another, or last — which joins nothing), `restore` (a stretch set aside put back, a
+sequence of its own, last), and on a metagenome `reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
 reader, a suggestion, or auto mode — **when**, and for a suggestion **the evidence it was accepted
 on**. The history is the provenance: the console writes it, an exported AGP quotes it, the command
 line replays it. **Undo** and **redo** move a cursor along it; a step made after an undo drops the
@@ -10222,7 +10223,8 @@ What is on it:
   suggestions to work through); **selection**, what is selected and what can be done with it, each act
   printing its key; **history**, every step in words, the cursor lit and undone steps greyed, a press
   on a row going back or forward to it; **sequences**, the edited assembly — a press selects a whole
-  sequence and frames it — with what was set aside, and why, at the foot; **suggestions**, sorted by
+  sequence and frames it — with what was set aside, and why, at the foot, each with *put back*;
+  **suggestions**, sorted by
   confidence, each its number, its kind, its words, its confidence, the chips of its evidence and its
   two answers, *take* `Y` and *turn down* `N`, those turned down struck through beneath with *offer
   again*, and what the answers taught with *forget*; and **picture**, what the stage's picture is.
@@ -10333,7 +10335,11 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   new sequence** `S`; **join** by dragging one sequence's end onto another's on a pieces bar; **set the
   origin** `O` on a circular sequence. *Built*: invert, cut and split at the pointer (or, with no pointer
   on the map, at the selection's ends — a stretch made a sequence of its own), set aside with its menu
-  of reasons, duplicate by ⌥ held on the drop and as *copy* in the sidebar (the stretch again after
+  of reasons — and **put back** from its row on the sequences card: one `restore` step, the piece a
+  sequence of its own, last, read as the file reads it whatever way it was set aside, joined to
+  nothing, selected and framed to be moved into place; an original put back whole takes its own name
+  again, and a contig sent to another genome comes back to this one — duplicate by ⌥ held on the drop
+  and as *copy* in the sidebar (the stretch again after
   itself), and **join** by dropping a whole sequence — selected from the list, the diagonal or a bar —
   on another's start or end **with ⇧ held**, from the map or along a pieces bar, which puts a 100 bp
   `N` gap between them and lands the joined sequence where the drop was; without ⇧ the drop puts it

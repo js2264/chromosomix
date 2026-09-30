@@ -25,7 +25,7 @@ import type { ManualStore } from '../annotations/manual'
 import type { MapId } from '../annotations/placement'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { EditedAssembly, isGap, type AsideReason, type EditStep, type ReferenceEdit } from '../genome/edit'
+import { EditedAssembly, isGap, type AsideReason, type EditStep, type Piece, type ReferenceEdit } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { bpAt } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -2820,6 +2820,17 @@ export class EditStage {
     )
   }
 
+  /**
+   * A stretch set aside, put back (§27.4): a sequence of its own, last, as the
+   * file reads it — selected and framed, to be moved into place with ↑ ↓, its
+   * grip or a drag.
+   */
+  private putBack(piece: Piece): void {
+    this.step({ op: 'restore', sequence: piece.sequence, start: piece.start, end: piece.end })
+    const units = this.grid === null || this.selection?.kind !== 'stretch' ? null : stretchUnits(this.grid, this.selection.stretch)
+    if (units !== null) this.frameUnits(units[0], units[1])
+  }
+
   /** A sequence selected whole, as a press on its row or on its name on a bar does. */
   private selectWhole(name: string): void {
     const length = this.props.store.assembly.lengthOf(name)
@@ -2963,19 +2974,29 @@ export class EditStage {
             el(
               'ul',
               { class: 'edit-aside-list' },
-              ...assembly.aside.map((item) =>
-                el(
+              ...assembly.aside.map((item) => {
+                const locus = formatLocus({ contig: item.piece.sequence, start: item.piece.start, end: item.piece.end })
+                // Back into the assembly, as a sequence of its own (§27.4).
+                const back = el('button', {
+                  class: 'btn btn-quiet edit-aside-back',
+                  title: 'Put it back: a sequence of its own, last, as the file reads it — one step, to undo like any other',
+                  attrs: { type: 'button', 'aria-label': `Put back ${locus}` },
+                  on: { click: () => this.putBack(item.piece) },
+                })
+                back.append(icon('undo-2', { size: 12 }), el('span', { text: 'put back' }))
+                return el(
                   'li',
                   {},
-                  el('span', { text: formatLocus({ contig: item.piece.sequence, start: item.piece.start, end: item.piece.end }) }),
+                  el('span', { class: 'edit-aside-locus', text: locus }),
                   // Sent to another genome of the metagenome, which (§27.10).
                   el('span', {
                     class: 'edit-aside-why',
                     text: item.genome === undefined ? item.why : `→ ${item.genome === '__unbinned__' ? 'no genome' : item.genome}`,
                     title: item.genome === undefined ? '' : `A contig of ${item.genome === '__unbinned__' ? 'no genome' : item.genome} now, by its contacts`,
                   }),
-                ),
-              ),
+                  back,
+                )
+              }),
             ),
           )
     // Longest first, the order an assembly is conventionally written in: one

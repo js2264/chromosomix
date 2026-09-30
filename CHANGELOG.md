@@ -14,6 +14,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A stretch set aside can be put back — a dev feature (§27.4).** Each row of the set-aside list on the
+  stage's sequences card has *put back*: one step, undone like any other, that returns the piece as a
+  sequence of its own, last, as the file reads it, selected and framed to be moved into place. Before,
+  only an undo brought it back, and with it every step made since.
+
 - **A dot plot in the stage's corner, redrawn through every edit — a dev feature (§27.3).** With another
   reference loaded beside the file's own sequence — the theoretical genome a strain was built to be —
   the stage draws the assembly against it in the map's corner, and after every step the lines move
