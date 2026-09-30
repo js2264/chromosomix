@@ -12912,9 +12912,16 @@ span.deck-name {
 .edit-overlay.is-panning {
   cursor: grab;
 }
-.edit-bar,
 .edit-lane {
   pointer-events: none;
+}
+/* A pieces bar is a handle on its pieces (§27.4): pressed, dragged, turned. */
+.edit-bar {
+  cursor: grab;
+  touch-action: none;
+}
+.edit-bar.is-dragging {
+  cursor: grabbing;
 }
 .edit-lane-band {
   position: absolute;

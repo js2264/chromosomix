@@ -259,6 +259,8 @@ export class EditStage {
   private previewing = false
   /** What the rail was last painted from, so a frame that changes none of it leaves it be. */
   private railSignature = ''
+  /** A move begun on a pieces bar: where the press was, on the page, until it travels. */
+  private barPress: { x: number; y: number } | null = null
   private closed = false
   private readonly stopStore: () => void
   private readonly observer: ResizeObserver | null
@@ -379,6 +381,8 @@ export class EditStage {
     )
 
     this.wireCanvas()
+    this.wireBar(this.topBar, 'top')
+    this.wireBar(this.leftBar, 'left')
     this.onKey = (event) => this.key(event)
     this.onKeyUp = (event) => this.keyUp(event)
     this.onBlur = () => this.letGo()
@@ -1261,6 +1265,112 @@ export class EditStage {
   }
 
   /**
+   * A pieces bar as a handle on the pieces it draws (§27.3, §27.4): a press
+   * selects the piece under it, or holds the selection where it is inside it,
+   * and a drag moves what is held — the map's own move, with the pointer set
+   * on the diagonal at the bar's place, so the ghost, the snapping, the preview
+   * under the hand, `I` on the way and ⌥ for a copy are the same ones; a
+   * double click turns the piece; hovering names it and where it came from.
+   */
+  private wireBar(canvas: HTMLCanvasElement, side: 'top' | 'left'): void {
+    const unitOf = (event: MouseEvent): number => {
+      const rect = canvas.getBoundingClientRect()
+      return side === 'top' ? this.sx.toUnit(event.clientX - rect.left) : this.sy.toUnit(event.clientY - rect.top)
+    }
+    const onDiagonal = (unit: number): { x: number; y: number } => ({ x: this.sx.toPixel(unit), y: this.sy.toPixel(unit) })
+    canvas.addEventListener('pointerdown', (event) => {
+      const grid = this.grid
+      if (grid === null || event.button !== 0) return
+      closeMenu()
+      this.overlayCanvas.focus({ preventScroll: true })
+      const unit = unitOf(event)
+      const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
+      const lit = held === null ? null : stretchUnits(grid, held)
+      const inside = held !== null && lit !== null && unit >= lit[0] && unit <= lit[1]
+      const stretch = inside ? held : partStretch(grid, unit)
+      if (stretch === null) return
+      const units = inside && lit !== null ? lit : stretchUnits(grid, stretch)
+      if (!inside) {
+        this.selection = { kind: 'stretch', stretch }
+        this.paintSide()
+      }
+      if (units !== null) {
+        this.drag = { kind: 'move', stretch, units, grip: unit - units[0], ...onDiagonal(unit), moved: false, strand: 1, copy: event.altKey, step: null, mark: null }
+        this.barPress = { x: event.clientX, y: event.clientY }
+        canvas.setPointerCapture(event.pointerId)
+        canvas.classList.add('is-dragging')
+      }
+      event.preventDefault()
+      this.schedule()
+    })
+    canvas.addEventListener('pointermove', (event) => {
+      const drag = this.drag
+      if (drag?.kind === 'move' && this.barPress !== null) {
+        if (!drag.moved && Math.hypot(event.clientX - this.barPress.x, event.clientY - this.barPress.y) < DRAG_PX) return
+        drag.moved = true
+        Object.assign(drag, onDiagonal(unitOf(event)))
+        drag.copy = event.altKey
+        this.updateMove(drag)
+        this.schedule()
+        return
+      }
+      if (this.drag === null) this.describeBar(unitOf(event))
+    })
+    const finish = (event: PointerEvent): void => {
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      canvas.classList.remove('is-dragging')
+      const drag = this.drag
+      this.barPress = null
+      if (drag?.kind !== 'move') return
+      this.drag = null
+      const step = drag.moved ? drag.step : null
+      this.preview = null
+      this.pictureDirty = true
+      if (step !== null) {
+        this.step(step)
+        return
+      }
+      this.paintReadout()
+      this.paintSide()
+      this.schedule()
+    }
+    canvas.addEventListener('pointerup', finish)
+    canvas.addEventListener('pointercancel', (event) => {
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      canvas.classList.remove('is-dragging')
+      this.barPress = null
+      this.cancelDrag()
+    })
+    canvas.addEventListener('pointerleave', () => {
+      if (this.drag === null) this.paintReadout()
+    })
+    canvas.addEventListener('dblclick', (event) => {
+      event.preventDefault()
+      const grid = this.grid
+      if (grid === null) return
+      const stretch = partStretch(grid, unitOf(event))
+      if (stretch !== null) this.turn(stretch)
+    })
+  }
+
+  /** The readout over a pieces bar: the piece under the pointer, where it came from, and what the bar does with it. */
+  private describeBar(unit: number): void {
+    const grid = this.grid
+    if (grid === null) return
+    const place = grid.place(Math.min(grid.n - 1e-9, Math.max(0, unit)))
+    const stretch = partStretch(grid, unit)
+    const piece = place?.part.piece ?? null
+    if (place === null || stretch === null || piece === null) {
+      this.readoutEl.textContent = place === null ? this.summary() : `${place.sequence} · gap`
+      return
+    }
+    const here = formatLocus({ contig: stretch.sequence, start: stretch.from, end: stretch.to })
+    const from = formatLocus({ contig: piece.sequence, start: piece.start, end: piece.end })
+    const origin = from === here && piece.strand === 1 ? '' : ` ← ${from}${piece.strand === -1 ? ', turned' : ''}`
+    this.readoutEl.textContent = `${here}${origin} · drag to move it, double-click to turn it`
+  }
+
+  /**
    * The pointer at `(x, y)` on the map, snapped, and said in the readout: to a
    * suggestion's corner in the plane where one is within reach (§27.4), else
    * along each axis; and a suggestion's mark under it lit, with its label.
@@ -1928,7 +2038,7 @@ export class EditStage {
         head,
         el('p', {
           class: 'edit-empty',
-          text: 'Drag along the diagonal to select a stretch, or press a piece; drag off it to box two stretches, or press a corner for the stretch between its two ends.',
+          text: 'Drag along the diagonal to select a stretch, or press a piece, on the map or on a bar; drag off it to box two stretches, or press a corner for the stretch between its two ends.',
         }),
       )
       return
@@ -1956,7 +2066,7 @@ export class EditStage {
         ),
         el('p', {
           class: 'edit-hint',
-          text: 'Drag its square to move it: ⌥ copies it, I turns it on the way, and a whole sequence dropped on another’s end joins the two.',
+          text: 'Drag its square, or its piece on a bar, to move it: ⌥ copies it, I turns it on the way, and a whole sequence dropped on another’s end joins the two. A double click on a bar turns a piece.',
         }),
       )
       return

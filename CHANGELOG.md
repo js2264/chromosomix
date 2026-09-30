@@ -14,6 +14,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage's pieces bars are handles — a dev feature (§27.3, §27.4).** A press on a piece of the
+  bar along the map's top or left selects it; a drag moves it, the map rearranged under the hand as a
+  drag of its square does, and a whole sequence dropped on another's end joins the two; a double click
+  turns a piece; and the readout over a bar names the piece and the stretch of the file it is.
+
 - **The session through an edit gives the file's place beside its own, and keeps bookmarks where the
   file has them — a dev feature (§27.7).** On a map drawn through an edit, the readout names each
   place with where it was in the file, as the stage's does — `IV_e1:1,159,001 ← IV:1,241,000, turned`

@@ -10177,8 +10177,12 @@ What is on it:
 - **Two pieces bars**, along its top and left edges: every piece a block in its **original sequence's
   hue** (a golden angle apart, so neighbours never share one), with chevrons pointing the way it reads,
   and every edited sequence's name over its span. A moved piece keeps its colour, so the bar says at a
-  glance where each stretch came from, and a reversed one points the other way. *Built*, as a picture:
-  a piece is selected, moved and turned from the map; from the bar itself, not yet.
+  glance where each stretch came from, and a reversed one points the other way. *Built*, and a handle
+  as well as a picture: a press on a bar selects the piece under it, or holds the selection where it is
+  inside it; a drag moves what is held — the map's own move, snapped and previewed under the hand, `I`
+  turning it and ⌥ copying it on the way, and a whole sequence dropped on another's end joining the
+  two; a double click turns a piece; and the readout over a bar names the piece and, where it is not
+  the same, the stretch of the file it is (`V_e1:1-576,874 ← V:1-576,874, turned`).
 - **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
   dragged, so a track moves with the stretch under the hand; the selection is lit across them.
   *Built.*
@@ -10274,7 +10278,7 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   pointer is down the block in hand is regathered on the main thread through the tentative edit, cells
   whole, at frame rate, and on the drop the worker reads the settled edit exactly and the refine path's
   swap (§2) replaces the preview. `I` during the drag turns the stretch on the way. *Built* from the
-  square on the map: the stretch's start snaps, or its end where that is nearer a target, the whole map
+  square on the map and from its piece on a pieces bar: the stretch's start snaps, or its end where that is nearer a target, the whole map
   and its lanes are redrawn through the edit the drop would make at every move of the pointer, the
   readout says that step, and the selection follows the stretch to where it lands. A stretch dropped
   back on itself is left alone, or turned if it was flipped on the way. At the whole-genome scale the
@@ -10286,9 +10290,9 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   origin** `O` on a circular sequence. *Built*: invert, cut and split at the pointer (or, with no pointer
   on the map, at the selection's ends — a stretch made a sequence of its own), set aside with its menu
   of reasons, duplicate by ⌥ held on the drop and as *copy* in the sidebar (the stretch again after
-  itself), and **join** by dropping a whole sequence — selected from the list or the diagonal — on
-  another's start or end, which puts a 100 bp `N` gap between them and lands the joined sequence where
-  the drop was. The right-click menu offers the same, for the selection and for the place under the
+  itself), and **join** by dropping a whole sequence — selected from the list, the diagonal or a bar —
+  on another's start or end, from the map or along a pieces bar, which puts a 100 bp `N` gap between
+  them and lands the joined sequence where the drop was. The right-click menu offers the same, for the selection and for the place under the
   pointer. Not yet: the origin, which comes with circular sequences on the stage.
 - **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it. *Built.*
 
