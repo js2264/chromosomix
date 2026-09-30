@@ -63,6 +63,12 @@ export interface EditedSequence {
   parts: Part[]
   /** Declared circular: its last base is followed by its first (§8.15). */
   circular?: boolean
+  /**
+   * Named by the reader (§27.3): it keeps the name it was given where its
+   * parts are an original's, whole, again — which would otherwise take the
+   * original's name back.
+   */
+  named?: boolean
 }
 
 /** Why a stretch was taken out of the assembly. */
@@ -558,7 +564,10 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
     case 'rename': {
       const target = find(next, step.sequence)
       if (target === null || step.name === '' || (taken.has(step.name) && step.name !== target.name)) return state
+      // A name of the file's own is that sequence's, whole, and no other's.
+      if (originals.has(step.name) && wholeOriginal(target, original) !== step.name) return state
       target.name = step.name
+      target.named = true
       return next
     }
     case 'reorder': {
@@ -702,6 +711,8 @@ function settleNames(state: Folded, original: OriginalAssembly): Folded {
   // an inversion inverted back — is the original again, and takes its name back
   // where it is free, so that the history's net effect is what the names say.
   for (const sequence of state.sequences) {
+    // Not one the reader named: the name they gave it is the one it keeps.
+    if (sequence.named === true) continue
     const whole = wholeOriginal(sequence, original)
     if (whole !== null && sequence.name !== whole && !taken.has(whole)) {
       taken.delete(sequence.name)

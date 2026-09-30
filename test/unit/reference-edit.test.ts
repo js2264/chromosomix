@@ -190,6 +190,21 @@ describe('a join, a split and a stretch set aside', () => {
     roundTrips(assembly)
   })
 
+  it('keeps the name the reader gives a sequence, even one that is an original whole', () => {
+    // Whole and forward, I would take its own name back; named, it keeps chrI.
+    expect(edited({ op: 'rename', sequence: 'I', name: 'chrI' }).sequences.map((sequence) => sequence.name)).toEqual(['chrI', 'II', 'III'])
+    // A turn undone by another is the original again, and keeps the name too.
+    const back = edited(
+      { op: 'invert', sequence: 'I', from: 0, to: 1000 },
+      { op: 'rename', sequence: 'I_e1', name: 'chrI' },
+      { op: 'invert', sequence: 'chrI', from: 0, to: 1000 },
+    )
+    expect(back.sequences[0].name).toBe('chrI')
+    // A name of the file's own is refused for any stretch but that sequence whole.
+    expect(edited({ op: 'rename', sequence: 'II', name: 'III' }).sequences.map((sequence) => sequence.name)).toEqual(['I', 'II', 'III'])
+    expect(edited({ op: 'join', a: 'I', aEnd: 'end', b: 'II', bEnd: 'start', gap: 0 }, { op: 'rename', sequence: 'I_e1', name: 'II' }).sequences[0].name).toBe('I_e1')
+  })
+
   it('rotates a circle to start at its origin', () => {
     const assembly = edited({ op: 'rotate', sequence: 'III', at: 100 })
     const name = assembly.sequences[2].name

@@ -94,6 +94,50 @@ await sleep(800)
 console.log('review:', await text('.edit-review'))
 await shot('r06-review')
 
+// Named, sorted, and a circle started elsewhere (§27.3, §27.4): the fused
+// chromosome given the name the strain gives it, the sequences longest first,
+// and contig_62 — which reads as a circle — started at its middle with O.
+await page.click('.edit-modes >> text=manual')
+await sleep(300)
+if (fused !== null) {
+  await page.evaluate((name) => {
+    document.querySelector(`.edit-sequence-rename[aria-label="Rename ${name}"]`)?.click()
+  }, fused)
+  await sleep(200)
+  await page.fill('.edit-rename-input', 'chrXVI_Mmmyco')
+  await page.keyboard.press('Enter')
+  await sleep(1200)
+}
+await page.click('.edit-sequences-card button >> text=longest first').catch(() => console.log('longest first: not offered'))
+await sleep(1200)
+await g.settled()
+console.log('named and sorted:', await page.evaluate(() => [...document.querySelectorAll('.edit-sequence-name')].slice(0, 6).map((node) => node.textContent)))
+{
+  // contig_62 framed from the list — a few pixels wide in the whole genome —
+  // then the pointer on its middle.
+  await page.evaluate(() => {
+    for (const button of document.querySelectorAll('.edit-sequence')) {
+      if (button.querySelector('.edit-sequence-name')?.textContent === 'contig_62') button.click()
+    }
+  })
+  await sleep(900)
+  const box = await g.mapBox()
+  const c62 = await g.cellsOf('contig_62')
+  if (c62 !== null) {
+    const middle = Math.round((c62[0] + c62[1]) / 2)
+        await page.mouse.move(...Object.values(g.at(box, middle, middle)))
+    await sleep(300)
+    console.log('over contig_62:', c62, await text('.edit-readout'))
+    await page.keyboard.press('o')
+    await sleep(1200)
+    console.log('after O:', await text('.edit-readout'))
+  } else console.log('origin: no contig_62')
+}
+console.log('history now:', (await history()).slice(-3))
+await page.evaluate(() => document.querySelector('.edit-sequences-card')?.scrollIntoView({ block: 'start' }))
+await sleep(300)
+await shot('r06b-named')
+
 // The AGP of the rebuilt assembly.
 await page.click('.edit-modes >> text=manual')
 await page.evaluate(() => {
@@ -104,6 +148,6 @@ const [download] = await Promise.all([page.waitForEvent('download'), page.click(
 const path = join(files, download.suggestedFilename())
 await download.saveAs(path)
 const agp = readFileSync(path, 'utf8')
-console.log('AGP, the fused chromosome:\n' + agp.split('\n').filter((line) => line.startsWith('contig_39')).join('\n'))
+console.log('AGP, the fused chromosome:\n' + agp.split('\n').filter((line) => line.startsWith('chrXVI_Mmmyco') || line.startsWith('contig_39')).join('\n'))
 await shot('r07-export')
 await g.close()

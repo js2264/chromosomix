@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Name, order and start the stage's sequences — a dev feature (§27.3, §27.4).** A sequence is renamed
+  from its pencil on the sequences card, or a double click — the fused chromosome of the reassembly
+  auto mode rebuilds is *chrXVI_Mmmyco* in its AGP, not *contig_39_e1* — and keeps the name through
+  later edits; *longest first* orders the assembly in one step; and `O` starts a circle at the
+  pointer, as the menu's *start the circle here* does.
+
 - **A suggestion's ends are dragged to adjust it, in review — a dev feature (§27.6).** The ends of the
   suggestion review is on take the pointer: a turn's or a move's stretch begun or ended elsewhere, a
   split's point moved, snapped as everything on the stage is, with its outline, its words and its row

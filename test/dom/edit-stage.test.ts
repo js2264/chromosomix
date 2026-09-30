@@ -150,6 +150,37 @@ describe('the stage', () => {
     sequence('I').click()
     expect(textsOf(document.body, '.edit-act span')).toEqual(['turn', 'copy', 'own sequence', 'set aside'])
   })
+
+  it('renames a sequence from its pencil, as a step, and refuses a name another has', async () => {
+    const { store } = await open()
+    const rename = (name: string, to: string): void => {
+      ;(document.querySelector(`.edit-sequence-rename[aria-label="Rename ${name}"]`) as HTMLButtonElement).click()
+      const input = document.querySelector('.edit-rename-input') as HTMLInputElement
+      input.value = to
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    }
+    rename('I', 'chrI')
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'rename', sequence: 'I', name: 'chrI' })
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['chrI', 'II'])
+    // Another's name, or two words, is refused and said; nothing is made.
+    rename('II', 'chrI')
+    expect(store.applied).toBe(1)
+    expect(document.querySelector('.edit-sequences-note')?.textContent).toBe('chrI is the name of another sequence already.')
+    rename('II', 'chr II')
+    expect(store.applied).toBe(1)
+    expect(document.querySelector('.edit-sequences-note')?.textContent).toMatch(/^A name is one word/)
+  })
+
+  it('puts the sequences longest first, as one step, and says when they are', async () => {
+    const { store } = await open()
+    expect(button('longest first').disabled).toBe(true)
+    store.apply({ op: 'reorder', names: ['II', 'I'] }, 'reader')
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['II', 'I'])
+    button('longest first').click()
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'reorder', names: ['I', 'II'] })
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['I', 'II'])
+    expect(button('longest first').disabled).toBe(true)
+  })
 })
 
 describe('the suggestions', () => {

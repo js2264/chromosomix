@@ -5594,6 +5594,8 @@ export class Session {
         return reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, keep: true, ...(wanted === undefined ? {} : { contigs: wanted }) }, onProgress)
       },
       suggest: (input) => reader.cancellable<'suggest'>({ kind: 'suggest', ...input }),
+      // The circles the reader declared, whose origin the stage may set (§27.4).
+      circular: () => this.circularStore()?.list() ?? [],
       // The binning every genome's edit makes, as the edits stand (§27.10).
       ...(scope === undefined ? {} : { binning: () => this.binning() }),
       // Where a genome's contigs and the others belong (§27.10): read without

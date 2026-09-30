@@ -109,6 +109,8 @@ export interface EditStageProps {
   liftContacts?: ExportCardProps['liftContacts']
   /** On a metagenome: the contig → MAG table every genome's edit makes (§27.10). */
   binning?: ExportCardProps['binning']
+  /** The file's sequences the reader declared circular (§8.15), whose origin the stage may set (§27.4). */
+  circular?: () => readonly string[]
   /** The map's colours, as its Map card has them. */
   colormap: string
   lanes?: StageLanes
@@ -260,6 +262,9 @@ export class EditStage {
   private autoRunning = false
   /** Suggestions whose ends the hand has dragged, by key, until the edit changes (§27.6). */
   private readonly adjustments = new Map<string, Suggestion>()
+  /** The sequence whose name is being typed, on the sequences card; and a line about the last name refused. */
+  private renaming: string | null = null
+  private sequencesNote = ''
   /** The sequences the picture was read of, where not the whole map. */
   private drawn: Set<string> | null = null
   /** Where a genome's contigs and the others belong, read for the contigs `linksOf` names. */
@@ -367,7 +372,7 @@ export class EditStage {
 
     this.selectionCard = el('section', { class: 'edit-card' })
     this.historyCard = el('section', { class: 'edit-card' })
-    this.sequencesCard = el('section', { class: 'edit-card' })
+    this.sequencesCard = el('section', { class: 'edit-card edit-sequences-card' })
     this.pictureCard = el('section', { class: 'edit-card' })
     this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
     this.genomeCard = el('section', { class: 'edit-card edit-genome-card' })
@@ -726,6 +731,43 @@ export class EditStage {
     const selection = this.selection
     if (selection?.kind !== 'stretch') return
     this.splitOut(selection.stretch)
+  }
+
+  /**
+   * Whether an edited sequence is a circle (§8.15): declared one by a layout
+   * it was read from, or every part of it a piece of one sequence of the file
+   * the reader declared circular, the whole of it — as it is, or started
+   * elsewhere by an origin already set.
+   */
+  private circularOf(name: string): boolean {
+    const assembly = this.props.store.assembly
+    const sequence = assembly.sequence(name)
+    if (sequence === null) return false
+    if (sequence.circular === true) return true
+    const declared = this.props.circular?.() ?? []
+    if (declared.length === 0 || sequence.parts.some((part) => isGap(part))) return false
+    const pieces = sequence.parts.filter((part) => !isGap(part)) as Array<{ sequence: string }>
+    const of = pieces[0]?.sequence
+    if (of === undefined || !declared.includes(of) || pieces.some((piece) => piece.sequence !== of)) return false
+    const original = this.props.store.edit.original
+    const index = original.names.indexOf(of)
+    return index >= 0 && assembly.lengthOf(name) === original.lengths[index]
+  }
+
+  /**
+   * `O`: a circle started at the pointer — or at the selection's start — its
+   * first base there and the rest after it round the circle (§27.4). Said, and
+   * nothing done, on a sequence that is not one.
+   */
+  private originHere(): void {
+    const selection = this.selection
+    const place = this.pointerPlace() ?? (selection?.kind === 'stretch' && selection.stretch.from > 0 ? { sequence: selection.stretch.sequence, at: selection.stretch.from } : null)
+    if (place === null) return
+    if (!this.circularOf(place.sequence)) {
+      this.readoutEl.textContent = `O starts a circle elsewhere, and ${place.sequence} is not one: tick it circular on the Chromosomes table first`
+      return
+    }
+    this.step({ op: 'rotate', sequence: place.sequence, at: place.at })
   }
 
   /** A stretch made a sequence of its own: split after it, then before it. */
@@ -1539,6 +1581,8 @@ export class EditStage {
       this.cutHere()
     } else if (key === 's' || key === 'S') {
       this.splitHere()
+    } else if (key === 'o' || key === 'O') {
+      this.originHere()
     } else if (key === 'Backspace' || key === 'Delete') {
       if (this.selection?.kind === 'stretch') {
         const rect = this.overlayCanvas.getBoundingClientRect()
@@ -1604,6 +1648,9 @@ export class EditStage {
         { label: formatPosition(place.sequence, place.at) },
         { label: 'cut here', hint: 'C', run: () => this.step({ op: 'cut', sequence: place.sequence, at: place.at }) },
         { label: 'split into two sequences here', hint: 'S', run: () => this.step({ op: 'split', sequence: place.sequence, at: place.at }) },
+        ...(this.circularOf(place.sequence)
+          ? [{ label: 'start the circle here', hint: 'O', run: () => this.step({ op: 'rotate', sequence: place.sequence, at: place.at }) }]
+          : []),
       )
     }
     return items
@@ -2336,12 +2383,29 @@ export class EditStage {
       })
       const units = this.grid?.sequence(sequence.name)
       if (units !== undefined && units !== null) button.dataset.cells = `${units.from} ${units.to}`
+      const circle = this.circularOf(sequence.name)
       button.append(
-        el('span', { class: 'edit-sequence-name', text: sequence.name }),
+        el('span', { class: 'edit-sequence-name', text: sequence.name, ...(circle ? { title: 'circular' } : {}) }),
         el('span', { class: 'edit-sequence-length', text: fmt.bp(length) }),
-        el('span', { class: 'edit-sequence-pieces', text: pieces === 1 ? '' : `${pieces} pieces` }),
+        el('span', { class: 'edit-sequence-pieces', text: `${circle ? '○ ' : ''}${pieces === 1 ? '' : `${pieces} pieces`}` }),
       )
-      list.append(el('li', {}, button))
+      if (this.renaming === sequence.name) {
+        list.append(el('li', { class: 'edit-sequence-row' }, this.renameBox(sequence.name)))
+        continue
+      }
+      // A name of its own (§27.3): the pencil, or a double click on the row.
+      button.addEventListener('dblclick', (event) => {
+        event.preventDefault()
+        this.startRename(sequence.name)
+      })
+      const pencil = el('button', {
+        class: 'btn-icon edit-sequence-rename',
+        title: `Rename ${sequence.name}`,
+        attrs: { type: 'button', 'aria-label': `Rename ${sequence.name}` },
+        on: { click: () => this.startRename(sequence.name) },
+      })
+      pencil.append(icon('pencil', { size: 12 }))
+      list.append(el('li', { class: 'edit-sequence-row' }, button, pencil))
     }
     const aside =
       assembly.aside.length === 0
@@ -2368,11 +2432,71 @@ export class EditStage {
               ),
             ),
           )
+    // Longest first, the order an assembly is conventionally written in: one
+    // step, undone as any is (§27.3).
+    const byLength = [...assembly.sequences].sort((a, b) => (assembly.lengthOf(b.name) ?? 0) - (assembly.lengthOf(a.name) ?? 0)).map((sequence) => sequence.name)
+    const sorted = byLength.every((name, i) => assembly.sequences[i].name === name)
+    const sort = el('button', {
+      class: 'btn btn-quiet edit-card-act',
+      title: sorted ? 'They are longest first already' : 'Put the sequences longest first — one step, to undo like any other',
+      attrs: { type: 'button' },
+      on: { click: () => this.step({ op: 'reorder', names: byLength }) },
+    })
+    sort.append(el('span', { text: 'longest first' }))
+    sort.disabled = sorted
     this.sequencesCard.replaceChildren(
-      el('h3', { class: 'edit-card-head', text: `sequences · ${assembly.sequences.length}` }),
+      el('div', { class: 'edit-card-headrow' }, el('h3', { class: 'edit-card-head', text: `sequences · ${assembly.sequences.length}` }), sort),
+      ...(this.sequencesNote === '' ? [] : [el('p', { class: 'edit-note edit-sequences-note', text: this.sequencesNote })]),
       list,
       ...(aside === null ? [] : [aside]),
     )
+  }
+
+  private startRename(name: string): void {
+    this.renaming = name
+    this.sequencesNote = ''
+    this.paintSequences()
+    this.sequencesCard.querySelector<HTMLInputElement>('.edit-rename-input')?.select()
+  }
+
+  /**
+   * The box a sequence is renamed in: Enter makes it a step, Escape or a click
+   * away leaves the name as it was. A name is one word, and one no other
+   * sequence of the edit has — a FASTA header and an AGP line are split on
+   * spaces, and two sequences of one name are one too many for either.
+   */
+  private renameBox(name: string): HTMLElement {
+    const input = el('input', { class: 'input edit-rename-input', attrs: { type: 'text', value: name, 'aria-label': `New name for ${name}`, spellcheck: 'false' } }) as HTMLInputElement
+    const done = (commit: boolean): void => {
+      if (this.renaming !== name) return
+      this.renaming = null
+      const wanted = input.value.trim()
+      if (commit && wanted !== name) {
+        const taken = this.props.store.assembly.sequences.some((sequence) => sequence.name === wanted)
+        const theFiles = this.props.store.edit.original.names.includes(wanted)
+        if (wanted === '' || /\s/.test(wanted)) this.sequencesNote = 'A name is one word: a FASTA header and an AGP line are split on spaces.'
+        else if (taken) this.sequencesNote = `${wanted} is the name of another sequence already.`
+        else if (theFiles) this.sequencesNote = `${wanted} is a name of the file’s own, for that sequence whole and no other.`
+        else {
+          this.sequencesNote = ''
+          this.step({ op: 'rename', sequence: name, name: wanted })
+          return
+        }
+      }
+      this.paintSequences()
+    }
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        done(true)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        done(false)
+      }
+    })
+    input.addEventListener('blur', () => done(false))
+    return input
   }
 
   /**

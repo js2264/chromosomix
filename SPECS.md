@@ -10167,7 +10167,7 @@ the file as it is made.
 
 **Its keys exist only while it is open**, as the enlarged model's do, printed on the controls that
 perform them (§26.4) and taking no letter from the panels behind: `I` turns, `C` cuts, `S` splits,
-*delete* sets aside, `⌘Z` and `⇧⌘Z` undo and redo, `0` fits, `+` and `−` zoom, *Space* held pans. Not
+`O` starts a circle, *delete* sets aside, `⌘Z` and `⇧⌘Z` undo and redo, `0` fits, `+` and `−` zoom, *Space* held pans. Not
 yet in the palette while the stage is up.
 
 What is on it:
@@ -10205,9 +10205,13 @@ What is on it:
   two answers, *take* `Y` and *turn down* `N`, those turned down struck through beneath with *offer
   again*, and what the answers taught with *forget*; and **picture**, what the stage's picture is.
   *Built*, the suggestions first under the modes, and a step a suggestion made is tagged in the
-  history — *suggested* or *auto* — with what it rested on. Still to come: a rename and a circular
-  tick on a sequence, a sort by length, **export** (§27.8) and **settings** — the evidence the method
-  may use and the resolution it works at.
+  history — *suggested* or *auto* — with what it rested on; **export** (§27.8); and on the sequences
+  card, a **rename** — its pencil, shown on the row's hover, or a double click, Enter making it a step
+  and Escape leaving the name — which a later edit keeps even where the sequence is an original whole
+  again, and which refuses two words, another sequence's name, and a name of the file's own for any
+  stretch but that sequence whole; **longest first**, one `reorder` step, greyed when they are; and a
+  circle marked `○`. Still to come: a circular tick on a sequence, and **settings** — the evidence the
+  method may use and the resolution it works at.
 
 **On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
 (§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
@@ -10292,8 +10296,11 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   of reasons, duplicate by ⌥ held on the drop and as *copy* in the sidebar (the stretch again after
   itself), and **join** by dropping a whole sequence — selected from the list, the diagonal or a bar —
   on another's start or end, from the map or along a pieces bar, which puts a 100 bp `N` gap between
-  them and lands the joined sequence where the drop was. The right-click menu offers the same, for the selection and for the place under the
-  pointer. Not yet: the origin, which comes with circular sequences on the stage.
+  them and lands the joined sequence where the drop was. The right-click menu offers the same, for the
+  selection and for the place under the pointer; and **the origin** `O` of a circle — a sequence the
+  reader declared circular (§8.15), or read as one — at the pointer or the selection's start, a
+  `rotate` step, the menu's *start the circle here*; on a sequence that is not one, `O` says so and
+  does nothing.
 - **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it. *Built.*
 
 ### 27.5 Suggestions: ends and corners

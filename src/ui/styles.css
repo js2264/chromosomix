@@ -13083,8 +13083,12 @@ span.deck-name {
 }
 .edit-sequence {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 4.6rem;
+  /* Wide enough for `○ 13 pieces` on one line. */
+  grid-template-columns: minmax(0, 1fr) auto 6.2rem;
   align-items: baseline;
+}
+.edit-sequence-pieces {
+  white-space: nowrap;
 }
 .edit-sequence.is-selected {
   background: var(--accent-soft);
@@ -13100,6 +13104,41 @@ span.deck-name {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+/* A row: the sequence, and the pencil that names it — shown on the row's
+   hover and focus, so a list of sixty contigs is not sixty pencils (§27.3). */
+.edit-sequence-row {
+  display: flex;
+  align-items: center;
+}
+.edit-sequence-row > .edit-sequence {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.edit-sequence-rename {
+  flex: none;
+  margin-right: 0.25rem;
+  opacity: 0;
+}
+.edit-sequence-row:hover > .edit-sequence-rename,
+.edit-sequence-rename:focus-visible {
+  opacity: 1;
+}
+.edit-rename-input {
+  width: 100%;
+  margin: 0.15rem 0.3rem;
+}
+/* A card's heading with one act beside it. */
+.edit-card-headrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.edit-card-act {
+  flex: none;
+  padding: 0 0.4rem;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
 }
 .edit-aside-list > li {
   display: flex;
