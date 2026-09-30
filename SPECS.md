@@ -10085,7 +10085,7 @@ overlay is drawn through, which reads a stretch either way round and clips what 
 it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). The edit is kept per file with the circular
 declarations, carried in a saved workspace as `edit` and read back from one (`state/referenceEdit.ts`);
 a record made on another assembly is kept untouched, named in the stage's history, and not applied.
-Not yet: the link's `s=` payload, and an AGP or `.assembly` read as an edit.
+An AGP or a Juicebox `.assembly` is read back as an edit (§27.8). Not yet: the link's `s=` payload.
 
 **An edit is drawn, never written back.** The file is read exactly as it would be without one; the
 lens maps between the original and the edited assembly, and everything on screen goes through it.
@@ -10493,6 +10493,39 @@ The contacts writer holds the whole file in memory, as the `.pairs` import's doe
 that will not fit is refused with its size and the two ways out — a coarser rung, or the command line,
 which writes to disk.
 
+*Built* (`edit/exports.ts`, `edit/ExportCard.ts`), in the stage's **export** card under its sequences —
+a bordered button per file, each through the save dialog and named after the map
+(`Yeast_microC_G2M_1kb.edited.agp`, `….to-edited.chain`), a line under them saying what was written or
+why not:
+
+- **AGP 2.1**: the header says whose edit it is, what wrote it and when, and lists the applied steps in
+  words; each sequence is its components, 1-based and inclusive, a turned piece `-`, a run of `N` a gap
+  line `N  <length>  scaffold  yes  proximity_ligation`.
+- **What was set aside.** A stretch set aside as *unplaced* is still sequence of the assembly: every
+  file writes it as a sequence of its own, `IV_unplaced1`, after the edited ones. One set aside as
+  *debris*, a *contaminant* or a *haplotig* is not: the AGP names it on a comment line
+  (`# aside  debris  I:901-1000`), the chain lifts it nowhere, and chrom.sizes leaves it out.
+- **chrom.sizes**: every sequence the files write, and its length.
+- **The Juicebox `.assembly`**: the original cut into fragments at every piece's ends, in the
+  original's order (`IV:::fragment_2`), then a line of signed fragment numbers per sequence — debris,
+  contaminants and haplotigs as fragments marked `:::debris`, Juicebox's own word, on lines of their
+  own. Refused, before any dialog opens, where a stretch is placed twice: the format lists every
+  fragment once.
+- **The liftOver chain**, original to edited: one chain per piece, one ungapped block, a turned piece
+  on the query's `-` strand counted from its end, as the format has it; a duplicated stretch has two
+  chains, which `liftOver -multiple` follows.
+- **Read back**: *lay out from an AGP or .assembly…* reads either — told apart by its first line — as
+  **one step of the history**, *lay out as in IV_V.agp · 15 sequences*, undone as any step is. It is
+  the one step written in the original's coordinates, since that is what such a file names, and it
+  replaces what the steps before it built. Every component must be a sequence of the map, inside its
+  length — a file of another assembly is refused, naming the first sequence the map does not have — and
+  whatever of the original no component covers is set aside, unplaced. An AGP keeps its gaps, and the
+  comment lines this app writes restore what was set aside and why, so an edit written and read back is
+  the same edit. An `.assembly` has no gaps and no names: its lines become `scaffold_1` and on, with 100
+  `N` where fragments of two sequences meet — a join — and none where two of one sequence do.
+
+Not yet: the FASTA, the lifted contacts and tracks, and the files per MAG.
+
 ### 27.9 The whole-genome picture: 16,384 cells
 
 The stage's whole-genome picture is **16,384 cells a side**, fixed — about 190 kb a cell for a human
@@ -10576,10 +10609,10 @@ more than one map; a stage on an assembly of more sequences than its picture has
 single-cell file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4,
 §27.9), the edit kept with the file and carried in a workspace, the session drawn through it (§27.7),
 and the method with its suggestions — drawn with the rail and the corners, snapped to, and answered in
-manual, review and auto (§27.5, §27.6). Not yet built, in the order it will be
-(`docs/reference-editing.md` §10): the exports; the command line; the evidence beyond the map;
-metagenomes — and, left over, the zoom past the stage's picture, the gaps §27.7 lists, and the
-method's refinement at finer rungs.
+manual, review and auto (§27.5, §27.6), and the text files written from the edit and read back
+(§27.8). Not yet built, in the order it will be (`docs/reference-editing.md` §10): the rest of the
+exports; the command line; the evidence beyond the map; metagenomes — and, left over, the zoom past
+the stage's picture, the gaps §27.7 lists, and the method's refinement at finer rungs.
 
 ## 28. Two sequences on two axes
 

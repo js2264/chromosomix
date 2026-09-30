@@ -14,6 +14,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The edit of the reference written out, and read back — a dev feature (§27.8).** The stage has an
+  *export* card: the edited assembly as an **AGP 2.1** (the steps in its header, each gap typed
+  `scaffold` with `proximity_ligation` as its evidence), a **chrom.sizes**, a Juicebox **`.assembly`**
+  for JBAT, 3D-DNA and YaHS, and a **liftOver chain** from the original coordinates to the edited
+  ones — each through the save dialog, named after the map, the file itself never touched. A stretch
+  set aside as unplaced is written as a sequence of its own; debris, contaminants and haplotigs are
+  left out and named in the AGP's comments. *Lay out from an AGP or .assembly…* reads either back —
+  another tool's scaffolds, or this app's own — as one step of the history, undone as any step is; a
+  file of another assembly is refused, naming the sequence the map does not have.
+
 - **Suggestions drawn over the map on the stage that edits the reference — a dev feature (§27.5,
   §27.6).** The stage now says where it thinks the reference is wrong, on the picture the reader is
   judging it by. Its own method measures the file's contact law and trans level in the pass that

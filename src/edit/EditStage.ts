@@ -53,6 +53,7 @@ import {
   type Stretch,
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
+import { ExportCard } from './ExportCard'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
 import { paintPicture, pictureColours } from './paint'
 import { Rail, type RailItem } from './rail'
@@ -176,6 +177,7 @@ export class EditStage {
   private readonly sequencesCard: HTMLElement
   private readonly pictureCard: HTMLElement
   private readonly suggestionsCard: HTMLElement
+  private readonly exportCard: ExportCard
   private readonly modes: Record<Mode, HTMLButtonElement>
   private readonly rail: Rail
   private readonly reviewBar: HTMLElement
@@ -303,6 +305,7 @@ export class EditStage {
     this.sequencesCard = el('section', { class: 'edit-card' })
     this.pictureCard = el('section', { class: 'edit-card' })
     this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
+    this.exportCard = new ExportCard({ title: props.title, store: props.store })
     const mode = (name: Mode, title: string): HTMLButtonElement =>
       el('button', {
         class: 'btn btn-toggle',
@@ -324,6 +327,7 @@ export class EditStage {
       this.selectionCard,
       this.historyCard,
       this.sequencesCard,
+      this.exportCard.element,
       this.pictureCard,
     )
 

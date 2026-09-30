@@ -68,6 +68,9 @@ export interface EditedSequence {
 /** Why a stretch was taken out of the assembly. */
 export type AsideReason = 'debris' | 'contaminant' | 'haplotig' | 'unplaced'
 
+/** Every reason, in the order a menu offers them. */
+export const ASIDE_REASONS: readonly AsideReason[] = ['debris', 'contaminant', 'haplotig', 'unplaced']
+
 /** A stretch taken out of the edited assembly, and why. */
 export interface Aside {
   piece: Piece
@@ -128,6 +131,25 @@ export type EditStep =
   | { op: 'rotate'; sequence: string; at: number }
   | { op: 'rename'; sequence: string; name: string }
   | { op: 'reorder'; names: string[] }
+  | LayoutStep
+
+/**
+ * The whole assembly laid out as a file describes it — an AGP or a Juicebox
+ * `.assembly` read back (SPECS §27.8). Unlike every other step it is written in
+ * the **original's** coordinates, since that is what such a file names, and it
+ * replaces whatever the history had built: the steps after it apply to it.
+ * Whatever of the original it leaves out is set aside, unplaced.
+ */
+export interface LayoutStep {
+  op: 'layout'
+  /** The file it was read from, as the history names it. */
+  from: string
+  sequences: Array<{ name: string; parts: LayoutPart[]; circular?: boolean }>
+  aside: Array<{ sequence: string; start: number; end: number; why: AsideReason }>
+}
+
+/** A stretch of an original sequence, or a run of `N`, as a layout names it. */
+export type LayoutPart = { sequence: string; start: number; end: number; strand: 1 | -1 } | { gap: number }
 
 /** Who made a step. */
 export type StepAuthor = 'reader' | 'suggestion' | 'auto'
@@ -484,7 +506,84 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
       next.sequences.sort((a, b) => (rank.get(a.name) ?? Infinity) - (rank.get(b.name) ?? Infinity))
       return next
     }
+    case 'layout':
+      return laidOut(step, original, ids)
   }
+}
+
+/**
+ * The state a layout describes, checked against the original: a stretch of a
+ * sequence it does not have, or past its end, is dropped rather than trusted —
+ * and whatever of the original no part covers is set aside, unplaced, so that
+ * every base of the file is still somewhere.
+ */
+function laidOut(step: LayoutStep, original: OriginalAssembly, ids: IdSource): Folded {
+  const lengthOf = new Map(original.names.map((name, i) => [name, original.lengths[i]]))
+  const covered = new Map<string, Array<[number, number]>>()
+  const cover = (sequence: string, start: number, end: number): void => {
+    const list = covered.get(sequence) ?? []
+    list.push([start, end])
+    covered.set(sequence, list)
+  }
+  const valid = (sequence: string, start: number, end: number): [number, number] | null => {
+    const length = lengthOf.get(sequence)
+    if (length === undefined) return null
+    const a = clamp(Math.round(start), 0, length)
+    const b = clamp(Math.round(end), 0, length)
+    return b > a ? [a, b] : null
+  }
+  const taken = new Set<string>()
+  const sequences: EditedSequence[] = []
+  // A layout kept with a file is read back from storage, so nothing about its
+  // shape is taken on trust: a malformed entry is dropped, not thrown on.
+  for (const laid of Array.isArray(step.sequences) ? step.sequences : []) {
+    if (laid === null || typeof laid !== 'object' || !Array.isArray(laid.parts)) continue
+    const parts: Part[] = []
+    for (const part of laid.parts) {
+      if (part === null || typeof part !== 'object') continue
+      if ('gap' in part) {
+        if (typeof part.gap === 'number' && part.gap > 0) parts.push({ gap: Math.round(part.gap) })
+        continue
+      }
+      if (typeof part.sequence !== 'string' || typeof part.start !== 'number' || typeof part.end !== 'number') continue
+      if (part.strand !== 1 && part.strand !== -1) continue
+      const range = valid(part.sequence, part.start, part.end)
+      if (range === null) continue
+      cover(part.sequence, range[0], range[1])
+      parts.push({ id: ids.next(part.sequence), sequence: part.sequence, start: range[0], end: range[1], strand: part.strand })
+    }
+    // Gaps at either end of a sequence are nothing a sequence can begin or end with.
+    while (parts.length > 0 && isGap(parts[0])) parts.shift()
+    while (parts.length > 0 && isGap(parts[parts.length - 1])) parts.pop()
+    if (parts.length === 0) continue
+    const wanted = typeof laid.name === 'string' ? laid.name : ''
+    const name = wanted !== '' && !taken.has(wanted) ? wanted : freshName(wanted === '' ? 'seq' : wanted, taken)
+    taken.add(name)
+    sequences.push({ name, parts: merge(parts), ...(laid.circular === true ? { circular: true } : {}) })
+  }
+  const aside: Aside[] = []
+  for (const item of Array.isArray(step.aside) ? step.aside : []) {
+    if (item === null || typeof item !== 'object' || typeof item.sequence !== 'string') continue
+    if (!ASIDE_REASONS.includes(item.why)) continue
+    const range = valid(item.sequence, item.start, item.end)
+    if (range === null) continue
+    cover(item.sequence, range[0], range[1])
+    aside.push({ piece: { id: ids.next(item.sequence), sequence: item.sequence, start: range[0], end: range[1], strand: 1 }, why: item.why })
+  }
+  // What no part covers: unplaced, stretch by stretch.
+  for (let i = 0; i < original.names.length; i++) {
+    const name = original.names[i]
+    const spans = (covered.get(name) ?? []).sort((a, b) => a[0] - b[0])
+    let at = 0
+    for (const [start, end] of spans) {
+      if (start > at) aside.push({ piece: { id: ids.next(name), sequence: name, start: at, end: start, strand: 1 }, why: 'unplaced' })
+      at = Math.max(at, end)
+    }
+    if (at < original.lengths[i]) {
+      aside.push({ piece: { id: ids.next(name), sequence: name, start: at, end: original.lengths[i], strand: 1 }, why: 'unplaced' })
+    }
+  }
+  return { sequences, aside }
 }
 
 /** The original name an edited sequence descends from, for naming what splits off it. */

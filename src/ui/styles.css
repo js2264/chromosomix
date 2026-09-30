@@ -13030,6 +13030,22 @@ span.deck-name {
   line-height: 1.5;
 }
 
+/* The export card (§27.8): a bordered button per format, the way back in,
+   and a line saying what was written or why not. */
+.edit-export-files,
+.edit-export-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.edit-export-read {
+  margin-top: 0.1rem;
+}
+.edit-export-status:empty {
+  display: none;
+}
+
 /* The rail (§27.3): each suggestion's label at the height of what it
    concerns, beside the map, with a leader to a bracket that spans it. */
 .edit-rail {
