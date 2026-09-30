@@ -2,7 +2,7 @@
 
 A unified genome browser for `.*cool`, `.scool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
 and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, `.2bit`, BAM, VCF, barChart, 
-genePred, bedMethyl and UCSC's formats. 
+genePred, bedMethyl, cytoBand ideograms, RNA-seq splice junctions and UCSC's formats. 
 The browser is a single-page application that runs entirely in the browser, with no 
 server-side processing or data upload.
 
@@ -10,6 +10,7 @@ server-side processing or data upload.
 
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
+  - Draws chromosome ideograms from UCSC's cytoBand/cytoBandIdeo (which also declare the genome's lengths), and RNA-seq splice junctions — STAR's `SJ.out.tab`, junction BEDs from regtools/TopHat, leafcutter's `.junc` — as sashimi arcs; a spliced BAM's coverage carries its own arcs, counted from its reads.
   - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., with resolution ladder and on-the-fly balancing. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
   - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. 
 

@@ -41,6 +41,7 @@ import {
   laneLabelOf,
   readsOf,
   scaleOf,
+  searchesByName,
 } from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
@@ -58,11 +59,13 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import { barChartCaption, barExtentOf, barLimitsOf, barsOf } from '../render/barchart'
+import { barLimitsOf } from '../render/barchart'
+import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type {
   AnnotationEntry,
+  AnnotationKind,
   BaseRegion,
   FeatureSet,
   ReadPile,
@@ -109,7 +112,10 @@ import {
   LABEL_BAND,
   drawFeatures,
   featureAt,
+  featureCaption,
   featureLayoutFor,
+  glyphExtentOf,
+  glyphExtentOfRow,
   layoutFeatures,
 } from '../render/features'
 import {
@@ -373,7 +379,11 @@ interface Lane {
   /** Tracks drawn *into* this lane, when its group is in overlay mode. */
   overlaid: AnnotationEntry[]
   frame: LaneFrame
-  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
+  /**
+   * The value tracks drawn in this lane — and, for a BAM's depth, the introns
+   * its reads skipped in the same window, for the arcs drawn over it (§8.23).
+   */
+  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile; junctions?: FeatureSet | null }>
   /**
    * Residues to draw, for a FASTA zoomed in far enough to show them.
    *
@@ -1366,7 +1376,12 @@ export class BrowserView {
         first: this.props.assembly.contigs[0]?.name,
         accepts: {
           sequence: true,
-          gene: this.props.store.entries.some((entry) => entry.payload?.kind === 'features'),
+          gene: this.props.store.entries.some(
+            (entry) => entry.payload?.kind === 'features' && searchesByName(entry.kind),
+          ),
+          band: this.props.store.entries.some(
+            (entry) => entry.kind === 'ideogram' && entry.payload?.kind === 'features',
+          ),
           whole: true,
         },
       }),
@@ -2335,7 +2350,7 @@ export class BrowserView {
       // **Ribbons tile, they do not overlay** — the same rule, from the same
       // module, read here for the same reason the heatmap one is.
       const nested = nestsAsRibbons(lane.profiles.map(({ entry: member }) => member))
-      for (const [at, { entry: member, profile }] of lane.profiles.entries()) {
+      for (const [at, { entry: member, profile, junctions }] of lane.profiles.entries()) {
         const laneFrame = bands?.[at] ?? frame
         const extent = extentFor(member, profile.extent, groups)
         const limits = resolveLimits(member.style.limits, extent)
@@ -2367,6 +2382,26 @@ export class BrowserView {
           drawTrack(ctx, laneFrame, profile, paint)
         }
         else drawTrackScaling(ctx, laneFrame, profile, paint, scaledTo(limits, dragged))
+        // A BAM's depth with its reads' introns over it: the sashimi plot
+        // (§8.23), on the same frame and the same flip as the curve.
+        const reads = readsOf(member.style)
+        if (junctions !== undefined && junctions !== null && reads.sashimi) {
+          drawSashimi(
+            ctx,
+            laneFrame,
+            this.trackAxis,
+            junctions,
+            {
+              guideColour: palette.labelColor,
+              haloColour: palette.labelHaloColor,
+              font: scaleFont(LANE_FONT),
+              opacity: member.style.opacity,
+              labels: this.text,
+              labelBand: scaleLength(LABEL_BAND),
+            },
+            { floor: reads.sashimiFloor, flip: member.style.flip },
+          )
+        }
       }
       const first = lane.profiles[0]
       const resolved = resolveLimits(
@@ -2454,9 +2489,11 @@ export class BrowserView {
       // autoscaled chart has to be given a pair to be scaled *from*, and it is
       // the one it is already drawn against: zero to the file's tallest bar.
       const dragged = this.scaling?.id === lane.entry.id ? this.scaling.factor : null
-      const fixed = barLimitsOf(entry.style.limits)
-      const axis = fixed ?? barExtentOf(barsOf(entry)) ?? undefined
-      const barLimits = dragged === null || axis === undefined ? fixed : scaledTo(axis, dragged)
+      // …and a junction lane's arcs the same way (§8.23): the only glyphs with
+      // an axis, and so the only feature lanes a typed pair reaches.
+      const fixed = hasAMovableAxis(entry.kind) ? barLimitsOf(entry.style.limits) : undefined
+      const axis = fixed ?? glyphExtentOf(entry.kind, set, layout) ?? undefined
+      const axisLimits = dragged === null || axis === undefined ? fixed : scaledTo(axis, dragged)
       const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
       const paint = {
         colour: entry.style.colour,
@@ -2474,10 +2511,11 @@ export class BrowserView {
         arrows: features.arrows,
         display: features.display,
         barScale: features.bars,
-        ...(barLimits === undefined ? {} : { barLimits }),
+        ...(axisLimits === undefined ? {} : { axisLimits }),
         colourOf: ink.colourOf,
       }
       drawFeatures(ctx, frame, set, layout, paint, entry.kind)
+      const caption = featureCaption(entry.kind, set, layout, features.bars, axisLimits, fmt.int, fmt.num)
       if (this.text) {
         label = {
           // Chipped in a colour that is **in the lane**: §8.12's rule, which a
@@ -2490,19 +2528,10 @@ export class BrowserView {
               ? entry
               : { ...entry, style: { ...entry.style, colour: ink.chip } },
           ],
-          detail: layout.dense
-            ? {
-                kind: 'text',
-                text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
-              }
-            : // What the top of a bar means, which is the one thing a chart
-              // without an axis cannot say for itself (§8.17).
-              set.bars === undefined
-              ? null
-              : {
-                  kind: 'text',
-                  text: barChartCaption(set.bars, fmt.num, features.bars, barLimits),
-                },
+          // One function writes this line for both surfaces: the count when
+          // the lane has collapsed, what the top of a chart or an arc means,
+          // the bands under the window (§8.16, §8.17, §8.22, §8.23).
+          detail: caption === null ? null : { kind: 'text', text: caption },
           at: 'near',
         }
       }
@@ -2839,6 +2868,7 @@ export class BrowserView {
       lane.profiles.push({
         entry: member,
         profile: profileOf(lane.frame, this.trackAxis, samples, scaleOf(member.style)),
+        ...(member.kind === 'alignments' ? { junctions: junctionsOfSamples(samples) } : {}),
       })
       lane.pending = this.cache.pendingOf(member.id, 'browser') ?? lane.pending
     }
@@ -3806,9 +3836,10 @@ export class BrowserView {
     }
     // A barChart has no profile row to take an extent from and is not in any
     // group — its axis starts at the file's own tallest bar, which is what the
-    // lane was drawn against before anybody touched it (§8.17).
+    // lane was drawn against before anybody touched it (§8.17). A junction
+    // lane's starts at its largest count, for the same reason (§8.23).
     const entry = this.props.store.entries.find((each) => each.id === id)
-    return entry === undefined ? null : barExtentOf(barsOf(entry))
+    return entry === undefined ? null : glyphExtentOfRow(entry, this.layouts.get(id)?.layout)
   }
 
   private nudgeCeiling(lane: Lane, factor: number): void {
@@ -3825,7 +3856,7 @@ export class BrowserView {
     // start from two different numbers.
     const extent =
       row === undefined
-        ? barExtentOf(barsOf(target))
+        ? glyphExtentOfRow(target, this.layouts.get(target.id)?.layout)
         : extentFor(target, row.profile.extent, groups)
     const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
@@ -3892,13 +3923,19 @@ export class BrowserView {
   }
 
   /** A feature's card: what a click on it opens, and the lane menu's *About it*. */
-  private openFeatureCard(hit: { set: FeatureSet; index: number; source: string }): void {
-    const { set, index, source } = hit
+  private openFeatureCard(hit: {
+    set: FeatureSet
+    index: number
+    source: string
+    kind?: AnnotationKind
+  }): void {
+    const { set, index, source, kind } = hit
     this.featureDialog?.close()
     this.featureDialog = openFeatureDialog({
       set,
       index,
       source,
+      ...(kind === undefined ? {} : { kind }),
       onGoTo: () => this.frameFeature(set, index),
       onClose: () => {
         this.featureDialog = null
@@ -3950,7 +3987,7 @@ export class BrowserView {
   private featureAtPoint(
     x: number,
     y: number,
-  ): { set: FeatureSet; index: number; source: string } | null {
+  ): { set: FeatureSet; index: number; source: string; kind: AnnotationKind } | null {
     for (const lane of this.lanes) {
       const cached = this.layouts.get(lane.entry.id)
       const set = lane.entry.payload?.kind === 'features' ? lane.entry.payload.data : null
@@ -3959,7 +3996,7 @@ export class BrowserView {
       // The lane's own label comes back with the hit: the card names the track
       // the feature was read from, and asking the store for it afterwards would
       // mean matching an id against a list this loop is already standing in.
-      if (hit !== null) return { set, index: hit.index, source: lane.entry.label }
+      if (hit !== null) return { set, index: hit.index, source: lane.entry.label, kind: lane.entry.kind }
     }
     return null
   }

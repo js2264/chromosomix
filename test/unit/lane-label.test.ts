@@ -324,6 +324,30 @@ describe('fitting a name into a column', () => {
       expect(line.length).toBeGreaterThan(0)
     }
   })
+
+  // Two lines offered and neither half of any break fitting: the name is cut to
+  // what two lines hold and that is broken — never one line of twice the
+  // column's width, run out over the lane beside it.
+  it('cuts a name too long for two lines to two lines, not to one line twice as wide', () => {
+    const name = 'Geuvadis_chrX_GBR_ERR188428.junctions'
+    const lines = fitName(measure, name, 18 * CHAR, 2)
+    expect(lines).toHaveLength(2)
+    for (const line of lines) expect(measure(line)).toBeLessThanOrEqual(18 * CHAR)
+    expect(lines.join('')).toContain(NAME_CUT)
+    expect(lines[0].startsWith('Geuvadis')).toBe(true)
+    expect(lines[1].endsWith('.junctions')).toBe(true)
+  })
+
+  it('never gives back a line wider than the column, however it is asked', () => {
+    const name = 'Geuvadis_chrX_GBR_ERR188428.junctions'
+    for (const lines of [1, 2, 3]) {
+      for (const chars of [3, 5, 8, 12, 18, 30]) {
+        for (const line of fitName(measure, name, chars * CHAR, lines)) {
+          expect(measure(line)).toBeLessThanOrEqual(chars * CHAR)
+        }
+      }
+    }
+  })
 })
 
 describe('a long name in a narrow column', () => {

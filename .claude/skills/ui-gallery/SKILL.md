@@ -45,6 +45,7 @@ node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the l
 node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
 node scripts/ui-dev-features.mjs gallery     # the dev features switch (§29): the lab store, About and a .metacool refused with it off, the switch pressed, the same three on, and off again: d01 … d08
 node scripts/ui-edit.mjs gallery             # the stage that edits the reference (§27, dev): the heading's word, the whole genome, a snap, a stretch selected and turned, the bow-tie zoomed, a drag with the map rearranged, a box, the set-aside menu, an undo, the heading edited, dark, and dev off: e01 … e14
+node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sashimi arcs and two samples' STAR junctions at RPL10, FLNA's reverse arcs, chrX whole, the junction and band cards, the Tracks card's rows, colour by annotated at DDX3X, a band typed, the karyotype, a regtools BED dropped, the dark theme, the yeast karyotype on a map's edges and EFB1's arc: ij01 … ij17
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -267,6 +268,21 @@ run's notes. The contact list is 330 MB and is read twice on the binned road; wh
 cannot reach the bucket, serve a folder holding the two files under their bucket names and name its
 address in `GALLERY_DATA`. `GALLERY_ONLY=binned` or `matrix` runs one part. Run it after any change
 to the orientation figure, to P(s)'s form or estimate, or to a `file` parameter.
+
+`scripts/ui-ideogram-junctions.mjs` drives the **karyotype and the junction lanes** (§8.22, §8.23)
+on the human chrX demo, which opens the 1D browser from the hg19 cytoBand alone: RPL10 as the
+session opens it — the ideogram, the genes, the BAM's depth with its own arcs, and two samples'
+STAR junctions on one typed axis — then FLNA beside it, where the reverse strand's arcs hang below the
+line, and the whole of chromosome X. It clicks the strongest arc (found by its colour) and the band
+under it and prints both cards, opens the Tracks card's rows for the three kinds, colours the GBR
+junctions by `annotated` and lets its axis go to the window before DDX3X — the 3′ end shot again,
+where the novel acceptor three bases from the annotated one parts from it — types `Xq13` in the locus
+box and prints the hits and the window Enter opens, shows the whole genome at `*`, drops the regtools
+BED of the same sample, and opens the session again in the dark theme (the whole page: the figure
+stays on paper, §16.5). Then the yeast map with its karyotype on two edges, CEN4's waist at 449 kb, and
+chromosome I with EFB1's arc beside it, from a session it writes to `demo/yeast/` and removes. It
+prints every row, card and hit it met. Run it after any change to `render/ideogram.ts`,
+`render/junctions.ts`, `render/sashimi.ts`, the two parsers, or the band search.
 
 Those last two of the first script need a form filled in before the run, which is why they are driven by name rather
 than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on

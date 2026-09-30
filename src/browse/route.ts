@@ -105,6 +105,13 @@ export function routeOf(uri: string): FileRoute {
   // name belongs to; whether the file behind it opens is settled by its bytes,
   // where a refusal can carry a message.
   if (/\.bam$/i.test(name)) return 'genome'
+  // A cytoBand and a junction file, each published under a name rather than an
+  // extension of its own (§8.22, §8.23): UCSC's `cytoBand.txt.gz`, STAR's
+  // `SJ.out.tab`, a `junctions.bed` (which the list above takes already) and
+  // leafcutter's `.junc`. A cytoBand declares a genome, so it is the door a
+  // browser opens from.
+  if (/cytoband(ideo)?(\.txt)?(\.gz)?$/i.test(name)) return 'genome'
+  if (/(sj\.out\.tab|\.junc)(\.gz)?$/i.test(name)) return 'genome'
   return 'unknown'
 }
 

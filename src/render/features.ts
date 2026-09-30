@@ -26,15 +26,20 @@ import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
 import { strandBands, type BarScale, type FeatureDisplay } from '../annotations/fields'
-import type { AnnotationKind, FeatureSet } from '../annotations/types'
+import type { AnnotationKind, AnnotationPayload, FeatureSet } from '../annotations/types'
+import { junctionCeiling } from '../annotations/junctions'
 import {
   BAR_GAP,
   BAR_MIN_WIDTH,
+  barChartCaption,
+  barExtentOf,
   barChartRows,
   barColours,
   dominantOf,
   peakOf,
 } from './barchart'
+import { drawIdeogram, ideogramCaption } from './ideogram'
+import { drawJunctions, junctionAt, junctionCaption, junctionLimits, type JunctionArc } from './junctions'
 import { cutMiddle } from './laneLabel'
 import { VARIANT_MIN_WIDTH } from './variants'
 
@@ -111,6 +116,16 @@ export interface FeatureLayout {
   dense: boolean
   /** How many features the window actually holds, drawn or not. */
   total: number
+  /**
+   * The arcs a junction lane drew, where one did (§8.23).
+   *
+   * Written by the renderer rather than the layout, because an arc's height is
+   * a fact about the paint — the lane's limits — and not about the packing. Kept
+   * here because the layout is what both surfaces hold on to for the hit test,
+   * so {@link featureAt} can answer with the curve under the pointer rather
+   * than with the box of an intron that nests three others.
+   */
+  arcs?: JunctionArc[]
 }
 
 /** Gap between two features in the same row, in pixels, so they read as two. */
@@ -476,8 +491,12 @@ export interface FeaturePaint {
    * relative. Present, a bar's height is where its value falls between these two
    * numbers, which is the only reading under which the same chart in two files
    * draws the same way. See `render/barchart.ts`'s `barLimitsOf`.
+   *
+   * A junction lane reads it the same way (§8.23): an arc's height is its count
+   * between these two, and one under the floor is not drawn. It was called
+   * `barLimits` while a barChart was the only glyph with an axis.
    */
-  barLimits?: { min: number; max: number }
+  axisLimits?: { min: number; max: number }
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -632,6 +651,10 @@ export function featureLayoutFor(
   // A single base is a hairline at every zoom a chromosome is browsed at
   // (§8.14).
   const least = kind === 'variants' ? scale(VARIANT_MIN_WIDTH) : 0
+  // One row, never banded, whatever the display mode says. A karyotype's bands
+  // tile one shape (§8.22) and a junction's arc has its strand in which way it
+  // grows (§8.23): rows would cut the one and halve the other.
+  if (kind === 'ideogram' || kind === 'junctions') return { rows: 1, least, banded: false }
   if (kind === 'barchart') {
     // A chart's rows divide its value axis, so how many of them fit is a
     // question about the *measurement* and not about the label under it — and
@@ -678,7 +701,77 @@ export function drawFeatures(
   kind: AnnotationKind,
 ): void {
   if (kind === 'barchart') drawBarCharts(ctx, frame, set, layout, paint)
+  else if (kind === 'ideogram') drawIdeogram(ctx, frame, set, layout, paint)
+  else if (kind === 'junctions') drawJunctions(ctx, frame, set, layout, paint)
   else drawModels(ctx, frame, set, layout, paint, kind !== 'variants')
+}
+
+/**
+ * The value axis a feature lane's glyphs stand on before a reader moves it, or
+ * `null` for a kind whose glyphs have none.
+ *
+ * Zero to a barChart's tallest bar (§8.17) and zero to a junction lane's
+ * largest count (§8.23): what each draws against under `auto`, and so where a
+ * ceiling drag, a ⌘-scroll and the typed field all start from. One function
+ * for both, because the three gestures ask it on two surfaces and a kind
+ * answered at some of those six places and not the others is a lane whose
+ * ceiling moves by one gesture and not by another.
+ */
+export function glyphExtentOf(
+  kind: AnnotationKind,
+  set: FeatureSet | undefined,
+  /**
+   * What the lane last drew, where the caller has it: a junction lane's `auto`
+   * is fitted to the junctions in view (`render/junctions.ts`), so a gesture
+   * that starts from the axis on screen starts from that — and from the file's
+   * largest count where nothing has been drawn yet.
+   */
+  layout?: FeatureLayout,
+): { min: number; max: number } | null {
+  if (set === undefined) return null
+  if (kind === 'barchart') return barExtentOf(set.bars)
+  if (kind === 'junctions') {
+    if (layout !== undefined && layout.placements.length > 0) return junctionLimits(set, undefined, layout)
+    const top = junctionCeiling(set)
+    return top > 0 ? { min: 0, max: top } : null
+  }
+  return null
+}
+
+/** {@link glyphExtentOf} for a row, whose set may not have arrived yet. */
+export function glyphExtentOfRow(
+  row: { kind: AnnotationKind; payload?: AnnotationPayload },
+  layout?: FeatureLayout,
+): { min: number; max: number } | null {
+  return glyphExtentOf(row.kind, row.payload?.kind === 'features' ? row.payload.data : undefined, layout)
+}
+
+/**
+ * The line under a feature lane's name, or `null` for none (§8.16, §8.17,
+ * §8.22, §8.23).
+ *
+ * One function for both surfaces, for {@link featureLayoutFor}'s reason: the
+ * map's lanes and the 1D browser wrote the same two branches, and a kind added
+ * to one of them and not the other is a lane with two captions.
+ */
+export function featureCaption(
+  kind: AnnotationKind,
+  set: FeatureSet,
+  layout: FeatureLayout,
+  barScale: BarScale,
+  axisLimits: { min: number; max: number } | undefined,
+  int: (value: number) => string,
+  num: (value: number) => string,
+): string | null {
+  // Bands tile rather than overlap, so a genome's worth of them is still the
+  // karyotype: the caption names the ones under the window whatever the count.
+  if (kind === 'ideogram') return ideogramCaption(set, layout)
+  // …and arcs are drawn at every zoom, the strongest when there are too many.
+  if (kind === 'junctions') return junctionCaption(set, layout, axisLimits, int)
+  if (layout.dense) return `${int(layout.total)} ${kind === 'variants' ? 'variants' : 'features'} in view`
+  // What the top of a bar means, which is the one thing a chart without an
+  // axis cannot say for itself (§8.17).
+  return set.bars === undefined ? null : barChartCaption(set.bars, num, barScale, axisLimits)
 }
 
 /**
@@ -746,7 +839,7 @@ export function drawBarCharts(
   const chartHeight = Math.max(3, rowHeight - band - 2)
   const width = bars.labels.length
   const colours = barColours(bars)
-  const fixed = paint.barLimits
+  const fixed = paint.axisLimits
   // A fixed axis is not a *ceiling*, it is two ends, so it cannot be folded into
   // the division below — and it overrides the per-feature reading rather than
   // composing with it: "each chart against its own top" and "every chart against
@@ -1316,6 +1409,9 @@ export function featureAt(
   x: number,
   y: number,
 ): FeaturePlacement | null {
+  // A lane of arcs is hit on its curves: three nested junctions share one span,
+  // and a box test would name the last of them wherever the pointer was.
+  if (layout.arcs !== undefined) return junctionAt(frame, layout, x, y)
   // The exact inverse of what `laneRect` did when the boxes were drawn — through
   // the same module, so the two cannot answer differently about an edge where
   // `across` runs backwards against the canvas.

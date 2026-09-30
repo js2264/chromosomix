@@ -56,7 +56,9 @@ import {
   type AnnotationKind,
   type FeatureSet,
 } from '../annotations/types'
+import { stainOf } from '../annotations/cytoband'
 import { barColours } from './barchart'
+import { STAIN_ORDER, stainColour, stainLabel } from './ideogram'
 import { colormapCss } from './colormaps'
 import { rotateHue } from './hue'
 import { categoryColour } from './meta'
@@ -147,6 +149,11 @@ export function featureColouring(
     key: { field, levels: [], ramp: null },
     chip: colour,
   }
+  // A karyotype's ink is its stains' and is not a choice (§8.22), whatever the
+  // picker would have said — which is why the card offers none and shows only
+  // this key. Asked before `one colour`, because no field of the file is what
+  // this lane is coloured by.
+  if (kind === 'ideogram' && set !== undefined) return stainColouring(set, field, colour)
   if (field.kind === 'lane' || set === undefined) return plain
 
   // A barChart's ink is not a choice (§8.17). Its glyph is one bar per
@@ -284,6 +291,45 @@ function barLevels(labels: readonly string[], colours: readonly string[]): KeyLe
     shown.push({ label: `+ ${labels.length - MAX_BAR_LEVELS} more`, colour: 'transparent' })
   }
   return shown
+}
+
+/**
+ * A karyotype's colours: each band its stain's, from the function the
+ * ideogram is drawn with, and a key naming the stains this file has in the
+ * order UCSC's own legend gives them — so the card reads as the lane does.
+ *
+ * The name on the row is chipped in the centromere's red where the file has
+ * one, the one colour every ideogram shares, and in the darkest stain's where
+ * it has not: §8.12's rule, a chip in a colour that is in the picture.
+ */
+function stainColouring(set: FeatureSet, field: FeatureField, colour: string): FeatureColouring {
+  const present = new Set<string>()
+  const stains: string[] = new Array(set.length)
+  for (let i = 0; i < set.length; i++) {
+    const stain = stainOf(set.detail[i])
+    stains[i] = stain
+    present.add(stain)
+  }
+  const ordered = [
+    ...STAIN_ORDER.filter((stain) => present.has(stain)),
+    ...[...present].filter((stain) => stain !== '' && !STAIN_ORDER.includes(stain)).sort(),
+  ]
+  const levels = ordered.map((stain) => ({ label: stainLabel(stain), colour: stainColour(stain) }))
+  // `STAIN_ORDER` runs the `gpos` stains light to dark, so the last of them
+  // present is the darkest; a file of nothing but `gneg` — an unbanded
+  // cytoBandIdeo — keeps the lane's own colour, since a chip in the unstained
+  // one would be white on white.
+  const stained = ordered.filter((stain) => stain.startsWith('gpos'))
+  const chip = present.has('acen')
+    ? stainColour('acen')
+    : stained.length > 0
+      ? stainColour(stained[stained.length - 1])
+      : colour
+  return {
+    colourOf: (index) => stainColour(stains[index] ?? ''),
+    key: { field, levels, ramp: null },
+    chip,
+  }
 }
 
 /** Forward, reverse, and the file that does not say. See {@link STRAND_TURN}. */

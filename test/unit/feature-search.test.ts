@@ -205,3 +205,77 @@ describe('the window a click on a feature opens', () => {
     expect(paddedSpan(1000, 2000)).toEqual({ start: gal4.start, end: gal4.end })
   })
 })
+
+/**
+ * A karyotype's bands, by the names a cytogeneticist writes (§8.22) — found
+ * beside the gene model and never in its place.
+ */
+describe('finding a band by its ISCN name', () => {
+  /** Three bands of Xq13 and one of Xq28, as UCSC's cytoBand writes them. */
+  function bands(): ReturnType<FeatureBuilder['finish']> {
+    const build = new FeatureBuilder()
+    build.add('chrX', 67_800_000, 71_800_000, { name: 'q13.1', score: 0, detail: 'stain gneg' })
+    build.add('chrX', 71_800_000, 73_900_000, { name: 'q13.2', score: 50, detail: 'stain gpos50' })
+    build.add('chrX', 73_900_000, 76_000_000, { name: 'q13.3', score: 0, detail: 'stain gneg' })
+    build.add('chrX', 147_100_000, 155_270_560, { name: 'q28', score: 0, detail: 'stain gneg' })
+    return build.finish()
+  }
+
+  /** A store holding the given sets, loaded in this order. */
+  function storeOf(...sets: Array<[string, ReturnType<FeatureBuilder['finish']>]>): AnnotationStore {
+    const store = new AnnotationStore(`bands-${counter++}.cool`)
+    store.clear()
+    for (const [kind, data] of sets) {
+      const entry = store.begin({
+        card: 'linear',
+        kind: kind as 'gtf',
+        label: kind,
+        source: { kind: 'local', file: null as unknown as File, name: `${kind}.txt` },
+      })
+      store.update(entry.id, { status: 'ready', payload: { kind: 'features', data } })
+    }
+    return store
+  }
+
+  it('matches the chromosome and the band together, with or without UCSC’s prefix', () => {
+    const store = storeOf(['ideogram', bands()])
+    const names = ['Xq13.1', 'Xq13.2', 'Xq13.3']
+    expect(findFeatures(store, 'Xq13').map((hit) => hit.name)).toEqual(names)
+    expect(findFeatures(store, 'xq13').map((hit) => hit.name)).toEqual(names)
+    expect(findFeatures(store, 'chrXq13').map((hit) => hit.name)).toEqual(names)
+    // The band's own name is not the question: `q13` is a band on every chromosome.
+    expect(findFeatures(store, 'q13')).toEqual([])
+  })
+
+  it('opens the band as a gene would open: the band, padded a quarter either side', () => {
+    const store = storeOf(['ideogram', bands()])
+    const [q28] = findFeatures(store, 'Xq28')
+    expect([q28.featureStart, q28.featureEnd]).toEqual([147_100_000, 155_270_560])
+    expect(paddedSpan(147_100_000, 155_270_560)).toEqual({ start: q28.start, end: q28.end })
+    expect(featureSuggestions(store, 'Xq28')[0].label).toBe('Xq28 · chrX:147,100,001-155,270,560 · ideogram')
+  })
+
+  it('lists the genes first, and leaves the gene search with the gene model', () => {
+    const build = new FeatureBuilder()
+    build.add('chrX', 73_040_000, 73_072_000, { name: 'XIST' })
+    build.add('chrX', 70_300_000, 70_400_000, { name: 'Xq13-like' })
+    // The karyotype arrives first: it must not become the set a gene is looked
+    // up in, or `XIST` would be searched for among `p11` and `q13.1`.
+    const store = storeOf(['ideogram', bands()], ['gtf', build.finish()])
+    expect(findFeatures(store, 'xist').map((hit) => hit.name)).toEqual(['XIST'])
+    expect(findFeatures(store, 'Xq13').map((hit) => hit.name)).toEqual([
+      'Xq13-like',
+      'Xq13.1',
+      'Xq13.2',
+      'Xq13.3',
+    ])
+  })
+
+  it('is never answered from a sample’s junctions', () => {
+    const junctions = new FeatureBuilder()
+    junctions.add('chrX', 1000, 2000, { name: 'JUNC00000001', score: 12 })
+    const store = storeOf(['junctions', junctions.finish()], ['gtf', genes()])
+    expect(findFeatures(store, 'junc')).toEqual([])
+    expect(findFeatures(store, 'gal4').map((hit) => hit.name)).toEqual(['GAL4'])
+  })
+})

@@ -112,6 +112,8 @@ import {
   sniffFormat,
 } from '../annotations/parse'
 import { parseBarChart, sniffBarChart } from '../annotations/barchart'
+import { parseCytoBand, sniffCytoBand } from '../annotations/cytoband'
+import { parseJunctions, sniffJunctions } from '../annotations/junctions'
 import { formatIntervals } from '../annotations/export'
 import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
 import type { StoredEntry } from '../annotations/types'
@@ -1339,6 +1341,15 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
     // the vector.
     if (sniffBarChart(text, path)) {
       inputs.features = { ...inputs.features, [id]: parseBarChart(text, path) }
+    } else if (sniffCytoBand(text)) {
+      // A karyotype's bands, scored by how dark each stains (§8.22): read as a
+      // BED they kept their spans and lost the one column a task splitting
+      // light from dark bands would read.
+      inputs.features = { ...inputs.features, [id]: parseCytoBand(text) }
+    } else if (sniffJunctions(text, path) !== null) {
+      // Introns, whatever shape the aligner wrote them in (§8.23). A STAR table
+      // read as a BED is intervals one base too wide with no count on them.
+      inputs.features = { ...inputs.features, [id]: parseJunctions(text, path) }
     } else if (sniffBed3d(text, path) || sniffG3d(text, path)) {
       // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set
       // whose rows carry coordinates, which is what the structure tasks read

@@ -48,6 +48,7 @@ import {
   longCigarOf,
   readNameAt,
   SEQ_ALPHABET,
+  skipTag,
   type RecordCursor,
 } from './format'
 import type { PileFilter } from './pile'
@@ -413,24 +414,6 @@ function mdTag(bytes: Uint8Array, cursor: RecordCursor): string | null {
   return null
 }
 
-/** Step over one tag value, returning where the next tag begins, or `-1`. */
-function skipTag(bytes: Uint8Array, at: number, type: string, to: number): number {
-  const width: Record<string, number | undefined> = { c: 1, C: 1, s: 2, S: 2, i: 4, I: 4, f: 4, A: 1 }
-  if (type === 'Z' || type === 'H') {
-    let end = at
-    while (end < to && bytes[end] !== 0) end++
-    return end + 1
-  }
-  if (type === 'B') {
-    const sub = String.fromCharCode(bytes[at])
-    const count = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(at + 1, true)
-    const each = width[sub]
-    if (each === undefined || count < 0) return -1
-    return at + 5 + count * each
-  }
-  const each = width[type]
-  return each === undefined ? -1 : at + each
-}
 
 /**
  * Walk an `MD` tag alongside the CIGAR.

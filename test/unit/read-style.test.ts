@@ -46,6 +46,9 @@ describe('the default', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
+      // A sashimi plot's arcs over the depth, from two reads up (§8.23).
+      sashimi: true,
+      sashimiFloor: 2,
     })
   })
 
@@ -72,8 +75,23 @@ describe('reading a stored style back', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
+      sashimi: false,
+      sashimiFloor: 5,
     }
     expect(readStyleOf(stored)).toEqual(stored)
+  })
+
+  it('opens a style stored before the arcs with them on, from two reads', () => {
+    const old = readStyleOf({ colourBy: 'strand', minMapq: 0, hideDuplicates: false, layout: 'pairs', splits: false })
+    expect(old.sashimi).toBe(true)
+    expect(old.sashimiFloor).toBe(2)
+  })
+
+  it('clamps an arc floor that is not a count', () => {
+    expect(readStyleOf({ sashimiFloor: 0 }).sashimiFloor).toBe(1)
+    expect(readStyleOf({ sashimiFloor: 2.6 }).sashimiFloor).toBe(3)
+    expect(readStyleOf({ sashimiFloor: 'many' }).sashimiFloor).toBe(2)
+    expect(readStyleOf({ sashimi: 'no' }).sashimi).toBe(true)
   })
 
   it('refuses a colouring it has never heard of', () => {
@@ -185,6 +203,8 @@ describe('surviving a stored session', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
+      sashimi: false,
+      sashimiFloor: 4,
     }
     expect(roundTrip(set)).toEqual(set)
   })
@@ -200,6 +220,8 @@ describe('surviving a stored session', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
+      sashimi: true,
+      sashimiFloor: 2,
     })
   })
 

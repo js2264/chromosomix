@@ -496,7 +496,7 @@ function drawn(
     outline: false,
     labels: false,
     barScale,
-    ...(barLimits === undefined ? {} : { barLimits }),
+    ...(barLimits === undefined ? {} : { axisLimits: barLimits }),
   })
   return filled
 }

@@ -68,6 +68,8 @@ import { FASTA_NAME, guessedIndexUrl } from '../sidecar'
 import { interactSummary, isInteractSchema, parseInteract, sniffInteract } from '../interact'
 import { longRangeSummary, parseLongRange, sniffLongRange } from '../longrange'
 import { genePredSummary, isGenePredSchema, parseGenePred, sniffGenePred } from '../genepred'
+import { cytoBandLengths, cytoBandSummary, parseCytoBand, sniffCytoBand } from '../cytoband'
+import { junctionSummary, parseJunctions, sniffJunctions } from '../junctions'
 import {
   bedMethylSummary,
   isBedMethylSchema,
@@ -99,6 +101,7 @@ import type {
   ReadStyle,
   ReadWindow,
   Region,
+  SampleJunctions,
   TrackSamples,
   TrackSampleSet,
 } from '../types'
@@ -1032,6 +1035,29 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'barchart', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
 
+  // A cytoBand is the one feature file that can answer this **exactly** (§8.22):
+  // UCSC's bands tile each chromosome from its first base, so the last band's
+  // end is the chromosome's length — a `chrom.sizes` with a picture on it, which
+  // is what IGV takes one for. Taken at its word only where the bands really do
+  // tile, and given the lower bound where they do not, as any feature file is.
+  if (sniffCytoBand(text)) {
+    const data = parseCytoBand(text)
+    recent = { key: cacheKey(source), format: 'cytoband', features: data }
+    const tiled = cytoBandLengths(data)
+    if (tiled !== null) return { format: 'cytoband', contigs: tiled, origin: 'cytoband', exact: true }
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'cytoband', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+  // Junctions declare nothing about the genome but where their introns end.
+  if (sniffJunctions(text, source.name) !== null) {
+    const data = parseJunctions(text, source.name)
+    recent = { key: cacheKey(source), format: 'junctions', features: data }
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'junctions', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   // The same five, in the same order as `load`, and it has to be: this is what
   // decides which road a *drop* takes, so a genePred routed as a BED here would
   // open as one however well the loader knew better. Every one of them gives the
@@ -1600,6 +1626,17 @@ async function load(
   // nine and an integer count in column 8 that matches its own list.
   if (sniffBarChart(text, source.name)) return loadBarChart(text, source.name, mapContigs)
 
+  // A karyotype and a sample's splice junctions (§8.22, §8.23), in front of the
+  // BED sniffer for the reason every format in this stretch is. Neither can be
+  // captured by anything above: a cytoBand is five columns ending in a stain
+  // word, and a STAR table is nine integers — and neither can capture anything
+  // below, since no BED puts a word in a BED5's score column and no BED9 is all
+  // integers. The two BED-shaped junction files are claimed only where the file
+  // says it holds junctions; see `sniffJunctions`.
+  if (sniffCytoBand(text)) return loadCytoBand(text, mapContigs)
+  const junctions = sniffJunctions(text, source.name)
+  if (junctions !== null) return loadJunctions(text, source.name, mapContigs)
+
   // The five UCSC formats of §8.18–§8.20, all of them in front of the BED
   // sniffer and every one of them for its reason. This block is the price of
   // `sniffFormat`'s last line being `return 'bed'`: a format it has not been
@@ -1784,6 +1821,44 @@ function loadBarChart(
 }
 
 /**
+ * A cytoBand, as the bands of an ideogram (§8.22).
+ *
+ * Its own arm for the summary, which counts bands, sequences and centromeric
+ * bands — the three numbers that say whether this is a karyotype or a list of
+ * unplaced sequences in five columns, which a cytoBandIdeo mostly is.
+ */
+function loadCytoBand(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseCytoBand(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'cytoband',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: cytoBandSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * Splice junctions of any of the three shapes, as introns with a count (§8.23).
+ *
+ * Its own arm for the summary: a reader of junctions wants the reads behind
+ * them and how many the annotation already knew, which is how a novel junction
+ * is found.
+ */
+function loadJunctions(text: string, fileName: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseJunctions(text, fileName)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'junctions',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: junctionSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
  * A g3d, read into beads with a place on each (§25).
  *
  * Its own arm for the summary's sake, which is the one place the inferred
@@ -1862,10 +1937,19 @@ function featureResult(
     format,
     contigs: data.contigs,
     overlap: overlapReport(data.contigs, mapContigs, renaming),
+    // The format's own sentence wherever it has one. A parse cached by the
+    // assembly question comes back through here rather than through its own
+    // loader, and used to come back saying `862 features` about a karyotype.
     summary:
       format === 'gtf'
         ? `${fmt.int(data.length)} transcripts · ${fmt.int(exons)} exons`
-        : `${fmt.int(data.length)} feature${data.length === 1 ? '' : 's'}`,
+        : format === 'genepred'
+          ? genePredSummary(data)
+          : format === 'cytoband'
+            ? cytoBandSummary(data)
+            : format === 'junctions'
+              ? junctionSummary(data)
+              : `${fmt.int(data.length)} feature${data.length === 1 ? '' : 's'}`,
     payload: { kind: 'features', data },
   }
 }
@@ -2985,6 +3069,10 @@ async function alignmentSamples(
     // mismatch rate as a variant at every pixel.
     const reference = basesPerPixel <= VARIANT_BELOW ? residuesFor(plan.region) : undefined
     const variant = reference === undefined ? null : new Float64Array(bins)
+    // The introns the counted reads skip, for the lane's sashimi arcs (§8.23):
+    // tallied on the depth's pass, so an arc and the curve under it are counted
+    // from the same reads, and summed across spans as the depth is.
+    const introns = new Map<string, number>()
     for (const byteSpan of plan.spans) {
       // Between blocks, so a pan that has moved on stops this rather than
       // holding the one thread every other lane's `sample` is waiting on.
@@ -3003,6 +3091,7 @@ async function alignmentSamples(
         bins,
         filterOf(style),
         reference,
+        introns,
       )
       // Summed across spans rather than concatenated: a read overlapping the
       // window may live in any of them, and the bins are the same bins.
@@ -3033,6 +3122,7 @@ async function alignmentSamples(
       ends,
       values,
       variant: differing,
+      junctions: junctionsOf(introns),
       min: null,
       max: null,
       // Depth *is* the summary — there is no finer value behind it to have
@@ -3060,6 +3150,30 @@ async function alignmentSamples(
     // moment a reader pans across an empty contig.
     extent: min <= max && max > 0 ? { min: 0, max } : null,
   }
+}
+
+/** A window's intron tally as the four sorted arrays a lane draws from (§8.23). */
+function junctionsOf(introns: Map<string, number>): SampleJunctions {
+  const rows: Array<[number, number, number, number]> = []
+  for (const [key, count] of introns) {
+    const [from, to, strand] = key.split(':').map(Number)
+    rows.push([from, to, strand, count])
+  }
+  rows.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+  const n = rows.length
+  const out: SampleJunctions = {
+    starts: new Int32Array(n),
+    ends: new Int32Array(n),
+    counts: new Float32Array(n),
+    strands: new Int8Array(n),
+  }
+  rows.forEach(([from, to, strand, count], at) => {
+    out.starts[at] = from
+    out.ends[at] = to
+    out.strands[at] = strand
+    out.counts[at] = count
+  })
+  return out
 }
 
 /**

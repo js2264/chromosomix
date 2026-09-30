@@ -79,6 +79,12 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   }
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
+  // UCSC publishes both as a bare `.txt.gz`, so the name is the tell (§8.22).
+  if (/cytoband(ideo)?(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'ideogram' }
+  // STAR's table, a junctions BED, leafcutter's `.junc` (§8.23).
+  if (/(sj\.out\.tab|junctions?\.bed|\.junc)(\.gz)?$/i.test(name)) {
+    return { card: 'linear', kind: 'junctions' }
+  }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   // WashU's g3d, text or container, and Dip-C's `.3dg` which is the same text
   // with the haplotype folded into the chromosome's name (§25).
@@ -801,6 +807,12 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'genepred':
     case 'bedmethyl':
     case 'twobit':
+    // A band and an intron are each along one axis, and so a lane (§8.22,
+    // §8.23) — the junction's arc joins two places, but they are two places a
+    // few kilobases apart on one sequence, read along it, not a pixel of the
+    // matrix to mark.
+    case 'cytoband':
+    case 'junctions':
       return 'linear'
     // A model's beads are intervals along one axis and its picture is a cell of
     // the deck, which is neither of the two above: the row lives on the
@@ -852,6 +864,10 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // be a box — so it is a kind rather than a `segments` with a column nothing
     // reads.
     if (format === 'barchart') return 'barchart'
+    // A karyotype and a sample's introns (§8.22, §8.23), whose glyphs are an
+    // ideogram and a sashimi plot's arcs rather than boxes.
+    if (format === 'cytoband') return 'ideogram'
+    if (format === 'junctions') return 'junctions'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
     if (format === 'bed' || format === 'bigbed') return 'segments'

@@ -9079,6 +9079,18 @@ body.is-carrying-card * {
   flex: 0 0 3.2rem;
   width: 3.2rem;
   min-width: 0;
+  /* The limit boxes' rule (below): at this width the spinner's reserved room is
+     most of the box, and a lane of 100 px or more read `10(`. The height is
+     typed, and the arrow keys still step it. */
+  appearance: textfield;
+  -webkit-appearance: textfield;
+}
+
+.ann-field > .ann-size::-webkit-outer-spin-button,
+.ann-field > .ann-size::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .ann-unit {

@@ -82,10 +82,18 @@ function signals(rows: readonly AnnotationEntry[]): AnnotationEntry[] {
   return rows.filter((entry) => hasTrackControls(entry.kind))
 }
 
-/** The rows with a pair of limits: a signal, a sequence's GC, a barChart. */
+/**
+ * The rows with a pair of limits: a signal, a sequence's GC, a barChart, a
+ * junction lane — the last because one pair typed over two samples' lanes at
+ * once is exactly the comparison their limits exist for (§8.23).
+ */
 function limited(rows: readonly AnnotationEntry[]): AnnotationEntry[] {
   return rows.filter(
-    (entry) => hasTrackControls(entry.kind) || entry.kind === 'sequence' || entry.kind === 'barchart',
+    (entry) =>
+      hasTrackControls(entry.kind) ||
+      entry.kind === 'sequence' ||
+      entry.kind === 'barchart' ||
+      entry.kind === 'junctions',
   )
 }
 

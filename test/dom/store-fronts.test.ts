@@ -78,7 +78,7 @@ describe('the lab’s gallery', () => {
     const front = frontById('rsg')
     const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host([]) })
     document.body.appendChild(view.el)
-    expect(all(view.el, '.gallery-card')).toHaveLength(3)
+    expect(all(view.el, '.gallery-card')).toHaveLength(4)
     expect(view.el.textContent ?? '').not.toMatch(/\.m?metacool(?!er)|mock (microbial )?community|\bMAGs?\b/i)
   })
 
@@ -92,7 +92,7 @@ describe('the lab’s gallery', () => {
     // is under the figure it belongs to.
     expect(all(view.el, '.gallery-heading')).toHaveLength(0)
     const cards = all(view.el, '.gallery-card')
-    expect(cards.length).toBe(4)
+    expect(cards.length).toBe(5)
     // The first line is the name and the one verb, an icon with the words in its title.
     const head = cards[0].querySelector('.gallery-card-head') as HTMLElement
     expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C, G2/M')
@@ -109,11 +109,13 @@ describe('the lab’s gallery', () => {
     expect(fold.querySelector('summary')?.textContent).toBe('8 files')
     expect(all(fold, '.portal-row')).toHaveLength(8)
     expect(all(fold, '.row-verb-add')).toHaveLength(8)
-    // The deck's four, the tracks-only figure's eleven, the metagenome's two.
-    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 4)).toEqual([
+    // The deck's four, the tracks-only figure's eleven, human chrX's five, the
+    // metagenome's two.
+    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 5)).toEqual([
       '8 files',
       '11 files',
       '4 files',
+      '5 files',
       '2 files',
     ])
     // …and the files no figure names — two maps, the shotgun coverage, the
@@ -121,10 +123,14 @@ describe('the lab’s gallery', () => {
     // every figure here carries a DOI, and a lane of generated numbers does not
     // belong in one. The `.2bit` is the same sequence a figure already names as
     // a FASTA, published beside it because the paste box's hub example points at
-    // it (§8.21, §24.10). They are still offered, under the cards.
+    // it (§8.21, §24.10). Then five for §8.22 and §8.23: the yeast karyotype and
+    // the yeast test subset's junctions, which are there to be dropped on the
+    // yeast map, and the human samples' junctions no figure draws — two more
+    // STAR tables and one as regtools writes it. They are still offered, under
+    // the cards.
     const loose = view.el.querySelector('.gallery-loose') as HTMLElement
-    expect(loose.querySelector('summary')?.textContent).toBe('5 more files, in no figure')
-    expect(all(loose, '.portal-row')).toHaveLength(5)
+    expect(loose.querySelector('summary')?.textContent).toBe('10 more files, in no figure')
+    expect(all(loose, '.portal-row')).toHaveLength(10)
   })
 })
 

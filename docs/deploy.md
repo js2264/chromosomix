@@ -167,13 +167,14 @@ own; what the store leads with is the workspaces below, and those name these.
 ## The published workspaces
 
 The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
-`ui/stores/registry.ts`, SPECS §24.2) leads with **four workspace files**, drawn as figures:
+`ui/stores/registry.ts`, SPECS §24.2) leads with **five workspace files**, drawn as figures:
 
 | file | opens |
 | --- | --- |
 | `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
 | `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
 | `Yeast_deck.metacooler.json` | the micro-C `.cool` beside a Juicer `.hic` of the same locus, in two locked columns |
+| `Human_chrX_RNA.metacooler.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads as depth with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
 | `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
 
 They are ordinary `metacooler.workspace` files — the exact format the save button in the top bar

@@ -30,10 +30,12 @@ import {
   drawnFromSamples,
   drawsAProfile,
   hasAMovableAxis,
+  hasFeatureRows,
   hasTrackControls,
   isIntervalSet,
   isMetadata,
   readsAlignments,
+  searchesByName,
   type AnnotationKind,
 } from '@/annotations/types'
 
@@ -83,17 +85,18 @@ describe('what a lane can be controlled with', () => {
     }
   })
 
-  it('moves an axis only on a lane that has one — a profile, or a chart', () => {
+  it('moves an axis only on a lane that has one — a profile, a chart, or arcs', () => {
     // The invariant used to be *a movable axis implies a profile*, and the
     // barChart is what broke it rather than what slipped through it: §8.17 gave
     // a lane of glyphs a pair of limits, because both readings it had were
     // relative and two files' lanes could not be compared by eye. An axis is a
     // pair of numbers a picture is drawn against; a profile is one way of
-    // drawing against one.
+    // drawing against one. A junction lane's arcs are a second glyph drawn
+    // against one, for the barChart's reason: two samples side by side (§8.23).
     for (const kind of KINDS) {
       if (!hasAMovableAxis(kind)) continue
       expect(
-        drawsAProfile(kind) || kind === 'barchart',
+        drawsAProfile(kind) || kind === 'barchart' || kind === 'junctions',
         `${kind} has a movable axis and nothing drawn against it`,
       ).toBe(true)
     }
@@ -177,7 +180,7 @@ describe('what counts as a set of intervals', () => {
     // the task was available and half of it could not be filled.
     for (const site of SITES) {
       const source = readFileSync(join(process.cwd(), site), 'utf8')
-      const listed = /needsKinds:\s*\[[^\]]*'(gtf|segments|variants|barchart)'/
+      const listed = /needsKinds:\s*\[[^\]]*'(gtf|segments|variants|barchart|ideogram|junctions)'/
       expect(listed.test(source), `${site} lists the kinds instead of deriving them`).toBe(false)
     }
   })
@@ -186,7 +189,8 @@ describe('what counts as a set of intervals', () => {
     // The exact shape that drifted: `kind === 'gtf' || kind === 'segments'`.
     for (const site of SITES) {
       const source = readFileSync(join(process.cwd(), site), 'utf8')
-      const spelled = /kind === '(gtf|segments|variants|barchart)'\s*\|\|\s*\w+\.kind === '(gtf|segments|variants|barchart)'/
+      const spelled =
+        /kind === '(gtf|segments|variants|barchart|ideogram|junctions)'\s*\|\|\s*\w+\.kind === '(gtf|segments|variants|barchart|ideogram|junctions)'/
       expect(spelled.test(source), `${site} spells the rule out`).toBe(false)
     }
   })
@@ -199,14 +203,59 @@ describe('what counts as a set of intervals', () => {
     // whatever is drawn inside them, and a metaplot over them is a reading
     // nobody should have to convert a file to ask for (§8.17). A structure's
     // beads are the same argument once more: an interval that has a place in
-    // space is still an interval (§25).
+    // space is still an interval (§25). And so are a karyotype's bands and a
+    // sample's introns (§8.22, §8.23): a band's score is its stain, which is
+    // what splits light from dark in *Signal by group*, and an intron's ends
+    // are the splice sites a metaplot centres on.
     expect(KINDS.filter(isIntervalSet).sort()).toEqual([
       'barchart',
       'gtf',
+      'ideogram',
+      'junctions',
       'segments',
       'structure',
       'variants',
     ])
+  })
+})
+
+/**
+ * A karyotype and a sample's junctions: two feature kinds with glyphs of their
+ * own (§8.22, §8.23), and every predicate answered on purpose.
+ */
+describe('an ideogram lane', () => {
+  it('answers every predicate the way a peak set does', () => {
+    for (const ask of [drawsAProfile, hasTrackControls, drawnFromSamples, isMetadata, hasAMovableAxis]) {
+      expect(ask('ideogram'), ask.name).toBe(ask('segments'))
+    }
+    expect(isIntervalSet('ideogram')).toBe(true)
+  })
+
+  it('has no rows to expand or collapse, since its bands tile one shape', () => {
+    expect(hasFeatureRows('ideogram')).toBe(false)
+  })
+
+  it('is searched by band rather than made the gene search', () => {
+    expect(searchesByName('ideogram')).toBe(false)
+    expect(searchesByName('gtf')).toBe(true)
+  })
+})
+
+describe('a junction lane', () => {
+  it('is a feature kind that has an axis, as a barChart is', () => {
+    expect(drawsAProfile('junctions')).toBe(false)
+    expect(drawnFromSamples('junctions')).toBe(false)
+    expect(hasAMovableAxis('junctions')).toBe(true)
+    // No row of track controls: an arc's count is not in anybody else's units,
+    // so there is no autoscale group for it to join.
+    expect(hasTrackControls('junctions')).toBe(false)
+    expect(isIntervalSet('junctions')).toBe(true)
+  })
+
+  it('packs no rows and is not the search', () => {
+    expect(hasFeatureRows('junctions')).toBe(false)
+    expect(searchesByName('junctions')).toBe(false)
+    expect(readsAlignments('junctions')).toBe(false)
   })
 })
 
