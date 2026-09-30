@@ -35,6 +35,18 @@ const DEFAULT_CHUNK_SIZE = 1 << 20
 /** 64 MiB of chunks retained. Well above one MAG's matrix, far below a file. */
 const DEFAULT_CACHE_BYTES = 64 << 20
 
+/**
+ * How close a miss must land to a recent fetch to count as the same region
+ * being read — see {@link RemoteRangeSource.aheadFor}.
+ */
+const NEAR_BYTES = 4 << 20
+
+/** The most one miss fetches beyond what it needs. */
+const MAX_AHEAD_BYTES = 16 << 20
+
+/** Recent fetches remembered, so several streams read side by side are each seen. */
+const RECENT_FETCHES = 8
+
 export interface RemoteRangeOptions {
   /** Bytes per cached chunk. */
   chunkSize?: number
@@ -50,6 +62,12 @@ export interface RemoteRangeOptions {
   onRead?(requests: number, bytes: number): void
   /** Upper bound on retained chunk bytes; least-recently-used are dropped. */
   maxCacheBytes?: number
+  /**
+   * Fetch ahead of a region being read chunk after chunk (default on) — see
+   * {@link RemoteRangeSource.aheadFor}. Off for a source opened to read in small
+   * pieces, whose reader chose bandwidth over round trips (§12).
+   */
+  readAhead?: boolean
   /** Injected for tests. Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch
   /**
@@ -92,6 +110,12 @@ export class RemoteRangeSource implements ByteSource {
   /** Insertion-ordered, so the first key is the least recently used. */
   private readonly cache = new Map<number, Uint8Array>()
   private cachedBytes = 0
+  private readonly readAhead: boolean
+  /**
+   * The last few fetches, newest last: their chunk range, and how many misses
+   * in a row had landed near the region each was part of.
+   */
+  private readonly recent: Array<{ from: number; to: number; streak: number }> = []
   private requests: number
   private bytesRead: number
   private mountPath: string | null = null
@@ -116,6 +140,7 @@ export class RemoteRangeSource implements ByteSource {
     this.fetchImpl =
       options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init))
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
+    this.readAhead = options.readAhead ?? true
     this.onRead = options.onRead
     const requested = Math.trunc(options.maxCacheBytes ?? DEFAULT_CACHE_BYTES)
     this.maxCacheBytes = Math.max(this.chunkSize, requested)
@@ -474,6 +499,13 @@ export class RemoteRangeSource implements ByteSource {
       const last = Math.floor((position + length - 1) / this.chunkSize)
       let end = index
       while (end + 1 <= last && !this.cache.has(end + 1)) end += 1
+      // Beyond what this read needs, where the reads before it say more of the
+      // same region is coming — but never over a chunk already held.
+      const { ahead, streak } = this.aheadFor(index, end)
+      const beyond = Math.min(end + ahead, Math.ceil(this.size / this.chunkSize) - 1)
+      while (end < beyond && !this.cache.has(end + 1)) end += 1
+      this.recent.push({ from: index, to: end, streak })
+      if (this.recent.length > RECENT_FETCHES) this.recent.shift()
       const from = index * this.chunkSize
       const to = Math.min((end + 1) * this.chunkSize, this.size) - 1
       const fetched = this.fetchRange(from, to)
@@ -485,6 +517,37 @@ export class RemoteRangeSource implements ByteSource {
         this.store(i, fetched.subarray(start, Math.min(start + this.chunkSize, fetched.length)))
       }
     }
+  }
+
+  /**
+   * How many chunks to fetch past the ones a miss needs.
+   *
+   * HDF5 reads a cooler's pixels a dataset chunk at a time — `bin1_id`,
+   * `bin2_id` and `count` in turn, each a megabyte or so — and each read that
+   * misses the cache is a round trip, one after another on the worker. Reading a
+   * whole chromosome of a 5 GB `.mcool` was sixty-three of them, a megabyte
+   * apiece, hopping between three streams through one 60 MB region of the file:
+   * the latency, paid sixty-three times, was the wait.
+   *
+   * So a miss that lands within {@link NEAR_BYTES} of one of the last few
+   * fetches is taken as that region still being read, and from the third such
+   * miss in a row the fetch runs ahead, doubling each time up to
+   * {@link MAX_AHEAD_BYTES}. The count is kept per region, so a read of the
+   * weights or the index between two pixel chunks does not start the pixels'
+   * count again. A miss far from anything recent is a new question — an index,
+   * a header, another sequence — and fetches what it asks for and nothing more,
+   * so the scattered reads of opening a file are what they were.
+   */
+  private aheadFor(index: number, end: number): { ahead: number; streak: number } {
+    if (!this.readAhead) return { ahead: 0, streak: 0 }
+    const near = Math.max(1, Math.floor(NEAR_BYTES / this.chunkSize))
+    let streak = 0
+    for (const fetch of this.recent) {
+      if (index >= fetch.from - near && index <= fetch.to + near) streak = Math.max(streak, fetch.streak + 1)
+    }
+    if (streak < 2) return { ahead: 0, streak }
+    const most = Math.max(0, Math.floor(MAX_AHEAD_BYTES / this.chunkSize) - (end - index + 1))
+    return { ahead: Math.min(most, 2 ** (streak - 2)), streak }
   }
 
   private fetchRange(from: number, to: number): Uint8Array {

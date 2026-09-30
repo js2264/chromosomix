@@ -826,6 +826,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A file with several resolutions opens a third of the way up them, not at its finest (§3.6, §9).**
+  An `.mcool` addressed at its root, a `.hic` named with no resolution and a zoomify ladder in an
+  `.mmetacool` land on the third of six or seven rungs — the second of four or five, the finest of one
+  or two — so a 5 GB 4DN map comes up at 25 kb rather than 1 kb, where every read is the largest the
+  file has and the first chromosome asked for was the longest wait. The finest level is one pick away
+  in the resolution list, and once picked it is the floor of every zoom as before; a comparison or a
+  deck that asks for a bin size still gets it.
+
 - **A sideways scroll slides a map along its diagonal (§7)**, rows and columns together, as the
   reference editor's stage always has: the diagonal stays put and the picture moves down the genome
   under it, where the columns alone carried it off the side of the picture within a screen. Over a
@@ -1756,6 +1764,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **The Tracks card's height box shows three digits.** It reserved its spinner's room at a width
   where that was most of the box, so a lane of 100 px or more read `10(`. It is typed, like the limit
   boxes beside it, and the arrow keys still step it.
+
+- **A window inside one chromosome of a `.hic` reads its own blocks, not the chromosome's (§3.6).** An
+  off-diagonal rectangle — a corner, two loci a chromosome apart — unioned its two axes into one span,
+  so it read the whole square between them: six bins by six at a chromosome's corner was every block
+  of that chromosome, 15 MB at 25 kb on a 4DN map. Each axis now keeps its own window, and the blocks
+  below the diagonal are reached through their transpose as they always were.
+
+- **The circular-chromosome check no longer reads a large file at its finest rung (§8.15).** It reads
+  six bins at each end of each sequence, so its cost was never the pixels but the rung's index and
+  weights: 111 MiB of background reads on a 5 GB 4DN map opened at 1 kb, slowing the first views and
+  the contact count behind them. Each sequence is now measured at the coarsest rung that still gives
+  it a hundred bins, decided alike on every demo map, and asked again at the open rung only where the
+  coarse rung cannot be read as the test reads it.
+
+- **The whole genome of a laddered file is drawn from a coarse rung instead of asking to download the
+  file (§9).** On a 5 GB `.mcool` at 25 kb, *whole genome* was a gate — "reads every stored pixel of
+  the file, 5.0 GB downloaded" — beside a button to reopen the file at 500 kb. It now reads the
+  coarsest rung whose bins fit a drawn cell and draws: 5 s after landing over the network, 4 s for a
+  1 GB file on disk, and a zoom inside it still refines to the rung that is open.
+
+- **A remote `.mcool` reads a chromosome in far fewer round trips (§6.1, §12).** HDF5 reads the pixel
+  columns a chunk at a time, and each 1 MiB miss was its own request: 63 in a row for chr1 of a 5 GB
+  file. A region read chunk after chunk now fetches ahead, up to 16 MiB, while scattered reads — an
+  open, an index — still fetch only what they ask for: 34 requests, and the picture 15 s after landing
+  where it was 24 s, measured through a slow proxy.
+
+- **A first open no longer waits for the HDF5 runtime to load (§6.1).** The reader's worker, which
+  compiles h5wasm the moment it exists, was only made once a file was opened; it is now made while
+  the picker is on screen, and a 1 GB `.mcool` dropped on a fresh tab lands in 0.3 s where it took 3.2.
 
 - **A large `.hic` opens in seconds, and its contacts are counted without holding it up (§3.6, §6.5,
   §12).** The 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y) sat on its spinner for minutes.

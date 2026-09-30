@@ -54,6 +54,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { landingRung } from '../metacooler/detect'
 import type { ByteSource, Extent } from '../types'
 import {
   normKey,
@@ -130,7 +131,7 @@ const NORM_PREFERENCE = ['SCALE', 'KR', 'INTER_KR', 'GW_KR', 'VC_SQRT', 'VC'] as
 const BP = 'BP'
 
 export interface HicOpenOptions {
-  /** Bin size to open at; the finest available when omitted. */
+  /** Bin size to open at; the landing rung when omitted (`metacooler/detect.ts`, `landingRung`). */
   binSize?: number
 }
 
@@ -227,7 +228,7 @@ export class HicFile {
         {},
       )
     }
-    const binSize = options.binSize ?? available[0]
+    const binSize = options.binSize ?? landingRung(available)
     if (!available.includes(binSize)) {
       throw new ViewerError(
         'unsupported',
@@ -529,12 +530,18 @@ export class HicFile {
     if (zoom === null) return null
     const intra = lowChrom === highChrom
 
-    // The window each axis of the *stored* pair covers. The stored first axis is
-    // the lower chromosome, which is not necessarily the caller's row axis, so
-    // both windows are unioned onto both axes for an intra pair and assigned by
-    // chromosome for an inter one.
-    const lowSpan = this.localSpan(lowChrom, rows, cols)
-    const highSpan = this.localSpan(highChrom, rows, cols)
+    // The window each axis of the *stored* pair covers. For an inter pair the
+    // stored first axis is the lower chromosome, which is not necessarily the
+    // caller's row axis, so each axis takes whichever window covers its
+    // chromosome. For an intra pair each keeps its own: the block arithmetic
+    // adds every block's transpose, which is where the half of a window below
+    // the diagonal is stored. Unioning the two instead read the bounding square
+    // — a corner of a chromosome, six bins by six, read every block of it: a
+    // whole chromosome's 15 MB at 25 kb for each of the circularity check's
+    // corner reads (§8.15).
+    const [lowSpan, highSpan] = intra
+      ? [this.clipSpan(lowChrom, rows), this.clipSpan(lowChrom, cols)]
+      : [this.localSpan(lowChrom, rows, cols), this.localSpan(highChrom, rows, cols)]
     if (lowSpan === null || highSpan === null) return null
 
     const numbers = blockNumbersFor(zoom, this.header.version, intra, lowSpan, highSpan)
@@ -580,6 +587,14 @@ export class HicFile {
    * either of its axes. Where both overlap, the union is taken: narrowing to one
    * would drop the half of an on-diagonal block the other axis was asking for.
    */
+  /** `extent`'s part on one chromosome, in its own bins, or `null` where it misses it. */
+  private clipSpan(chrom: number, extent: Extent): [number, number] | null {
+    const base = this.chromOffset[chrom]
+    const from = Math.max(extent[0], base)
+    const to = Math.min(extent[1], this.chromOffset[chrom + 1])
+    return to > from ? [from - base, to - base] : null
+  }
+
   private localSpan(chrom: number, rows: Extent, cols: Extent): [number, number] | null {
     const base = this.chromOffset[chrom]
     const end = this.chromOffset[chrom + 1]

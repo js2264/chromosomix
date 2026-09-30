@@ -63,6 +63,7 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
         ...(spec.reading === 'fine'
           ? {
               chunkSize: FINE_CHUNK_SIZE,
+              readAhead: false,
               ...(watch?.onRead === undefined ? {} : { onRead: watch.onRead.bind(watch) }),
             }
           : {}),
@@ -116,7 +117,7 @@ export async function createDetachedSource(spec: SourceSpec): Promise<ByteSource
   if (spec.reading === 'whole') return await wholeObjectOf(spec.url, access)
   return await RemoteRangeSource.open(spec.url, {
     ...access,
-    ...(spec.reading === 'fine' ? { chunkSize: FINE_CHUNK_SIZE } : {}),
+    ...(spec.reading === 'fine' ? { chunkSize: FINE_CHUNK_SIZE, readAhead: false } : {}),
   })
 }
 

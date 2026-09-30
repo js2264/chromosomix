@@ -143,6 +143,35 @@ export function junctionCandidates(
   return candidates.slice(0, limit)
 }
 
+/**
+ * The bins a sequence is measured on where the file's ladder lets it be — see
+ * {@link junctionRung}.
+ */
+export const JUNCTION_TARGET_BINS = 100
+
+/**
+ * The bin size to measure one sequence's junction at: the coarsest of `rungs`,
+ * no finer than the one open, that still gives it {@link JUNCTION_TARGET_BINS}
+ * bins; the open one where none does.
+ *
+ * The test reads six bins at each end and three at the corner, so what it
+ * costs is never the pixels. It is what reading any window at a rung costs —
+ * that rung's index, its weights for the sequence, a block — and at a fine rung
+ * of a large file that is megabytes a read: on a 5 GB 4DN map opened at 1 kb,
+ * 111 MiB for three reads on each of 21 chromosomes. The score is a ratio of
+ * the junction to the diagonal at the same separation, so it does not depend
+ * on the bin size so long as the ends are a small part of the sequence, which a
+ * hundred bins is. A short sequence keeps the rung it was opened at, where it
+ * has the bins it has.
+ */
+export function junctionRung(length: number, open: number, rungs: readonly number[]): number {
+  let best = open
+  for (const rung of rungs) {
+    if (rung > best && Math.ceil(length / rung) >= JUNCTION_TARGET_BINS) best = rung
+  }
+  return best
+}
+
 /** A dense block of the whole map, by bins of the whole map: what a host reads the test through. */
 export type JunctionReader = (rows: [number, number], cols: [number, number]) => Promise<ArrayLike<number>>
 

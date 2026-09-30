@@ -47,6 +47,7 @@ import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
 import type { SourceSpec } from '../worker/protocol'
 import { ViewerError } from '../errors'
+import { landingRung } from '../metacooler/detect'
 
 /**
  * Dismissal is remembered across sessions, not just this one: the claim is
@@ -343,9 +344,10 @@ export class FilePicker {
  * the caller has to build a URI out of both.
  *
  * For a `zoomify` ladder every name is an integer and the one to open is the
- * **smallest** — the base resolution, the finest data, and the level the others
- * are derived from. HDF5 group order is alphabetical, which puts `1000` before
- * `500`, so sorting numerically is not cosmetic.
+ * rung {@link landingRung} names — a third of the way up from the finest, not
+ * the finest itself, whose reads are the largest the file has. HDF5 group order
+ * is alphabetical, which puts `1000` before `500`, so the ladder is ordered by
+ * number before it is counted.
  *
  * For a sample collection the names are datasets with no order to exploit, so
  * the file's own order wins.
@@ -369,12 +371,12 @@ export function firstEntry(
   const group = typeof err.detail['group'] === 'string' ? (err.detail['group'] as string) : 'entries'
   if (!allIntegers(names)) return { group, entry: names[0] }
   // An mcool's resolutions are always integers, so a name *is* a bin size: the
-  // wanted one where it exists, and otherwise the finest level — the same rule
-  // that lands an mmetacool ladder on its base resolution.
+  // wanted one where it exists, and otherwise the landing rung — the same rule
+  // for an mmetacool ladder.
   if (prefer !== undefined && names.includes(String(prefer))) {
     return { group, entry: String(prefer) }
   }
-  return { group, entry: [...names].sort((a, b) => Number(a) - Number(b))[0] }
+  return { group, entry: String(landingRung(names.map(Number))) }
 }
 
 /** `true` when every entry name parses as a positive integer (§3.4). */

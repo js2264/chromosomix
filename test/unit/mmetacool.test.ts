@@ -257,13 +257,16 @@ describe('which entry an mmetacool opens at', () => {
   const rootError = (entries: string[]): ViewerError =>
     new ViewerError('mmetacool-root', 'No metacool entry at root', { entries })
 
-  it('opens the finest level of a zoomify ladder, not the alphabetically first', () => {
-    // HDF5 group order is alphabetical, which puts '1000' before '500'. The
-    // base resolution is the one every other level was derived from, so a
-    // string sort would land the user on a coarsened view of their own data.
-    expect(firstEntry(rootError(['1000', '2000', '4000']))).toEqual({ group: 'entries', entry: '1000' })
-    expect(firstEntry(rootError(['1000', '500', '2000']))).toEqual({ group: 'entries', entry: '500' })
+  it('opens a third of the way up a zoomify ladder, counted in numeric order', () => {
+    // HDF5 group order is alphabetical, which puts '1000' before '500', so the
+    // ladder is ordered by number before the landing rung is counted up it
+    // (\`landingRung\`): not the finest, whose reads are the largest there are.
+    expect(firstEntry(rootError(['1000', '2000', '4000']))).toEqual({ group: 'entries', entry: '2000' })
+    expect(firstEntry(rootError(['1000', '500', '2000']))).toEqual({ group: 'entries', entry: '1000' })
     expect(firstEntry(rootError(['10000', '2000']))).toEqual({ group: 'entries', entry: '2000' })
+    expect(
+      firstEntry(rootError(['1000', '2000', '5000', '10000', '25000', '50000', '100000'])),
+    ).toEqual({ group: 'entries', entry: '5000' })
   })
 
   it('keeps file order for a sample collection, where the names carry no order', () => {
@@ -280,9 +283,9 @@ describe('which entry an mmetacool opens at', () => {
       group: 'entries',
       entry: '2000',
     })
-    // …and falls back to the finest when it has not, which is what makes the
-    // gate's bin-size message the thing the reader sees rather than a silent
-    // mismatch.
+    // …and falls back to the landing rung when it has not, which is what makes
+    // the gate's bin-size message the thing the reader sees rather than a
+    // silent mismatch.
     expect(firstEntry(rootError(['500', '1000']), 2000)).toEqual({
       group: 'entries',
       entry: '500',

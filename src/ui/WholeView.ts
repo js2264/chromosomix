@@ -611,6 +611,9 @@ export class WholeView {
   private gated(): boolean {
     const { nnz, wholeFileLevel } = this.props
     if (wholeFileLevel !== undefined) return true
+    // A coarser rung that draws the same cells is read instead of the open
+    // one's every pixel ({@link rungRead}), and that is a bounded read.
+    if (this.rungRead() !== null) return false
     // A file that states no pixel count is measured by its bins instead — a
     // `.hic` at 1 kb walks every block of the file whatever it declares.
     if (nnz === null) return this.props.nBins > WHOLE_VIEW_GATE_BINS
@@ -624,6 +627,29 @@ export class WholeView {
    * from far fewer pixels. `null` for a file with no ladder, and for one whose
    * open rung is already the coarsest that fits.
    */
+  /**
+   * The rung to read the whole picture from instead of the open map, and its
+   * cells in that rung's bins — or `null` to read the open map.
+   *
+   * A file with a ladder already holds this picture at a coarse rung, balanced
+   * at that resolution, in a fraction of the pixels: on a 5 GB `.mcool` opened
+   * at 25 kb, the 500 kb rung's few million pixels against the open rung's
+   * three hundred million, which was a gate asking to download the whole file.
+   * So the view reads it there, as the zoom already reads coarse windows
+   * (`ui/refine.ts`), and the open rung stays what it is: the finest a zoom
+   * inside the picture goes to. Only the plain whole-genome picture: a selection
+   * and a second file have their own grids to agree with, and a metagenome's
+   * whole-file level is a scan by definition (§7.3).
+   */
+  private rungRead(): { name: string; binsPerCell: number } | null {
+    if (this.level !== 'bin' || this.props.selection !== undefined) return null
+    if (this.props.wholeFileLevel !== undefined || this.props.compare !== undefined) return null
+    const rung = this.cheaperRung()
+    if (rung === null) return null
+    const cell = this.props.binsize * this.plan.binsPerCell
+    return { name: rung.name, binsPerCell: Math.max(1, Math.floor(cell / rung.binsize)) }
+  }
+
   private cheaperRung(): { name: string; binsize: number } | null {
     const cell = this.props.binsize * this.plan.binsPerCell
     const fits = rungsOf(this.props.rungs ?? []).filter(
@@ -826,6 +852,7 @@ export class WholeView {
     // because a request type is a discriminated union and narrowing it through
     // a ternary argument loses the discriminant.
     const selection = this.props.selection
+    const fromRung = this.rungRead()
     const task: Cancellable<MatrixResult> =
       selection !== undefined && this.level === 'bin'
         ? client.cancellable<'selection'>(
@@ -846,8 +873,14 @@ export class WholeView {
               balance,
               // An identity plan asks for the ordinary dense read; above that
               // the block comes back on the coarser grid the panel was built
-              // for.
-              ...this.wire(),
+              // for — from a coarser rung where one draws it ({@link rungRead}),
+              // its cells counted in that rung's bins.
+              ...(fromRung === null
+                ? this.wire()
+                : {
+                    rung: fromRung.name,
+                    ...(fromRung.binsPerCell > 1 ? { binsPerCell: fromRung.binsPerCell } : {}),
+                  }),
               ...budget,
               ...genomes,
             },
@@ -897,7 +930,8 @@ export class WholeView {
       // whole chromosome at 10 kb is more cells than any picture holds — and
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
-      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
+      // The bin size of the map that answered: a rung's, where one was read.
+      this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
       this.panel.setData(this.byGenome(result), this.wholeName(), second)
       this.summary.replaceChildren(...this.summarise(result))
       this.armRefine(rows, result, budget)
@@ -1005,7 +1039,9 @@ export class WholeView {
         if (err instanceof ViewerError) this.showRefusal(err)
       },
     })
-    this.ladder.adopt(this.byGenome(result))
+    // A block read at a rung is held by the extent it was asked for, in bins
+    // of the open map, which is the unit the ladder counts in.
+    this.ladder.adopt(this.byGenome(result), ...(result.binsize === undefined ? [] : [ceiling, ceiling]))
   }
 
   /**

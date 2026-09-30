@@ -376,6 +376,23 @@ export function orderEntries(names: string[]): string[] {
   return allIntegers ? [...names].sort((a, b) => Number(a) - Number(b)) : names
 }
 
+/**
+ * The rung a laddered file opens at when nothing named one: a third of the way
+ * up from the finest — the 3rd of six or seven, the 2nd of four or five, the
+ * finest of one or two.
+ *
+ * Not the finest, which is where every file used to land. The finest rung is
+ * the one whose every read is largest — its index, its weights, a whole
+ * chromosome's block — and opening a large file there is a wait before anything
+ * is asked of it, and a longer one the first time a chromosome is. A reader who
+ * wants the finest level picks it, and from then on it is theirs (§9): the open
+ * rung is the finest a zoom reads.
+ */
+export function landingRung(sizes: readonly number[]): number {
+  const sorted = [...sizes].sort((a, b) => a - b)
+  return sorted[Math.floor(sorted.length / 3)]
+}
+
 export function refuseMcoolRoot(h: Hdf5Handle, entries: string[]): never {
   const { path } = parseUri(h.uri)
   const paths = entries.map((name) => `/resolutions/${name}`)

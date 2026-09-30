@@ -97,7 +97,7 @@ describe.each(VERSIONS)('a v%i footer whose expected-value sections are populate
       norms: { [`KR/1/${BIN}`]: divisors },
       ...extra,
     })
-    return HicFile.open(new BytesSource(written.bytes))
+    return HicFile.open(new BytesSource(written.bytes), { binSize: BIN })
   }
 
   it('is walked to the normalisation index rather than past it', async () => {
@@ -202,7 +202,7 @@ describe('a v9 footer with no pointer to the normalisation index', () => {
       withoutNormIndexPointer: true,
       norms: { [`SCALE/1/${BIN}`]: divisors },
     })
-    const file = HicFile.open(new BytesSource(written.bytes))
+    const file = HicFile.open(new BytesSource(written.bytes), { binSize: BIN })
     expect(file.normType).toBe('SCALE')
     expect(Array.from(file.weights(0, 2))[0]).toBeCloseTo(1 / divisors[0], 5)
   })
