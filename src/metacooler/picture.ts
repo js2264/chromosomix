@@ -151,6 +151,30 @@ export function depthStride(coords: Coords, offsets: ArrayLike<number> | null, c
   return Math.max(1, Math.ceil(least / (pixels / bins)))
 }
 
+/**
+ * The finest bins, in base pairs, a map as deep as this one shows — rows of
+ * {@link PICTURE_DEPTH} stored pixels on the mean — from one rung's row index:
+ * its {@link depthStride} of its bins where it is shallow at them, and finer
+ * than them where it is deep, on the reckoning that a finer rung spreads the
+ * same stored pixels over proportionally more rows. A finer rung holds more
+ * pixels than that, never fewer, so the answer errs coarse. What a window of
+ * the stage is never read finer than (§27.9).
+ */
+export function depthFloor(coords: Coords, offsets: ArrayLike<number> | null, binsize: number, contigs?: ArrayLike<number>, least = PICTURE_DEPTH): number {
+  if (offsets === null) return binsize
+  let pixels = 0
+  let bins = 0
+  const count = contigs === undefined ? coords.nContigs : contigs.length
+  for (let i = 0; i < count; i++) {
+    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? i : contigs[i])
+    pixels += offsets[hi] - offsets[lo]
+    bins += hi - lo
+  }
+  if (!(bins > 0) || !(pixels > 0)) return binsize
+  const perRow = pixels / bins
+  return perRow < least ? binsize * Math.ceil(least / perRow) : binsize / Math.floor(perRow / least)
+}
+
 /** Where cell `(a, b)`, `a ≤ b`, lives in an upper triangle `n` a side. */
 export function triangleIndex(a: number, b: number, n: number): number {
   return a * n - (a * (a - 1)) / 2 + (b - a)

@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { Coords } from '../../src/metacooler/coords'
 import type { ReadPlan, SpanScanOptions } from '../../src/metacooler/matrix'
 import {
+  depthFloor,
   decodeTable,
   displayRange,
   encode,
@@ -220,5 +221,24 @@ describe('the range it opens at', () => {
     const step = 4 / 254
     expect(vmin).toBeCloseTo(-2, 5)
     expect(vmax).toBeCloseTo(-2 + 98 * step, 5)
+  })
+})
+
+describe('the finest bins a map shows', () => {
+  // One sequence of 100 bins at 1 kb, every row holding the same stored pixels.
+  const coords = new Coords(1000, Float64Array.from([0, 100]), Float64Array.from([100_000]))
+  const rows = (perRow: number): Float64Array => Float64Array.from({ length: 101 }, (_, i) => i * perRow)
+
+  it('is coarser than the rung where its rows are shallow, by the depth stride', () => {
+    // Eight a row, where a picture wants sixty-four: cells of eight bins.
+    expect(depthFloor(coords, rows(8), 1000)).toBe(8000)
+  })
+
+  it('is finer than the rung where its rows are deep, erring coarse', () => {
+    // Six hundred and forty a row: ten times what a picture wants, so a rung
+    // ten times finer holds as many a row, and more.
+    expect(depthFloor(coords, rows(640), 1000)).toBe(100)
+    expect(depthFloor(coords, rows(64), 1000)).toBe(1000)
+    expect(depthFloor(coords, null, 1000)).toBe(1000)
   })
 })

@@ -6,7 +6,7 @@
  * another genome and one brought in, and the AGP of that genome alone.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g08, g03b, g04b, g06b
+ *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g08, g03b, g04b, g04c, g04d, g06b
  */
 
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -54,8 +54,24 @@ await g.settled()
 console.log('title:', await text('.modal-edit .modal-title'))
 console.log('stage:', await text('.edit-readout'))
 console.log('offered:', await g.suggestions())
-console.log('picture:', await text('.edit-card .edit-note'))
+console.log('picture:', await text('.edit-picture-card .edit-note'))
 await shot('g04-stage')
+
+// Closer than a cell (§27.9): the genome's longest contig framed from the
+// list, its picture cells enlarged at once, then the window read again finer.
+await page.evaluate(() => document.querySelector('.edit-sequence')?.click())
+await sleep(150)
+await shot('g04c-enlarged')
+for (let i = 0; i < 40; i++) {
+  await sleep(250)
+  if (await page.evaluate(() => document.querySelector('.edit-window-note') !== null)) break
+}
+await sleep(400)
+console.log('closer:', await text('.edit-window-note'))
+await shot('g04d-closer')
+await page.keyboard.press('Escape')
+await page.keyboard.press('0')
+await sleep(500)
 
 // Where the genome's contigs belong, read from every contact of the file.
 for (let i = 0; i < 120; i++) {

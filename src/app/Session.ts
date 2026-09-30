@@ -5589,11 +5589,16 @@ export class Session {
       store,
       // What the method weighs is kept by the reader, where the suggestions
       // are then counted, off the stage's thread (§27.12).
-      readPicture: (onProgress, contigs) => {
+      readPicture: (onProgress, contigs, cells) => {
         const wanted = contigs ?? drawn
-        return reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, keep: true, ...(wanted === undefined ? {} : { contigs: wanted }) }, onProgress)
+        return reader.cancellable<'picture'>(
+          { kind: 'picture', balance, method: true, keep: true, ...(wanted === undefined ? {} : { contigs: wanted }), ...(cells === undefined ? {} : { cells }) },
+          onProgress,
+        )
       },
       suggest: (input) => reader.cancellable<'suggest'>({ kind: 'suggest', ...input }),
+      // Zoomed past the picture, the window on screen read finer (§27.9).
+      readWindow: (request) => reader.cancellable<'stageWindow'>({ kind: 'stageWindow', ...request }),
       // The circles the reader declared, whose origin the stage may set (§27.4).
       circular: () => this.circularStore()?.list() ?? [],
       // The binning every genome's edit makes, as the edits stand (§27.10).

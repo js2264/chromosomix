@@ -17,7 +17,7 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
-import { PICTURE_CELLS, depthStride, displayRange, pictureLayout, pictureStride, type PictureContacts } from '../metacooler/picture'
+import { PICTURE_CELLS, depthFloor, depthStride, displayRange, pictureLayout, pictureStride, type PictureContacts } from '../metacooler/picture'
 import { findCorners, type FileCorner } from '../edit/corners'
 import { LensGrid } from '../edit/grid'
 import { METHOD_GATHER, expectedOf, type Expected } from '../edit/method'
@@ -67,10 +67,12 @@ import {
   type PictureResult,
   type ResampleResult,
   type SourceKind,
+  type StageWindowSide,
   type StatsResult,
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
+import type { WindowRead, WindowRun } from '../edit/paint'
 import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { mcoolNameFor } from '../pairs/mcoolName'
@@ -166,6 +168,12 @@ interface Session {
    * (§27.12), under the id of the read that made it.
    */
   stageMethod?: { picture: number; contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
+  /**
+   * The rung the stage last read a window of, drawn through its edit (§27.9),
+   * kept while the edit and the rung stand: building the lens is the one part
+   * of a window's read that is not the window's size.
+   */
+  stageWindowMap?: { key: string; map: MetaCooler }
 }
 
 /**
@@ -856,7 +864,8 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     offsets = null
   }
   // The finest that fits, pooled further where the map is too shallow at it.
-  const stride = fits === null ? null : Math.max(fits, depthStride(mc.coords, offsets, drawn))
+  const deep = depthStride(mc.coords, offsets, drawn)
+  const stride = fits === null ? null : Math.max(fits, deep)
   if (stride === null) {
     throw new ViewerError(
       'unsupported',
@@ -915,8 +924,71 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     vmax,
     balanced,
     pixels: read.pixels,
+    least: depthFloor(mc.coords, offsets, mc.binsize, drawn),
     ...(method === undefined ? {} : kept ? { methodKept: request.id } : { method }),
   }
+}
+
+/** The cells a stage window may hold: four million, 16 MB of floats. */
+const STAGE_WINDOW_CELLS = 4_000_000
+
+/**
+ * A window of the stage's map read finer than its picture (§27.9): the rung
+ * whose bins are about a pixel — the coarsest no coarser than `binsize`, else
+ * the finest there is — drawn through the stage's edit, the window's rows and
+ * columns named as places in the edited assembly and handed back as runs of
+ * bins, one per edited sequence each side crosses. `null` where no rung is
+ * finer than the picture's own cell, or the window would be too large to hold.
+ */
+async function handleStageWindow(request: Extract<WorkerRequest, { kind: 'stageWindow' }>): Promise<WindowRead | null> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const rungs =
+    base.entryGroup === 'resolutions'
+      ? base.entries
+          .map((name) => ({ name, size: Number(name) }))
+          .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
+          .sort((a, b) => a.size - b.size)
+      : [{ name: '', size: base.binsize }]
+  const fits = rungs.filter((rung) => rung.size <= request.binsize)
+  const chosen = fits.length > 0 ? fits[fits.length - 1] : rungs[0]
+  if (chosen === undefined || !(chosen.size < request.coarser)) return null
+  const key = `${chosen.name}|${request.key}`
+  if (active.stageWindowMap?.key !== key) {
+    const seen = chosen.size === base.binsize ? base : await mapFor(chosen.name)
+    const rung = seen.unlensed ?? seen
+    // Not closed when replaced: a map drawn through an edit shares its rung's
+    // file, which the rungs above hold and close.
+    const { map, refusal } = MetaCooler.withLens(rung, request.edit)
+    if (refusal !== null) throw new ViewerError('unsupported', refusal)
+    active.stageWindowMap = { key, map }
+  }
+  const map = active.stageWindowMap.map
+  const index = new Map(map.chromnames.map((name, c) => [name, c]))
+  const offsets = map.coords.chromOffset
+  const size = map.binsize
+  const extentOf = (side: StageWindowSide): Extent | null => {
+    const a = index.get(side.from.sequence)
+    const b = index.get(side.to.sequence)
+    if (a === undefined || b === undefined) return null
+    const lo = Math.min(offsets[a + 1] - 1, offsets[a] + Math.floor(Math.max(0, side.from.bp) / size))
+    const hi = Math.min(offsets[b + 1], offsets[b] + Math.ceil(Math.max(0, side.to.bp) / size))
+    return hi > lo ? [lo, hi] : null
+  }
+  const rows = extentOf(request.rows)
+  const cols = extentOf(request.cols)
+  if (rows === null || cols === null || (rows[1] - rows[0]) * (cols[1] - cols[0]) > STAGE_WINDOW_CELLS) return null
+  const dense = await map.matrix({ rows, cols, balance: request.balance && map.hasWeights })
+  const runsOf = ([lo, hi]: Extent): WindowRun[] => {
+    const out: WindowRun[] = []
+    for (let c = 0; c < map.chromnames.length; c++) {
+      const from = Math.max(lo, offsets[c])
+      const to = Math.min(hi, offsets[c + 1])
+      if (to > from) out.push({ sequence: map.chromnames[c], firstBin: from - offsets[c], count: to - from, at: from - lo })
+    }
+    return out
+  }
+  return { binsize: size, rows: runsOf(dense.rowExtent), cols: runsOf(dense.colExtent), values: dense.values, ncols: dense.ncols }
 }
 
 /**
@@ -2032,6 +2104,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handlePicture(request)
     case 'suggest':
       return handleSuggest(request)
+    case 'stageWindow':
+      return handleStageWindow(request)
     case 'genomeLinks':
       return handleGenomeLinks(request)
     case 'cancel':

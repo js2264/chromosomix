@@ -10210,8 +10210,8 @@ What is on it:
   and Escape leaving the name — which a later edit keeps even where the sequence is an original whole
   again, and which refuses two words, another sequence's name, and a name of the file's own for any
   stretch but that sequence whole; **longest first**, one `reorder` step, greyed when they are; and a
-  circle marked `○`. Still to come: a circular tick on a sequence, and **settings** — the evidence the
-  method may use and the resolution it works at.
+  circle marked `○`; and on the picture card, the picture's size (§27.9), the resolution the stage and
+  the method work at. Still to come: a circular tick on a sequence, and the evidence the method may use.
 
 **On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
 (§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
@@ -10695,8 +10695,24 @@ of them would sparkle where the map is sparse. It opens at the first and ninety-
 the cells that hold contacts, the rule every map's automatic range follows, in the map's colours.
 Read each time the stage opens and dropped when it closes: 13.7 million pixels of the yeast micro-C
 at 1 kb take a few seconds over the demo's local server. Refused, with the numbers, for an assembly of
-more sequences than the picture has cells, since a cell never holds two; a zoom past the picture's own
-cell is not yet read through the lens, so the stage shows the picture's cells enlarged.
+more sequences than the picture has cells, since a cell never holds two.
+
+**Closer than a cell.** Once a cell of the picture is two pixels wide or more and the view has settled,
+the window on screen — a third more each way — is read again finer, in the reader's worker, from the
+rung whose bins are about a device pixel, drawn through the stage's edit (`MetaCooler.withLens`, kept
+while the edit and the rung stand), and painted over the picture wherever it reaches, each pixel the
+bin under it through the lens (`edit/paint.ts`, `windowSide`, `paintWindow`). It is coloured on the
+picture's own scale: a picture cell is the sum of its rung's pixels, and a pixel of a rung `k` times
+coarser holds `k²` of the window's raw and about `k` balanced, since balancing sets every rung's rows
+to one total. **Never finer than the map is deep enough to show**: the picture says the finest bins
+whose rows hold 64 stored pixels on the mean (`depthFloor`), and nothing is read unless it is half a
+cell or less — a metagenome's genome pooled to 11 kb for its depth stays 11 kb cells enlarged, where
+the yeast assembly at 10 kb cells is read again at 1 kb. An edit drops the window, since it was read
+through the edit before it; a drag draws the picture alone, since the window cannot follow the hand.
+The picture card says when the window is shown (*Closer than a cell, the map on screen is read again
+at 1.0 kb a bin, through the edit*), and offers **the picture's size** — 16,384 cells a side, the
+finest, or 8,192, 4,096, 2,048 — kept per file: a coarser picture is read and weighed faster, and a
+zoom reads what it does not hold.
 
 ### 27.10 Metagenomes
 
@@ -10795,10 +10811,11 @@ Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
 | Operation | Budget |
 |---|---|
 | Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel, and what the pass reads said as it starts — `13,735,472 stored pixels at 1 kb`, and how many bins a cell pools where it does; not a time, which a range request's speed decides) — and, in the same pass, what the method weighs, then its law and its corners in the reader's worker: about two seconds more for a yeast genome at 1 kb |
+| Closer than a cell | one dense read of the window on screen, a third more each way, from the rung about a device pixel a bin, through the edit — at most four million cells, 16 MB; the rung's lens built once for the edit and kept while it stands (§27.9) |
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
-| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; not yet refined |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; until the first is in, the card says it is weighing, never that there is nothing to weigh; not yet refined |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held — *built*: 400,000 bases a request; the file itself is held whole before it is saved |
 | Export the lifted map | *built*: one pass over each rung's stored pixels, in the reader's worker; at most 60 million pixels gathered, 720 MB, and the `.mcool` built in memory as the `.pairs` import's is |
@@ -10815,10 +10832,10 @@ with its suggestions — drawn with the rail and the corners, snapped to, and an
 and auto (§27.5, §27.6), and the exports — the text files written from the edit and read back, the
 sequence, the map and the tracks lifted through it (§27.8) — the sequence's own evidence, its telomeres
 and gaps (§27.5), and the stage on one genome of a metagenome, its contigs sent to other genomes and
-brought in from them, and the contig → MAG table of every genome's edit (§27.10). Not yet built, in the order it
-will be (`docs/reference-editing.md` §10): the rest of the evidence beyond the map; files for every
-genome of a metagenome at once; the command line — and, left over, the zoom past the stage's picture,
-the gaps §27.7 lists, and the method's refinement at finer rungs.
+brought in from them, and the contig → MAG table of every genome's edit (§27.10), and the stage closer
+than its picture's cell (§27.9). Not yet built, in the order it will be (`docs/reference-editing.md`
+§10): the rest of the evidence beyond the map; files for every genome of a metagenome at once; the
+command line — and, left over, the gaps §27.7 lists, and the method's refinement at finer rungs.
 
 ## 28. Two sequences on two axes
 

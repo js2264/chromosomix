@@ -12,7 +12,8 @@
  */
 
 import { applyColormap, colormapIndex } from '../render/colormaps'
-import { logOf, type Quantizer } from '../metacooler/picture'
+import { encode, logOf, type Quantizer } from '../metacooler/picture'
+import type { LensGrid } from './grid'
 
 /** One level of the picture: an upper triangle `n` a side. */
 export interface PaintLevel {
@@ -120,6 +121,81 @@ export function paintPicture(
         continue
       }
       target[row + x] = colours[cells[a <= b ? rowBase + (b - a) : colBase[x] + (a - b)]]
+    }
+  }
+}
+
+/**
+ * A window of the edited map read finer than the picture (§27.9): a rung's
+ * bins through the lens, each side a run of bins per edited sequence.
+ */
+export interface WindowRead {
+  /** Base pairs a bin. */
+  binsize: number
+  rows: readonly WindowRun[]
+  cols: readonly WindowRun[]
+  /** Row-major, `rows × cols` long; `NaN` for a bin the balancer left empty. */
+  values: Float32Array
+  ncols: number
+}
+
+/** The bins of one edited sequence a side of a window covers. */
+export interface WindowRun {
+  sequence: string
+  /** Its first bin in the window, counted from the sequence's start. */
+  firstBin: number
+  count: number
+  /** Where that bin is in the window's own rows or columns. */
+  at: number
+}
+
+/**
+ * The window's row (or column) each pixel along one side shows — `-1` off it,
+ * or in a gap: the unit under the pixel's centre, its place in the edited
+ * sequence, the bin there.
+ */
+export function windowSide(grid: LensGrid, from: number, to: number, pixels: number, runs: readonly WindowRun[], binsize: number): Int32Array {
+  const out = new Int32Array(pixels).fill(-1)
+  const byName = new Map(runs.map((run) => [run.sequence, run]))
+  const per = (to - from) / pixels
+  for (let p = 0; p < pixels; p++) {
+    const unit = from + (p + 0.5) * per
+    if (!(unit >= 0 && unit < grid.n)) continue
+    const place = grid.place(unit)
+    if (place === null || place.part.piece === null) continue
+    const run = byName.get(place.sequence)
+    if (run === undefined) continue
+    const k = Math.floor(place.bp / binsize) - run.firstBin
+    if (k >= 0 && k < run.count) out[p] = run.at + k
+  }
+  return out
+}
+
+/**
+ * Paint a window over the picture where it reaches, and leave the picture's
+ * pixels where it does not (§27.9). A value is scaled to a picture cell's
+ * worth — `scale`, the bins of the window a cell holds — and coloured on the
+ * picture's own quantizer, so a finer read is the same map, closer.
+ */
+export function paintWindow(
+  target: Uint32Array,
+  width: number,
+  rows: Int32Array,
+  cols: Int32Array,
+  read: Pick<WindowRead, 'values' | 'ncols'>,
+  scale: number,
+  q: Quantizer,
+  colours: Uint32Array,
+): void {
+  for (let y = 0; y < rows.length; y++) {
+    const r = rows[y]
+    if (r < 0) continue
+    const at = y * width
+    const base = r * read.ncols
+    for (let x = 0; x < cols.length; x++) {
+      const c = cols[x]
+      if (c < 0) continue
+      target[at + x] = colours[encode(read.values[base + c] * scale, q)]
     }
   }
 }

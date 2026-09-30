@@ -22,6 +22,7 @@ import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
 import type { FileCorner } from '../edit/corners'
 import type { GridLayout } from '../edit/grid'
+import type { WindowRead } from '../edit/paint'
 import type { Expected } from '../edit/method'
 import type { SequenceEvidence } from '../edit/sequenceEvidence'
 import type { Suggested } from '../edit/suggest'
@@ -770,6 +771,12 @@ export interface PictureResult {
   /** Stored pixels walked. */
   pixels: number
   /**
+   * The finest bins, in base pairs, this map is deep enough to show, from the
+   * picture's rung (`metacooler/picture.ts`, `depthFloor`): a window is never
+   * read finer (§27.9).
+   */
+  least?: number
+  /**
    * What the method that proposes edits weighs (§27.5), from the same pass: the
    * contacts as numbers, what the map is expected to hold, and the corners of
    * the file in its own order. Absent where the request did not ask for them.
@@ -782,6 +789,12 @@ export interface PictureResult {
    * thread (§27.12), in place of {@link method}.
    */
   methodKept?: number
+}
+
+/** One side of a stage window: where it begins and ends in the edited assembly. */
+export interface StageWindowSide {
+  from: { sequence: string; bp: number }
+  to: { sequence: string; bp: number }
 }
 
 /**
@@ -837,6 +850,7 @@ export interface ResultMap {
   resample: ResampleResult
   contacts: { total: number | null }
   picture: PictureResult
+  stageWindow: WindowRead | null
   suggest: Suggested
   genomeLinks: GenomeLinksResult
   cancel: null
@@ -1078,6 +1092,24 @@ export type WorkerRequest =
        * kept.
        */
       keep?: boolean
+    }
+  /**
+   * A window of the stage's map read finer than its picture (§27.9): the rung
+   * whose bins are about `binsize`, drawn through `edit`, over the stretch of
+   * the edited assembly each side names. `key` names the edit, so the map
+   * drawn through it is kept while the edit stands. Answered `null` where no
+   * rung is finer than `coarser`, the picture's own cell.
+   */
+  | {
+      id: number
+      kind: 'stageWindow'
+      edit: ReferenceEdit
+      key: string
+      binsize: number
+      coarser: number
+      rows: StageWindowSide
+      cols: StageWindowSide
+      balance: boolean
     }
   /**
    * The suggestions for an edit (§27.5), counted here against what the method

@@ -13128,6 +13128,14 @@ span.deck-name {
   width: 100%;
   margin: 0.15rem 0.3rem;
 }
+/* The picture's size, on its card (§27.9). */
+.edit-cells {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  color: var(--text-dim);
+}
 /* A card's heading with one act beside it. */
 .edit-card-headrow {
   display: flex;

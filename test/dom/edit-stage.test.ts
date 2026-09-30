@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { findCorners } from '@/edit/corners'
 import { EditStage } from '@/edit/EditStage'
 import { expectedOf } from '@/edit/method'
+import type { Suggested } from '@/edit/suggest'
 import { EditStore } from '@/state/referenceEdit'
 import type { PictureResult } from '@/worker/protocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
@@ -269,6 +270,29 @@ describe('the suggestions', () => {
     // No key-up comes for a key held as the window goes.
     window.dispatchEvent(new Event('blur'))
     expect(document.querySelector('.edit-review-state')).toBeNull()
+  })
+
+  it('says it is weighing while the count kept where the picture was read is on its way', async () => {
+    let answer: (suggested: Suggested) => void = () => {}
+    const store = new EditStore('stage|kept.cool', ORIGINAL)
+    const stage = new EditStage({
+      title: 'kept.cool',
+      memoryKey: () => 'stage|kept.cool',
+      store,
+      readPicture: () => ({ promise: Promise.resolve({ ...picture(), methodKept: 1 }), cancel: () => {} }),
+      suggest: () => ({ promise: new Promise<Suggested>((resolve) => (answer = resolve)), cancel: () => {} }),
+      colormap: 'default',
+      onClose: () => {},
+    })
+    opened.push(stage)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const head = (): string | null | undefined => document.querySelector('.edit-suggestions-card .edit-card-head')?.textContent
+    expect(head()).toBe('suggestions · weighing…')
+    expect(document.querySelector('.edit-suggestions-card .edit-empty')?.textContent).toMatch(/^Weighing the map/)
+    answer({ list: [], along: new Float64Array(16).fill(Number.NaN), breakpoints: [], unit: 1 })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(head()).toBe('suggestions · 0')
+    expect(document.querySelector('.edit-suggestions-card .edit-empty')?.textContent).toMatch(/^Nothing to suggest/)
   })
 
   it('applies every one at even odds or more in auto, each a step marked auto', async () => {

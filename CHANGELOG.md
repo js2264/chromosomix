@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage closer than its picture's cell — a dev feature (§27.9).** Zoomed in past two pixels a
+  cell, the window on screen is read again from a finer rung, through the edit, in the reader's worker,
+  and painted on the picture's own colour scale: the yeast assembly's 10 kb picture shows its 1 kb map
+  where the reader looks, where before it showed the 10 kb cells enlarged. Never finer than the map is
+  deep enough to show, so a shallow genome of a metagenome keeps its pooled cells. The picture card
+  says when it is shown, and offers the picture's size — 16,384 cells a side down to 2,048 — for a
+  faster read of a large map.
+
 - **Name, order and start the stage's sequences — a dev feature (§27.3, §27.4).** A sequence is renamed
   from its pencil on the sequences card, or a double click — the fused chromosome of the reassembly
   auto mode rebuilds is *chrXVI_Mmmyco* in its AGP, not *contig_39_e1* — and keeps the name through
@@ -29,7 +37,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **The stage's suggestions are counted off its thread — a dev feature (§27.12).** The reader's worker
   keeps what the method weighs from the picture's pass, tens of megabytes it no longer sends, and counts
   the suggestions there after every edit and answer, so dragging, zooming and answering are never held
-  up by them; auto mode waits for each count before taking the next.
+  up by them; auto mode waits for each count before taking the next. Until the first count is in, the
+  card says it is weighing, not that the map gave it nothing to weigh.
 
 - **The stage says what its picture reads as the read starts — a dev feature (§27.12):** *reading
   the whole map for the stage: 13,735,472 stored pixels at 1 kb*, and how many bins a cell pools on a

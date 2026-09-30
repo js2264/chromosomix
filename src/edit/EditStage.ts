@@ -37,7 +37,7 @@ import { closeMenu, openMenu, type MenuItem } from '../ui/Menu'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
 import { fmt } from '../units'
-import type { GenomeLinksResult, PictureResult } from '../worker/protocol'
+import type { GenomeLinksResult, PictureResult, StageWindowSide } from '../worker/protocol'
 import { BAR_THICKNESS, drawBar, drawOverlay, readInk, type StageInk } from './draw'
 import {
   dropPlace,
@@ -57,11 +57,12 @@ import { adjustableEnds, adjustSuggestion } from './adjust'
 import { ExportCard, type ExportCardProps } from './ExportCard'
 import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
-import { paintPicture, pictureColours } from './paint'
+import { paintPicture, paintWindow, pictureColours, windowSide, type WindowRead } from './paint'
 import { Rail, type RailItem } from './rail'
 import { INITIAL_WEIGHTS, learn, suggest, type Suggested, type Suggestion } from './suggest'
 import { stepText } from './words'
 import type { Learned } from '../state/referenceEdit'
+import { recall, remember } from '../state/UiMemory'
 
 /** The lanes the stage draws, as the map they were placed on has them. */
 export interface StageLanes {
@@ -88,7 +89,7 @@ export interface EditStageProps {
    * of these sequences of the map alone, where they are given: one genome of a
    * metagenome and the contigs it may bring in (§27.10).
    */
-  readPicture(onProgress: (done: number, total: number, note?: string) => void, contigs?: string[]): PictureRequest
+  readPicture(onProgress: (done: number, total: number, note?: string) => void, contigs?: string[], cells?: number): PictureRequest
   /**
    * On one genome of a metagenome (§27.10): read every contact of the file for
    * where the genome's contigs, and the others, belong — without being asked
@@ -105,6 +106,12 @@ export interface EditStageProps {
    * the method's data is weighed here.
    */
   suggest?(input: SuggestRequest): { promise: Promise<Suggested>; cancel(): void }
+  /**
+   * Read the window on screen finer than the picture (§27.9): a rung whose
+   * bins are about a pixel, through the stage's edit. Absent, a zoom past the
+   * picture's cell shows the cell enlarged.
+   */
+  readWindow?(request: WindowRequest): { promise: Promise<WindowRead | null>; cancel(): void }
   /** The map lifted through an edit, every rung, as an `.mcool` (§27.8). */
   liftContacts?: ExportCardProps['liftContacts']
   /** On a metagenome: the contig → MAG table every genome's edit makes (§27.10). */
@@ -115,6 +122,20 @@ export interface EditStageProps {
   colormap: string
   lanes?: StageLanes
   onClose(): void
+}
+
+/** What a finer read of the window on screen is asked for (§27.9). */
+export interface WindowRequest {
+  edit: ReferenceEdit
+  /** Names the edit, so the map drawn through it is kept while it stands. */
+  key: string
+  /** Base pairs a pixel: the rung wanted is the coarsest no coarser. */
+  binsize: number
+  /** The picture's cell, which a rung must be finer than to be worth reading. */
+  coarser: number
+  rows: StageWindowSide
+  cols: StageWindowSide
+  balance: boolean
 }
 
 /** What a count of the suggestions off the stage's thread is asked for. */
@@ -164,6 +185,31 @@ const SNAP_PX = 8
 const DIAGONAL_PX = 12
 /** Travel, in pixels, before a press becomes a drag. */
 const DRAG_PX = 4
+
+/**
+ * How wide a picture cell must be on screen, in pixels, before the window is
+ * read again finer than the picture (§27.9): below it the picture shows as
+ * much as a pixel can.
+ */
+const WINDOW_CELL_PX = 2
+
+/**
+ * What a value of a window read at `binsize` is multiplied by to be on the
+ * picture's scale (§27.9). A picture cell is the sum of `stride²` pixels of
+ * its rung; a pixel of a rung `k` times coarser than the window's holds, raw,
+ * the sum of `k²` of the window's — and, balanced, about `k` of them, since
+ * balancing sets each rung's rows to the same total over `k` times fewer bins.
+ */
+export function windowScale(picture: Pick<PictureResult, 'binsize' | 'stride' | 'balanced'>, binsize: number): number {
+  const k = picture.binsize / picture.stride / binsize
+  return picture.stride * picture.stride * (picture.balanced ? k : k * k)
+}
+
+/** The picture's sizes a reader may choose, cells a side, the finest first (§27.9). */
+const PICTURE_CELL_CHOICES: readonly number[] = [16_384, 8_192, 4_096, 2_048]
+
+/** Where the picture's size is kept for a file. */
+const PICTURE_CELLS_SCOPE = 'map:edit-cells'
 /** The fewest cells a view may show a side. */
 const MIN_SPAN = 12
 /** Pixels within which the pointer snaps to a corner, measured in the plane (§27.4). */
@@ -262,6 +308,13 @@ export class EditStage {
   private autoRunning = false
   /** Suggestions whose ends the hand has dragged, by key, until the edit changes (§27.6). */
   private readonly adjustments = new Map<string, Suggestion>()
+  /** Names this stage's edits to the reader's worker, a new one each time the edit changes (§27.9). */
+  private readonly token = Math.random().toString(36).slice(2)
+  private editVersion = 0
+  /** The window on screen read finer than the picture, for the edit `key` names; the read in flight; its timer. */
+  private windowRead: { key: string; read: WindowRead; view: [number, number, number, number]; asked: number } | null = null
+  private windowRequest: { cancel(): void } | null = null
+  private windowTimer = 0
   /** The sequence whose name is being typed, on the sequences card; and a line about the last name refused. */
   private renaming: string | null = null
   private sequencesNote = ''
@@ -373,7 +426,7 @@ export class EditStage {
     this.selectionCard = el('section', { class: 'edit-card' })
     this.historyCard = el('section', { class: 'edit-card' })
     this.sequencesCard = el('section', { class: 'edit-card edit-sequences-card' })
-    this.pictureCard = el('section', { class: 'edit-card' })
+    this.pictureCard = el('section', { class: 'edit-card edit-picture-card' })
     this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
     this.genomeCard = el('section', { class: 'edit-card edit-genome-card' })
     this.exportCard = new ExportCard({
@@ -454,6 +507,25 @@ export class EditStage {
   // The picture
   // -------------------------------------------------------------------------
 
+  /**
+   * The picture's size, chosen: a coarser picture is read faster over a slow
+   * link and weighed faster, and a zoom past its cell reads the window on
+   * screen finer anyway (§27.9).
+   */
+  private cellsChoice(): HTMLElement {
+    const select = el('select', {
+      class: 'select edit-cells-select',
+      attrs: { 'aria-label': 'Cells a side of the picture' },
+      on: { change: () => this.setCells(Number(select.value)) },
+    }) as HTMLSelectElement
+    for (const cells of PICTURE_CELL_CHOICES) {
+      select.append(el('option', { text: `${cells.toLocaleString('en-US')}${cells === PICTURE_CELL_CHOICES[0] ? ' (the finest)' : ''}`, attrs: { value: String(cells) } }))
+    }
+    select.value = String(this.cells())
+    select.disabled = this.request !== null
+    return el('label', { class: 'edit-cells' }, el('span', { text: 'cells a side' }), select)
+  }
+
   private read(): void {
     this.request?.cancel()
     const genome = this.props.store.edit.original.genome
@@ -463,10 +535,14 @@ export class EditStage {
     // What the pass reads, as the worker says it on the way in (§27.12): the
     // stored pixels and the resolution, so a long read is a known one.
     let what = ''
-    const request = this.props.readPicture((done, total, note) => {
-      if (note !== undefined) what = note
-      if (this.request === request && total > 0) this.showStatus(what === '' ? `${reading}…` : `${reading}: ${what}…`, done / total, true)
-    }, contigs)
+    const request = this.props.readPicture(
+      (done, total, note) => {
+        if (note !== undefined) what = note
+        if (this.request === request && total > 0) this.showStatus(what === '' ? `${reading}…` : `${reading}: ${what}…`, done / total, true)
+      },
+      contigs,
+      this.cells(),
+    )
     this.request = request
     request.promise
       .then((picture) => {
@@ -559,8 +635,12 @@ export class EditStage {
 
   /** The store changed: a step made, undone or redone. */
   private edited(): void {
-    // An adjusted suggestion was for the edit as it stood.
+    // An adjusted suggestion was for the edit as it stood; so was a finer read.
     this.adjustments.clear()
+    this.editVersion++
+    this.windowRead = null
+    this.windowRequest?.cancel()
+    this.windowRequest = null
     // A contig brought in from another genome is not in the picture yet: it
     // is read again, with it (§27.10).
     const drawn = this.drawn
@@ -926,6 +1006,95 @@ export class EditStage {
     this.schedule()
   }
 
+  /**
+   * How many cells a side the picture may have, as the reader set it on the
+   * picture card (§27.3's settings, the resolution the stage works at): the
+   * finest rung that fits them is read. Kept per file, beside the edit.
+   */
+  private cells(): number {
+    const kept = recall<number>(this.props.memoryKey(), PICTURE_CELLS_SCOPE)
+    return typeof kept === 'number' && PICTURE_CELL_CHOICES.includes(kept) ? kept : PICTURE_CELL_CHOICES[0]
+  }
+
+  private setCells(cells: number): void {
+    if (cells === this.cells()) return
+    remember(this.props.memoryKey(), PICTURE_CELLS_SCOPE, cells === PICTURE_CELL_CHOICES[0] ? null : cells)
+    this.windowRead = null
+    this.read()
+  }
+
+  /** A picture cell's width on screen, in CSS pixels. */
+  private cellPx(): number {
+    const [x0, x1] = this.sx.domain
+    return this.size / Math.max(1e-9, x1 - x0)
+  }
+
+  private windowKey(): string {
+    return `${this.token}:${this.editVersion}`
+  }
+
+  /** Once the view has settled, read the window on screen finer than the picture, where it is zoomed past a cell (§27.9). */
+  private considerWindow(): void {
+    window.clearTimeout(this.windowTimer)
+    if (this.props.readWindow === undefined || this.closed) return
+    this.windowTimer = window.setTimeout(() => this.readWindow(), 200)
+  }
+
+  private readWindow(): void {
+    const grid = this.grid
+    const picture = this.picture
+    const ask = this.props.readWindow
+    if (grid === null || picture === null || ask === undefined || this.closed || this.preview !== null || this.drag !== null) return
+    const cellPx = this.cellPx()
+    if (cellPx < WINDOW_CELL_PX) return
+    const [x0, x1] = this.sx.domain
+    const [y0, y1] = this.sy.domain
+    // A bin a device pixel — finer shows nothing more — and never finer than
+    // the map is deep enough to show; and only where that is half a cell or
+    // less, since a read about as coarse as the picture shows the picture.
+    const bpPerPixel = Math.max(1, Math.floor(picture.binsize / (cellPx * this.dpr)), picture.least ?? 0)
+    if (2 * bpPerPixel > picture.binsize) return
+    const key = this.windowKey()
+    const held = this.windowRead
+    const inside = (view: readonly number[]): boolean => view[0] <= x0 && view[1] >= x1 && view[2] <= y0 && view[3] >= y1
+    // Held already: this edit, the view inside it, and as fine as asked or the finest there is.
+    if (held !== null && held.key === key && inside(held.view) && (held.read.binsize <= 2 * bpPerPixel || held.read.binsize > held.asked)) return
+    const padX = (x1 - x0) / 3
+    const padY = (y1 - y0) / 3
+    const view: [number, number, number, number] = [x0 - padX, x1 + padX, y0 - padY, y1 + padY]
+    const rows = this.windowSideOf(grid, view[2], view[3])
+    const cols = this.windowSideOf(grid, view[0], view[1])
+    if (rows === null || cols === null) return
+    this.windowRequest?.cancel()
+    const request = ask({ edit: this.props.store.edit, key, binsize: bpPerPixel, coarser: picture.binsize, rows, cols, balance: picture.balanced })
+    this.windowRequest = request
+    request.promise.then(
+      (read) => {
+        if (this.closed || this.windowRequest !== request) return
+        this.windowRequest = null
+        if (read === null || key !== this.windowKey()) return
+        this.windowRead = { key, read, view, asked: bpPerPixel }
+        this.pictureDirty = true
+        this.schedule()
+        this.paintPicture()
+      },
+      () => {
+        if (this.windowRequest === request) this.windowRequest = null
+      },
+    )
+  }
+
+  /** A stretch of the axis as the places in the edited assembly it begins and ends at. */
+  private windowSideOf(grid: LensGrid, from: number, to: number): StageWindowSide | null {
+    const lo = Math.max(0, from)
+    const hi = Math.min(grid.n, to)
+    if (!(hi > lo)) return null
+    const first = grid.place(lo)
+    const last = grid.place(Math.max(lo, hi - 1e-6))
+    if (first === null || last === null) return null
+    return { from: { sequence: first.sequence, bp: Math.max(0, first.bp) }, to: { sequence: last.sequence, bp: Math.max(0, last.bp) } }
+  }
+
   // -------------------------------------------------------------------------
   // Drawing
   // -------------------------------------------------------------------------
@@ -966,7 +1135,15 @@ export class EditStage {
         const [x0, x1] = this.sx.domain
         const [y0, y1] = this.sy.domain
         paintPicture(target, { x0, x1, y0, y1, width, height }, grid.cellMap, grid.cellMap, picture.levels, this.colours)
+        // Closer than a cell, the window read finer, where it reaches (§27.9).
+        const held = this.windowRead
+        if (held !== null && this.preview === null && held.key === this.windowKey() && this.cellPx() >= WINDOW_CELL_PX) {
+          const rows = windowSide(grid, y0, y1, height, held.read.rows, held.read.binsize)
+          const cols = windowSide(grid, x0, x1, width, held.read.cols, held.read.binsize)
+          paintWindow(target, width, rows, cols, held.read, windowScale(picture, held.read.binsize), { low: picture.low, high: picture.high }, this.colours)
+        }
         ctx.putImageData(this.image, 0, 0)
+        this.considerWindow()
       }
     }
 
@@ -2104,7 +2281,10 @@ export class EditStage {
     const weighing = this.suggesting !== 0 || this.recountRequest !== null || this.autoRunning
     const head = el('h3', {
       class: 'edit-card-head',
-      text: this.suggested === null ? 'suggestions' : `suggestions · ${open.length}${weighing ? ' · weighing…' : ''}`,
+      text:
+        this.suggested === null
+          ? `suggestions${weighing ? ' · weighing…' : ''}`
+          : `suggestions · ${open.length}${weighing ? ' · weighing…' : ''}`,
     })
     if (!this.weighs() || this.suggested === null) {
       card.replaceChildren(
@@ -2114,7 +2294,10 @@ export class EditStage {
           text:
             this.picture === null
               ? 'Weighed once the picture is read: the map’s own contact law, then every junction the reference makes, and every two ends that might meet.'
-              : 'The map gave the method nothing to weigh.',
+              : // The first count, where the data is kept, is on its way.
+                this.weighs() && weighing
+                ? 'Weighing the map’s own contact law, then every junction the reference makes, and every two ends that might meet…'
+                : 'The map gave the method nothing to weigh.',
         }),
       )
       return
@@ -2650,6 +2833,11 @@ export class EditStage {
             ? `${this.pictureOf()}, read once for the stage.`
             : `${this.pictureOf()} at ${fmt.bp(picture.binsize)} a cell, ${picture.n.toLocaleString('en-US')} cells a side, ${picture.balanced ? 'balanced' : 'raw counts'}; pieces move in whole cells, so a junction inside a cell is placed to the nearest edge.`,
       }),
+      this.cellsChoice(),
+      // Zoomed past a cell: the window read again, finer (§27.9).
+      ...(this.windowRead === null || this.windowRead.key !== this.windowKey()
+        ? []
+        : [el('p', { class: 'edit-note edit-window-note', text: `Closer than a cell, the map on screen is read again at ${fmt.bp(this.windowRead.read.binsize)} a bin, through the edit.` })]),
       ...(sequence === null ? [] : [el('p', { class: 'edit-note edit-evidence-note', text: sequence })]),
     )
   }
@@ -2667,6 +2855,9 @@ export class EditStage {
     this.linksRequest = null
     this.recountRequest?.cancel()
     this.recountRequest = null
+    this.windowRequest?.cancel()
+    this.windowRequest = null
+    window.clearTimeout(this.windowTimer)
     window.clearTimeout(this.suggesting)
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     window.removeEventListener('keydown', this.onKey, true)
