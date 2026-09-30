@@ -1980,8 +1980,13 @@ export class Session {
     this.warming = true
     const start = (): void => {
       this.warming = false
-      if (!this.destroyed && this.reader === null && this.file === null && this.assembly === null) {
+      if (this.destroyed || this.reader !== null || this.file !== null || this.assembly !== null) return
+      // Only a head start: a host that cannot make the worker now (a DOM test
+      // has none) leaves it to the first open, which makes it or says why not.
+      try {
         this.clientOf()
+      } catch {
+        // the first open tries again
       }
     }
     if (typeof requestIdleCallback === 'function') requestIdleCallback(start, { timeout: 2000 })
