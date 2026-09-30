@@ -38,6 +38,8 @@ data/*.cool
 data/*.mcool
 data/*.pairs.gz
 data/*.txt
+data/*.fa
+data/*.gtf
 data/*.tsv
 
 # Scratch checkouts an agent works in. A worktree is a checkout of *this*

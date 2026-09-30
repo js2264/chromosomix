@@ -224,6 +224,49 @@ export interface PictureContacts {
   marginal: Float64Array
   /** Bins of each cell the balancer kept: every one of them, unbalanced. */
   kept: Uint16Array
+  /**
+   * The cells as they are between the **ends** of sequences (§27.5): every
+   * cell within `depth` of either end of a sequence is in its end's zone, and
+   * every pair of zone cells the band does not already hold — two sequences'
+   * ends, or a sequence's two ends — is kept here, where it holds anything, so
+   * that whether two ends meet is weighed at the picture's own resolution
+   * rather than on the coarse grid. A pair of kept cells that is not listed
+   * held nothing. `complete` is `false` where the budget ran out first, and the
+   * pairs past it are read from the coarse grid.
+   */
+  ends?: PictureEnds
+}
+
+/** The cells between sequence ends, sparse: see {@link PictureContacts.ends}. */
+export interface PictureEnds {
+  depth: number
+  /** Each cell's zone — `2s` the start of sequence `s`, `2s + 1` its end — or `-1`. */
+  zone: Int32Array
+  /**
+   * The pairs that held anything, by row as a compressed sparse matrix: the
+   * pairs of row `a` are `rowStart[a]` to `rowStart[a + 1]`, each a column above
+   * `a` in `cols`, ascending, and its value in `values` — so a pair is found by
+   * a binary search of its row, and nothing is built to find it.
+   */
+  rowStart: Int32Array
+  cols: Int32Array
+  values: Float32Array
+  complete: boolean
+}
+
+/** The value a {@link PictureEnds} holds for cells `lo ≤ hi`, or `undefined` where it lists none. */
+export function endValue(ends: PictureEnds, lo: number, hi: number): number | undefined {
+  let low = ends.rowStart[lo]
+  let high = ends.rowStart[lo + 1] - 1
+  const cols = ends.cols
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const c = cols[mid]
+    if (c < hi) low = mid + 1
+    else if (c > hi) high = mid - 1
+    else return ends.values[mid]
+  }
+  return undefined
 }
 
 /** What the gathering keeps: how wide a band, and how coarse a whole. */
@@ -232,7 +275,14 @@ export interface GatherOptions {
   width: number
   /** The most coarse cells a side. */
   coarseCells: number
+  /** Cells from each end of a sequence whose pairs with other ends are kept as they are; none where absent. */
+  endDepth?: number
+  /** The most end pairs kept. */
+  endBudget?: number
 }
+
+/** The most pairs of end cells a pass keeps: 48 MB of them. */
+export const END_BUDGET = 4_000_000
 
 /** The fewest cells a coarse cell for the coarse grid to fit `cap` a side, anchored to every sequence. */
 export function coarseFactor(offsets: Int32Array, cap: number): number {
@@ -408,18 +458,62 @@ function gathering(
   const counts = new Uint32Array(triangleSize(coarseN))
   const marginal = new Float64Array(n)
 
+  // The end zones: each sequence's first and last `depth` cells — a short
+  // one's nearer half to each end.
+  const depth = Math.max(0, Math.trunc(options.endDepth ?? 0))
+  const zone = new Int32Array(n).fill(-1)
+  if (depth > 0) {
+    for (let s = 0; s + 1 < layout.offsets.length; s++) {
+      const first = layout.offsets[s]
+      const last = layout.offsets[s + 1]
+      const length = last - first
+      zone.fill(2 * s, first, first + Math.min(depth, Math.ceil(length / 2)))
+      zone.fill(2 * s + 1, last - Math.min(depth, Math.floor(length / 2)), last)
+    }
+  }
+  const budget = Math.max(0, Math.trunc(options.endBudget ?? END_BUDGET))
+  // Rows arrive in order and each row's columns ascending, so the pairs are
+  // kept already sorted, and each row's first pair is where it starts.
+  const rowStart = new Int32Array(depth > 0 ? n + 1 : 0)
+  let endCols = new Int32Array(depth > 0 ? 1024 : 0)
+  let endValues = new Float32Array(endCols.length)
+  let ends = 0
+  let complete = true
+  const keep = (c: number, v: number): void => {
+    if (ends >= budget) {
+      complete = false
+      return
+    }
+    if (ends === endCols.length) {
+      const size = Math.min(budget, endCols.length * 2)
+      const cols = new Int32Array(size)
+      const values = new Float32Array(size)
+      cols.set(endCols)
+      values.set(endValues)
+      endCols = cols
+      endValues = values
+    }
+    endCols[ends] = c
+    endValues[ends] = v
+    ends++
+  }
+
   return {
     row(r, band, at) {
+      if (depth > 0) rowStart[r] = ends
       const kr = kept[r]
       if (kr === 0) return
       const sequence = sequenceOf[r]
       const coarseRow = of[r]
       const coarseAt = triangleIndex(coarseRow, coarseRow, coarseN) - coarseRow
+      const inZone = zone[r] >= 0
       for (let c = r; c < n; c++) {
         const kc = kept[c]
         if (kc === 0) continue
         const v = band[at + c] / (kr * kc)
-        if (c - r < width && sequenceOf[c] === sequence) bandOut[r * width + (c - r)] = v
+        const inBand = c - r < width && sequenceOf[c] === sequence
+        if (inBand) bandOut[r * width + (c - r)] = v
+        else if (inZone && v > 0 && zone[c] >= 0) keep(c, v)
         const index = coarseAt + of[c]
         sums[index] += v
         counts[index]++
@@ -430,9 +524,35 @@ function gathering(
     finish() {
       const values = new Float32Array(sums.length)
       for (let i = 0; i < sums.length; i++) values[i] = counts[i] === 0 ? Number.NaN : sums[i] / counts[i]
-      return { n, sequenceOf, width, band: bandOut, coarse: { n: coarseN, factor, of, values }, marginal, kept }
+      return {
+        n,
+        sequenceOf,
+        width,
+        band: bandOut,
+        coarse: { n: coarseN, factor, of, values },
+        marginal,
+        kept,
+        ...(depth > 0
+          ? {
+              ends: {
+                depth,
+                zone,
+                rowStart: finishRows(rowStart, ends),
+                cols: endCols.slice(0, ends),
+                values: endValues.slice(0, ends),
+                complete,
+              },
+            }
+          : {}),
+      }
     },
   }
+}
+
+/** Close a row index: every row set its own start as the pass reached it, in order; the last row ends where the pairs do. */
+function finishRows(rowStart: Int32Array, total: number): Int32Array {
+  rowStart[rowStart.length - 1] = total
+  return rowStart
 }
 
 /** One level of the pyramid: an upper triangle `n` a side. */

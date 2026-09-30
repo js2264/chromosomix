@@ -7,7 +7,7 @@
  */
 
 import { LensGrid } from '../../src/edit/grid'
-import { BAND_WIDTH, COARSE_CELLS } from '../../src/edit/method'
+import { METHOD_GATHER } from '../../src/edit/method'
 import { EditedAssembly, emptyEdit } from '../../src/genome/edit'
 import { Coords } from '../../src/metacooler/coords'
 import type { ReadPlan, SpanScanOptions } from '../../src/metacooler/matrix'
@@ -133,7 +133,7 @@ export async function simulate(
     coords,
     layout,
     weights: Float64Array.from({ length: n }, (_, bin) => (masked.includes(bin) ? Number.NaN : 1)),
-    gather: { width: BAND_WIDTH, coarseCells: COARSE_CELLS },
+    gather: METHOD_GATHER,
   })
   const names = sequences.map((_, i) => `s${i + 1}`)
   const assembly = EditedAssembly.of(emptyEdit({ names, lengths }))

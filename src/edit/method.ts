@@ -28,7 +28,7 @@
  * bytes.
  */
 
-import { triangleIndex, type PictureContacts } from '../metacooler/picture'
+import { endValue, triangleIndex, type GatherOptions, type PictureContacts, type PictureEnds } from '../metacooler/picture'
 
 /**
  * The most cells each end of a junction is read into (§27.5's `W`). A file's
@@ -47,6 +47,30 @@ export const BAND_WIDTH = 64
 
 /** The most coarse cells a side the pass keeps of the whole map. */
 export const COARSE_CELLS = 2048
+
+/**
+ * Cells from each end of a sequence whose pairs with every other end the pass
+ * keeps as they are: three of the longest meeting window, since a window walks
+ * past the cells the balancer emptied at an end — a subtelomere's repeats, the
+ * edge of an rDNA array — to find its own.
+ */
+export const END_DEPTH = 160
+
+/** What the picture's pass gathers for the method (§27.5). */
+export const METHOD_GATHER: GatherOptions = { width: BAND_WIDTH, coarseCells: COARSE_CELLS, endDepth: END_DEPTH }
+
+/** The longest window two ends' meeting is weighed over, in valid cells each. */
+export const MEETING_REACH = 48
+
+/** The fewest cells a meeting window is read into. */
+const LEAST_MEETING = 8
+
+/**
+ * The gaps a meeting is tried at, in cells: the sequence an assembly never
+ * closed between two ends — a repeat, an rDNA array, a stretch no read spanned —
+ * which moves every cell of the window that much further apart along the molecule.
+ */
+const GAPS = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 
 /** The share of each distance's highest values left out of its mean, so what is looked for does not lift what it is judged against. */
 const TRIM = 0.01
@@ -84,6 +108,16 @@ export interface Expected {
    * misjoin taken away about two thirds of one.
    */
   unit: number
+  /**
+   * Cells each end of a **meeting** is read into ({@link meetingScore}): a
+   * third of the distance at which the law falls to eight times the trans level,
+   * between eight and {@link MEETING_REACH} — longer than a junction's window,
+   * since whether two separate ends meet is asked of every contact that can
+   * still tell an adjacency from the background.
+   */
+  reach: number
+  /** A meeting window holding exactly the law, gap nought, against the trans level: the unit meetings are counted in. */
+  meetUnit: number
 }
 
 /** The mean of the lowest `1 − TRIM` of some values, which it sorts. */
@@ -261,7 +295,19 @@ export function expectedOf(contacts: PictureContacts, balanced: boolean): Expect
   }
   unit = Math.max(unit / dispersion, 1e-9)
 
-  return { law, trans: transLevel, dispersion, bias, window, unit }
+  let far8 = 1
+  while (far8 < 3 * MEETING_REACH && far8 < n && law[far8] >= 8 * transLevel) far8++
+  const meetReach = Math.max(LEAST_MEETING, Math.min(MEETING_REACH, Math.ceil(far8 / 3)))
+  let meetUnit = 0
+  for (let i = 0; i < meetReach; i++) {
+    for (let j = 0; j < meetReach; j++) {
+      const p = law[Math.min(n, i + j + 1)]
+      meetUnit += p * Math.log((p + transLevel) / transLevel) - p
+    }
+  }
+  meetUnit = Math.max(meetUnit / dispersion, 1e-9)
+
+  return { law, trans: transLevel, dispersion, bias, window, unit, reach: meetReach, meetUnit }
 }
 
 /** The slope of the law's last decade in log–log, between −3 and −0.3. */
@@ -303,6 +349,8 @@ export class EditedMap {
   readonly dispersion: number
   readonly window: number
   readonly unit: number
+  readonly reach: number
+  readonly meetUnit: number
   /** The law, and its log, for the distances a window spans: `near[d]` is `P(d)`, clamped to the grid. */
   readonly near: Float64Array
   readonly logNear: Float64Array
@@ -313,6 +361,8 @@ export class EditedMap {
   private readonly coarseValues: Float32Array
   private readonly coarseN: number
   private readonly bias: Float64Array
+  /** The cells between sequence ends, as they are; `null` where the pass kept none. */
+  private readonly ends: PictureEnds | null
 
   constructor(
     contacts: PictureContacts,
@@ -325,6 +375,8 @@ export class EditedMap {
     this.dispersion = expected.dispersion
     this.window = expected.window
     this.unit = expected.unit
+    this.reach = expected.reach
+    this.meetUnit = expected.meetUnit
     this.band = contacts.band
     this.width = contacts.width
     this.sequenceOf = contacts.sequenceOf
@@ -332,6 +384,7 @@ export class EditedMap {
     this.coarseValues = contacts.coarse.values
     this.coarseN = contacts.coarse.n
     this.bias = expected.bias
+    this.ends = contacts.ends ?? null
     this.near = new Float64Array(2 * this.window + 2)
     this.logNear = new Float64Array(this.near.length)
     for (let d = 0; d < this.near.length; d++) {
@@ -362,11 +415,33 @@ export class EditedMap {
     if (d < this.width && this.sequenceOf[lo] === this.sequenceOf[hi]) {
       v = this.band[lo * this.width + d]
     } else {
-      const x = this.coarseOf[lo]
-      const y = this.coarseOf[hi]
-      v = this.coarseValues[triangleIndex(x, y, this.coarseN)]
+      const ends = this.ends
+      const zoned = ends !== null && ends.zone[lo] >= 0 && ends.zone[hi] >= 0
+      const held = zoned ? endValue(ends, lo, hi) : undefined
+      // Listed, it is the value; not listed, it held nothing — unless the
+      // budget ran out before its row, and then the coarse grid says.
+      if (held !== undefined) v = held
+      else if (zoned && ends.complete) v = 0
+      else v = this.coarseValues[triangleIndex(this.coarseOf[lo], this.coarseOf[hi], this.coarseN)]
     }
     return v / (this.bias[a] * this.bias[b])
+  }
+
+  /** The coarse cell an edited cell is in, or `-1` in a gap. */
+  coarseCell(i: number): number {
+    const a = this.cellMap[i]
+    return a < 0 ? -1 : this.coarseOf[a]
+  }
+
+  /** The coarse grid's value between two coarse cells: a mean over their cells, not divided by coverage. */
+  coarseValue(x: number, y: number): number {
+    return this.coarseValues[x <= y ? triangleIndex(x, y, this.coarseN) : triangleIndex(y, x, this.coarseN)]
+  }
+
+  /** Whether an edited cell holds anything the balancer kept: a cell of no gap, with coverage. */
+  holds(i: number): boolean {
+    const a = this.cellMap[i]
+    return a >= 0 && this.bias[a] > 0
   }
 
   /** What a cell pair `d` cells apart along one molecule is expected to hold. */
@@ -470,6 +545,162 @@ export function junctionScore(map: EditedMap, e: End, f: End, apart: Apart = 'tr
   return { score: score / map.dispersion, seen, reached }
 }
 
+/** Two ends' meeting (§27.5): the evidence they meet, and the gap and strength it was found at. */
+export interface Meeting {
+  /** The log-likelihood of their meeting over their lying apart at the trans level, over the dispersion. */
+  score: number
+  /** The gap the meeting fits best, in cells: what the assembly left out between them. */
+  gap: number
+  /** How much of the law the window holds at that gap, above the trans level, `0 … 1`. */
+  amplitude: number
+  /**
+   * The window over the law at gap nought, uncapped: above one, brighter than
+   * any adjacency — the whole window, so one hot cell at a thinly covered end is
+   * not a bright corner, and a repeat both ends carry is.
+   */
+  brightness: number
+  /** The window's mean over the trans level. */
+  level: number
+  /**
+   * The score its own window would have holding exactly the law, gap nought:
+   * what a clean adjacency of these two ends would score, so `score / ideal`
+   * says how much of one this meeting is, however short the ends.
+   */
+  ideal: number
+  seen: number
+  reached: number
+}
+
+/** One end's walk into its stretch: the cells it read, and how far from the end each is. */
+interface Walk {
+  cells: Int32Array
+  distance: Int32Array
+  length: number
+}
+
+/**
+ * The cells a meeting reads from an end: its first `reach` that hold
+ * anything, walking past those that do not — a subtelomere's repeats, an
+ * array's edge — as far as three times `reach`, each kept with its true
+ * distance from the end; never more than half the stretch, so that a short
+ * sequence's two ends read different cells, which is what tells which way
+ * round it goes.
+ */
+function walk(map: EditedMap, end: End, reach: number): Walk {
+  const span = end.hi - end.lo
+  const most = Math.max(1, Math.min(reach, Math.floor(span / 2)))
+  const cells = new Int32Array(most)
+  const distance = new Int32Array(most)
+  let length = 0
+  for (let k = 0; k < 3 * most && length < most; k++) {
+    const cell = end.cell + end.dir * k
+    if (cell < end.lo || cell >= end.hi) break
+    if (!map.holds(cell)) continue
+    cells[length] = cell
+    distance[length] = k
+    length++
+  }
+  return { cells, distance, length }
+}
+
+/** Whether the coarse cells two walks lie in hold more than twice the trans level between them: worth the fine window. */
+function coarselyMeets(map: EditedMap, we: Walk, wf: Walk): boolean {
+  const xs = new Set<number>()
+  const ys = new Set<number>()
+  for (let i = 0; i < we.length; i++) xs.add(map.coarseCell(we.cells[i]))
+  for (let j = 0; j < wf.length; j++) ys.add(map.coarseCell(wf.cells[j]))
+  let total = 0
+  let count = 0
+  for (const x of xs) {
+    if (x < 0) continue
+    for (const y of ys) {
+      if (y < 0) continue
+      const v = map.coarseValue(x, y)
+      if (!(v >= 0)) continue
+      total += v
+      count++
+    }
+  }
+  return count === 0 || total > 2 * count * map.trans
+}
+
+/**
+ * Whether two separate ends meet (§27.5): over their walks' windows, the
+ * log-likelihood that the contacts are an adjacency's — each cell expected at
+ * `A · P(d + g) + T`, `d` the cells it spans across the junction, `g` a gap the
+ * assembly left out, `A` how much of the law survived what flanks the gap —
+ * over their lying apart at the trans level `T`, a quasi-Poisson likelihood
+ * over the file's dispersion. `A` is fitted, not assumed: an assembly breaks in
+ * repeats, and the reads that would have mapped beside a break often did not,
+ * so a true adjacency is regularly a fraction of the law — and what then tells
+ * it from two strangers is that its contacts fall away from the corner as the
+ * law does, and which of its ends they fall away from. `g` is the best of a
+ * ladder of gaps; the score is the best of those.
+ */
+export function meetingScore(map: EditedMap, e: End, f: End): Meeting {
+  const reach = map.reach
+  const we = walk(map, e, reach)
+  const wf = walk(map, f, reach)
+  const reached = we.length * wf.length
+  const empty: Meeting = { score: 0, gap: 0, amplitude: 0, brightness: 0, level: 0, ideal: 0, seen: 0, reached }
+  if (reached === 0) return empty
+  // First the coarse grid: most pairs of an assembly's ends share no more than
+  // strangers do, and a few coarse cells say so without the window's.
+  if (!coarselyMeets(map, we, wf)) return empty
+  const values = new Float64Array(reached)
+  const span = new Int32Array(reached)
+  let seen = 0
+  let total = 0
+  for (let i = 0; i < we.length; i++) {
+    for (let j = 0; j < wf.length; j++) {
+      const v = map.value(we.cells[i], wf.cells[j])
+      if (!(v >= 0)) continue
+      values[seen] = v
+      span[seen] = we.distance[i] + wf.distance[j] + 1
+      total += v
+      seen++
+    }
+  }
+  if (seen === 0) return empty
+  const trans = map.trans
+  // Two ends whose window holds no more than two strangers share meet in no
+  // way worth a fit: most pairs of an assembly's ends are these.
+  if (total < 1.5 * seen * trans) return { ...empty, level: total / seen / trans, seen }
+  let ideal = 0
+  let lawTotal = 0
+  for (let k = 0; k < seen; k++) {
+    const p = map.expectedAt(span[k])
+    ideal += p * Math.log((p + trans) / trans) - p
+    lawTotal += p
+  }
+  let best = { score: Number.NEGATIVE_INFINITY, gap: 0, amplitude: 0 }
+  for (const gap of GAPS) {
+    let expected = 0
+    for (let k = 0; k < seen; k++) expected += map.expectedAt(span[k] + gap)
+    if (!(expected > 0)) continue
+    const amplitude = Math.min(1, Math.max(1e-6, (total - seen * trans) / expected))
+    let score = 0
+    for (let k = 0; k < seen; k++) {
+      const mean = amplitude * map.expectedAt(span[k] + gap) + trans
+      score += values[k] * Math.log(mean / trans) - (mean - trans)
+    }
+    if (score > best.score) best = { score, gap, amplitude }
+    // Past the gap where the law has flattened below the window's own level,
+    // a longer one explains nothing more.
+    if (map.expectedAt(gap) < trans) break
+  }
+  return {
+    score: best.score / map.dispersion,
+    gap: best.gap,
+    amplitude: best.amplitude,
+    brightness: lawTotal > 0 ? Math.max(0, total - seen * trans) / lawTotal : 0,
+    level: total / seen / trans,
+    ideal: ideal / map.dispersion,
+    seen,
+    reached,
+  }
+}
+
 /** A stretch of the edited axis, half-open: an edited sequence's cells. */
 export interface AxisStretch {
   from: number
@@ -534,5 +765,164 @@ export function breakpointsOf(
       if (lowest) out.push(x)
     }
   }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Clustering foci
+// ---------------------------------------------------------------------------
+
+/** A place of one sequence of the file that the others' own such places cluster with: a centromere, most often. */
+export interface Focus {
+  /** The sequence of the file it is on. */
+  sequence: number
+  /** Its cells of the picture, half-open. */
+  from: number
+  to: number
+  /** Of the other sequences asked, the share whose brightest contact with this one is here. */
+  agreement: number
+}
+
+/** The fewest coarse cells a sequence must have to be asked where its focus is. */
+const FOCUS_LEAST_CELLS = 4
+
+/** Coarse cells either side of a vote that count as the same place. */
+const FOCUS_REACH = 1
+
+/**
+ * The share of the clustering sequences that must name one place for it to be
+ * a focus. Asked only of sequences that cluster themselves, a place a stray
+ * peak made is named by one or two of them, never by nearly half; the smallest
+ * chromosomes, whose telomeres lie near their centromeres, are named by about
+ * half — yeast I and III, at 1 kb.
+ */
+const FOCUS_AGREEMENT = 0.45
+
+/**
+ * Where each sequence's contacts with every other sequence peak, where they
+ * agree (§27.5): in a genome whose centromeres cluster — yeasts, many fungi,
+ * plants in a Rabl configuration — each chromosome's brightest contact with any
+ * other chromosome is its centromere with the other's, so each sequence is asked,
+ * of every other one, where in it the brightest coarse cell of their block lies,
+ * and a place half of them name is its focus. A genome whose centromeres do not
+ * cluster answers every question somewhere else, and has none; nor does a
+ * sequence too short to have a place of its own. What it is for: a join that
+ * would put two foci far apart in one sequence makes a chromosome with two
+ * centromeres, which no curator takes.
+ */
+export function fociOf(contacts: PictureContacts, expected: Expected): Focus[] {
+  const { coarse, sequenceOf, n } = contacts
+  const nc = coarse.n
+  // Each coarse cell's sequence, first cell and coverage. A coarse cell most
+  // of whose cells the balancer emptied is not asked: its mean is the few
+  // cells left, and a subtelomere's few are its repeats, which shine in trans.
+  const coarseSequence = new Int32Array(nc).fill(-1)
+  const coarseFirst = new Int32Array(nc + 1).fill(n)
+  const coverage = new Float64Array(nc)
+  const counted = new Float64Array(nc)
+  const cellsIn = new Float64Array(nc)
+  for (let a = n - 1; a >= 0; a--) {
+    const c = coarse.of[a]
+    coarseSequence[c] = sequenceOf[a]
+    coarseFirst[c] = a
+    cellsIn[c]++
+    if (expected.bias[a] > 0) {
+      coverage[c] += expected.bias[a]
+      counted[c]++
+    }
+  }
+  for (let c = 0; c < nc; c++) coverage[c] = counted[c] >= 0.6 * cellsIn[c] ? coverage[c] / counted[c] : Number.NaN
+  // The sequences' coarse ranges.
+  const ranges: Array<[number, number]> = []
+  for (let c = 0; c < nc; c++) {
+    const s = coarseSequence[c]
+    if (s < 0) continue
+    const range = ranges[s]
+    if (range === undefined) ranges[s] = [c, c + 1]
+    else range[1] = c + 1
+  }
+  const asked: number[] = []
+  ranges.forEach((range, s) => {
+    if (range !== undefined && range[1] - range[0] >= FOCUS_LEAST_CELLS) asked.push(s)
+  })
+  if (asked.length < 3) return []
+  const value = (x: number, y: number): number => {
+    const v = coarse.values[x <= y ? triangleIndex(x, y, nc) : triangleIndex(y, x, nc)] / (coverage[x] * coverage[y])
+    return v >= 0 ? v : Number.NaN
+  }
+  // Each pair's brightest place, once: `peaks[i][j]` is where in the `i`th
+  // sequence asked its block with the `j`th peaks, or `-1`.
+  const peaks: Int32Array[] = asked.map(() => new Int32Array(asked.length).fill(-1))
+  for (let i = 0; i < asked.length; i++) {
+    const [a0, a1] = ranges[asked[i]]
+    for (let j = i + 1; j < asked.length; j++) {
+      const [b0, b1] = ranges[asked[j]]
+      let best = 0
+      let bx = -1
+      let by = -1
+      for (let x = a0; x < a1; x++) {
+        for (let y = b0; y < b1; y++) {
+          // A cell and its eight neighbours, so one noisy cell is not a peak.
+          let sum = 0
+          let count = 0
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              const xx = x + dx
+              const yy = y + dy
+              if (xx < a0 || xx >= a1 || yy < b0 || yy >= b1) continue
+              const v = value(xx, yy)
+              if (Number.isNaN(v)) continue
+              sum += v
+              count++
+            }
+          }
+          const mean = count > 0 ? sum / count : 0
+          if (mean > best) {
+            best = mean
+            bx = x
+            by = y
+          }
+        }
+      }
+      // A peak no brighter than a few times two strangers is no place at all.
+      if (bx < 0 || best < 4 * expected.trans) continue
+      peaks[i][j] = bx
+      peaks[j][i] = by
+    }
+  }
+  /** The place most of `partners` name in the `i`th sequence, and the share that do. */
+  const modeOf = (i: number, partners: readonly number[]): { mode: number; agreement: number } => {
+    const list: number[] = []
+    for (const j of partners) if (j !== i && peaks[i][j] >= 0) list.push(peaks[i][j])
+    const asking = partners.filter((j) => j !== i).length
+    if (list.length < 3 || asking === 0) return { mode: -1, agreement: 0 }
+    let mode = -1
+    let most = 0
+    for (const candidate of list) {
+      let near = 0
+      for (const other of list) if (Math.abs(other - candidate) <= FOCUS_REACH) near++
+      if (near > most) {
+        most = near
+        mode = candidate
+      }
+    }
+    return { mode, agreement: most / asking }
+  }
+  // Twice: first every sequence asked of all the others, and those a third of
+  // them agree on kept as the clustering ones; then every sequence asked again
+  // of those alone — a stretch with no centromere of its own, a plasmid, a
+  // fragment of a chromosome's arm, answers the first question anywhere, and
+  // would dilute every other sequence's agreement.
+  const everyone = asked.map((_, i) => i)
+  const clustering = everyone.filter((i) => modeOf(i, everyone).agreement >= 1 / 3)
+  if (clustering.length < 3) return []
+  const out: Focus[] = []
+  asked.forEach((s, i) => {
+    const { mode, agreement } = modeOf(i, clustering)
+    if (mode < 0 || agreement < FOCUS_AGREEMENT) return
+    const lo = Math.max(ranges[s][0], mode - FOCUS_REACH)
+    const hi = Math.min(ranges[s][1], mode + FOCUS_REACH + 1)
+    out.push({ sequence: s, from: coarseFirst[lo], to: coarseFirst[hi], agreement })
+  })
   return out
 }

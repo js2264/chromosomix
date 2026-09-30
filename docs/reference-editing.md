@@ -26,7 +26,12 @@
 > backgrounds — *is it refused* against the trans level, *do these ends meet* against the window's own
 > level, which is what keeps telomeres and centromeres clustering from reading as adjacencies; and the
 > confidence carries a fourth feature, a corner brighter than any adjacency, which is the repeats every
-> telomere carries (SPECS §27.5 says what is built).
+> telomere carries (SPECS §27.5 says what is built). A real long-read reassembly — a yeast whose
+> chromosome XVI carries the *M. mycoides* genome, in 32 contigs — asked for three more: whether two
+> contigs **meet** is weighed at the picture's own cells between sequence ends, with the gap the
+> assembly left and the share of the law that survived beside it fitted rather than assumed; an end has
+> one neighbour, so a join's **exclusivity** is a feature; and the **centromeres that cluster** are found
+> from the map, so a join of two chromosomes' telomeres is never offered.
 
 The feature in one sentence: **a stage where the reader edits the reference a contact map was built
 against — cut, invert, move, join, duplicate, set aside — with the map, its tracks and every later

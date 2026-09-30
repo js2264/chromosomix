@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { findCorners } from '../../src/edit/corners'
 import { LensGrid } from '../../src/edit/grid'
-import { BAND_WIDTH, COARSE_CELLS, expectedOf } from '../../src/edit/method'
+import { METHOD_GATHER, expectedOf } from '../../src/edit/method'
 import { suggest, type Suggestion } from '../../src/edit/suggest'
 import { EditedAssembly, emptyEdit, withStep, type EditStep, type ReferenceEdit } from '../../src/genome/edit'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
@@ -23,7 +23,7 @@ const HIC = new URL('../../demo/yeast/Yeast_hic.hic', import.meta.url).pathname
 async function suggestionsOf(map: MetaCooler, steps: EditStep[] = []): Promise<Suggestion[]> {
   const stride = pictureStride(map.coords) as number
   const layout = pictureLayout(map.coords, stride)
-  const read = await map.picture(layout, { balance: map.hasWeights, gather: { width: BAND_WIDTH, coarseCells: COARSE_CELLS } })
+  const read = await map.picture(layout, { balance: map.hasWeights, gather: METHOD_GATHER })
   const contacts = read?.contacts
   if (contacts === undefined) throw new Error('no contacts')
   const expected = expectedOf(contacts, map.hasWeights)
@@ -50,8 +50,11 @@ describe('the demo .hic', () => {
     try {
       const list = await suggestionsOf(hic)
       expect(list.filter((s) => s.confidence >= 0.5).map((s) => s.words)).toEqual([])
-      // What it does offer, below even odds, it says why: the telomeres' shared elements.
-      for (const s of list) if (s.kind === 'join') expect(s.evidence).toContain('brighter than an adjacency')
+      // What it does offer, below even odds, it says why: the telomeres' shared
+      // elements, the two centromeres such a join would make, or an end with a
+      // better offer elsewhere.
+      const reasons = ['brighter than an adjacency', 'two centromeres', 'an end with a better offer']
+      for (const s of list) if (s.kind === 'join') expect(s.evidence.some((chip) => reasons.includes(chip)), s.words).toBe(true)
     } finally {
       hic.close()
     }

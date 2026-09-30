@@ -19,7 +19,7 @@ import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/p
 import { ScoolStore } from '../metacooler/scool'
 import { PICTURE_CELLS, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
 import { findCorners } from '../edit/corners'
-import { BAND_WIDTH, COARSE_CELLS, expectedOf } from '../edit/method'
+import { METHOD_GATHER, expectedOf } from '../edit/method'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
@@ -730,7 +730,7 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   const read = await mc.picture(layout, {
     balance: balanced,
     ...(request.value === undefined ? {} : { value: request.value }),
-    ...(request.method === true ? { gather: { width: BAND_WIDTH, coarseCells: COARSE_CELLS } } : {}),
+    ...(request.method === true ? { gather: METHOD_GATHER } : {}),
     ...scanHooks(request.id),
   })
   if (read === null || cancelled.has(request.id)) throw abortError()

@@ -27,7 +27,20 @@ import type { PictureContacts } from '../metacooler/picture'
 import type { FileCorner } from './corners'
 import { JOIN_GAP } from './gestures'
 import type { GridSequence, LensGrid } from './grid'
-import { EditedMap, breakpointsOf, junctionScore, junctionsAlong, type Apart, type End, type Expected, type Junction } from './method'
+import {
+  EditedMap,
+  breakpointsOf,
+  fociOf,
+  junctionScore,
+  junctionsAlong,
+  meetingScore,
+  type Apart,
+  type End,
+  type Expected,
+  type Focus,
+  type Junction,
+  type Meeting,
+} from './method'
 import { stepText } from './words'
 
 export type SuggestionKind = 'split' | 'turn' | 'move' | 'join'
@@ -59,7 +72,12 @@ export interface Suggestion {
   gain: number
   /** The chance a curator would accept it. */
   confidence: number
-  /** What the confidence was computed from: the gain, the size, how much of its windows held anything, and how much brighter than an adjacency its corners are. */
+  /**
+   * What the confidence was computed from: the gain, the size, how much of its
+   * windows held anything, how much brighter than an adjacency its corners are,
+   * how far a join's ends prefer each other to anything else, and whether it
+   * would make a sequence of two foci.
+   */
   features: number[]
   /** The points whose junctions it takes away: edges of the edited axis. */
   breaks: number[]
@@ -95,11 +113,26 @@ export type Weights = readonly number[]
  *   adjacent stretches share are more often a repeat the reads could not place —
  *   the elements every telomere carries — than an adjacency, and a corner ten
  *   times the law is offered below even odds whatever it would gain.
+ * - **1.5** on how much more a join's two ends meet each other than either meets
+ *   anything else, in doublings, between −2 and 2: an end has one neighbour, and
+ *   two ends that each have a better offer elsewhere — a cluster of short
+ *   contigs that all lie near each other, telomeres that all touch — are not
+ *   each other's.
+ * - **5** on a join that would put two clustering foci far apart in one
+ *   sequence — two centromeres, in a genome whose centromeres cluster: no
+ *   chromosome has two, and a join of two chromosomes' ends that the telomeres'
+ *   clustering lit is exactly that, however much the two ends prefer each other.
  */
-export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5]
+export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5, 1.5, 5]
 
 /** Doublings of the contact law a junction's corner may stand at before it counts against it. */
 const EXCESS_FREE = Math.log2(2.5)
+
+/** Doublings of the contact law a join's whole window may stand at before it counts against it. */
+const BRIGHT_FREE = Math.log2(1.6)
+
+/** The most a join is worth, in adjacencies: it makes one. */
+const JOIN_MOST = 1.2
 
 /** The least gain a suggestion is offered at, in units: below it, a change is noise. */
 const LEAST_GAIN = 0.1
@@ -194,7 +227,16 @@ interface Trade {
   seen: number
   /** How far past the contact law the brightest corner it makes stands, in doublings. */
   excess: number
+  /** A join's: how much more its ends meet each other than anything else, in doublings. */
+  exclusivity?: number
+  /** A join's: it would make a sequence of two foci far apart. */
+  dicentric?: boolean
+  /** A join's: the gap its meeting fitted, in cells. */
+  gapCells?: number
 }
+
+/** The foci of a file, found once: they are in its own cells, which no edit moves. */
+const fociCache = new WeakMap<PictureContacts, Focus[]>()
 
 /** The suggestions for the reference as it now stands, best first. */
 export function suggest(input: SuggestInput): Suggested {
@@ -353,6 +395,62 @@ export function suggest(input: SuggestInput): Suggested {
    */
   const meets = (e: End | null, f: End | null): number => (e === null || f === null ? 0 : junction(e, f, 'local').score / unit)
   const holds = meets
+  /** Whether two separate ends meet, with the gap and strength they meet at ({@link meetingScore}). */
+  const meetings = new Map<string, Meeting>()
+  const meet = (e: End, f: End): Meeting => {
+    const a = keyOf(e)
+    const b = keyOf(f)
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`
+    let held = meetings.get(key)
+    if (held === undefined) {
+      held = meetingScore(map, e, f)
+      meetings.set(key, held)
+    }
+    return held
+  }
+
+  // The file's clustering foci, where the edit put them: per edited sequence,
+  // the cells each focus landed on.
+  let fileFoci = fociCache.get(input.contacts)
+  if (fileFoci === undefined) {
+    fileFoci = fociOf(input.contacts, expected)
+    fociCache.set(input.contacts, fileFoci)
+  }
+  const foci: Array<Array<[number, number]>> = sequences.map(() => [])
+  for (const focus of fileFoci) {
+    // Its cells may land in two sequences only where an edit copied it, and
+    // then it is in both.
+    const bySequence = new Map<number, number[]>()
+    for (let a = focus.from; a < focus.to; a++) {
+      for (let k = landingStart[a]; k < landingStart[a + 1]; k++) {
+        const e = landings[k]
+        const s = sequenceAt(e)
+        if (s < 0) continue
+        const list = bySequence.get(s) ?? []
+        list.push(e)
+        bySequence.set(s, list)
+      }
+    }
+    for (const [s, cells] of bySequence) foci[s].push([Math.min(...cells), Math.max(...cells) + 1])
+  }
+  /** Cells two foci may lie apart and still be one: the reach of a focus. */
+  const focusMerge = 4 * input.contacts.coarse.factor
+  /**
+   * Whether joining end `e` of sequence `a` to end `f` of `b` puts two foci
+   * farther apart than one focus spans: the distance of each from its end,
+   * and the gap between.
+   */
+  const dicentric = (e: End, a: number, f: End, b: number, gapCells: number): boolean => {
+    if (a === b) return false
+    for (const [x0, x1] of foci[a]) {
+      const fromE = e.dir < 0 ? e.cell + 1 - x1 : x0 - e.cell
+      for (const [y0, y1] of foci[b]) {
+        const fromF = f.dir < 0 ? f.cell + 1 - y1 : y0 - f.cell
+        if (Math.max(0, fromE) + Math.max(0, fromF) + gapCells > focusMerge) return true
+      }
+    }
+    return false
+  }
   /** How far past the contact law the corner of a junction stands, in doublings. */
   const excessOf = (e: End, f: End): number => {
     let most = 0
@@ -371,11 +469,17 @@ export function suggest(input: SuggestInput): Suggested {
   const trades: Trade[] = []
   const place = (sequence: GridSequence, x: number): number => edgeBp(grid, sequence, x)
   const push = (trade: Omit<Trade, 'seen' | 'excess'>): void => {
-    if (!(trade.gain > LEAST_GAIN)) return
+    // A join across a long gap — an rDNA array, a megabase no read spanned —
+    // is a small share of an adjacency and still the only thing its two ends
+    // meet: it is offered on the weight of its evidence and how alone it is.
+    const enough = trade.kind === 'join' ? (trade.exclusivity ?? 0) >= 1 || trade.gain > LEAST_GAIN : trade.gain > LEAST_GAIN
+    if (!enough || !(trade.gain > 0)) return
     let seen = 0
     let reached = 0
     for (const [e, f] of trade.made) {
-      const j = junction(e, f, 'local')
+      // A join is weighed by its meeting, whose walks step past what the
+      // balancer emptied: its window is as full as it could be.
+      const j = trade.kind === 'join' ? meet(e, f) : junction(e, f, 'local')
       seen += j.seen
       reached += j.reached
     }
@@ -384,7 +488,17 @@ export function suggest(input: SuggestInput): Suggested {
       seen += j.seen
       reached += j.reached
     }
-    const excess = trade.made.reduce((most, [e, f]) => Math.max(most, excessOf(e, f)), 0)
+    // A join's brightness is its whole window's, and a window of a meeting
+    // reaches far enough that more than {@link BRIGHT_FREE} of the law is
+    // already more than an adjacency holds; a trade's is its corners'.
+    const excess = trade.made.reduce(
+      (most, [e, f]) =>
+        Math.max(
+          most,
+          trade.kind === 'join' ? Math.log2(Math.max(1e-9, meet(e, f).brightness)) - BRIGHT_FREE + EXCESS_FREE : excessOf(e, f),
+        ),
+      0,
+    )
     trades.push({ ...trade, seen: reached === 0 ? 0 : seen / reached, excess })
   }
   /** The junction a point makes, with a trade's walls, where it makes one. */
@@ -530,6 +644,7 @@ export function suggest(input: SuggestInput): Suggested {
   }
 
   // Joins: two sequences' free ends that meet.
+  const joins: Array<{ e: End; f: End; pa: Point; pb: Point; a: number; b: number; step: EditStep; meeting: Meeting; gain: number }> = []
   for (let a = 0; a < sequences.length; a++) {
     for (let b = a + 1; b < sequences.length; b++) {
       const A = points[a]
@@ -553,29 +668,76 @@ export function suggest(input: SuggestInput): Suggested {
         // Past a few dozen sequences, only ends a corner pairs: every pair of
         // thousands of contigs is millions of windows.
         if (!fewSequences && !partnered(option.pa, option.pb)) continue
-        push({
-          kind: 'join',
-          gain: meets(option.e, option.f),
-          points: [option.pa, option.pb],
-          made: [[option.e, option.f]],
-          taken: [],
-          step: option.step,
-          stretch: null,
-          target: null,
-          cells: Number.POSITIVE_INFINITY,
-        })
+        const meeting = meet(option.e, option.f)
+        // How much of a clean adjacency of these two ends the meeting is: the
+        // gain, counted in adjacencies as every trade's is — and a join makes
+        // one, so a window brighter than the law is worth no more than that:
+        // what is brighter is its brightness, weighed on its own.
+        const gain = meeting.ideal > 0 ? Math.min(JOIN_MOST, meeting.score / meeting.ideal) : 0
+        joins.push({ ...option, e: option.e, f: option.f, a, b, meeting, gain })
       }
     }
   }
+  // Each end's best offer and second best, by the weight of the evidence —
+  // the meeting's score itself, not its share of an ideal, since a short end
+  // can be all of one on a few cells — so that a join is weighed against what
+  // else its two ends could do: an end has one neighbour.
+  const offers = new Map<string, number[]>()
+  const endKey = (point: Point, end: End): string => `${point.sequence}:${point.x}:${end.dir}`
+  const evidenceOf = (meeting: Meeting): number => Math.max(0, meeting.score) / map.meetUnit
+  for (const join of joins) {
+    for (const key of [endKey(join.pa, join.e), endKey(join.pb, join.f)]) {
+      const list = offers.get(key) ?? []
+      list.push(evidenceOf(join.meeting))
+      offers.set(key, list)
+    }
+  }
+  for (const list of offers.values()) list.sort((x, y) => y - x)
+  /** The best an end is offered by anything but this join. */
+  const elsewhere = (key: string, own: number): number => {
+    const list = offers.get(key) ?? []
+    // The join's own offer is in the list once; the best of the rest is the
+    // first that is not it, or the second where the first is.
+    return list[0] === own ? (list[1] ?? 0) : (list[0] ?? 0)
+  }
+  /**
+   * Evidence below which two offers are both nothing, and neither is preferred:
+   * a hundredth of an adjacency's. Clustering telomeres meet at about that,
+   * and an end whose best is that and whose next is less has no better offer
+   * than nothing.
+   */
+  const floor = 0.01
+  for (const join of joins) {
+    const own = evidenceOf(join.meeting)
+    const rival = Math.max(elsewhere(endKey(join.pa, join.e), own), elsewhere(endKey(join.pb, join.f), own))
+    const exclusivity = Math.max(-2, Math.min(2, Math.log2(Math.max(own, floor) / Math.max(rival, floor))))
+    push({
+      kind: 'join',
+      gain: join.gain,
+      points: [join.pa, join.pb],
+      made: [[join.e, join.f]],
+      taken: [],
+      step: join.step,
+      stretch: null,
+      target: null,
+      cells: Number.POSITIVE_INFINITY,
+      exclusivity,
+      dicentric: dicentric(join.e, join.a, join.f, join.b, join.meeting.gap),
+      gapCells: join.meeting.gap,
+    })
+  }
 
-  // Ranked, and the best of those that share no point.
-  const weights = input.weights ?? INITIAL_WEIGHTS
+  // Ranked, and the best of those that share no point. Weights learned under
+  // another set of features are the initial ones again.
+  const weights = input.weights !== undefined && input.weights.length === INITIAL_WEIGHTS.length ? input.weights : INITIAL_WEIGHTS
   const ranked = trades.map((trade) => {
     const features = [
       Math.log2(1 + Math.max(0, trade.gain)),
       Number.isFinite(trade.cells) ? Math.min(0, Math.log10(trade.cells / 4)) : 0,
       trade.seen - 1,
       -Math.max(0, trade.excess - EXCESS_FREE),
+      trade.exclusivity ?? 0,
+      trade.dicentric === true ? -1 : 0,
     ]
     return { trade, features, confidence: confidenceOf(features, weights) }
   })
@@ -588,7 +750,11 @@ export function suggest(input: SuggestInput): Suggested {
   for (const { trade, features, confidence } of ranked) {
     if (trade.points.some(taken)) continue
     used.push(...trade.points)
-    list.push(toSuggestion(trade, features, confidence, grid, unit, (e, f) => junction(e, f, 'local')))
+    list.push(
+      toSuggestion(trade, features, confidence, grid, unit, (e, f) =>
+        trade.kind === 'join' ? { score: (meet(e, f).score / map.meetUnit) * unit, seen: 0, reached: 0 } : junction(e, f, 'local'),
+      ),
+    )
   }
   return { list, along: along.score, breakpoints, unit }
 }
@@ -639,6 +805,9 @@ function toSuggestion(
   const evidence = ['map']
   if (features[2] < -0.25) evidence.push('sparse')
   if (features[3] < 0) evidence.push('brighter than an adjacency')
+  if (trade.kind === 'join' && (trade.gapCells ?? 0) > 0) evidence.push(`a gap of about ${gapWords((trade.gapCells ?? 0) * grid.binsize)}`)
+  if (features[4] < -0.5) evidence.push('an end with a better offer')
+  if (trade.dicentric === true) evidence.push('two centromeres')
   return {
     key: `${trade.kind}:${identity}`,
     kind: trade.kind,
@@ -654,6 +823,13 @@ function toSuggestion(
     target: trade.target,
     evidence,
   }
+}
+
+/** A gap's length in words, to a significant figure: `16 kb`, `2 kb`, `500 bp`. */
+function gapWords(bp: number): string {
+  if (bp >= 1_000_000) return `${(bp / 1_000_000).toPrecision(2)} Mb`
+  if (bp >= 1000) return `${Math.round(bp / 1000)} kb`
+  return `${Math.round(bp)} bp`
 }
 
 /**

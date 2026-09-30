@@ -10342,11 +10342,15 @@ where it went further than the text above:
 
 - **What it reads.** The same pass that reads the stage's picture keeps, from the same floats before
   they are bytes, the cells within 64 of the diagonal as they are, the whole map on a coarse grid of at
-  most 2,048 cells a side (never across a sequence's edge), and each cell's coverage — every value the
-  mean of one pair of bins, so a pooled cell and a single bin speak one unit
-  (`metacooler/picture.ts`). From them, once per file in the reader's worker: the law, the trans level
-  and the dispersion as above — the law measured cell by cell near the diagonal and from the coarse
-  grid beyond, the dispersion the median variance over mean near the diagonal — and the corners.
+  most 2,048 cells a side (never across a sequence's edge), each cell's coverage — every value the
+  mean of one pair of bins, so a pooled cell and a single bin speak one unit — and, sparse, every pair
+  of cells within 160 of any two sequences' ends that held anything, at most four million of them, by
+  row (`metacooler/picture.ts`, `PictureEnds`): whether two contigs meet is weighed at the picture's
+  own cells, never on the coarse grid, where a 1 kb map's cells are seven a side and the corner that
+  says which way round a contig goes is a blur. From them, once per file in the reader's worker: the
+  law, the trans level and the dispersion as above — the law measured cell by cell near the diagonal
+  and from the coarse grid beyond, the dispersion the median variance over mean near the diagonal —
+  and the corners.
 - **The window is the law's.** `W` is half the distance at which the law falls to eight times the
   trans level, between 4 and 16 cells: as far as an adjacency stands well out of the background and no
   further, since past that a window weighs clustering as if it were adjacency.
@@ -10358,6 +10362,37 @@ where it went further than the text above:
   at all. What a trade makes and what it takes away are both weighed the second way, so a trade is two
   configurations compared. The **unit** a gain is counted in is the score of a window that holds
   exactly the law: one adjacency made is about one, one clean misjoin taken away about two thirds.
+- **Two separate ends meet** — a join — by a third question, the **meeting** (`meetingScore`): each
+  end is walked into its sequence past the cells the balancer emptied — a subtelomere's repeats, an
+  array's edge — to its first `R` cells that hold anything, each kept with its true distance from the
+  end, never more than half the sequence, so a short contig's two ends read different cells; `R` is a
+  third of the distance at which the law falls to eight times the trans level, between 8 and 48. Every
+  cell is expected at `A · P(d + g) + T`: `g` a **gap** the assembly left out, tried from nought to
+  2,048 cells, and `A` how much of the law survived what flanks it, fitted — an assembly breaks in
+  repeats and the reads beside a break often did not map, so a true adjacency is regularly a fraction
+  of the law, and what tells it from two strangers is that its contacts fall away from the corner as
+  the law does, and from which of its ends. The best gap's log-likelihood against the trans level is
+  counted in the score **its own window** would have holding the law at gap nought, so a clean
+  adjacency is one however short its contigs, and at most 1.2 — a join makes one junction, and a
+  window brighter than the law is no more of one. Two ends whose coarse cells hold no more than twice
+  what strangers share are not weighed at all. The fitted gap is said on the suggestion (`a gap of
+  about 16 kb`).
+- **An end has one neighbour.** Each end's offers are ranked by the weight of their evidence; a join's
+  **exclusivity** is how many doublings its own offer stands above the best either of its ends has
+  elsewhere, between −2 and 2 — a cluster of short contigs that all lie near each other, telomeres that
+  all touch, are not each other's (`an end with a better offer`); an offer under a hundredth of an
+  adjacency's evidence is nothing, so two ends whose best is the clustering of their telomeres are not
+  exclusive for lack of anything else. A join across a long gap — an rDNA array, a megabase no read
+  spanned — is a small share of an adjacency and still the only thing its two ends meet: offered on its
+  exclusivity alone, a doubling or more.
+- **Clustering foci** (`fociOf`): each sequence is asked, of every other one, where in it the
+  brightest coarse cell of their block lies — a cell and its eight neighbours, only cells most of whose
+  own cells the balancer kept, a peak four times the trans level at least — twice: first of all the
+  others, keeping those a third agree on as the clustering ones, then of those alone, and a place
+  nearly half of those name — 45%, which the smallest yeast chromosomes, whose telomeres lie near their
+  centromeres, reach and a stray peak never does — is its **focus**. In a genome whose centromeres cluster it is the centromere; one whose
+  do not answers anywhere, and has none. A join that would put two foci further apart than four coarse
+  cells in one sequence makes a chromosome of **two centromeres**, and says so.
 - **Corners** are found as above, on the coarse grid, from a smoothed log of observed over expected:
   a point whose quadrant stands three times above expectation and three times above both quadrants it
   shares a side with, four coarse cells a quadrant, the 240 strongest kept, each placed at the most
@@ -10374,16 +10409,26 @@ where it went further than the text above:
   costs what its corners name rather than every pair of its ends. A junction an edit made that the map
   cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
   but the hand is behind it; one of the file's own is trusted.
-- **The confidence** is a logistic over four features — `log₂(1 + gain)`, a penalty for a stretch of
-  fewer than four cells, the share of its windows that held anything, and how far past two and a half
-  times the law the brightest corner it makes stands (`brighter than an adjacency`: the elements every
-  telomere carries light the corner between two chromosomes' ends brighter than any true adjacency) —
-  with the initial weights and their reasons in `edit/suggest.ts`. The suggestions are the best of each
+- **The confidence** is a logistic over six features — `log₂(1 + gain)`, a penalty for a stretch of
+  fewer than four cells, the share of its windows that held anything, how far past the law the
+  brightest thing it makes stands (`brighter than an adjacency`: the elements every telomere carries
+  light the corner between two chromosomes' ends brighter than any true adjacency — a trade's two
+  corner cells past two and a half times the law, a join's whole window past 1.6 times, so that one
+  hot cell at a thinly covered end is not a bright corner), a join's exclusivity, and a join that makes
+  two centromeres — with the initial weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2,
+  2.5, 1.5 and 5. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
   point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
   offered — a suggestion a curator would take one time in seven or less is noise on the map — though
   it is still ranked, and an answer about another can raise it.
 - **Placed by the map, to one cell** of the picture; no finer rung is read, and no evidence below the
   map places it to the base.
+
+Tried on a real reassembly — a yeast whose chromosome XVI carries the *M. mycoides* genome, 32
+long-read contigs and a Hi-C map of the strain (§27.11) — the meeting, the exclusivity and the foci are
+what it took. Joins scored on the coarse grid never offered the join at the fused chromosome's working
+centromere, and turned chromosome XV's first 25 kb the wrong way round; a fixed-amplitude score
+penalised every true adjacency for the reads lost beside its break; telomeres paired by their
+clustering were the strongest joins in the file until two centromeres counted against them.
 
 Not yet: the refinement at finer rungs; suggestions to set a stretch aside or to copy one; the
 evidence beyond the map — gaps, telomeric repeats, the skew of a circle, coverage and mappability,
@@ -10587,7 +10632,20 @@ at even odds on the assembly as it was drawn (`test/unit/edit-method.test.ts`); 
 16 kb, as it is — nothing at even odds — and scrambled through the lens by a turn, a move turned, a
 split and a join, the four put back and nothing else offered at even odds
 (`test/unit/edit-method-demo.test.ts`). On the 1 kb micro-C the same scramble's six breakpoints are
-found to the kilobase. Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
+found to the kilobase. And a real reassembly (`test/unit/edit-method-reassembly.test.ts`, skipped
+without its 70 MB in `data/`): a yeast whose chromosome XVI carries the *Mycoplasma mycoides* genome,
+its long-read assembly in 32 contigs and a Hi-C map of the strain on them, against two truths that
+mostly agree — the theoretical genome, to which each contig was aligned, and the map's own clustering
+centromeres, which put the fused chromosome's working centromere at the first myco stretch's end,
+where the theoretical genome has none. At open, seven joins at even odds or more: chromosome XII
+across its rDNA, XV whole, the fused chromosome's first yeast and myco stretches to its second yeast
+stretch at that centromere, and three joins of the myco contigs — all as the theoretical genome has
+them — and one of two myco contigs the map joins with no gap at the full law where the theoretical
+genome does not; no join of two chromosomes' telomeres, which their clustering lights. Auto mode
+rebuilds XII, XV and the fused chromosome, `39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54-`, in the
+theoretical order and orientation but for contig_49 — fifteen kilobases, most of them emptied by the
+balancer, either way round — and those two. Not yet: the grid, `--simulate`, and the `.pairs`
+re-binned exactly.
 
 ### 27.12 Costs
 
@@ -10597,7 +10655,7 @@ found to the kilobase. Not yet: the grid, `--simulate`, and the `.pairs` re-binn
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
-| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer on the stage's own thread once the hand has let go: about a fifth of a second for a yeast genome at 1 kb; not yet in a worker, not yet refined |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer on the stage's own thread once the hand has let go: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; the cells between sequence ends at most four million, 32 MB, kept by the picture's pass; not yet in a worker, not yet refined |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held |
 

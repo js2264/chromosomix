@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Suggestions that scaffold a real long-read assembly — a dev feature (§27.5, §27.11).** Whether
+  two contigs meet is now weighed at the picture's own resolution — the pass that reads the stage's
+  picture keeps every pair of cells between sequence ends — by a score that fits the gap the assembly
+  left between them and how much of the contact law survived beside it, walking past the cells the
+  balancer emptied at their ends; an end has one neighbour, so a join whose ends each have a better
+  offer counts less; and the centromeres that cluster are found from the map, so a join of two
+  chromosomes' telomeres — two centromeres in one sequence — is never offered at even odds. On a yeast
+  whose chromosome XVI carries the *Mycoplasma mycoides* genome, assembled from long reads into 32
+  contigs, the stage now offers the join at the fused chromosome's working centromere, chromosome XII
+  across its rDNA and XV whole, and auto mode rebuilds the fused chromosome, yeast, myco, yeast, myco,
+  in the order and orientation the strain was built to have. A suggestion says the gap it fitted
+  (`a gap of about 8 kb`), `an end with a better offer` and `two centromeres`.
+
 - **The edit of the reference written out, and read back — a dev feature (§27.8).** The stage has an
   *export* card: the edited assembly as an **AGP 2.1** (the steps in its header, each gap typed
   `scaffold` with `proximity_ligation` as its evidence), a **chrom.sizes**, a Juicebox **`.assembly`**

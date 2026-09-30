@@ -711,6 +711,17 @@ makes less those it takes away, counted in **units** of one adjacency. A suggest
 a result: it enters the reference only when accepted, or when auto mode applies it and writes down
 that it did.
 
+### meeting, gap, exclusivity, focus
+
+A **meeting** is whether two separate ends — two contigs' — belong together: the junction score's
+likelihood with a **gap** the assembly left out between them and the share of the law that survived
+beside it both fitted, over windows walked past the cells the balancer emptied, and counted in what a
+clean adjacency of those two ends would score. **Exclusivity** is how far a join's two ends prefer
+each other to anything else either could meet, since an end has one neighbour. A **focus** is the
+place of a sequence the others' own such places cluster with — a centromere, in a genome whose
+centromeres cluster; a join that would give one sequence two far apart makes a chromosome of **two
+centromeres**, and counts against itself.
+
 ### manual, review, auto
 
 The stage's three modes, and three answers to one question — **who presses accept** (§27.6). In
