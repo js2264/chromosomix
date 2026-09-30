@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The dot plot is a view you can move through — a dev feature (§28.2).** On screen its streaks are drawn
+  as lines, sharp at any zoom, in a square plot at one scale on both axes: the wheel zooms about the
+  pointer, a drag or a sideways scroll moves it, a double click shows both sets whole, and the line under
+  it names the streak the pointer is on — both loci, its way round and its anchors — which a press keeps
+  named. The PNG and PDF buttons draw the window on screen.
+
 - **The stage reorders without joining — a dev feature (§27.4).** A piece pressed again selects its whole
   sequence, a stitched one whole, as a press on the sequence's name on a pieces bar does; **↑ ↓** — or
   *earlier* and *later* on the selection's card — move a whole sequence one place in the order, or a

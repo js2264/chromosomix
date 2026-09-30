@@ -11,10 +11,34 @@
  */
 
 import { PairBuilder } from '../../annotations/featureset'
-import { anchorsOf, densityOf, K, locate, MAX_OCCURRENCES, minimizersOf, oneToOne, sequenceSet, streaksOf, windowFor, type SequenceSet } from '../../dotplot/dotplot'
+import { anchorsOf, densityOf, K, locate, MAX_OCCURRENCES, minimizersOf, oneToOne, sequenceSet, streaksOf, windowFor, type SequenceSet, type Streak } from '../../dotplot/dotplot'
 import { idParam, numParam, strParam, type TrackTaskRunner } from '../job'
 import { DOTPLOT_CELLS } from '../tasks/dotplot'
-import type { MatrixOutput, TaskOutput } from '../types'
+import type { DotplotStreaks, MatrixOutput, TaskOutput } from '../types'
+
+/** The streaks kept, as the lines the figure on screen draws (§28.2), with the two axes they are measured along. */
+function linesOf(streaks: readonly Streak[], a: SequenceSet, b: SequenceSet, xLabel: string, yLabel: string): DotplotStreaks {
+  const n = streaks.length
+  const lines: DotplotStreaks = {
+    x: { label: xLabel, names: [...a.names], lengths: [...a.lengths] },
+    y: { label: yLabel, names: [...b.names], lengths: [...b.lengths] },
+    x0: new Float64Array(n),
+    x1: new Float64Array(n),
+    y0: new Float64Array(n),
+    y1: new Float64Array(n),
+    strand: new Int8Array(n),
+    anchors: new Int32Array(n),
+  }
+  streaks.forEach((streak, i) => {
+    lines.x0[i] = streak.x0
+    lines.x1[i] = streak.x1
+    lines.y0[i] = streak.y0
+    lines.y1[i] = streak.y1
+    lines.strand[i] = streak.strand
+    lines.anchors[i] = streak.anchors
+  })
+  return lines
+}
 
 /** A set's sequences as marks along an axis of the figure, in its cells. */
 function segmentsOf(set: SequenceSet, cellSize: number): NonNullable<MatrixOutput['xSegments']> {
@@ -117,6 +141,7 @@ export const runDotplot: TrackTaskRunner = async (job) => {
       { label: 'bases a cell', value: grid.cellSize },
     ],
     large: true,
+    streaks: linesOf(streaks, a, b, job.inputs.labels?.[xId] ?? 'along x', job.inputs.labels?.[yId] ?? 'along y'),
   }
 
   const rows = streaks.map((streak) => {

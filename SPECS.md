@@ -10896,7 +10896,8 @@ a glance, as the line that jumps, turns or leaves. Related to §27 and independe
 contact map and no edit, only two FASTA or `.2bit` files, and it is computed here, in the browser. A
 **dev feature** (§29) until it is validated; **status: partly built** — the matches (§28.1), the task
 and its figure, table and pairs (§28.3), the command line, and what it says about itself (§28.4).
-**Not yet**: the view of its own (§28.2).
+**Built since**: the figure a view of its own on screen, zoomed and read under the pointer (§28.2); **not
+yet** a view of its own in the link, with the maps' tracks on its edges.
 
 ### 28.1 Matches
 
@@ -10922,7 +10923,23 @@ would leave it its diagonal.
 
 ### 28.2 The view
 
-**Not yet built.** A view of its own, `view=dotplot`, with the two sequence sets' addresses in the link,
+*Built*, in the figure's own place (`ui/dotplotFigure.ts`, `dotplot/view.ts`): on screen the dot plot is
+its **streaks drawn as the lines they are** — the same way round red, the other blue, a line at 45°
+whatever the two sets' sizes, since both axes are drawn at one scale in a square plot centred across
+the drawer — rather than the cells, so that a zoom stays sharp. The wheel zooms about the pointer, which
+stays over the same bases (the window held only by its centre, over the data, so that a zoom into
+either set's last sequence — where a fused chromosome is usually written — does not slide away under
+the pointer); a drag or a sideways scroll moves it, as over a map (§7.2); a double click, `0` or *the
+whole* in its corner shows both sets whole again; `+ − ←→↑↓` answer when it has the keys. The line
+under it says what the pointer is on: the streak within six pixels, **both loci, its way round and its
+anchors** (`contig_5:43-73,573 × chrXVI-Mmmyco_inv870kb:1,531,421-1,604,949 · the other way round ·
+9,310 anchors`), lit over a halo; else the place on both axes and the bases a pixel. A press keeps a
+streak named while the pointer goes elsewhere, and Escape lets it go. What the PNG and PDF buttons
+draw is the window on screen, as lines; the cells stay the output's, and what a vector export of the
+figure through the Figures block draws. The colour picker a matrix offers is not offered: the lines
+are red and blue whatever it would say.
+
+Still to come: a view of its own, `view=dotplot`, with the two sequence sets' addresses in the link,
 drawn by the map's machinery over two assemblies instead of one: the density of anchors in each cell,
 **signed** — forward positive, reversed negative — in `RdBu_r` about zero, so that a reordering is a red
 line that jumps and an inversion a blue one. It zooms from the two assemblies end to end down to the

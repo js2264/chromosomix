@@ -77,6 +77,68 @@ await shot('d03-figure')
 // The whole picture: the figure's head at the top of the drawer.
 await scrollTo(/^Streaks one to one/)
 await shot('d04-picture')
+// The view of its own (§28.2): a streak under the pointer, named on both axes;
+// then zoomed onto the fused chromosome's corner, and a streak named there.
+const plot = page.locator('.dotplot-canvas').first()
+async function hoverStreak(from, to) {
+  const box = await plot.boundingBox()
+  if (box === null) return ''
+  const across = box.width - 98
+  const side = Math.min(across, box.height - 56)
+  const rect = { x: box.x + 86 + (across - side) / 2, y: box.y + 10, width: side, height: side }
+  for (let t = from; t <= to; t += 0.004) {
+    await page.mouse.move(rect.x + t * rect.width, rect.y + t * rect.height)
+    const said = await page.evaluate(() => document.querySelector('.dotplot-readout')?.textContent ?? '')
+    if (/anchors/.test(said)) return said
+  }
+  return page.evaluate(() => document.querySelector('.dotplot-readout')?.textContent ?? '')
+}
+if ((await plot.count()) > 0) {
+  console.log('idle:', await page.evaluate(() => document.querySelector('.dotplot-readout')?.textContent))
+  console.log('hovered:', await hoverStreak(0.1, 0.5))
+  await shot('d04b-hover')
+  // A streak of the fused chromosome, in the plot's far corner: the pointer
+  // put on the middle of its line, as the figure says it drew it, and zoomed
+  // there — the streak stays under the pointer, named, as it grows.
+  console.log('in the corner:', await hoverStreak(0.8, 0.99))
+  // The next frame draws the lit streak, and says where.
+  await sleep(250)
+  const middle = await page.evaluate(() => {
+    const canvas = document.querySelector('.dotplot-canvas')
+    const lit = canvas?.dataset.lit?.split(' ').map(Number)
+    if (canvas === null || lit === undefined) return null
+    const r = canvas.getBoundingClientRect()
+    return { x: r.left + (lit[0] + lit[2]) / 2, y: r.top + (lit[1] + lit[3]) / 2 }
+  })
+  if (middle !== null) await page.mouse.move(middle.x, middle.y)
+  for (let k = 0; k < 5; k++) {
+    await page.mouse.wheel(0, -300)
+    await sleep(200)
+  }
+  await sleep(600)
+  if (middle !== null) {
+    await page.mouse.move(middle.x + 1, middle.y)
+    await page.mouse.move(middle.x, middle.y)
+  }
+  await sleep(200)
+  // A pixel's worth of aim before the zoom is twenty after it: the streak is
+  // found again near the pointer.
+  if (middle !== null) {
+    let said = ''
+    for (let r = 0; r <= 40 && !/anchors/.test(said); r += 4) {
+      for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) {
+        await page.mouse.move(middle.x + dx, middle.y + dy)
+        said = await page.evaluate(() => document.querySelector('.dotplot-readout')?.textContent ?? '')
+        if (/anchors/.test(said)) break
+      }
+    }
+  }
+  await sleep(250)
+  console.log('zoomed:', await page.evaluate(() => document.querySelector('.dotplot-readout')?.textContent))
+  await shot('d04c-zoomed')
+  await page.locator('.dotplot-whole').first().click().catch(() => undefined)
+  await sleep(300)
+}
 await scrollTo(/^Streaks$/)
 await shot('d05-streaks')
 

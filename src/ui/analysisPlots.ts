@@ -1691,7 +1691,7 @@ export interface PlotFigure {
 }
 
 /** The width a figure is drawn at before anything has measured its column. */
-const MIN_FIGURE_WIDTH = 240
+export const MIN_FIGURE_WIDTH = 240
 
 /**
  * Call `onChange` whenever the effective theme changes.
@@ -1702,7 +1702,7 @@ const MIN_FIGURE_WIDTH = 240
  * restyled by CSS, so a figure that watched only one of the two would keep the
  * old palette until something else made it redraw.
  */
-function watchTheme(onChange: () => void): () => void {
+export function watchTheme(onChange: () => void): () => void {
   const media = window.matchMedia?.('(prefers-color-scheme: dark)')
   const observer =
     typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => onChange())

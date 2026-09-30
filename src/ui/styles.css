@@ -13536,3 +13536,36 @@ span.deck-name {
 .modal-backdrop ~ .crumb-menu {
   z-index: 110;
 }
+
+/* The dot plot as a view of its own (§28.2): the picture, a button back to
+   the whole of both sets once it is zoomed, and a line under it saying what the
+   pointer is on — the streak, on both axes, or the place. */
+.dotplot-host {
+  position: relative;
+}
+.dotplot-canvas {
+  cursor: grab;
+  touch-action: none;
+}
+.dotplot-canvas.is-dragging {
+  cursor: grabbing;
+}
+.dotplot-canvas.is-on-streak {
+  cursor: pointer;
+}
+.dotplot-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dotplot-whole {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+}
+.dotplot-readout {
+  min-height: 1.5em;
+  padding: 0.2rem 0.1rem 0;
+  color: var(--text-dim);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}

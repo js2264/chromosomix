@@ -383,6 +383,10 @@ export function analysisTransfers(payload: unknown): Transferable[] {
         break
       case 'matrix':
         take(output.values)
+        if (output.streaks !== undefined) {
+          const lines = output.streaks
+          for (const array of [lines.x0, lines.x1, lines.y0, lines.y1, lines.strand, lines.anchors]) take(array)
+        }
         break
       case 'curve':
         for (const series of output.series) {

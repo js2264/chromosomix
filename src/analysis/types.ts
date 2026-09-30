@@ -901,6 +901,21 @@ export interface CurveOutput {
  * same rasteriser and the same colormaps, so a pileup in the drawer and the map
  * behind it agree about what a colour means.
  */
+/** A dot plot's streaks, one entry each, and the two axes they are measured along (§28.2). */
+export interface DotplotStreaks {
+  /** What each axis is — the sequence set's name — and its sequences in order, with their lengths. */
+  x: { label: string; names: string[]; lengths: number[] }
+  y: { label: string; names: string[]; lengths: number[] }
+  /** Extents on each axis, half-open, in bases along the concatenated axis. */
+  x0: Float64Array
+  x1: Float64Array
+  y0: Float64Array
+  y1: Float64Array
+  /** `1` the same way round, `-1` the other. */
+  strand: Int8Array
+  anchors: Int32Array
+}
+
 export interface MatrixOutput {
   kind: 'matrix'
   id: string
@@ -943,6 +958,13 @@ export interface MatrixOutput {
    * three times that.
    */
   large?: boolean
+  /**
+   * A dot plot's streaks as the lines they are (§28.2): where present, the
+   * figure on screen draws these rather than the cells — at any zoom, sharp,
+   * the one under the pointer named on both axes — and the cells stay what an
+   * export draws.
+   */
+  streaks?: DotplotStreaks
   /**
    * The value a diverging colormap is centred on, if it is one.
    *
