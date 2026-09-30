@@ -53,7 +53,7 @@ import {
  type FigureSubject} from './MatrixPanel'
 import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
-import { attachRefine, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
@@ -827,6 +827,19 @@ export class RegionView {
    * fits the finest grid the window's cell count allows, which is what a view of
    * a whole chromosome has always relied on.
    */
+  /**
+   * `{ rung }` where a sibling rung draws this window's first picture from
+   * fewer pixels with nothing lost ({@link poolingRung}), else nothing.
+   *
+   * Not with a declared grid, which is a whole number of the *open* map's bins
+   * (§3.4), nor beside a second file, whose ladder need not have the rung.
+   */
+  private firstRung(rows: [number, number], cols: [number, number]): { rung?: string } {
+    if ((this.props.binsPerCell ?? 1) > 1 || this.props.compare !== undefined) return {}
+    const rung = poolingRung(rungsOf(this.props.rungs ?? []), rows, cols, this.props.binsize)
+    return rung === undefined ? {} : { rung }
+  }
+
   private pooled(): { binsPerCell?: number } {
     const k = this.props.binsPerCell ?? 1
     return k > 1 ? { binsPerCell: k } : {}
@@ -900,6 +913,7 @@ export class RegionView {
         const ask = {
           kind: 'matrix' as const,
           rows: [lo, hi] as [number, number],
+          ...this.firstRung([lo, hi], [lo, hi]),
           ...(wrap === undefined ? {} : { wrap }),
           ...this.pooled(),
           balance: this.props.balance,
@@ -916,7 +930,7 @@ export class RegionView {
         // whole chromosome at 10 kb is more cells than any picture holds — and
         // every coordinate on screen is the bin size times a cell offset, so the
         // panel is told before it is given the block.
-        this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
+        this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
         this.panel.setData(result, this.props.region, second)
         // After the block and *before* the ladder is armed, which is the whole
         // reason it is here rather than in the panel's own setup: the refine
@@ -937,6 +951,7 @@ export class RegionView {
         kind: 'matrix' as const,
         rows: [lo, hi] as [number, number],
         cols: [lo2, hi2] as [number, number],
+        ...this.firstRung([lo, hi], [lo2, hi2]),
         ...this.pooled(),
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
@@ -953,7 +968,7 @@ export class RegionView {
       // whole chromosome at 10 kb is more cells than any picture holds — and
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
-      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
+      this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
       await this.armRefine(parsed, result, other)
     } catch (err) {

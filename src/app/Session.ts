@@ -2519,7 +2519,13 @@ export class Session {
       const group = splitUri(uri).group
       // `/entries/rep1` in an mmetacool, `/resolutions/1000` in an mcool.
       const match = /^\/(?:entries|resolutions)\/(.+)$/.exec(group)
-      const currentEntry = match === null ? undefined : match[1]
+      // A `.hic` opened by its own URL names no rung, and lands on one (§3.6):
+      // the one it is drawn at, or the picker would stand on the finest.
+      const landed =
+        info.entryGroup === 'resolutions' && info.binsize !== null && entries.includes(String(info.binsize))
+          ? String(info.binsize)
+          : undefined
+      const currentEntry = match === null ? landed : match[1]
       // A map and a genome are the two shapes of a session and never both: a
       // `.cool` dropped on the browser is a map from here on, and leaving the
       // assembly set would keep the browser's command list and its panels.
@@ -5811,7 +5817,9 @@ export class Session {
         measureJunctions(
           [candidate],
           async (rows, cols) =>
-            (await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })).values,
+            (
+              await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance, background: true })
+            ).values,
           alive,
         )
       for (const candidate of tested) {
@@ -8283,7 +8291,9 @@ export class Session {
     if (info.contacts !== null) return
     const open = this.opens.get(client)
     client
-      .request<'contacts'>({ kind: 'contacts' })
+      // Followed, and silently: its progress is not what any veil is up for,
+      // and on the veil of a view that is reading it named the wrong wait.
+      .request<'contacts'>({ kind: 'contacts' }, () => undefined)
       .then(({ total }) => {
         if (total === null || this.opens.get(client) !== open) return
         this.counted.set(client, total)
@@ -10429,6 +10439,7 @@ function junctionReaderAt(
       rows: [start(rows[0]), end(rows[1])],
       cols: [start(cols[0]), end(cols[1])],
       balance,
+      background: true,
     })
     const nrows = rows[1] - rows[0]
     const ncols = cols[1] - cols[0]

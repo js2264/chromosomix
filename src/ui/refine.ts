@@ -228,7 +228,13 @@ export class BlockLadder {
    */
   adopt(result: MatrixResult, rows?: Extent, cols?: Extent): void {
     this.current = result
-    this.keep(result, rows ?? result.rowExtent, cols ?? result.colExtent)
+    // A block read from a sibling rung describes itself on that rung's grid;
+    // `source` is the window it was asked for, in the open map's bins.
+    this.keep(
+      result,
+      rows ?? result.source?.rows ?? result.rowExtent,
+      cols ?? result.source?.cols ?? result.colExtent,
+    )
   }
 
   /** The finest block held that covers `view`, or `null`. */
@@ -742,6 +748,39 @@ export function chooseRung(
   // zoom may use is the level that is open — which needs no rung named.
   best ??= above[0]
   return best.binsize === binsize ? undefined : best.name
+}
+
+/**
+ * The rung a view's **first** read of a window can come from with nothing lost.
+ *
+ * A window wider than {@link POOLED_CELL_CAP} bins is pooled by the reader into
+ * cells of {@link gridFor} bins each, so the picture of a whole chromosome at
+ * 25 kb is a picture at 50 kb, summed out of every 25 kb pixel. A ladder that
+ * stores the 50 kb rung already holds that picture, balanced at its own
+ * resolution, in about a quarter of the pixels: on a 1 GB `.hic`, chr1's first
+ * read took 1.6 s from the rung where it took 4.3 s from the open map, for the
+ * same 3,925 cells.
+ *
+ * Only a rung whose bins divide that cell, so the grid on screen is the one the
+ * reader would have drawn, and the ladder takes it as it is: the same cell
+ * size is what {@link BlockLadder}'s *good enough* compares against, so no
+ * refine follows until the reader zooms. `undefined` — read the open map —
+ * where the window is not pooled at all, or no rung fits.
+ */
+export function poolingRung(
+  rungs: ReadonlyArray<{ name: string; binsize: number }>,
+  rows: Extent,
+  cols: Extent,
+  binsize: number,
+): string | undefined {
+  if (!(binsize > 0)) return undefined
+  const cell = binsize * gridFor(rows, cols)
+  let best: { name: string; binsize: number } | null = null
+  for (const rung of rungs) {
+    if (rung.binsize <= binsize || rung.binsize > cell || cell % rung.binsize !== 0) continue
+    if (best === null || rung.binsize > best.binsize) best = rung
+  }
+  return best?.name
 }
 
 // ---------------------------------------------------------------------------

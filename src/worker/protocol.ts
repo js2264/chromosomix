@@ -1009,6 +1009,11 @@ export type WorkerRequest =
       genomes?: boolean
       binsPerCell?: number
       contigsPerCell?: number
+      /**
+       * A read nobody is looking at yet — the circularity check's (§8.15). It
+       * waits until the views' own reads have been answered (§12).
+       */
+      background?: boolean
     }
   | {
       id: number

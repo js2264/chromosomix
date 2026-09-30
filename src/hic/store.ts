@@ -179,6 +179,8 @@ export class HicStore implements PixelStore {
         options.onProgress?.(done, pairs.length)
         return !stopped
       },
+      undefined,
+      options.pause,
     )
   }
 
@@ -254,7 +256,9 @@ export class HicStore implements PixelStore {
    * moment a `.hic` opens, so the request waiting was the loading screen's own.
    * Yielding first means nothing is read until what was already queued has been
    * answered. The yield is also what lets a cancel arrive at all, the argument
-   * `forEachPixelSpanAsync` makes for its window loop.
+   * `forEachPixelSpanAsync` makes for its window loop. A walk given `pause`
+   * waits on that instead, which is how the census stands aside for as long as
+   * a view is reading rather than for one turn of the loop (§12).
    *
    * **And a walk across pairs keeps several in flight.** Its reads are exact
    * ones that do not hold the worker (`HicFile`), and they are round trips and
@@ -267,13 +271,14 @@ export class HicStore implements PixelStore {
     read: (a: number, b: number) => Promise<PixelChunk | null>,
     take: (records: PixelChunk | null, done: number) => boolean,
     cancelled?: () => boolean,
+    pause?: () => Promise<void>,
   ): Promise<boolean> {
     const ahead = pairs.length > 1 ? this.file.walkAhead() : 1
     const queue: Array<Promise<PixelChunk | null>> = []
     let next = 0
     let done = 0
     while (done < pairs.length) {
-      await yieldToEventLoop()
+      await (pause?.() ?? yieldToEventLoop())
       if (cancelled?.() === true) return false
       while (queue.length < ahead && next < pairs.length) {
         const [a, b] = pairs[next]

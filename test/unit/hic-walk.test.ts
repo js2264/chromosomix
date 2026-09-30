@@ -420,6 +420,52 @@ describe('the census of a .hic, walked pair by pair (§6.5)', () => {
     mc.close()
   })
 
+  it('stands aside for as long as it is told to, and reads nothing meanwhile (§12)', async () => {
+    const { bytes, total } = await fixture()
+    const source = new RecordingSource(bytes)
+    const mc = MetaCooler.fromHic(`walk.hic::/resolutions/${COARSE}`, source)
+    source.reads.length = 0
+    // A view is reading: every step waits until it is let go.
+    let release: () => void = () => undefined
+    let held = true
+    let asked = 0
+    const counting = mc.countContacts({
+      pause: () => {
+        asked += 1
+        return held ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve()
+      },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(asked).toBe(1)
+    expect(source.reads).toEqual([])
+    held = false
+    release()
+    expect(await counting).toBe(total)
+    expect(asked).toBeGreaterThan(1)
+    mc.close()
+  })
+
+  it('stops standing aside once a resample is waiting on it, which would otherwise never end', async () => {
+    const { bytes, total } = await fixture()
+    const mc = MetaCooler.fromHic(`walk.hic::/resolutions/${COARSE}`, new RecordingSource(bytes))
+    // A pause that only a wait on the census can end: the resample below is a
+    // request somebody is waiting for, so the views are never quiet while it runs.
+    const counting = mc.countContacts({
+      pause: (wanted) =>
+        new Promise<void>((resolve) => {
+          const poll = setInterval(() => {
+            if (!wanted()) return
+            clearInterval(poll)
+            resolve()
+          }, 2)
+        }),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await mc.resample({ contacts: Math.floor(total / 2), seed: 1 })
+    expect(await counting).toBe(total)
+    mc.close()
+  })
+
   it('has read the pairs in flight, not every pair, when it hands over its first pixels', async () => {
     const { bytes, pairs } = await fixture()
     const source = new RecordingSource(bytes)

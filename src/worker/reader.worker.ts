@@ -84,6 +84,7 @@ import { liftedTable } from '../edit/liftedContacts'
 import { VERSION } from '../version'
 import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
+import { Foreground } from './foreground'
 import { resolutionLabel } from '../units'
 
 /**
@@ -200,6 +201,8 @@ let session: Session | null = null
 let calls = 0
 let lastOp: SourceStats = { requests: 0, bytes: 0 }
 const cancelled = new Set<number>()
+/** The views' reads, which the census and the circularity check stand aside for (§12). */
+const foreground = new Foreground()
 
 function requireSession(): Session {
   if (session === null) throw new Error('no file is open in the reader worker')
@@ -2126,7 +2129,12 @@ async function handleContacts(request: Extract<WorkerRequest, { kind: 'contacts'
     .sort((a, b) => Number(b) - Number(a))
   const map = ladder.length > 0 ? await mapFor(ladder[0]) : active.mc
   const say = reporter(request.id)
-  return { total: await map.countContacts({ onProgress: (done, total) => say(done, total, 'counting contacts') }) }
+  return {
+    total: await map.countContacts({
+      onProgress: (done, total) => say(done, total, 'counting contacts'),
+      pause: (wanted) => foreground.quiet(wanted),
+    }),
+  }
 }
 
 function handleStats(): StatsResult {
@@ -2220,6 +2228,11 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
 
 async function handle(request: WorkerRequest): Promise<void> {
   calls++
+  // The census and a read marked `background` go behind every other request:
+  // one waits between its steps (`handleContacts`), the other before it starts.
+  const background = request.kind === 'contacts' || (request.kind === 'matrix' && request.background === true)
+  if (background && request.kind === 'matrix') await foreground.quiet(() => cancelled.has(request.id))
+  const ended = background ? null : foreground.begin()
   const before = session?.source.stats()
   const summing = followCells(request.id)
   try {
@@ -2232,6 +2245,7 @@ async function handle(request: WorkerRequest): Promise<void> {
   } catch (err) {
     post({ type: 'error', id: request.id, error: serialiseError(err) })
   } finally {
+    ended?.()
     summing()
     cancelled.delete(request.id)
   }

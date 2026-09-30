@@ -1548,6 +1548,11 @@ record's first few dozen bytes, and that rung's one block, both as exact ranges,
 flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231 pairs) that
 is 456 requests and under 1 MB. Reading each record whole first — the block index of all thirteen
 rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen for a minute and a half.
+And **it stands aside for as long as a view is reading**, not for one turn: between pairs it waits
+until no view's request has run for a quarter of a second (§12), so a chromosome clicked while it
+counts is read as if it were not counting. A resample waiting on the census ends the wait, since the
+views are then waiting on it. Its progress is its own and is not written on a view's veil: *counting
+contacts…* over a chromosome that was loading named the wrong wait.
 
 **What is refused, by name:** counts that are not whole or are negative (there is no contact to
 draw); a `square` file, which stores every contact twice; an `.scool`, whose map is a sum of cells
@@ -3446,7 +3451,8 @@ of 21 chromosomes of a 5 GB 4DN map opened at 1 kb. The score is a ratio at one 
 answer does not move: every sequence of the demo maps is decided alike at both rungs. A sequence
 the coarse rung cannot be read for as the test reads it — a level that absorbed its last part-bin —
 is asked again at the open rung; one whose end the balancer dropped is not, being undecided at every
-rung. At **0.2** or above the sequence
+rung. **Its reads wait for the views'** (§12): each is asked only once nothing a reader is looking at
+has read for a quarter of a second. At **0.2** or above the sequence
 is ticked, and a banner names it and says where to untick it; below, or where an
 end has nothing to measure, it is left alone. **It only ever adds a tick, and
 only once per file**: the scores are kept with the declarations — the box's own
@@ -4464,6 +4470,15 @@ in the same view. Concretely:
   file; the open rung is left as it is, and a zoom inside the picture still refines to it. A file
   with no rung that fits, a selection and a second file in the square keep the pooled read and its
   gate
+- **so is the first picture of a region wider than the reader draws at the open rung** — a whole
+  chromosome, most often. A window of more than 4,096 bins is pooled into cells of several bins, so
+  chr1 at 25 kb is a 50 kb picture summed from every 25 kb pixel; where the ladder stores a rung
+  whose bins divide that cell, the first read comes from it: the same cells, balanced at their own
+  resolution, from a fraction of the pixels (`poolingRung`). Never coarser than the pooled grid, so
+  the picture is the one it was and the refine takes it as it stands; a zoom then reads the open
+  rung as before. On a 1 GB `.hic` from S3, chr1's read took 1.3 s where it took 4.3. A declared
+  resolution (§3.4) and a second file keep the open rung. A `.hic` opened with no rung named stands
+  the resolution picker on the rung it opened at, not on its finest
 
 The app is therefore not a HiGlass replacement for standard Hi-C. Say so in the paper rather than let
 a reviewer discover it: the claim is zero-install regional inspection of any cooler, plus a genome
@@ -4548,6 +4563,15 @@ whole-genome picture, and the census §6.5 takes on every open:
 |---|---|
 | A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and no chunk of the cache spent on either; four pairs in flight |
 | The census, started beside an open | **0** reads before a request already queued has been answered |
+| The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
+
+**A view's reads go first.** One worker reads for everything, and over a network each of its reads
+is a round trip that holds the thread — so work nobody is looking at, taking turns with a view,
+makes the view wait for its round trips as well as its own. The census (§6.5) and the circularity
+check (§8.15) are that work. Every other request counts itself in while it runs, and they wait until
+none has run for 250 ms, which covers the hop to the main thread between a view's `range` and its
+`matrix`. On a 1 GB `.hic` from S3 (4DNFIYUR29KO), chromosome 1 clicked from the Chromosomes table
+while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s.
 
 And for an alignment lane (§8.13), where the open cost is separated from the window cost for the same
 reason the table above separates opening a file from loading one MAG's matrix — a `.bai` for a human
