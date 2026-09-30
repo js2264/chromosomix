@@ -1025,7 +1025,20 @@ export type WorkerRequest =
    * The stage's whole-genome picture (§27.9), at the finest rung of the ladder
    * that fits `cells` a side — pooled a few bins a cell where none does.
    */
-  | { id: number; kind: 'picture'; cells?: number; balance?: boolean; value?: string; method?: boolean }
+  | {
+      id: number
+      kind: 'picture'
+      cells?: number
+      balance?: boolean
+      value?: string
+      method?: boolean
+      /**
+       * The sequences to draw, by name, where not all of them: one genome of a
+       * metagenome and the contigs brought into it (§27.10). The rest of the
+       * file is left out of the picture and of what the method weighs.
+       */
+      contigs?: string[]
+    }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

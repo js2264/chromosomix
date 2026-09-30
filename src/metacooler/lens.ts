@@ -519,9 +519,12 @@ export function lensFor(
   edit: ReferenceEdit,
   names: readonly string[],
   lengths: ArrayLike<number>,
+  options: { always?: boolean } = {},
 ): { assembly: EditedAssembly } | { refusal: string } | null {
   const wrong = mismatch(edit, names, Array.from(lengths))
   if (wrong !== null) return { refusal: `The edit was made on another assembly: ${wrong}.` }
   const assembly = EditedAssembly.of(edit)
-  return assembly.isIdentity ? null : { assembly }
+  // An edit that changes nothing is the map as it is — but for one of some of
+  // its sequences, which is those sequences alone.
+  return assembly.isIdentity && options.always !== true ? null : { assembly }
 }

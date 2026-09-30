@@ -75,6 +75,9 @@ const GAPS = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 /** The share of each distance's highest values left out of its mean, so what is looked for does not lift what it is judged against. */
 const TRIM = 0.01
 
+/** The least coverage a raw map's cell is weighed at, as a share of the median cell's. */
+const LEAST_COVERAGE = 0.1
+
 /** What the map is expected to hold, measured from the map itself (§27.5). */
 export interface Expected {
   /**
@@ -94,6 +97,14 @@ export interface Expected {
    * on a raw one; `NaN` for a cell with nothing the balancer kept.
    */
   bias: Float64Array
+  /**
+   * How much of a whole cell each cell pools, `0 … 1`: the bins of it the
+   * balancer kept over the most any cell keeps. A value is a mean over a
+   * cell's pairs of bins, and a sequence's last cell, a bin or two of a
+   * pooled one, holds its mean over a tenth of the pairs — a tenth of the
+   * evidence, whatever the mean.
+   */
+  share: Float64Array
   /**
    * Cells each end of a junction is read into: half the distance at which the
    * law falls to eight times the trans level, between four and {@link WINDOW} —
@@ -172,14 +183,53 @@ export function expectedOf(contacts: PictureContacts, balanced: boolean): Expect
     const positive = new Values()
     for (let a = 0; a < n; a++) if (marginal[a] > 0) positive.push(marginal[a])
     const middle = median(positive.view())
-    for (let a = 0; a < n; a++) bias[a] = marginal[a] > 0 && middle > 0 ? marginal[a] / middle : Number.NaN
+    // A cell with under a tenth of the usual coverage is as good as masked: a
+    // contact or two there, over coverage that small, would be the loudest
+    // thing in any window it is in.
+    for (let a = 0; a < n; a++) bias[a] = marginal[a] >= LEAST_COVERAGE * middle && middle > 0 ? marginal[a] / middle : Number.NaN
   }
   for (let a = 0; a < n; a++) if (kept[a] === 0) bias[a] = Number.NaN
+  let fullest = 1
+  for (let a = 0; a < n; a++) if (kept[a] > fullest) fullest = kept[a]
+  const share = new Float64Array(n)
+  for (let a = 0; a < n; a++) share[a] = kept[a] / fullest
 
   // The law near the diagonal, cell by cell, and how noisy it is.
   const near = new Float64Array(width).fill(Number.NaN)
   const ratios = new Values()
   for (let d = 0; d < width; d++) {
+    if (!balanced) {
+      // A raw map's cells are counts at their own coverage: the law is the
+      // counts over the coverage that could have held them, and the noise is
+      // Pearson's — so a thinly covered cell, divided by its coverage, is not
+      // the loudest voice in the mean.
+      let counts = 0
+      let covered = 0
+      let cells = 0
+      for (let a = 0; a + d < n; a++) {
+        const pooled = share[a] * share[a + d]
+        const o = band[a * width + d] * pooled
+        const w = bias[a] * bias[a + d] * pooled
+        if (!(o >= 0) || !(w > 0)) continue
+        counts += o
+        covered += w
+        cells++
+      }
+      if (cells < 8 || !(covered > 0)) continue
+      const p = counts / covered
+      near[d] = p
+      if (d === 0 || !(p > 0)) continue
+      let pearson = 0
+      for (let a = 0; a + d < n; a++) {
+        const pooled = share[a] * share[a + d]
+        const o = band[a * width + d] * pooled
+        const w = bias[a] * bias[a + d] * pooled
+        if (!(o >= 0) || !(w > 0)) continue
+        pearson += (o - w * p) ** 2 / (w * p)
+      }
+      ratios.push(pearson / Math.max(1, cells - 1))
+      continue
+    }
     const values = new Values()
     for (let a = 0; a + d < n; a++) {
       const v = band[a * width + d] / (bias[a] * bias[a + d])
@@ -220,24 +270,39 @@ export function expectedOf(contacts: PictureContacts, balanced: boolean): Expect
   for (let c = 0; c < nc; c++) coarseBias[c] = coarseCount[c] > 0 ? coarseBias[c] / coarseCount[c] : Number.NaN
   const byDistance: Values[] = []
   const trans = new Values()
+  // A raw map's, as the law near the diagonal is: counts over the coverage
+  // that could have held them, so the level strangers share is what they do
+  // share, and not what the thinly covered cells, divided up, say they do.
+  const rawSums = new Float64Array(nc)
+  const rawCover = new Float64Array(nc)
+  const rawCells = new Int32Array(nc)
+  let transSum = 0
+  let transCover = 0
   for (let a = 0; a < nc; a++) {
     let at = triangleIndex(a, a, nc)
     for (let b = a; b < nc; b++, at++) {
-      const v = coarse.values[at] / (coarseBias[a] * coarseBias[b])
+      const w = coarseBias[a] * coarseBias[b]
+      const v = coarse.values[at] / w
       if (!(v >= 0)) continue
       if (coarseSequence[a] === coarseSequence[b]) {
         const d = b - a
         if (d === 0) continue
         ;(byDistance[d] ??= new Values()).push(v)
+        rawSums[d] += coarse.values[at]
+        rawCover[d] += w
+        rawCells[d]++
       } else {
         trans.push(v)
+        transSum += coarse.values[at]
+        transCover += w
       }
     }
   }
   const far = new Float64Array(byDistance.length).fill(Number.NaN)
   for (let d = 1; d < byDistance.length; d++) {
     const values = byDistance[d]
-    if (values !== undefined && values.length >= 4) far[d] = trimmedMean(values.view())
+    if (values === undefined || values.length < 4) continue
+    far[d] = balanced ? trimmedMean(values.view()) : rawCover[d] > 0 ? rawSums[d] / rawCover[d] : Number.NaN
   }
 
   // The law in cells: as measured near the diagonal; interpolated in log–log
@@ -270,7 +335,7 @@ export function expectedOf(contacts: PictureContacts, balanced: boolean): Expect
   for (let d = longest + 1; d <= n; d++) law[d] = law[longest] * Math.pow(d / Math.max(1, longest), slope)
   if (!(law[0] > 0)) law[0] = law[1] > 0 ? law[1] : 1
 
-  let transLevel = trimmedMean(trans.view())
+  let transLevel = balanced ? trimmedMean(trans.view()) : transCover > 0 ? transSum / transCover : Number.NaN
   // A file of one molecule has no trans: two ends apart are then as far apart
   // as it has anything, half of that.
   if (!(transLevel > 0)) transLevel = 0.5 * law[Math.max(1, longest)]
@@ -307,7 +372,7 @@ export function expectedOf(contacts: PictureContacts, balanced: boolean): Expect
   }
   meetUnit = Math.max(meetUnit / dispersion, 1e-9)
 
-  return { law, trans: transLevel, dispersion, bias, window, unit, reach: meetReach, meetUnit }
+  return { law, trans: transLevel, dispersion, bias, share, window, unit, reach: meetReach, meetUnit }
 }
 
 /** The slope of the law's last decade in log–log, between −3 and −0.3. */
@@ -361,6 +426,7 @@ export class EditedMap {
   private readonly coarseValues: Float32Array
   private readonly coarseN: number
   private readonly bias: Float64Array
+  private readonly share: Float64Array
   /** The cells between sequence ends, as they are; `null` where the pass kept none. */
   private readonly ends: PictureEnds | null
 
@@ -384,6 +450,7 @@ export class EditedMap {
     this.coarseValues = contacts.coarse.values
     this.coarseN = contacts.coarse.n
     this.bias = expected.bias
+    this.share = expected.share
     this.ends = contacts.ends ?? null
     this.near = new Float64Array(2 * this.window + 2)
     this.logNear = new Float64Array(this.near.length)
@@ -425,6 +492,21 @@ export class EditedMap {
       else v = this.coarseValues[triangleIndex(this.coarseOf[lo], this.coarseOf[hi], this.coarseN)]
     }
     return v / (this.bias[a] * this.bias[b])
+  }
+
+  /**
+   * What the value at edited cells `(i, j)` is worth as evidence, a whole
+   * cell's of a balanced map being one: the coverage it was divided by — on a
+   * raw map, a cell a tenth covered holds a tenth of the counts, and its value,
+   * ten times them, is not ten times the evidence — and the pairs of bins its
+   * mean is over ({@link Expected.share}).
+   */
+  weight(i: number, j: number): number {
+    const a = this.cellMap[i]
+    const b = this.cellMap[j]
+    if (a < 0 || b < 0) return 0
+    const w = this.bias[a] * this.bias[b] * this.share[a] * this.share[b]
+    return w > 0 ? w : 0
   }
 
   /** The coarse cell an edited cell is in, or `-1` in a gap. */
@@ -478,6 +560,19 @@ export interface Junction {
   /** Cells of the window that held a value, of those its two walks reached. */
   seen: number
   reached: number
+  /**
+   * The contacts the window holds past what strangers share, over the
+   * dispersion — so on any map about the reads it rests on: what a claim a
+   * shallow map makes from two or three of them is worth, whatever the
+   * likelihood of so many where the trans level expects none.
+   */
+  contacts: number
+  /**
+   * The contacts the law would put in the window, over the dispersion: what
+   * a refusal of it rests on — an empty window where the law expects two
+   * contacts is no absence at all.
+   */
+  expected: number
 }
 
 /**
@@ -496,6 +591,7 @@ export type Apart = 'trans' | 'local'
 
 /** A window's values, by row, reused from one junction to the next. */
 const scratch = new Float64Array(WINDOW * WINDOW)
+const weights = new Float64Array(WINDOW * WINDOW)
 
 /**
  * The junction score of two ends (§27.5): over the window of their first
@@ -512,37 +608,45 @@ export function junctionScore(map: EditedMap, e: End, f: End, apart: Apart = 'tr
   let seen = 0
   let reached = 0
   let total = 0
+  let covered = 0
   for (let i = 0; i < w; i++) {
     const r = e.cell + e.dir * i
     const inside = r >= e.lo && r < e.hi
     for (let j = 0; j < w; j++) {
       const c = f.cell + f.dir * j
       let v = Number.NaN
+      let weight = 0
       if (inside && c >= f.lo && c < f.hi) {
         reached++
         v = map.value(r, c)
-        if (v >= 0) {
+        weight = map.weight(r, c)
+        if (v >= 0 && weight > 0) {
           seen++
-          total += v
+          total += weight * v
+          covered += weight
         } else {
           v = Number.NaN
         }
       }
       scratch[i * w + j] = v
+      weights[i * w + j] = weight
     }
   }
-  const level = apart === 'local' && seen > 0 ? Math.max(trans, total / seen) : trans
+  const level = apart === 'local' && covered > 0 ? Math.max(trans, total / covered) : trans
   let score = 0
+  let lawful = 0
   const logLevel = Math.log(level)
   for (let i = 0; i < w; i++) {
     for (let j = 0; j < w; j++) {
       const v = scratch[i * w + j]
       if (Number.isNaN(v)) continue
       const d = i + j + 1
-      score += v * (logLaw[d] - logLevel) - (law[d] - level)
+      score += weights[i * w + j] * (v * (logLaw[d] - logLevel) - (law[d] - level))
+      lawful += weights[i * w + j] * law[d]
     }
   }
-  return { score: score / map.dispersion, seen, reached }
+  const dispersion = map.dispersion
+  return { score: score / dispersion, seen, reached, contacts: Math.max(0, total - covered * trans) / dispersion, expected: lawful / dispersion }
 }
 
 /** Two ends' meeting (§27.5): the evidence they meet, and the gap and strength it was found at. */
@@ -561,6 +665,8 @@ export interface Meeting {
   brightness: number
   /** The window's mean over the trans level. */
   level: number
+  /** The contacts past the trans level it rests on, as a junction's ({@link Junction.contacts}). */
+  contacts: number
   /**
    * The score its own window would have holding exactly the law, gap nought:
    * what a clean adjacency of these two ends would score, so `score / ideal`
@@ -642,22 +748,29 @@ export function meetingScore(map: EditedMap, e: End, f: End): Meeting {
   const we = walk(map, e, reach)
   const wf = walk(map, f, reach)
   const reached = we.length * wf.length
-  const empty: Meeting = { score: 0, gap: 0, amplitude: 0, brightness: 0, level: 0, ideal: 0, seen: 0, reached }
+  const empty: Meeting = { score: 0, gap: 0, amplitude: 0, brightness: 0, level: 0, ideal: 0, seen: 0, reached, contacts: 0 }
   if (reached === 0) return empty
   // First the coarse grid: most pairs of an assembly's ends share no more than
   // strangers do, and a few coarse cells say so without the window's.
   if (!coarselyMeets(map, we, wf)) return empty
   const values = new Float64Array(reached)
+  const weights = new Float64Array(reached)
   const span = new Int32Array(reached)
   let seen = 0
+  // Sums weighed by each cell's coverage (see `EditedMap.weight`): counts, and
+  // the coverage that could have held them.
   let total = 0
+  let covered = 0
   for (let i = 0; i < we.length; i++) {
     for (let j = 0; j < wf.length; j++) {
       const v = map.value(we.cells[i], wf.cells[j])
-      if (!(v >= 0)) continue
+      const w = map.weight(we.cells[i], wf.cells[j])
+      if (!(v >= 0) || !(w > 0)) continue
       values[seen] = v
+      weights[seen] = w
       span[seen] = we.distance[i] + wf.distance[j] + 1
-      total += v
+      total += w * v
+      covered += w
       seen++
     }
   }
@@ -665,24 +778,24 @@ export function meetingScore(map: EditedMap, e: End, f: End): Meeting {
   const trans = map.trans
   // Two ends whose window holds no more than two strangers share meet in no
   // way worth a fit: most pairs of an assembly's ends are these.
-  if (total < 1.5 * seen * trans) return { ...empty, level: total / seen / trans, seen }
+  if (total < 1.5 * covered * trans) return { ...empty, level: total / covered / trans, seen }
   let ideal = 0
   let lawTotal = 0
   for (let k = 0; k < seen; k++) {
     const p = map.expectedAt(span[k])
-    ideal += p * Math.log((p + trans) / trans) - p
-    lawTotal += p
+    ideal += weights[k] * (p * Math.log((p + trans) / trans) - p)
+    lawTotal += weights[k] * p
   }
   let best = { score: Number.NEGATIVE_INFINITY, gap: 0, amplitude: 0 }
   for (const gap of GAPS) {
     let expected = 0
-    for (let k = 0; k < seen; k++) expected += map.expectedAt(span[k] + gap)
+    for (let k = 0; k < seen; k++) expected += weights[k] * map.expectedAt(span[k] + gap)
     if (!(expected > 0)) continue
-    const amplitude = Math.min(1, Math.max(1e-6, (total - seen * trans) / expected))
+    const amplitude = Math.min(1, Math.max(1e-6, (total - covered * trans) / expected))
     let score = 0
     for (let k = 0; k < seen; k++) {
       const mean = amplitude * map.expectedAt(span[k] + gap) + trans
-      score += values[k] * Math.log(mean / trans) - (mean - trans)
+      score += weights[k] * (values[k] * Math.log(mean / trans) - (mean - trans))
     }
     if (score > best.score) best = { score, gap, amplitude }
     // Past the gap where the law has flattened below the window's own level,
@@ -693,11 +806,12 @@ export function meetingScore(map: EditedMap, e: End, f: End): Meeting {
     score: best.score / map.dispersion,
     gap: best.gap,
     amplitude: best.amplitude,
-    brightness: lawTotal > 0 ? Math.max(0, total - seen * trans) / lawTotal : 0,
-    level: total / seen / trans,
+    brightness: lawTotal > 0 ? Math.max(0, total - covered * trans) / lawTotal : 0,
+    level: total / covered / trans,
     ideal: ideal / map.dispersion,
     seen,
     reached,
+    contacts: Math.max(0, total - covered * trans) / map.dispersion,
   }
 }
 
@@ -731,10 +845,19 @@ export function junctionsAlong(map: EditedMap, sequences: readonly AxisStretch[]
 }
 
 /**
+ * The least evidence a refusal is, in natural log-likelihood whatever the
+ * unit: twenty to one. A map too shallow at its cells to hold an adjacency's
+ * worth of contacts in a window — a metagenome's genome at a kilobase — has
+ * windows whose every emptiness is chance, and a unit so small that a fifth of
+ * one is no evidence at all.
+ */
+export const LEAST_REFUSAL = 3
+
+/**
  * The breakpoints along the axis (§27.5): edges where the map refuses the
- * junction the reference makes — a score under `−floor` units — and refuses it
- * more than anywhere within half a window, so a break is one point and not the
- * run of edges around it.
+ * junction the reference makes — a score under `−floor` units, and under
+ * {@link LEAST_REFUSAL} — and refuses it more than anywhere within half a
+ * window, so a break is one point and not the run of edges around it.
  */
 export function breakpointsOf(
   score: Float64Array,
@@ -745,10 +868,11 @@ export function breakpointsOf(
 ): number[] {
   const out: number[] = []
   const reach = Math.max(1, window >> 1)
+  const least = Math.max(floor * unit, LEAST_REFUSAL)
   for (const sequence of sequences) {
     for (let x = sequence.from + 1; x < sequence.to; x++) {
       const here = score[x]
-      if (!(here < -floor * unit)) continue
+      if (!(here < -least)) continue
       let lowest = true
       for (let y = Math.max(sequence.from + 1, x - reach); y <= Math.min(sequence.to - 1, x + reach); y++) {
         const there = score[y]

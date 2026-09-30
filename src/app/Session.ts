@@ -23,10 +23,11 @@
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { devFeature } from '../state/devFeatures'
-import { EDIT_SCOPE, EditStore, readEdit } from '../state/referenceEdit'
+import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { carryRegion } from '../edit/places'
 import { EditStage } from '../edit/EditStage'
+import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
 import { ReferenceChip } from '../edit/ReferenceChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
@@ -1582,8 +1583,11 @@ export class Session {
             {
               id: 'edit-reference',
               group: 'View',
-              title: 'Edit the reference',
-              hint: 'Cut, turn, move, copy and join stretches of the assembly, with the map redrawn as you go.',
+              // On a metagenome, one genome at a time (§27.10).
+              title: isMetacool ? (this.genomeInView() === undefined ? 'Edit a genome' : `Edit genome ${this.genomeInView()}`) : 'Edit the reference',
+              hint: isMetacool
+                ? 'One genome of the metagenome: its contigs scaffolded, turned, split, or sent to another genome, with the map redrawn as you go.'
+                : 'Cut, turn, move, copy and join stretches of the assembly, with the map redrawn as you go.',
               enabled: this.reader !== null && this.editStage === null,
               run: () => void this.openEditStage(),
             },
@@ -5395,22 +5399,47 @@ export class Session {
    */
   private editHeld: { key: string; store: EditStore } | null = null
 
-  private editStore(): EditStore | null {
+  /**
+   * @param genome On a metagenome, the genome whose edit it is (§27.10): its
+   *   contigs alone, kept apart from every other genome's.
+   */
+  private editStore(genome?: string): EditStore | null {
     if (!devFeature('edit')) return null
-    const key = this.sessionKey()
+    const base = this.sessionKey()
     const contigs = this.file?.contigs ?? null
-    if (key === null || contigs === null) return null
+    if (base === null || contigs === null) return null
+    const key = genome === undefined ? base : genomeEditKey(base, genome)
     if (this.editHeld?.key !== key) {
       // The file's own sequences — which, where the session is drawn through an
       // edit, are the ones the edit was made on rather than the ones the
       // reader now answers with (§27.7).
       const pairs = contigPairs(contigs)
-      const original = this.lens?.edit.original ?? { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
-      const store = new EditStore(key, original)
+      const file = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
+      const rows = genome === undefined ? [] : this.contigRowsOf(genome)
+      const original =
+        genome === undefined ? (this.lens?.edit.original ?? file) : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
+      const store = new EditStore(key, original, undefined, file)
       store.subscribe(() => this.referenceChip?.sync())
       this.editHeld = { key, store }
     }
     return this.editHeld.store
+  }
+
+  /** The genome of a metagenome the reader is looking at, where one is in view. */
+  private genomeInView(): string | undefined {
+    const scope = this.metaScope
+    return scope?.kind === 'contigs' ? scope.genome : undefined
+  }
+
+  /** The genomes the stage may edit, as the picker lists them (§27.10). */
+  private pickableGenomes(): PickableGenome[] {
+    const base = this.sessionKey()
+    return this.genomeRows().map(({ name, length }) => ({
+      name,
+      length,
+      contigs: this.contigRowsOf(name).length,
+      steps: base === null ? 0 : (readEdit(recall<unknown>(genomeEditKey(base, name), EDIT_SCOPE))?.cursor ?? 0),
+    }))
   }
 
   /**
@@ -5499,23 +5528,35 @@ export class Session {
   /** The stage, while it is open. */
   private editStage: EditStage | null = null
 
-  /** Open the stage on the file's map (§27.3): one map and its tracks, never a deck. */
-  private async openEditStage(): Promise<void> {
+  /**
+   * Open the stage on the file's map (§27.3): one map and its tracks, never a
+   * deck. On a metagenome, on one genome of it (§27.10) — `genome`, else the
+   * one in view, else the one the reader picks.
+   */
+  private async openEditStage(genome?: string): Promise<void> {
     if (!devFeature('edit') || this.editStage !== null) return
     const file = this.file
     const reader = this.reader
     if (file === null || reader === null) return
     await this.contigs().catch(() => null)
-    const store = this.editStore()
+    let scope: string | undefined
+    if (this.isMetacool) {
+      scope = genome ?? this.genomeInView() ?? (await pickGenome(this.mapLabel(file.uri), this.pickableGenomes())) ?? undefined
+      if (scope === undefined) return
+    }
+    const store = this.editStore(scope)
     if (store === null || this.destroyed || this.editStage !== null || this.file !== file) return
     const state = this.store.state
     const balance = file.info.hasWeights && state?.balance !== false
     const lanes = this.annotationContext()
+    // One genome's contigs, and any brought into it: the picture of them alone.
+    const drawn = store.edit.original.genome === undefined ? undefined : [...store.edit.original.names]
     this.editStage = new EditStage({
       title: this.mapLabel(file.uri),
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
-      readPicture: (onProgress) => reader.cancellable<'picture'>({ kind: 'picture', balance, method: true }, onProgress),
+      readPicture: (onProgress) =>
+        reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, ...(drawn === undefined ? {} : { contigs: drawn }) }, onProgress),
       liftContacts: (edit, onProgress) => reader.cancellable<'exportLifted'>({ kind: 'exportLifted', edit }, onProgress),
       colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
       ...(lanes === undefined
@@ -5525,7 +5566,8 @@ export class Session {
         this.editStage = null
         this.referenceChip?.sync()
         this.host.sessionChanged(this)
-        void this.redrawThroughEdit()
+        // A genome's edit is its own files; the session is not drawn through it.
+        if (scope === undefined) void this.redrawThroughEdit()
       },
     })
     this.host.sessionChanged(this)

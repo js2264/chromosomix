@@ -52,38 +52,53 @@ export interface PictureLayout {
   stride: number
   /** Cells a side. */
   n: number
-  /** The cell each bin of the map falls in. */
+  /** The cell each bin of the map falls in; `-1` for a bin of a sequence the picture leaves out. */
   slot: Int32Array
   /**
-   * The first cell of each sequence, and one past the last: `nContigs + 1`
-   * long. A cell never holds two sequences — the grid starts afresh at each —
-   * so a piece of one can be moved without carrying the end of another.
+   * The first cell of each sequence, and one past the last: one more than
+   * the sequences drawn. A cell never holds two sequences — the grid starts
+   * afresh at each — so a piece of one can be moved without carrying the end
+   * of another.
    */
   offsets: Int32Array
+  /**
+   * The map's sequences drawn, in its order, where they are not all of them:
+   * one genome of a metagenome and the contigs brought into it (§27.10).
+   */
+  contigs?: Int32Array
 }
 
-/** The grid `stride` bins a cell makes of a map, anchored to every sequence. */
-export function pictureLayout(coords: Coords, stride: number): PictureLayout {
+/**
+ * The grid `stride` bins a cell makes of a map, anchored to every sequence —
+ * or to those of `contigs`, the map's own indices in its order, the rest left
+ * out: a picture of one genome of a metagenome is a picture of its sequences
+ * alone.
+ */
+export function pictureLayout(coords: Coords, stride: number, contigs?: ArrayLike<number>): PictureLayout {
   const k = Math.max(1, Math.trunc(stride))
-  const nContigs = coords.nContigs
-  const offsets = new Int32Array(nContigs + 1)
+  const drawn = contigs ?? null
+  const count = drawn === null ? coords.nContigs : drawn.length
+  const offsets = new Int32Array(count + 1)
   const slot = new Int32Array(coords.nBins)
+  if (drawn !== null) slot.fill(-1)
   let cell = 0
-  for (let c = 0; c < nContigs; c++) {
-    offsets[c] = cell
+  for (let i = 0; i < count; i++) {
+    const c = drawn === null ? i : drawn[i]
+    offsets[i] = cell
     const [lo, hi] = coords.contigBinExtent(c)
     for (let bin = lo; bin < hi; bin++) slot[bin] = cell + Math.floor((bin - lo) / k)
     cell += Math.ceil((hi - lo) / k)
   }
-  offsets[nContigs] = cell
-  return { stride: k, n: cell, slot, offsets }
+  offsets[count] = cell
+  return { stride: k, n: cell, slot, offsets, ...(drawn === null ? {} : { contigs: Int32Array.from(drawn) }) }
 }
 
 /** Cells a side at `stride`, from the sequences' bin counts alone. */
-function cellsAt(coords: Coords, stride: number): number {
+function cellsAt(coords: Coords, stride: number, contigs?: ArrayLike<number>): number {
   let total = 0
-  for (let c = 0; c < coords.nContigs; c++) {
-    const [lo, hi] = coords.contigBinExtent(c)
+  const count = contigs === undefined ? coords.nContigs : contigs.length
+  for (let i = 0; i < count; i++) {
+    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? i : contigs[i])
     total += Math.ceil((hi - lo) / stride)
   }
   return total
@@ -92,20 +107,48 @@ function cellsAt(coords: Coords, stride: number): number {
 /**
  * The fewest bins a cell that brings the picture within `cap` cells a side, or
  * `null` where no number does: a cell never holds two sequences, so an assembly
- * of more sequences than that has no picture of this kind (§27.13).
+ * of more sequences than that has no picture of this kind (§27.13). Of the
+ * sequences of `contigs` alone, where it is given.
  */
-export function pictureStride(coords: Coords, cap = PICTURE_CELLS): number | null {
-  if (coords.nContigs > cap) return null
-  if (cellsAt(coords, 1) <= cap) return 1
+export function pictureStride(coords: Coords, cap = PICTURE_CELLS, contigs?: ArrayLike<number>): number | null {
+  if ((contigs === undefined ? coords.nContigs : contigs.length) > cap) return null
+  const cells = (stride: number): number => cellsAt(coords, stride, contigs)
+  if (cells(1) <= cap) return 1
   let high = 2
-  while (cellsAt(coords, high) > cap) high *= 2
+  while (cells(high) > cap) high *= 2
   let low = high >> 1
   while (low + 1 < high) {
     const mid = (low + high) >> 1
-    if (cellsAt(coords, mid) <= cap) high = mid
+    if (cells(mid) <= cap) high = mid
     else low = mid
   }
   return high
+}
+
+/** Stored pixels a row of the picture's cells should hold, on the mean: below it, a map is too shallow at its bins to see or weigh. */
+export const PICTURE_DEPTH = 64
+
+/**
+ * The fewest bins a cell of a map as shallow as this one takes for its rows to
+ * hold {@link PICTURE_DEPTH} stored pixels each, on the mean — from the store's
+ * row index alone, so nothing is read to know it. A metagenome's genome at a
+ * kilobase holds a few contacts a row, and a picture of it at its own bins is
+ * white, and every window of it a guess; `1` for any map deeper than that.
+ *
+ * @param offsets The store's `bin1_offset`: the stored pixels before each row.
+ */
+export function depthStride(coords: Coords, offsets: ArrayLike<number> | null, contigs?: ArrayLike<number>, least = PICTURE_DEPTH): number {
+  if (offsets === null) return 1
+  let pixels = 0
+  let bins = 0
+  const count = contigs === undefined ? coords.nContigs : contigs.length
+  for (let i = 0; i < count; i++) {
+    const [lo, hi] = coords.contigBinExtent(contigs === undefined ? i : contigs[i])
+    pixels += offsets[hi] - offsets[lo]
+    bins += hi - lo
+  }
+  if (!(bins > 0) || !(pixels > 0)) return 1
+  return Math.max(1, Math.ceil(least / (pixels / bins)))
 }
 
 /** Where cell `(a, b)`, `a ≤ b`, lives in an upper triangle `n` a side. */
@@ -339,11 +382,27 @@ export async function readPicture(options: {
   const histogram = new Float64Array(256)
   const gather = options.gather === undefined ? null : gathering(layout, weights, options.gather)
 
-  // The first bin of each cell, so a band of cell rows is a band of bins.
-  const firstBin = new Int32Array(n + 1)
-  firstBin.fill(nBins)
-  for (let bin = nBins - 1; bin >= 0; bin--) firstBin[slot[bin]] = bin
-  firstBin[n] = nBins
+  // The bins of each cell, so a band of cell rows is the runs of bins its
+  // sequences hold — one run where every sequence is drawn, and never the rows
+  // of a sequence left out between two drawn.
+  const firstBin = new Int32Array(n).fill(-1)
+  const endBin = new Int32Array(n)
+  for (let bin = 0; bin < nBins; bin++) {
+    const cell = slot[bin]
+    if (cell < 0) continue
+    if (firstBin[cell] < 0) firstBin[cell] = bin
+    endBin[cell] = bin + 1
+  }
+  const runsOf = (r0: number, r1: number): Extent[] => {
+    const runs: Extent[] = []
+    for (let cell = r0; cell < r1; cell++) {
+      if (firstBin[cell] < 0) continue
+      const last = runs[runs.length - 1]
+      if (last !== undefined && last[1] === firstBin[cell]) last[1] = endBin[cell]
+      else runs.push([firstBin[cell], endBin[cell]])
+    }
+    return runs
+  }
 
   const rowsPerBand = Math.max(1, Math.floor((options.bandBytes ?? BAND_BYTES) / (4 * Math.max(1, n))))
   const band = new Float32Array(Math.min(n, rowsPerBand) * n)
@@ -356,7 +415,9 @@ export async function readPicture(options: {
   } catch {
     offsets = null
   }
-  const total = offsets !== null ? offsets[nBins] - offsets[0] : n
+  const pixelsIn = (runs: readonly Extent[]): number =>
+    offsets === null ? 0 : runs.reduce((sum, [lo, hi]) => sum + (offsets[hi] - offsets[lo]), 0)
+  const total = offsets !== null ? pixelsIn(runsOf(0, n)) : n
   let done = 0
   let quantizer: Quantizer | null = null
   let pixels = 0
@@ -364,23 +425,25 @@ export async function readPicture(options: {
   for (let r0 = 0; r0 < n; r0 += rowsPerBand) {
     if (options.cancelled?.() === true) return null
     const r1 = Math.min(n, r0 + rowsPerBand)
-    const bins: Extent = [firstBin[r0], firstBin[r1]]
+    const runs = runsOf(r0, r1)
     const width = (r1 - r0) * n
     band.fill(0, 0, width)
     const before = done
     const stopped = !(await store.forEachBands(
-      [bins],
+      runs,
       (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           const b1 = chunk.bin1[i]
           const b2 = chunk.bin2[i]
           // The upper half only: a square store holds the lower one as well.
           if (b2 < b1) continue
+          const r = slot[b1]
+          const c = slot[b2]
+          // A contact with a sequence the picture leaves out.
+          if (r < 0 || c < 0) continue
           let v = chunk.count[i]
           if (weights !== null) v *= weights[b1] * weights[b2]
           if (!(v > 0)) continue
-          const r = slot[b1]
-          const c = slot[b2]
           // A pooled cell on the diagonal is a square of bin pairs of which the
           // store holds one half: counted twice off its own diagonal, it is the
           // sum the square holds.
@@ -410,7 +473,7 @@ export async function readPicture(options: {
       }
       gather?.row(r, band, row)
     }
-    done = offsets !== null ? offsets[firstBin[r1]] - offsets[0] : r1
+    done = offsets !== null ? before + pixelsIn(runs) : r1
     options.onProgress?.(done, total)
     await yieldToEventLoop()
   }
@@ -439,7 +502,7 @@ function gathering(
   const width = Math.max(1, Math.trunc(options.width))
   const kept = new Uint16Array(n)
   for (let bin = 0; bin < layout.slot.length; bin++) {
-    if (weights === null || weights[bin] > 0) kept[layout.slot[bin]]++
+    if (layout.slot[bin] >= 0 && (weights === null || weights[bin] > 0)) kept[layout.slot[bin]]++
   }
   const sequenceOf = new Int32Array(n)
   for (let c = 0; c + 1 < layout.offsets.length; c++) sequenceOf.fill(c, layout.offsets[c], layout.offsets[c + 1])

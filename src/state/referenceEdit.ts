@@ -38,6 +38,15 @@ import { recall, remember } from './UiMemory'
 /** The `UiMemory` scope this is kept under. Also in `SessionConfig`'s table. */
 export const EDIT_SCOPE = 'map:edit'
 
+/**
+ * The key one genome's edit of a metagenome is kept under (§27.10): the
+ * file's, and the genome — so every genome has an edit of its own, and none
+ * is the file's.
+ */
+export function genomeEditKey(fileKey: string, genome: string): string {
+  return `${fileKey}#genome=${genome}`
+}
+
 /** The scope what review mode learned about a file is kept under (§27.6). */
 export const LEARNED_SCOPE = 'map:edit-learned'
 
@@ -101,9 +110,10 @@ export function readEdit(stored: unknown): ReferenceEdit | null {
     })
   }
   const cursor = value['cursor']
+  const genome = original?.['genome']
   return {
     version: 1,
-    original: { names: names as string[], lengths: lengths as number[] },
+    original: { names: names as string[], lengths: lengths as number[], ...(typeof genome === 'string' ? { genome } : {}) },
     history: entries,
     cursor:
       typeof cursor === 'number' && Number.isInteger(cursor) ? Math.max(0, Math.min(entries.length, cursor)) : entries.length,
@@ -118,13 +128,25 @@ export class EditStore {
   /** Why a stored edit is not applied here, or `null`. */
   readonly refusal: string | null
 
+  /**
+   * @param original What a new edit is made on: the file's sequences, or one
+   *   genome's of a metagenome.
+   * @param file The file's own sequences, which a kept edit is checked
+   *   against — `original`, where the edit is of the whole file.
+   */
   constructor(
     private readonly key: string,
     original: OriginalAssembly,
     private readonly clock: () => number = () => Date.now(),
+    file: OriginalAssembly = original,
   ) {
     const stored = readEdit(recall<unknown>(key, EDIT_SCOPE))
-    const wrong = stored === null ? null : mismatch(stored, original.names, original.lengths)
+    const wrong =
+      stored === null
+        ? null
+        : stored.original.genome !== original.genome
+          ? `it is of ${stored.original.genome ?? 'the whole file'}, and this of ${original.genome ?? 'the whole file'}`
+          : mismatch(stored, file.names, file.lengths)
     this.refusal = wrong === null ? null : `The edit kept for this file was made on another assembly: ${wrong}.`
     this.held = stored !== null && wrong === null ? stored : emptyEdit(original)
   }

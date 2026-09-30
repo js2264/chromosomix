@@ -30,6 +30,7 @@ import { JOIN_GAP } from './gestures'
 import type { GridSequence, LensGrid } from './grid'
 import {
   EditedMap,
+  LEAST_REFUSAL,
   breakpointsOf,
   fociOf,
   junctionScore,
@@ -113,7 +114,13 @@ export type Weights = readonly number[]
  *   a junction it makes stands, in doublings: contacts brighter than two truly
  *   adjacent stretches share are more often a repeat the reads could not place —
  *   the elements every telomere carries — than an adjacency, and a corner ten
- *   times the law is offered below even odds whatever it would gain.
+ *   times the law is offered below even odds whatever it would gain. Not of a
+ *   join whose two ends prefer each other by a doubling or more, and less the
+ *   nearer it is to that: what a repeat lights, it lights between every end
+ *   that carries it, and an end that meets one other so much more than any is
+ *   bright with depth — a metagenome's contigs break at the rRNA operons and
+ *   insertion elements their genome has several of, and their ends are the
+ *   brightest thing in the map.
  * - **1.5** on how much more a join's two ends meet each other than either meets
  *   anything else, in doublings, between −2 and 2: an end has one neighbour, and
  *   two ends that each have a better offer elsewhere — a cluster of short
@@ -128,8 +135,21 @@ export type Weights = readonly number[]
  *   and nothing follows it.
  * - **1** on a break the sequence places — at a gap of `N` the assembler left,
  *   where it stopped being sure: the map and the assembly agree on it.
+ * - **2** on `log₂` of the contacts what it makes rests on, over
+ *   {@link LEAST_CONTACTS}, where they are fewer: a unit is what one adjacency
+ *   is worth in this map at these cells, and in a shallow one — a metagenome's
+ *   genome at a kilobase — a window that holds two contacts where strangers
+ *   share none is a strong likelihood and two reads, and the best of the many
+ *   trades a search weighs rests on two or three of them by chance.
  */
-export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5, 1.5, 5, 4, 1]
+export const INITIAL_WEIGHTS: Weights = [-1.5, 2, 1.5, 2, 2.5, 1.5, 5, 4, 1, 2]
+
+/**
+ * The contacts a trade needs behind it before its gain counts in full: past
+ * the trans level in the junctions it makes, or — for a split, which makes
+ * none — what the law would have put in the one it takes away.
+ */
+const LEAST_CONTACTS = 16
 
 /** Doublings of the contact law a junction's corner may stand at before it counts against it. */
 const EXCESS_FREE = Math.log2(2.5)
@@ -144,8 +164,9 @@ const JOIN_MOST = 1.2
 const LEAST_GAIN = 0.1
 
 /**
- * Assemblies of more sequences than this are joined only where a corner says
- * two of their ends meet: every pair of free ends of thousands of contigs is
+ * Assemblies of more sequences than this are joined only where two of their
+ * ends touch — a corner pairs them, or their first coarse cells share more
+ * than strangers do: every pair of free ends of thousands of contigs is
  * millions of windows.
  */
 const JOIN_ALL_BELOW = 64
@@ -245,6 +266,8 @@ interface Trade {
   buried?: boolean
   /** A break it makes that a gap of `N` places. */
   atGap?: boolean
+  /** The contacts past the trans level its new junctions rest on ({@link Junction.contacts}). */
+  contacts: number
 }
 
 /** The foci of a file, found once: they are in its own cells, which no edit moves. */
@@ -363,7 +386,7 @@ export function suggest(input: SuggestInput): Suggested {
       .sort((a, b) => a - b)
       .map((x) => {
         const inside = x > sequence.from && x < sequence.to
-        const refused = inside && along.score[x] < 0
+        const refused = inside && along.score[x] < -LEAST_REFUSAL
         const open = refused || (inside && made.has(x) && !(along.score[x] >= 0))
         return { sequence: s, x, inside, refused, open, cornered: cornered[s].has(x) }
       }),
@@ -521,7 +544,7 @@ export function suggest(input: SuggestInput): Suggested {
   const place = (sequence: GridSequence, x: number): number => gapNear(sequence, x) ?? edgeBp(grid, sequence, x)
   /** Whether a trade's breaks are placed by gaps of `N`. */
   const placedByGap = (points: readonly Point[]): boolean => points.some((point) => point.inside && gapNear(sequences[point.sequence], point.x) !== null)
-  const push = (trade: Omit<Trade, 'seen' | 'excess' | 'atGap' | 'buried'>): void => {
+  const push = (trade: Omit<Trade, 'seen' | 'excess' | 'atGap' | 'buried' | 'contacts'>): void => {
     // A join across a long gap — an rDNA array, a megabase no read spanned —
     // is a small share of an adjacency and still the only thing its two ends
     // meet: it is offered on the weight of its evidence and how alone it is.
@@ -529,18 +552,25 @@ export function suggest(input: SuggestInput): Suggested {
     if (!enough || !(trade.gain > 0)) return
     let seen = 0
     let reached = 0
+    let contacts = 0
     for (const [e, f] of trade.made) {
       // A join is weighed by its meeting, whose walks step past what the
       // balancer emptied: its window is as full as it could be.
       const j = trade.kind === 'join' ? meet(e, f) : junction(e, f, 'local')
       seen += j.seen
       reached += j.reached
+      contacts += j.contacts
     }
+    let missing = 0
     for (const [e, f] of trade.taken) {
       const j = junction(e, f, 'local')
       seen += j.seen
       reached += j.reached
+      missing += junction(e, f, 'trans').expected
     }
+    // A split makes nothing: what it rests on is the contacts the law would
+    // have put where the map holds none.
+    if (trade.made.length === 0) contacts = missing
     // A join's brightness is its whole window's, and a window of a meeting
     // reaches far enough that more than {@link BRIGHT_FREE} of the law is
     // already more than an adjacency holds; a trade's is its corners'.
@@ -553,7 +583,7 @@ export function suggest(input: SuggestInput): Suggested {
       0,
     )
     const breaks = trade.kind === 'move' ? trade.points.slice(0, 2) : trade.kind === 'join' ? [] : trade.points
-    trades.push({ ...trade, seen: reached === 0 ? 0 : seen / reached, excess, atGap: placedByGap(breaks), buried: buries(trade.made) })
+    trades.push({ ...trade, seen: reached === 0 ? 0 : seen / reached, excess, atGap: placedByGap(breaks), buried: buries(trade.made), contacts })
   }
   /** The junction a point makes, with a trade's walls, where it makes one. */
   const takenAt = (point: Point, walls: readonly Point[]): [End, End] | null => {
@@ -697,6 +727,55 @@ export function suggest(input: SuggestInput): Suggested {
     }
   }
 
+  // Past a few dozen sequences, the ends worth a meeting are those that touch:
+  // a corner pairs them, or their first coarse cells share more than twice
+  // what strangers do — found from each end's coarse cells against the coarse
+  // cells every other end is in, so an assembly of hundreds of contigs costs
+  // what its ends touch and not every pair of them.
+  const touching = new Set<string>()
+  const endId = (point: Point, dir: 1 | -1): string => `${point.sequence}:${point.x}:${dir}`
+  if (!fewSequences) {
+    const ends: Array<{ id: string; sequence: number; coarse: number[] }> = []
+    const byCoarse = new Map<number, number[]>()
+    for (const list of points) {
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (first === undefined || last === undefined) continue
+      for (const [point, dir] of [
+        [first, 1],
+        [last, -1],
+      ] as const) {
+        const end = endOf(point, dir, [])
+        if (end === null) continue
+        const coarse = new Set<number>()
+        for (let k = 0; k < map.reach; k++) {
+          const cell = end.cell + end.dir * k
+          if (cell < end.lo || cell >= end.hi) break
+          const c = map.coarseCell(cell)
+          if (c >= 0) coarse.add(c)
+        }
+        const at = ends.length
+        ends.push({ id: endId(point, dir), sequence: point.sequence, coarse: [...coarse] })
+        for (const c of coarse) {
+          const held = byCoarse.get(c)
+          if (held === undefined) byCoarse.set(c, [at])
+          else held.push(at)
+        }
+      }
+    }
+    const strangers = 2 * map.trans
+    for (const end of ends) {
+      for (const x of end.coarse) {
+        for (const [y, others] of byCoarse) {
+          if (!(map.coarseValue(x, y) > strangers)) continue
+          for (const k of others) if (ends[k].sequence !== end.sequence) touching.add(`${end.id}|${ends[k].id}`)
+        }
+      }
+    }
+  }
+  const touches = (pa: Point, e: End, pb: Point, f: End): boolean =>
+    partnered(pa, pb) || touching.has(`${endId(pa, e.dir)}|${endId(pb, f.dir)}`)
+
   // Joins: two sequences' free ends that meet.
   const joins: Array<{ e: End; f: End; pa: Point; pb: Point; a: number; b: number; step: EditStep; meeting: Meeting; gain: number }> = []
   for (let a = 0; a < sequences.length; a++) {
@@ -708,7 +787,6 @@ export function suggest(input: SuggestInput): Suggested {
       const bStart = B[0]
       const bEnd = B[B.length - 1]
       if (aStart === undefined || aEnd === undefined || bStart === undefined || bEnd === undefined) continue
-      if (!fewSequences && !aStart.cornered && !aEnd.cornered) continue
       const nameA = sequences[a].name
       const nameB = sequences[b].name
       const options: Array<{ e: End | null; f: End | null; pa: Point; pb: Point; step: EditStep }> = [
@@ -719,9 +797,8 @@ export function suggest(input: SuggestInput): Suggested {
       ]
       for (const option of options) {
         if (option.e === null || option.f === null) continue
-        // Past a few dozen sequences, only ends a corner pairs: every pair of
-        // thousands of contigs is millions of windows.
-        if (!fewSequences && !partnered(option.pa, option.pb)) continue
+        // Past a few dozen sequences, only ends that touch.
+        if (!fewSequences && !touches(option.pa, option.e, option.pb, option.f)) continue
         const meeting = meet(option.e, option.f)
         // How much of a clean adjacency of these two ends the meeting is: the
         // gain, counted in adjacencies as every trade's is — and a join makes
@@ -799,14 +876,18 @@ export function suggest(input: SuggestInput): Suggested {
   const weights = input.weights !== undefined && input.weights.length === INITIAL_WEIGHTS.length ? input.weights : INITIAL_WEIGHTS
   const ranked = trades.map((trade) => {
     const features = [
-      Math.log2(1 + Math.max(0, trade.gain)),
+      // No more adjacencies' worth than its contacts could hold: the unit is
+      // what one is worth in this map, and in a shallow one a handful of reads
+      // is a great many units.
+      Math.log2(1 + Math.min(Math.max(0, trade.gain), trade.contacts / LEAST_CONTACTS)),
       Number.isFinite(trade.cells) ? Math.min(0, Math.log10(trade.cells / 4)) : 0,
       trade.seen - 1,
-      -Math.max(0, trade.excess - EXCESS_FREE),
+      -Math.max(0, trade.excess - EXCESS_FREE) * (trade.kind === 'join' ? 1 - Math.max(0, Math.min(1, trade.exclusivity ?? 0)) : 1),
       trade.exclusivity ?? 0,
       trade.dicentric === true ? -1 : 0,
       trade.buried === true ? -1 : 0,
       trade.atGap === true ? 1 : 0,
+      Math.min(0, Math.log2(Math.max(1e-3, trade.contacts) / LEAST_CONTACTS)),
     ]
     return { trade, features, confidence: confidenceOf(features, weights) }
   })
@@ -821,7 +902,7 @@ export function suggest(input: SuggestInput): Suggested {
     used.push(...trade.points)
     list.push(
       toSuggestion(trade, features, confidence, grid, unit, (e, f) =>
-        trade.kind === 'join' ? { score: (meet(e, f).score / map.meetUnit) * unit, seen: 0, reached: 0 } : junction(e, f, 'local'),
+        trade.kind === 'join' ? { score: (meet(e, f).score / map.meetUnit) * unit, seen: 0, reached: 0, contacts: 0, expected: 0 } : junction(e, f, 'local'),
       ),
     )
   }
@@ -879,6 +960,7 @@ function toSuggestion(
   if (trade.dicentric === true) evidence.push('two centromeres')
   if (trade.buried === true) evidence.push('a telomere')
   if (trade.atGap === true) evidence.push('at a gap of N')
+  if (features[8] < -0.5) evidence.push('few contacts')
   return {
     key: `${trade.kind}:${identity}`,
     kind: trade.kind,

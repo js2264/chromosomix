@@ -205,7 +205,9 @@ export class ExportCard {
   }
 
   private name(suffix: string): string {
-    return `${exportStem(this.props.title)}.${suffix}`
+    // One genome's files say whose they are (§27.10).
+    const genome = this.props.store.edit.original.genome
+    return `${exportStem(this.props.title)}${genome === undefined ? '' : `.${exportBaseName(genome)}`}.${suffix}`
   }
 
   /** Write what `make` makes to where the reader chose, saying so; `make` may be long, and is asked after the dialog. */

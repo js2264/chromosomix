@@ -150,6 +150,46 @@ describe('reading it', () => {
   })
 })
 
+describe('a picture of some of the sequences', () => {
+  it('is those sequences’ bins alone, the rest of the file left out', () => {
+    const { coords } = map()
+    // The second sequence alone: its 25 bins, the first's slot -1.
+    expect(pictureStride(coords, 30, [1])).toBe(1)
+    expect(pictureStride(coords, 20, [1])).toBe(2)
+    const layout = pictureLayout(coords, 1, [1])
+    expect(layout.n).toBe(25)
+    expect(Array.from(layout.offsets)).toEqual([0, 25])
+    expect(Array.from(layout.contigs ?? [])).toEqual([1])
+    expect(layout.slot[39]).toBe(-1)
+    expect(layout.slot[40]).toBe(0)
+  })
+
+  it('holds what the whole picture holds at the same bins, and reads only their rows', async () => {
+    const { coords, store, value } = map()
+    const layout = pictureLayout(coords, 1, [1])
+    let asked: Extent[] = []
+    const watched = Object.assign(Object.create(Object.getPrototypeOf(store)) as MemoryStore, store, {
+      forEachBands: async (bands: readonly Extent[], onChunk: (c: PixelChunk) => void) => {
+        asked = [...bands]
+        return store.forEachBands(bands, onChunk)
+      },
+    })
+    const read = await readPicture({ store: watched, coords, layout, weights: null })
+    if (read === null) throw new Error('cancelled')
+    expect(asked).toEqual([[40, 65]])
+    const table = decodeTable(read.quantizer)
+    const step = (read.quantizer.high - read.quantizer.low) / 254
+    for (const [i, j] of [
+      [0, 0],
+      [3, 17],
+      [24, 24],
+    ]) {
+      const got = table[read.cells[triangleIndex(i, j, 25)]]
+      expect(Math.abs(Math.log10(got) - Math.log10(value(40 + i, 40 + j)))).toBeLessThanOrEqual(step)
+    }
+  })
+})
+
 describe('the pyramid', () => {
   it('means four cells into one, down to the floor', () => {
     const q = { low: 0, high: 4 }

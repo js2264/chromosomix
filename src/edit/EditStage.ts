@@ -355,7 +355,8 @@ export class EditStage {
     this.stopStore = props.store.subscribe(() => this.edited())
 
     this.modal = stageDialog({
-      title: `Edit the reference · ${props.title}`,
+      // One genome of a metagenome is edited on its own (§27.10), and says so.
+      title: props.store.edit.original.genome === undefined ? `Edit the reference · ${props.title}` : `Edit ${props.store.edit.original.genome} · ${props.title}`,
       variant: 'modal-edit',
       stage: this.root,
       stageClass: 'edit-stage-body',
@@ -387,9 +388,11 @@ export class EditStage {
 
   private read(): void {
     this.request?.cancel()
-    this.showStatus('reading the whole map for the stage…', 0, true)
+    const genome = this.props.store.edit.original.genome
+    const reading = genome === undefined ? 'reading the whole map for the stage…' : `reading ${genome}’s contigs for the stage…`
+    this.showStatus(reading, 0, true)
     const request = this.props.readPicture((done, total) => {
-      if (this.request === request && total > 0) this.showStatus('reading the whole map for the stage…', done / total, true)
+      if (this.request === request && total > 0) this.showStatus(reading, done / total, true)
     })
     this.request = request
     request.promise
@@ -1995,6 +1998,12 @@ export class EditStage {
     )
   }
 
+  /** What the picture is of: the whole map, or one genome's contigs of a metagenome (§27.10). */
+  private pictureOf(): string {
+    const genome = this.props.store.edit.original.genome
+    return genome === undefined ? 'The whole map' : `${genome}’s contigs alone, the rest of the metagenome left out,`
+  }
+
   private paintPicture(): void {
     const picture = this.picture
     const evidence = this.evidence
@@ -2015,8 +2024,8 @@ export class EditStage {
         class: 'edit-note',
         text:
           picture === null
-            ? 'The whole map, read once for the stage.'
-            : `The whole map at ${fmt.bp(picture.binsize)} a cell, ${picture.n.toLocaleString('en-US')} cells a side, ${picture.balanced ? 'balanced' : 'raw counts'}; pieces move in whole cells, so a junction inside a cell is placed to the nearest edge.`,
+            ? `${this.pictureOf()}, read once for the stage.`
+            : `${this.pictureOf()} at ${fmt.bp(picture.binsize)} a cell, ${picture.n.toLocaleString('en-US')} cells a side, ${picture.balanced ? 'balanced' : 'raw counts'}; pieces move in whole cells, so a junction inside a cell is placed to the nearest edge.`,
       }),
       ...(sequence === null ? [] : [el('p', { class: 'edit-note edit-evidence-note', text: sequence })]),
     )

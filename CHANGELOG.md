@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage on one genome of a metagenome — a dev feature (§27.10).** On a `.metacool`, *Edit a
+  genome* asks which — the file's genomes longest first, each with its size, its contigs and whether it
+  has been edited, and a filter — or takes the one in view, and opens the stage on that genome's
+  contigs alone: only their rows are read, and the suggestions, the auto mode and every export are that
+  genome's, named after it (`Mock_microbial_community.metator_00009_00000.edited.agp`). Each genome's
+  edit is kept apart from the others'. On a shallow map the stage now pools its picture until every row
+  holds enough to see — a genome of the mock community is drawn at 11 kb rather than white at 1 kb —
+  and the suggestions weigh what a raw map's thinly covered cells and a pooled picture's part-cells
+  hold for what it is, count the contacts a suggestion rests on, and say `few contacts` where there
+  are few: on the mock community they offer scaffolding joins, and no longer the rearrangements two
+  reads of chance had lit at near certainty. Past 64 contigs, the ends weighed for a join are those
+  that touch, not only those a corner pairs.
+
 - **The assembly's own sequence beside the map, when the stage suggests — a dev feature (§27.5).**
   Where the session holds the assembly's FASTA or `.2bit`, the stage reads it once: the ends of every
   sequence for telomeric repeats — `TTAGGG` and its plant, insect and ciliate kin on either strand,

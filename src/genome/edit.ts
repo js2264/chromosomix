@@ -168,6 +168,12 @@ export interface HistoryEntry {
 export interface OriginalAssembly {
   names: readonly string[]
   lengths: readonly number[]
+  /**
+   * The genome of a metagenome the edit is of (§27.10), where it is of one:
+   * its sequences are that genome's contigs, in the file's order — some of the
+   * file's, not all of them — and the file's other genomes are not the edit's.
+   */
+  genome?: string
 }
 
 /** An edit as it is kept: the original it applies to, and its history. */
@@ -211,7 +217,7 @@ export interface Landing {
 export function emptyEdit(original: OriginalAssembly): ReferenceEdit {
   return {
     version: 1,
-    original: { names: [...original.names], lengths: [...original.lengths] },
+    original: { names: [...original.names], lengths: [...original.lengths], ...(original.genome === undefined ? {} : { genome: original.genome }) },
     history: [],
     cursor: 0,
   }
@@ -861,6 +867,16 @@ export function editFingerprint(edit: ReferenceEdit): string {
  */
 export function mismatch(edit: ReferenceEdit, names: readonly string[], lengths: readonly number[]): string | null {
   const original = edit.original
+  if (original.genome !== undefined) {
+    // One genome's edit: every sequence of it is one of the file's, as long.
+    const file = new Map(names.map((name, i) => [name, lengths[i]]))
+    for (let i = 0; i < original.names.length; i++) {
+      const length = file.get(original.names[i])
+      if (length === undefined) return `the edit names ${original.names[i]}, which this file does not have`
+      if (length !== original.lengths[i]) return `${original.names[i]} is ${original.lengths[i]} bp in the edit and ${length} bp here`
+    }
+    return null
+  }
   if (original.names.length !== names.length) {
     return `the edit was made on ${original.names.length} sequences and this file has ${names.length}`
   }

@@ -10408,8 +10408,10 @@ where it went further than the text above:
   refused one and a sequence's end to any point, either way round, the flanks closing behind it — and
   of a whole sequence only into another's interior, where a corner pairs one of its ends with the point
   it goes in at (end to end is a join); a **join** of two sequences' free ends, every pair up to 64
-  sequences and past that only the ends a corner pairs, so that an assembly of thousands of contigs
-  costs what its corners name rather than every pair of its ends. A junction an edit made that the map
+  sequences and past that only the ends that touch — a corner pairs them, or their first coarse cells
+  share more than twice what strangers do, found from each end's coarse cells against the cells every
+  other end is in — so that an assembly of thousands of contigs costs what its ends touch rather than
+  every pair of them. A junction an edit made that the map
   cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
   but the hand is behind it; one of the file's own is trusted.
 - **The sequence** (`edit/sequenceEvidence.ts`), where the session holds the assembly's own FASTA or
@@ -10429,14 +10431,31 @@ where it went further than the text above:
   is placed at the gap's middle, to the base, and says `at a gap of N`. The stage's side panel says
   what it read: *From SGPMJH_1_MP366_1_reference.fa: telomeric repeats at 27 of 64 ends, 0 gaps of
   N*.
-- **The confidence** is a logistic over eight features — `log₂(1 + gain)`, a penalty for a stretch of
+- **A shallow map** — a metagenome's genome at a kilobase holds a few contacts a row — is weighed for
+  what it holds. On a raw map every cell's value is weighed by the coverage it was divided by, so a
+  contact or two at a thinly covered end is not the loudest thing in a window, and a cell under a tenth
+  of the median coverage is no evidence; the law and the trans level are counts over the coverage that
+  could have held them and the noise is Pearson's. On any map a cell's value is weighed by the pairs of
+  bins it pools, since a sequence's last cell of a pooled picture is a mean over a bin or two. A
+  refusal needs twenty to one in likelihood whatever the unit (`LEAST_REFUSAL`); and a trade is worth
+  no more adjacencies than the **contacts** it rests on hold, sixteen apiece — past the trans level in
+  the junctions it makes, over the dispersion, which on any map is about the reads — and one resting
+  on fewer says `few contacts`. A split rests on the contacts the law would have put where the map
+  holds none. On a genome map none of this moves a suggestion; on the mock community it is what keeps
+  the best of the many trades a search weighs, which is two or three reads of chance, off even odds.
+- **The confidence** is a logistic over nine features — `log₂(1 + gain)`, the gain capped by the
+  contacts as above, a penalty for a stretch of
   fewer than four cells, the share of its windows that held anything, how far past the law the
   brightest thing it makes stands (`brighter than an adjacency`: the elements every telomere carries
   light the corner between two chromosomes' ends brighter than any true adjacency — a trade's two
   corner cells past two and a half times the law, a join's whole window past 1.6 times, so that one
   hot cell at a thinly covered end is not a bright corner), a join's exclusivity, a join that makes
-  two centromeres, a join that buries a telomere, and a break a gap of `N` places — with the initial
-  weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2, 2.5, 1.5, 5, 4 and 1. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
+  two centromeres, a join that buries a telomere, a break a gap of `N` places, and the contacts under
+  sixteen — with the initial weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2, 2.5,
+  1.5, 5, 4, 1 and 2. A join whose ends prefer each other by a doubling or more is not counted brighter
+  than an adjacency, and less the nearer it is to that: what a repeat lights, it lights between every
+  end that carries it, and a metagenome's contigs break at the rRNA operons their genome has several
+  of, so their true joins are the brightest thing in the map. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
   point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
   offered — a suggestion a curator would take one time in seven or less is noise on the map — though
   it is still ranked, and an answer about another can raise it.
@@ -10633,7 +10652,10 @@ a genome they cannot see.
 
 *Built* (`metacooler/picture.ts`, the reader's `picture` request): read from the finest rung of an
 `.mcool` whose bins fit, whatever rung is open, and pooled a few bins a cell, never across a sequence's
-edge, only where none does; balanced where the map is. **One pass, a band of rows at a time**: the
+edge, only where none does — or where the map is too shallow at them: its rows are pooled until each
+holds 64 stored pixels on the mean, counted from the store's row index before anything is read, so
+a metagenome's genome at 1 kb, a few contacts a row, is drawn at 11 kb and weighed there, and a genome
+map deeper than that is not touched; balanced where the map is. **One pass, a band of rows at a time**: the
 pixels whose first bin is in the band — one ranged read of a cooler's pixel table — are summed into a
 band of floats and quantized before the next band is read, so no more than 64 MB of floats is ever in
 hand. The byte scale is set from the first band, a decade below its thousandth-lowest cell to half a
@@ -10655,6 +10677,24 @@ On a `.metacool` the edited assembly keeps its genome layer, and two more steps 
 scaffolds**. C4 is untouched — the file is still read in genome-then-length order, and the lens is what
 reorders it. What comes out is what the tools downstream take: the contig → MAG table
 `metacooler create` reads, and a FASTA and an AGP per MAG.
+
+*Built*, **one genome at a time**. A metagenome of twenty thousand contigs has no picture of the stage's
+kind — a cell never holds two sequences — and a curator scaffolds a MAG, not a community. So on a
+`.metacool` the stage is on one genome: the one in view, else the one the reader picks from a list of
+the file's genomes, longest first, each with its size, its contigs and how many steps its edit has, with
+a filter for a file of hundreds (`edit/GenomePicker.ts`); the command reads *Edit genome
+metator_00009_00000* where one is in view and *Edit a genome* where none is. The edit is that genome's
+alone: its original is the genome's contigs in the file's order, marked with the genome's name, kept
+under the file's key and the genome's (`state/referenceEdit.ts`, `genomeEditKey`), and checked against
+the file as a part of it — every contig of it one of the file's, as long. Its picture is those contigs
+alone (`pictureLayout` over some of a map's sequences): only their rows are read, a contact with a
+contig outside is left out, and the method weighs the genome as it would a genome. Everything the stage
+writes is that genome's, and says so — `Mock_microbial_community.metator_00009_00000.edited.agp` — the
+lifted contacts included, a map of that genome alone through its edit. The session itself is not drawn
+through a genome's edit: the metagenome's views are the file's.
+
+Not yet: moving a contig to another genome or bringing one in, the contig → MAG table across every
+genome's edit, and files for every genome at once.
 
 ### 27.11 Validation
 
@@ -10712,16 +10752,18 @@ re-binned exactly.
 
 Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
 more than one map; a stage on an assembly of more sequences than its picture has cells; a lifted
-`.cool` above the memory it would take, with the way out; for now, an edit drawn on a `.metacool` or a
-single-cell file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4,
-§27.9), the edit kept with the file and carried in a workspace, the session drawn through it (§27.7),
-and the method with its suggestions — drawn with the rail and the corners, snapped to, and answered in
-manual, review and auto (§27.5, §27.6), and the exports — the text files written from the edit and
-read back, the sequence, the map and the tracks lifted through it (§27.8) — and the sequence's own
-evidence, its telomeres and gaps (§27.5). Not yet built, in the order it will be
-(`docs/reference-editing.md` §10): the rest of the evidence beyond the map; metagenomes; the command
-line — and, left over, the zoom past the stage's picture, the gaps §27.7 lists, and the method's
-refinement at finer rungs.
+`.cool` above the memory it would take, with the way out; for now, a session drawn through an edit of a
+`.metacool` — a genome's edit is its own files, not the session's view — and an edit on a single-cell
+file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4, §27.9), the edit
+kept with the file and carried in a workspace, the session drawn through it (§27.7), and the method
+with its suggestions — drawn with the rail and the corners, snapped to, and answered in manual, review
+and auto (§27.5, §27.6), and the exports — the text files written from the edit and read back, the
+sequence, the map and the tracks lifted through it (§27.8) — the sequence's own evidence, its telomeres
+and gaps (§27.5), and the stage on one genome of a metagenome (§27.10). Not yet built, in the order it
+will be (`docs/reference-editing.md` §10): the rest of the evidence beyond the map; a metagenome's
+genome layer — contigs moved between genomes, the contig → MAG table; the command line — and, left
+over, the zoom past the stage's picture, the gaps §27.7 lists, and the method's refinement at finer
+rungs.
 
 ## 28. Two sequences on two axes
 

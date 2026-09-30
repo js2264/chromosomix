@@ -1448,9 +1448,12 @@ export class MetaCooler {
    * cells are not yet drawn through one.
    */
   static withLens(mc: MetaCooler, edit: ReferenceEdit): { map: MetaCooler; refusal: string | null } {
-    if (mc.hasGenomes) return { map: mc, refusal: 'An edit is not yet drawn on a map of several genomes.' }
+    // One genome's edit is a map of that genome alone, drawn through it
+    // (§27.10); the whole file's, on a metagenome, is not drawn yet.
+    const ofGenome = edit.original.genome !== undefined
+    if (mc.hasGenomes && !ofGenome) return { map: mc, refusal: 'An edit is not yet drawn on a map of several genomes.' }
     if (mc.layout.kind === 'scool') return { map: mc, refusal: 'An edit is not yet drawn on a single-cell file.' }
-    const found = lensFor(edit, mc.chromnames, mc.contigLengths)
+    const found = lensFor(edit, mc.chromnames, mc.contigLengths, { always: ofGenome })
     if (found === null) return { map: mc, refusal: null }
     if ('refusal' in found) return { map: mc, refusal: found.refusal }
     const lens = BinLens.of(mc.coords, mc.chromnames, found.assembly)

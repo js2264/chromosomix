@@ -17,7 +17,7 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
-import { PICTURE_CELLS, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
+import { PICTURE_CELLS, depthStride, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
 import { findCorners } from '../edit/corners'
 import { METHOD_GATHER, expectedOf } from '../edit/method'
 import { crossResolution } from '../metacooler/coords'
@@ -512,8 +512,10 @@ async function handleExportLifted(id: number, edit: ReferenceEdit): Promise<Lift
     },
   )
   if (bytes === null) throw abortError()
-  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?cool|hic|pairs(\.gz)?)$/i, '')
-  return { bytes, filename: `${stem}.edited.mcool`, rungs, contacts: finest.sum, skipped }
+  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?m?(meta)?cool|hic|pairs(\.gz)?)$/i, '')
+  // One genome's edit is that genome's map alone, and says whose.
+  const genome = edit.original.genome === undefined ? '' : `.${edit.original.genome}`
+  return { bytes, filename: `${stem}${genome}.edited.mcool`, rungs, contacts: finest.sum, skipped }
 }
 
 /** A rung of the open file as the file stores it: no lens, not held — the caller closes it. */
@@ -825,18 +827,34 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   // The file's own order, whatever the session is drawn through: the stage
   // draws the edit through the picture, not the picture through the edit —
   // and so the rung is the one whose bins of the file's own sequences fit.
-  const rung = pictureRung(open.unlensed ?? open, cap)
+  const base = open.unlensed ?? open
+  // One genome's sequences, in the file's order, where the stage is on one.
+  let drawn: number[] | undefined
+  if (request.contigs !== undefined) {
+    const index = new Map(base.chromnames.map((name, c) => [name, c]))
+    drawn = [...new Set(request.contigs.map((name) => index.get(name)).filter((c): c is number => c !== undefined))].sort((a, b) => a - b)
+    if (drawn.length === 0) throw new ViewerError('unsupported', 'None of the sequences the stage asked for are in this file.')
+  }
+  const rung = pictureRung(base, cap, drawn)
   const seen = await mapFor(rung)
   const mc = seen.unlensed ?? seen
-  const stride = pictureStride(mc.coords, cap)
+  const fits = pictureStride(mc.coords, cap, drawn)
+  let offsets: Float64Array | null = null
+  try {
+    offsets = mc.store.binOffsets()
+  } catch {
+    offsets = null
+  }
+  // The finest that fits, pooled further where the map is too shallow at it.
+  const stride = fits === null ? null : Math.max(fits, depthStride(mc.coords, offsets, drawn))
   if (stride === null) {
     throw new ViewerError(
       'unsupported',
       `The stage draws the whole assembly at ${cap.toLocaleString('en-US')} cells a side, each inside one ` +
-        `sequence, and this one has ${mc.coords.nContigs.toLocaleString('en-US')} sequences.`,
+        `sequence, and this one has ${(drawn?.length ?? mc.coords.nContigs).toLocaleString('en-US')} sequences.`,
     )
   }
-  const layout = pictureLayout(mc.coords, stride)
+  const layout = pictureLayout(mc.coords, stride, drawn)
   const balanced = request.balance === true && mc.hasWeights
   const read = await mc.picture(layout, {
     balance: balanced,
@@ -857,11 +875,11 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     binsize: mc.binsize * stride,
     stride,
     n: layout.n,
-    sequences: mc.chromnames.map((name, c) => ({
-      name,
+    sequences: (drawn ?? mc.chromnames.map((_, c) => c)).map((c, i) => ({
+      name: mc.chromnames[c],
       length: mc.coords.contigLengths[c],
-      firstCell: layout.offsets[c],
-      cells: layout.offsets[c + 1] - layout.offsets[c],
+      firstCell: layout.offsets[i],
+      cells: layout.offsets[i + 1] - layout.offsets[i],
     })),
     levels: read.levels,
     low: read.quantizer.low,
@@ -882,12 +900,13 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
  * Counted from the open map's sequence lengths, so no rung is opened to be
  * measured: an `.mcool`'s entries are its bin sizes.
  */
-function pictureRung(open: MetaCooler, cap: number): string | undefined {
+function pictureRung(open: MetaCooler, cap: number, contigs?: readonly number[]): string | undefined {
   if (open.entryGroup !== 'resolutions') return undefined
   const lengths = open.coords.contigLengths
+  const drawn = contigs ?? Array.from({ length: lengths.length }, (_, c) => c)
   const binsAt = (size: number): number => {
     let total = 0
-    for (let c = 0; c < lengths.length; c++) total += Math.ceil(lengths[c] / size)
+    for (const c of drawn) total += Math.ceil(lengths[c] / size)
     return total
   }
   const rungs = open.entries
