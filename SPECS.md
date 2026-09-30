@@ -5816,7 +5816,9 @@ against the new one. This is the discipline the on-the-fly 4C lane never kept �
 whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
-panel to exist.
+panel to exist. **A task that reads no map** — two sequence sets against each other (§28) — has no
+framing to name or to leave: its heading says it reads the sequences chosen, not the map, its result
+is never stale for a view that moved, and its provenance is of the sequences.
 
 **Provenance travels with the numbers.** Every result carries its task and task version, every
 parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
@@ -7365,6 +7367,10 @@ dragged. The exception is a picture whose rows are a **list** — the metaplot's
 three thousand features down against distance across — which has no diagonal, nothing to compare
 across one, and which square cells turn into a ribbon a fifth of the card wide. It takes the whole
 width, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+**A picture read like a map** — a dot plot's two assemblies end to end (§28), `MatrixOutput.large` —
+is square and as large as the drawer lets it be, its cells a fraction of a pixel wider than whole where
+that is what fills it, each cell's edges on whole pixels; and it is always painted, however few its
+cells, since its axes are its sequences end to end, which the painter marks and a category axis cannot.
 A chart's grid is stated as four insets and stretches to whatever it is put in, so a square aspect
 means the builder is told the size of the box and answers with a grid in pixels — and the colour bar
 stands beside the picture at the picture's own height rather than against the far edge at a fixed
@@ -10796,44 +10802,71 @@ A dot plot: one sequence set along the x axis, another along the y, and a mark w
 share sequence — so that a reordering, an inversion or a translocation between two assemblies is seen at
 a glance, as the line that jumps, turns or leaves. Related to §27 and independent of it: it needs no
 contact map and no edit, only two FASTA or `.2bit` files, and it is computed here, in the browser. A
-**dev feature** (§29) until it is validated; **status: specified, not yet built.**
+**dev feature** (§29) until it is validated; **status: partly built** — the matches (§28.1), the task
+and its figure, table and pairs (§28.3), the command line, and what it says about itself (§28.4).
+**Not yet**: the view of its own (§28.2).
 
 ### 28.1 Matches
 
 Canonical minimizers of `k = 19` over both strands, their window chosen so that the first set's
-minimizers stay under a budget — every minimizer of a yeast genome at the densest window, about one in
-150 bases of a human one — sorted by hash in typed arrays on each side and **merge-joined**, which needs
-no hash table and holds nothing but the two sorted lists. A hash seen more than 50 times on either side is
-dropped, as minimap2 drops its most frequent minimizers, so that a repeat family is not a square of noise.
-An **anchor** is one shared minimizer — a position on each axis and a strand. Anchors along one diagonal
-band — `x − y` forward, `x + y` reversed — with gaps under a few kilobases chain into a **streak**: one
-line of the plot, with its anchor count and its extent on both axes.
+minimizers stay under a budget of two million — about one in seven bases of a yeast genome, one in
+1,500 of a human one — found with a deque over the window, sorted by hash with a radix sort in typed
+arrays on each side and **merge-joined**, which needs no hash table and holds nothing but the two sorted
+lists. A hash seen more than 50 times on either side is dropped, as minimap2 drops its most frequent
+minimizers, so that a repeat family is not a square of noise. An **anchor** is one shared minimizer — a
+position on each axis and a strand. Anchors along one diagonal band 500 bases wide — `x − y` forward,
+`x + y` reversed — no more than 5 kb apart along it, ten or more of them, chain into a **streak**: one
+line of the plot, with its anchor count and its extent on both axes. A shared 19-mer on its own is
+chance as often as not, so what is drawn is the anchors of streaks.
+
+**One to one.** Between two sets the streaks are kept **one to one**, unless the reader asks for every
+one: strongest first, each kept unless more than half its stretch along either axis — in steps of 100
+bases, coarser past 40 Mb — is already a stronger kept streak's, as `delta-filter -1` keeps MUMmer's
+alignments. Each stretch of one set is then at its best place in the other, the place its flanks put
+it, and the grid a repeat family's copies draw with each other goes: between a yeast's long-read
+assembly and the genome it was built to be, 106 streaks of 11,738, which still cover 99% of the
+assembly. A set against itself keeps every streak, since that is what it is drawn for — one to one
+would leave it its diagonal.
 
 ### 28.2 The view
 
-A view of its own, `view=dotplot`, with the two sequence sets' addresses in the link, drawn by the map's
-machinery over two assemblies instead of one: the density of anchors in each cell, **signed** —
-forward positive, reversed negative — in `RdBu_r` about zero, so that a reordering is a red line that
-jumps and an inversion a blue one. It zooms from the two assemblies end to end down to the anchors
-themselves, drawn as dots once a cell is a few bases wide. The x edges carry the first assembly's
-tracks and the y edges the second's, each matched by name to its own sequences; the readout gives both
-loci and the strand. A zoom past what the sample can show recomputes the window at a denser sampling,
-which is bounded work.
+**Not yet built.** A view of its own, `view=dotplot`, with the two sequence sets' addresses in the link,
+drawn by the map's machinery over two assemblies instead of one: the density of anchors in each cell,
+**signed** — forward positive, reversed negative — in `RdBu_r` about zero, so that a reordering is a red
+line that jumps and an inversion a blue one. It zooms from the two assemblies end to end down to the
+anchors themselves, drawn as dots once a cell is a few bases wide. The x edges carry the first
+assembly's tracks and the y edges the second's, each matched by name to its own sequences; the readout
+gives both loci and the strand. A zoom past what the sample can show recomputes the window at a denser
+sampling, which is bounded work.
 
 ### 28.3 The figure, and the command line
 
 A task in the Analysis panel's 1D group, *Two sequences against each other*, taking the two sets from
-the session's sequences: its figure in the drawer is the same signed density at the task's resolution,
-restylable and exported like every figure (§18.13), with the streaks as a table (TSV) and as BEDPE,
-which the app reads back as an overlay. `metacooler-run dotplot a.fa b.fa --out results/` writes the
-same two.
+the session's sequences — two FASTA or `.2bit` files, or one against itself — and computed in the
+annotations worker beside their residues: several seconds for two yeast genomes. It reads **no map**, so
+the drawer's heading names none, a view that moves leaves its result standing rather than stale, and
+the result's provenance is of the sequences. Its figure is the same signed density at the task's
+resolution — 400 cells along the longer axis unless the reader asks for others, each square in bases —
+drawn **as large as the drawer lets it be** (up to 600 pixels a side, a cell a fraction of a pixel
+wider than whole if that is what fills it, each cell's edges on whole pixels), with a rule where one
+sequence meets the next along each axis and each sequence's name beside its stretch where there is room:
+standing under the picture where that writes more of them than lying down, as it nearly always does for
+an assembly's contigs. The scale is clipped at the middle of the cells a line crosses — three anchors or
+more — so a short line is not the white it is there to stand out of. It is restylable and exported like
+every figure (§18.13), and always painted, never the chart of a small matrix, since a category axis
+cannot mark sequences end to end. The streaks it draws come out as a table (TSV) and as pairs
+(BEDPE, the way round in the name column), which the app reads back as an overlay. The command line
+runs the same task through the same runner — `metacooler-run dotplot --sequence a.fa --sequence b.fa
+--x a.fa --y b.fa --out results/`, which is what the drawer's *copy CLI command* writes — and writes
+the density, the streaks and the pairs, their provenance of the sequences and not of a map.
 
 ### 28.4 What it says about itself
 
-The caption says what was sampled — `exact 19-mers, one in about 150 bases; hashes above 50 copies
-dropped` — because a dot plot's blank is only as good as its sampling, and a reader must know which
-blank they are looking at. A dot plot of two human genomes is a picture of chromosome-scale structure
-and says so; it is not an alignment, and it writes none.
+The note says what was sampled — `Exact 19-mers, one in about 7 bases; hashes above 50 copies on either
+side dropped` — and how many anchors and streaks there were, and how many of those were kept one to
+one, because a dot plot's blank is only as good as its sampling, and a reader must know which blank they
+are looking at. A dot plot of two human genomes is a picture of chromosome-scale structure and says so;
+it is not an alignment, and it writes none.
 
 ## 29. Dev features
 
@@ -10886,7 +10919,8 @@ What is dev, and what switched off means for each:
 - **`edit`** — the stage, its keys, the heading's word on the reference, the palette's *Edit the
   reference*, the edit kept with a file, its task once there is one, and every surface of the lens
   (§27). Switched off, none of them is drawn and a kept edit is left in storage as it was.
-- **`dotplot`** — the task, the view and its links (§28).
+- **`dotplot`** — the task, and the view and its links once they are built (§28). Switched off, the
+  task is not in the Analysis panel.
 
 ### 29.4 What a dev feature left in a session
 

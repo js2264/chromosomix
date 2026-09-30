@@ -45,6 +45,7 @@ import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
 import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
+import { DOTPLOT_TASK } from "./tasks/dotplot";
 import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
@@ -122,6 +123,9 @@ export const TASKS: readonly AnalysisTask[] = [
   // how its values differ between the groups of one — A against B.
   GROUP_SIGNAL_TASK,
   OVERLAP_TASK,
+  // Last of the 1D card, and of a kind of its own: two sequence sets against
+  // each other rather than one read along its length (§28) — a dev feature.
+  DOTPLOT_TASK,
   // **Metagenome**, absent unless the file has genomes, so the card is there
   // for a metacool and nowhere else.
   MAG_QC_TASK,

@@ -68,10 +68,14 @@ import type { FigureStyle } from './style'
  */
 export const MATRIX_CHART_CELLS = 20_000
 
-/** Whether this matrix is one the chart draws. */
+/**
+ * Whether this matrix is one the chart draws. Never a picture read like a map
+ * (`MatrixOutput.large`), however few its cells: a dot plot's axes are its
+ * sequences end to end, which the painter marks and a category axis cannot.
+ */
 export function drawnAsChart(output: MatrixOutput): boolean {
   const cells = output.nrows * output.ncols
-  return cells > 0 && cells <= MATRIX_CHART_CELLS
+  return cells > 0 && cells <= MATRIX_CHART_CELLS && output.large !== true
 }
 
 /** How many stops the ramp is sampled at for `visualMap`. */

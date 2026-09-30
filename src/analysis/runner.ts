@@ -694,8 +694,11 @@ export class AnalysisRunner {
     // (§5.8), where the reader has the bigWigs and not the map. It still needs a
     // framing, because a result is a record and a record names what it was of
     // (§18.4); what it names there is the assembly rather than a block.
+    // A task that reads no map is a record of none, whatever the view shows.
     const framing =
-      context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
+      task.mapless === true
+        ? tracksFraming(context, 'sequences')
+        : context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
     if (framing === null) {
       this.refuse(task, batch, 'this view has no contact map to run against')
       return
@@ -1612,7 +1615,8 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
 }
 
 /**
- * The framing a track-only run is a record of.
+ * The framing a track-only run is a record of — or a run on sequences alone,
+ * which names them instead.
  *
  * There is no block, so the extents are empty and the bin size is zero — and
  * that is the honest reading rather than a placeholder: the numbers came from
@@ -1620,7 +1624,7 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
  * involved. A task in this venue never reads any of these fields; what reads
  * them is the provenance line above an export, which should say so.
  */
-function tracksFraming(context: AnalysisContext): AnalysisFraming {
+function tracksFraming(context: AnalysisContext, read = 'loaded tracks'): AnalysisFraming {
   return {
     uri: context.uri,
     rows: [0, 0],
@@ -1635,7 +1639,7 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     // opened from a signed S3 URL, and the whole of one in a heading pushes the
     // rest of the line off the drawer and off a console row. What the uri is
     // wanted for is `# file:`, which every provenance block already carries.
-    label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
+    label: `${fileLabel(context.uri)} · ${read}, no contact map`,
     // What the file's molecules are declared to be, which a task on the
     // sequence reads as surely as one on the map (§8.15).
     ...(context.circular === undefined ? {} : { circular: [...context.circular] }),

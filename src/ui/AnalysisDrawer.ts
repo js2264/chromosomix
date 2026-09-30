@@ -1308,6 +1308,14 @@ export class AnalysisDrawer {
    */
   private syncFraming(result: TaskResult | null): void {
     const current = this.options.framing()
+    // A task that reads no map has no framing to name, nor one to leave.
+    if (this.current?.mapless === true) {
+      this.framingEl.className = 'analysis-framing'
+      this.framingEl.textContent = result === null ? 'reads the sequences chosen, not the map' : 'from the sequences chosen, not the map'
+      this.framingEl.title = ''
+      this.recomputeButton.classList.add('hidden')
+      return
+    }
     if (result !== null) {
       const provenance = result.provenance
       const stale = current !== null && !framingHolds(provenance, current)

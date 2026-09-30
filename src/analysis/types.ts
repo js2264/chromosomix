@@ -935,6 +935,15 @@ export interface MatrixOutput {
    */
   aspect?: 'square' | 'fill'
   /**
+   * A picture read like a map rather than a chart — a dot plot's two
+   * assemblies end to end (§28): as large as the card lets it be, its square
+   * cells a fraction of a pixel wider where that is what fills it, each one's
+   * edges on whole pixels. Absent, a cell is a whole number of pixels, which
+   * leaves a picture of four hundred cells four hundred pixels wide in a card
+   * three times that.
+   */
+  large?: boolean
+  /**
    * The value a diverging colormap is centred on, if it is one.
    *
    * `1` for a ratio, `0` for a correlation, absent for a raw pileup. A diverging
@@ -971,8 +980,23 @@ export interface MatrixOutput {
    * bound where they do*.
    */
   margins?: MatrixMargins
+  /**
+   * Sequences laid end to end along an axis, in its cells — a rule between two
+   * and the name of each under it: a dot plot's two assemblies (§28), whose
+   * ticks are sequences rather than a scale. Where given, they take the place
+   * of that axis's ticks.
+   */
+  xSegments?: MatrixSegment[]
+  ySegments?: MatrixSegment[]
   /** See {@link CurveOutput.acrossMaps}. */
   acrossMaps?: boolean
+}
+
+/** One sequence along an axis of a {@link MatrixOutput}: its name, and the cells it spans, fractional. */
+export interface MatrixSegment {
+  label: string
+  from: number
+  to: number
 }
 
 /**
@@ -1392,6 +1416,13 @@ export interface AnalysisTask {
    * task (§16, §18.8) and it is a property of what the task *is*.
    */
   needsPeers?: boolean
+  /**
+   * Whether this task reads **no map** at all — two sequence sets against
+   * each other (§28) — so the drawer's heading names no framing, and a view
+   * that has moved leaves the result standing rather than stale: nothing it
+   * was computed from has moved.
+   */
+  mapless?: boolean
   /**
    * Whether this task can run on what is open, and if not, why not.
    *

@@ -776,7 +776,9 @@ label lights its marks on the map and hovering a mark lights its label: one high
 A **dot plot** is one sequence set against another on the map's two axes (§28). An **anchor** is one
 minimizer the two share — a position on each axis and a strand; a **streak** is anchors chained along
 one diagonal, a line of the plot. Forward is drawn positive and reversed negative, so an inversion is
-the colour a reordering is not.
+the colour a reordering is not. Streaks kept **one to one** are each stretch at its best place on the
+other axis, a stronger streak having taken the rest — which is how a repeat family's copies stop
+drawing a grid between two assemblies.
 
 ---
 

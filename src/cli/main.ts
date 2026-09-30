@@ -1046,7 +1046,7 @@ async function runTracksOnly(
     normalise: null,
     level: 'bin',
     label:
-      `${basename(named)} · loaded tracks, no contact map` +
+      `${basename(named)} · ${task.mapless === true ? 'sequences' : 'loaded tracks'}, no contact map` +
       `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
       `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}`,
     // A task on the sequence reads what the molecules are as surely as one on

@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Two sequences against each other — a dot plot, a dev feature (§28).** A task in the Analysis
+  panel's 1D card sets one FASTA or `.2bit` of the session against another, or against itself: the
+  exact 19-mers the two share, sampled to two million a set (one in about seven bases of a yeast), and
+  the streaks they make along a diagonal — a reordering between two assemblies the line that jumps, an
+  inversion the one that turns blue. Between two sets the streaks are kept one to one, each stretch at
+  its best place and the grid a repeat family's copies draw with each other left out; *every one* keeps
+  them. The figure takes the drawer's width, with each sequence's name along its axis, standing where
+  an assembly's contigs are too narrow for it lying down; the streaks come out as a table and as pairs.
+  It reads no map, and says so where the drawer names what a result was run on. On the long-read
+  assembly of the yeast whose chromosome XVI carries the *M. mycoides* genome, against the genome it was
+  built to be, it draws the fused chromosome's four stretches as the contigs that make them, in several
+  seconds. `metacooler-run dotplot --sequence a.fa --sequence b.fa --x a.fa --y b.fa` runs the same.
+  Not yet: the view of its own.
+
 - **The stage on one genome of a metagenome — a dev feature (§27.10).** On a `.metacool`, *Edit a
   genome* asks which — the file's genomes longest first, each with its size, its contigs and whether it
   has been edited, and a filter — or takes the one in view, and opens the stage on that genome's
