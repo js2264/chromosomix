@@ -49,6 +49,7 @@ import {
   hasFeatureRows,
   placementOn,
   type AnnotationEntry,
+  type AnnotationKind,
   type FeatureSet,
 } from '../annotations/types'
 import { FEATURE_DISPLAYS, featuresOf } from '../annotations/fields'
@@ -2879,7 +2880,12 @@ export class MatrixPanel {
    * and a card left behind would be describing a gene from a picture that is no
    * longer on screen.
    */
-  private openFeature(hit: { set: FeatureSet; index: number; source: string }): void {
+  private openFeature(hit: {
+    set: FeatureSet
+    index: number
+    source: string
+    kind?: AnnotationKind
+  }): void {
     this.featureDialog?.close()
     this.featureDialog = openFeatureDialog({
       ...hit,
@@ -2980,8 +2986,12 @@ export class MatrixPanel {
    * implementation waiting to drift from the other.
    */
   autoscaleTracks(): void {
+    // Every lane whose axis a reader can move, as the browser's button asks —
+    // not only those drawn as a profile, which left a barChart's or a junction
+    // lane's typed pair standing beside a map after the button that says
+    // *every track* (§8.17, §8.23).
     for (const entry of this.laneStore.entries) {
-      if (!drawsAProfile(entry.kind) || entry.style.limits.auto) continue
+      if (!hasAMovableAxis(entry.kind) || entry.style.limits.auto) continue
       this.laneStore.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
     }
   }

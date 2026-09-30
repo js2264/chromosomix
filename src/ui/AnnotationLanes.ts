@@ -39,7 +39,9 @@ import {
   LABEL_BAND,
   drawFeatures,
   featureAt,
+  featureCaption,
   featureLayoutFor,
+  glyphExtentOf,
   layoutFeatures,
   type FeatureLayout,
 } from '../render/features'
@@ -75,7 +77,8 @@ import {
 } from '../render/laneLabel'
 import { formatLocus } from '../genome/assembly'
 import type { LocusAxis } from '../render/locus'
-import { barChartCaption, barExtentOf, barLimitsOf } from '../render/barchart'
+import { barLimitsOf } from '../render/barchart'
+import { drawSashimi, junctionsOfSamples } from '../render/sashimi'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type { OverlayAxes } from '../render/overlays'
@@ -106,6 +109,7 @@ import {
   laneLabelOf,
   readsOf,
   type AnnotationEntry,
+  type AnnotationKind,
   type FeatureSet,
   type LaneEdge,
   type TrackSampleSet,
@@ -273,8 +277,12 @@ interface Lane {
   entry: AnnotationEntry
   overlaid: AnnotationEntry[]
   frame: LaneFrame
-  /** One per value track in the lane; empty for the feature kinds. */
-  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
+  /**
+   * One per value track in the lane; empty for the feature kinds. A BAM's depth
+   * carries the introns its reads skipped in the same window, for the arcs
+   * drawn over it (§8.23).
+   */
+  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile; junctions?: FeatureSet | null }>
   /** The read a member is waiting on, if any — see `BrowserView`'s `Lane.pending`. */
   pending: { done: number; total: number } | null
   /**
@@ -1116,14 +1124,11 @@ export class AnnotationLanes {
         // a whole bin, a FASTA can only ever be its GC content — the residues
         // need a base per pixel and a bin is a thousand of them.
         if (axis === null || !drawnFromSamples(member.kind)) continue
+        const samples = this.samplesFor(member, edge, axis, frame)
         profiles.push({
           entry: member,
-          profile: profileOf(
-            frame,
-            axis,
-            this.samplesFor(member, edge, axis, frame),
-            scaleOf(member.style),
-          ),
+          profile: profileOf(frame, axis, samples, scaleOf(member.style)),
+          ...(member.kind === 'alignments' ? { junctions: junctionsOfSamples(samples) } : {}),
         })
         pending =
           this.cache?.pendingOf(member.id, laneIsHorizontal(edge) ? 'cols' : 'rows') ?? pending
@@ -1260,7 +1265,7 @@ export class AnnotationLanes {
         // twice: both surfaces draw this lane and a rule about what a lane *is*
         // that lives in one painter is a rule the other drifts from.
         const nested = nestsAsRibbons(profiles.map(({ entry: member }) => member))
-        for (const [at, { entry: member, profile }] of profiles.entries()) {
+        for (const [at, { entry: member, profile, junctions }] of profiles.entries()) {
           const laneFrame = bands?.[at] ?? frame
           const limits = resolveLimits(
             member.style.limits,
@@ -1296,6 +1301,26 @@ export class AnnotationLanes {
             drawTrack(ctx, laneFrame, profile, paint)
           } else {
             drawTrackScaling(ctx, laneFrame, profile, paint, scaledTo(limits, dragged))
+          }
+          // The sashimi plot beside a map as in the browser (§8.23): the
+          // introns the depth's reads skipped, over the depth.
+          const reads = readsOf(member.style)
+          if (junctions !== undefined && junctions !== null && axis !== null && reads.sashimi) {
+            drawSashimi(
+              ctx,
+              laneFrame,
+              axis,
+              junctions,
+              {
+                guideColour: geometry.palette.guide,
+                haloColour: geometry.palette.halo,
+                font: scaleFont(LANE_FONT),
+                opacity: member.style.opacity,
+                labels: text,
+                labelBand: scaleLength(LABEL_BAND),
+              },
+              { floor: reads.sashimiFloor, flip: member.style.flip },
+            )
           }
         }
         const first = profiles[0]
@@ -1421,16 +1446,18 @@ export class AnnotationLanes {
         // *from*, and it is the one it is already drawn against: zero to the
         // file's tallest bar.
         const scaling = geometry.scaling?.id === entry.id ? geometry.scaling.factor : null
-        const fixed = barLimitsOf(entry.style.limits)
-        const barAxis = fixed ?? barExtentOf(set.bars) ?? undefined
-        const barLimits =
-          scaling === null || barAxis === undefined ? fixed : scaledTo(barAxis, scaling)
+        // …and a junction lane's arcs the same way (§8.23): the only glyphs with
+        // an axis, and so the only feature lanes a typed pair reaches.
+        const fixed = hasAMovableAxis(entry.kind) ? barLimitsOf(entry.style.limits) : undefined
+        const glyphAxis = fixed ?? glyphExtentOf(entry.kind, set, layout) ?? undefined
+        const axisLimits =
+          scaling === null || glyphAxis === undefined ? fixed : scaledTo(glyphAxis, scaling)
         // The pair the *next* gesture starts from, as the profile branch records
         // its own: without this the drag resolves an extent of `null` and a
         // ceiling nudge on a chart moves a stored `[0, 1]` nobody chose. The
         // **committed** pair, never the one under a drag — a half-finished
         // gesture is not a decision.
-        if (barAxis !== undefined) state.limits.set(entry.id, barAxis)
+        if (glyphAxis !== undefined) state.limits.set(entry.id, glyphAxis)
         const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
         const paint = {
           colour: entry.style.colour,
@@ -1447,10 +1474,11 @@ export class AnnotationLanes {
           arrows: features.arrows,
           display: features.display,
           barScale: features.bars,
-          ...(barLimits === undefined ? {} : { barLimits }),
+          ...(axisLimits === undefined ? {} : { axisLimits }),
           colourOf: ink.colourOf,
         }
         drawFeatures(ctx, frame, set, layout, paint, entry.kind)
+        const caption = featureCaption(entry.kind, set, layout, features.bars, axisLimits, fmt.int, fmt.num)
         if (text) {
           label = {
             // Named with a colour that is in the lane — §8.12's rule, as the
@@ -1460,18 +1488,9 @@ export class AnnotationLanes {
                 ? entry
                 : { ...entry, style: { ...entry.style, colour: ink.chip } },
             ],
-            detail: layout.dense
-              ? {
-                  kind: 'text',
-                  text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
-                }
-              : // The browser's caption, on the lane beside the map (§8.17).
-                set.bars === undefined
-                ? null
-                : {
-                    kind: 'text',
-                    text: barChartCaption(set.bars, fmt.num, features.bars, barLimits),
-                  },
+            // The browser's caption, on the lane beside the map: one function
+            // writes it for both surfaces (§8.17, §8.22, §8.23).
+            detail: caption === null ? null : { kind: 'text', text: caption },
             at: 'near',
           }
         }
@@ -1892,13 +1911,13 @@ export class AnnotationLanes {
     edge: LaneEdge,
     x: number,
     y: number,
-  ): { set: FeatureSet; index: number; source: string } | null {
+  ): { set: FeatureSet; index: number; source: string; kind: AnnotationKind } | null {
     for (const slot of this.slotsFor(edge)) {
       const cached = this.layouts.get(`${slot.entry.id}:${edge}`)
       const set = slot.entry.payload?.kind === 'features' ? slot.entry.payload.data : null
       if (cached === undefined || set === null) continue
       const hit = featureAt(cached.frame, cached.layout, x, y)
-      if (hit !== null) return { set, index: hit.index, source: slot.entry.label }
+      if (hit !== null) return { set, index: hit.index, source: slot.entry.label, kind: slot.entry.kind }
     }
     return null
   }

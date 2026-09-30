@@ -62,6 +62,31 @@ export const FLAG = {
 } as const
 
 /**
+ * Step over one tag value, returning where the next tag begins, or `-1`.
+ *
+ * Here rather than beside either of its two readers — a read's `MD` for its
+ * mismatches, and a spliced read's `XS` for the strand its intron is on — so a
+ * tag type one of them learns to step over is a type the other steps over too.
+ */
+export function skipTag(bytes: Uint8Array, at: number, type: string, to: number): number {
+  const width: Record<string, number | undefined> = { c: 1, C: 1, s: 2, S: 2, i: 4, I: 4, f: 4, A: 1 }
+  if (type === 'Z' || type === 'H') {
+    let end = at
+    while (end < to && bytes[end] !== 0) end++
+    return end + 1
+  }
+  if (type === 'B') {
+    const sub = String.fromCharCode(bytes[at])
+    const count = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(at + 1, true)
+    const each = width[sub]
+    if (each === undefined || count < 0) return -1
+    return at + 5 + count * each
+  }
+  const each = width[type]
+  return each === undefined ? -1 : at + each
+}
+
+/**
  * The reads no pile-up and no coverage should ever count.
  *
  * Secondary and supplementary alignments are *the same molecule* reported a

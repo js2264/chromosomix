@@ -83,6 +83,16 @@ export type DetectedFormat =
   // own so that the lane can say which modification it is drawing and which
   // ones it is not.
   | 'bedmethyl'
+  // A karyotype's bands (§8.22): UCSC's cytoBand and cytoBandIdeo. A
+  // `FeatureSet`, and a member of its own because it is the one feature file
+  // that can declare a genome — its bands tile each chromosome, so the last
+  // one's end is the length — and because it becomes a kind of its own.
+  | 'cytoband'
+  // RNA-seq splice junctions (§8.23): STAR's `SJ.out.tab`, a junctions BED,
+  // leafcutter's `.junc`. One member for all three, for the reason `barchart`
+  // is one for its text and its bigBed: the kind they become and the parser
+  // that reads them are the same, and only the columns differ.
+  | 'junctions'
   // A 3D model of the fibre (§25): WashU's g3d, as the text `g3dtools` takes or
   // as the container it writes. One member for both, for the reason `barchart`
   // is one for its text and its bigBed: what a reader has is a structure, and

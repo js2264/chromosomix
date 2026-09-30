@@ -23,7 +23,9 @@
 
 import { formatLocus } from '../genome/assembly'
 
+import { iscnName } from './cytoband'
 import type { AnnotationStore } from './store'
+import type { FeatureSet } from './types'
 
 /** A zoomed-to feature keeps this much of its own length as margin on each side. */
 export const FEATURE_PAD = 0.25
@@ -93,10 +95,25 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
   const raw = text.trim()
   const query = raw.toLowerCase()
   if (query.length < 2 || raw.includes(':')) return []
-  const source = store.searchSource()
-  if (source === null || source.payload?.kind !== 'features') return []
-  const set = source.payload.data
   const hits: FeatureHit[] = []
+  const source = store.searchSource()
+  if (source !== null && source.payload?.kind === 'features') {
+    geneHits(source.payload.data, source.label, query, limit, hits)
+  }
+  // …then the bands of every karyotype loaded, by their ISCN names (§8.22).
+  // After the genes, so a gene is never pushed off the list by a band, and
+  // from every ideogram rather than a starred one: a band's name is the same
+  // name in every file that has it.
+  for (const entry of store.entries) {
+    if (hits.length >= limit) break
+    if (entry.kind !== 'ideogram' || entry.status !== 'ready' || entry.payload?.kind !== 'features') continue
+    bandHits(entry.payload.data, entry.label, query, limit, hits)
+  }
+  return hits
+}
+
+/** The genes of the search source whose name or accession starts with `query`. */
+function geneHits(set: FeatureSet, label: string, query: string, limit: number, hits: FeatureHit[]): void {
   for (let i = 0; i < set.length && hits.length < limit; i++) {
     const name = set.name[i]
     const id = set.id[i]
@@ -117,10 +134,36 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
       end: set.end[i] + pad,
       featureStart: set.start[i],
       featureEnd: set.end[i],
-      source: source.label,
+      source: label,
     })
   }
-  return hits
+}
+
+/**
+ * The bands whose ISCN name starts with `query` — `8q24` for every band of
+ * 8q24, `xq28` for Xq28 — with UCSC's `chr` prefix ignored on both sides, since
+ * a cytogeneticist writes neither.
+ */
+function bandHits(set: FeatureSet, label: string, query: string, limit: number, hits: FeatureHit[]): void {
+  const wanted = query.replace(/^chr/, '')
+  if (wanted.length < 2) return
+  for (let i = 0; i < set.length && hits.length < limit; i++) {
+    if (set.name[i] === '') continue
+    const contig = set.contigs[set.contig[i]]
+    const name = iscnName(contig, set.name[i])
+    if (!name.toLowerCase().startsWith(wanted)) continue
+    const pad = Math.max(FEATURE_MIN_PAD, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
+    hits.push({
+      name,
+      id: '',
+      contig,
+      start: Math.max(0, set.start[i] - pad),
+      end: set.end[i] + pad,
+      featureStart: set.start[i],
+      featureEnd: set.end[i],
+      source: label,
+    })
+  }
 }
 
 /**

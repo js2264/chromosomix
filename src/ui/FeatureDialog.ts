@@ -19,7 +19,13 @@
  */
 
 import { formatLocus } from '../genome/assembly'
-import { DETAIL_SEP, type BarChartBars, type FeatureSet } from '../annotations/types'
+import { iscnName } from '../annotations/cytoband'
+import {
+  DETAIL_SEP,
+  type AnnotationKind,
+  type BarChartBars,
+  type FeatureSet,
+} from '../annotations/types'
 import { barColours } from '../render/barchart'
 import { Modal } from './Modal'
 import { el, fmt } from './dom'
@@ -31,6 +37,18 @@ export interface FeatureDialogProps {
   index: number
   /** What the track it came from is called, for the line that says where. */
   source: string
+  /**
+   * What kind of lane it was clicked in, where the caller knows (§8.22,
+   * §8.23).
+   *
+   * A band and a junction are rows of a `FeatureSet` like any other, and the
+   * card lists them the same way — but two lines of it would be wrong about
+   * them. A junction's score is its **reads** and its length is its
+   * **intron's**, and a band's score is a darkness its stain already says; a
+   * band is named as a cytogeneticist names it, chromosome first, and a
+   * junction with no name is a *splice junction* rather than a *feature*.
+   */
+  kind?: AnnotationKind
   /**
    * Frame the feature in the view behind the dialog, and close.
    *
@@ -79,16 +97,27 @@ function attributeRows(detail: string): HTMLElement[] {
   // the answer to the question the click asked and has no key at all, while
   // `QUAL 60` and `filter q10` are two facts that read as one run-on string
   // unless they are split here.
+  //
+  // The third set is a band's and a junction's (§8.22, §8.23), and two of those
+  // read better under a longer name than the one the parser keys them by.
   const KEYED =
-    /^(biotype|source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE|top|total) (.+)$/
+    /^(biotype|source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE|top|total|stain|multi|motif|annotated|overhang|anchors) (.+)$/
+  const NAMED: Record<string, string> = { multi: 'multi-mapped', overhang: 'max overhang' }
   return detail
     .split(DETAIL_SEP)
     .map((part) => part.trim())
     .filter((part) => part !== '')
     .map((part) => {
       const keyed = KEYED.exec(part)
-      return keyed === null ? row('', part) : row(keyed[1], keyed[2])
+      return keyed === null ? row('', part) : row(NAMED[keyed[1]] ?? keyed[1], keyed[2])
     })
+}
+
+/** What a feature with no name of its own is called on its card. */
+function nounOf(kind: AnnotationKind | undefined): string {
+  if (kind === 'junctions') return 'Splice junction'
+  if (kind === 'ideogram') return 'Band'
+  return 'Feature'
 }
 
 /**
@@ -217,24 +246,42 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
   const name = set.name[at]
   const length = set.end[at] - set.start[at]
   const strand = set.strand[at]
+  const junction = props.kind === 'junctions'
+  const band = props.kind === 'ideogram'
+  // A band by its ISCN name — `Xq28`, not the file's `q28` — since the file
+  // writes the chromosome in another column and the title is read alone.
+  const title =
+    band && name !== '' ? iscnName(set.contigs[set.contig[at]], name) : name === '' ? nounOf(props.kind) : name
 
   return new Modal({
     // The name is the title, because it is what the reader clicked on. A feature
     // with none — a peak, an unnamed BED row — says what kind of thing it is
     // instead, rather than leaving the heading blank.
-    title: name === '' ? 'Feature' : name,
+    title,
+    // …and a name keeps the case the file wrote it in, which the heading's
+    // uppercase would take: a band headed `XQ28` has a long arm called `Q`,
+    // and a mouse gene headed `ACTB` is the human one.
+    titleIsName: name !== '',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => {
       const rows: HTMLElement[] = [
         ...geneRows(name, set.id[at]),
-        row('position', locusOf(set, at)),
-        row('length', fmt.bp(length)),
+        // A junction *is* its intron: the span is the intron's, and so is the
+        // length — donor to acceptor, which is what a reader checks against a
+        // gene model's exons.
+        row(junction ? 'intron' : 'position', locusOf(set, at)),
+        row(junction ? 'intron length' : 'length', fmt.bp(length)),
       ]
       // Only where the format carries one. A `0` strand means "this file does
       // not say", and writing "strand: ." would be reporting a fact the file
       // does not contain.
       if (strand !== 0) rows.push(row('strand', strand === 1 ? 'forward (+)' : 'reverse (−)'))
-      if (Number.isFinite(set.score[at])) rows.push(row('score', fmt.num(set.score[at])))
+      // A junction's score is the reads that crossed it, and says so; a band's
+      // is the darkness its stain already names on the line below, and is not
+      // said twice.
+      if (Number.isFinite(set.score[at]) && !band) {
+        rows.push(row(junction ? 'reads' : 'score', fmt.num(set.score[at])))
+      }
       rows.push(...attributeRows(set.detail[at]))
       // Before the exons and after the attributes: a barChart has no exons and
       // the attributes are `top` and `total`, which are this chart summarised —

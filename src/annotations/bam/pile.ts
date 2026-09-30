@@ -38,9 +38,11 @@ import {
   consumesQuery,
   consumesReference,
   DEFAULT_EXCLUDE,
+  FLAG,
   forEachRecord,
   longCigarOf,
   SEQ_ALPHABET,
+  skipTag,
   type RecordCursor,
 } from './format'
 import { BASE_CODE } from '../fasta'
@@ -104,6 +106,13 @@ export function coverageOf(
    * here" to name a place (§8.13).
    */
   reference?: { start: number; bases: Uint8Array },
+  /**
+   * Where to count the introns the counted reads skip (§8.23): a sashimi
+   * plot's arcs, from the same pass and the same filter as the depth, so an arc
+   * is never counted from a read the curve under it left out. Keyed
+   * `start:end:strand`; absent counts nothing.
+   */
+  introns?: Map<string, number>,
 ): CoverageResult {
   const span = end - start
   if (bins <= 0 || span <= 0) {
@@ -137,6 +146,19 @@ export function coverageOf(
       if (b <= a) return
       addInterval(partial, whole, (a - start) / binWidth, (b - start) / binWidth, bins)
     })
+    if (introns !== undefined) {
+      // The strand is read once per spliced record and only for one: a read
+      // with no `N` in it costs the walk and nothing more.
+      let strand: number | null = null
+      eachIntron(bytes, cursor, (from, to) => {
+        // Every intron that reaches into the region, which is every arc that
+        // can be seen from it — one whose ends are both outside still spans it.
+        if (to <= start || from >= end) return
+        strand ??= spliceStrand(bytes, cursor)
+        const key = `${from}:${to}:${strand}`
+        introns.set(key, (introns.get(key) ?? 0) + 1)
+      })
+    }
     if (reference === undefined || varPartial === null || varWhole === null) return
     eachMismatch(bytes, cursor, reference, (at) => {
       if (at < start || at >= end) return
@@ -265,6 +287,68 @@ function addInterval(
     whole[first + 1] += 1
     whole[last] -= 1
   }
+}
+
+/**
+ * The introns a record skips — each CIGAR `N`, as `[start, end)` on the
+ * reference (§8.23).
+ *
+ * The walk {@link eachAlignedBlock} makes, emitting the gaps rather than the
+ * blocks, and for its reason reading a long CIGAR out of its `CG` tag: the
+ * placeholder `N` a record with too many ops carries is the read's whole
+ * reference span, and counted as an intron it would be an arc over the read.
+ */
+export function eachIntron(
+  bytes: Uint8Array,
+  cursor: RecordCursor,
+  emit: (start: number, end: number) => void,
+): void {
+  const long = longCigarOf(bytes, cursor)
+  const ops = long === null ? cursor.cigarOps : long.length
+  const view = long === null ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) : null
+  let at = cursor.pos
+  for (let i = 0; i < ops; i++) {
+    const packed = view === null ? (long as Uint32Array)[i] : view.getUint32(cursor.cigarAt + i * 4, true)
+    const op = packed & 0xf
+    const length = packed >>> 4
+    if (op === 3) {
+      if (length > 0) emit(at, at + length)
+      at += length
+      continue
+    }
+    if (consumesReference(op)) at += length
+  }
+}
+
+/**
+ * The strand a spliced read's intron is transcribed from: `+1`, `-1`, or `0`
+ * where the aligner did not say.
+ *
+ * `XS:A` is the strand itself — STAR writes it with `--outSAMstrandField
+ * intronMotif`, and HISAT2 and TopHat always do. minimap2's `ts:A` is relative
+ * to the read's own strand, so a reverse read's is turned over. An unstranded
+ * library aligned without either leaves every arc unstranded, which is what it
+ * is (§8.16).
+ */
+export function spliceStrand(bytes: Uint8Array, cursor: RecordCursor): number {
+  const qualAt = cursor.seqAt + ((cursor.seqLength + 1) >> 1)
+  let at = qualAt + cursor.seqLength
+  const to = cursor.at + cursor.bytes - 4
+  while (at + 3 <= to) {
+    const a = bytes[at]
+    const b = bytes[at + 1]
+    const type = String.fromCharCode(bytes[at + 2])
+    at += 3
+    if (type === 'A' && ((a === 88 && b === 83) || (a === 116 && b === 115))) {
+      // `XS` or `ts`, a single character: `+` (43) or `-` (45).
+      const said = bytes[at] === 43 ? 1 : bytes[at] === 45 ? -1 : 0
+      if (a === 88) return said
+      return (cursor.flag & FLAG.REVERSE) !== 0 ? -said : said
+    }
+    at = skipTag(bytes, at, type, to)
+    if (at < 0) return 0
+  }
+  return 0
 }
 
 /**

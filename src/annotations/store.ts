@@ -50,6 +50,7 @@ import {
   normalisePlacement,
   placementOn,
   readStyleOf,
+  searchesByName,
   structureStyleOf,
 } from './types'
 import { featureStyleOf } from './fields'
@@ -549,8 +550,12 @@ export class AnnotationStore {
    * the search never quietly stops working.
    */
   searchSource(): AnnotationEntry | null {
+    // Not a karyotype, nor a sample's junctions: neither has names a reader
+    // searches a gene by, and either loaded before the gene model would have
+    // taken the search from it (`searchesByName`).
     const usable = this.items.filter(
-      (entry) => entry.status === 'ready' && entry.payload?.kind === 'features',
+      (entry) =>
+        entry.status === 'ready' && entry.payload?.kind === 'features' && searchesByName(entry.kind),
     )
     return usable.find((entry) => entry.primary === true) ?? usable[0] ?? null
   }

@@ -54,6 +54,13 @@ export type AssemblyOrigin =
   // and "the sequences themselves" would be a lie about a read that never
   // touched them.
   | 'twobit'
+  // A cytoBand whose bands tile every sequence from its first base (§8.22):
+  // the last band ends where the chromosome does, which is how UCSC writes
+  // every one and what makes the file a `chrom.sizes` with a picture on it.
+  // Exact, and its own member for the reason `vcf` is one — the Genome card
+  // says where lengths came from — and a cytoBand that does *not* tile its
+  // sequences reports `features` and gets the lower bound.
+  | 'cytoband'
 
 export interface Assembly {
   /** What names it: the URI of the file its lengths were read from. */

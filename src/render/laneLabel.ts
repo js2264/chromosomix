@@ -161,8 +161,14 @@ export function fitName(
   if (lines >= 2) {
     const broken = breakInTwo(measure, text, width)
     if (broken !== null) return broken
+    // Too long for two lines even broken: cut to what two lines hold, and break
+    // *that*. It was cut to two lines' width and handed back as one line, so a
+    // regtools BED dropped under its own name ran twice the column's width out
+    // over the arcs it named.
+    const cut = breakInTwo(measure, cutMiddle(measure, text, width * lines), width)
+    if (cut !== null) return cut
   }
-  return [cutMiddle(measure, text, width * lines)]
+  return [cutMiddle(measure, text, width)]
 }
 
 /**

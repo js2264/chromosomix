@@ -234,6 +234,8 @@ export interface LocusAccepts {
   genome?: boolean
   /** A gene or feature name, where an annotation is loaded to search. */
   gene?: boolean
+  /** A cytogenetic band — `Xq28` — where a karyotype is loaded (§8.22). */
+  band?: boolean
   /** `*`, for everything at once. */
   whole?: boolean
 }
@@ -341,6 +343,7 @@ export function locusPlaceholder(options: { first?: string; accepts?: LocusAccep
   if (accepts.sequence === true) parts.push('a sequence')
   if (accepts.genome === true) parts.push('a genome')
   if (accepts.gene === true) parts.push('a gene')
+  if (accepts.band === true) parts.push('a band')
   if (accepts.whole === true) parts.push('* for the whole genome')
   // `or` before the last one, whatever the last one is. It was put in with the
   // `*` and nowhere else, so a box that does not take `*` read

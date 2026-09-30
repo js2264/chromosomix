@@ -173,6 +173,28 @@ const DEMO: Array<{
     files: ['Yeast_microC_G2M_1kb.cool', 'Yeast_hic.hic', 'Yeast_annotations.gtf', 'Yeast_ATAC.bw'],
   },
   {
+    folder: 'human',
+    file: 'Human_chrX_RNA.metacooler.json',
+    title: 'Splicing on human chrX',
+    line: 'The 1D browser over hg19’s karyotype: a sashimi plot from reads, and two samples’ junctions on one axis.',
+    assembly: 'hg19 (GRCh37)',
+    provenance: 'Geuvadis · DOI 10.1038/nature12531 · nf-core/test-datasets rnasplice',
+    detail:
+      'The browser opened from UCSC’s hg19 cytoBand alone — its bands tile each chromosome, so it ' +
+      'declares the genome — at RPL10 in Xq28. Under the ideogram, the Ensembl gene model; one ' +
+      'lymphoblastoid sample’s reads as depth, with the introns they skip drawn over it as arcs ' +
+      'and counted; and STAR’s junction tables for a GBR and a YRI sample, both read against one ' +
+      'typed axis of 1 to 400 reads so their arcs compare. Pan out to FLNA to see the reverse ' +
+      'strand’s arcs hang below the line, or type a band — Xq13 — in the locus box.',
+    files: [
+      'hg19_cytoBand.txt',
+      'Homo_sapiens.GRCh37.chrX.gtf.gz',
+      'Geuvadis_chrX_GBR_ERR188428.bam',
+      'Geuvadis_chrX_GBR_ERR188428.SJ.out.tab',
+      'Geuvadis_chrX_YRI_ERR188454.SJ.out.tab',
+    ],
+  },
+  {
     folder: 'metagenomics/mock-community',
     file: 'Mock_microbial_community.metacooler.json',
     title: 'Mock microbial community',
@@ -264,6 +286,11 @@ const DEMO_DATA: Array<{
       ['Yeast_expression.barChart', 'Expression by condition (synthetic)', 'barChart'],
       ['Yeast_microC_anchors.bed', 'Micro-C anchors', 'bed'],
       ['Yeast_microC_loops.tsv', 'Micro-C loop calls', 'loops'],
+      // The karyotype as a cytoBand (§8.22): arms, centromeres and the rDNA —
+      // no bands, since yeast chromosomes take no G-banding.
+      ['Yeast_cytobands.txt', 'Karyotype: arms, centromeres, rDNA', 'cytoBand'],
+      // STAR's junctions for nf-core's chrI test subset of GSE110004 (§8.23).
+      ['Yeast_RNA_junctions.SJ.out.tab', 'RNA-seq splice junctions, chrI subset', 'SJ.out.tab'],
     ] as const
   ).map(([file, label, format]) => ({
     folder: 'yeast',
@@ -273,6 +300,26 @@ const DEMO_DATA: Array<{
     format,
     assembly: 'S288C (syn XIII-40)',
     dataset: 'Yeast',
+  })),
+  ...(
+    [
+      ['hg19_cytoBand.txt', 'Human karyotype, UCSC’s bands', 'cytoBand'],
+      ['Homo_sapiens.GRCh37.chrX.gtf.gz', 'Genes, chromosome X', 'gtf'],
+      ['Geuvadis_chrX_GBR_ERR188428.bam', 'RNA-seq reads, GBR ERR188428', 'bam'],
+      ['Geuvadis_chrX_GBR_ERR188383.SJ.out.tab', 'Splice junctions, GBR ERR188383', 'SJ.out.tab'],
+      ['Geuvadis_chrX_GBR_ERR188428.SJ.out.tab', 'Splice junctions, GBR ERR188428', 'SJ.out.tab'],
+      ['Geuvadis_chrX_YRI_ERR188454.SJ.out.tab', 'Splice junctions, YRI ERR188454', 'SJ.out.tab'],
+      ['Geuvadis_chrX_YRI_ERR204916.SJ.out.tab', 'Splice junctions, YRI ERR204916', 'SJ.out.tab'],
+      ['Geuvadis_chrX_GBR_ERR188428.junctions.bed', 'Splice junctions as regtools writes them', 'junctions.bed'],
+    ] as const
+  ).map(([file, label, format]) => ({
+    folder: 'human',
+    file,
+    label,
+    kind: 'genome' as const,
+    format,
+    assembly: 'hg19 (GRCh37)',
+    dataset: 'Human, Geuvadis chrX',
   })),
   {
     folder: 'yeast-mpneumoniae',

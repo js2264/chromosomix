@@ -24,7 +24,7 @@ import {
   type FeatureDisplay,
   type FeatureStyle,
 } from '../annotations/fields'
-import { barExtentOf } from '../render/barchart'
+import { glyphExtentOfRow } from '../render/features'
 import { featureColouring, rampStops } from '../render/featureInk'
 import {
   COLOUR_BY,
@@ -318,7 +318,7 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
   // the lane was drawing against before the reader touched this. Seeding from it
   // means leaving auto starts on the picture that was already on screen, rather
   // than on `0 to 1` and a lane of full-height bars (§8.17).
-  const seed = entry.fileExtent ?? barExtentOf(setOf(entry)?.bars) ?? { min: 0, max: 1 }
+  const seed = entry.fileExtent ?? glyphExtentOfRow(entry) ?? { min: 0, max: 1 }
   const min = el('input', {
     class: 'input input-num',
     type: 'number',
@@ -676,6 +676,67 @@ export function splitsToggle(store: AnnotationStore, entry: AnnotationEntry): HT
     { class: 'field field-block' },
     el('span', { class: 'field-label', text: 'reads' }),
     el('div', { class: 'ann-chips' }, chip),
+  )
+}
+
+/**
+ * The sashimi plot's arcs over a BAM's depth, and the fewest reads one is drawn
+ * from (§8.23).
+ *
+ * The depth row's alone. The arcs are drawn over the curve, and the pile beside
+ * it draws each spliced read's gap as the line it is. Not written through to
+ * the pile for the same reason: it is about how the depth is *drawn*, not about
+ * which reads count — a floor on arcs changes no number anywhere.
+ */
+export function sashimiField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const chip = button(
+    'junction arcs',
+    () => patchReads(store, entry, { sashimi: !liveReads(store, entry).sashimi }),
+    {
+      class: `btn btn-chip${reads.sashimi ? ' is-on' : ''}`,
+      title:
+        'Draw the introns the reads skip as arcs over the depth — a sashimi plot — each labelled ' +
+        'with the reads that skipped it. Counted from the same reads as the depth, under the same ' +
+        'filters. Nothing is drawn for a library whose reads are not spliced.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(reads.sashimi))
+  const box = el('input', {
+    class: 'input input-num ann-size',
+    type: 'number',
+    value: String(reads.sashimiFloor),
+    title:
+      'The fewest reads an arc is drawn from. A junction one read long is as often an ' +
+      'aligner’s guess as a splice, and in a deep file those guesses are most of the arcs.',
+  })
+  box.min = '1'
+  box.step = '1'
+  box.disabled = !reads.sashimi
+  box.addEventListener('change', () => {
+    // On the string, as the MAPQ box reads it: an emptied box is no answer,
+    // and `Number('')` would be a floor of zero.
+    const raw = box.value.trim()
+    const typed = raw === '' ? Number.NaN : Math.round(Number(raw))
+    if (!Number.isFinite(typed)) {
+      box.value = String(liveReads(store, entry).sashimiFloor)
+      return
+    }
+    const clamped = Math.max(1, typed)
+    box.value = String(clamped)
+    patchReads(store, entry, { sashimiFloor: clamped })
+  })
+  return el(
+    'div',
+    { class: 'ann-inline' },
+    el('div', { class: 'ann-chips' }, chip),
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'from' }),
+      box,
+      el('span', { class: 'field-label', text: 'reads' }),
+    ),
   )
 }
 

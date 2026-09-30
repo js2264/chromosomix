@@ -30,7 +30,7 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import { hasTrackControls, isIntervalSet, readsAlignments } from '../annotations/types'
+import { hasTrackControls, isIntervalSet, readsAlignments, searchesByName } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
@@ -72,6 +72,7 @@ import {
   styleFields,
   opacityField,
   duplicatesToggle,
+  sashimiField,
   splitsToggle,
 } from './laneSettings'
 
@@ -459,7 +460,7 @@ export class AnnotationCard {
         // The `*` a resolution this file does not store wears (`3 kb*`), for
         // the same fact: this row is not in any file the reader gave the app.
         ...(isSynthetic(entry) ? [syntheticMark(entry)] : []),
-        ...(entry.payload?.kind === 'features' ? [this.star(entry)] : []),
+        ...(entry.payload?.kind === 'features' && searchesByName(entry.kind) ? [this.star(entry)] : []),
         this.visibility(entry),
         more,
         iconButton('x', 'Remove this track', () => this.props.store.remove(entry.id), {
@@ -1127,6 +1128,10 @@ export class AnnotationCard {
         ),
       )
     }
+    // …and the depth's own arcs, the sashimi plot (§8.23): drawn over the
+    // curve, so the depth row has them and the pile does not — its reads draw
+    // their gaps themselves.
+    if (entry.kind === 'alignments') out.push(sashimiField(this.props.store, entry))
     // …and how the pile is drawn, which only the pile has. A colouring and a
     // pairing mean nothing to a depth curve, so they are not offered on the row
     // that draws one.
@@ -1165,7 +1170,25 @@ export class AnnotationCard {
       // is left, and it is the one of the three this lane needs most: it is
       // where the bars get their names.
       const key = featureLegend(entry)
-      if (entry.kind === 'barchart') {
+      if (entry.kind === 'ideogram') {
+        // A karyotype's ink is its stains' and its glyph is one shape rather
+        // than boxes on rows (§8.22), so the picker, the arrowheads and the row
+        // modes would all be controls that silently do nothing. The key is
+        // what is left, and it is where a reader learns which grey is which.
+        out.push(key)
+      } else if (entry.kind === 'junctions') {
+        // The value axis first, for the barChart's reason (§8.17, §8.23): two
+        // samples' arcs are comparable only against one ceiling, and the floor
+        // is the minimum count a junction is drawn at. Then what the arcs are
+        // coloured by — strand, or any column the aligner wrote — and no
+        // arrowheads or row modes, since an arc points nowhere and is not
+        // packed into rows.
+        out.push(
+          this.limits(entry),
+          featureColourField(this.props.store, entry, (by) => fillFeatureLegend(key, entry, by)),
+          key,
+        )
+      } else if (entry.kind === 'barchart') {
         // …and the value axis, which is the one control §8.17 left it without.
         // Both readings a barChart had were *relative* — every chart against the
         // file's tallest bar, or each against its own — so two lanes of two
@@ -1544,10 +1567,12 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
       // FASTA or a BAM` — an article on one format of eight, and six formats
       // short: a reader holding the bedGraph that MACS2 or deepTools wrote, or
       // a 2bit, was told this viewer would not take it. BED's variants are not
-      // listed because content decides (§8.3), so a narrowPeak *is* a BED.
+      // listed because content decides (§8.3), so a narrowPeak *is* a BED — and
+      // a junctions BED is one too; a cytoBand and STAR's table are not, and
+      // are named (§8.22, §8.23).
       text:
-        'bigWig, bedGraph, wig, bigBed, BED, GTF, genePred, BEDPE, interact, VCF, BAM, FASTA ' +
-        'or 2bit. Drop one here, or click to choose.',
+        'bigWig, bedGraph, wig, bigBed, BED, GTF, genePred, BEDPE, interact, VCF, BAM, FASTA, ' +
+        '2bit, cytoBand or SJ.out.tab. Drop one here, or click to choose.',
     }),
   )
   zone.addEventListener('click', () => void choose())

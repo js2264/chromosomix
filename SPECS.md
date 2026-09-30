@@ -1010,9 +1010,10 @@ memory and their renderers are the ones §8 already specifies. What differs is t
 underneath, and only that: the axis is the whole assembly laid end to end at one unit per base pair,
 rather than an axis of matrix bins. §8.4's rule is unchanged and is what makes this possible at all.
 
-Lengths come from whatever named them, in descending order of trust: a `chrom.sizes` declares them, a
-BBI header carries them, and a feature file yields only the furthest coordinate it mentions — which
-is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described. A
+Lengths come from whatever named them, in descending order of trust: a `chrom.sizes` declares them,
+and so does a cytoBand whose bands tile every sequence (§8.22); a BBI header carries them; and a
+feature file yields only the furthest coordinate it mentions — which is a lower bound, is rounded up,
+and is labelled as inferred wherever the genome is described. A
 **label**, and once per surface: the Genome card's `lengths` row reads `inferred (rounded up)`, the
 browser's summary line ends ` · lengths inferred (rounded up)`, and the way out of it — drop a
 `chrom.sizes` or a bigWig — is said once, in the card, where the row it corrects is. It was said
@@ -3028,7 +3029,8 @@ about *which reads count* — the mapping-quality floor and the duplicate switch
 to both: a floor applied to the pile and not to the depth beside it is two pictures of two different
 files under one name, and nothing on screen would say so. How the pile is *drawn* — the colouring,
 the pair layout, the split-read switch — is the pile's alone, because none of it means anything to a
-curve. Closing one row clears the other's link, so a write-through cannot chase a row that has gone.
+curve; and the arcs drawn over the depth, with their floor, are the depth's alone (§8.23). Closing one
+row clears the other's link, so a write-through cannot chase a row that has gone.
 In the worker the two rows share one open handle and one parsed index, keyed on the file **and its
 index**: a BAI for a human alignment is single-digit megabytes to fetch and to parse, and the second
 row must not pay that again to throw the result away.
@@ -3066,7 +3068,9 @@ bigWig of the coverage is the honest answer at that width and the message names 
 **What a bin holds is mean depth**, and three decisions inside that are worth writing down because
 each is a place a viewer can quietly disagree with `samtools` and never say so. A CIGAR `N` is not
 covered: it is reference the read is aligned *across* rather than *over*, and counting it draws an
-RNA-seq gene as a solid block and erases the only thing the picture was for. A `D` is covered,
+RNA-seq gene as a solid block and erases the only thing the picture was for. It is counted
+elsewhere instead, on the same pass: the introns the reads skip, drawn over the depth as a sashimi
+plot's arcs (§8.23). A `D` is covered,
 because a deletion is a base the read asserts something about. Secondary and supplementary
 alignments are excluded, because they are one molecule reported twice and they cluster at repeats and
 breakpoints — the loci where the number is being read most carefully. Duplicates are **kept**: marking them is a
@@ -4107,6 +4111,237 @@ turn a window into a byte range", and every caller above them wants exactly that
 lines of arithmetic. The CLI reads one the same way (`cli/tracks.ts`), through the same pure
 functions, so a metaplot over ten thousand windows of hg38 reads a few megabytes rather than
 unpacking 3.1 GB.
+
+### 8.22 Chromosome ideograms: cytoBand
+
+UCSC's `cytoBand` is five columns — `chrom chromStart chromEnd name gieStain` — and the fifth is the
+whole of the format: the Giemsa stain a metaphase chromosome takes over that stretch. `gneg` is a
+light band, `gpos25` to `gpos100` dark ones by how dark, `acen` the centromere, `gvar` variable
+heterochromatin and `stalk` the narrow stalk of an acrocentric's short arm, which is where its rDNA
+is. Every UCSC assembly publishes one and IGV draws its ideogram from the same file. `cytoBandIdeo`
+is the same five columns with a row for each unplaced sequence as well, its band name left empty.
+
+**It is a `FeatureSet`, one band per row**, for §8.14's reason, which is stronger here than anywhere:
+a band is an interval with a name, and the search, the export, the hit test and every task that
+reads intervals are the code a peak set already uses. What it has of its own is a **kind**,
+`ideogram`, because of the glyph. A band is not a box on a row: it is a stretch of *one* shape, the
+chromosome, whose outline pinches at the centromere and narrows at a stalk, and the packing, the
+strand bands, the colour picker and the arrowheads every other interval lane has are questions a
+karyotype is never asked.
+
+**It is recognised by its last column.** Every row the sniffer reads must end in a stain, a word no
+format of the BED family puts in its fifth column — a BED5's is a score, a number — so the test
+cannot capture a BED, and nothing that is a cytoBand fails it. A whitespace-separated
+`cytoBandIdeo` whose empty names have collapsed away leaves four columns with the stain in the
+fourth, and is read as well. It is asked before `sniffFormat`, for §8.17's reason: that function's
+last line is `return 'bed'`, and a cytoBand read as a BED is a lane of grey boxes whose one column
+anybody opened the file for was never read. The file's *name* decides nothing about its contents;
+it only routes a bare link to the door it opens from (`cytoBand.txt.gz` opens a browser, like a
+`chrom.sizes`).
+
+**The stain is kept twice.** In the detail, as `stain gpos50`, so the card and the tooltip say it the
+way the file does; and in the **score**, as the darkness it names: `gneg` 0, `gposN` N, a bare `gpos`
+100. That is a number the file states rather than one this invents, and it is what lets a task read
+the bands as light and dark — *Signal by group* split by score is a track read over G-light against
+G-dark bands, with no code of its own. `acen`, `gvar` and `stalk` are not a darkness and score
+`NaN`. The CLI reads the file the same way, so a task run from the
+command line gets the scores too.
+
+**A cytoBand declares the genome.** UCSC's bands tile each chromosome, from its first base to its
+last, so the end of the last band is the chromosome's length and the file is a `chrom.sizes` with a
+picture on it. That is checked rather than assumed: bands that start at 0 and leave no gap or
+overlap on every sequence give exact lengths, `origin: 'cytoband'`, and the Genome card's `lengths`
+row says `the cytoBand's bands`; one sequence that does not tile and the whole file gives the lower
+bound every other feature file gives (§5.8), because a file that tiles some chromosomes and not
+others is not making the claim it would be read as making. So `hg19_cytoBand.txt` alone opens a
+browser over hg19's 24 sequences at their exact lengths, which is how the human demo opens.
+
+**One outline per chromosome, and the bands inside it.** Each sequence in view is traced once, along
+its top edge and back along its bottom: **rounded at a telomere** — only where the chromosome's own
+end is in view, since the edge of a window is not a telomere — **pinched to a waist at the
+centromere**, where the first `acen` band named on the q arm begins (the middle of the run where the
+names do not say), to a fifth of the body's half-height rather than to a point, so the outline
+never crosses itself; and **narrowed to half along a stalk**. The bands are filled inside it as plain
+rectangles clipped to it, and it is edged once in the plot's ink. A centromere's two triangles are
+not drawn as triangles: they are what two `acen` rectangles look like inside a waist. The body is at
+most 22 pixels tall and centred in the lane, which opens at 40 — room for it, for a band's name
+inside it, and for the two lines of its label in the browser's column.
+
+**A yeast centromere is widened to be seen.** A human centromere is megabases and draws itself; a
+budding yeast's CEN is 118 bases, a hairline at any zoom where its chromosome is on screen. So a
+centromere is drawn at least six pixels wide, centred on itself and over the bands either side — the
+reason a variant is widened to three pixels (§8.14): a mark too narrow to see is not a mark.
+
+**The stains are physical, and the same in both themes.** `gposN` is N % of the way from the
+unstained near-white to a near-black, which is how UCSC and IGV read the number; turning the ramp
+over for a dark page would draw every G-light band dark to a reader who knows ideograms. The
+centromere is the red every ideogram gives it, `gvar` is **hatched** because it is variable rather
+than a darkness — in strokes at 45°, not a pattern fill, which the vector export cannot carry
+(`ui/vector.ts`) — and a stalk is a paler grey, where there is little to stain. The ink is therefore
+not a choice, and the card offers no `colour by`, no arrowheads and no `rows` (§8.16's three modes
+pack rows a karyotype does not have): it shows the **key**, the stains this file has in UCSC's legend
+order, and chips the row in the centromere's red.
+
+**One axis.** The bands are drawn where they are, on the lane's own axis (§8.4). This is not IGV's
+thumbnail of the whole chromosome with the window boxed in red, which is a second coordinate system
+beside the one every other lane shares. Zoomed out the lane is the karyotype — every band drawn,
+whatever §8.16's density rule would say, since bands tile rather than overlap and a genome's worth of
+them a pixel apiece is still the picture a reader zoomed out that far is looking for. Zoomed in it is
+the bands under the window, each **named inside itself** where the name fits, in the stain's
+contrasting ink. The line under the lane's name says which bands the window is in, in ISCN — `Xq28`,
+`Xq27.3 – q28`, `1p36.33 – Yq12` across the whole genome — which is the one fact the picture cannot
+carry once a band is wider than the screen. Beside a map the drawing is the same on all four edges.
+
+**A click names the band as a cytogeneticist does**: chromosome first and `chr` dropped — `Xq28`,
+where the file writes `q28` and the chromosome in another column — then its position, its length
+and its stain. The card has no score row, because the score is the stain restated.
+
+**Bands are searched by name, beside the genes and never instead of them.** The locus box offers
+every band of every ready ideogram whose ISCN name begins with what was typed, `chr` or not — `Xq13`
+lists `Xq13.1`, `Xq13.2` and `Xq13.3` with their spans — alongside the gene model's hits, and its
+placeholder says `a band` when there is one to find. What a karyotype never is, is the starred set
+the gene search reads (`searchesByName`): a cytoBand loaded before the GTF would otherwise have
+become the search source, and turned a search for `GAL4` into a search of `p11` and `q12`.
+
+**The demos.** `demo/human/hg19_cytoBand.txt` is UCSC's hg19 file — 862 bands over chr1–22, X and
+Y — and is the human demo's genome. `demo/yeast/Yeast_cytobands.txt` is the demo assembly as a
+cytoBand, which yeast has no G-banding for, so none is invented: each arm is one unstained band, the
+centromere is the CEN element found in the demo FASTA by its CDEI–CDEII–CDEIII architecture, and
+chromosome XII's rDNA is a stalk, which is what the stalk of a human acrocentric *is* — its
+nucleolar organiser. `scripts/make_ideogram_junction_demo.py` writes both and says where each came
+from.
+
+### 8.23 Splice junctions and sashimi arcs
+
+A junction is an **intron a read was seen to skip**: the last base of one exon joined to the first
+base of the next, and a count of the reads that said so. It is drawn as the arc every reader of
+RNA-seq has learnt alternative splicing from — Katz et al.'s sashimi plot — from one exon's end to
+the next one's start, as tall as its count against the lane's ceiling and labelled with that count
+at its apex. Two arcs leaving one exon are two isoforms, and the numbers on them say which is used
+how much.
+
+Every aligner that splices writes them, in one of three shapes:
+
+| Shape | Written by | Coordinates | Count |
+|---|---|---|---|
+| `SJ.out.tab`, nine integer columns | STAR | the intron, 1-based, inclusive | uniquely mapping reads (column 7) |
+| BED12 of two blocks | regtools, TopHat, Portcullis, IGV | the two anchors and the gap between them | the score column |
+| BED6 `.junc` | leafcutter | the intron, 0-based, half-open | the score column |
+
+All three become one `FeatureSet` whose features are the **introns** — donor to acceptor, 0-based
+and half-open — with the read count as the score. The intron, and not the anchors-and-intron a
+junctions BED spans, because the intron is the fact: the arc is drawn between its ends, the card
+gives its length, and a metaplot over splice sites wants the splice sites. Everything else a row says
+goes into the detail, keyed, so the card lists it and the colour picker offers it (§8.16): `multi`,
+STAR's multi-mapping reads; `motif`, spelled on the strand the intron is transcribed from — STAR
+numbers each motif once per genomic strand, and its code 2 is `GT/AG` read backwards, which is
+`GT/AG` to the reader and not `CT/AC`; `annotated`, `yes` where the junction is in the GTF STAR was
+given, which is what makes *colour by annotated* a map of novel splicing; `overhang`, the longest
+anchor any read had; and, from a BED, `anchors`, the two flanks, which are the one thing a BED says
+that the intron does not. A BED's score is read as the count it is rather than clamped to BED's
+nominal thousand, which any expressed gene passes.
+
+**STAR's table is recognised by its columns; the two BEDs have to say what they are.** Nine integers
+with STAR's small codes in the strand, motif and annotated columns are a statement no other file
+makes. But a BED12 of two blocks is also a two-exon transcript, so it is read as junctions only
+where the file says so — a name with `junc` or `sj` in it (`junctions.bed`, `SJ.bed`), a TopHat
+`track` line naming junctions, or regtools' and TopHat's own `JUNC…` names on every row — and a
+six-column BED is a peak set as often as not, so only a file called `.junc` is leafcutter's. All of it
+is asked before `sniffFormat`: a STAR table read as a BED is intervals one base too wide with no
+count on them, and a junctions BED is a lane of two-exon "genes" that are all intron.
+
+**The lane is a baseline, and a file with both strands splits it.** Arcs stand on one baseline and
+grow the way every value in this application grows (`laneGrowsInward`). A file with junctions on
+**both** strands moves the baseline to the middle, as IGV's junction track does: forward arcs rise
+from it and reverse arcs hang from it, so the two strands of a bidirectional locus read as two
+families rather than one tangle. A junction with no strand stands with the forward ones. The
+colouring is §8.16's, strand by default — forward in the lane's colour, reverse in the turned hue,
+unstranded in the grey that means *no answer*. An arc is stroked thicker the stronger it is; it is
+never lower than an eighth of its side's height, because a one-read arc against a ceiling of three
+hundred is otherwise a line along the baseline; and an intron narrower than two pixels is drawn as
+a **spike** of the same height at its middle, so a whole chromosome is a map of where splicing is and
+how much of it, rather than a fringe of sub-pixel humps. Past four thousand arcs the strongest are
+drawn and the caption says how many that was. The lane opens at 72 pixels.
+
+**Each count at its apex, strongest first, and none over another count or another arc.** A count
+that sits on two arcs is a count for neither, and one a digit's width from its neighbour is read with
+it — `13` beside `1` three pixels away is `131`, a count no junction there has. So a count is not
+written where a count already stands, nor where another drawn arc's line runs through it: DDX3X's
+alternative acceptors, three bases apart, are three arcs on one span, and the one-read arc's `1`
+written at its apex landed on the six-read arc's line and was read as its count. A count left out is
+still on the card a click on its arc opens. A count wider than its arc is still written, at the arc's
+apex: EFB1's 659 over a 366-base intron beside a yeast map is the arc a reader is looking for.
+
+**The axis is the lane's limits** — §8.17's third reading, for §8.17's reason: two samples' arcs can
+only be compared against one ceiling. A typed pair holds across windows and lanes, and the batch box
+sets one pair on several rows at once. The floor is also a **filter**, which is what a sashimi plot's
+*minimum junction coverage* is: a junction under it is not drawn, and the caption counts what was
+(`9 of 10 · 1–400 reads`). Over the ceiling an arc draws full height rather than out of the lane.
+**Under `auto` the axis is zero to the largest count in view**, and this is the one feature lane
+fitted to the window rather than to its file, against the rule §8.17 keeps for a barChart. Junction
+counts are heavier-tailed than expression: in the GBR sample's chrX, TMSB4X's second intron carries
+2,800 reads, 23 junctions of 2,967 reach a hundred and half have two or fewer, so against the file
+every gene but a handful is a row of flat humps. What makes the window safe here, where it is not
+for a chart, is what makes a track's autoscale safe: every arc carries its count, and the caption
+restates the ceiling on every frame (`20 junctions · to 23 reads`). A ceiling drag, a ⌘-scroll and
+the right-click menu's range reach the lane (`hasAMovableAxis`) and start from the axis on screen;
+the map's autoscale button, which says *every track*, now sets `auto` on a junction lane and on a
+barChart's as well, where it used to reach only the lanes drawn as a profile.
+
+**A click is tested against the curves on screen**: the nearest drawn arc within four pixels, the
+taller of two within half a pixel of each other. Not against boxes the size of each intron, because
+nested arcs share their span and a box test would name the last one drawn wherever the pointer was.
+The card says `intron` and `intron length` where every other card says position and length, and
+`reads` where it says score, then the file's own fields — multi-mapped, motif, annotated, max
+overhang, or a BED's anchors. A junction with no name is titled *Splice junction*.
+
+**A junction file is never the search source.** A junction has no name a reader looks for —
+regtools' `JUNC00000001` is a row number — and a sample's junctions are not where anybody looks a gene
+up, so one loaded before the GTF does not take the locus box's gene search from it.
+
+**A spliced BAM draws its own arcs.** The depth row of an alignment file (§8.13) counts the introns
+its reads skip on the pass that counts its depth — the CIGAR `N` that §8.13 declines to cover is
+counted here instead, and its span is exactly the intron's — and draws them over the curve. That is
+the sashimi plot proper: the curve says how much of each exon was read, the arcs say how the exons
+were joined, and no junction file is needed. They are counted under the depth's own filter, the
+mapping-quality floor, the duplicate switch and the exclusion of secondary and supplementary records,
+so an arc never stands on reads the curve under it did not count. A read with too many operations for
+its record carries its CIGAR in a `CG` tag and a placeholder `N` the length of the whole read in the
+record, and it is read from the tag: counted from the placeholder, every such read would be an arc
+over itself. The strand is the aligner's `XS`, or minimap2's `ts` turned over for a reverse read,
+since `ts` is the read's own strand; a read with neither is unstranded. A junction that reaches into
+two of a view's padded windows is counted in each and kept once, with the larger count.
+
+The arcs over a depth stand on its baseline and are never split — the depth has one baseline, and a
+reverse arc hanging below it would hang out of the lane — and a flipped lane carries them with it.
+They are drawn in the plot's ink rather than the lane's colour, which is already the colour of the
+filled curve under them. Their ceiling is the strongest junction in view, since the depth under them
+is autoscaled to the window too, and their floor is the row's own `junction arcs from N reads`, two
+by default, because a junction one read long is as often an aligner's guess as a splice and in a deep
+file those guesses are most of the arcs. The switch and the floor are on the depth row's card and
+stored with the session; they are not written through to the pile, because they are about how the
+depth is drawn rather than which reads count, and the pile draws each read's gap itself. **On by
+default**, because it costs nothing where there is nothing to draw: a DNA library's reads skip no
+intron, so its lane is unchanged. On both surfaces — in the browser and beside a map.
+
+**A BAM's arcs count records, as regtools does, and STAR's table counts pairs.** A pair whose two
+mates both cross an intron is two records, and two arcs' worth of evidence to a reader of the BAM;
+STAR's column 7 counts the pair once. So the strongest junction of RPL10 reads 350 over the GBR
+sample's depth and in regtools' BED of the same alignments, and 338 in STAR's table for the same
+library. Both are right about what they count, and neither is converted into the other: the BAM's
+number is the one its own depth curve agrees with.
+
+**The demos.** `demo/human/` is four Geuvadis lymphoblastoid samples, two GBR and two YRI, as
+nf-core/test-datasets subsamples them to chromosome X for nf-core/rnasplice: their `SJ.out.tab`s
+from STAR, run in **one pass** — a two-pass run inserts the first pass's junctions into the genome
+and then reports every one of them as annotated, which empties the one column that tells a novel
+junction from a known one — one sample's alignments and index for a depth with its own arcs, the same
+sample's junctions as the BED12 regtools writes, and the Ensembl chrX GTF they were aligned against.
+The workspace opens the browser from the hg19 cytoBand alone at RPL10 in Xq28, with the GBR and YRI
+samples' junctions against one typed axis of 1 to 400 reads. `demo/yeast/Yeast_RNA_junctions.SJ.out.tab`
+is STAR's junctions for the chromosome I subset of GSE110004 that nf-core keeps for its RNA-seq
+tests, which puts EFB1's arc beside the yeast map. `scripts/make_ideogram_junction_demo.py` writes
+all of them and records the commands, versions and commits; nothing in them is generated.
 
 
 ---
@@ -9831,8 +10066,9 @@ would otherwise repeat, `typedLocusToRegion` for what was typed. A view that for
 itself is a view that will drift.
 
 The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
-and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name and `*`
-have no coordinates and pass through untouched — as does anything the tokenizer refuses, so that a
+and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name, a band's
+ISCN name (§8.22) and `*` have no coordinates and pass through untouched — as does anything the
+tokenizer refuses, so that a
 refusal is about what the reader typed rather than about what a helper made of it.
 
 **Copying is not displaying.** What the clipboard takes is 1-based inclusive and **ungrouped**, so it

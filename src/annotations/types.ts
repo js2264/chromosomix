@@ -65,6 +65,18 @@ export type AnnotationKind =
   // starts at all follow from that, and every one of them is a question no
   // other feature kind is asked.
   | 'barchart'
+  // A chromosome's ideogram, from a cytoBand (§8.22). A `FeatureSet` of bands,
+  // and its own kind because a band is not a box on a row: it is a stretch of
+  // *one* shape, the chromosome, whose outline pinches at the centromere and
+  // narrows at a stalk, coloured by the stain the file names. The packing, the
+  // strand bands, the colour picker and the arrowheads every other interval
+  // lane has are questions a karyotype is never asked.
+  | 'ideogram'
+  // RNA-seq splice junctions (§8.23): a `FeatureSet` of introns with a read
+  // count on each, drawn as a sashimi plot's arcs from one exon's end to the
+  // next's start. Its own kind for the glyph, and because it has an axis — two
+  // samples' arcs are comparable only against one ceiling (§8.17's argument).
+  | 'junctions'
   | 'pairs'
   | 'sequence'
   | 'metadata'
@@ -251,7 +263,12 @@ export function hasAMovableAxis(kind: AnnotationKind): boolean {
     kind === 'sequence' ||
     kind === 'metadata' ||
     kind === 'alignments' ||
-    kind === 'barchart'
+    kind === 'barchart' ||
+    // A junction lane is the barChart's case again (§8.23): its arcs are drawn
+    // against a ceiling, and two samples' lanes are comparable only when that
+    // ceiling is one number both share — so it has the limits row, and every
+    // gesture that moves an axis has to reach it.
+    kind === 'junctions'
   )
 }
 
@@ -260,8 +277,10 @@ export function hasAMovableAxis(kind: AnnotationKind): boolean {
  * expanded, squished or collapsed (`FeatureStyle.display`, §8.16).
  *
  * The interval lanes whose glyph is a box on a row: a gene model, a segments
- * file, a call set. Not a barChart, whose rows are its value axis (§8.17), and
- * not a structure, whose lane is a bead per bin rather than a packing.
+ * file, a call set. Not a barChart, whose rows are its value axis (§8.17); not
+ * a karyotype or a junction lane, each one shape along one baseline — the
+ * chromosome, the arcs — rather than a packing (§8.22, §8.23); and not a
+ * structure, whose lane is a bead per bin.
  */
 export function hasFeatureRows(kind: AnnotationKind): boolean {
   return kind === 'gtf' || kind === 'segments' || kind === 'variants'
@@ -328,6 +347,8 @@ export const ANNOTATION_KINDS = [
   'segments',
   'variants',
   'barchart',
+  'ideogram',
+  'junctions',
   'pairs',
   'sequence',
   'metadata',
@@ -360,13 +381,35 @@ export const ANNOTATION_KINDS = [
 export function isIntervalSet(kind: AnnotationKind): boolean {
   // A structure's beads are intervals too (§25): what a bead carries besides its
   // place on the genome does not stop a metaplot piling on the place.
+  //
+  // …and so are a karyotype's bands and a sample's introns (§8.22, §8.23). A
+  // band's score is its stain's darkness, so *Signal by group* split by score
+  // is a track read over G-light against G-dark bands; an intron's ends are the
+  // splice sites a metaplot centres on.
   return (
     kind === 'gtf' ||
     kind === 'segments' ||
     kind === 'variants' ||
     kind === 'barchart' ||
+    kind === 'ideogram' ||
+    kind === 'junctions' ||
     kind === 'structure'
   )
+}
+
+/**
+ * Whether the locus box may search this kind's features **by name** — and so
+ * whether it can be the starred set the search reads.
+ *
+ * Every interval set but two. A karyotype's bands are searched too, but by
+ * their ISCN names and alongside the gene model rather than instead of it
+ * (`annotations/search.ts`): a band set made the one search source would turn
+ * `GAL4` into a search of `p11` and `q12`. A junction has no name a reader
+ * looks for — regtools' `JUNC00000001` is a row number — and a sample's
+ * junctions are not where anybody looks a gene up (§8.22, §8.23).
+ */
+export function searchesByName(kind: AnnotationKind): boolean {
+  return kind !== 'ideogram' && kind !== 'junctions'
 }
 
 /**
@@ -724,8 +767,30 @@ export interface TrackSamples {
    * different claims, and an array of zeros would draw them alike.
    */
   variant: Float32Array | null
+  /**
+   * The introns the window's reads skipped, with how many reads skipped each —
+   * a sashimi plot's arcs, counted from the reads behind the depth (§8.23).
+   *
+   * Only an alignment lane carries this, and it is counted on the depth's own
+   * pass under the depth's own filter, so an arc never stands on reads the
+   * curve under it did not count. Absent on every other kind; empty arrays for
+   * a window of reads with no `N` in any of them, which is a DNA library.
+   */
+  junctions?: SampleJunctions
   /** `true` when these came from a zoom level rather than from base resolution. */
   summary: boolean
+}
+
+/**
+ * Introns as four parallel arrays, sorted by start: the shape a window's
+ * spliced reads are tallied into (§8.23). `strands` is `+1`, `-1` or `0` where
+ * the aligner wrote no `XS`.
+ */
+export interface SampleJunctions {
+  starts: Int32Array
+  ends: Int32Array
+  counts: Float32Array
+  strands: Int8Array
 }
 
 // ---------------------------------------------------------------------------
@@ -1069,6 +1134,16 @@ function defaultSize(kind: AnnotationKind): number {
   // sixteen and every other one is rounding. Sixty is about three packed rows
   // of a legible chart, or one generous one (§8.17).
   if (kind === 'barchart') return 60
+  // An ideogram is one shape and the names of its bands inside it: tall enough
+  // for a band name in a chromosome drawn with room either side, and for the
+  // two lines of its label — its name and the bands under the window — in the
+  // browser's column; no taller, since it is context rather than a
+  // measurement (§8.22).
+  if (kind === 'ideogram') return 40
+  // A sashimi arc is read by its height and its count, and a lane of them has
+  // two strands to hold, one above the baseline and one below: seventy is room
+  // for both and a count at every apex (§8.23).
+  if (kind === 'junctions') return 72
   // A depth lane is a bigWig's picture and takes a bigWig's height. The pile
   // beside it is a stack of rows, and 180 is about a dozen of them — enough
   // that a heterozygous site shows two alleles rather than a coin flip.
@@ -1887,6 +1962,23 @@ export interface ReadStyle {
    * the pile do not see it either.
    */
   splits: boolean
+  /**
+   * Draw the introns the reads skip as a sashimi plot's arcs, over the depth
+   * (§8.23).
+   *
+   * On by default, because it costs nothing where there is nothing to draw: a
+   * DNA library's reads skip no introns, so its lane is unchanged, and an
+   * RNA-seq file's is the picture a reader of one expects. Off is for a figure
+   * of the depth alone.
+   */
+  sashimi: boolean
+  /**
+   * The fewest reads an arc is drawn from: sashimi plots' *minimum junction
+   * coverage*. Two by default, because a junction one read long is as often an
+   * aligner's guess as a splice, and in a deep file those guesses are most of
+   * the arcs.
+   */
+  sashimiFloor: number
 }
 
 /** What an alignment lane starts with. */
@@ -1897,6 +1989,8 @@ export function defaultReadStyle(): ReadStyle {
     hideDuplicates: false,
     layout: 'pairs',
     splits: false,
+    sashimi: true,
+    sashimiFloor: 2,
   }
 }
 
@@ -1947,6 +2041,13 @@ export function readStyleOf(value: unknown): ReadStyle {
         ? 'reads'
         : fallback.layout,
     splits: row['splits'] === true,
+    // Absent means *on*, for the same reason as every default here: a session
+    // stored before the arcs existed opens on what a new lane opens on.
+    sashimi: row['sashimi'] !== false,
+    sashimiFloor:
+      typeof row['sashimiFloor'] === 'number' && Number.isFinite(row['sashimiFloor'])
+        ? Math.max(1, Math.min(1_000_000, Math.round(row['sashimiFloor'] as number)))
+        : fallback.sashimiFloor,
   }
 }
 

@@ -505,6 +505,7 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   bam: 'the BAM’s @SQ header',
   vcf: 'the VCF’s ##contig lines',
   twobit: 'the .2bit index',
+  cytoband: 'the cytoBand’s bands',
 }
 
 /** What a reader was last told to draw its map to, and what it answered (§6.5). */

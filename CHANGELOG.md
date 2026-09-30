@@ -226,6 +226,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   everything. The slider it is drawn as is the one toggle in the app with a knob, lit by the same rule
   as every other (§26.3).
 
+- **Chromosome ideograms, from UCSC's cytoBand (§8.22).** A `cytoBand` or `cytoBandIdeo` is a lane of
+  its own kind: each chromosome in view drawn as one outline — rounded telomeres, a waist at the
+  centromere, a narrowed stalk — with its Giemsa bands inside it in their stains' colours, the same in
+  both themes: `gneg` to `gpos100` from white to near-black, the centromere red, `gvar` hatched. The
+  bands are on the lane's own axis, so zoomed out the lane is the karyotype and zoomed in it is the
+  bands under the window, each named inside itself where it fits, with the window's bands in ISCN
+  under the lane's name (`Xq28`, `Xq27.3 – q28`). A yeast CEN of 118 bases is widened to six pixels so
+  it can be seen. The card shows the stains as a key; a click on a band opens it by its ISCN name,
+  with its position, length and stain. A band's stain is also its score — `gneg` 0, `gposN` N — so
+  *Signal by group* can split a track over light and dark bands. **A cytoBand declares the genome**:
+  its bands tile every chromosome, so the file alone opens a browser at exact lengths (`lengths: the
+  cytoBand's bands` on the Genome card), and one that does not tile gives the lower bound any feature
+  file does. Beside a map on any edge, in the browser, and read by `metacooler-run`.
+
+- **Bands in the locus box (§8.22).** Typing a band's ISCN name — `Xq13`, `chr8q24` — lists the bands
+  of every loaded ideogram that start with it, under the gene model's hits, and Enter opens one, padded
+  as a gene is. A karyotype never becomes the set the gene search reads, however early it was loaded.
+
+- **RNA-seq splice junctions, drawn as sashimi arcs (§8.23).** STAR's `SJ.out.tab`, the two-block
+  BED12 that regtools, TopHat and Portcullis write, and leafcutter's `.junc` are read as one lane of
+  **introns**, each an arc from one exon's end to the next's start, as tall as its read count and
+  labelled with it at its apex. A file with junctions on both strands splits the lane: forward arcs
+  rise from the middle, reverse arcs hang from it. The arcs are measured against the lane's
+  **limits** — a typed pair holds across windows and lanes, so two samples compare on one axis, and
+  its floor is the minimum junction coverage; under `auto` the axis is fitted to the junctions in view
+  and the caption says so (`20 junctions · to 23 reads`). An intron too narrow to be an arc is a
+  spike, so a whole chromosome is a map of where splicing is. A click on an arc opens the junction:
+  intron, intron length, strand, reads, and STAR's multi-mapped reads, motif, whether the GTF knew it
+  and its longest overhang — each of which the colour picker offers, so *colour by annotated* shows
+  the novel junctions. The ceiling drag, ⌘-scroll, right-click range and batch box's limits all reach
+  the lane. STAR's table is recognised by its columns; a BED is read as junctions where its name, a
+  `track` line or its `JUNC…` names say so.
+
+- **A spliced BAM's depth draws its own arcs (§8.23).** The introns an alignment file's reads skip are
+  counted on the pass that counts its depth, under the same MAPQ floor and duplicate switch, and drawn
+  over the curve with their counts — a sashimi plot with no junction file at all. The depth row's card
+  has `junction arcs` and `from N reads` (two by default); on by default, and a DNA library's lane is
+  unchanged, since its reads skip nothing. Long CIGARs are read from the `CG` tag; the strand is `XS`,
+  or minimap2's `ts`. Counted per record, as regtools counts, where STAR's table counts a pair once.
+
+- **A human RNA-seq demo, and a yeast karyotype and junctions (§8.22, §8.23).** *Splicing on human
+  chrX* opens the 1D browser from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the
+  Ensembl chrX genes, a Geuvadis sample's reads as depth with their arcs, and two samples' STAR
+  junctions (GBR and YRI) on one typed axis of 1 to 400 reads. The store lists all its files — four
+  samples' `SJ.out.tab`s from a one-pass STAR run, the BAM, and the regtools BED of the same sample —
+  and the yeast set gains `Yeast_cytobands.txt` (arms, the CEN elements found in the demo FASTA, and
+  the rDNA as a stalk) and STAR's junctions for nf-core's chromosome I subset, EFB1's intron among
+  them. `scripts/make_ideogram_junction_demo.py` writes them and records where each came from.
+
 - **A `.pairs` for P(s)'s four orientations is dropped on the form, or chosen through it (§18.8).**
   Under *four orientations* the drawer asked for the file by address alone, so a reader with the
   `.pairs` on their disk had to host it somewhere first — or drop it on the app, which *opens* it, as
@@ -798,6 +847,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   listed an empty `Genomes: []` first — `ops/range.py`'s sentence is kept word for word for the files
   that have genomes, which are the only ones it was written for. The desktop build's *Go* menu says
   *Landing table* and *Previous / Next sequence*, words true on every file.
+
+- **The map's *autoscale every track* reaches a barChart's and a junction lane's axis (§8.17,
+  §8.23).** It set `auto` on the lanes drawn as a profile only, so a barChart with a typed pair kept it
+  beside a map after the button that says *every track* — while the browser's own button, the ceiling
+  drag and the ⌘-scroll all moved it. It now asks what they ask: whether the lane has an axis a reader
+  can move.
 
 - **A line on a turned map is the V its place makes (§17.4).** A line from the Manual annotations
   card was drawn straight up a turned map, as it is on the square, and a column of a turned picture is
@@ -1681,6 +1736,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **A genePred that opened the browser says what it holds.** A feature file asked for the genome's
+  lengths is parsed once and kept, and the row it then loaded into came back through the generic
+  path, reading `N features` rather than the genePred's own line. Every format with a sentence of its
+  own now gets it on that road too.
+
+- **A lane's name too long for two lines of the browser's name column no longer runs out over the
+  lane (§8.8).** A name with no break that left both halves inside the column was cut to the width of
+  two lines and drawn on one, so `Geuvadis_chrX_GBR…188428.junctions`, dropped under its own name,
+  ran across the first arcs of the file it named. It is cut to what two lines hold and broken there,
+  or cut to one line where even that will not break.
+
+- **A feature's card is headed with its name as the file wrote it.** The heading was uppercased
+  like a dialog's category, so a band's card read `XQ28` — a long arm called `Q` — and a mouse gene's
+  read as the human one's symbol. A card headed by a name now keeps its case; one headed by what the
+  feature is (*Feature*, *Splice junction*) keeps the dialog's style.
+
+- **The Tracks card's height box shows three digits.** It reserved its spinner's room at a width
+  where that was most of the box, so a lane of 100 px or more read `10(`. It is typed, like the limit
+  boxes beside it, and the arrow keys still step it.
 
 - **A plain Run on a map binned from a `.pairs` is no longer refused (§3.7, §18.3).** The analysis
   worker opens the map for itself, and a contact list opened without the grid the reader chose is
