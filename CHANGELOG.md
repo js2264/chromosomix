@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A workspace keeps what the stage learned, and every genome's edit — a dev feature (§27.6,
+  §27.10).** A saved workspace, and a shared link, now carry what the reader's answers taught the stage
+  about a file — the weights, the count, what was turned down — and, on a metagenome, each genome's edit
+  and its learning, where before they carried the file's own edit alone and a metagenome's curation was
+  left behind.
+
 - **The stage's pieces bars are handles — a dev feature (§27.3, §27.4).** A press on a piece of the
   bar along the map's top or left selects it; a drag moves it, the map rearranged under the hand as a
   drag of its square does, and a whole sequence dropped on another's end joins the two; a double click

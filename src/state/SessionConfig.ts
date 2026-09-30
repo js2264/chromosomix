@@ -29,10 +29,10 @@
 
 import { CIRCULAR_EVIDENCE_SCOPE, CIRCULAR_SCOPE } from './circular'
 import { ORIGIN_SCOPE } from './origins'
-import { EDIT_SCOPE, readEdit } from './referenceEdit'
+import { EDIT_SCOPE, LEARNED_SCOPE, genomeEditKey, readEdit, readLearned, type Learned } from './referenceEdit'
 import type { ReferenceEdit } from '../genome/edit'
 import { RESOLUTIONS_SCOPE } from './resolutions'
-import { recall, remember } from './UiMemory'
+import { recall, recallBelow, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { FIGURES_SCOPE, type FigureMemory } from '../figures/style'
 import { formatUri, parseUri } from '../uri'
@@ -205,6 +205,20 @@ export interface SessionConfig {
    * holds one keeps it for the reader who turns the switch on.
    */
   edit?: ReferenceEdit
+  /**
+   * What the reader's answers on the stage taught it about this file (§27.6):
+   * the confidence model's weights, how many answers moved them, and the
+   * suggestions turned down — kept beside {@link edit}, so a curation carried
+   * in a workspace is carried with what it taught. Absent where nothing was.
+   */
+  editLearned?: Learned
+  /**
+   * Each genome's edit of a metagenome, and what its answers taught, by the
+   * genome's name (§27.10): kept per genome, below the file's own key, and
+   * carried here so a workspace of a metagenome keeps every genome's curation
+   * rather than none of it. Absent where no genome has one.
+   */
+  genomeEdits?: Record<string, { edit?: ReferenceEdit; learned?: Learned }>
   /**
    * Resolutions the reader **added** to this file's ladder, in bp (§3.4).
    *
@@ -520,6 +534,8 @@ export function buildConfig(options: {
     ...circularOf(recall<string[]>(key, SCOPES.circular), recall<unknown>(key, SCOPES.circularEvidence)),
     ...originsOf(recall<unknown>(key, SCOPES.origins)),
     ...editOf(recall<unknown>(key, SCOPES.edit)),
+    ...learnedOf(recall<unknown>(key, LEARNED_SCOPE)),
+    ...genomeEditsOf(key),
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
@@ -587,6 +603,40 @@ function editOf(stored: unknown): { edit?: ReferenceEdit } {
   return edit !== null && edit.history.length > 0 ? { edit } : {}
 }
 
+/** What was learned, where anything was (§27.6); nothing where nothing was. */
+function learnedOf(stored: unknown): { editLearned?: Learned } {
+  const learned = readLearned(stored)
+  return learned.weights === null && learned.answers === 0 && learned.rejected.length === 0 ? {} : { editLearned: learned }
+}
+
+/** Each genome's kept edit and what it learned, read from below the file's key (§27.10). */
+function genomeEditsOf(key: string): { genomeEdits?: SessionConfig['genomeEdits'] } {
+  const prefix = genomeEditKey(key, '')
+  const out: NonNullable<SessionConfig['genomeEdits']> = {}
+  for (const { rest: genome } of [...recallBelow<unknown>(prefix, EDIT_SCOPE), ...recallBelow<unknown>(prefix, LEARNED_SCOPE)]) {
+    if (genome === '' || out[genome] !== undefined) continue
+    const edit = editOf(recall<unknown>(genomeEditKey(key, genome), EDIT_SCOPE)).edit
+    const learned = learnedOf(recall<unknown>(genomeEditKey(key, genome), LEARNED_SCOPE)).editLearned
+    if (edit === undefined && learned === undefined) continue
+    out[genome] = { ...(edit === undefined ? {} : { edit }), ...(learned === undefined ? {} : { learned }) }
+  }
+  return Object.keys(out).length > 0 ? { genomeEdits: out } : {}
+}
+
+/** `genomeEdits` as a workspace wrote it, each genome's record checked by the store's own readers. */
+function readGenomeEdits(stored: unknown): { genomeEdits?: SessionConfig['genomeEdits'] } {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return {}
+  const out: NonNullable<SessionConfig['genomeEdits']> = {}
+  for (const [genome, record] of Object.entries(stored as Record<string, unknown>)) {
+    if (genome === '' || record === null || typeof record !== 'object' || Array.isArray(record)) continue
+    const edit = editOf((record as Record<string, unknown>)['edit']).edit
+    const learned = learnedOf((record as Record<string, unknown>)['learned']).editLearned
+    if (edit === undefined && learned === undefined) continue
+    out[genome] = { ...(edit === undefined ? {} : { edit }), ...(learned === undefined ? {} : { learned }) }
+  }
+  return Object.keys(out).length > 0 ? { genomeEdits: out } : {}
+}
+
 /** `{ resolutions: … }` for a file the reader added one to, else nothing. */
 function resolutionsOf(sizes: number[] | null): { resolutions?: number[] } {
   return Array.isArray(sizes) && sizes.length > 0 ? { resolutions: sizes } : {}
@@ -630,6 +680,11 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   }
   if (config.origins !== undefined) remember(key, SCOPES.origins, config.origins)
   if (config.edit !== undefined) remember(key, SCOPES.edit, config.edit)
+  if (config.editLearned !== undefined) remember(key, LEARNED_SCOPE, config.editLearned)
+  for (const [genome, record] of Object.entries(config.genomeEdits ?? {})) {
+    if (record.edit !== undefined) remember(genomeEditKey(key, genome), EDIT_SCOPE, record.edit)
+    if (record.learned !== undefined) remember(genomeEditKey(key, genome), LEARNED_SCOPE, record.learned)
+  }
   if (config.resolutions !== undefined) {
     remember(key, SCOPES.resolutions, config.resolutions)
   }
@@ -862,6 +917,8 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     // store's own reader — the round trip `SessionConfig`'s own history of
     // fields written out and dropped on the way in is the reason to test.
     ...editOf(row['edit']),
+    ...learnedOf(row['editLearned']),
+    ...readGenomeEdits(row['genomeEdits']),
     ...resolutionsOf(
       Array.isArray(row['resolutions'])
         ? (row['resolutions'] as unknown[]).filter(

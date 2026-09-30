@@ -10522,12 +10522,12 @@ answer is one step of the regression, a learning rate of a tenth and a pull of 0
 initial weights — three rejections of a suggestion at 92% leave it above even odds, thirty-three put it
 below — and the rest are ranked again at once; what it taught — the weights, how many answers, what
 was turned down, by keys that name the file's own cells so a suggestion stays turned down after
-another edit moves it — is kept per file beside the edit (`map:edit-learned`), said under the list,
-and forgotten by *forget*; *offer again* brings back one turned down, what its answer taught kept.
+another edit moves it — is kept per file beside the edit (`map:edit-learned`), carried with it in a
+saved workspace and a shared link (`editLearned`), said under the list, and forgotten by *forget*;
+*offer again* brings back one turned down, what its answer taught kept.
 **Auto**: *apply* takes every suggestion at 50% or more, best first,
 counting again after each, forty at most a run, each a step marked `auto` with what it rested on.
-Not yet: dragging a suggestion's ends to adjust it, what was learned in a saved workspace, and the
-command line.
+Not yet: dragging a suggestion's ends to adjust it, and the command line.
 
 ### 27.7 The session through the lens
 
@@ -10699,7 +10699,8 @@ a filter for a file of hundreds (`edit/GenomePicker.ts`); the command reads *Edi
 metator_00009_00000* where one is in view and *Edit a genome* where none is. The edit is that genome's
 alone: its original is the genome's contigs in the file's order, marked with the genome's name, kept
 under the file's key and the genome's (`state/referenceEdit.ts`, `genomeEditKey`), and checked against
-the file as a part of it — every contig of it one of the file's, as long. Its picture is those contigs
+the file as a part of it — every contig of it one of the file's, as long — and carried, with what its
+answers taught, in a saved workspace and a shared link (`genomeEdits`, by genome). Its picture is those contigs
 alone (`pictureLayout` over some of a map's sequences): only their rows are read, a contact with a
 contig outside is left out, and the method weighs the genome as it would a genome. Everything the stage
 writes is that genome's, and says so — `Mock_microbial_community.metator_00009_00000.edited.agp` — the

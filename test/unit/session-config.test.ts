@@ -279,6 +279,41 @@ describe('the round trip', () => {
     expect(odd !== null && 'edit' in odd).toBe(false)
   })
 
+  /**
+   * What the stage learned (§27.6), and each genome's edit of a metagenome
+   * (§27.10) — kept below the file's own key, which is why a workspace carried
+   * none of them until it looked there.
+   */
+  it('carries what the answers taught, and every genome’s edit and learning', () => {
+    const key = 'meta|mock.metacool'
+    const learned = { weights: [-1, 2, 1.5], answers: 4, rejected: ['join:a:end:b:start'] }
+    const genomeEdit = {
+      version: 1,
+      original: { names: ['a1', 'a2'], lengths: [1000, 600], genome: 'MAG_1' },
+      history: [{ step: { op: 'join', a: 'a1', aEnd: 'end', b: 'a2', bEnd: 'start', gap: 100 }, by: 'auto', when: 1 }],
+      cursor: 1,
+    }
+    remember(key, 'map:edit-learned', learned)
+    remember(`${key}#genome=MAG_1`, 'map:edit', genomeEdit)
+    remember(`${key}#genome=MAG_1`, 'map:edit-learned', { weights: null, answers: 1, rejected: [] })
+    remember(`${key}#genome=MAG_2`, 'map:edit-learned', { weights: [0.5], answers: 2, rejected: [] })
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    const read = roundTrip(config)
+    expect(read?.editLearned).toEqual(learned)
+    expect(read?.genomeEdits).toEqual({
+      MAG_1: { edit: genomeEdit, learned: { weights: null, answers: 1, rejected: [] } },
+      MAG_2: { learned: { weights: [0.5], answers: 2, rejected: [] } },
+    })
+    // Put back under the importing tab's key, each genome below it.
+    applyConfig(read as NonNullable<typeof read>, 'into|mock.metacool')
+    expect(recall('into|mock.metacool', 'map:edit-learned')).toEqual(learned)
+    expect(recall('into|mock.metacool#genome=MAG_1', 'map:edit')).toEqual(genomeEdit)
+    expect(recall('into|mock.metacool#genome=MAG_2', 'map:edit-learned')).toEqual({ weights: [0.5], answers: 2, rejected: [] })
+    // A genome record that is neither is left out rather than trusted.
+    const odd = parseTab({ state: STATE, genomeEdits: { MAG_3: { edit: { version: 9 } }, '': {} } })
+    expect(odd !== null && 'genomeEdits' in odd).toBe(false)
+  })
+
   it('carries the deck’s arrangement into the importing session', () => {
     const key = 'deck|six.cool'
     remember(key, 'deck:starred', 'p4')

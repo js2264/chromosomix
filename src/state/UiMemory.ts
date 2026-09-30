@@ -101,3 +101,32 @@ export function recall<T>(uri: string, scope: string): T | null {
     return null
   }
 }
+
+/**
+ * Every value {@link remember} stored for `scope` under a key that begins
+ * with `prefix`, by the rest of the key — the facts kept below one file's own:
+ * a metagenome's genomes, each edit under its own key
+ * (`state/referenceEdit.ts`'s `genomeEditKey`). Unordered, and untrusted as
+ * {@link recall}'s are.
+ */
+export function recallBelow<T>(prefix: string, scope: string): Array<{ rest: string; value: T }> {
+  const head = `${PREFIX}${prefix}`
+  const tail = `:${scope}`
+  const keys = new Set<string>(memory.keys())
+  try {
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i)
+      if (key !== null) keys.add(key)
+    }
+  } catch {
+    /* the map above is where everything went */
+  }
+  const out: Array<{ rest: string; value: T }> = []
+  for (const key of keys) {
+    if (!key.startsWith(head) || !key.endsWith(tail) || key.length < head.length + tail.length) continue
+    const rest = key.slice(head.length, key.length - tail.length)
+    const value = recall<T>(`${prefix}${rest}`, scope)
+    if (value !== null) out.push({ rest, value })
+  }
+  return out
+}
