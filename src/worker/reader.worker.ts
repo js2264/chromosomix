@@ -54,6 +54,7 @@ import {
   type DeepValidation,
   type GenomesResult,
   type MatrixResult,
+  type LiftedExport,
   type McoolExport,
   type OpenResult,
   type OverviewResult,
@@ -71,6 +72,10 @@ import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { mcoolNameFor } from '../pairs/mcoolName'
 import { writeMcool } from '../pairs/write'
+import type { BinnedPixels } from '../pairs/bin'
+import type { PairsHeader } from '../pairs/format'
+import { liftedTable } from '../edit/liftedContacts'
+import { VERSION } from '../version'
 import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
@@ -427,6 +432,112 @@ async function handleExportMcool(id: number): Promise<McoolExport> {
   const bytes = await writeMcool(active.pairs, scanHooks(id))
   if (bytes === null) throw abortError()
   return { bytes, filename: mcoolNameFor(active.mc.uri), rungs: active.pairs.rungs }
+}
+
+/** The most pixels a lifted `.mcool` gathers across its rungs: a rung that would pass it is left out, finest first. */
+const LIFT_BUDGET = 60_000_000
+
+/**
+ * The open map lifted through an edit of its reference, as an `.mcool` of
+ * every rung the file has (§27.8): each rung opened as the file stores it —
+ * never through the session's own lens, which may be another edit — drawn
+ * through `edit`, and its pixels gathered in the edited assembly's bins.
+ * Rungs finer than the budget allows are left out, and said so.
+ */
+async function handleExportLifted(id: number, edit: ReferenceEdit): Promise<LiftedExport> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const hooks = scanHooks(id)
+  const names = base.entries.length > 0 ? [...base.entries] : ['']
+  // Finest first, as the file lists them.
+  const sized = names.map((name) => ({ name, size: name === '' ? base.binsize : Number(name) })).sort((a, b) => a.size - b.size)
+  const tables = new Map<number, BinnedPixels>()
+  const skipped: Array<{ rung: number; why: string }> = []
+  // Coarsest first, so a budget spent leaves out the finest.
+  let spent = 0
+  for (const { name, size } of [...sized].reverse()) {
+    const rung = name === '' ? base : await openPlainRung(active, name)
+    if (rung === null) {
+      skipped.push({ rung: size, why: 'it would not open' })
+      continue
+    }
+    try {
+      const nnz = rung.nnz ?? 0
+      if (spent + nnz > LIFT_BUDGET) {
+        skipped.push({ rung: size, why: `${nnz.toLocaleString('en-US')} pixels would pass the budget of ${LIFT_BUDGET.toLocaleString('en-US')}` })
+        continue
+      }
+      const { map, refusal } = MetaCooler.withLens(rung, edit)
+      if (refusal !== null) throw new ViewerError('unsupported', refusal, {})
+      const table = await liftedTable(map, {
+        cancelled: hooks.cancelled,
+        onProgress: (done, total) => hooks.onProgress(done, total, `lifting the ${size.toLocaleString('en-US')} bp rung`),
+      })
+      if (table === null) throw abortError()
+      tables.set(size, table)
+      spent += table.nnz
+    } finally {
+      if (rung !== base) rung.close()
+    }
+  }
+  const rungs = [...tables.keys()].sort((a, b) => a - b)
+  if (rungs.length === 0) throw new ViewerError('unsupported', 'No rung of this map could be lifted within the budget.', {})
+  const finest = tables.get(rungs[0]) as BinnedPixels
+  const header: PairsHeader = {
+    version: '',
+    assembly: null,
+    sorted: null,
+    shape: 'upper triangle',
+    contigs: finest.contigs,
+    columns: { chrom1: 1, pos1: 2, chrom2: 3, pos2: 4, strand1: -1, strand2: -1 } as PairsHeader['columns'],
+    text: '',
+  }
+  const bytes = await writeMcool(
+    { header, rungs, tables, indexed: false, declaredRecords: null },
+    {
+      ...hooks,
+      about: {
+        generatedBy: `metacooler-viewer ${VERSION} (lifted through an edit of the reference; unbalanced)`,
+        metadata: (table) => ({
+          'generated-by': `metacooler-viewer ${VERSION}`,
+          'lifted-from': active.mc.uri,
+          'lifted-through': edit.history.slice(0, edit.cursor).map((entry) => entry.step),
+          'contacts-written': table.sum,
+          balanced: false,
+          note:
+            'Raw counts through an edit of the reference: bins moved whole, a stretch set aside left out, a duplicated ' +
+            'one written at each copy. Run `cooler balance` to add a bins/weight column.',
+        }),
+      },
+    },
+  )
+  if (bytes === null) throw abortError()
+  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?cool|hic|pairs(\.gz)?)$/i, '')
+  return { bytes, filename: `${stem}.edited.mcool`, rungs, contacts: finest.sum, skipped }
+}
+
+/** A rung of the open file as the file stores it: no lens, not held — the caller closes it. */
+async function openPlainRung(active: Session, rung: string): Promise<MetaCooler | null> {
+  if (active.pairs !== null) {
+    const table = active.pairs.tables.get(Number(rung))
+    if (table === undefined) return null
+    return MetaCooler.fromPairs({
+      uri: active.mc.uri,
+      header: active.pairs.header,
+      pixels: table,
+      rungs: active.pairs.rungs,
+      indexed: active.pairs.indexed,
+      declaredRecords: active.pairs.declaredRecords,
+    })
+  }
+  const base = active.mc.unlensed ?? active.mc
+  const group = base.entryGroup === '' ? 'entries' : base.entryGroup
+  const { path } = parseUri(base.uri)
+  try {
+    return await MetaCooler.open(`${path}::${group}/${rung}`, active.source, active.metacool === undefined ? {} : { metacool: active.metacool })
+  } catch {
+    return null
+  }
 }
 
 /** The import and rung this URI reuses, when it reuses one — see `rungInImport`. */
@@ -1714,6 +1825,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleOpen(request)
     case 'exportMcool':
       return handleExportMcool(request.id)
+    case 'exportLifted':
+      return handleExportLifted(request.id, request.edit)
     case 'genomes':
       return handleGenomes()
     case 'contigs':

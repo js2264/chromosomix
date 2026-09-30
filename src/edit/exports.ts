@@ -22,14 +22,17 @@
 
 import {
   ASIDE_REASONS,
+  EditedAssembly,
+  emptyEdit,
   isGap,
+  withStep,
   type AsideReason,
-  type EditedAssembly,
   type LayoutPart,
   type LayoutStep,
   type OriginalAssembly,
   type Part,
   type Piece,
+  type ReferenceEdit,
 } from '../genome/edit'
 import { JOIN_GAP } from './gestures'
 
@@ -81,6 +84,27 @@ export function assemblyObjects(assembly: EditedAssembly): AssemblyObject[] {
     out.push({ name, parts: [item.piece], length: item.piece.end - item.piece.start, unplaced: true })
   }
   return out
+}
+
+/**
+ * An edit whose assembly is exactly the sequences the files write — the stretch
+ * set aside as unplaced a sequence of its own — as one layout of the original:
+ * what a lifted map is drawn through, so that its sequences are the AGP's.
+ */
+export function writableEdit(edit: ReferenceEdit): ReferenceEdit {
+  const assembly = EditedAssembly.of(edit)
+  const step: LayoutStep = {
+    op: 'layout',
+    from: 'the export',
+    sequences: assemblyObjects(assembly).map((object) => ({
+      name: object.name,
+      parts: object.parts.map((part): LayoutPart => (isGap(part) ? { gap: part.gap } : { sequence: part.sequence, start: part.start, end: part.end, strand: part.strand })),
+    })),
+    aside: assembly.aside
+      .filter((item) => item.why !== 'unplaced')
+      .map((item) => ({ sequence: item.piece.sequence, start: item.piece.start, end: item.piece.end, why: item.why })),
+  }
+  return withStep(emptyEdit(edit.original), step, 'reader', 0)
 }
 
 /** The comment lines a text file begins with: what it is of, by what, and the history. */

@@ -1,11 +1,12 @@
 /**
  * The stage's export card (§27.8), in headless Chromium on the yeast micro-C
  * demo: the card under an edit, each text file written and its first lines
- * printed, and an AGP of another arrangement read back — one step in the
- * history, the map laid out as it says.
+ * printed, the edited sequence, the map and the genes lifted through the edit,
+ * and an AGP of another arrangement read back — one step in the history, the
+ * map laid out as it says.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit-export.mjs [out-dir]     # x01 … x04
+ *   node scripts/ui-edit-export.mjs [out-dir]     # x01 … x07
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -57,6 +58,30 @@ await save('chain')
 console.log('status:', await text('.edit-export-status'))
 await shot('x02-written')
 
+// The sequence, the map and a track, lifted through the turn.
+async function saveBinary(format, wait = 120_000) {
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: wait }), page.click(`.edit-export-card button[data-format="${format}"]`)])
+  const path = join(files, download.suggestedFilename())
+  await download.saveAs(path)
+  const bytes = readFileSync(path)
+  console.log(`${format} → ${download.suggestedFilename()}: ${bytes.length.toLocaleString('en-US')} bytes`)
+  console.log('status:', await text('.edit-export-status'))
+  return bytes
+}
+const fasta = (await saveBinary('FASTA')).toString('utf8')
+// IV_e1 from 400,001: the turned piece, which is IV:400,001-900,000 reverse-complemented.
+const ivStart = fasta.indexOf('>IV_e1\n') + '>IV_e1\n'.length
+const ivText = fasta.slice(ivStart, fasta.indexOf('>', ivStart)).replace(/\n/g, '')
+console.log('IV_e1:400,001-400,060 is', ivText.slice(400_000, 400_060))
+await shot('x03-fasta')
+await saveBinary('mcool', 600_000)
+await shot('x04-contacts')
+await page.selectOption('.edit-export-card .edit-export-track', { label: 'genes' })
+await sleep(300)
+const bed = (await saveBinary('track')).toString('utf8')
+console.log('genes, lifted:\n' + bed.split('\n').filter((line) => line.startsWith('IV_e1')).slice(180, 184).join('\n'))
+await shot('x05-track')
+
 // Another arrangement read back: IV and V as one scaffold, V turned, with a
 // join's gap between — the rest as they are.
 const lengths = new Map(
@@ -86,8 +111,8 @@ await sleep(600)
 await g.settled()
 console.log('read back:', await text('.edit-export-status'))
 console.log('history:', await history())
-await shot('x03-read-back')
+await shot('x06-read-back')
 await page.evaluate(() => document.querySelector('.edit-history')?.scrollIntoView({ block: 'center' }))
 await sleep(300)
-await shot('x04-history')
+await shot('x07-history')
 await g.close()

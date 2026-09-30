@@ -13042,6 +13042,15 @@ span.deck-name {
 .edit-export-read {
   margin-top: 0.1rem;
 }
+.edit-export-track {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.edit-export-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
 .edit-export-status:empty {
   display: none;
 }

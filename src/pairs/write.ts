@@ -109,6 +109,12 @@ const COOLER_FORMAT_URL = 'https://github.com/open2c/cooler'
 export interface WriteOptions {
   onProgress?: (done: number, total: number, note?: string) => void
   cancelled?: () => boolean
+  /**
+   * What the file says it is, where it is not a `.pairs` import: the
+   * `generated-by` attribute, and the `metadata` JSON in place of the import's
+   * provenance — a map lifted through an edit of the reference says so (§27.8).
+   */
+  about?: { generatedBy: string; metadata: (table: BinnedPixels) => Record<string, unknown> }
 }
 
 /**
@@ -163,7 +169,7 @@ async function build(
       const table = imported.tables.get(size)
       if (table === undefined) continue
       const group = resolutions.create_group(String(size))
-      writeCoolerGroup(group, table, imported, size)
+      writeCoolerGroup(group, table, imported, size, options.about)
       written = await writePixels(group, table, written, totalPixels, options)
       if (options.cancelled?.() === true) return null
       options.onProgress?.(written, totalPixels, `writing the ${formatBp(size)} rung`)
@@ -182,6 +188,7 @@ function writeCoolerGroup(
   table: BinnedPixels,
   imported: PairsImport,
   binSize: number,
+  about?: WriteOptions['about'],
 ): void {
   const nChroms = table.contigs.length
 
@@ -195,14 +202,14 @@ function writeCoolerGroup(
   group.create_attribute('nbins', table.nBins)
   group.create_attribute('nnz', table.nnz)
   group.create_attribute('sum', table.sum)
-  group.create_attribute('generated-by', `metacooler-viewer ${VERSION} (pairs import; unbalanced)`)
+  group.create_attribute('generated-by', about?.generatedBy ?? `metacooler-viewer ${VERSION} (pairs import; unbalanced)`)
   group.create_attribute('creation-date', new Date().toISOString())
   if (imported.header.assembly !== null) {
     // `genome-assembly` is the name cooler writes and the one its readers look
     // for; `assembly` is a legacy spelling this app still accepts on the way in.
     group.create_attribute('genome-assembly', imported.header.assembly)
   }
-  group.create_attribute('metadata', JSON.stringify(provenance(imported, table)))
+  group.create_attribute('metadata', JSON.stringify(about === undefined ? provenance(imported, table) : about.metadata(table)))
 
   const chroms = group.create_group('chroms')
   chroms.create_dataset({ name: 'name', data: table.contigs.map((contig) => contig.name) })

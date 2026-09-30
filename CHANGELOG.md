@@ -35,7 +35,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   set aside as unplaced is written as a sequence of its own; debris, contaminants and haplotigs are
   left out and named in the AGP's comments. *Lay out from an AGP or .assembly…* reads either back —
   another tool's scaffolds, or this app's own — as one step of the history, undone as any step is; a
-  file of another assembly is refused, naming the sequence the map does not have.
+  file of another assembly is refused, naming the sequence the map does not have. And the session
+  lifted through the edit: the **FASTA** of the edited assembly from the session's own FASTA or
+  `.2bit`, turned pieces reverse-complemented; the **map** as an `.mcool` of every rung, raw counts
+  in the edited bins; and any **track** — a signal as bigWig, features as BED, pairs as BEDPE — with
+  what lay on a stretch set aside counted rather than silently lost.
 
 - **Suggestions drawn over the map on the stage that edits the reference — a dev feature (§27.5,
   §27.6).** The stage now says where it thinks the reference is wrong, on the picture the reader is

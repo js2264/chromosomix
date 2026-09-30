@@ -7,7 +7,11 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { ExportCard, exportStem } from '../../src/edit/ExportCard'
+import { FeatureBuilder } from '../../src/annotations/featureset'
+import type { AnnotationEntry } from '../../src/annotations/types'
+import type { AnnotationStore } from '../../src/annotations/store'
+import type { AnnotationClient } from '../../src/annotations/worker/client'
+import { ExportCard, exportStem, type ExportCardProps } from '../../src/edit/ExportCard'
 import { EditStore } from '../../src/state/referenceEdit'
 
 const ORIGINAL = { names: ['I', 'II'], lengths: [1000, 600] }
@@ -40,13 +44,35 @@ afterEach(() => {
 
 let files = 0
 
-function card(): { card: ExportCard; store: EditStore } {
+function card(extra: Partial<ExportCardProps> = {}): { card: ExportCard; store: EditStore } {
   // A file of its own each time: what a store keeps outlives a test.
   files += 1
   const store = new EditStore(`test-${files}.cool`, ORIGINAL, () => 0)
-  const exportCard = new ExportCard({ title: 'Yeast_1kb.mcool::/resolutions/1000', store, now: () => new Date('2026-09-30T00:00:00Z') })
+  const exportCard = new ExportCard({ title: 'Yeast_1kb.mcool::/resolutions/1000', store, now: () => new Date('2026-09-30T00:00:00Z'), ...extra })
   document.body.append(exportCard.element)
   return { card: exportCard, store }
+}
+
+const BASES: Record<string, string> = { I: 'A'.repeat(500) + 'C'.repeat(500), II: 'G'.repeat(600) }
+
+/** A session with a FASTA and a BED of two features, read through stubs of the store and the client. */
+function annotations(): NonNullable<ExportCardProps['annotations']> {
+  const genes = new FeatureBuilder()
+  genes.add('I', 100, 200, { strand: 1, name: 'g1' })
+  genes.add('II', 10, 20, { strand: -1, name: 'g2' })
+  const entries = [
+    { id: 'seq', card: 'linear', kind: 'sequence', label: 'genome.fa', status: 'ready' },
+    { id: 'genes', card: 'linear', kind: 'segments', label: 'genes', status: 'ready', payload: { kind: 'features', data: genes.finish() } },
+  ] as unknown as AnnotationEntry[]
+  const client = {
+    request: async (payload: { kind: string; regions: Array<{ contig: string; start: number; end: number }> }) => {
+      if (payload.kind !== 'bases') throw new Error(`unexpected ${payload.kind}`)
+      return {
+        regions: payload.regions.map((region) => ({ ...region, bases: new TextEncoder().encode(BASES[region.contig].slice(region.start, region.end)) })),
+      }
+    },
+  } as unknown as AnnotationClient
+  return { store: { entries } as unknown as AnnotationStore, client }
 }
 
 const button = (label: string): HTMLButtonElement =>
@@ -69,7 +95,7 @@ describe('the export card', () => {
     expect(asked).toEqual(['Yeast_1kb.edited.agp'])
     expect(saved['Yeast_1kb.edited.agp']).toContain('# 1. turn I:101-300\n')
     expect(saved['Yeast_1kb.edited.agp']).toContain('I_e1\t101\t300\t2\tW\tI\t101\t300\t-\n')
-    expect(document.querySelector('.edit-export-status')?.textContent).toBe('Wrote Yeast_1kb.edited.agp.')
+    expect(document.querySelector('.edit-export-status')?.textContent).toMatch(/^Wrote Yeast_1kb\.edited\.agp \(\d+ B\)\.$/)
   })
 
   it('says why there is no .assembly before any dialog opens', async () => {
@@ -95,6 +121,55 @@ describe('the export card', () => {
       { name: 'I', length: 1000 },
       { name: 'II', length: 600 },
     ])
+  })
+
+  it('writes the edited sequence from the session’s FASTA, a turned piece reverse-complemented', async () => {
+    const { store } = card({ annotations: annotations() })
+    store.apply({ op: 'invert', sequence: 'I', from: 400, to: 600 })
+    button('FASTA').click()
+    for (let k = 0; k < 6; k++) await settle()
+    const fasta = saved['Yeast_1kb.edited.fa']
+    const [head, ...lines] = fasta.split('\n')
+    expect(head).toBe('>I_e1')
+    const I = lines.join('').split('>')[0]
+    // A×400, then the turn: revcomp(A×100 C×100) = G×100 T×100, then C×400.
+    expect(I).toBe('A'.repeat(400) + 'G'.repeat(100) + 'T'.repeat(100) + 'C'.repeat(400))
+    expect(document.querySelector('.edit-export-status')?.textContent).toMatch(/^Wrote Yeast_1kb\.edited\.fa \(/)
+  })
+
+  it('says why there is no FASTA where the session has no sequence', () => {
+    card()
+    expect(button('FASTA').disabled).toBe(true)
+    expect(button('FASTA').title).toBe('Load the assembly’s FASTA or .2bit into the session to write the edited sequence')
+  })
+
+  it('lifts a track of features as BED, named for the track', async () => {
+    const { store } = card({ annotations: annotations() })
+    store.apply({ op: 'invert', sequence: 'I', from: 0, to: 1000 })
+    const select = document.querySelector('.edit-export-track') as HTMLSelectElement
+    expect([...select.options].map((option) => option.textContent)).toEqual(['genes'])
+    button('BED').click()
+    for (let k = 0; k < 4; k++) await settle()
+    expect(saved['genes.edited.bed'].split('\n').slice(1, -1)).toEqual(['I_e1\t800\t900\tg1\t0\t-', 'II\t10\t20\tg2\t0\t-'])
+  })
+
+  it('writes the map lifted by the reader’s worker, and says what it carries', async () => {
+    let asked: unknown = null
+    card({
+      liftContacts: (edit) => {
+        asked = edit
+        return {
+          promise: Promise.resolve({ bytes: new Uint8Array([1, 2, 3]), filename: 'x.mcool', rungs: [1000, 5000], contacts: 1234, skipped: [] }),
+          cancel: () => {},
+        }
+      },
+    })
+    button('contacts (.mcool)').click()
+    for (let k = 0; k < 6; k++) await settle()
+    expect(saved['Yeast_1kb.edited.mcool']).toBeDefined()
+    // The worker is asked for the export's own edit: one layout of the original.
+    expect((asked as { history: Array<{ step: { op: string } }> }).history.map((entry) => entry.step.op)).toEqual(['layout'])
+    expect(document.querySelector('.edit-export-status')?.textContent).toBe('Wrote Yeast_1kb.edited.mcool (3 B). 2 rungs, 1 kb, 5 kb; 1,234 contacts at the finest.')
   })
 
   it('refuses a file of another assembly, and makes no step', () => {

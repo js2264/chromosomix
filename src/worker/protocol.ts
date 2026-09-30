@@ -261,6 +261,14 @@ export interface McoolExport {
   rungs: number[]
 }
 
+/** A map lifted through an edit of the reference (§27.8): its bytes, and what was left out. */
+export interface LiftedExport extends McoolExport {
+  /** Contacts written at the finest rung. */
+  contacts: number
+  /** Rungs of the file not written, finest first, and why. */
+  skipped: Array<{ rung: number; why: string }>
+}
+
 /** What an import actually did, for the info panel and the status line. */
 export interface PairsImportSummary {
   base: number
@@ -793,6 +801,7 @@ export interface ResultMap {
   validateDeep: DeepValidation
   stats: StatsResult
   exportMcool: McoolExport
+  exportLifted: LiftedExport
   resample: ResampleResult
   contacts: { total: number | null }
   picture: PictureResult
@@ -833,6 +842,8 @@ export type WorkerRequest =
   // progress and its own cancel, and because a reader who cancelled the
   // download still has the map.
   | { id: number; kind: 'exportMcool' }
+  /** The open map lifted through an edit of its reference, every rung, as an `.mcool` (§27.8). */
+  | { id: number; kind: 'exportLifted'; edit: ReferenceEdit }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
   | { id: number; kind: 'cells' }

@@ -5516,6 +5516,7 @@ export class Session {
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
       readPicture: (onProgress) => reader.cancellable<'picture'>({ kind: 'picture', balance, method: true }, onProgress),
+      liftContacts: (edit, onProgress) => reader.cancellable<'exportLifted'>({ kind: 'exportLifted', edit }, onProgress),
       colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
       ...(lanes === undefined
         ? {}

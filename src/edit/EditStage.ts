@@ -53,7 +53,7 @@ import {
   type Stretch,
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
-import { ExportCard } from './ExportCard'
+import { ExportCard, type ExportCardProps } from './ExportCard'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
 import { paintPicture, pictureColours } from './paint'
 import { Rail, type RailItem } from './rail'
@@ -83,6 +83,8 @@ export interface EditStageProps {
   store: EditStore
   /** Start reading the whole-genome picture, reporting progress as it goes. */
   readPicture(onProgress: (done: number, total: number) => void): PictureRequest
+  /** The map lifted through an edit, every rung, as an `.mcool` (§27.8). */
+  liftContacts?: ExportCardProps['liftContacts']
   /** The map's colours, as its Map card has them. */
   colormap: string
   lanes?: StageLanes
@@ -305,7 +307,14 @@ export class EditStage {
     this.sequencesCard = el('section', { class: 'edit-card' })
     this.pictureCard = el('section', { class: 'edit-card' })
     this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
-    this.exportCard = new ExportCard({ title: props.title, store: props.store })
+    this.exportCard = new ExportCard({
+      title: props.title,
+      store: props.store,
+      ...(props.lanes === undefined
+        ? {}
+        : { annotations: { store: props.lanes.store, ...(props.lanes.client === undefined ? {} : { client: props.lanes.client }) } }),
+      ...(props.liftContacts === undefined ? {} : { liftContacts: props.liftContacts }),
+    })
     const mode = (name: Mode, title: string): HTMLButtonElement =>
       el('button', {
         class: 'btn btn-toggle',

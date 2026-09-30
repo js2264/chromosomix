@@ -10568,8 +10568,28 @@ why not:
   comment lines this app writes restore what was set aside and why, so an edit written and read back is
   the same edit. An `.assembly` has no gaps and no names: its lines become `scaffold_1` and on, with 100
   `N` where fragments of two sequences meet — a join — and none where two of one sequence do.
+- **The FASTA**, from the session's own sequence — a FASTA or a `.2bit` — piece by piece through the
+  annotation worker's ranged reads, 400,000 bases a request: a turned piece reverse-complemented base
+  for base, case kept so a soft-masked repeat stays one; a gap as `N`; sixty bases a line; each
+  unplaced stretch a record of its own. A sequence the file lacks is written as `N` and named, so every
+  coordinate of the AGP is still the same base here. Where the session has no sequence the button is
+  off and its tooltip says what to load.
+- **The contacts**, `contacts (.mcool)`: the reader's worker opens each rung of the file as it stores
+  it — never through the session's own lens, which may be another edit — draws it through the export's
+  own edit, one layout of the original whose sequences are the AGP's, unplaced stretches among them, and
+  gathers its pixels in the edited bins: the upper triangle, sorted, duplicates summed, raw counts,
+  bins moved whole. Written by the `.pairs` import's writer, `generated-by` saying *lifted through an
+  edit of the reference; unbalanced* and the steps in its metadata. Coarsest rungs first, within 60
+  million pixels: a finer rung past that is left out, and the line under the buttons names it.
+- **A track**, picked from the session's: a signal as **bigWig** — every interval at the file's own
+  resolution, clipped to its piece and carried to where the piece lands, mirrored where it is turned —
+  features as **BED6**, once for each piece an edit cut them into, their strand turned with it, and
+  pairs as **BEDPE**, each anchor where its middle base lands. What lay on a stretch set aside is not
+  written, and the line under the buttons counts it, and the features an edit cut through.
 
-Not yet: the FASTA, the lifted contacts and tracks, and the files per MAG.
+Not yet: a gene model's exons (a lifted GTF is BED6), a derived track, marks, the spans of a tabix-indexed
+track the session never loaded, a writer that streams rather than holds the whole file, and the files
+per MAG.
 
 ### 27.9 The whole-genome picture: 16,384 cells
 
@@ -10657,7 +10677,8 @@ re-binned exactly.
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
 | Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer on the stage's own thread once the hand has let go: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; the cells between sequence ends at most four million, 32 MB, kept by the picture's pass; not yet in a worker, not yet refined |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
-| Export FASTA | one ranged read per piece; no whole sequence held |
+| Export FASTA | one ranged read per piece; no whole sequence held — *built*: 400,000 bases a request; the file itself is held whole before it is saved |
+| Export the lifted map | *built*: one pass over each rung's stored pixels, in the reader's worker; at most 60 million pixels gathered, 720 MB, and the `.mcool` built in memory as the `.pairs` import's is |
 
 ### 27.13 Refused, and not yet built
 
@@ -10667,10 +10688,11 @@ more than one map; a stage on an assembly of more sequences than its picture has
 single-cell file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4,
 §27.9), the edit kept with the file and carried in a workspace, the session drawn through it (§27.7),
 and the method with its suggestions — drawn with the rail and the corners, snapped to, and answered in
-manual, review and auto (§27.5, §27.6), and the text files written from the edit and read back
-(§27.8). Not yet built, in the order it will be (`docs/reference-editing.md` §10): the rest of the
-exports; the command line; the evidence beyond the map; metagenomes — and, left over, the zoom past
-the stage's picture, the gaps §27.7 lists, and the method's refinement at finer rungs.
+manual, review and auto (§27.5, §27.6), and the exports — the text files written from the edit and
+read back, the sequence, the map and the tracks lifted through it (§27.8). Not yet built, in the order
+it will be (`docs/reference-editing.md` §10): the evidence beyond the map; metagenomes; the command
+line — and, left over, the zoom past the stage's picture, the gaps §27.7 lists, and the method's
+refinement at finer rungs.
 
 ## 28. Two sequences on two axes
 
