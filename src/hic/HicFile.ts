@@ -24,12 +24,33 @@
  * ## Caching
  *
  * Two caches, both bounded, both for the same reason the byte source has one:
- * the matrix records (one per chromosome pair, a few KB each, read once and
- * kept, because navigating within a chromosome asks for the same one every
- * time) and the decompressed blocks (LRU by bytes, because a pan re-asks for
- * the blocks it just left). Neither is a tile cache: a block is an index unit,
- * nothing is composited out of them, and dropping the whole lot costs a re-read
- * and not a redraw.
+ * each chromosome pair's block index at this resolution (read once and kept,
+ * because navigating within a chromosome asks for the same one every time) and
+ * the decompressed blocks (LRU by bytes, because a pan re-asks for the blocks it
+ * just left). Neither is a tile cache: a block is an index unit, nothing is
+ * composited out of them, and dropping the whole lot costs a re-read and not a
+ * redraw.
+ *
+ * ## Reading one pair, and reading every pair
+ *
+ * A pair's block index is read out of its matrix record only as far as this
+ * resolution (`hic/blocks.ts`, `readZoom`), because the record holds every
+ * resolution's and a large file's run to hundreds of kilobytes a pair.
+ *
+ * And a read is told whether it is one of many. A window inside a chromosome
+ * reads its pair through the byte source's chunk cache, where the blocks around
+ * the ones asked for arrive with them and a pan finds them there. A walk across
+ * the genome — every pair, one after another, as the census of §6.5 and a
+ * whole-genome picture make — lands a few hundred bytes at a time in places
+ * megabytes apart and never comes back, so it reads exactly those bytes
+ * (`ByteSource.readExact`) and leaves the cache to the reads that will use it.
+ * On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y) that is the
+ * difference between counting its contacts from 500 MiB of chunks and from
+ * about 1 MB.
+ *
+ * What is left of a walk's cost is round trips — a record's head, then its
+ * blocks, for each of 231 pairs — and those are exact reads that do not hold
+ * the worker, so a walk keeps a few pairs in flight ({@link walkAhead}).
  */
 
 import { ViewerError } from '../errors'
@@ -45,16 +66,50 @@ import {
   type NormVectorKey,
 } from './format'
 import {
+  RECORD_HEAD_BYTES,
   blockNumbersFor,
+  blockRuns,
   decodeBlock,
-  readMatrixRecord,
+  readZoom,
+  readZoomAsync,
   type BlockRecords,
-  type MatrixRecord,
+  type BlockRef,
   type ZoomData,
 } from './blocks'
 
 /** Bytes of decompressed block retained. One order under the source's own LRU. */
 const BLOCK_CACHE_BYTES = 48 << 20
+
+/**
+ * The most chromosome pairs a walk reads at once — see {@link HicFile.walkAhead}.
+ *
+ * Four, not the six connections a browser opens to one host: a walk runs behind
+ * the views (the census starts on every open), and the two left over are what a
+ * pan's own reads get without queueing behind it.
+ */
+const WALK_AHEAD = 4
+
+/**
+ * The memory a walk's pairs in flight may hold between them, at most.
+ *
+ * A pair is decoded whole (`HicStore.scanAll` says why), about 28 bytes a
+ * stored pixel, so what bounds a pair is its square at the rung.
+ */
+const WALK_AHEAD_BYTES = 64 << 20
+
+/** Bytes a decoded pixel holds while its pair is read: the block's and the pair's copies. */
+const BYTES_PER_PIXEL = 28
+
+/**
+ * How far apart two blocks may lie and still be fetched in one exact read.
+ *
+ * The bytes between them are carried for nothing, and a round trip costs more
+ * than 64 KiB does on any connection a reader would open a 5 GB file over.
+ */
+const RUN_GAP_BYTES = 64 << 10
+
+/** The most one exact read of blocks asks for at once. */
+const RUN_CAP_BYTES = 16 << 20
 
 /**
  * The normalisations this reader will use as `bins/weight`, best first.
@@ -102,7 +157,15 @@ export class HicFile {
   private readonly source: ByteSource
   /** Display index → the index the file's own master index is keyed on. */
   private readonly fileIndex: Int32Array
-  private readonly matrices = new Map<string, MatrixRecord | null>()
+  /** Each pair's block index at {@link binSize}, by master-index key; `null` for none. */
+  private readonly zooms = new Map<string, ZoomData | null>()
+  /** Block indexes a walk is fetching now, so two reads of one pair fetch it once. */
+  private readonly zoomsInFlight = new Map<string, Promise<ZoomData | null>>()
+  /**
+   * Set once a record's head has not reached {@link binSize}, after which every
+   * record is read whole — see `readZoom`, whose `beyondHead` this is.
+   */
+  private beyondHead = false
   private readonly blockCache = new Map<string, BlockRecords>()
   private blockCacheBytes = 0
   private readonly normCache = new Map<number, Float64Array | null>()
@@ -217,14 +280,15 @@ export class HicFile {
    *
    * The `sumCounts` per matrix is a float the writer computed, so this is the
    * file's own answer rather than one derived by reading it — the same
-   * relationship `attrs['sum']` has to a cooler's pixel table.
+   * relationship `attrs['sum']` has to a cooler's pixel table. It is not the
+   * number of contacts (§6.5 says why), and it costs a read of every record,
+   * so nothing on the open path asks for it.
    */
   totalCount(): number {
     let sum = 0
     for (const key of this.footer.masterIndex.keys()) {
-      const record = this.matrixFor(key)
-      const zoom = record?.zooms.find((z) => z.unit === BP && z.binSize === this.binSize)
-      if (zoom !== undefined) sum += zoom.sumCounts
+      const zoom = this.zoomAt(key)
+      if (zoom !== null) sum += zoom.sumCounts
     }
     return sum
   }
@@ -308,28 +372,87 @@ export class HicFile {
     return this.normFallbacks.get(chrom) ?? this.normType
   }
 
-  /** The matrix record for a `"a_b"` key, read once and kept. */
-  private matrixFor(key: string): MatrixRecord | null {
-    if (this.matrices.has(key)) return this.matrices.get(key) ?? null
+  /**
+   * The block index for a `"a_b"` key at this file's bin size, read once and kept.
+   *
+   * Out of the head of the pair's matrix record where the resolution is there,
+   * and out of the whole record where it is not (`readZoom`), through the
+   * source's chunks — the read a window makes.
+   */
+  private zoomAt(key: string): ZoomData | null {
+    if (this.zooms.has(key)) return this.zooms.get(key) ?? null
     const entry = this.footer.masterIndex.get(key)
-    const record =
-      entry === undefined
-        ? null
-        : readMatrixRecord(
-            (position, length) => this.source.readBytes(position, length),
-            entry,
-            this.header.version,
-          )
-    this.matrices.set(key, record)
-    return record
+    let zoom: ZoomData | null = null
+    if (entry !== undefined) {
+      const found = readZoom(
+        (position, length) => this.source.readBytes(position, length),
+        entry,
+        BP,
+        this.binSize,
+        this.beyondHead ? 0 : RECORD_HEAD_BYTES,
+      )
+      zoom = found.zoom
+      if (found.beyondHead) this.beyondHead = true
+    }
+    this.zooms.set(key, zoom)
+    return zoom
+  }
+
+  /**
+   * {@link zoomAt} for a walk: the same index, kept in the same place, read in
+   * exact ranges and without holding the worker — see the module head. A source
+   * with no exact read is read the ordinary way.
+   */
+  private zoomAtSparse(key: string): Promise<ZoomData | null> {
+    if (this.zooms.has(key)) return Promise.resolve(this.zooms.get(key) ?? null)
+    const flying = this.zoomsInFlight.get(key)
+    if (flying !== undefined) return flying
+    const entry = this.footer.masterIndex.get(key)
+    const source = this.source
+    const exact = source.readExact
+    if (entry === undefined || exact === undefined) return Promise.resolve(this.zoomAt(key))
+    const reading = readZoomAsync(
+      (position, length) => exact.call(source, position, length),
+      entry,
+      BP,
+      this.binSize,
+      this.beyondHead ? 0 : RECORD_HEAD_BYTES,
+    )
+      .then((found) => {
+        if (found.beyondHead) this.beyondHead = true
+        this.zooms.set(key, found.zoom)
+        return found.zoom
+      })
+      .finally(() => this.zoomsInFlight.delete(key))
+    this.zoomsInFlight.set(key, reading)
+    return reading
   }
 
   /** The zoom for one display chromosome pair at this file's bin size. */
   private zoomFor(a: number, b: number): ZoomData | null {
-    const key = `${this.fileIndex[a]}_${this.fileIndex[b]}`
-    const record = this.matrixFor(key)
-    if (record === null) return null
-    return record.zooms.find((z) => z.unit === BP && z.binSize === this.binSize) ?? null
+    return this.zoomAt(this.pairKey(a, b))
+  }
+
+  private pairKey(a: number, b: number): string {
+    return `${this.fileIndex[a]}_${this.fileIndex[b]}`
+  }
+
+  /**
+   * How many chromosome pairs a walk at this rung may read at once.
+   *
+   * Enough to overlap round trips, which are nearly all a coarse walk costs;
+   * few enough that the pairs held at once stay small, since each is decoded
+   * whole. At the rungs a census or a whole-genome picture uses — a chromosome
+   * a few hundred bins long — that is {@link WALK_AHEAD}; at a rung where one
+   * pair could fill the budget alone, it is one pair at a time, as before.
+   */
+  walkAhead(): number {
+    let widest = 0
+    for (let c = 0; c < this.chroms.length; c++) {
+      widest = Math.max(widest, this.chromOffset[c + 1] - this.chromOffset[c])
+    }
+    const pair = Math.max(1, widest * widest * BYTES_PER_PIXEL)
+    return Math.max(1, Math.min(WALK_AHEAD, Math.floor(WALK_AHEAD_BYTES / pair)))
   }
 
   /** Whether any matrix exists at this bin size — the acceptance gate's question. */
@@ -341,23 +464,39 @@ export class HicFile {
   }
 
   /**
-   * Every chromosome pair stored at this resolution, as display indices.
+   * Every chromosome pair the master index lists, as display indices, each once.
    *
    * Derived from the master index rather than from the cross product, because a
    * file written with `-d` holds only the intra matrices and walking the
    * absent pairs would be a request each to learn nothing.
+   *
+   * **Reads nothing.** Whether a listed pair has a matrix at *this* resolution
+   * is in its record, and {@link pairRecords} answers `null` for one that has
+   * not — so a walk finds out as it reaches each pair rather than all at once
+   * before it starts. Finding out up front was the walk's own cost paid twice,
+   * synchronously: every record read whole before the first pixel, a minute and
+   * a half of blocked worker on a 4DN map before its contacts could be counted
+   * (§6.5), and every other request to the reader queued behind it — the one
+   * the loading screen was waiting for included.
    */
-  storedPairs(): Array<[number, number]> {
+  indexedPairs(): Array<[number, number]> {
     const byFileIndex = new Map<number, number>()
     this.fileIndex.forEach((file, display) => byFileIndex.set(file, display))
+    const seen = new Set<string>()
     const pairs: Array<[number, number]> = []
     for (const key of this.footer.masterIndex.keys()) {
       const [rawA, rawB] = key.split('_').map((part) => Number.parseInt(part, 10))
       const a = byFileIndex.get(rawA)
       const b = byFileIndex.get(rawB)
       if (a === undefined || b === undefined) continue
-      if (this.zoomFor(a, b) === null) continue
-      pairs.push(a <= b ? [a, b] : [b, a])
+      const pair: [number, number] = a <= b ? [a, b] : [b, a]
+      // One matrix per unordered pair is what `zoomFor` reads, so a file that
+      // listed a pair both ways round would otherwise have it walked twice —
+      // and every accumulator above is additive.
+      const id = `${pair[0]}_${pair[1]}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      pairs.push(pair)
     }
     pairs.sort((x, y) => x[0] - y[0] || x[1] - y[1])
     return pairs
@@ -372,15 +511,21 @@ export class HicFile {
    * `bin1 <= bin2`, which is the `symmetric-upper` storage mode the whole reader
    * is written against, so `planRead` and `scatterDense` need no case for this
    * container.
+   *
+   * `sparse` says this pair is one of a walk across many, and changes how the
+   * bytes are fetched and nothing else — see the module head.
    */
   async pairRecords(
     a: number,
     b: number,
     rows: Extent,
     cols: Extent,
+    sparse = false,
   ): Promise<{ bin1: Int32Array; bin2: Int32Array; count: Float64Array; length: number } | null> {
     const [lowChrom, highChrom] = a <= b ? [a, b] : [b, a]
-    const zoom = this.zoomFor(lowChrom, highChrom)
+    const zoom = sparse
+      ? await this.zoomAtSparse(this.pairKey(lowChrom, highChrom))
+      : this.zoomFor(lowChrom, highChrom)
     if (zoom === null) return null
     const intra = lowChrom === highChrom
 
@@ -397,13 +542,8 @@ export class HicFile {
     const highBase = this.chromOffset[highChrom]
 
     let total = 0
-    const parts: Array<{ x: Int32Array; y: Int32Array; value: Float32Array; length: number }> = []
-    for (const number of numbers) {
-      const records = await this.block(zoom, number)
-      if (records === null) continue
-      parts.push(records)
-      total += records.length
-    }
+    const parts = await this.blocks(zoom, numbers, sparse)
+    for (const part of parts) total += part.length
     if (total === 0) return null
 
     const bin1 = new Int32Array(total)
@@ -455,23 +595,70 @@ export class HicFile {
     return Number.isFinite(lo) ? [lo, hi] : null
   }
 
-  /** One block, decompressed, through the LRU. */
-  private async block(zoom: ZoomData, number: number): Promise<BlockRecords | null> {
-    const ref = zoom.blocks.get(number)
-    if (ref === undefined || ref.size <= 0) return null
-    const key = `${this.binSize}/${ref.position}`
-    const held = this.blockCache.get(key)
-    if (held !== undefined) {
-      // Reinsert at the back: `Map` keeps insertion order, so the first key is
-      // the least recently used.
-      this.blockCache.delete(key)
-      this.blockCache.set(key, held)
-      return held
+  /**
+   * The blocks `numbers` names that the index holds, decompressed, through the
+   * LRU, in the order they were named.
+   *
+   * One read a block for a window, through the source's chunks as it always
+   * was. For a `sparse` walk, the blocks not already held are fetched in exact
+   * reads of the stretches they sit in end to end (`blockRuns`) — on a coarse
+   * rung, one block of about a kilobyte per pair, which a chunk would have
+   * rounded out to a megabyte.
+   */
+  private async blocks(zoom: ZoomData, numbers: readonly number[], sparse: boolean): Promise<BlockRecords[]> {
+    const got = new Map<number, BlockRecords>()
+    const missing: BlockRef[] = []
+    for (const number of numbers) {
+      const ref = zoom.blocks.get(number)
+      if (ref === undefined || ref.size <= 0) continue
+      const held = this.held(ref)
+      if (held !== undefined) got.set(number, held)
+      else missing.push(ref)
     }
-    const compressed = this.source.readBytes(ref.position, ref.size)
+    const source = this.source
+    const exact = sparse ? source.readExact : undefined
+    if (exact !== undefined) {
+      for (const run of blockRuns(missing, RUN_GAP_BYTES, RUN_CAP_BYTES)) {
+        const bytes = await exact.call(source, run.position, run.length)
+        for (const ref of run.refs) {
+          const at = ref.position - run.position
+          got.set(ref.number, await this.decode(ref, bytes.subarray(at, at + ref.size)))
+        }
+      }
+    } else {
+      for (const ref of missing) {
+        got.set(ref.number, await this.decode(ref, this.source.readBytes(ref.position, ref.size)))
+      }
+    }
+    const out: BlockRecords[] = []
+    for (const number of numbers) {
+      const records = got.get(number)
+      if (records !== undefined) out.push(records)
+    }
+    return out
+  }
+
+  /** A block already decompressed, marked most recently used; `undefined` when it is not held. */
+  private held(ref: BlockRef): BlockRecords | undefined {
+    const key = this.blockKey(ref)
+    const held = this.blockCache.get(key)
+    if (held === undefined) return undefined
+    // Reinsert at the back: `Map` keeps insertion order, so the first key is
+    // the least recently used.
+    this.blockCache.delete(key)
+    this.blockCache.set(key, held)
+    return held
+  }
+
+  /** Decompress one block's bytes and keep the result. */
+  private async decode(ref: BlockRef, compressed: Uint8Array): Promise<BlockRecords> {
     const records = decodeBlock(await inflate(compressed), this.header.version)
-    this.remember(key, records)
+    this.remember(this.blockKey(ref), records)
     return records
+  }
+
+  private blockKey(ref: BlockRef): string {
+    return `${this.binSize}/${ref.position}`
   }
 
   private remember(key: string, records: BlockRecords): void {
@@ -491,7 +678,7 @@ export class HicFile {
   }
 
   close(): void {
-    this.matrices.clear()
+    this.zooms.clear()
     this.blockCache.clear()
     this.normCache.clear()
     this.blockCacheBytes = 0

@@ -1757,6 +1757,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   where that was most of the box, so a lane of 100 px or more read `10(`. It is typed, like the limit
   boxes beside it, and the arrow keys still step it.
 
+- **A large `.hic` opens in seconds, and its contacts are counted without holding it up (§3.6, §6.5,
+  §12).** The 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y) sat on its spinner for minutes.
+  The contact count every `.hic` takes in the background began by reading every chromosome pair's
+  matrix record whole — the block index of all thirteen resolutions, 70 MB, rounded out to 281 MiB of
+  1 MiB chunks — in one synchronous stretch on the reader, and the request the loading screen was
+  waiting for sat behind it; the count then pulled a megabyte around each kilobyte block, 500 MiB in
+  all. It now reads nothing until what was already asked has been answered, reads each record only as
+  far as the coarsest rung and each block as exactly its bytes, and keeps four pairs in flight. In a
+  browser, from a data centre, the Chromosomes table is up in 5 s where it took 75, and the count
+  reads under 1 MB behind it. A whole-genome picture of a `.hic` walks the pairs the same way: 5.7 MiB
+  where it was 289 MiB.
+
 - **A plain Run on a map binned from a `.pairs` is no longer refused (§3.7, §18.3).** The analysis
   worker opens the map for itself, and a contact list opened without the grid the reader chose is
   refused with *choose a bin size* — which is what every task pressed on such a map said, P(s)

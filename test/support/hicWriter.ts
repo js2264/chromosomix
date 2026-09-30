@@ -111,6 +111,33 @@ export interface HicWriteOptions {
    * failing.
    */
   withAllChrom?: boolean
+  /**
+   * Read `records` as bins of the **finest** resolution, and bin each coarser
+   * one from them, summing what lands in one cell — as Juicer bins one set of
+   * contacts at every resolution it writes.
+   *
+   * Off by default, so every fixture written before it keeps its bytes: those
+   * write the same bins at every resolution, which is a legal file and a
+   * useless one for a question about *which* resolution is read, since every
+   * rung of it holds the same block index. Rebinned, a fine rung's index is
+   * larger than a coarse one's, as in a real file.
+   */
+  rebin?: boolean
+}
+
+/** `records` at `from` bp bins, summed into `to` bp bins. */
+function rebinned(records: HicRecord[], from: number, to: number): HicRecord[] {
+  if (from === to) return records
+  const cells = new Map<string, HicRecord>()
+  for (const record of records) {
+    const x = Math.floor((record.x * from) / to)
+    const y = Math.floor((record.y * from) / to)
+    const key = `${x}:${y}`
+    const held = cells.get(key)
+    if (held === undefined) cells.set(key, { x, y, value: record.value })
+    else held.value += record.value
+  }
+  return [...cells.values()]
 }
 
 /**
@@ -488,14 +515,16 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
     blocks: PendingBlock[]
   }
   const pending = new Map<string, PendingZoom[]>()
+  const finest = Math.min(...options.resolutions)
 
-  for (const [key, records] of Object.entries(options.records)) {
+  for (const [key, written] of Object.entries(options.records)) {
     const [a, b] = key.split('_').map((part) => Number.parseInt(part, 10))
     const intra = a === b
     const chromA = fileChroms[a]
     const chromB = fileChroms[b]
     const zooms: PendingZoom[] = []
     for (const binSize of options.resolutions) {
+      const records = options.rebin === true ? rebinned(written, finest, binSize) : written
       const nBinsX = binsOf(chromA.length, binSize)
       const nBinsY = binsOf(chromB.length, binSize)
       const columns = blockColumnCountOf(version, intra, nBinsX, nBinsY, blockBinCount)

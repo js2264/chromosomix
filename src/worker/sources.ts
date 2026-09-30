@@ -256,12 +256,16 @@ function keep(url: string, reading: string, source: ByteSource): ByteSource {
  * actually known, rather than by weakening the handle.
  */
 function retained(source: ByteSource): ByteSource {
+  // Forwarded only where the source has one, so a borrower falls back exactly
+  // as it would on the source itself — a `.hic` walk asks after it by name.
+  const exact = source.readExact?.bind(source)
   return {
     id: source.id,
     size: source.size,
     isRemote: source.isRemote,
     mount: () => source.mount(),
     readBytes: (position, length) => source.readBytes(position, length),
+    ...(exact === undefined ? {} : { readExact: exact }),
     stats: () => source.stats(),
     close: () => {
       // Deliberately empty: {@link releaseSources} owns this one.

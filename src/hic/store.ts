@@ -97,7 +97,12 @@ export class HicStore implements PixelStore {
     options: SpanScanOptions = {},
   ): Promise<boolean> {
     this.refuseOtherColumns(options.value)
-    return this.walk(this.pairsFor(rows, cols), (a, b) => this.file.pairRecords(a, b, rows, cols), onChunk, options)
+    const pairs = this.pairsFor(rows, cols)
+    // A window inside one chromosome is one pair, read through the chunk cache a
+    // pan comes back to; a window across chromosomes — the whole genome at a
+    // coarse rung, at its widest — is a walk, and reads exactly (`HicFile`).
+    const sparse = pairs.length > 1
+    return this.walk(pairs, (a, b) => this.file.pairRecords(a, b, rows, cols, sparse), onChunk, options)
   }
 
   /**
@@ -118,7 +123,8 @@ export class HicStore implements PixelStore {
     for (const band of bands) for (const chrom of this.file.chromsSpanning(band)) touched.add(chrom)
 
     const whole: Extent = [0, this.file.nBins]
-    const pairs = this.file.storedPairs().filter(([a]) => touched.has(a))
+    const pairs = this.file.indexedPairs().filter(([a]) => touched.has(a))
+    const sparse = pairs.length > 1
     return this.walk(
       pairs,
       (a, b) => {
@@ -126,7 +132,7 @@ export class HicStore implements PixelStore {
         // file. Passing the union of the bands rather than one band at a time is
         // what keeps a pair visited once when two bands land on one chromosome.
         const extent = this.clipTo(a, bands)
-        return extent === null ? Promise.resolve(null) : this.file.pairRecords(a, b, extent, whole)
+        return extent === null ? Promise.resolve(null) : this.file.pairRecords(a, b, extent, whole, sparse)
       },
       onChunk,
       options,
@@ -156,22 +162,24 @@ export class HicStore implements PixelStore {
    * read inside `HicFile` that `pairRecords` is then written on top of; until
    * that exists the same caveat applies to {@link forEachWindow} and
    * {@link forEachBands}, whose `chunkSize` is dropped for the same reason.
+   *
+   * **This walk runs behind the others**, and is written to. The census of §6.5
+   * is one, started the moment a `.hic` opens, on the thread every view reads
+   * through — see {@link inOrder} for what keeps it from holding them up.
    */
   async scanAll(options: ScanAllOptions): Promise<void> {
     const whole: Extent = [0, this.file.nBins]
-    const pairs = this.file.storedPairs()
-    let done = 0
-    let stopped = false
-    for (const [a, b] of pairs) {
-      const records = await this.file.pairRecords(a, b, whole, whole)
-      done += 1
-      if (records !== null && !stopped) {
-        if (options.onChunk(records) === false) stopped = true
-      }
-      options.onProgress?.(done, pairs.length)
-      if (stopped) return
-      await yieldToEventLoop()
-    }
+    const pairs = this.file.indexedPairs()
+    const sparse = pairs.length > 1
+    await this.inOrder(
+      pairs,
+      (a, b) => this.file.pairRecords(a, b, whole, whole, sparse),
+      (records, done) => {
+        const stopped = records !== null && options.onChunk(records) === false
+        options.onProgress?.(done, pairs.length)
+        return !stopped
+      },
+    )
   }
 
   /**
@@ -215,26 +223,71 @@ export class HicStore implements PixelStore {
   }
 
   /**
-   * The common loop: pair by pair, cancellable between them, yielding after each.
-   *
-   * The yield is what makes a cancel arrive at all — the same argument
-   * `forEachPixelSpanAsync` makes for its window loop, and the same reason a
-   * whole-file read of either container can be called off.
+   * The common loop of the three reads above: pair by pair, cancellable between
+   * them, answering `false` when it was cancelled.
    */
-  private async walk(
+  private walk(
     pairs: ReadonlyArray<[number, number]>,
     read: (a: number, b: number) => Promise<PixelChunk | null>,
     onChunk: (chunk: PixelChunk) => void,
     options: SpanScanOptions,
   ): Promise<boolean> {
+    return this.inOrder(
+      pairs,
+      read,
+      (records, done) => {
+        if (records !== null && records.length > 0) onChunk(records)
+        options.onProgress?.(done, pairs.length)
+        return true
+      },
+      () => options.cancelled?.() === true,
+    )
+  }
+
+  /**
+   * Each pair's records handed to `take` in the order given — `take` answering
+   * `false` stops the walk, and so does `cancelled` between pairs.
+   *
+   * **It yields before each pair, not after.** The reads under a window are
+   * synchronous on the worker, so whatever a walk reads before it next yields,
+   * every other request to the reader waits for — and a census is started the
+   * moment a `.hic` opens, so the request waiting was the loading screen's own.
+   * Yielding first means nothing is read until what was already queued has been
+   * answered. The yield is also what lets a cancel arrive at all, the argument
+   * `forEachPixelSpanAsync` makes for its window loop.
+   *
+   * **And a walk across pairs keeps several in flight.** Its reads are exact
+   * ones that do not hold the worker (`HicFile`), and they are round trips and
+   * little else, so up to `HicFile.walkAhead` pairs are read at once. The
+   * pixels are still handed over one pair at a time and in order, so a
+   * consumer sees exactly what a one-at-a-time walk would give it.
+   */
+  private async inOrder(
+    pairs: ReadonlyArray<[number, number]>,
+    read: (a: number, b: number) => Promise<PixelChunk | null>,
+    take: (records: PixelChunk | null, done: number) => boolean,
+    cancelled?: () => boolean,
+  ): Promise<boolean> {
+    const ahead = pairs.length > 1 ? this.file.walkAhead() : 1
+    const queue: Array<Promise<PixelChunk | null>> = []
+    let next = 0
     let done = 0
-    for (const [a, b] of pairs) {
-      if (options.cancelled?.() === true) return false
-      const records = await read(a, b)
-      if (records !== null && records.length > 0) onChunk(records)
-      done += 1
-      options.onProgress?.(done, pairs.length)
+    while (done < pairs.length) {
       await yieldToEventLoop()
+      if (cancelled?.() === true) return false
+      while (queue.length < ahead && next < pairs.length) {
+        const [a, b] = pairs[next]
+        next += 1
+        const reading = read(a, b)
+        // A read the walk stops before reaching is left to finish unawaited,
+        // and its failure is nobody's to report. The one awaited below still
+        // throws.
+        reading.catch(() => undefined)
+        queue.push(reading)
+      }
+      const records = await queue.shift()!
+      done += 1
+      if (!take(records, done)) return false
     }
     return true
   }

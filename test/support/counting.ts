@@ -158,6 +158,11 @@ export class CountingRangeSource implements ByteSource {
     return this.remote.readBytes(position, length)
   }
 
+  /** The exact one too, which a `.hic` walked pair by pair reads through. */
+  readExact(position: number, length: number): Promise<Uint8Array> {
+    return this.remote.readExact(position, length)
+  }
+
   private constructor(path: string, url: string, remote: RemoteRangeSource) {
     this.path = path
     this.url = url
@@ -180,6 +185,20 @@ export class CountingRangeSource implements ByteSource {
     const remote = await RemoteRangeSource.open(url, {
       ...options,
       fetchImpl: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        // The exact reads a `.hic` walk makes come through `fetch` rather than
+        // the synchronous stub, and are held to the same rule: a range, or
+        // nothing.
+        const range = new Headers(init?.headers).get('range')
+        if (String(input) === url && init?.method === 'GET' && range !== null) {
+          const match = /^bytes=(\d+)-(\d+)$/.exec(range)
+          if (match === null) throw new Error(`unsupported Range header: ${range}`)
+          const from = Number(match[1])
+          const end = Math.min(Number(match[2]), bytes.byteLength - 1)
+          return new Response(bytes.slice(from, end + 1), {
+            status: 206,
+            headers: { 'content-range': `bytes ${from}-${end}/${bytes.byteLength}` },
+          })
+        }
         if (String(input) !== url || init?.method !== 'HEAD') {
           throw new Error(`unexpected probe: ${init?.method} ${String(input)}`)
         }
