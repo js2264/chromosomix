@@ -47,7 +47,13 @@ import type {
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
 import { OriginStore } from '../state/origins'
-import { junctionCandidates, measureJunctions } from '../analysis/circularity'
+import {
+  junctionCandidates,
+  junctionRung,
+  measureJunctions,
+  type JunctionCandidate,
+  type JunctionReader,
+} from '../analysis/circularity'
 import { ResolutionStore } from '../state/resolutions'
 import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { openResolutionDialog } from '../ui/ResolutionDialog'
@@ -1956,6 +1962,39 @@ export class Session {
   }
 
   /** The worker, built the first time anything needs one. */
+  /**
+   * Start the reader worker while the picker is on screen, before any file is
+   * chosen.
+   *
+   * The worker starts fetching and instantiating h5wasm the moment it exists —
+   * 4.8 MB, compiled — and it was only made by the first open, so every first
+   * open waited for all of it between the click and the first byte of the file:
+   * 2.6 of the 3.2 seconds it took a 1 GB `.mcool` dropped on a fresh tab to
+   * land, measured. Made here, when the page is idle, the runtime is ready by
+   * the time anyone has found their file. Only for the picker a reader is
+   * looking at, and only once: a tab restored with a map open makes its worker
+   * straight away, and one with a genome never needs this one.
+   */
+  private warmReader(): void {
+    if (this.reader !== null || this.warming) return
+    this.warming = true
+    const start = (): void => {
+      this.warming = false
+      if (this.destroyed || this.reader !== null || this.file !== null || this.assembly !== null) return
+      // Only a head start: a host that cannot make the worker now (a DOM test
+      // has none) leaves it to the first open, which makes it or says why not.
+      try {
+        this.clientOf()
+      } catch {
+        // the first open tries again
+      }
+    }
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(start, { timeout: 2000 })
+    else window.setTimeout(start, 500)
+  }
+
+  private warming = false
+
   private clientOf(): ReaderClient {
     if (this.reader === null) {
       this.reader = new ReaderClient()
@@ -5752,24 +5791,63 @@ export class Session {
     if (this.destroyed || this.file !== file) return
     // A draft assembly is thousands of contigs; the ones a declaration is about
     // are the chromosomes and plasmids, which are the longest.
-    const tested = junctionCandidates(contigPairs(contigs), binsize)
+    const pairs = contigPairs(contigs)
+    const tested = junctionCandidates(pairs, binsize)
     const balance = file.info.hasWeights
-    let measured: Awaited<ReturnType<typeof measureJunctions>>
+    // Each sequence at the coarsest rung that still gives it a hundred bins
+    // (`junctionRung`): the windows are six bins, so what a read costs is the
+    // rung's index and weights, and on a large file opened at its finest rung
+    // those were megabytes a read.
+    const rungs =
+      file.info.entryGroup === 'resolutions'
+        ? file.info.entries.filter((name) => /^\d+$/.test(name)).map(Number)
+        : []
+    const lengths = new Map(pairs)
+    const scores: Record<string, number> = {}
+    const circular: string[] = []
+    const alive = (): boolean => !this.destroyed && this.file === file
     try {
-      measured = await measureJunctions(
-        tested,
-        async (rows, cols) =>
-          (await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })).values,
-        () => !this.destroyed && this.file === file,
-      )
+      const atOpen = (candidate: JunctionCandidate): ReturnType<typeof measureJunctions> =>
+        measureJunctions(
+          [candidate],
+          async (rows, cols) =>
+            (await this.clientOf().request<'matrix'>({ kind: 'matrix', rows, cols, balance })).values,
+          alive,
+        )
+      for (const candidate of tested) {
+        const length = lengths.get(candidate.name) ?? 0
+        const rung = junctionRung(length, binsize, rungs)
+        const binsAtRung = Math.ceil(length / rung)
+        let measured: Awaited<ReturnType<typeof measureJunctions>>
+        try {
+          measured =
+            rung === binsize
+              ? await atOpen(candidate)
+              : await measureJunctions(
+                  [{ name: candidate.name, from: 0, n: binsAtRung }],
+                  junctionReaderAt(this.clientOf(), candidate, binsAtRung, binsize, rung, balance),
+                  alive,
+                )
+        } catch (err) {
+          // A coarse rung that could not be read as the test reads it is asked
+          // again where the file was opened, so the saving never costs an answer.
+          // An end the balancer dropped is *not* asked again: it is undecided at
+          // every rung — the unassembled start of a mouse chromosome is three
+          // megabases of nothing whichever grid it is on — and asking twice was
+          // the check's whole cost over again for no answer.
+          if (!(err instanceof JunctionRungMismatch)) throw err
+          measured = await atOpen(candidate)
+        }
+        if (measured === null) return
+        Object.assign(scores, measured.scores)
+        circular.push(...measured.circular)
+      }
     } catch {
       // A read that failed is a file this test cannot be run on, which is no
       // reason to disturb the one being looked at. Nothing is recorded, so the
       // next open tries again.
       return
     }
-    if (measured === null) return
-    const { scores, circular } = measured
     store.detected(scores, circular)
     const added = circular.filter((name) => store.has(name))
     for (const name of added) this.adoptCircular(name, true)
@@ -7647,6 +7725,7 @@ export class Session {
       // to the picker does not leave three dropzones wired to nothing.
       this.setAnnotations([])
       this.showContent(this.picker.el)
+      this.warmReader()
       return
     }
 
@@ -10314,6 +10393,48 @@ export function compareRung(carried: CompareCarry, binsize: number | null): stri
   const match = rungsOf(carried.entries).find((rung) => rung.binsize === binsize)
   if (match === undefined) return null
   return `${splitUri(carried.uri).path}::${carried.entryGroup || 'entries'}/${match.name}`
+}
+
+/**
+ * The junction test's reads for one sequence at a sibling rung (§8.15).
+ *
+ * The test is written in the sequence's own bins at that rung, and the reader
+ * takes windows in bins of the *open* map with the rung named beside them,
+ * converting itself (`WorkerRequest` `matrix.rung`). So a window's start goes
+ * over rounded up and its end rounded down, which the reader's conversion takes
+ * back to exactly the bins meant; the sequence's end goes over as its end. A
+ * block that still comes back another shape — a level that absorbed the
+ * sequence's last part-bin, so its bins are not the ones counted here — throws
+ * {@link JunctionRungMismatch}, and the sequence is measured at the open rung.
+ */
+/** A sibling rung that could not give the junction test the block it asked for. */
+class JunctionRungMismatch extends Error {}
+
+function junctionReaderAt(
+  client: ReaderClient,
+  sequence: JunctionCandidate,
+  binsAtRung: number,
+  open: number,
+  rung: number,
+  balance: boolean,
+): JunctionReader {
+  const scale = rung / open
+  const start = (bin: number): number => sequence.from + Math.min(sequence.n - 1, Math.ceil(bin * scale))
+  const end = (bin: number): number =>
+    sequence.from + (bin >= binsAtRung ? sequence.n : Math.min(sequence.n, Math.floor(bin * scale)))
+  return async (rows, cols) => {
+    const read = await client.request<'matrix'>({
+      kind: 'matrix',
+      rung: String(rung),
+      rows: [start(rows[0]), end(rows[1])],
+      cols: [start(cols[0]), end(cols[1])],
+      balance,
+    })
+    const nrows = rows[1] - rows[0]
+    const ncols = cols[1] - cols[0]
+    if (read.nrows !== nrows || read.ncols !== ncols) throw new JunctionRungMismatch()
+    return read.values
+  }
 }
 
 function contigPairs(contigs: ContigsResult | null): Array<[string, number]> {

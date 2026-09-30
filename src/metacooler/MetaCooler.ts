@@ -517,8 +517,9 @@ export class MetaCooler {
    * The resolution is named the way an mcool's is — `file.hic::/resolutions/5000`
    * — so the entry picker, the URL hash, the refine ladder (§3.4) and a deck
    * descending to its lead's rung all work on a `.hic` without a line of their
-   * own. A URI with no group opens the finest resolution the file carries,
-   * which is what dropping one on the page means.
+   * own. A URI with no group opens the rung `landingRung` names — a third of
+   * the way up from the finest, which is what dropping one on the page means, as
+   * it is for an `.mcool` addressed at its root.
    */
   static fromHic(uri: string, source: ByteSource): MetaCooler {
     const { group } = parseUri(uri)

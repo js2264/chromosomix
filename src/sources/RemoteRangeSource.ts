@@ -35,6 +35,18 @@ const DEFAULT_CHUNK_SIZE = 1 << 20
 /** 64 MiB of chunks retained. Well above one MAG's matrix, far below a file. */
 const DEFAULT_CACHE_BYTES = 64 << 20
 
+/**
+ * How close a miss must land to a recent fetch to count as the same region
+ * being read — see {@link RemoteRangeSource.aheadFor}.
+ */
+const NEAR_BYTES = 4 << 20
+
+/** The most one miss fetches beyond what it needs. */
+const MAX_AHEAD_BYTES = 16 << 20
+
+/** Recent fetches remembered, so several streams read side by side are each seen. */
+const RECENT_FETCHES = 8
+
 export interface RemoteRangeOptions {
   /** Bytes per cached chunk. */
   chunkSize?: number
@@ -50,6 +62,12 @@ export interface RemoteRangeOptions {
   onRead?(requests: number, bytes: number): void
   /** Upper bound on retained chunk bytes; least-recently-used are dropped. */
   maxCacheBytes?: number
+  /**
+   * Fetch ahead of a region being read chunk after chunk (default on) — see
+   * {@link RemoteRangeSource.aheadFor}. Off for a source opened to read in small
+   * pieces, whose reader chose bandwidth over round trips (§12).
+   */
+  readAhead?: boolean
   /** Injected for tests. Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch
   /**
@@ -92,11 +110,19 @@ export class RemoteRangeSource implements ByteSource {
   /** Insertion-ordered, so the first key is the least recently used. */
   private readonly cache = new Map<number, Uint8Array>()
   private cachedBytes = 0
+  private readonly readAhead: boolean
+  /**
+   * The last few fetches, newest last: their chunk range, and how many misses
+   * in a row had landed near the region each was part of.
+   */
+  private readonly recent: Array<{ from: number; to: number; streak: number }> = []
   private requests: number
   private bytesRead: number
   private mountPath: string | null = null
   private readonly credential: S3Credential | undefined
   private readonly headers: Record<string, string> | undefined
+  /** What {@link readExact} fetches through — the probe's own, so a test's stub serves both. */
+  private readonly fetchImpl: typeof fetch
 
   private constructor(
     url: string,
@@ -109,7 +135,12 @@ export class RemoteRangeSource implements ByteSource {
     this.size = size
     this.credential = options.credential
     this.headers = options.headers
+    // Wrapped rather than held: a browser's `fetch` called as a method of this
+    // object throws "Illegal invocation".
+    this.fetchImpl =
+      options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init))
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
+    this.readAhead = options.readAhead ?? true
     this.onRead = options.onRead
     const requested = Math.trunc(options.maxCacheBytes ?? DEFAULT_CACHE_BYTES)
     this.maxCacheBytes = Math.max(this.chunkSize, requested)
@@ -395,6 +426,52 @@ export class RemoteRangeSource implements ByteSource {
   }
 
   /**
+   * Read `[position, position + length)` in one request for exactly that range.
+   *
+   * The cache is consulted and never filled: a range whose chunks are all held
+   * is copied out of them for nothing, and any other is fetched as asked for
+   * and handed over whole. Filling the cache from it would need the chunks
+   * either side, which is the megabyte this exists not to fetch — see
+   * `ByteSource.readExact`.
+   *
+   * Through `fetch`, not the synchronous request every other read makes, so the
+   * worker is free while it is in flight and a walk can have several at once.
+   * The request is otherwise the same one, refused the same ways.
+   */
+  async readExact(position: number, length: number): Promise<Uint8Array> {
+    const n = Math.max(0, Math.min(this.size - position, length))
+    if (n === 0) return new Uint8Array(0)
+    const first = Math.floor(position / this.chunkSize)
+    const last = Math.floor((position + n - 1) / this.chunkSize)
+    let held = true
+    for (let i = first; i <= last && held; i++) held = this.cache.has(i)
+    if (held) return this.readBytes(position, n)
+
+    const from = position
+    const to = position + n - 1
+    const doFetch = this.fetchImpl
+    const response = await doFetch(this.url, {
+      method: 'GET',
+      headers: { ...this.authorisation(), Range: `bytes=${from}-${to}` },
+    })
+    this.requests += 1
+    this.refuseStatus(response.status, from, to)
+    const body = new Uint8Array(await response.arrayBuffer())
+    this.bytesRead += body.byteLength
+    this.onRead?.(this.requests, this.bytesRead)
+    const fetched = this.windowOf(body, from, to, response.headers.get('content-range'))
+    if (fetched.byteLength < n) {
+      throw new ViewerError('remote-no-ranges', 'a range request returned a short response', {
+        wanted: n,
+        available: fetched.byteLength,
+      })
+    }
+    // Copied only when the window is a slice of a bigger body — a host that sent
+    // more than was asked for — so that body is not kept alive by a few bytes.
+    return fetched.byteLength === n && fetched.buffer.byteLength === n ? fetched : fetched.slice(0, n)
+  }
+
+  /**
    * Copy `length` bytes starting at `position` into `buffer` at `offset`,
    * fetching whatever is missing.
    *
@@ -422,6 +499,13 @@ export class RemoteRangeSource implements ByteSource {
       const last = Math.floor((position + length - 1) / this.chunkSize)
       let end = index
       while (end + 1 <= last && !this.cache.has(end + 1)) end += 1
+      // Beyond what this read needs, where the reads before it say more of the
+      // same region is coming — but never over a chunk already held.
+      const { ahead, streak } = this.aheadFor(index, end)
+      const beyond = Math.min(end + ahead, Math.ceil(this.size / this.chunkSize) - 1)
+      while (end < beyond && !this.cache.has(end + 1)) end += 1
+      this.recent.push({ from: index, to: end, streak })
+      if (this.recent.length > RECENT_FETCHES) this.recent.shift()
       const from = index * this.chunkSize
       const to = Math.min((end + 1) * this.chunkSize, this.size) - 1
       const fetched = this.fetchRange(from, to)
@@ -433,6 +517,37 @@ export class RemoteRangeSource implements ByteSource {
         this.store(i, fetched.subarray(start, Math.min(start + this.chunkSize, fetched.length)))
       }
     }
+  }
+
+  /**
+   * How many chunks to fetch past the ones a miss needs.
+   *
+   * HDF5 reads a cooler's pixels a dataset chunk at a time — `bin1_id`,
+   * `bin2_id` and `count` in turn, each a megabyte or so — and each read that
+   * misses the cache is a round trip, one after another on the worker. Reading a
+   * whole chromosome of a 5 GB `.mcool` was sixty-three of them, a megabyte
+   * apiece, hopping between three streams through one 60 MB region of the file:
+   * the latency, paid sixty-three times, was the wait.
+   *
+   * So a miss that lands within {@link NEAR_BYTES} of one of the last few
+   * fetches is taken as that region still being read, and from the third such
+   * miss in a row the fetch runs ahead, doubling each time up to
+   * {@link MAX_AHEAD_BYTES}. The count is kept per region, so a read of the
+   * weights or the index between two pixel chunks does not start the pixels'
+   * count again. A miss far from anything recent is a new question — an index,
+   * a header, another sequence — and fetches what it asks for and nothing more,
+   * so the scattered reads of opening a file are what they were.
+   */
+  private aheadFor(index: number, end: number): { ahead: number; streak: number } {
+    if (!this.readAhead) return { ahead: 0, streak: 0 }
+    const near = Math.max(1, Math.floor(NEAR_BYTES / this.chunkSize))
+    let streak = 0
+    for (const fetch of this.recent) {
+      if (index >= fetch.from - near && index <= fetch.to + near) streak = Math.max(streak, fetch.streak + 1)
+    }
+    if (streak < 2) return { ahead: 0, streak }
+    const most = Math.max(0, Math.floor(MAX_AHEAD_BYTES / this.chunkSize) - (end - index + 1))
+    return { ahead: Math.min(most, 2 ** (streak - 2)), streak }
   }
 
   private fetchRange(from: number, to: number): Uint8Array {
@@ -449,22 +564,34 @@ export class RemoteRangeSource implements ByteSource {
     // request against a cached key. The static headers — an API key, a bearer
     // token — go on with it and before it, for the same reason and in the order
     // `sources/access.ts` fixes.
-    if (this.credential !== undefined || this.headers !== undefined) {
-      const headers = accessHeaders({
-        url: this.url,
-        method: 'GET',
-        ...(this.headers === undefined ? {} : { headers: this.headers }),
-        ...(this.credential === undefined ? {} : { credential: this.credential }),
-      })
-      for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
-    }
+    for (const [name, value] of Object.entries(this.authorisation())) xhr.setRequestHeader(name, value)
     xhr.setRequestHeader('Range', `bytes=${from}-${to}`)
     // Allowed on a synchronous request only inside a worker; the guard in
     // mount() is what makes this reachable.
     xhr.responseType = 'arraybuffer'
     xhr.send(null)
     this.requests += 1
-    if (xhr.status === 403 && this.credential !== undefined) {
+    this.refuseStatus(xhr.status, from, to)
+    const body = new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0))
+    this.bytesRead += body.byteLength
+    this.onRead?.(this.requests, this.bytesRead)
+    return this.windowOf(body, from, to, xhr.getResponseHeader('content-range'))
+  }
+
+  /** What authorises a `GET` of this object — a signature, a header bag, both or neither. */
+  private authorisation(): Record<string, string> {
+    if (this.credential === undefined && this.headers === undefined) return {}
+    return accessHeaders({
+      url: this.url,
+      method: 'GET',
+      ...(this.headers === undefined ? {} : { headers: this.headers }),
+      ...(this.credential === undefined ? {} : { credential: this.credential }),
+    })
+  }
+
+  /** Refuse a ranged `GET` that was not answered with the range, in the words the fix needs. */
+  private refuseStatus(status: number, from: number, to: number): void {
+    if (status === 403 && this.credential !== undefined) {
       // Distinguished from the range failure below because the fix is
       // different and neither message would suggest the other. A signed request
       // that is refused is a key problem — wrong region, expired token, an IAM
@@ -480,17 +607,13 @@ export class RemoteRangeSource implements ByteSource {
         { url: this.url, status: 403, from, to, signed: true },
       )
     }
-    if (xhr.status !== 206 && xhr.status !== 200) {
+    if (status !== 206 && status !== 200) {
       throw new ViewerError(
         'remote-no-ranges',
-        `${hostOf(this.url)} returned ${xhr.status} for bytes ${from}-${to} of ${this.url}`,
-        { url: this.url, status: xhr.status, from, to },
+        `${hostOf(this.url)} returned ${status} for bytes ${from}-${to} of ${this.url}`,
+        { url: this.url, status, from, to },
       )
     }
-    const body = new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0))
-    this.bytesRead += body.byteLength
-    this.onRead?.(this.requests, this.bytesRead)
-    return this.windowOf(body, from, to, xhr.getResponseHeader('content-range'))
   }
 
   /**

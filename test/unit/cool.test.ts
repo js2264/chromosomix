@@ -230,15 +230,22 @@ describe('an mcool is a ladder of coolers', () => {
     }
   })
 
-  it('lands on the finest resolution, whatever order HDF5 lists them in', () => {
+  it('lands a third of the way up its resolutions, whatever order HDF5 lists them in', () => {
     // HDF5 lists group members lexicographically, which puts `1000` before
-    // `500` and `10000` before `5000`. The names are bin sizes, so the finest
-    // is the smallest number, not the first string.
+    // `500` and `10000` before `5000`. The names are bin sizes, so the ladder
+    // is ordered by number — 500, 1000, 5000, 10000 — and the landing rung is
+    // the second of the four, not the finest.
     const err = new ViewerError('mcool-root', 'No cooler at root', {
       entries: ['10000', '1000', '500', '5000'],
       group: 'resolutions',
     })
-    expect(firstEntry(err)).toEqual({ group: 'resolutions', entry: '500' })
+    expect(firstEntry(err)).toEqual({ group: 'resolutions', entry: '1000' })
+    // Six or seven resolutions: the third.
+    const six = new ViewerError('mcool-root', 'No cooler at root', {
+      entries: ['1000', '2000', '5000', '10000', '50000', '100000'],
+      group: 'resolutions',
+    })
+    expect(firstEntry(six)).toEqual({ group: 'resolutions', entry: '5000' })
   })
 
   it('offers its resolutions in numeric order', async () => {

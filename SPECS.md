@@ -297,6 +297,16 @@ Blocks are how the *file* is indexed. Nothing is composited, nothing is cached t
 the result of a read is one whole bounded matrix handed up in COO exactly as a cooler's is. §14's
 invariant is untouched.
 
+**A read across chromosome pairs is read differently from a window.** A pair's matrix record holds
+the block index of every resolution the pair was written at — 725 KB for chr1 × chr2 on a 4DN mouse
+map written at thirteen — so it is read only as far as the resolution open, which for the coarse ones
+Juicer writes first is a record's first few dozen bytes. A window inside a chromosome reads through
+the source's chunks, which a pan comes back to. A walk across the pairs — a whole-genome picture, the
+census of §6.5 — lands a few hundred bytes a pair in places megabytes apart and never comes back, so
+it reads exactly those bytes, leaves the chunks to the windows, and keeps four pairs in flight, since
+round trips are then nearly all it costs — fewer, down to one, at a rung where the pairs in flight
+could hold more than 64 MiB of pixels between them, since a pair is decoded whole.
+
 **Three things are translated, and nothing else.**
 
 - **The `All` chromosome is dropped**, by name and never by index — every Juicer file carries a
@@ -309,7 +319,9 @@ invariant is untouched.
   A bin the balancer dropped becomes `NaN`, which is what a balanced cooler writes for one.
 - **The resolution ladder becomes entries**, spelled `file.hic::/resolutions/5000` exactly as an
   mcool's is. That is what wires it into the entry picker, the URL hash, §3.4's refine ladder and a
-  deck descending to its lead's rung, with no code in any of them learning the format exists.
+  deck descending to its lead's rung, with no code in any of them learning the format exists. A
+  `.hic` named with no resolution opens at the rung an `.mcool` addressed at its root lands on — a
+  third of the way up from the finest (§9) — and not at its finest.
 
 **What is not read**, and each is a §13-style decision rather than a gap: fragment-resolution
 matrices (`unit = "FRAG"`), because a fragment grid is variable bins under another name and §3.3
@@ -1376,6 +1388,24 @@ interface ByteSource { readonly id: string; readonly size: number;
 
 `LocalFileSource` wraps a `File`. `RemoteRangeSource` wraps a URL. Identical downstream.
 
+**A remote read reads ahead where the reads before it say to.** Each miss of the 1 MiB chunk cache
+is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin1_id`, `bin2_id`
+and `count` in turn, three streams through one region of the file — so a whole chromosome of a 5 GB
+`.mcool` was 63 round trips of a megabyte, one after another. A miss within 4 MiB of one of the last
+eight fetches is that region still being read, and from the third in a row the fetch runs ahead of
+it, doubling to at most 16 MiB; the count is kept per region, so a read of the weights between two
+pixel chunks does not start it again. A miss far from anything recent — an index, a header, another
+sequence — fetches what it asks for and nothing more, so opening a file costs what it did, and a
+source opened to read in small pieces (§3.8's `fine`) never reads ahead. The same chromosome is now 34
+requests. A walk across a `.hic`'s chromosome pairs reads the other way, exactly and not through
+the chunks at all (§3.6).
+
+**The reader is started before it is asked for anything.** Its worker fetches and compiles h5wasm the
+moment it exists, and it used to exist only once a file was opened, so every first open waited for
+the runtime between the click and the first byte: 2.6 of the 3.2 seconds a 1 GB `.mcool` dropped on a
+fresh tab took to land. It is made when the picker is on screen and the page is idle, and the same
+drop lands in 0.3 s.
+
 ### 6.2 Decoding requirements
 
 **String columns.** metacooler writes them as fixed-length `S<n>`, sized by **UTF-8 encoded byte
@@ -1509,6 +1539,15 @@ twice — the matrix both ways round — and the demo `.hic` declares 23,827,759
 contacts, so that number would have sent the up chevron to a total the file never held. The reader
 counts the contacts instead, in the background, on the coarsest rung of the file (the same contacts
 in the fewest pixels), and the box shows them when they land.
+
+**In the background means behind every other read.** The census starts on every open, on the
+thread every view reads through, so it reads nothing before a request already waiting has been
+answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
+chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
+record's first few dozen bytes, and that rung's one block, both as exact ranges, four pairs in
+flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231 pairs) that
+is 456 requests and under 1 MB. Reading each record whole first — the block index of all thirteen
+rungs, 70 MB, in 1 MiB chunks — was 500 MiB, and held the loading screen for a minute and a half.
 
 **What is refused, by name:** counts that are not whole or are negative (there is no contact to
 draw); a `square` file, which stores every contact twice; an `.scool`, whose map is a sum of cells
@@ -3399,7 +3438,15 @@ same separations, measured at the two ends the junction joins, the median of the
 three (`analysis/circularity.ts`). It is about one on a circle — 0.65 on the
 *Pseudomonas aeruginosa* PAK chromosome, 1.1 on a *Borrelia* plasmid — and under
 0.03 on the linear chromosomes of *Borrelia burgdorferi* and *Streptomyces
-coelicolor*, whose telomeres are known to meet. At **0.2** or above the sequence
+coelicolor*, whose telomeres are known to meet. **Each sequence is measured at the coarsest
+rung of the file's ladder that still gives it a hundred bins**, the rung it was opened at where
+none does: the blocks are a few bins wide, so what a read costs is the rung's index and weights,
+and at a large file's finest rung those are megabytes a read — 111 MiB for the three reads on each
+of 21 chromosomes of a 5 GB 4DN map opened at 1 kb. The score is a ratio at one separation, so the
+answer does not move: every sequence of the demo maps is decided alike at both rungs. A sequence
+the coarse rung cannot be read for as the test reads it — a level that absorbed its last part-bin —
+is asked again at the open rung; one whose end the balancer dropped is not, being undecided at every
+rung. At **0.2** or above the sequence
 is ticked, and a banner names it and says where to untick it; below, or where an
 end has nothing to measure, it is left alone. **It only ever adds a tick, and
 only once per file**: the scores are kept with the declarations — the box's own
@@ -4403,7 +4450,20 @@ in the same view. Concretely:
   one map *open*; the rungs a zoom touches are opened beside it over the same mounted bytes and
   released with the session. An `.mcool` addressed at its **root** is
   refused with `mcool-root`, naming its resolutions — the mirror of `mmetacool-root` — and the app
-  opens the finest of them, as it does for a zoomify ladder
+  opens **a third of the way up them from the finest** (`landingRung`): the third of six or seven,
+  the second of four or five, the finest of one or two. The same rung is where a zoomify ladder of
+  an `.mmetacool` lands, and where a `.hic` opened with no resolution named opens (§3.6). Not the
+  finest, whose every read is the largest the file has — its index, its weights, a whole chromosome's
+  block — so that landing there made the first wait of every large file its longest. A reader who
+  wants the finest level picks it, and it is then the floor of every zoom (§16.2); a rung a comparison
+  or a deck asks for by bin size is still opened as asked
+- **the whole genome of a laddered file is read at a coarse rung**, not pooled from the open one:
+  the coarsest rung whose bins still fit one drawn cell draws the same cells from a fraction of the
+  pixels, balanced at its own resolution. On a 5 GB `.mcool` opened at 25 kb that is the 500 kb
+  rung's few million pixels in seconds, where the open rung was a gate asking to download the whole
+  file; the open rung is left as it is, and a zoom inside the picture still refines to it. A file
+  with no rung that fits, a selection and a second file in the square keep the pooled read and its
+  gate
 
 The app is therefore not a HiGlass replacement for standard Hi-C. Say so in the paper rather than let
 a reviewer discover it: the claim is zero-install regional inspection of any cooler, plus a genome
@@ -4478,6 +4538,16 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Zoom out to a block already read | 0 requests |
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
+| A region read chunk after chunk (remote) | from the third near miss, one request a stretch growing to 16 MiB — thirty-two sequential chunks in ≤ 8 requests (§6.1) |
+| Reads scattered across a file (remote) | exactly the chunk each asks for — no read-ahead (§6.1) |
+
+And for a `.hic` (§3.6), whose one expensive shape is a read across every chromosome pair — a
+whole-genome picture, and the census §6.5 takes on every open:
+
+| Operation | Budget |
+|---|---|
+| A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and no chunk of the cache spent on either; four pairs in flight |
+| The census, started beside an open | **0** reads before a request already queued has been answered |
 
 And for an alignment lane (§8.13), where the open cost is separated from the window cost for the same
 reason the table above separates opening a file from loading one MAG's matrix — a `.bai` for a human

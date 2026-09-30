@@ -237,7 +237,7 @@ describe.each([
     // were wrong rather than the reader's, this is the assertion that says so.
     expect(await straw.getNormalizationOptions()).toContain('KR')
 
-    const file = HicFile.open(new BytesSource(written.bytes))
+    const file = HicFile.open(new BytesSource(written.bytes), { binSize: BIN })
     expect(file.normType).toBe('KR')
 
     const region = { chr: 'chr1', start: 0, end: CHROMS[0].length }

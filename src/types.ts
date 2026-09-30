@@ -52,6 +52,30 @@ export interface ByteSource {
    * Returns fewer bytes than asked for only at end of file.
    */
   readBytes(position: number, length: number): Uint8Array
+  /**
+   * Read `[position, position + length)` as exactly those bytes, past the cache.
+   *
+   * {@link readBytes} rounds every read out to whole chunks, which is right for
+   * the reads it was built for — HDF5's metadata walk lands again and again in
+   * the chunk it just fetched — and wrong for a read that lands alone in the
+   * middle of a large file and is never followed by its neighbours. A `.hic`
+   * walked pair by pair is exactly that: the head of each chromosome pair's
+   * matrix record and one coarse block after it, a few hundred bytes apiece and
+   * megabytes apart, so a 1 MiB chunk around each is a megabyte thrown away per
+   * read — half a gigabyte to count the contacts of one 4DN file.
+   *
+   * Served from the cache when every chunk it covers is already there, and
+   * otherwise one request for exactly the range, which is then **not** kept:
+   * the caller has asked for bytes it will not read again. Optional, because a
+   * source whose reads cost no round trip has nothing to gain from it; a caller
+   * without it falls back to {@link readBytes}.
+   *
+   * **Asynchronous**, unlike every other read here, and that is the other half
+   * of the point. A walk of that kind is a round trip or two per chromosome pair
+   * and nothing else — latency is its whole cost — so it keeps a few in flight
+   * at once, and the worker answers other requests while they are.
+   */
+  readExact?(position: number, length: number): Promise<Uint8Array>
   /** Release the mount. Idempotent. */
   close(): void
   /** Bytes fetched and requests issued so far — drives the §12 budget tests. */

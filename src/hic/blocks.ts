@@ -53,27 +53,42 @@ export interface ZoomData {
   sumCounts: number
 }
 
-/** One chromosome pair's matrix, at every resolution it was written at. */
-export interface MatrixRecord {
-  chr1: number
-  chr2: number
-  zooms: ZoomData[]
-}
+/**
+ * Bytes of a matrix record read first, in the hope that the resolution asked
+ * for is inside them — see {@link readZoom}.
+ *
+ * A zoom's header is 39 bytes and each of its blocks another 16, so this holds
+ * every coarse rung of a mammalian file with room to spare: on a 4DN mouse map
+ * the eight rungs from 10 Mb down to 50 kb take under 700 bytes of chr1 × chr1's
+ * record. A finer rung is further in than any head worth reading, and costs the
+ * whole record whatever this is.
+ */
+export const RECORD_HEAD_BYTES = 4 << 10
 
 /**
- * Parse one chromosome pair's matrix record.
+ * One resolution of one chromosome pair, out of the leading bytes of its matrix
+ * record — or `null` when the pair has no matrix at that resolution.
  *
- * `entry.size` is the record's own length, so this is one bounded read and the
- * block index for a pair costs exactly one request however many blocks it holds.
+ * A record is the block index of **every** resolution the pair was written at,
+ * one after another, and only the one asked for is decoded: the others are
+ * skipped by their block count, 16 bytes a block, without a map being built for
+ * blocks nobody will read.
+ *
+ * `bytes` may stop short of the record's end, and that is the point of taking
+ * them rather than an entry: a header or a block list that runs past the last
+ * byte throws the `RangeError` a `DataView` throws, which is what tells
+ * {@link readZoom} that the answer is further in. No wrong answer can come out
+ * of a short read instead — a unit string cut off mid-name is followed by a
+ * field read past the end, and a resolution is only reported absent once every
+ * header in the record has been read.
  */
-export function parseMatrixRecord(bytes: Uint8Array, _version: number): MatrixRecord {
+export function findZoom(bytes: Uint8Array, unit: string, binSize: number): ZoomData | null {
   const cursor = new Cursor(bytes)
-  const chr1 = cursor.int32()
-  const chr2 = cursor.int32()
+  cursor.int32() // chr1, which the master-index key already says
+  cursor.int32() // chr2
   const nResolutions = cursor.int32()
-  const zooms: ZoomData[] = []
   for (let i = 0; i < nResolutions; i++) {
-    const unit = cursor.string()
+    const zoomUnit = cursor.string()
     cursor.int32() // zoom index, which is the position in this list
     const sumCounts = cursor.float32()
     // Three reserved statistics — occupied cells, standard deviation, 95th
@@ -83,10 +98,14 @@ export function parseMatrixRecord(bytes: Uint8Array, _version: number): MatrixRe
     cursor.float32()
     cursor.float32()
     cursor.float32()
-    const binSize = cursor.int32()
+    const zoomBinSize = cursor.int32()
     const blockBinCount = cursor.int32()
     const blockColumnCount = cursor.int32()
     const blockCount = cursor.int32()
+    if (zoomUnit !== unit || zoomBinSize !== binSize) {
+      cursor.position += blockCount * 16
+      continue
+    }
     const blocks = new Map<number, BlockRef>()
     for (let b = 0; b < blockCount; b++) {
       const number = cursor.int32()
@@ -94,18 +113,99 @@ export function parseMatrixRecord(bytes: Uint8Array, _version: number): MatrixRe
       const size = cursor.int32()
       blocks.set(number, { number, position, size })
     }
-    zooms.push({ unit, binSize, blockBinCount, blockColumnCount, blocks, sumCounts })
+    return { unit: zoomUnit, binSize: zoomBinSize, blockBinCount, blockColumnCount, blocks, sumCounts }
   }
-  return { chr1, chr2, zooms }
+  return null
 }
 
-/** Read and parse one master-index entry. */
-export function readMatrixRecord(
+/**
+ * One resolution of one master-index entry, reading the record only as far as it.
+ *
+ * Reading a whole record to use one resolution of it is the cost this exists to
+ * avoid, and on a large file it is most of what a whole-genome read costs: a
+ * 4DN map written at thirteen resolutions holds 70 MB of block index across its
+ * 231 chromosome pairs — 725 KB for chr1 × chr2 alone — where the coarsest rung
+ * needs the first 67 bytes of each. Juicer writes a pair's resolutions in the
+ * header's order, which is coarsest first, so the rungs a whole-genome read is
+ * made at are the ones at the front.
+ *
+ * So `head` bytes are read first and the rest only when the resolution lies
+ * past them; a `head` of zero, or one past the record's end, reads the record
+ * whole in one go. `beyondHead` reports the first case, so the caller can stop
+ * paying a head read that cannot succeed: every record lists its resolutions in
+ * the same order, and a rung past the head of one is at the far end of all of
+ * them.
+ */
+export function readZoom(
   read: (position: number, length: number) => Uint8Array,
   entry: MasterIndexEntry,
-  version: number,
-): MatrixRecord {
-  return parseMatrixRecord(read(entry.position, entry.size), version)
+  unit: string,
+  binSize: number,
+  head: number,
+): { zoom: ZoomData | null; beyondHead: boolean } {
+  if (head > 0 && head < entry.size) {
+    try {
+      return { zoom: findZoom(read(entry.position, head), unit, binSize), beyondHead: false }
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err
+    }
+    return { zoom: findZoom(read(entry.position, entry.size), unit, binSize), beyondHead: true }
+  }
+  return { zoom: findZoom(read(entry.position, entry.size), unit, binSize), beyondHead: false }
+}
+
+/** {@link readZoom}, for a read that answers later — the exact reads a walk makes. */
+export async function readZoomAsync(
+  read: (position: number, length: number) => Promise<Uint8Array>,
+  entry: MasterIndexEntry,
+  unit: string,
+  binSize: number,
+  head: number,
+): Promise<{ zoom: ZoomData | null; beyondHead: boolean }> {
+  if (head > 0 && head < entry.size) {
+    try {
+      return { zoom: findZoom(await read(entry.position, head), unit, binSize), beyondHead: false }
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err
+    }
+    return { zoom: findZoom(await read(entry.position, entry.size), unit, binSize), beyondHead: true }
+  }
+  return { zoom: findZoom(await read(entry.position, entry.size), unit, binSize), beyondHead: false }
+}
+
+/**
+ * The blocks in `refs` grouped into stretches that sit end to end in the file,
+ * so each stretch is one read.
+ *
+ * Juicer writes a resolution's blocks in block-number order, one after another,
+ * so the blocks a pair needs are mostly contiguous and a walk that read them one
+ * request apiece would spend a round trip on each. A gap of up to `gap` bytes is
+ * read through rather than split on — it costs less to carry than a second
+ * request does — and a stretch stops growing at `cap`, so no one read holds
+ * more than that in flight.
+ */
+export function blockRuns(
+  refs: readonly BlockRef[],
+  gap: number,
+  cap: number,
+): Array<{ position: number; length: number; refs: BlockRef[] }> {
+  const sorted = [...refs].sort((p, q) => p.position - q.position)
+  const runs: Array<{ position: number; length: number; refs: BlockRef[] }> = []
+  for (const ref of sorted) {
+    const last = runs[runs.length - 1]
+    const end = ref.position + ref.size
+    if (
+      last !== undefined &&
+      ref.position - (last.position + last.length) <= gap &&
+      end - last.position <= cap
+    ) {
+      last.length = Math.max(last.length, end - last.position)
+      last.refs.push(ref)
+      continue
+    }
+    runs.push({ position: ref.position, length: ref.size, refs: [ref] })
+  }
+  return runs
 }
 
 /**

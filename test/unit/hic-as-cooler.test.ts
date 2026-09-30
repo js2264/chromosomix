@@ -224,11 +224,13 @@ describe('a .hic opened as a MetaCooler', () => {
     expect(mc.countKind).toBe('f')
   })
 
-  it('exposes its resolution ladder as entries, at the finest by default', async () => {
+  it('exposes its resolution ladder as entries, a third of the way up by default', async () => {
+    // Opened with no group, as a dropped file is: the landing rung, not the
+    // finest, whose reads are the largest (`landingRung`).
     const mc = await openHic({ resolutions: [100, 500, 2500] })
     expect(mc.entries).toEqual(['100', '500', '2500'])
     expect(mc.entryGroup).toBe('resolutions')
-    expect(mc.binsize).toBe(100)
+    expect(mc.binsize).toBe(500)
   })
 
   it('opens the resolution the URI names', async () => {
