@@ -888,6 +888,23 @@ describe('the two axes of a wheel', () => {
     expect(prevented()).toBe(2)
   })
 
+  it('slides along the diagonal on a horizontal one where the picture has a diagonal: rows and columns together', () => {
+    const { heatmap, wheel } = wheeled()
+    heatmap.setDiagonalSlide(true)
+    wheel(0, -400)
+    const plot = heatmap.plotRect
+    const corner = (): { row?: number; col?: number } => {
+      const cell = heatmap.cellAt(plot.x + 1, plot.y + 1)
+      return { row: cell?.row, col: cell?.col }
+    }
+    const before = corner()
+    wheel(180, 4)
+    const after = corner()
+    // Down the genome on both axes at once, by the same number of cells.
+    expect((after.col ?? 0) - (before.col ?? 0)).toBeGreaterThan(0)
+    expect((after.row ?? 0) - (before.row ?? 0)).toBe((after.col ?? 0) - (before.col ?? 0))
+  })
+
   it('slides up and down with ⌘ held, instead of zooming', () => {
     const { heatmap, wheel, prevented } = wheeled()
     wheel(0, -400)

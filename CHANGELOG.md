@@ -758,6 +758,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A sideways scroll slides a map along its diagonal (§7)**, rows and columns together, as the
+  reference editor's stage always has: the diagonal stays put and the picture moves down the genome
+  under it, where the columns alone carried it off the side of the picture within a screen. Over a
+  turned band, and over two stretches that share no bins, it still slides along the columns.
+
 - **`.metacool` and `.mmetacool` are a dev feature (§3.2, §29.3).** With the switch off, both are
   refused as files this viewer does not read — in the sentence any unknown HDF5 file gets, which names
   neither — rather than a `.metacool` opening as the cooler of twenty thousand contigs it also is. The

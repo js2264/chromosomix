@@ -5591,7 +5591,7 @@ export class MatrixPanel {
       // as the two coming apart.
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
         event.preventDefault()
-        this.heatmap.panBy(-event.deltaX, 0)
+        this.heatmap.panBy(-event.deltaX, this.heatmap.slidesAlongDiagonal ? -event.deltaX : 0)
         return
       }
       event.preventDefault()
@@ -5661,6 +5661,8 @@ export class MatrixPanel {
     // Both drags collapse onto the genomic axis under a turn; see
     // {@link HeatmapView.setSpanGestures}.
     this.heatmap.setSpanGestures(turned !== null)
+    // A sideways scroll slides along the diagonal where the picture has one.
+    this.heatmap.setDiagonalSlide(slidesAlongDiagonal(data, turned))
     // A band's rows are not a thing to fit: the block is cut to the height of
     // the box it is drawn in, so fitting them is a tautology at every zoom and
     // asking for it makes the zoom a function of a number derived from the zoom.
@@ -5803,6 +5805,7 @@ export class MatrixPanel {
     this.painted = null
     this.heatmap.setAnchor(anchorFor(turned))
     this.heatmap.setSpanGestures(turned !== null)
+    this.heatmap.setDiagonalSlide(slidesAlongDiagonal(data, turned))
     this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
     this.refit()
     this.heatmap.regrid(
@@ -9588,6 +9591,19 @@ function watchTheme(onChange: () => void): () => void {
  * ticked contigs, and moving those separators out to the genomes would coarsen
  * a picture nobody asked to have coarsened.
  */
+/**
+ * Whether a sideways scroll over a block slides along its diagonal (see
+ * `HeatmapView.setDiagonalSlide`): where the diagonal is in the picture — its
+ * rows and its columns share a stretch of bins — and the block is square, not
+ * turned into a band whose diagonal already runs across the screen.
+ */
+export function slidesAlongDiagonal(data: Pick<MatrixResult, 'rowExtent' | 'colExtent'>, turned: RotatedBlock | null): boolean {
+  if (turned !== null) return false
+  const [r0, r1] = data.rowExtent
+  const [c0, c1] = data.colExtent
+  return Math.max(r0, c0) < Math.min(r1, c1)
+}
+
 export function separatorsFor(data: MatrixResult): SeparatorSet {
   const toSeparators = (groups: AxisGroup[]): Separator[] =>
     groups.map((group) => ({ at: group.start, label: group.label }))

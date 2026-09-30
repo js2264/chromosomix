@@ -1599,7 +1599,13 @@ colormap is selectable; keyboard pan and zoom are supported.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
 Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
-is and what they already meant over this app's own tracks. It used to be left to the page so that the
+is and what they already meant over this app's own tracks — and on a map, **along its diagonal**:
+rows and columns together, by the same distance, so the diagonal stays where it is on the screen
+and the picture moves down the genome under it, as the reference editor's stage (§27.3) has always
+slid. A slide that took the columns alone carried a cis map's diagonal off the side of the picture
+within a screen. Along the columns alone where there is no diagonal to follow: over a turned band
+(§17), whose diagonal already runs across the screen, and over a block of two stretches that share
+no bins — a trans block, two genomes. It used to be left to the page so that the
 platform's back-and-forward swipe would work over a map as it does over the rest of a document; that
 is the wrong trade over the one element a reader navigates *by* sliding, and the swipe still works
 everywhere outside the picture. Over a lane stack it means the same thing as over the map, because a
