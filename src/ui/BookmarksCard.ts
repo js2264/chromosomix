@@ -286,8 +286,12 @@ export class BookmarksCard {
     this.say(`${file.name}: ${parts.join(', ')}.`)
   }
 
-  /** One line under the list, or none. Cleared by the next thing that happens. */
-  private say(message: string | null): void {
+  /**
+   * One line under the list, or none. Cleared by the next thing that happens.
+   * Public for the one thing only the session knows: that a bookmark's place
+   * is set aside by the edit the map is drawn through (§27.7).
+   */
+  say(message: string | null): void {
     this.note.textContent = message ?? ''
     this.note.classList.toggle('hidden', message === null)
   }

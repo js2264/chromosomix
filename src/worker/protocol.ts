@@ -19,6 +19,15 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import type { ReferenceEdit } from '../genome/edit'
+import type { FileCorner } from '../edit/corners'
+import type { GridLayout } from '../edit/grid'
+import type { WindowRead } from '../edit/paint'
+import type { RefinedPoint, RefinePoint } from '../edit/refine'
+import type { Expected } from '../edit/method'
+import type { SequenceEvidence } from '../edit/sequenceEvidence'
+import type { Suggested } from '../edit/suggest'
+import type { PictureContacts } from '../metacooler/picture'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
@@ -257,6 +266,14 @@ export interface McoolExport {
   rungs: number[]
 }
 
+/** A map lifted through an edit of the reference (§27.8): its bytes, and what was left out. */
+export interface LiftedExport extends McoolExport {
+  /** Contacts written at the finest rung. */
+  contacts: number
+  /** Rungs of the file not written, finest first, and why. */
+  skipped: Array<{ rung: number; why: string }>
+}
+
 /** What an import actually did, for the info panel and the status line. */
 export interface PairsImportSummary {
   base: number
@@ -389,6 +406,12 @@ export interface OpenResult {
   contacts: number | null
   /** Present only when this map was imported from a `.pairs` (§3.7). */
   pairs?: PairsImportSummary
+  /**
+   * What became of the edit the open asked for (§27.7): `null` where the map is
+   * drawn through it, the reason where it is not — an edit made on another
+   * assembly, or a container it is not yet drawn on. Absent where none was asked.
+   */
+  edit?: { refusal: string | null }
   sourceKind: SourceKind
 }
 
@@ -720,6 +743,83 @@ export interface ResampleResult {
   census: Census | null
 }
 
+/**
+ * The stage's whole-genome picture (§27.9): every contact of a map at up to
+ * 16,384 cells a side, one byte a cell, in the file's order — see
+ * `metacooler/picture.ts` for how it is read and what a byte means.
+ */
+export interface PictureResult {
+  /** The rung it was read from, as `OpenResult.entries` names it; `null` for the open map. */
+  rung: string | null
+  /** Base pairs a cell a side: the rung's bin size times {@link stride}. */
+  binsize: number
+  /** Bins of that rung a cell a side. */
+  stride: number
+  /** Cells a side. */
+  n: number
+  /** The sequences, in file order, each with the cells it spans. */
+  sequences: Array<{ name: string; length: number; firstCell: number; cells: number }>
+  /** The picture and the pyramid over it, finest first: upper triangles. */
+  levels: Array<{ n: number; cells: Uint8Array }>
+  /** The base-10 logs bytes `1` and `255` stand for. */
+  low: number
+  high: number
+  /** The range the picture opens at, in base-10 logs. */
+  vmin: number
+  vmax: number
+  /** Whether the values are balanced, or the raw column. */
+  balanced: boolean
+  /** Stored pixels walked. */
+  pixels: number
+  /**
+   * The finest bins, in base pairs, this map is deep enough to show, from the
+   * picture's rung (`metacooler/picture.ts`, `depthFloor`): a window is never
+   * read finer (§27.9).
+   */
+  least?: number
+  /**
+   * What the method that proposes edits weighs (§27.5), from the same pass: the
+   * contacts as numbers, what the map is expected to hold, and the corners of
+   * the file in its own order. Absent where the request did not ask for them.
+   */
+  method?: { contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
+  /**
+   * Where the request asked the worker to **keep** what the method weighs
+   * rather than send it: the picture's id, which a `suggest` request names —
+   * tens of megabytes held where the suggestions are counted, off the stage's
+   * thread (§27.12), in place of {@link method}.
+   */
+  methodKept?: number
+}
+
+/** One side of a stage window: where it begins and ends in the edited assembly. */
+export interface StageWindowSide {
+  from: { sequence: string; bp: number }
+  to: { sequence: string; bp: number }
+}
+
+/**
+ * Where one genome's contigs, and the contigs of the others, belong by their
+ * contacts (§27.10): a pass over every stored pixel of a metagenome, raw
+ * counts, a contig's contacts with itself left out.
+ */
+export interface GenomeLinksResult {
+  /**
+   * Each contig of the genome's edit: its contacts with every other contig,
+   * with the edit's own, and with the genomes the most of the rest are with,
+   * most first — `__unbinned__` among them, by that name.
+   */
+  inside: Array<{ contig: string; total: number; own: number; partners: Array<{ genome: string; contacts: number }> }>
+  /**
+   * Contigs of other genomes, and of none, in contact with the edit's: the
+   * contacts with it and with every contig, the largest share first, at most
+   * a hundred.
+   */
+  outside: Array<{ contig: string; genome: string; length: number; contacts: number; total: number }>
+  /** Stored pixels walked. */
+  pixels: number
+}
+
 export interface StatsResult {
   /** Everything the byte source has fetched since the file was opened. */
   total: SourceStats
@@ -747,8 +847,14 @@ export interface ResultMap {
   validateDeep: DeepValidation
   stats: StatsResult
   exportMcool: McoolExport
+  exportLifted: LiftedExport
   resample: ResampleResult
   contacts: { total: number | null }
+  picture: PictureResult
+  stageWindow: WindowRead | null
+  suggest: Suggested
+  refine: Array<RefinedPoint | null>
+  genomeLinks: GenomeLinksResult
   cancel: null
   close: null
 }
@@ -760,12 +866,34 @@ export type RequestKind = keyof ResultMap
 // ---------------------------------------------------------------------------
 
 export type WorkerRequest =
-  | { id: number; kind: 'open'; uri: string; source: SourceSpec; binning?: PairsBinning }
+  | {
+      id: number
+      kind: 'open'
+      uri: string
+      source: SourceSpec
+      binning?: PairsBinning
+      /**
+       * Whether the multi-genome containers are read — the page's *dev
+       * features* switch (§29), stamped on every open by the client, since a
+       * worker cannot read `localStorage`. Absent reads them.
+       */
+      metacool?: boolean
+      /**
+       * An edit of the reference to draw the map through (§27.7): the file is
+       * opened as it is, then presented as the edited assembly — its sequences,
+       * its bins, its pixels carried to where they land (`metacooler/lens.ts`) —
+       * and so is every rung opened for a zoom after it. Sent only while the dev
+       * features are on (§29), and only for an edit that changes something.
+       */
+      edit?: ReferenceEdit
+    }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
   // progress and its own cancel, and because a reader who cancelled the
   // download still has the map.
   | { id: number; kind: 'exportMcool' }
+  /** The open map lifted through an edit of its reference, every rung, as an `.mcool` (§27.8). */
+  | { id: number; kind: 'exportLifted'; edit: ReferenceEdit }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
   | { id: number; kind: 'cells' }
@@ -943,6 +1071,83 @@ export type WorkerRequest =
    */
   | { id: number; kind: 'contacts' }
   | { id: number; kind: 'stats' }
+  /**
+   * The stage's whole-genome picture (§27.9), at the finest rung of the ladder
+   * that fits `cells` a side — pooled a few bins a cell where none does.
+   */
+  | {
+      id: number
+      kind: 'picture'
+      cells?: number
+      balance?: boolean
+      value?: string
+      method?: boolean
+      /**
+       * The sequences to draw, by name, where not all of them: one genome of a
+       * metagenome and the contigs brought into it (§27.10). The rest of the
+       * file is left out of the picture and of what the method weighs.
+       */
+      contigs?: string[]
+      /**
+       * Keep what the method weighs here, for `suggest` requests, rather than
+       * send it (`PictureResult.methodKept`). The last picture kept is the one
+       * kept.
+       */
+      keep?: boolean
+    }
+  /**
+   * A window of the stage's map read finer than its picture (§27.9): the rung
+   * whose bins are about `binsize`, drawn through `edit`, over the stretch of
+   * the edited assembly each side names. `key` names the edit, so the map
+   * drawn through it is kept while the edit stands. Answered `null` where no
+   * rung is finer than `coarser`, the picture's own cell.
+   */
+  | {
+      id: number
+      kind: 'stageWindow'
+      edit: ReferenceEdit
+      key: string
+      binsize: number
+      coarser: number
+      rows: StageWindowSide
+      cols: StageWindowSide
+      balance: boolean
+    }
+  /**
+   * A suggestion's points placed again at the finer rungs (§27.5): each read
+   * around, through the stage's edit, at every rung from the picture's `cell`
+   * down to `least`, the finest bin the map is deep enough to show. One answer
+   * a point, in order: `null` where the first rung already could not.
+   */
+  | {
+      id: number
+      kind: 'refine'
+      edit: ReferenceEdit
+      points: RefinePoint[]
+      cell: number
+      least: number
+      balance: boolean
+    }
+  /**
+   * The suggestions for an edit (§27.5), counted here against what the method
+   * weighs of the picture `picture` names — kept by its read — so the stage's
+   * thread stays with the hand (§27.12).
+   */
+  | {
+      id: number
+      kind: 'suggest'
+      picture: number
+      edit: ReferenceEdit
+      layout: GridLayout
+      weights?: number[]
+      evidence?: SequenceEvidence
+    }
+  | {
+      id: number
+      kind: 'genomeLinks'
+      /** The contigs of one genome's edit, by name (§27.10). */
+      contigs: string[]
+    }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

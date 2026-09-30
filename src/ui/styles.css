@@ -2183,6 +2183,7 @@ p {
    button says the opposite of what it is. */
 .btn-toggle[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-pressed='true']:not(:disabled),
+.btn-switch[aria-pressed='true']:not(:disabled),
 .btn-icon[aria-expanded='true']:not(:disabled),
 .ann-flip.is-on,
 .structure-select.is-on,
@@ -5359,6 +5360,79 @@ canvas.is-frozen {
   border-top: 1px solid var(--border);
   padding-top: 0.6rem;
   user-select: text;
+}
+
+/* The dev features switch (§29.1), under the version picker and set off from
+   it by a rule: it is the one control in a dialog of facts, and the one trace a
+   dev feature leaves anywhere a reader looks. */
+.about-dev {
+  border-top: 1px solid var(--border);
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+
+.about-dev-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.about-dev-hint {
+  margin: 0.3rem 0 0;
+  font-size: var(--step--1);
+  color: var(--text-faint);
+}
+
+/* A slider: the one toggle in the application drawn as a track and a knob.
+
+   It is lit by the rule that lights every toggle (§26.3) — border, fill and
+   colour, from `aria-pressed` — and the knob is `currentColor`, so on is the
+   knob in the accent, moved across. The slider is how it is drawn, never a
+   second way of saying it is on. */
+.btn-switch {
+  position: relative;
+  flex: none;
+  width: 2.2rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-faint);
+}
+
+.btn-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
+  transition: left 120ms ease;
+}
+
+.btn-switch[aria-pressed='true'] .btn-switch-knob {
+  left: calc(100% - 1rem);
+}
+
+/* Pointed at while off, the knob darkens rather than taking the accent: an
+   accent knob on the left read as half on, and the accent means *on* here and
+   nothing else (§26.5). */
+.btn-switch:hover:not(:disabled):not([aria-pressed='true']) {
+  border-color: var(--text-dim);
+  background: var(--bg-muted);
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-switch-knob {
+    transition: none;
+  }
 }
 
 /* The version picker, directly under that stamp and deliberately continuous
@@ -10682,7 +10756,9 @@ span.deck-name {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  padding: 0.6rem 0.8rem;
+  /* Room at the foot for the toggle that floats over it, so the last line
+     scrolls clear of it. */
+  padding: 0.6rem 0.8rem 2.6rem;
   border-left: 1px solid var(--border);
   overflow-y: auto;
   font-size: calc(var(--step--1) * var(--text-scale, 1));
@@ -12702,4 +12778,857 @@ span.deck-name {
 }
 .structure-settings .structure-range {
   width: 100%;
+}
+
+/* The stage that edits the reference (§27.3, `edit/EditStage.ts`): the map
+   drawn through the edit, a pieces bar on two edges, the lanes under it, and a
+   sidebar of what is selected, what was done and what the assembly now is. */
+.modal-edit {
+  width: min(98vw, 124rem);
+  height: 94vh;
+  max-height: 94vh;
+}
+
+/* Which genome of a metagenome the stage edits (§27.10): a filter and a list,
+   longest first, each row a button. */
+.modal-genome-picker {
+  width: min(96vw, 40rem);
+}
+.genome-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+}
+.genome-picker-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.genome-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(60vh, 32rem);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.genome-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 6.5rem 7.5rem;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.genome-picker-row:hover,
+.genome-picker-row:focus-visible {
+  background: var(--bg-sunken);
+  outline: none;
+}
+.genome-picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.genome-picker-size,
+.genome-picker-contigs {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.genome-picker-steps {
+  color: var(--accent);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  text-align: right;
+}
+.genome-picker-none {
+  padding: 0.4rem 0.6rem;
+  color: var(--text-dim);
+}
+@media (max-width: 36rem) {
+  .genome-picker-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .genome-picker-contigs,
+  .genome-picker-steps {
+    display: none;
+  }
+}
+.edit-stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.edit-tools {
+  display: flex;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+.edit-readout {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.edit-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.edit-plot > canvas {
+  position: absolute;
+}
+.edit-picture {
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.edit-overlay {
+  cursor: crosshair;
+  touch-action: none;
+  outline: none;
+}
+.edit-overlay.is-panning {
+  cursor: grab;
+}
+/* A suggestion's end a drag would take hold of, and one being dragged (§27.6). */
+.edit-overlay.is-on-end {
+  cursor: grab;
+}
+.edit-overlay.is-adjusting {
+  cursor: grabbing;
+}
+.edit-lane {
+  pointer-events: none;
+}
+/* A pieces bar is a handle on its pieces (§27.4): pressed, dragged, turned. */
+.edit-bar {
+  cursor: grab;
+  touch-action: none;
+}
+.edit-bar.is-dragging {
+  cursor: grabbing;
+}
+.edit-lane-band {
+  position: absolute;
+  background: var(--accent-soft);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.edit-lane-band.hidden {
+  display: none;
+}
+.edit-status {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text-dim);
+}
+.edit-status.hidden {
+  display: none;
+}
+.edit-status-bar {
+  width: 18rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.edit-status-fill {
+  height: 100%;
+  background: var(--accent);
+}
+/* The stage's sidebar as a panel column (§27.3): its cards stand on the sunken
+   ground as the panels' cards do — bordered and raised — so that each reads as
+   ending where the next begins, which a gap of white between headings did not
+   say. */
+.stage-side.edit-side {
+  background: var(--bg-sunken);
+}
+.edit-side-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.edit-side-body p,
+.edit-side-body button {
+  font-size: inherit;
+}
+.edit-modes {
+  display: flex;
+  gap: 0.25rem;
+}
+.edit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem 0.7rem;
+  background: var(--bg-raised);
+}
+.edit-card-head {
+  margin: 0;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.edit-card-sub {
+  margin: 0.4rem 0 0.1rem;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.edit-empty,
+.edit-hint,
+.edit-note {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.edit-locus {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.edit-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.edit-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.edit-act .kbd {
+  margin-left: 0.1rem;
+}
+.edit-box-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.edit-box-key {
+  flex: 0 0 4.6rem;
+  color: var(--text-dim);
+}
+.edit-history,
+.edit-sequences,
+.edit-aside-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.edit-history {
+  max-height: 15rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.edit-history-button,
+.edit-sequence {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.22rem 0.5rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.edit-history-button:hover,
+.edit-sequence:hover {
+  background: var(--bg-sunken);
+}
+.edit-history-row.is-current > .edit-history-button {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.edit-history-row.is-undone > .edit-history-button {
+  color: var(--text-faint);
+}
+.edit-history-n {
+  flex: 0 0 1.4rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.edit-sequences {
+  max-height: 18rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.edit-sequence {
+  display: grid;
+  /* Wide enough for `○ 13 pieces` on one line. */
+  grid-template-columns: minmax(0, 1fr) auto 6.2rem;
+  align-items: baseline;
+}
+.edit-sequence-pieces {
+  white-space: nowrap;
+}
+.edit-sequence.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.edit-sequence-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-sequence-length,
+.edit-sequence-pieces {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* A row: the sequence, and the pencil that names it — shown on the row's
+   hover and focus, so a list of sixty contigs is not sixty pencils (§27.3). */
+.edit-sequence-row {
+  display: flex;
+  align-items: center;
+}
+/* A sequence's grip (§27.4): what drags it to another place in the order — a
+   handle, not a button: no box of its own, only the dots, brighter under the
+   pointer and outlined when the keys are on it. */
+.edit-sequence-grip {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.1rem 0 0.35rem;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
+}
+.edit-sequence-grip:hover {
+  color: var(--text);
+}
+.edit-sequence-grip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+.edit-sequence-grip:active {
+  cursor: grabbing;
+}
+.edit-sequence-row.is-lifted {
+  opacity: 0.55;
+}
+/* Where it would go: a line across the list, between the two rows. */
+.edit-sequence-row.is-drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.edit-sequence-row.is-drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.edit-sequence-row > .edit-sequence {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.edit-sequence-rename {
+  flex: none;
+  margin-right: 0.25rem;
+  opacity: 0;
+}
+.edit-sequence-row:hover > .edit-sequence-rename,
+.edit-sequence-rename:focus-visible {
+  opacity: 1;
+}
+.edit-rename-input {
+  width: 100%;
+  margin: 0.15rem 0.3rem;
+}
+/* The picture's size, on its card (§27.9). */
+.edit-cells {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  color: var(--text-dim);
+}
+/* A card's heading with one act beside it. */
+.edit-card-headrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.edit-card-act {
+  flex: none;
+  padding: 0 0.4rem;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.edit-aside-list > li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.5rem;
+}
+.edit-aside-locus {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.edit-aside-why {
+  color: var(--text-dim);
+}
+/* What was set aside, put back (§27.4): quiet, as a row's own act is. */
+.edit-aside-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
+}
+.edit-history-by {
+  /* On the step's first line, whatever its words wrap to: a chip stretched to
+     a two-line row is a blot. */
+  align-self: flex-start;
+  flex: none;
+  margin-left: auto;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.5;
+}
+
+/* One genome of a metagenome (§27.10): what its contacts say about where its
+   contigs belong, a row a contig, the way to send it or bring it in at the
+   row's end. */
+.edit-genome-sub {
+  margin: 0.4rem 0 0;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.edit-genome-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.edit-genome-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name act'
+    'share act';
+  column-gap: 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.edit-genome-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-genome-share {
+  grid-area: share;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-genome-act {
+  grid-area: act;
+  white-space: nowrap;
+}
+
+/* The export card (§27.8): a bordered button per format, the way back in,
+   and a line saying what was written or why not. */
+.edit-export-files,
+.edit-export-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.edit-export-read {
+  margin-top: 0.1rem;
+}
+.edit-export-track {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.edit-export-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.edit-export-status:empty {
+  display: none;
+}
+
+/* The rail (§27.3): each suggestion's label at the height of what it
+   concerns, beside the map, with a leader to a bracket that spans it. */
+.edit-rail {
+  position: absolute;
+  z-index: 2;
+}
+.edit-rail-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.edit-rail-labels {
+  position: absolute;
+  inset: 0;
+}
+.edit-rail-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0 0.4rem 0 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  font: inherit;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.edit-rail-label:hover,
+.edit-rail-label.is-lit,
+.edit-rail-label:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.edit-rail-label.is-current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.edit-rail-number,
+.edit-suggestion-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Review (§27.6): where it is, and what its keys do. */
+.edit-review {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.edit-review.hidden {
+  display: none;
+}
+.edit-review-where {
+  flex: none;
+  white-space: nowrap;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.edit-review-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-review-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.edit-review-state {
+  margin-right: 0.4rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* The list of suggestions, best first. */
+.edit-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.edit-suggestion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.edit-suggestion.is-lit {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.edit-suggestion.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.edit-suggestion-main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.edit-suggestion-main > svg {
+  color: var(--accent);
+}
+.edit-suggestion.is-lit .edit-suggestion-main,
+.edit-suggestion-main:hover {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+.edit-suggestion-words {
+  overflow-wrap: anywhere;
+}
+.edit-suggestion-confidence {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.edit-suggestion-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0 0.5rem 0.35rem 2.1rem;
+}
+.edit-suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.edit-chip {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.6;
+}
+/* The chip that says a suggestion's ends were dragged is the way back too (§27.6). */
+.edit-chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+.edit-chip-button:hover {
+  color: var(--accent);
+}
+.edit-suggestion-acts {
+  display: flex;
+  gap: 0.25rem;
+}
+.edit-suggestion-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+}
+.edit-declined > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.edit-declined-list {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.edit-declined-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.1rem 0 0.1rem 0.5rem;
+}
+.edit-declined-words {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+/* The word on the reference (§27.3), before the resolution: it takes the free
+   space the resolution would otherwise take, and the two read on from it. */
+.crumb-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-left: 0.75rem;
+  flex: 0 0 auto;
+}
+.breadcrumb > .crumb-reference {
+  margin-left: auto;
+}
+.breadcrumb > .crumb-reference + .crumb-res,
+.breadcrumb > .crumb-reference + .crumb-contacts {
+  margin-left: 0;
+}
+.crumb-reference-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+.crumb-reference-revert.hidden {
+  display: none;
+}
+
+/* A menu opened from inside a dialog — the edit stage's right click, its
+   reasons for setting a stretch aside — sits over the dialog it came from. */
+.modal-backdrop ~ .crumb-menu {
+  z-index: 110;
+}
+
+/* The dot plot as a view of its own (§28.2): the picture, a button back to
+   the whole of both sets once it is zoomed, and a line under it saying what the
+   pointer is on — the streak, on both axes, or the place. */
+.dotplot-host {
+  position: relative;
+}
+.dotplot-canvas {
+  cursor: grab;
+  touch-action: none;
+}
+.dotplot-canvas.is-dragging {
+  cursor: grabbing;
+}
+.dotplot-canvas.is-on-streak {
+  cursor: pointer;
+}
+.dotplot-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dotplot-whole {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+}
+.dotplot-readout {
+  min-height: 1.5em;
+  padding: 0.2rem 0.1rem 0;
+  color: var(--text-dim);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+/* The stage's corner dot plot (§27.3): over the map's upper triangle, which the
+   lower one mirrors, anchored by its right edge so that folded to its button it
+   stands where the plot's corner does. */
+.edit-dotplot {
+  position: absolute;
+  z-index: 3;
+  transform: translateX(-100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+}
+.edit-dotplot-head {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.edit-dotplot-picker {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.edit-dotplot-canvas {
+  display: block;
+  cursor: default;
+}
+.edit-dotplot-canvas.is-on-streak {
+  cursor: pointer;
+}
+.edit-dotplot-caption {
+  max-width: 100%;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.3;
+}
+.edit-dotplot.is-folded {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.edit-dotplot.is-folded > :not(.edit-dotplot-open),
+.edit-dotplot:not(.is-folded) > .edit-dotplot-open {
+  display: none;
 }

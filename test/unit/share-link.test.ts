@@ -113,6 +113,20 @@ describe('a session in a fragment', () => {
     expect(back?.createdAt).toBe(config.createdAt)
   })
 
+  it('carries the edit of the reference, which a recipient opens drawn through (§27.2)', async () => {
+    const edit = {
+      version: 1,
+      original: { names: ['I', 'II'], lengths: [1000, 600] },
+      history: [
+        { step: { op: 'invert', sequence: 'I', from: 100, to: 300 }, by: 'reader', when: 1 },
+        { step: { op: 'join', a: 'I', aEnd: 'end', b: 'II', bEnd: 'start', gap: 100 }, by: 'auto', when: 2 },
+      ],
+      cursor: 2,
+    }
+    const back = decoded(await decodeShare(await encodeShare(configOf({ edit } as Partial<SessionConfig>))))
+    expect(back?.edit).toEqual(edit)
+  })
+
   it('travels as a workspace of one tab, which is the file’s own format', async () => {
     // One parser rather than two. The wrapper costs a few dozen bytes after
     // deflate and buys a link that is refused by the same code a file is —

@@ -26,6 +26,7 @@ import { icon, iconButton } from '../ui/icons'
 import { stageDialog } from '../ui/StageDialog'
 import type { Modal } from '../ui/Modal'
 import { matrixFigure, type PlotFigure } from '../ui/analysisPlots'
+import { dotplotFigure } from '../ui/dotplotFigure'
 import { drawnAsChart } from './matrixOption'
 import { chartFigure, themeOf, type ChartFigure } from './echartsFigure'
 import { figureSettings, type FigureSettings } from './settings'
@@ -102,6 +103,14 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     // A figure built while the dialog is up takes the dialog's height, not the
     // drawer column's — the reset that rebuilds it must not shrink it.
     const fill = dialog !== null
+    if (built.kind === 'matrix' && built.output.streaks !== undefined) {
+      // A dot plot on screen is a view of its own (§28.2): its streaks drawn
+      // as lines at any zoom and read under the pointer. Its cells stay what an
+      // export draws.
+      const figure = dotplotFigure(built.output.streaks)
+      figure.setFill?.(fill)
+      return figure
+    }
     if (built.kind === 'matrix') {
       // The painter takes the *styled* output, because it reads the colours and
       // the scale off the output it is given; the chart takes the raw one and
@@ -218,6 +227,9 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
           title: 'Both axes back to the whole of the data — the wheel zooms, this undoes it',
         }),
       )
+    } else if (spec.kind === 'matrix' && spec.output.streaks !== undefined) {
+      // A dot plot on screen is its streaks, red and blue whatever the colours
+      // of its cells (§28.2): a colour picker there would change nothing seen.
     } else if (spec.kind === 'matrix') {
       const maps = el('select', { class: 'select select-tight' })
       maps.appendChild(el('option', { value: '', text: 'auto' }))

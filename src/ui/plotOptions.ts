@@ -12,6 +12,7 @@
  */
 
 import type { PlotOptions } from '../render/heatmap'
+import { devFeature } from '../state/devFeatures'
 import type { IconName } from './icons'
 
 /**
@@ -204,7 +205,11 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   },
   dividers: {
     label: 'dividers',
-    hint: 'Contig and genome boundaries, as the metacooler show command draws them.',
+    // Genomes, and the command line that draws them, are the multi-genome
+    // format's — a dev feature (§29).
+    hint: devFeature('metacool')
+      ? 'Contig and genome boundaries, as the metacooler show command draws them.'
+      : 'Sequence boundaries, drawn as lines across the map.',
   },
   breaks: {
     label: 'breaks',

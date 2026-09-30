@@ -109,7 +109,12 @@ export interface FeatureColouring {
    * what puts a ten-thousand-box lane back on the single-path fast case
    * `drawSegments` keeps for it.
    */
-  colourOf: ((index: number) => string) | undefined
+  /**
+   * A feature's colour, by its index — and whether it is placed on a reversed
+   * piece of an edited sequence (§27.2), where a colour that says *strand* says
+   * the strand it has there.
+   */
+  colourOf: ((index: number, reversed?: boolean) => string) | undefined
   key: FeatureKey
   /**
    * The colour the lane's **name** should be chipped in.
@@ -173,7 +178,10 @@ export function featureColouring(
     const colours = strandPalette(colour)
     const named: Record<number, string> = { 0: 'unstranded', 1: 'forward', [-1]: 'reverse' }
     return {
-      colourOf: (index) => colours[set.strand[index] > 0 ? 0 : set.strand[index] < 0 ? 1 : 2],
+      colourOf: (index, reversed) => {
+        const strand = reversed === true ? -set.strand[index] : set.strand[index]
+        return colours[strand > 0 ? 0 : strand < 0 ? 1 : 2]
+      },
       key: {
         field,
         // In band order, which is the order they are drawn down the lane — so

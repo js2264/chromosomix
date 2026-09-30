@@ -20,6 +20,7 @@ import { GenomesView } from '@/ui/stores/GenomesView'
 import type { StoreHost } from '@/ui/stores/host'
 import { customStore, frontById } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
+import { resetDevFeatures } from '@/state/devFeatures'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -67,6 +68,20 @@ function serving(bodies: Record<string, string>): string[] {
 }
 
 describe('the lab’s gallery', () => {
+  // Every figure, the metagenome's included, is what the gallery draws with
+  // the dev features switch on; the last case here is what it draws with it off.
+  beforeEach(() => resetDevFeatures(true))
+  afterEach(() => resetDevFeatures())
+
+  it('draws no card and no file of the multi-genome format while dev features are off (§29)', () => {
+    resetDevFeatures(false)
+    const front = frontById('rsg')
+    const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host([]) })
+    document.body.appendChild(view.el)
+    expect(all(view.el, '.gallery-card')).toHaveLength(3)
+    expect(view.el.textContent ?? '').not.toMatch(/\.m?metacool(?!er)|mock (microbial )?community|\bMAGs?\b/i)
+  })
+
   it('draws one card per figure: the name and its one verb, the chips, the line, and its files under a fold', () => {
     const opened: StoreEntry[] = []
     const front = frontById('rsg')

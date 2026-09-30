@@ -97,7 +97,10 @@ export const runCisTrans: TaskRunner = async (job) => {
     job.note(
       'This file has more sequence pairs with contact than the pair table holds, so the ranked ' +
         'list below is of the pairs seen first rather than of the strongest. The per-sequence ' +
-        'rows are unaffected. Tick fewer sequences, or read this one as a metagenome.',
+        // Not *or read it as a metagenome*: this runs in a worker, which cannot
+        // know whether the page shows that format (§29), and the advice is a
+        // file the reader would have to make rather than a thing they can do.
+        'rows are unaffected. Tick fewer sequences.',
     )
   }
   if (accumulator.dropped > 0) {

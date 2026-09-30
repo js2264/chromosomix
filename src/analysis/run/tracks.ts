@@ -15,6 +15,7 @@ import { runGroupSignal } from './groupsignal'
 import { runMetaplot } from './metaplot'
 import { runMotif } from './motif'
 import { runComposition } from './composition'
+import { runDotplot } from './dotplot'
 import { runOriTer } from './oriter'
 import { runOverlap } from './overlap'
 import { runPeaks } from './peaks'
@@ -24,6 +25,7 @@ export const TRACK_RUNNERS: Record<string, TrackTaskRunner> = {
   motif: runMotif,
   peaks: runPeaks,
   composition: runComposition,
+  dotplot: runDotplot,
   oriter: runOriTer,
   metaplot: runMetaplot,
   trackcorr: runTrackCorrelation,

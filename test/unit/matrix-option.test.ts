@@ -89,6 +89,12 @@ describe('which matrices the chart draws', () => {
     expect(drawnAsChart(matrix({ nrows: 1, ncols: MATRIX_CHART_CELLS }))).toBe(true)
   })
 
+  it('leaves a picture read like a map to the painter, however few its cells', () => {
+    // A dot plot's axes are its sequences end to end, which the painter marks
+    // and a category axis cannot (§28).
+    expect(drawnAsChart(matrix({ nrows: 60, ncols: 60, large: true }))).toBe(false)
+  })
+
   it('refuses an empty one rather than drawing an empty chart', () => {
     expect(drawnAsChart(matrix({ nrows: 0, ncols: 0, values: new Float32Array(0) }))).toBe(false)
   })

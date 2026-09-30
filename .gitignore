@@ -38,7 +38,11 @@ data/*.cool
 data/*.mcool
 data/*.pairs.gz
 data/*.txt
+data/*.fa
+data/*.gtf
 data/*.tsv
+# Written by scripts/make-scrambled-demo.ts for the stage's gallery.
+data/scrambled/
 
 # Scratch checkouts an agent works in. A worktree is a checkout of *this*
 # repository, so `git add -A` at the top level offers to commit it as an

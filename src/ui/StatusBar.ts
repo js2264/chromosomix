@@ -17,6 +17,7 @@
  */
 
 import { icon } from './icons'
+import { devFeature } from '../state/devFeatures'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import type { DeepValidation, StatsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
@@ -254,10 +255,14 @@ export class StatusBar {
     this.validationDetail.replaceChildren(
       el('p', {
         class: 'hint',
-        text:
-          'Light checks ran at open: attributes, group presence, table lengths, the /chroms ' +
-          'soft link. Click to scan every pixel, as the metacooler check --deep command does — ' +
-          'cheap locally, slow over the network.',
+        // The soft link and the command are the multi-genome format's, a dev
+        // feature (§29).
+        text: devFeature('metacool')
+          ? 'Light checks ran at open: attributes, group presence, table lengths, the /chroms ' +
+            'soft link. Click to scan every pixel, as the metacooler check --deep command does — ' +
+            'cheap locally, slow over the network.'
+          : 'Light checks ran at open: attributes, group presence, table lengths. Click to scan ' +
+            'every pixel — cheap locally, slow over the network.',
       }),
     )
   }

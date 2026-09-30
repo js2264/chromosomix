@@ -29,6 +29,7 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
+import { devFeature } from '../state/devFeatures'
 import type { AnnotationEntry } from '../annotations/types'
 import type { MetadataIndex } from '../annotations/metaIndex'
 import {
@@ -116,9 +117,12 @@ export class MetadataCard {
       ),
     )
     this.picker.title =
-      'Columns this file carries about its own genomes, sequences and bins. What is offered is ' +
-      'what the view on screen can show: a column is drawn where its own table is no finer than ' +
-      'the axis.'
+      // Genomes are the multi-genome format's, a dev feature (§29).
+      (devFeature('metacool')
+        ? 'Columns this file carries about its own genomes, sequences and bins. '
+        : 'Columns this file carries about its own sequences and bins. ') +
+      'What is offered is what the view on screen can show: a column is drawn where its own ' +
+      'table is no finer than the axis.'
 
     this.list.addEventListener('focusout', () => {
       setTimeout(() => {

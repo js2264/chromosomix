@@ -9,6 +9,7 @@
 
 import { registerThread } from '../perf/threads'
 import { withAccess } from '../s3/attach'
+import { devFeature } from '../state/devFeatures'
 import { spawnReaderWorker } from './spawn'
 import {
   reviveError,
@@ -105,7 +106,7 @@ export class ReaderClient {
     // what keeps the dozen construction sites ignorant of credentials, and what
     // makes a key edited mid-session apply to the next request rather than to
     // the next reload.
-    const message = withAccess({ ...payload, id }) as WorkerRequest
+    const message = withDevGate(withAccess({ ...payload, id }) as WorkerRequest)
     return new Promise<ResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)
@@ -142,4 +143,18 @@ export class ReaderClient {
 /** `true` when a rejection is a user cancellation rather than a failure. */
 export function isCancellation(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
+}
+
+/**
+ * Stamp the page's *dev features* switch on an open (§29).
+ *
+ * Here for the reason credentials are stamped here: an open is issued from half
+ * a dozen places — a tab, a deck's cell, the compare card — and a worker cannot
+ * read `localStorage`, so the one road every open takes is where the answer
+ * joins it. Only `open` carries it; every later request is about a map that
+ * already passed.
+ */
+function withDevGate(message: WorkerRequest): WorkerRequest {
+  if (message.kind !== 'open') return message
+  return { ...message, metacool: devFeature('metacool') }
 }

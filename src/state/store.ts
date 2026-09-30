@@ -50,6 +50,7 @@
  */
 
 import { formatUri, parseUri } from '../uri'
+import { devFeature } from './devFeatures'
 import { routeOf } from '../browse/route'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
@@ -245,6 +246,13 @@ export function kindOf(uri: string): StoreEntryKind {
   return routeOf(uri) === 'genome' ? 'genome' : 'map'
 }
 
+/** Whether a store row is one of the two multi-genome containers, by its name or its declared format. */
+function isMultiGenomeRow(uri: string, fields: Record<string, string> | undefined): boolean {
+  const format = fields?.['format']
+  if (format !== undefined && /^m?metacool$/i.test(format.trim())) return true
+  return /\.m?metacool$/i.test(parseUriPath(uri).split(/[?#]/)[0])
+}
+
 /** The file half of a URI, without throwing on one that names no file. */
 function parseUriPath(uri: string): string {
   try {
@@ -314,6 +322,11 @@ export function parseStore(text_: string): StoreFile | ConfigRefusal {
     const note = text(entry, 'note')
     const fields = readFields(entry['fields'])
     const tracks = readTracks(entry['tracks'])
+    // A row of the multi-genome format is not offered while that format is a
+    // dev feature that is off (§29): a catalogue row the reader presses and
+    // is refused is the format announcing itself. Dropped like a row with no
+    // address, and for the same reason — one row, not the catalogue.
+    if (!devFeature('metacool') && isMultiGenomeRow(uri, fields)) continue
     entries.push({
       label,
       uri,

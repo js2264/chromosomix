@@ -17,9 +17,16 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
+import { PICTURE_CELLS, depthFloor, depthStride, displayRange, pictureLayout, pictureStride, type PictureContacts } from '../metacooler/picture'
+import { findCorners, type FileCorner } from '../edit/corners'
+import { LensGrid } from '../edit/grid'
+import { METHOD_GATHER, expectedOf, type Expected } from '../edit/method'
+import { REFINE_REACH, REFINE_WINDOW, refineChain, refinePoint, type ReadSquare, type RefinedPoint } from '../edit/refine'
+import { suggest, type Suggested } from '../edit/suggest'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
+import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -50,24 +57,34 @@ import {
   type DeepValidation,
   type GenomesResult,
   type MatrixResult,
+  type LiftedExport,
   type McoolExport,
   type OpenResult,
   type OverviewResult,
   type PairsBinning,
   type PairsImportSummary,
   type PairsProbeResult,
+  type GenomeLinksResult,
+  type PictureResult,
   type ResampleResult,
   type SourceKind,
+  type StageWindowSide,
   type StatsResult,
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
+import type { WindowRead, WindowRun } from '../edit/paint'
 import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { mcoolNameFor } from '../pairs/mcoolName'
 import { writeMcool } from '../pairs/write'
+import type { BinnedPixels } from '../pairs/bin'
+import type { PairsHeader } from '../pairs/format'
+import { liftedTable } from '../edit/liftedContacts'
+import { VERSION } from '../version'
 import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
+import { resolutionLabel } from '../units'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -132,6 +149,40 @@ interface Session {
    * resampled map must not tell.
    */
   resample: ResampleSpec | null
+  /**
+   * The edit of the reference the map is drawn through (§27.7), or `null` for
+   * the file as it is. Held for the reason {@link resample} is: a rung opened
+   * later for a zoom is drawn through it too, or the next zoom out would show
+   * the file's own sequences under the edited names.
+   */
+  lens: ReferenceEdit | null
+  /**
+   * The page's answer about the multi-genome containers (§29), as the open
+   * that made this session carried it, so a sibling rung is opened under the
+   * same one. A rung of a file that passed is a rung of the same file; this is
+   * the second lock on a door the first already shut.
+   */
+  metacool?: boolean
+  /**
+   * What the method weighs of the stage's last picture (§27.5), kept here for
+   * the `suggest` requests that count its suggestions off the stage's thread
+   * (§27.12), under the id of the read that made it.
+   */
+  stageMethod?: { picture: number; contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
+  /**
+   * The rung the stage last read a window of, drawn through its edit (§27.9),
+   * kept while the edit and the rung stand: building the lens is the one part
+   * of a window's read that is not the window's size.
+   */
+  stageWindowMap?: { key: string; map: MetaCooler }
+  /**
+   * Where the finer rungs placed the points the stage asked of them (§27.5),
+   * by the neighbourhood each read covers — the pieces of the edited sequence
+   * around it — so a point an edit elsewhere leaves as it was is not read
+   * again; and the rungs drawn through the edit last asked with.
+   */
+  refinePlaced?: Map<string, { delta: number; binsize: number; support: number } | null>
+  refineMaps?: { fingerprint: string; maps: Map<string, MetaCooler> }
 }
 
 /**
@@ -189,8 +240,9 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       indexed: active.pairs.indexed,
       declaredRecords: active.pairs.declaredRecords,
     })
-    drawnAsSession(active, built)
-    active.rungs.set(rung, built)
+    const seen = throughLens(active, built)
+    drawnAsSession(active, seen)
+    active.rungs.set(rung, seen)
     touchRung(active, rung)
     while (active.recent.length > MAX_RUNGS) {
       const oldest = active.recent.pop()
@@ -198,18 +250,23 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       active.rungs.get(oldest)?.close()
       active.rungs.delete(oldest)
     }
-    return built
+    return seen
   }
   const group = active.mc.entryGroup === '' ? 'entries' : active.mc.entryGroup
   const { path } = parseUri(active.mc.uri)
   let opened: MetaCooler
   try {
-    opened = await MetaCooler.open(`${path}::${group}/${rung}`, active.source)
+    opened = await MetaCooler.open(
+      `${path}::${group}/${rung}`,
+      active.source,
+      active.metacool === undefined ? {} : { metacool: active.metacool },
+    )
   } catch {
     // A rung that will not open is not a reason to fail the read: the open map
     // answers the same question at a different resolution.
     return active.mc
   }
+  opened = throughLens(active, opened)
   drawnAsSession(active, opened)
   active.rungs.set(rung, opened)
   touchRung(active, rung)
@@ -220,6 +277,20 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     active.rungs.delete(oldest)
   }
   return opened
+}
+
+/**
+ * A sibling rung drawn through the session's edit, as the open map is (§27.7).
+ * A rung the edit cannot be drawn on is answered by the open map, which is
+ * what `mapFor` does for a rung that will not open: the same question at
+ * another resolution, rather than the file's own sequences under the edit's names.
+ */
+function throughLens(active: Session, rung: MetaCooler): MetaCooler {
+  if (active.lens === null) return rung
+  const { map, refusal } = MetaCooler.withLens(rung, active.lens)
+  if (refusal === null) return map
+  rung.close()
+  return active.mc
 }
 
 /**
@@ -390,6 +461,114 @@ async function handleExportMcool(id: number): Promise<McoolExport> {
   return { bytes, filename: mcoolNameFor(active.mc.uri), rungs: active.pairs.rungs }
 }
 
+/** The most pixels a lifted `.mcool` gathers across its rungs: a rung that would pass it is left out, finest first. */
+const LIFT_BUDGET = 60_000_000
+
+/**
+ * The open map lifted through an edit of its reference, as an `.mcool` of
+ * every rung the file has (§27.8): each rung opened as the file stores it —
+ * never through the session's own lens, which may be another edit — drawn
+ * through `edit`, and its pixels gathered in the edited assembly's bins.
+ * Rungs finer than the budget allows are left out, and said so.
+ */
+async function handleExportLifted(id: number, edit: ReferenceEdit): Promise<LiftedExport> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const hooks = scanHooks(id)
+  const names = base.entries.length > 0 ? [...base.entries] : ['']
+  // Finest first, as the file lists them.
+  const sized = names.map((name) => ({ name, size: name === '' ? base.binsize : Number(name) })).sort((a, b) => a.size - b.size)
+  const tables = new Map<number, BinnedPixels>()
+  const skipped: Array<{ rung: number; why: string }> = []
+  // Coarsest first, so a budget spent leaves out the finest.
+  let spent = 0
+  for (const { name, size } of [...sized].reverse()) {
+    const rung = name === '' ? base : await openPlainRung(active, name)
+    if (rung === null) {
+      skipped.push({ rung: size, why: 'it would not open' })
+      continue
+    }
+    try {
+      const nnz = rung.nnz ?? 0
+      if (spent + nnz > LIFT_BUDGET) {
+        skipped.push({ rung: size, why: `${nnz.toLocaleString('en-US')} pixels would pass the budget of ${LIFT_BUDGET.toLocaleString('en-US')}` })
+        continue
+      }
+      const { map, refusal } = MetaCooler.withLens(rung, edit)
+      if (refusal !== null) throw new ViewerError('unsupported', refusal, {})
+      const table = await liftedTable(map, {
+        cancelled: hooks.cancelled,
+        onProgress: (done, total) => hooks.onProgress(done, total, `lifting the ${size.toLocaleString('en-US')} bp rung`),
+      })
+      if (table === null) throw abortError()
+      tables.set(size, table)
+      spent += table.nnz
+    } finally {
+      if (rung !== base) rung.close()
+    }
+  }
+  const rungs = [...tables.keys()].sort((a, b) => a - b)
+  if (rungs.length === 0) throw new ViewerError('unsupported', 'No rung of this map could be lifted within the budget.', {})
+  const finest = tables.get(rungs[0]) as BinnedPixels
+  const header: PairsHeader = {
+    version: '',
+    assembly: null,
+    sorted: null,
+    shape: 'upper triangle',
+    contigs: finest.contigs,
+    columns: { chrom1: 1, pos1: 2, chrom2: 3, pos2: 4, strand1: -1, strand2: -1 } as PairsHeader['columns'],
+    text: '',
+  }
+  const bytes = await writeMcool(
+    { header, rungs, tables, indexed: false, declaredRecords: null },
+    {
+      ...hooks,
+      about: {
+        generatedBy: `metacooler-viewer ${VERSION} (lifted through an edit of the reference; unbalanced)`,
+        metadata: (table) => ({
+          'generated-by': `metacooler-viewer ${VERSION}`,
+          'lifted-from': active.mc.uri,
+          'lifted-through': edit.history.slice(0, edit.cursor).map((entry) => entry.step),
+          'contacts-written': table.sum,
+          balanced: false,
+          note:
+            'Raw counts through an edit of the reference: bins moved whole, a stretch set aside left out, a duplicated ' +
+            'one written at each copy. Run `cooler balance` to add a bins/weight column.',
+        }),
+      },
+    },
+  )
+  if (bytes === null) throw abortError()
+  const stem = (parseUri(active.mc.uri).path.split('/').pop() ?? 'map').replace(/\.(m?m?(meta)?cool|hic|pairs(\.gz)?)$/i, '')
+  // One genome's edit is that genome's map alone, and says whose.
+  const genome = edit.original.genome === undefined ? '' : `.${edit.original.genome}`
+  return { bytes, filename: `${stem}${genome}.edited.mcool`, rungs, contacts: finest.sum, skipped }
+}
+
+/** A rung of the open file as the file stores it: no lens, not held — the caller closes it. */
+async function openPlainRung(active: Session, rung: string): Promise<MetaCooler | null> {
+  if (active.pairs !== null) {
+    const table = active.pairs.tables.get(Number(rung))
+    if (table === undefined) return null
+    return MetaCooler.fromPairs({
+      uri: active.mc.uri,
+      header: active.pairs.header,
+      pixels: table,
+      rungs: active.pairs.rungs,
+      indexed: active.pairs.indexed,
+      declaredRecords: active.pairs.declaredRecords,
+    })
+  }
+  const base = active.mc.unlensed ?? active.mc
+  const group = base.entryGroup === '' ? 'entries' : base.entryGroup
+  const { path } = parseUri(base.uri)
+  try {
+    return await MetaCooler.open(`${path}::${group}/${rung}`, active.source, active.metacool === undefined ? {} : { metacool: active.metacool })
+  } catch {
+    return null
+  }
+}
+
 /** The import and rung this URI reuses, when it reuses one — see `rungInImport`. */
 function importedRungFor(
   active: Session | null,
@@ -439,7 +618,13 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // it is *imported*, at a resolution the file does not carry — so that one is
   // reached through the refusal the mount raises, below.
   const say = reporter(request.id)
-  const hooks = { report: say, cancelled: () => cancelled.has(request.id) }
+  const hooks = {
+    report: say,
+    cancelled: () => cancelled.has(request.id),
+    // The page's dev features switch (§29), carried on each open because a
+    // worker has no `localStorage` of its own to read it from.
+    ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
+  }
   let mc: MetaCooler
   let source: ByteSource
   let pairs: PairsImport | null = reusable?.pairs ?? null
@@ -479,6 +664,16 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
       })
     }
   }
+  // Through the edit, where the reader asked for one (§27.7): the file was
+  // opened as it is, and from here on it is presented as the edited assembly.
+  let lens: ReferenceEdit | null = null
+  let lensRefusal: string | null = null
+  if (request.edit !== undefined) {
+    const seen = MetaCooler.withLens(mc, request.edit)
+    mc = seen.map
+    lensRefusal = seen.refusal
+    if (seen.refusal === null) lens = request.edit
+  }
   session = {
     mc,
     source,
@@ -487,12 +682,15 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     recent: [],
     pairs,
     resample: null,
+    lens,
+    ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
   }
 
   return {
     ...(pairs === null || request.binning === undefined
       ? {}
       : { pairs: summarise(pairs, request.binning.download === true, request.binning) }),
+    ...(request.edit === undefined ? {} : { edit: { refusal: lensRefusal } }),
     uri: mc.uri,
     layout: mc.layout,
     info: mc.info,
@@ -640,6 +838,391 @@ function binLevelResult(mc: MetaCooler, dense: DenseMatrix, genomes = false): Ma
 /** The hint the CLI would print for this shape of selection (§10). */
 function hintFor(rows: Extent, cols: Extent): string {
   return rows[0] === cols[0] && rows[1] === cols[1] ? DENSE_HINTS.binSelection : DENSE_HINTS.range
+}
+
+/**
+ * The stage's whole-genome picture (§27.9).
+ *
+ * Read from the finest rung of the ladder whose bins fit the picture — a yeast
+ * `.mcool` gives its 1 kb rung, twelve thousand cells, whatever rung is open —
+ * and pooled a few bins a cell only where none does. One pass over that rung,
+ * watched like the whole-genome read: the bar, and Escape.
+ */
+async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }>): Promise<PictureResult> {
+  const open = requireSession().mc
+  const cap = Math.max(256, Math.min(PICTURE_CELLS, Math.trunc(request.cells ?? PICTURE_CELLS)))
+  // The file's own order, whatever the session is drawn through: the stage
+  // draws the edit through the picture, not the picture through the edit —
+  // and so the rung is the one whose bins of the file's own sequences fit.
+  const base = open.unlensed ?? open
+  // One genome's sequences, in the file's order, where the stage is on one.
+  let drawn: number[] | undefined
+  if (request.contigs !== undefined) {
+    const index = new Map(base.chromnames.map((name, c) => [name, c]))
+    drawn = [...new Set(request.contigs.map((name) => index.get(name)).filter((c): c is number => c !== undefined))].sort((a, b) => a - b)
+    if (drawn.length === 0) throw new ViewerError('unsupported', 'None of the sequences the stage asked for are in this file.')
+  }
+  const rung = pictureRung(base, cap, drawn)
+  const seen = await mapFor(rung)
+  const mc = seen.unlensed ?? seen
+  const fits = pictureStride(mc.coords, cap, drawn)
+  let offsets: Float64Array | null = null
+  try {
+    offsets = mc.store.binOffsets()
+  } catch {
+    offsets = null
+  }
+  // The finest that fits, pooled further where the map is too shallow at it.
+  const deep = depthStride(mc.coords, offsets, drawn)
+  const stride = fits === null ? null : Math.max(fits, deep)
+  if (stride === null) {
+    throw new ViewerError(
+      'unsupported',
+      `The stage draws the whole assembly at ${cap.toLocaleString('en-US')} cells a side, each inside one ` +
+        `sequence, and this one has ${(drawn?.length ?? mc.coords.nContigs).toLocaleString('en-US')} sequences.`,
+    )
+  }
+  const layout = pictureLayout(mc.coords, stride, drawn)
+  const balanced = request.balance === true && mc.hasWeights
+  // What the pass will read, said as it starts (§27.12): the stored pixels of
+  // the rows it covers — every one where they are the whole map — at the
+  // rung's bins, and how many of those a cell pools.
+  const pixels = picturePixels(mc, offsets, drawn)
+  post({
+    type: 'progress',
+    id: request.id,
+    done: 0,
+    total: 1,
+    note:
+      `${pixels === null ? 'every stored pixel' : `${pixels.toLocaleString('en-US')} stored pixels`} at ${resolutionLabel(mc.binsize)}` +
+      (stride > 1 ? `, ${stride} bins a cell` : ''),
+  })
+  const read = await mc.picture(layout, {
+    balance: balanced,
+    ...(request.value === undefined ? {} : { value: request.value }),
+    ...(request.method === true ? { gather: METHOD_GATHER } : {}),
+    ...scanHooks(request.id),
+  })
+  if (read === null || cancelled.has(request.id)) throw abortError()
+  const { vmin, vmax } = displayRange(read.histogram, read.quantizer)
+  // What the map is expected to hold, and its corners, once per file (§27.5):
+  // the stage weighs every edit against these.
+  const contacts = read.contacts
+  const expected = contacts === undefined ? null : expectedOf(contacts, balanced)
+  const method =
+    contacts === undefined || expected === null ? undefined : { contacts, expected, corners: findCorners(contacts, expected) }
+  // Kept rather than sent, where asked: the suggestions are counted here.
+  const kept = request.keep === true && method !== undefined
+  const active = requireSession()
+  if (kept) active.stageMethod = { picture: request.id, ...method }
+  return {
+    rung: seen === open ? null : (rung ?? null),
+    binsize: mc.binsize * stride,
+    stride,
+    n: layout.n,
+    sequences: (drawn ?? mc.chromnames.map((_, c) => c)).map((c, i) => ({
+      name: mc.chromnames[c],
+      length: mc.coords.contigLengths[c],
+      firstCell: layout.offsets[i],
+      cells: layout.offsets[i + 1] - layout.offsets[i],
+    })),
+    levels: read.levels,
+    low: read.quantizer.low,
+    high: read.quantizer.high,
+    vmin,
+    vmax,
+    balanced,
+    pixels: read.pixels,
+    least: depthFloor(mc.coords, offsets, mc.binsize, drawn),
+    ...(method === undefined ? {} : kept ? { methodKept: request.id } : { method }),
+  }
+}
+
+/** The cells a stage window may hold: four million, 16 MB of floats. */
+const STAGE_WINDOW_CELLS = 4_000_000
+
+/**
+ * A window of the stage's map read finer than its picture (§27.9): the rung
+ * whose bins are about a pixel — the coarsest no coarser than `binsize`, else
+ * the finest there is — drawn through the stage's edit, the window's rows and
+ * columns named as places in the edited assembly and handed back as runs of
+ * bins, one per edited sequence each side crosses. `null` where no rung is
+ * finer than the picture's own cell, or the window would be too large to hold.
+ */
+async function handleStageWindow(request: Extract<WorkerRequest, { kind: 'stageWindow' }>): Promise<WindowRead | null> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const rungs = rungsOf(base)
+  const fits = rungs.filter((rung) => rung.size <= request.binsize)
+  const chosen = fits.length > 0 ? fits[fits.length - 1] : rungs[0]
+  if (chosen === undefined || !(chosen.size < request.coarser)) return null
+  const key = `${chosen.name}|${request.key}`
+  if (active.stageWindowMap?.key !== key) {
+    const seen = chosen.size === base.binsize ? base : await mapFor(chosen.name)
+    const rung = seen.unlensed ?? seen
+    // Not closed when replaced: a map drawn through an edit shares its rung's
+    // file, which the rungs above hold and close.
+    const { map, refusal } = MetaCooler.withLens(rung, request.edit)
+    if (refusal !== null) throw new ViewerError('unsupported', refusal)
+    active.stageWindowMap = { key, map }
+  }
+  const map = active.stageWindowMap.map
+  const index = new Map(map.chromnames.map((name, c) => [name, c]))
+  const offsets = map.coords.chromOffset
+  const size = map.binsize
+  const extentOf = (side: StageWindowSide): Extent | null => {
+    const a = index.get(side.from.sequence)
+    const b = index.get(side.to.sequence)
+    if (a === undefined || b === undefined) return null
+    const lo = Math.min(offsets[a + 1] - 1, offsets[a] + Math.floor(Math.max(0, side.from.bp) / size))
+    const hi = Math.min(offsets[b + 1], offsets[b] + Math.ceil(Math.max(0, side.to.bp) / size))
+    return hi > lo ? [lo, hi] : null
+  }
+  const rows = extentOf(request.rows)
+  const cols = extentOf(request.cols)
+  if (rows === null || cols === null || (rows[1] - rows[0]) * (cols[1] - cols[0]) > STAGE_WINDOW_CELLS) return null
+  const dense = await map.matrix({ rows, cols, balance: request.balance && map.hasWeights })
+  const runsOf = ([lo, hi]: Extent): WindowRun[] => {
+    const out: WindowRun[] = []
+    for (let c = 0; c < map.chromnames.length; c++) {
+      const from = Math.max(lo, offsets[c])
+      const to = Math.min(hi, offsets[c + 1])
+      if (to > from) out.push({ sequence: map.chromnames[c], firstBin: from - offsets[c], count: to - from, at: from - lo })
+    }
+    return out
+  }
+  return { binsize: size, rows: runsOf(dense.rowExtent), cols: runsOf(dense.colExtent), values: dense.values, ncols: dense.ncols }
+}
+
+/** A file's rungs, finest first, by entry name and bin size: the one it has, where it has one. */
+function rungsOf(base: MetaCooler): Array<{ name: string; size: number }> {
+  return base.entryGroup === 'resolutions'
+    ? base.entries
+        .map((name) => ({ name, size: Number(name) }))
+        .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
+        .sort((a, b) => a.size - b.size)
+    : [{ name: '', size: base.binsize }]
+}
+
+/** The most placements kept between edits before they are let go. */
+const REFINE_KEPT = 4096
+
+/**
+ * A suggestion's points placed again at the finer rungs (§27.5): each read
+ * around at every rung from the picture's cell to the finest the map is deep
+ * enough to show, through the stage's edit — the rungs drawn through it once
+ * for the edit — and kept by the neighbourhood the reads cover.
+ */
+async function handleRefine(request: Extract<WorkerRequest, { kind: 'refine' }>): Promise<Array<RefinedPoint | null>> {
+  const active = requireSession()
+  const base = active.mc.unlensed ?? active.mc
+  const rungs = rungsOf(base)
+  const chain = refineChain(
+    rungs.map((rung) => rung.size),
+    request.cell,
+    request.least,
+  )
+  if (chain.length === 0) return request.points.map(() => null)
+  const fingerprint = editFingerprint(request.edit)
+  if (active.refineMaps?.fingerprint !== fingerprint) active.refineMaps = { fingerprint, maps: new Map() }
+  const maps = active.refineMaps.maps
+  const placed = (active.refinePlaced ??= new Map())
+  if (placed.size > REFINE_KEPT) placed.clear()
+  const assembly = EditedAssembly.of(request.edit)
+  const lensedAt = async (size: number): Promise<MetaCooler | null> => {
+    const rung = rungs.find((candidate) => candidate.size === size)
+    if (rung === undefined) return null
+    let map = maps.get(rung.name)
+    if (map === undefined) {
+      const seen = rung.size === base.binsize ? base : await mapFor(rung.name)
+      // Not closed when let go: a map drawn through an edit shares its rung's
+      // file, which the rungs above hold and close.
+      const { map: lensed, refusal } = MetaCooler.withLens(seen.unlensed ?? seen, request.edit)
+      if (refusal !== null) throw new ViewerError('unsupported', refusal)
+      map = lensed
+      maps.set(rung.name, map)
+    }
+    return map
+  }
+  const read: ReadSquare = async (sequence, lo, hi, size) => {
+    if (cancelled.has(request.id)) throw abortError()
+    const map = await lensedAt(size)
+    const c = map === null ? -1 : map.chromnames.indexOf(sequence)
+    if (map === null || c < 0) return null
+    const offset = map.coords.chromOffset[c]
+    const rows: Extent = [offset + lo, offset + hi]
+    const dense = await map.matrix({ rows, cols: rows, balance: request.balance && map.hasWeights })
+    return dense.nrows === hi - lo && dense.ncols === hi - lo ? { n: hi - lo, values: dense.values } : null
+  }
+  // The farthest a point's reads reach: the first rung's, a cell and a half
+  // and three windows either side.
+  const span = (Math.ceil((REFINE_REACH * request.cell) / chain[0]) + 3 * REFINE_WINDOW + 1) * chain[0]
+  const out: Array<RefinedPoint | null> = []
+  for (const point of request.points) {
+    if (cancelled.has(request.id)) throw abortError()
+    const length = assembly.lengthOf(point.sequence)
+    if (length === null) {
+      out.push(null)
+      continue
+    }
+    const bp = point.bp
+    const lo = Math.max(0, bp - span)
+    const hi = Math.min(length, bp + span)
+    const pieces = assembly
+      .piecesIn(point.sequence, lo, hi)
+      .map(({ offset, piece }) => `${offset - bp}:${piece.sequence}:${piece.start}:${piece.end}:${piece.strand}`)
+      .join(';')
+    const key = [request.balance, request.cell, chain.join(','), chain.map((size) => bp % size).join(','), lo - bp, hi - bp, pieces].join('|')
+    let found = placed.get(key)
+    if (found === undefined) {
+      const refined = await refinePoint(point, length, request.cell, chain, read)
+      found = refined === null ? null : { delta: refined.bp - bp, binsize: refined.binsize, support: refined.support }
+      placed.set(key, found)
+    }
+    out.push(found === null ? null : { bp: bp + found.delta, binsize: found.binsize, support: found.support })
+  }
+  return out
+}
+
+/**
+ * The suggestions for an edit (§27.5), counted against what the method weighs
+ * of the stage's picture, kept here by its read — the whole of `suggest`, the
+ * lens built from the edit and the picture's layout as the stage builds it,
+ * off the stage's thread (§27.12).
+ */
+function handleSuggest(request: Extract<WorkerRequest, { kind: 'suggest' }>): Suggested {
+  const held = requireSession().stageMethod
+  if (held === undefined || held.picture !== request.picture) {
+    throw new ViewerError('unsupported', 'The picture these suggestions were asked of has been read again; they are counted against the new one.')
+  }
+  const grid = LensGrid.of(EditedAssembly.of(request.edit), request.layout)
+  return suggest({
+    contacts: held.contacts,
+    expected: held.expected,
+    corners: held.corners,
+    grid,
+    ...(request.weights === undefined ? {} : { weights: request.weights }),
+    ...(request.evidence === undefined ? {} : { evidence: request.evidence }),
+  })
+}
+
+/**
+ * Where one genome's contigs and every other contig belong by their contacts
+ * (§27.10): one pass over the file's stored pixels, raw counts, each contact
+ * of two contigs counted for both — for a contig of the genome, by the genome
+ * of the other; for a contig outside it, with the genome's contigs and in all.
+ */
+async function handleGenomeLinks(request: Extract<WorkerRequest, { kind: 'genomeLinks' }>): Promise<GenomeLinksResult> {
+  const open = requireSession().mc
+  const mc = open.unlensed ?? open
+  if (!mc.hasGenomes) throw new ViewerError('unsupported', 'Only a metagenome has genomes a contig could belong to.')
+  const n = mc.coords.nContigs
+  const index = new Map(mc.chromnames.map((name, c) => [name, c]))
+  const inside = new Uint8Array(n)
+  for (const name of request.contigs) {
+    const c = index.get(name)
+    if (c !== undefined) inside[c] = 1
+  }
+  const binContig = new Int32Array(mc.nBins)
+  for (let c = 0; c < n; c++) {
+    const [lo, hi] = mc.coords.contigBinExtent(c)
+    binContig.fill(c, lo, hi)
+  }
+  const genomeOf = mc.contigGenomeIds
+  const genomes = mc.genomeNames
+  const total = new Float64Array(n)
+  const own = new Float64Array(n)
+  const byGenome = new Map<number, Float64Array>()
+  for (let c = 0; c < n; c++) if (inside[c] === 1) byGenome.set(c, new Float64Array(genomes.length))
+  const hooks = scanHooks(request.id)
+  let pixels = 0
+  await mc.store.scanAll({
+    onChunk: (chunk) => {
+      if (hooks.cancelled()) return false
+      for (let i = 0; i < chunk.length; i++) {
+        const a = binContig[chunk.bin1[i]]
+        const b = binContig[chunk.bin2[i]]
+        if (a === b) continue
+        const v = chunk.count[i]
+        if (!(v > 0)) continue
+        total[a] += v
+        total[b] += v
+        if (inside[b] === 1) own[a] += v
+        if (inside[a] === 1) {
+          own[b] += v
+          const row = byGenome.get(a)
+          if (row !== undefined && genomeOf[b] >= 0) row[genomeOf[b]] += v
+        }
+        if (inside[b] === 1) {
+          const row = byGenome.get(b)
+          if (row !== undefined && genomeOf[a] >= 0) row[genomeOf[a]] += v
+        }
+      }
+      pixels += chunk.length
+      return true
+    },
+    onProgress: (done, all) => hooks.onProgress(done, all, 'reading every contact for where the contigs belong'),
+  })
+  if (hooks.cancelled()) throw abortError()
+  const insideRows: GenomeLinksResult['inside'] = []
+  for (const [c, row] of byGenome) {
+    const partners = [...row]
+      .map((contacts, g) => ({ genome: genomes[g], contacts }))
+      .filter((partner) => partner.contacts > 0)
+      .sort((x, y) => y.contacts - x.contacts)
+      .slice(0, 6)
+    insideRows.push({ contig: mc.chromnames[c], total: total[c], own: own[c], partners })
+  }
+  const outside: GenomeLinksResult['outside'] = []
+  for (let c = 0; c < n; c++) {
+    if (inside[c] === 1 || own[c] < 3) continue
+    const g = genomeOf[c]
+    outside.push({ contig: mc.chromnames[c], genome: g >= 0 ? genomes[g] : '__unbinned__', length: mc.coords.contigLengths[c], contacts: own[c], total: total[c] })
+  }
+  outside.sort((x, y) => y.contacts / y.total - x.contacts / x.total || y.contacts - x.contacts)
+  return { inside: insideRows, outside: outside.slice(0, 100), pixels }
+}
+
+/**
+ * The stored pixels a picture's pass reads (§27.12): the map's count where it
+ * reads every row, the rows of the sequences it draws where the per-bin index
+ * says, and `null` where neither is known.
+ */
+function picturePixels(mc: MetaCooler, offsets: Float64Array | null, drawn: readonly number[] | undefined): number | null {
+  if (drawn === undefined) return mc.nnz ?? (offsets === null ? null : offsets[offsets.length - 1])
+  if (offsets === null) return null
+  let total = 0
+  for (const c of drawn) {
+    const [first, end] = mc.coords.contigBinExtent(c)
+    total += offsets[end] - offsets[first]
+  }
+  return total
+}
+
+/**
+ * The rung a picture of `cap` cells a side is read from: the finest whose bins
+ * fit, else the coarsest, which is then pooled. `undefined` for the open map —
+ * a file with no ladder, or one whose open rung is the answer.
+ *
+ * Counted from the open map's sequence lengths, so no rung is opened to be
+ * measured: an `.mcool`'s entries are its bin sizes.
+ */
+function pictureRung(open: MetaCooler, cap: number, contigs?: readonly number[]): string | undefined {
+  if (open.entryGroup !== 'resolutions') return undefined
+  const lengths = open.coords.contigLengths
+  const drawn = contigs ?? Array.from({ length: lengths.length }, (_, c) => c)
+  const binsAt = (size: number): number => {
+    let total = 0
+    for (const c of drawn) total += Math.ceil(lengths[c] / size)
+    return total
+  }
+  const rungs = open.entries
+    .map((name) => ({ name, size: Number(name) }))
+    .filter((rung) => Number.isInteger(rung.size) && rung.size > 0)
+    .sort((a, b) => a.size - b.size)
+  if (rungs.length === 0) return undefined
+  const best = rungs.find((rung) => binsAt(rung.size) <= cap) ?? rungs[rungs.length - 1]
+  return best.size === open.binsize ? undefined : best.name
 }
 
 async function handleMatrix(
@@ -1568,6 +2151,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleOpen(request)
     case 'exportMcool':
       return handleExportMcool(request.id)
+    case 'exportLifted':
+      return handleExportLifted(request.id, request.edit)
     case 'genomes':
       return handleGenomes()
     case 'contigs':
@@ -1608,6 +2193,16 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleContacts(request)
     case 'stats':
       return handleStats()
+    case 'picture':
+      return handlePicture(request)
+    case 'suggest':
+      return handleSuggest(request)
+    case 'stageWindow':
+      return handleStageWindow(request)
+    case 'refine':
+      return handleRefine(request)
+    case 'genomeLinks':
+      return handleGenomeLinks(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

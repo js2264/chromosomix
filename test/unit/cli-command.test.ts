@@ -544,6 +544,24 @@ describe('a parameter whose load is its own flag', () => {
   })
 })
 
+describe('two sequence sets against each other', () => {
+  it('loads both and says which is which, with no map to name (§28)', () => {
+    // The dot plot reads no map: both references are loads, and `x` and `y`
+    // say which one each axis took.
+    const dotplot = taskById('dotplot') as AnalysisTask
+    const built = cliCommandFor({
+      task: dotplot,
+      provenance: provenance('dotplot', { ...defaultsOf(dotplot), x: 'a1', y: 'b1' }, { rows: [0, 0], cols: [0, 0] }),
+      context: context([entry('a1', 'assembly', 'assembly.fa'), entry('b1', 'theory', 'theory.fa')]),
+    })
+    const command = commandOf(built.text)
+    expect(command.startsWith('metacooler-run dotplot --sequence assembly.fa --sequence theory.fa')).toBe(true)
+    expect(command).toContain('--x assembly.fa')
+    expect(command).toContain('--y theory.fa')
+    expect(command).toContain("--streaks 'one to one'")
+  })
+})
+
 describe('what a shell cannot be given', () => {
   it('names a remote file and says it has to be fetched first', () => {
     const built = cliCommandFor({
@@ -720,6 +738,21 @@ describe('the framing a session sets from the picture', () => {
       context: context(),
     })
     expect(commandOf(stored.text)).not.toContain('--contacts')
+  })
+
+  it('says that the map was drawn through an edit, which the shell cannot yet apply (§27.7)', () => {
+    const edited = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { edit: '2:1x2y3z' }),
+      context: context(),
+    })
+    expect(notesOf(edited.text).join(' ')).toContain('drawn through an edit of its reference')
+    const stored = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(notesOf(stored.text).join(' ')).not.toContain('edit')
   })
 
   it('writes the bin size an imported .pairs was framed at', () => {

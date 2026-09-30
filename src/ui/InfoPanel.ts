@@ -65,6 +65,7 @@
  */
 
 import type { OpenResult } from '../worker/protocol'
+import { devFeature } from '../state/devFeatures'
 import { el, fmt } from './dom'
 import { resolutionLabel } from '../units'
 import { cardTitle, foldable, icon, iconButton, startFolded } from './icons'
@@ -343,7 +344,14 @@ export class InfoPanel {
       ['source', info.sourceKind === 'local' ? `local file (${fmt.bytes(info.sourceBytes)})` : `remote (${fmt.bytes(info.sourceBytes)})`],
       ['bin size', info.binsize === null ? '—' : resolutionLabel(info.binsize)],
       ['bin type', String(info.info['bin-type'] ?? '—')],
-      ['ordering', String(info.info['ordering'] ?? '—')],
+      // `genome-then-length` is the multi-genome format's word for its contig
+      // order, and a `.hic`, a `.pairs` and a HiC-Pro pair are given it only so
+      // they read as one; while that format is a dev feature that is off
+      // (§29), the row names a concept the page does not offer, so it is not
+      // drawn.
+      ...(devFeature('metacool')
+        ? ([['ordering', String(info.info['ordering'] ?? '—')]] as Array<[string, string]>)
+        : []),
       ['storage mode', String(info.info['storage-mode'] ?? '—')],
       ['assembly', String(info.info['assembly'] ?? '—')],
       ['format', `${String(info.info['format'] ?? '—')} v${String(info.info['format-version'] ?? '?')}`],

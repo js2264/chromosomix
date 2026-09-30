@@ -30,6 +30,7 @@
  */
 
 import { makeRandom } from '../analysis/random'
+import { devFeature } from '../state/devFeatures'
 import { isAddress, paramAsked, paramDerived, paramVisible } from '../analysis/types'
 import type {
   AnalysisContext,
@@ -1465,9 +1466,11 @@ export class ParamForm {
       type: 'text',
       attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
-      title:
-        'A contig, or a contig and a span, as metacooler show --range takes it. On a metagenome ' +
-        'a genome name is one too, and means the whole of it.',
+      title: devFeature('metacool')
+        ? 'A contig, or a contig and a span, as metacooler show --range takes it. On a metagenome ' +
+          'a genome name is one too, and means the whole of it.'
+        : // A genome name is the multi-genome format's, a dev feature (§29).
+          'A sequence, or a sequence and a span.',
     })
     const note = el('p', { class: 'hint param-map-note hidden' })
 

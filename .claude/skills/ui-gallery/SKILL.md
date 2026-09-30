@@ -43,6 +43,8 @@ node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck
 node scripts/ui-contacts.mjs gallery         # the breadcrumb's contacts box: 10M typed, the figure and a task on the drawn map, a deck's chevrons down and up, two files in one square, a Boost-HiC refusal and its two ways out: ct01 … ct18
 node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the lab's toy library: the .pairs binned on the fly, then a .pairs dropped on the .mcool's form, and an address: st01 … st09
 node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
+node scripts/ui-dev-features.mjs gallery     # the dev features switch (§29): the lab store, About and a .metacool refused with it off, the switch pressed, the same three on, and off again: d01 … d08
+node scripts/ui-edit.mjs gallery             # the stage that edits the reference (§27, dev): the heading's word, the whole genome, a snap, a stretch selected and turned, the bow-tie zoomed, a drag with the map rearranged, a box, the set-aside menu, an undo, the heading edited, dark, and dev off: e01 … e14
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

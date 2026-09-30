@@ -22,6 +22,15 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
+import { devFeature } from '../state/devFeatures'
+import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
+import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
+import { carryRegion, windowInFile } from '../edit/places'
+import { EditStage } from '../edit/EditStage'
+import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
+import { UNBINNED, binningTable, type BinningTable } from '../edit/binning'
+import { ReferenceChip } from '../edit/ReferenceChip'
+import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -1349,6 +1358,8 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    // The stage goes with the tab; the edit it made is kept with the file.
+    this.editStage?.close()
     this.stopEdgeLanding()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
@@ -1566,6 +1577,23 @@ export class Session {
           file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deckIsPossible,
         run: () => this.addMap(),
       },
+      // The stage that edits the reference (§27.3), a dev feature (§29): absent,
+      // not greyed, while the switch is off.
+      ...(devFeature('edit') && file !== null
+        ? [
+            {
+              id: 'edit-reference',
+              group: 'View',
+              // On a metagenome, one genome at a time (§27.10).
+              title: isMetacool ? (this.genomeInView() === undefined ? 'Edit a genome' : `Edit genome ${this.genomeInView()}`) : 'Edit the reference',
+              hint: isMetacool
+                ? 'One genome of the metagenome: its contigs scaffolded, turned, split, or sent to another genome, with the map redrawn as you go.'
+                : 'Cut, turn, move, copy and join stretches of the assembly, with the map redrawn as you go.',
+              enabled: this.reader !== null && this.editStage === null,
+              run: () => void this.openEditStage(),
+            },
+          ]
+        : []),
       {
         id: 'hide-map',
         group: 'View',
@@ -1659,22 +1687,29 @@ export class Session {
         enabled: this.current?.panel?.canCentreOnDiagonal === true,
         run: () => this.current?.panel?.centreOnDiagonal(),
       },
-      {
-        // One command and one key for the file's own landing table, whichever
-        // of the two it is: a metacool's genomes, or an scool's cells. No file
-        // has both, so a second entry would be a second key that is disabled on
-        // every file the first one works on.
-        id: 'go-genomes',
-        group: 'Go',
-        title: isScool ? 'Cells table' : 'Genomes table',
-        keys: KEYS.genomes,
-        enabled: file !== null && (isMetacool || isScool),
-        run: () => {
-          if (state !== null) {
-            this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
-          }
-        },
-      },
+      // One command and one key for the file's own landing table, whichever
+      // of the two it is: a metacool's genomes, or an scool's cells. No file
+      // has both, so a second entry would be a second key that is disabled on
+      // every file the first one works on. While the multi-genome format is a
+      // dev feature that is off (§29), it is the Cells table or nothing: a
+      // greyed *Genomes table* in the palette of every tab would be the one
+      // place a reader was told the format exists.
+      ...(isScool || devFeature('metacool')
+        ? [
+            {
+              id: 'go-genomes',
+              group: 'Go',
+              title: isScool ? 'Cells table' : 'Genomes table',
+              keys: KEYS.genomes,
+              enabled: file !== null && (isMetacool || isScool),
+              run: () => {
+                if (state !== null) {
+                  this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
+                }
+              },
+            },
+          ]
+        : []),
       {
         id: 'go-contigs',
         group: 'Go',
@@ -2393,11 +2428,22 @@ export class Session {
     try {
       // `pairs/import.ts` weights its pass against the rungs so the bar does
       // not stall at 99%; the other two report bytes and then pixels.
+      // Through the edit kept for this file, where there is one to draw (§27.7).
+      const edit = this.editToOpen(uri)
       task = client.cancellable<'open'>(
-        { kind: 'open', uri, source, ...(binning === undefined ? {} : { binning }) },
+        {
+          kind: 'open',
+          uri,
+          source,
+          ...(binning === undefined ? {} : { binning }),
+          ...(edit === undefined ? {} : { edit }),
+        },
         (done, total, note) => screen.report(done, total, note),
       )
       const info = await task.promise
+      this.lens = edit !== undefined && info.edit?.refusal === null ? { edit, assembly: EditedAssembly.of(edit) } : null
+      const refusal = info.edit?.refusal ?? null
+      if (refusal !== null) this.host.notify(`The edit kept for this file is not drawn. ${refusal}`)
       // A new map in the worker is a map as stored (§6.5): whatever it was told
       // to draw the last one to went with it, and the render below tells it
       // again.
@@ -2467,20 +2513,27 @@ export class Session {
         // view. A cooler offers its chromosomes and, when it fits, the whole
         // genome in one read — and still lists Genomes, greyed out, because
         // "this file has none" is a more useful answer than an absent entry.
+        // The greyed *Genomes* on a plain cooler is §9's answer to "does this
+        // viewer have one" — and while the multi-genome format is a dev feature
+        // that is off (§29), the question is not one this page raises, so the
+        // row is absent rather than greyed.
         rootChoices: isMetacool
           ? ['genomes', 'contigs', 'overview']
           : isScool
             ? ['cells', 'contigs', 'whole']
-            : ['genomes', 'contigs', 'whole'],
+            : devFeature('metacool')
+              ? ['genomes', 'contigs', 'whole']
+              : ['contigs', 'whole'],
         ...(isMetacool
           ? {}
           : {
-              disabledChoices: isScool
-                ? {}
-                : {
-                    genomes:
-                      'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
-                  },
+              disabledChoices:
+                isScool || !devFeature('metacool')
+                  ? {}
+                  : {
+                      genomes:
+                        'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
+                    },
               contigNoun: 'Chromosomes',
             }),
         fileLabel: fileLabel(uri),
@@ -2506,6 +2559,7 @@ export class Session {
         onAddResolution: () => this.askResolution(),
         onDropResolution: (binsize) => this.dropResolution(binsize),
         contacts: this.contactsBoxFor(),
+        ...(devFeature('edit') ? { reference: this.referenceChipFor() } : {}),
       })
       this.infoPanel = new InfoPanel({
         info,
@@ -3618,6 +3672,8 @@ export class Session {
       assembly,
       store: held.store,
       client: held.client,
+      // A map read as tracks is read through its edit, as the map is (§27.7).
+      edited: () => this.lens?.assembly ?? null,
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
@@ -4976,7 +5032,14 @@ export class Session {
       // card is built once per file and the picture under it is rebuilt on every
       // navigation, so a held reference would save the window of a view the reader
       // left ten clicks ago.
-      framed: () => this.current?.panel?.framedRegion() ?? null,
+      // In the file's coordinates, through whatever edit the map is drawn
+      // through, so a later edit does not move it (§27.7).
+      framed: () => {
+        const framed = this.current?.panel?.framedRegion() ?? null
+        if (framed === null || this.lens === null) return framed
+        const kept = windowInFile(this.lens.assembly, framed)
+        return kept === null ? null : { ...kept, ...(framed.wrapped === undefined ? {} : { wrapped: framed.wrapped }) }
+      },
       binsize: () => this.file?.info.binsize ?? null,
     })
 
@@ -5333,6 +5396,248 @@ export class Session {
     if (key === null) return null
     if (this.originsHeld?.key !== key) this.originsHeld = { key, store: new OriginStore(key) }
     return this.originsHeld.store
+  }
+
+  /**
+   * The edit of the file's reference (§27.2), held and keyed as the circular
+   * declarations are — a fact about the file's sequences, the same at every
+   * rung. Built once the contigs table is read, since an edit is checked
+   * against the names and lengths it was made on. A dev feature (§29): `null`
+   * while the switch is off, and the record is left as it was.
+   */
+  private editHeld: { key: string; store: EditStore } | null = null
+
+  /**
+   * @param genome On a metagenome, the genome whose edit it is (§27.10): its
+   *   contigs alone, kept apart from every other genome's.
+   */
+  private editStore(genome?: string): EditStore | null {
+    if (!devFeature('edit')) return null
+    const base = this.sessionKey()
+    const contigs = this.file?.contigs ?? null
+    if (base === null || contigs === null) return null
+    const key = genome === undefined ? base : genomeEditKey(base, genome)
+    if (this.editHeld?.key !== key) {
+      // The file's own sequences — which, where the session is drawn through an
+      // edit, are the ones the edit was made on rather than the ones the
+      // reader now answers with (§27.7).
+      const pairs = contigPairs(contigs)
+      const file = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
+      const rows = genome === undefined ? [] : this.contigRowsOf(genome)
+      const original =
+        genome === undefined ? (this.lens?.edit.original ?? file) : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
+      const store = new EditStore(key, original, undefined, file)
+      store.subscribe(() => this.referenceChip?.sync())
+      this.editHeld = { key, store }
+    }
+    return this.editHeld.store
+  }
+
+  /** The genome of a metagenome the reader is looking at, where one is in view. */
+  private genomeInView(): string | undefined {
+    const scope = this.metaScope
+    return scope?.kind === 'contigs' ? scope.genome : undefined
+  }
+
+  /**
+   * The contig → MAG table of the metagenome (§27.10): every contig with the
+   * genome the file puts it in, then every genome's kept edit applied.
+   */
+  private binning(): BinningTable {
+    const base = this.sessionKey()
+    const genomeNames = this.file?.genomes.table.data['name']
+    const table = this.file?.contigs?.table
+    const names = table?.data['name']
+    const ids = table?.data['genome_id']
+    const contigs: Array<{ name: string; genome: string }> = []
+    if (Array.isArray(names) && Array.isArray(genomeNames) && ids !== undefined && !Array.isArray(ids)) {
+      ;(names as string[]).forEach((name, row) => contigs.push({ name, genome: (genomeNames as string[])[Number(ids[row])] ?? UNBINNED }))
+    }
+    const edits = new Map<string, ReferenceEdit>()
+    if (base !== null) {
+      for (const genome of new Set(contigs.map((contig) => contig.genome))) {
+        const edit = readEdit(recall<unknown>(genomeEditKey(base, genome), EDIT_SCOPE))
+        if (edit !== null) edits.set(genome, edit)
+      }
+    }
+    return binningTable(contigs, edits)
+  }
+
+  /** The genomes the stage may edit, as the picker lists them (§27.10). */
+  private pickableGenomes(): PickableGenome[] {
+    const base = this.sessionKey()
+    return this.genomeRows().map(({ name, length }) => ({
+      name,
+      length,
+      contigs: this.contigRowsOf(name).length,
+      steps: base === null ? 0 : (readEdit(recall<unknown>(genomeEditKey(base, name), EDIT_SCOPE))?.cursor ?? 0),
+    }))
+  }
+
+  /**
+   * The edit the reader's map is drawn through (§27.7), as the reader accepted
+   * it when the file opened; `null` for the file as it is. The edit store may
+   * run ahead of it while the stage is open: the session is redrawn through the
+   * store's when the stage closes ({@link redrawThroughEdit}).
+   */
+  private lens: { edit: ReferenceEdit; assembly: EditedAssembly } | null = null
+
+  /** The edit to open a file through: the one kept for it, where the dev features are on and it has a step. */
+  private editToOpen(uri: string): ReferenceEdit | undefined {
+    if (!devFeature('edit')) return undefined
+    const stored = readEdit(recall<unknown>(this.memoryKey(uri), EDIT_SCOPE))
+    return stored === null || stored.cursor === 0 ? undefined : stored
+  }
+
+  /**
+   * Draw the session through the edit as it now stands, where the stage has
+   * changed it (§27.7): the file opened again through it — as a change of
+   * resolution opens it again — with the view carried to where its place went.
+   */
+  private async redrawThroughEdit(): Promise<void> {
+    const file = this.file
+    const state = this.store.state
+    if (file === null || state === null || !devFeature('edit')) return
+    const next = this.editToOpen(file.uri)
+    const before = this.lens?.assembly ?? null
+    const after = next === undefined ? null : EditedAssembly.of(next)
+    if ((before === null && (after === null || after.isIdentity)) || (before !== null && after !== null && sameSteps(this.lens?.edit, next))) {
+      return
+    }
+    const drawn = after === null || after.isIdentity ? null : after
+    const carried = this.carryAcrossEntries(file.uri)
+    if (carried === undefined) return
+    const move = (region: string | undefined): string | null | undefined =>
+      region === undefined ? undefined : carryRegion(region, before, drawn)
+    const region = move(carried.region)
+    const region2 = move(carried.region2)
+    const focus = move(carried.focus)
+    const lost = region === null || region2 === null
+    const view: ViewState = lost
+      ? { ...carried, view: 'contigs', region: undefined, region2: undefined, focus: undefined, regions: undefined }
+      : {
+          ...carried,
+          ...(region === undefined ? {} : { region }),
+          ...(region2 === undefined ? {} : { region2 }),
+          ...(focus === undefined ? {} : focus === null ? { focus: undefined } : { focus }),
+          // A selection names sequences, and an edit renames them: the table,
+          // where the reader chose them, is where to choose them again.
+          ...(carried.view === 'selection' ? { view: 'contigs' as const, regions: undefined } : {}),
+        }
+    await this.open(file.uri, file.source, view)
+  }
+
+  /**
+   * A framing of the session's own map with the edit it is drawn through
+   * (§27.7), so a result carries the assembly it was computed on and the next
+   * edit makes it stale; a companion's, and the file as it is, unchanged.
+   */
+  private withEditOf(framing: AnalysisFraming | null): AnalysisFraming | null {
+    if (framing === null || this.lens === null || framing.uri !== this.file?.uri) return framing
+    return { ...framing, edit: editFingerprint(this.lens.edit) }
+  }
+
+  /** Steps applied to the file's reference — from the store, or from the record it will read. */
+  private editSteps(): number {
+    if (this.editHeld !== null && this.editHeld.key === this.sessionKey()) return this.editHeld.store.applied
+    const key = this.sessionKey()
+    if (key === null) return 0
+    return readEdit(recall<unknown>(key, EDIT_SCOPE))?.cursor ?? 0
+  }
+
+  /** The heading's word on the reference, with its questions answered by this session. */
+  private referenceChip: ReferenceChip | null = null
+
+  private referenceChipFor(): ReferenceChip {
+    this.referenceChip = new ReferenceChip({
+      steps: () => this.editSteps(),
+      onOpen: () => void this.openEditStage(),
+      onRevert: () => void this.revertEdit(),
+    })
+    return this.referenceChip
+  }
+
+  /** The stage, while it is open. */
+  private editStage: EditStage | null = null
+
+  /**
+   * Open the stage on the file's map (§27.3): one map and its tracks, never a
+   * deck. On a metagenome, on one genome of it (§27.10) — `genome`, else the
+   * one in view, else the one the reader picks.
+   */
+  private async openEditStage(genome?: string): Promise<void> {
+    if (!devFeature('edit') || this.editStage !== null) return
+    const file = this.file
+    const reader = this.reader
+    if (file === null || reader === null) return
+    await this.contigs().catch(() => null)
+    let scope: string | undefined
+    if (this.isMetacool) {
+      scope = genome ?? this.genomeInView() ?? (await pickGenome(this.mapLabel(file.uri), this.pickableGenomes())) ?? undefined
+      if (scope === undefined) return
+    }
+    const store = this.editStore(scope)
+    if (store === null || this.destroyed || this.editStage !== null || this.file !== file) return
+    const state = this.store.state
+    const balance = file.info.hasWeights && state?.balance !== false
+    const lanes = this.annotationContext()
+    // One genome's contigs, and any brought into it: the picture of them alone.
+    const drawn = store.edit.original.genome === undefined ? undefined : [...store.edit.original.names]
+    this.editStage = new EditStage({
+      title: this.mapLabel(file.uri),
+      memoryKey: () => this.sessionKey() ?? file.uri,
+      store,
+      // What the method weighs is kept by the reader, where the suggestions
+      // are then counted, off the stage's thread (§27.12).
+      readPicture: (onProgress, contigs, cells) => {
+        const wanted = contigs ?? drawn
+        return reader.cancellable<'picture'>(
+          { kind: 'picture', balance, method: true, keep: true, ...(wanted === undefined ? {} : { contigs: wanted }), ...(cells === undefined ? {} : { cells }) },
+          onProgress,
+        )
+      },
+      suggest: (input) => reader.cancellable<'suggest'>({ kind: 'suggest', ...input }),
+      // Zoomed past the picture, the window on screen read finer (§27.9).
+      readWindow: (request) => reader.cancellable<'stageWindow'>({ kind: 'stageWindow', ...request }),
+      // A suggestion's points placed again at the finer rungs (§27.5).
+      refine: (request) => reader.cancellable<'refine'>({ kind: 'refine', ...request }),
+      // The circles the reader declared, whose origin the stage may set (§27.4).
+      circular: () => this.circularStore()?.list() ?? [],
+      // The binning every genome's edit makes, as the edits stand (§27.10).
+      ...(scope === undefined ? {} : { binning: () => this.binning() }),
+      // Where a genome's contigs and the others belong (§27.10): read without
+      // being asked where the file is a moment's pass.
+      ...(scope === undefined
+        ? {}
+        : {
+            genomeLinks: {
+              read: (contigs: string[], onProgress: (done: number, total: number) => void) =>
+                reader.cancellable<'genomeLinks'>({ kind: 'genomeLinks', contigs }, onProgress),
+              auto: (numberOr(file.info.info['nnz']) ?? Number.POSITIVE_INFINITY) <= LINKS_AUTO_PIXELS,
+            },
+          }),
+      liftContacts: (edit, onProgress) => reader.cancellable<'exportLifted'>({ kind: 'exportLifted', edit }, onProgress),
+      colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
+      ...(lanes === undefined
+        ? {}
+        : { lanes: { store: lanes.store, ...(lanes.map === undefined ? {} : { map: lanes.map }), manual: lanes.manual, client: lanes.client, groups: lanes.groups } }),
+      onClose: () => {
+        this.editStage = null
+        this.referenceChip?.sync()
+        this.host.sessionChanged(this)
+        // A genome's edit is its own files; the session is not drawn through it.
+        if (scope === undefined) void this.redrawThroughEdit()
+      },
+    })
+    this.host.sessionChanged(this)
+  }
+
+  /** Every step undone, and kept to be redone (§27.3). */
+  private async revertEdit(): Promise<void> {
+    await this.contigs().catch(() => null)
+    this.editStore()?.revert()
+    this.referenceChip?.sync()
+    await this.redrawThroughEdit()
   }
 
   /**
@@ -6707,6 +7012,10 @@ export class Session {
           client: held.client,
           groups: held.groups,
           contigLength: held.contigLength,
+          // The edit the session's own map is drawn through (§27.7), for its
+          // lanes. The lead's alone: a companion is a file of its own, drawn
+          // as it is until companions are drawn through the lens too.
+          ...(map === undefined || map === LEAD_MAP ? { edited: () => this.lens?.assembly ?? null } : {}),
           // The file's own columns (§8.12). Handed to every panel, including a
           // deck's companions: a lane is placed per map like any other, so a
           // MAG's contamination can be drawn beside the replicate it belongs to
@@ -6826,11 +7135,21 @@ export class Session {
   private goToBookmark(mark: Bookmark): void {
     const state = this.store.state
     if (state === null) return
+    // Kept in the file's coordinates, it is set down wherever the edit the map
+    // is drawn through puts it (§27.7); one taken before bookmarks were, in an
+    // edited sequence's name, is gone to as it is.
+    const kept = formatRegion(mark)
+    const carried = this.lens === null || this.lens.assembly.sequence(mark.contig) !== null ? kept : carryRegion(kept, null, this.lens.assembly)
+    if (carried === null) {
+      this.bookmarksCard?.say(`${formatLocus(mark)} is set aside by the edit the map is drawn through.`)
+      return
+    }
+    const where = /^(.*):\d+-\d+$/.exec(carried)?.[1] ?? carried
     this.navigate({
       uri: this.uriAtBinsize(mark.binsize) ?? state.uri,
       view: 'region',
-      region: mark.contig,
-      focus: formatRegion(mark),
+      region: where,
+      focus: carried,
       ...(state.transform === undefined ? {} : { transform: state.transform }),
       ...(state.colormap === undefined ? {} : { colormap: state.colormap }),
       ...(state.level === undefined ? {} : { level: state.level }),
@@ -7445,6 +7764,31 @@ export class Session {
     if (state.view === 'overview' && !this.file.info.hasGenomes) {
       this.navigate({ uri: state.uri, view: 'whole' }, { replace: true })
       return
+    }
+
+    // And the last of them: a link that names a genome on a file with no genome
+    // layer — the genome view, the pair view, or a region or a selection that
+    // carries one. None can be answered by a cooler, and each ended on a
+    // refusal about genomes: a sentence about a format the file is not, and,
+    // while that format is a dev feature that is off (§29), about one this
+    // page does not read. A view of genomes lands on the file's chromosomes; a
+    // view that merely carries a genome name is the same view without it.
+    if (!this.file.info.hasGenomes) {
+      if (state.view === 'genome' || state.view === 'pair') {
+        this.navigate({ uri: state.uri, view: 'contigs' }, { replace: true })
+        return
+      }
+      if (state.genome !== undefined || state.genome2 !== undefined || state.genomes !== undefined) {
+        const next: ViewState = { ...state }
+        delete next.genome
+        delete next.genome2
+        delete next.genomes
+        this.navigate(
+          next.view === 'selection' && next.regions === undefined ? { uri: state.uri, view: 'contigs' } : next,
+          { replace: true },
+        )
+        return
+      }
     }
 
     // …and the mirror of it. A metagenome's whole-file map is the `bin` level of
@@ -8864,8 +9208,10 @@ export class Session {
         class: 'inline-error',
         text:
           `This link points at ${fileLabel(uri)}, which is not a URL this page can fetch — it names ` +
-          'a local file. Drop the same file below to follow the link; the rest of the view (genome, ' +
-          'region, colour scale) will be restored.',
+          'a local file. Drop the same file below to follow the link; the rest of the view ' +
+          // A genome is a place only a multi-genome file has — a dev feature (§29).
+          (devFeature('metacool') ? '(genome, region, colour scale)' : '(region, colour scale)') +
+          ' will be restored.',
       }),
       this.picker.el,
     )
@@ -9014,6 +9360,7 @@ export class Session {
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
             ...this.resampleOf(this.reader),
+            ...(this.lens === null ? {} : { edit: this.lens.edit }),
             label: this.mapLabel(file.uri),
           }
         }
@@ -9044,20 +9391,20 @@ export class Session {
         if (starred !== null) {
           const facts = starred.analysisFacts()
           const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
-          return withCircularNames(
-            framed,
-            this.circularStore()?.list() ?? [],
-            this.originStore()?.record() ?? {},
+          return this.withEditOf(
+            withCircularNames(framed, this.circularStore()?.list() ?? [], this.originStore()?.record() ?? {}),
           )
         }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
-          : withCircularNames(
-              panel.analysisFraming(file.uri),
-              this.circularStore()?.list() ?? [],
-              this.originStore()?.record() ?? {},
+          : this.withEditOf(
+              withCircularNames(
+                panel.analysisFraming(file.uri),
+                this.circularStore()?.list() ?? [],
+                this.originStore()?.record() ?? {},
+              ),
             )
       },
       block: () => {
@@ -9230,6 +9577,7 @@ export class Session {
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
         ...this.resampleOf(this.reader),
+        ...(this.lens === null ? {} : { edit: this.lens.edit }),
         // What the reader calls it (§16.10), which is what every tab, legend,
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.
@@ -9350,10 +9698,12 @@ export class Session {
     // The framing a task is **run** on, and so the one that has to carry the
     // declarations: the drawer's header was given them and the run was not, so
     // a circle ticked on the table was still measured as a line (§8.15).
-    const framing = withCircularNames(
-      panel === undefined || panel === null ? null : panel.analysisFraming(uri),
-      declared.circular,
-      declared.origins,
+    const framing = this.withEditOf(
+      withCircularNames(
+        panel === undefined || panel === null ? null : panel.analysisFraming(uri),
+        declared.circular,
+        declared.origins,
+      ),
     )
     const block = panel === undefined || panel === null ? null : panel.analysisBlock()
     return buildAnalysisContext({
@@ -10037,6 +10387,12 @@ interface LevelChoice {
 }
 
 /** Why `bin × bin` is greyed out, once this tab could not hold it. */
+/**
+ * A metagenome whose every contact the stage reads for where a genome's
+ * contigs belong without being asked (§27.10): a pass of a few seconds at most.
+ */
+const LINKS_AUTO_PIXELS = 50_000_000
+
 const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
 
 /**
@@ -10085,4 +10441,12 @@ function levelChoices(
     return { options: refuse(pair('chromosome')), current: matrixLevel(state) }
   }
   return null
+}
+
+/** Whether two edits apply the same steps — the same assembly, whatever was undone after them. */
+function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b
+  if (a.cursor !== b.cursor) return false
+  return JSON.stringify(a.history.slice(0, a.cursor).map((entry) => entry.step)) ===
+    JSON.stringify(b.history.slice(0, b.cursor).map((entry) => entry.step))
 }

@@ -397,7 +397,8 @@ describe('the cards', () => {
 
   it('opens the 1D card with the tasks that make an interval set', () => {
     // A motif search and a peak call produce exactly the input the tasks below
-    // them take — one from the sequence, the other from a track.
+    // them take — one from the sequence, the other from a track. Two sequence
+    // sets against each other come last, a dev feature (§28, §29).
     expect(idsIn('1d')).toEqual([
       'motif',
       'peaks',
@@ -408,6 +409,7 @@ describe('the cards', () => {
       'frip',
       'groupsignal',
       'overlap',
+      'dotplot',
     ])
   })
 

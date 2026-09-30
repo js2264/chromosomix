@@ -18,7 +18,7 @@
  */
 
 import { OUTLINE_WIDTH, valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
-import type { LocusAxis, LocusSegment } from './locus'
+import { stretchOf, unitAt, type LocusAxis } from './locus'
 import {
   onScale,
   type Limits,
@@ -100,9 +100,6 @@ export interface PixelProfile {
  * `LocusAxis.segmentOf` deliberately answers with the first, which is right for
  * a caller resolving a *place* and wrong for one placing *data*.
  */
-function segmentsOf(axis: LocusAxis, contig: string): LocusSegment[] {
-  return axis.segments.filter((segment) => segment.contig === contig)
-}
 
 /**
  * Reduce samples to one value per pixel.
@@ -155,8 +152,12 @@ export function profileOf(
     // region is offered to both and lands on whichever one contains it, the
     // other placing it outside the visible slots, where the clip below drops it.
     // On every other axis this loop runs once and nothing changes.
-    for (const segment of segmentsOf(axis, region.contig)) {
+    for (const segment of axis.segmentsOf(region.contig)) {
       if (!(segment.bpPerUnit > 0)) continue
+      // The piece this stretch is, on an edited axis (§27.2): a region fetched
+      // for another piece of the same original lands in *that* piece, never on
+      // this one's pixels. The whole contig on an axis with no edit.
+      const [lowBp, highBp] = stretchOf(segment)
       const { starts, ends, values } = region
       const hasBand = region.min !== null && region.max !== null
       if (hasBand) envelope = true
@@ -170,8 +171,13 @@ export function profileOf(
         // heatmap itself is drawn in. Inlined rather than routed through
         // `locusToUnit`, because this runs once per interval and the segment has
         // already been resolved.
-        const u0 = segment.unitStart + (starts[i] - segment.bpStart) / segment.bpPerUnit
-        const u1 = segment.unitStart + (ends[i] - segment.bpStart) / segment.bpPerUnit
+        const s0 = Math.max(starts[i], lowBp)
+        const s1 = Math.min(ends[i], highBp)
+        if (!(s1 > s0)) continue
+        // Either way round: a reversed piece puts an interval's end on its left,
+        // and the swap below orders the two pixels whichever it is.
+        const u0 = unitAt(segment, s0)
+        const u1 = unitAt(segment, s1)
         let p0 = frame.toPixel(u0) - from
         let p1 = frame.toPixel(u1) - from
         if (p1 < p0) [p0, p1] = [p1, p0]

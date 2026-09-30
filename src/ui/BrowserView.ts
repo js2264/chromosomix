@@ -139,7 +139,10 @@ import {
   type NameBox,
   progressDetail,
 } from '../render/laneLabel'
-import type { LocusAxis, LocusWindow } from '../render/locus'
+import { bpAt, strandOf, type LocusAxis, type LocusWindow } from '../render/locus'
+import { axisThroughEdit } from '../edit/axis'
+import { stretchInFile } from '../edit/places'
+import type { EditedAssembly } from '../genome/edit'
 import type { MapId } from '../annotations/placement'
 import { setHoverPlace } from './hoverLocus'
 import { Scale } from '../render/scale'
@@ -289,6 +292,13 @@ export interface BrowserViewProps {
   assembly: Assembly
   store: AnnotationStore
   client: AnnotationClient
+  /**
+   * The edited assembly the session is drawn through, where it is drawn
+   * through one (§27.7): the axis is then the edited sequences, and the tracks
+   * — which are in the file's — are fetched and drawn through
+   * {@link BrowserView.trackAxis}. `null` or absent for the file as it is.
+   */
+  edited?(): EditedAssembly | null
   /**
    * Which of the assembly's sequences are on the axis.
    *
@@ -445,6 +455,12 @@ export class BrowserView {
    */
   private view: Assembly
   private axis: LocusAxis
+  /**
+   * The same axis in the file's own coordinates, where the session is drawn
+   * through an edit (§27.7) — what every track, mark and read is fetched and
+   * drawn through. The axis itself where there is no edit.
+   */
+  private trackAxis: LocusAxis
   private readonly scale: Scale
   private readonly canvas: HTMLCanvasElement
   private readonly stage: HTMLElement
@@ -666,6 +682,7 @@ export class BrowserView {
   constructor(private readonly props: BrowserViewProps) {
     this.view = props.selection.restrict(props.assembly)
     this.axis = assemblyAxis(this.view)
+    this.trackAxis = axisThroughEdit(this.axis, props.edited?.() ?? null) ?? this.axis
     this.scale = new Scale([0, Math.max(1, this.view.total)], 1)
 
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
@@ -997,20 +1014,33 @@ export class BrowserView {
    * begin in one chromosome and end in another, and the near end of one of them
    * is not what the reader drew.
    */
-  private pickSpan(from: number, to: number): void {
+  private pickSpan(from: number, to: number, anchor: number): void {
     const handler = this.picking?.box
     if (handler === undefined) return
     const start = this.axis.unitToLocus(from)
     const end = this.axis.unitToLocus(to)
     if (start === null || end === null || start.contig !== end.contig) return
-    const span: ManualSpan = orderedSpan(start.contig, start.bp, end.bp)
+    // In the file's coordinates where the tracks are drawn through an edit, as
+    // every mark is kept (§27.7): a drag across a junction is of the piece it
+    // began in, as one across an edge is refused for being of two sequences.
+    const began = this.axis.unitToLocus(anchor)
+    const span = stretchInFile(
+      this.props.edited?.() ?? null,
+      orderedSpan(start.contig, start.bp, end.bp),
+      began === null ? start.bp : began.bp,
+    )
+    if (span === null) return
     handler({ rows: span, cols: span })
   }
 
-  /** A canvas x as a genomic point, or `null` where there is no coordinate. */
+  /**
+   * A canvas x as a genomic point, or `null` where there is no coordinate — in
+   * the file's coordinates, as a mark is kept, where the view is drawn through
+   * an edit (§27.7); `null` in a gap, which is nowhere in the file.
+   */
   private pointAt(x: number): ManualPoint | null {
     if (x < this.gutter) return null
-    const locus = this.axis.unitToLocus(this.atUnit(x))
+    const locus = this.trackAxis.unitToLocus(this.atUnit(x))
     return locus === null ? null : { contig: locus.contig, bp: Math.round(locus.bp) }
   }
 
@@ -1193,9 +1223,14 @@ export class BrowserView {
     return out
   }
 
-  /** Publish the place under the pointer, or `null` once it has left. */
+  /**
+   * Publish the place under the pointer, or `null` once it has left — in the
+   * file's coordinates, as the map publishes it, where the view is drawn
+   * through an edit (§27.7): a model's beads and a deck's companions are the
+   * file's.
+   */
   private publishHover(x: number | null): void {
-    const locus = x === null || x < this.gutter ? null : this.axis.unitToLocus(this.atUnit(x))
+    const locus = x === null || x < this.gutter ? null : this.trackAxis.unitToLocus(this.atUnit(x))
     if (locus === null) {
       if (this.published) setHoverPlace(null)
       this.published = false
@@ -1268,6 +1303,7 @@ export class BrowserView {
     const keep = this.reportedLocus() === undefined ? null : this.currentRange()
     this.view = next
     this.axis = assemblyAxis(next)
+    this.trackAxis = axisThroughEdit(this.axis, this.props.edited?.() ?? null) ?? this.axis
     // Resets the domain to all of the new selection, which is the answer when
     // there is no window worth keeping.
     this.scale.setFull([0, Math.max(1, next.total)])
@@ -1583,19 +1619,23 @@ export class BrowserView {
    * The stretches on screen, per sequence, in the shape the deck hands its
    * cells (§25): what `MatrixPanel.framedRanges` answers for a map, for the
    * browser as a deck's lead. One window per stretch of the axis the domain
-   * overlaps, each carrying its segment as a map's does.
+   * overlaps, each carrying its segment as a map's does — in the file's
+   * coordinates, as a map's are, where the view is drawn through an edit (§27.7).
    */
   framedWindows(): LocusWindow[] {
     const [d0, d1] = this.scale.domain
     const out: LocusWindow[] = []
-    for (const segment of this.axis.segments) {
+    for (const segment of this.trackAxis.segments) {
       const lo = Math.max(d0, segment.unitStart)
       const hi = Math.min(d1, segment.unitEnd)
       if (!(hi > lo)) continue
+      // Low and high, whichever way the stretch reads (§27.2).
+      const a = bpAt(segment, lo)
+      const b = bpAt(segment, hi)
       out.push({
         contig: segment.contig,
-        start: segment.bpStart + (lo - segment.unitStart) * segment.bpPerUnit,
-        end: segment.bpStart + (hi - segment.unitStart) * segment.bpPerUnit,
+        start: Math.min(a, b),
+        end: Math.max(a, b),
         unitFrom: lo,
         unitTo: hi,
         segment,
@@ -1959,7 +1999,7 @@ export class BrowserView {
     // crosshair turned off, which read as the toggle not reaching the tracks.
     if (chrome && this.crosshair) {
       for (const echo of this.echo) {
-        const unit = this.axis.locusToUnit(echo.contig, echo.bp)
+        const unit = this.trackAxis.locusToUnit(echo.contig, echo.bp)
         if (unit === null) continue
         const px = this.gutter + this.scale.toPixel(unit)
         if (px >= this.gutter && px <= width) drawGuide(ctx, px, 0, height, CROSSHAIR_COLOR, this.dpr)
@@ -2112,8 +2152,8 @@ export class BrowserView {
     // are drawn over their own shading rather than under it.
     for (const rect of store.rects) {
       for (const span of sameSpan(rect.a, rect.b) ? [rect.a] : [rect.a, rect.b]) {
-        const from = this.axis.locusToUnit(span.contig, span.from)
-        const to = this.axis.locusToUnit(span.contig, span.to)
+        const from = this.trackAxis.locusToUnit(span.contig, span.from)
+        const to = this.trackAxis.locusToUnit(span.contig, span.to)
         if (from === null || to === null || to < low || from > high) continue
         // Clipped to the window rather than dropped at its edge: a domain wider
         // than the screen is the ordinary case, and a box drawn only when both
@@ -2128,14 +2168,14 @@ export class BrowserView {
       }
     }
     for (const line of store.lines) {
-      const at = this.axis.locusToUnit(line.at.contig, line.at.bp)
+      const at = this.trackAxis.locusToUnit(line.at.contig, line.at.bp)
       if (at === null || at < low || at > high) continue
       out.push({ id: line.id, kind: 'line', colour: line.colour, from: at, to: at })
     }
     for (const mark of store.arrowheads) {
       const drawn = new Set<number>()
       for (const end of [mark.a, mark.b]) {
-        const at = this.axis.locusToUnit(end.contig, end.bp)
+        const at = this.trackAxis.locusToUnit(end.contig, end.bp)
         if (at === null || at < low || at > high || drawn.has(at)) continue
         drawn.add(at)
         out.push({ id: mark.id, kind: 'anchor', colour: mark.colour, from: at, to: at })
@@ -2217,7 +2257,7 @@ export class BrowserView {
     for (let i = 0; i < row.window.piles.length; i++) {
       const placed = row.placed[i]
       if (placed === undefined) continue
-      drawReads(ctx, pile, this.axis, row.window.piles[i], placed, {
+      drawReads(ctx, pile, this.trackAxis, row.window.piles[i], placed, {
         colours,
         rowHeight: READ_ROW,
         rowGap: READ_ROW_GAP,
@@ -2262,7 +2302,7 @@ export class BrowserView {
       label = this.paintPile(ctx, lane, palette)
     } else if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
-        drawSequence(ctx, frame, this.axis, regions, {
+        drawSequence(ctx, frame, this.trackAxis, regions, {
           font: scaleFont(BASE_FONT),
           opacity: member.style.opacity,
           letters: this.text,
@@ -2374,7 +2414,7 @@ export class BrowserView {
         }
       }
     } else if (entry.payload?.kind === 'pairs') {
-      const drawn = drawArcs(ctx, frame, this.axis, entry.payload.data, {
+      const drawn = drawArcs(ctx, frame, this.trackAxis, entry.payload.data, {
         colour: entry.style.colour,
         opacity: entry.style.opacity,
       })
@@ -2400,7 +2440,7 @@ export class BrowserView {
       const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength, features.display)
       const layout = layoutFeatures(
         frame,
-        this.axis,
+        this.trackAxis,
         entry.payload.data,
         rules.rows,
         rules.least,
@@ -2731,7 +2771,7 @@ export class BrowserView {
         const regions = this.bases.basesFor({
           entry: member.id,
           scope: 'browser',
-          axis: this.axis,
+          axis: this.trackAxis,
           domain: lane.frame.domain,
         })
         lane.residues.push({ entry: member, regions: regions ?? [] })
@@ -2749,7 +2789,7 @@ export class BrowserView {
         const window = this.piles.readsFor({
           entry: member.id,
           scope: 'browser',
-          axis: this.axis,
+          axis: this.trackAxis,
           domain: lane.frame.domain,
           rows: rowsFor(lane.frame, this.nameBand()),
           // The browser's axis is one unit per base (§5.8), so the domain
@@ -2772,7 +2812,7 @@ export class BrowserView {
           rung,
           placed: packPile(
             window.piles,
-            this.axis,
+            this.trackAxis,
             lane.frame,
             lane.frame.domain[0],
             lane.frame.domain[1],
@@ -2786,7 +2826,7 @@ export class BrowserView {
       const samples = this.cache.samplesFor({
         entry: member.id,
         scope: 'browser',
-        axis: this.axis,
+        axis: this.trackAxis,
         domain: lane.frame.domain,
         // The lead's width where a cell was given one — see
         // {@link BrowserViewProps.sampleWidth}.
@@ -2798,7 +2838,7 @@ export class BrowserView {
       })
       lane.profiles.push({
         entry: member,
-        profile: profileOf(lane.frame, this.axis, samples, scaleOf(member.style)),
+        profile: profileOf(lane.frame, this.trackAxis, samples, scaleOf(member.style)),
       })
       lane.pending = this.cache.pendingOf(member.id, 'browser') ?? lane.pending
     }
@@ -3516,7 +3556,7 @@ export class BrowserView {
         // that did not travel places nothing — it is a drag the reader gave up
         // on — and, like the map's, it does not fall back to navigating either.
         if (this.picking?.box !== undefined) {
-          if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) this.pickSpan(from, to)
+          if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) this.pickSpan(from, to, this.atUnit(drag.x0))
           this.schedule()
           return
         }
@@ -3900,7 +3940,7 @@ export class BrowserView {
         const pile = band.window.piles[i]
         const placed = band.placed[i]
         if (placed === undefined) continue
-        const at = readAt(band.frame, this.axis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
+        const at = readAt(band.frame, this.trackAxis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
         if (at !== null) return { pile, index: at, source: lane.entry.label }
       }
     }
@@ -4016,6 +4056,12 @@ export class BrowserView {
       return
     }
     const where = this.describePosition(locus)
+    // The same place in the file, which is where the letters are held: a turned
+    // stretch reads them backwards and from the other strand (§27.7).
+    const unit = this.atUnit(x)
+    const held = this.trackAxis.unitToLocus(unit)
+    const piece = this.trackAxis.segmentAt(unit)
+    const inFile = held === null ? null : { ...held, reversed: piece !== null && strandOf(piece) === -1 }
     const rows: HTMLElement[] = []
     const parts: string[] = []
     // Which lane the pointer is actually inside. Every track is read at this
@@ -4057,7 +4103,7 @@ export class BrowserView {
       // readout in this view that is a letter rather than a number, and the
       // question a reader zoomed in this far is asking.
       for (const { entry, regions } of lane.residues) {
-        const letter = baseAt(regions, locus.contig, locus.bp) ?? '—'
+        const letter = (inFile === null ? null : baseAt(regions, inFile.contig, inFile.bp, inFile.reversed)) ?? '—'
         const here =
           inside !== undefined &&
           (inside.entry.id === entry.id ||

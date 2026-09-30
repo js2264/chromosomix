@@ -34,6 +34,7 @@
  */
 
 import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/types'
+import { editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
 import { abortError, idParam, listParam } from './job'
@@ -110,6 +111,8 @@ export interface RunnerHost {
     orientation?: OrientationSummary
     /** The total the map is drawn to, where it is drawn to one (§6.5). */
     resample?: ResampleTarget
+    /** The edit of the reference the map is drawn through, where it is drawn through one (§27.7). */
+    edit?: ReferenceEdit
     /** What the reader calls this map (§16.10), which its results are named by. */
     label?: string
   } | null
@@ -226,6 +229,9 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     a.level === b.level &&
     // The total the map is drawn to changes every count a task reads (§6.5).
     (a.contacts ?? null) === (b.contacts ?? null) &&
+    // And so does the edit it is drawn through (§27.7) — an inversion leaves a
+    // whole-genome window's bins where they were and moves every contact in it.
+    (a.edit ?? null) === (b.edit ?? null) &&
     // What the molecules are declared to be changes the numbers as surely as
     // the window does (§8.15): a decay measured along a line is not the one a
     // circle has, and an arm read from another origin is another arm.
@@ -321,6 +327,7 @@ function mountKey(
   cells?: readonly string[],
   binning?: PairsBinning,
   resample?: ResampleTarget,
+  edit?: ReferenceEdit,
 ): string {
   const base =
     cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
@@ -330,9 +337,13 @@ function mountKey(
   const binned = binning === undefined ? base : `${base}\u0000${binning.base}:${binning.rungs}`
   // And the total it is drawn to (§6.5): the same file at ten million contacts
   // and at its own depth are two maps as surely as two resolutions are.
-  return resample === undefined
-    ? binned
-    : `${binned}\u0000contacts:${resample.contacts}:${resample.seed ?? ''}:${resample.alpha ?? ''}`
+  const drawn =
+    resample === undefined
+      ? binned
+      : `${binned}\u0000contacts:${resample.contacts}:${resample.seed ?? ''}:${resample.alpha ?? ''}`
+  // And the edit it is drawn through (§27.7), by the steps it applies: two
+  // edits of one file are two assemblies, as two totals are two maps.
+  return edit === undefined ? drawn : `${drawn}\u0000edit:${editFingerprint(edit)}`
 }
 
 /**
@@ -401,6 +412,12 @@ export interface RunTarget {
    * answer a task at ten million contacts with the file's own depth.
    */
   resample?: ResampleTarget
+  /**
+   * The edit of the reference this map is drawn through (§27.7): every task
+   * reads the edited assembly, as the view draws it, and a mount keyed without
+   * it would answer a task about the edit with the file as it was.
+   */
+  edit?: ReferenceEdit
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -677,8 +694,11 @@ export class AnalysisRunner {
     // (§5.8), where the reader has the bigWigs and not the map. It still needs a
     // framing, because a result is a record and a record names what it was of
     // (§18.4); what it names there is the assembly rather than a block.
+    // A task that reads no map is a record of none, whatever the view shows.
     const framing =
-      context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
+      task.mapless === true
+        ? tracksFraming(context, 'sequences')
+        : context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
     if (framing === null) {
       this.refuse(task, batch, 'this view has no contact map to run against')
       return
@@ -803,6 +823,8 @@ export class AnalysisRunner {
       // task reaches a resampled map, and dropping the total here would measure
       // the file as stored under a header that says otherwise.
       ...(source?.resample === undefined ? {} : { resample: source.resample }),
+      // …and through the edit it is drawn through (§27.7), for the same reason.
+      ...(source?.edit === undefined ? {} : { edit: source.edit }),
       // The map's name where the host has one — the tab, the lane and every
       // figure that names the map take it from here — and the framing's address
       // where it has none, which is a genome browsed as tracks.
@@ -1140,7 +1162,7 @@ export class AnalysisRunner {
     // Keyed on the cell set as well as the file: an scool re-ticked between two
     // runs is the same URI and a different map, and a mount kept for the name
     // alone would answer the second question with the first one's cells.
-    const key = mountKey(source.uri, source.cells, source.binning, source.resample)
+    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -1161,6 +1183,7 @@ export class AnalysisRunner {
       ...(source.cells === undefined ? {} : { cells: source.cells }),
       ...(source.binning === undefined ? {} : { binning: source.binning }),
       ...(source.resample === undefined ? {} : { resample: source.resample }),
+      ...(source.edit === undefined ? {} : { edit: source.edit }),
     })
     this.mounted = key
   }
@@ -1592,7 +1615,8 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
 }
 
 /**
- * The framing a track-only run is a record of.
+ * The framing a track-only run is a record of — or a run on sequences alone,
+ * which names them instead.
  *
  * There is no block, so the extents are empty and the bin size is zero — and
  * that is the honest reading rather than a placeholder: the numbers came from
@@ -1600,7 +1624,7 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
  * involved. A task in this venue never reads any of these fields; what reads
  * them is the provenance line above an export, which should say so.
  */
-function tracksFraming(context: AnalysisContext): AnalysisFraming {
+function tracksFraming(context: AnalysisContext, read = 'loaded tracks'): AnalysisFraming {
   return {
     uri: context.uri,
     rows: [0, 0],
@@ -1615,7 +1639,7 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     // opened from a signed S3 URL, and the whole of one in a heading pushes the
     // rest of the line off the drawer and off a console row. What the uri is
     // wanted for is `# file:`, which every provenance block already carries.
-    label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
+    label: `${fileLabel(context.uri)} · ${read}, no contact map`,
     // What the file's molecules are declared to be, which a task on the
     // sequence reads as surely as one on the map (§8.15).
     ...(context.circular === undefined ? {} : { circular: [...context.circular] }),

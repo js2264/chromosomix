@@ -59,6 +59,9 @@ export class HicStore implements PixelStore {
   /** Blocks hold int16 counts or float32 values; the float kind covers both. */
   readonly countKind = 'f' as const
 
+  /** The index is two-dimensional: a rectangle costs its own blocks (`PixelStore.rectangular`). */
+  readonly rectangular = true
+
   scoreColumns(): string[] {
     // One value per record and no room in the format for a second. A `.hic`
     // cannot carry the extra per-pixel columns a cooler may (`expected`, a

@@ -61,7 +61,7 @@ import { FLAG } from '../annotations/bam/format'
 
 /** The one flag bit this module draws differently; see {@link drawOne}. */
 const SUPPLEMENTARY = FLAG.SUPPLEMENTARY
-import type { LocusAxis } from './locus'
+import { stretchOf, unitAt, type LocusAxis, type LocusSegment } from './locus'
 
 /**
  * Which picture a pile lane draws, if any.
@@ -82,6 +82,22 @@ const READ_MIN_PIXELS = 2.5
 
 /** …and below this many pixels per base, a letter does not fit in a column. */
 const LETTER_MIN_PIXELS = 7
+
+/**
+ * The stretch of the axis a pile was fetched for.
+ *
+ * The first stretch of its contig on most axes; on an edited one (§27.2) a
+ * contig can be several pieces, and a pile belongs to the one whose piece its
+ * window overlaps — a window is cut per piece, so there is exactly one.
+ */
+function pileSegment(axis: LocusAxis, pile: ReadPile): LocusSegment | null {
+  for (const segment of axis.segmentsOf(pile.contig)) {
+    if (!(segment.bpPerUnit > 0)) continue
+    const [from, to] = stretchOf(segment)
+    if (pile.end > from && pile.start < to) return segment
+  }
+  return null
+}
 
 /**
  * Which rung this frame is on.
@@ -246,10 +262,9 @@ export function packPile(
   const units: Array<{ pile: number; a: number; b: number; start: number; end: number }> = []
   for (let p = 0; p < piles.length; p++) {
     const pile = piles[p]
-    const segment = axis.segmentOf(pile.contig)
-    if (segment === null || !(segment.bpPerUnit > 0)) continue
-    const unitOf = (base: number): number =>
-      segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit
+    const segment = pileSegment(axis, pile)
+    if (segment === null) continue
+    const unitOf = (base: number): number => unitAt(segment, base)
     const paired = layout !== 'reads'
     for (let i = 0; i < pile.length; i++) {
       const mate = paired ? pile.mate[i] : -1
@@ -322,13 +337,12 @@ export function drawReads(
   paint: ReadPaint,
   rung: ReadRung,
 ): number {
-  const segment = axis.segmentOf(pile.contig)
-  if (segment === null || !(segment.bpPerUnit > 0)) return 0
+  const segment = pileSegment(axis, pile)
+  if (segment === null) return 0
   // The same conversion `profileOf` makes, and it has to be the same one: a
   // read and the coverage above it disagreeing by half a pixel is a pile that
   // does not line up with its own summary.
-  const at = (base: number): number =>
-    frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
+  const at = (base: number): number => frame.toPixel(unitAt(segment, base))
   const perBase = Math.abs(at(1) - at(0))
 
   ctx.save()
@@ -398,8 +412,8 @@ export function readAt(
   x: number,
   y: number,
 ): number | null {
-  const segment = axis.segmentOf(pile.contig)
-  if (segment === null || !(segment.bpPerUnit > 0)) return null
+  const segment = pileSegment(axis, pile)
+  if (segment === null) return null
   const along = laneIsHorizontal(frame.orientation) ? x : y
   const across = canvasToAcross(frame, laneIsHorizontal(frame.orientation) ? y : x)
   if (across < 0 || across > frame.thickness) return null
@@ -422,8 +436,7 @@ export function readAt(
   // be wrong and look right.
   if (row >= rowsAcross(frame.thickness, rowHeight, rowGap)) return null
 
-  const at = (base: number): number =>
-    frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
+  const at = (base: number): number => frame.toPixel(unitAt(segment, base))
   let found: number | null = null
   for (let i = 0; i < pile.length; i++) {
     if (placed.row[i] !== row) continue

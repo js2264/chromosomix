@@ -53,6 +53,7 @@
 import { splitUri } from './labels'
 import type { StoreEntry, StoreFile } from '../state/store'
 import { STORE_KIND, STORE_VERSION } from '../state/store'
+import { devFeature, type DevFeature } from '../state/devFeatures'
 
 declare const __DEMO_BASE__: string
 
@@ -104,6 +105,8 @@ const DEMO: Array<{
   detail: string
   /** The data files the session is made of, by name in its folder — its card's *N files* fold. */
   files: string[]
+  /** The dev feature this figure belongs to, if it is one (§29): absent from the store while it is off. */
+  dev?: DevFeature
 }> = [
   {
     folder: 'yeast',
@@ -180,6 +183,7 @@ const DEMO: Array<{
       'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
       'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first.',
     files: ['Mock_microbial_community.metacool', 'Mock_microbial_community.mmetacool'],
+    dev: 'metacool',
   },
 ]
 
@@ -201,6 +205,8 @@ const DEMO_DATA: Array<{
   format: string
   assembly: string
   dataset: string
+  /** The dev feature this file belongs to, if it is one (§29). */
+  dev?: DevFeature
 }> = [
   {
     folder: 'yeast',
@@ -294,6 +300,7 @@ const DEMO_DATA: Array<{
     format: 'metacool',
     assembly: 'mock community',
     dataset: 'Mock microbial community',
+    dev: 'metacool',
   },
   {
     folder: 'metagenomics/mock-community',
@@ -303,6 +310,7 @@ const DEMO_DATA: Array<{
     format: 'mmetacool',
     assembly: 'mock community',
     dataset: 'Mock microbial community',
+    dev: 'metacool',
   },
 ]
 
@@ -476,7 +484,10 @@ export function demosStore(): StoreFile {
     base,
     columns: DEMO_COLUMNS,
     entries: [
-      ...DEMO.map(
+      // A figure or a file that belongs to a dev feature is not listed while
+      // the switch is off (§29): the store is on the landing page, which is
+      // the first place a reader would learn of it.
+      ...DEMO.filter(shown).map(
         (entry): StoreEntry => ({
           label: entry.title,
           uri: `${base}${entry.folder}/${entry.file}`,
@@ -493,7 +504,7 @@ export function demosStore(): StoreFile {
           },
         }),
       ),
-      ...DEMO_DATA.map(
+      ...DEMO_DATA.filter(shown).map(
         (entry): StoreEntry => ({
           label: entry.label,
           uri: `${base}${entry.folder}/${entry.file}`,
@@ -503,6 +514,11 @@ export function demosStore(): StoreFile {
       ),
     ],
   }
+}
+
+/** Whether a figure or a file of the lab's store is listed: always, unless its dev feature is off. */
+function shown(entry: { dev?: DevFeature }): boolean {
+  return entry.dev === undefined || devFeature(entry.dev)
 }
 
 // ---------------------------------------------------------------------------

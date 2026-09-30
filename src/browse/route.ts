@@ -28,6 +28,7 @@
  */
 
 import { splitUri } from '../ui/labels'
+import { devFeature } from '../state/devFeatures'
 
 /** Which of the app's two front doors a name belongs to, or neither. */
 export type FileRoute = 'map' | 'genome' | 'unknown'
@@ -61,7 +62,11 @@ export function routeOf(uri: string): FileRoute {
   // query string, and a HiC-Pro pair names its bin file in a `#bins=` fragment
   // (§3.9) — which ends in `.bed`, and routed the *matrix* to the genome door.
   const name = (splitUri(uri).path.split(/[\\/]/).pop() ?? uri).split(/[?#]/)[0]
-  if (/\.([ms]?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
+  // The multi-genome containers only while they are read (§29): switched off
+  // they are names this viewer does not open, and the row says so in the
+  // sentence every other such name gets.
+  if (/\.m?metacool$/i.test(name)) return devFeature('metacool') ? 'map' : 'unknown'
+  if (/\.([ms]?cool|hic|h5|hdf5)$/i.test(name)) return 'map'
   // A `.pairs` is a contact list rather than a matrix, and it still belongs at
   // the map's door: what comes out of it is a map, after one question the file
   // cannot answer for itself (§3.7). Routing is about which front door a name

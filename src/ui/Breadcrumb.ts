@@ -172,6 +172,13 @@ export interface BreadcrumbProps {
    * behind it.
    */
   contacts?: { el: HTMLElement; sync(): void }
+  /**
+   * The word on the reference (§27.3): *as in the file*, or *edited · N steps*,
+   * before the resolution. Seated like the contacts box and for its reason: the
+   * session owns it, and this bar only puts it back on every render. Absent
+   * where there is no map to edit, and while the dev features are off (§29).
+   */
+  reference?: { el: HTMLElement; sync(): void }
 }
 
 /**
@@ -271,6 +278,13 @@ export class Breadcrumb {
     // file, then this resolution, then these chromosomes* and put a control the
     // reader changes often at the one end of the bar they scroll past on the way
     // to the coordinates.
+    //
+    // The reference first: whether the sequences the trail names are the
+    // file's or an edit's is the question before how finely they are drawn.
+    if (this.props.reference !== undefined) {
+      this.append(this.props.reference.el)
+      this.props.reference.sync()
+    }
     this.pushResolution()
     // …and after it, the total the maps are drawn to (§6.5): another answer to
     // *how the picture is drawn*, at the end of the bar where those live.

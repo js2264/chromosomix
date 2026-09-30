@@ -1623,6 +1623,8 @@ export class HeatmapView {
    * the canvas wears while the mode is on.
    */
   private bandMode: 'zoom' | 'pick' = 'zoom'
+  /** A sideways scroll slides along the diagonal: see {@link setDiagonalSlide}. */
+  private diagonalSlide = false
   /**
    * A form is waiting for a **box**, so a plain drag draws one.
    *
@@ -2425,6 +2427,28 @@ export class HeatmapView {
    * diagonal is the bottom edge of the picture, so snapping a corner onto it
    * would be snapping to the frame.
    */
+  /**
+   * Whether a sideways scroll slides **along the diagonal** — both axes at once,
+   * a slide down the genome — rather than along the columns alone.
+   *
+   * A cis map is read along its diagonal, and a sideways slide that took the
+   * columns and left the rows carried the diagonal off the side of the picture
+   * within a screen; the reference editor's stage slid along it from the first
+   * day, and a reader who learned it there found the session's map doing the
+   * other thing. On, wherever the diagonal is in the picture; off for a turned
+   * map, whose diagonal already runs across the screen, and for a block of two
+   * stretches that share none — a trans block, or two genomes — which has no
+   * diagonal to slide along.
+   */
+  setDiagonalSlide(on: boolean): void {
+    this.diagonalSlide = on
+  }
+
+  /** Whether a sideways scroll slides along the diagonal — see {@link setDiagonalSlide}. */
+  get slidesAlongDiagonal(): boolean {
+    return this.diagonalSlide
+  }
+
   setSpanGestures(on: boolean): void {
     this.spanGestures = on
   }
@@ -5538,9 +5562,10 @@ export class HeatmapView {
       // it does over the rest of the page; that is the wrong trade over a
       // picture you navigate by sliding. Back and forward are still a sideways
       // swipe *outside* the picture, which is where a page gesture belongs.
+      // Along the diagonal where there is one (see `setDiagonalSlide`).
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         e.preventDefault()
-        this.panBy(-e.deltaX, 0)
+        this.panBy(-e.deltaX, this.diagonalSlide ? -e.deltaX : 0)
         return
       }
       // **With ⌘ held, up and down slide too** — both axes at once, so two

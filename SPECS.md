@@ -115,6 +115,11 @@ testing for cooler first would silently downgrade every metacool to a contig-onl
 
 ### 3.2 `.metacool` — the primary case
 
+**A dev feature (§29).** Everything in this section, §3.4, §5.1–§5.3, §7.3 and the metagenome tasks of
+§18.8 is read, drawn and offered only while the *dev features* switch is on; switched off, a
+`.metacool` and an `.mmetacool` are refused as files this viewer does not read, and nothing on screen
+names either.
+
 Accepted when:
 
 - `metacooler-format-version == 1`
@@ -1594,7 +1599,13 @@ colormap is selectable; keyboard pan and zoom are supported.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
 Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
-is and what they already meant over this app's own tracks. It used to be left to the page so that the
+is and what they already meant over this app's own tracks — and on a map, **along its diagonal**:
+rows and columns together, by the same distance, so the diagonal stays where it is on the screen
+and the picture moves down the genome under it, as the reference editor's stage (§27.3) has always
+slid. A slide that took the columns alone carried a cis map's diagonal off the side of the picture
+within a screen. Along the columns alone where there is no diagonal to follow: over a turned band
+(§17), whose diagonal already runs across the screen, and over a block of two stretches that share
+no bins — a trans block, two genomes. It used to be left to the page so that the
 platform's back-and-forward swipe would work over a map as it does over the rest of a document; that
 is the wrong trade over the one element a reader navigates *by* sliding, and the swipe still works
 everywhere outside the picture. Over a lane stack it means the same thing as over the map, because a
@@ -4135,7 +4146,8 @@ in the same view. Concretely:
   (§7.3) still costs a full pixel pass, because summing genome pairs has no index to shortcut
 - the vocabulary follows the file: a cooler's sequences are **chromosomes**, and the genomes table is
   shown greyed out with the reason rather than hidden, so "does this viewer have one" is answered
-  rather than raised
+  rather than raised — while the multi-genome format is a dev feature that is **on** (§29). Off, the
+  row is absent: the question is not one that page raises, and a greyed row would raise it
 - whole-genome and whole-chromosome selections are size-guarded. Two guards, in order:
   `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a browser-side *estimate against a
   budget* — the dense values at 4 B per cell, the raster at 16 B per pooled pixel (a constant
@@ -4335,11 +4347,13 @@ handed to the browser to save (§26.6); none of them touches the thing that was 
 them needs a server. The distinction is between authoring an output and editing an input, and only the
 second is refused.
 
-Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
-contact-based contig reordering or scaffolding; ~~no writing of `.cool`, `.mcool` or
-`.metacool`~~ — **narrowed**, see §18.9 and §3.7: writing a matrix *derived from an opened map* is
-still refused, and writing the **primary reduction of a `.pairs` file** is not; and no differential
-APA.
+Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling;
+~~no contact-based contig reordering or scaffolding~~ — **reversed**, see §18.9 and §27: an edit of
+the reference is a lens over the opened file, and what it produces is new files; ~~no writing of
+`.cool`, `.mcool` or `.metacool`~~ — **narrowed**, see §18.9, §3.7 and §27.8: writing a matrix
+*derived from an opened map* is still refused, and writing the **primary reduction of a `.pairs`
+file**, or a **rearrangement** of an opened map's stored counts through a declared edit, is not; and
+no differential APA.
 
 Five more arrive with §8.13, each with its own reason rather than one shared one: no **mate
 fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
@@ -5808,7 +5822,9 @@ against the new one. This is the discipline the on-the-fly 4C lane never kept �
 whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
-panel to exist.
+panel to exist. **A task that reads no map** — two sequence sets against each other (§28) — has no
+framing to name or to leave: its heading says it reads the sequences chosen, not the map, its result
+is never stale for a view that moved, and its provenance is of the sequences.
 
 **Provenance travels with the numbers.** Every result carries its task and task version, every
 parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
@@ -6965,9 +6981,16 @@ fit at the commit yapc cites — compared region for region, summit for summit a
 candidate list with no significance claimed, rather than cut at a valley in its histogram or at a
 score that looked about right, because yapc's cut is IDR and nobody published another.
 
-**No contact-based contig reordering or scaffolding.** It would only be useful if the reordering could
-be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
-with nowhere to go.
+**Contact-based reordering and scaffolding: the reference editor (§27).** ~~No contact-based contig
+reordering or scaffolding. It would only be useful if the reordering could be written back into a
+file, and it cannot — see the next paragraph — so it would produce an ordering with nowhere to go.~~
+The argument was right about its premise and is overtaken by it: an ordering now has three places to
+go, and none of them is back into the file. It is a **lens** the whole session is drawn through
+(§27.2), so an edit is useful the moment it is made — the map, the tracks and every task after it are
+in its coordinates. It is **written as new files** — an AGP, a Juicebox `.assembly`, a chain, a
+FASTA, lifted tracks — each of which is authoring an output, which §13 never refused. And it is
+**re-applied** from any of them to the same library's other files. What stays refused is what the
+rule was protecting: the file that was opened is never modified.
 
 **No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
 `.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
@@ -7017,6 +7040,18 @@ One structural difference from `cooler cload` is stated rather than left to be d
 no way to construct an enum type. cooler reads it, and `Cooler.bins()` returns integer codes where a
 file from `cooler cload` returns a categorical of chromosome names. Everything numeric is identical.
 
+**A rearrangement is not a derivation, and the lifted contacts of §27.8 are the second case this
+admits.** A map moved through an edit of the reference computes no count. From a `.pairs`, every
+record is binned once, through the lens — the primary reduction of a primary file under a declared
+transform. From a stored map, every stored count is moved, whole, to the bin the edit puts it in:
+nothing is summed, smoothed, balanced or re-binned, except at a junction, where two stored bins may
+share an edited bin and the provenance counts where. The three questions are answered as they are
+answered above: **the bin table** from the edited assembly's lengths and the opened map's bin size;
+**provenance** as the source file, the AGP of the edit, and the count of approximate junctions and
+duplicated stretches; **balancing** none, `generated-by` saying *unbalanced*. And the checks are the
+same two: read back through this app's own reader, and compared with an independent re-binning of the
+same records through the same edit, written the slow obvious way in `test/support/`.
+
 **No differential APA**, and **no differential insulation task**. Two insulation tracks from two files
 are two synthetic tracks, and comparing tracks is something the app already does; a task that only
 subtracts one from the other would be a worse version of a picture the reader can already make.
@@ -7043,6 +7078,20 @@ pairs against a stated null, which is a summary of the file in the sense the int
 one. A **call** needs false-discovery control and a golden built from `hic_breakfinder`'s or
 `EagleC`'s own output, which is the bar the first paragraph of this section sets for any second
 caller, and neither is attempted.
+
+**The reference editor's suggestions are the one method this section admits without a port, and the
+exception is stated rather than slipped in.** §27.5 is the app's own — designed here, to be published
+as a method of its own, and different in parts from everything it was weighed against — so there is
+no upstream whose output could be its golden, and *the port does not get to improve on it* has nothing
+to bind. What the first paragraph fears is a half-good caller whose output *looks like a result*.
+Three things keep §27 on the right side of that line. **A suggestion is an offer, not a result**: in
+manual and review mode nothing enters the reference without a press, on a mark drawn over the very
+contacts it is about. **What auto mode applies is written down**: every step with the evidence it was
+taken on, undoable, in the history every export quotes. **And it is held to a truth known by
+construction** (§27.11): scrambles of good assemblies whose inverse is known exactly, recovered or
+not, reported with the grid they were drawn from — a bar a port does not meet, since a port is held
+to another program's answer rather than to the right one. It reports no variant, and the paragraph
+above stands for anything that would.
 
 **And, restating C1 because this is the section most likely to erode it:** no analysis runs anywhere but
 in the reader's own browser. There is no compute service, no offloading of the expensive cases, and no
@@ -7324,6 +7373,10 @@ dragged. The exception is a picture whose rows are a **list** — the metaplot's
 three thousand features down against distance across — which has no diagonal, nothing to compare
 across one, and which square cells turn into a ribbon a fifth of the card wide. It takes the whole
 width, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+**A picture read like a map** — a dot plot's two assemblies end to end (§28), `MatrixOutput.large` —
+is square and as large as the drawer lets it be, its cells a fraction of a pixel wider than whole where
+that is what fills it, each cell's edges on whole pixels; and it is always painted, however few its
+cells, since its axes are its sequences end to end, which the painter marks and a category axis cannot.
 A chart's grid is stated as four insets and stretches to whatever it is put in, so a square aspect
 means the builder is told the size of the box and answers with a grid in pixels — and the colour bar
 stands beside the picture at the picture's own height rather than against the far edge at a fixed
@@ -9849,6 +9902,12 @@ in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the 
 refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
 stands down for `:disabled`.
 
+**One toggle is drawn as a slider** — *dev features* in *About* (§29.1), a track and a knob, because a
+switch that reloads the window should look like the switch it is rather than like one more button in
+a dialog of facts. It is still a `button` with `aria-pressed`, lit by the same rule as every other
+toggle; the knob is `currentColor`, so *lit* is the knob in the accent, moved across. The slider is how
+it is drawn, never a second way of saying it is on.
+
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
@@ -9987,3 +10046,1022 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 
 A thing that can run says exactly one of: **never run**, **queued**, **running**, **done**,
 **failed**, **cancelled**, or **reading…** while it fetches. No surface invents a seventh.
+
+## 27. Editing the reference
+
+A stage where the reader edits the reference a contact map was built against — cut, invert, move,
+join, split, duplicate, set aside — with the map, its tracks and every later analysis redrawn through
+the edit as it is made, guided by **suggestions** the app computes from the map, the sequence, the
+tracks and the reads, drawn over the map and snapped to under the pointer. It is the work Juicebox
+Assembly Tools and PretextView do by hand, and it is here for three reasons neither of them has:
+nothing is installed or uploaded (C1, §11); the tracks move with the map, so a coverage dip, a gene
+and a gap are read beside the contacts that are being judged; and the app says where it thinks the
+reference is wrong, in the picture, where the reader's eye already is.
+
+**Status: partly built.** Every subsection below describes what will be, and says *built* as it
+lands: so far the model of an edit and its lens on the axes (§27.2), the stage with its picture
+(§27.3, §27.4, §27.9), the edit kept with the file, the session drawn through it — the map, its
+tracks, the Chromosomes table and every task (§27.7) — and the suggestions: the method, drawn over the
+stage's map and snapped to, and answered in all three modes (§27.5, §27.6). There are not yet exports
+(§27.8), nor any evidence beyond the map. It is a **dev feature** (§29) throughout: on `main`, and
+invisible until the switch in *About* is on. The design it was written from — the method in full, the architecture with the
+code it lands in, the alternatives weighed, the order it is built in — is `docs/reference-editing.md`.
+
+It reverses two of §18.9's refusals and narrows a third, each in its own paragraph there: contact-based
+reordering is no longer refused, because an ordering now has three places to go; a matrix this app
+writes may now be a *rearrangement* of an opened map; and the suggestions are the app's **own method**,
+admitted on its own validation (§27.11) rather than a port's golden. §13's first rule is untouched and
+is the ground all three stand on: **the app never modifies a file it opened.** An edit is a lens over
+the file, and what it produces is new files.
+
+### 27.1 Words
+
+The **original** is the assembly the file names: its sequences, as spelt, at their lengths. An **edit**
+is what the reader has done to it — an ordered **history** of **steps**, each one operation. Its result
+is the **edited assembly**: **edited sequences**, each an ordered list of **pieces** — a stretch of one
+original sequence, forward or reversed — and **gaps** of `N`. A stretch taken out of the assembly is
+**set aside**, with a reason. The mapping between the two assemblies is the **lens**, and the whole
+session is drawn through it.
+
+A **breakpoint** is a place where the map says the reference is discontinuous. An **end** is a point
+and a side — the sequence just left of a point, or just right of it. A **corner** is a point off the
+diagonal where two ends meet: the corner of a block of contacts that stops. A **suggestion** is an
+edit the app proposes, with its **confidence** and its **evidence**. The **rail** is the column of labels
+beside the map on the stage.
+
+### 27.2 The lens
+
+*Built so far*: the model — the steps, the history and its cursor, the names, and both directions
+of the mapping (`genome/edit.ts`) — and the axis every track, feature, sequence letter, read and
+overlay is drawn through, which reads a stretch either way round and clips what it draws to the piece
+it is (`render/locus.ts`, `bpAt`/`unitAt`/`stretchOf`). The edit is kept per file with the circular
+declarations, carried in a saved workspace as `edit` and read back from one (`state/referenceEdit.ts`);
+a record made on another assembly is kept untouched, named in the stage's history, and not applied.
+An AGP or a Juicebox `.assembly` is read back as an edit (§27.8). A shared link carries it, in the
+workspace of one tab its `#session=` payload is (§5.5), and opens drawn through it; the share dialog
+says so.
+
+**An edit is drawn, never written back.** The file is read exactly as it would be without one; the
+lens maps between the original and the edited assembly, and everything on screen goes through it.
+Taking the lens away is taking the edit away.
+
+- **Edited → original is a function**: every edited base lies in one piece or one gap, and so has one
+  original base, or none, and a strand.
+- **Original → edited is a relation**: an original base lands **once**, **not at all** (it was set aside),
+  or **more than once** (it was duplicated). A mark or a feature is drawn at every place its locus
+  lands, which is the rule circular sequences already hold (§8.15) and the code that holds it.
+
+**The steps**: `cut`, `invert`, `move` (within a sequence or to another, either way round),
+`duplicate`, `join` (two sequences end to end, either orientation, with an `N` gap), `split` (the
+right half becomes a sequence of its own), `set aside` (as *debris*, *contaminant*, *haplotig* or
+*unplaced*), `rotate` (a circular sequence's first base), `rename`, `reorder` and `place` (a stretch
+set in the order as a sequence of its own, taken out of its sequence, or a whole sequence moved in the
+order — before another, or last — which joins nothing), `restore` (a stretch set aside put back, a
+sequence of its own, last), and on a metagenome `reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
+reader, a suggestion, or auto mode — **when**, and for a suggestion **the evidence it was accepted
+on**. The history is the provenance: the console writes it, an exported AGP quotes it, the command
+line replays it. **Undo** and **redo** move a cursor along it; a step made after an undo drops the
+steps past the cursor.
+
+**Names.** A sequence that is exactly one whole original sequence, forward, keeps its name, so an edit to
+one chromosome leaves every other name in every link, table and track as it was. Any other sequence
+gets a new one, suffixed `_e1`, `_e2`, … per original — never a suffix §5.9's matcher strips, since
+`IV.1` would be matched to `IV` by the `version` tier, and the tracks of `IV` drawn on a sequence that is
+not it. The reader renames, and a rename is a step.
+
+**It is a fact about the file**, like the circular declarations and the origins, and kept with them:
+per file in the session, in a saved workspace and in a shared link's `#session=` payload. An edit carries the
+names and lengths of the assembly it was made against and is refused on a file whose sequences
+differ, naming the first that does (§10); the same edit therefore applies to the `.hic` of the same
+library, and to the `.pairs` it was binned from. **An AGP or a Juicebox `.assembly` dropped on a map is
+read as an edit** and offered — never applied without the reader's say, since it would replace one
+they may have spent an hour on.
+
+**Bins and bases.** A cut lands on any base. From a **`.pairs`** the contacts are exact at any cut:
+every record is mapped through the lens before it is binned, so each lands in the edited bin it
+belongs in — the primary reduction of a primary file, through a declared edit (§3.7). From a **stored
+map** a bin is never divided: a piece whose end falls inside a bin takes the nearest bin edge for its
+contacts, so every count stays the integer the file stored and every bin inside a piece *is* a stored
+bin, while the piece's bases stay exact in the sequence and the AGP. What is approximate is the
+**junction** — the edited bin where two pieces meet may hold two stored bins' contacts, or none — at
+most one bin per junction, and counted wherever it matters (§27.8). The rule for the picture is the
+rule for the export: what is drawn is what is written.
+
+**A duplicated stretch** is drawn with its contacts in both copies, which is the only way to show the
+structure, and the readout says a cell is a copy. It is not what a map of reads re-aligned to the
+edited sequence would show — those reads would map twice and be dropped — and the export says so
+rather than pretend otherwise.
+
+### 27.3 The stage
+
+The third caller of the stage dialog, after the enlarged model (§25.3) and a figure's *customise*
+(§18.13): the picture, a sidebar of what is done to it, the grip between them and the button that puts
+the sidebar away. It opens from **the heading's word on the reference** — *reference · as in the file*,
+before the resolution — and from the palette's *Edit the reference*; once there are suggestions, from
+a suggestion's row in the Analysis drawer too. **One map and its tracks**: the session's own map, its
+whole-genome picture drawn on the stage (§27.9), and the lanes placed on it drawn beside that picture
+through the lens — the same tracks with the same settings, since a lane's settings belong to the
+track and not to the surface drawing it. The stage draws a picture of its own rather than borrowing the
+map's panel, because it is finer than any map's and held in the file's order, which is what lets an
+edit redraw it without a read; the map behind the stage is left as the reader left it. A deck's other
+cells stay behind the stage, untouched; the stage is not a deck and never becomes one.
+
+**Escape never closes it.** Escape cancels, innermost first — a menu, a drag, the selection — and when
+there is nothing to cancel it does nothing: the stage is closed by its `×` alone, and a press on the
+dimmed page around it does not close it either. The Analysis drawer is not a modal because a modal
+"answers Escape by destroying what is being read"; a stage that must be modal has to answer it some
+other way, and this is that way (`ModalProps.onEscape`). Closing loses nothing: every step is kept with
+the file as it is made.
+
+**Its keys exist only while it is open**, as the enlarged model's do, printed on the controls that
+perform them (§26.4) and taking no letter from the panels behind: `I` turns, `C` cuts, `S` splits,
+`O` starts a circle, *delete* sets aside, `⌘Z` and `⇧⌘Z` undo and redo, `0` fits, `+` and `−` zoom, *Space* held pans. Not
+yet in the palette while the stage is up.
+
+What is on it:
+
+- **The map**, square, the whole edited assembly by default; the wheel zooms about the pointer, a
+  sideways wheel and *Space*-drag pan, a double click and `0` fit. Its picture is §27.9's. *Built.*
+- **Two pieces bars**, along its top and left edges: every piece a block in its **original sequence's
+  hue** (a golden angle apart, so neighbours never share one), with chevrons pointing the way it reads,
+  and every edited sequence's name over its span. A moved piece keeps its colour, so the bar says at a
+  glance where each stretch came from, and a reversed one points the other way. *Built*, and a handle
+  as well as a picture: a press on a bar's row of pieces selects the piece under it, or holds the
+  selection where it is inside it, and pressed again, without moving, widens it to its whole sequence;
+  a press on its row of names selects the **sequence whole**; a drag moves what is held — the map's own
+  move, snapped and previewed under the hand, `I` turning it and ⌥ copying it on the way, let go
+  between two sequences a sequence of its own there, and ⇧ joining it to the end it is let go on; a
+  double click turns a piece; and the readout over a bar names the piece and, where it is not the
+  same, the stretch of the file it is (`V_e1:1-576,874 ← V:1-576,874, turned`).
+- **A dot plot in the map's corner** against another reference the session holds — the theoretical
+  genome a strain was built to be, the assembly it came from — **drawn through the edit as it stands**
+  and redrawn after every step, so that whether the assembly is coming to read as the other one does
+  is seen as the steps are made. *Built* (`edit/LiveDotplot.ts`, `edit/dotplotLines.ts`): offered
+  where the session holds a sequence set besides the file's own — the one naming the most of the map's
+  sequences — and a picker for which; the streaks found **once**, by the dot plot task itself (§28) in
+  the annotations worker beside the residues, one to one, and after that only moved: each cut into the
+  pieces of the edited assembly it falls in, placed where its piece went, turned with it, its other
+  side the matching share of its extent along the reference, and what was set aside not drawn — an
+  edit moves the lines and makes none. A square of up to 220 pixels over the map's upper triangle,
+  which the lower one mirrors; folded to a button when it is in the way and remembered folded, and
+  nothing found until it is unfolded; the streak under the pointer named in the readout, both loci,
+  its way round and its anchors, and a press frames it on the map.
+- **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
+  dragged, so a track moves with the stretch under the hand; the selection is lit across them.
+  *Built.*
+- **The readout** over the map: where the pointer is in the edited assembly and, where that is not
+  the same place, in the original (`IV_e1:650,001 ← IV:650,001, turned`); the row as well off the
+  diagonal; what it snapped to; and, while a stretch is dragged, the step the drop would make. *Built.*
+- **The rail**, beside the map: each suggestion's label at the height of its position, with a leader
+  to it, packed so that no two overlap. Hovering a label lights its marks on the map; hovering a mark
+  lights its label. It is one highlight in two places. *Built*, left of the map: a bracket for each
+  suggestion spanning what it concerns — a turned or moved stretch and where it goes, two joined ends,
+  a split's one point — and a label, its number, its kind and its confidence (`1 turn 98%`), at the
+  bracket's middle, pushed apart and kept inside the map's height, only for what is in view; a press
+  frames it. The list in the sidebar is lit with them.
+- **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6 — the last two greyed until there are
+  suggestions to work through); **selection**, what is selected and what can be done with it, each act
+  printing its key; **history**, every step in words, the cursor lit and undone steps greyed, a press
+  on a row going back or forward to it; **sequences**, the edited assembly — a press selects a whole
+  sequence and frames it — with what was set aside, and why, at the foot, each with *put back*;
+  **suggestions**, sorted by
+  confidence, each its number, its kind, its words, its confidence, the chips of its evidence and its
+  two answers, *take* `Y` and *turn down* `N`, those turned down struck through beneath with *offer
+  again*, and what the answers taught with *forget*; and **picture**, what the stage's picture is.
+  *Built*, each a card as the panels' are — bordered and raised on the sunken ground of the column, so
+  that one reads as ending where the next begins — in the order *selection*, *sequences* (and on a
+  metagenome the genome's card), *history*, *suggestions*, **export** (§27.8) and *picture*; in review
+  and auto mode, whose work is the suggestions, their card comes first, under the modes. A step a
+  suggestion made is tagged in the history — *suggested* or *auto* — with what it rested on; and on the
+  sequences card, a **grip** before each row that drags the sequence to another place in the order —
+  a line across the list where it would go, one `place` step on the drop, nothing joined — and takes
+  ↑ ↓ when it has the keys; a **rename** — its pencil, shown on the row's hover, or a double click, Enter making it a step
+  and Escape leaving the name — which a later edit keeps even where the sequence is an original whole
+  again, and which refuses two words, another sequence's name, and a name of the file's own for any
+  stretch but that sequence whole; **longest first**, one `reorder` step, greyed when they are; and a
+  circle marked `○`; and on the picture card, the picture's size (§27.9), the resolution the stage and
+  the method work at. Still to come: a circular tick on a sequence, and the evidence the method may use.
+
+**On the map**, suggestions are drawn in `--accent`, because they are what a reader can act on
+(§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
+of two short strokes opening towards its quadrant — for two ends that meet; on hover, a **bracket with a
+turning arrow** for an inversion, an **arrow** to an insertion line for a move. An edit already made is
+ink: a thin rule at every junction between parts, and a stronger one at every edge between sequences
+(*built*). *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
+diamond at every junction a suggestion takes away, with its ticks across both pieces bars; a corner at
+every junction it makes, in both triangles; its number in a disc beside its first mark; and for the one
+lit — on the map, the rail or the list — what it would do: the stretch it turns outlined, dashed, with
+a two-headed arrow bowed off the diagonal; the stretch it moves outlined, with an arrow to a line across
+the diagonal where it goes in; a cut across the diagonal where it splits; an arrow between two ends it
+joins. None is drawn while a drag or review's preview shows another edit than the one they were found
+for. The selection is an outline in the accent with a halo, and no wash over the picture: a wash
+changes the colour of the contacts being judged, and over the darkest of them reads as another colour
+altogether. A rejected suggestion leaves the map and is struck through in the list. Nothing is drawn in
+`--warn` or `--danger`: a suggestion is an offer, not a caution.
+
+**Closing the stage leaves the session edited** (§27.7), and the heading above the map says so: the
+word on the reference reads `edited · 7 steps`, lit, its press reopens the stage, and the arrow beside
+it reverts to the file — every step undone and kept to be redone, so the arrow is one more undo and
+never a loss. *Built*; until §27.7 is, the maps and tracks behind the stage are still drawn as the file
+is.
+
+### 27.4 Gestures, and what snaps
+
+Direct manipulation, and every act is also on the right-click menu and in the sidebar, printing its
+key.
+
+**Snapping.** Within 8 pixels of a target along the axis the pointer is moving on — within 10 of a
+corner, measured in the plane — the crosshair jumps to it, the target lights, its label lights on the
+rail, and the readout names it: `snapped to 2 · inversion · XIII:412,301`. Holding **⌥** frees the
+pointer while it is held, and the readout says `free`. The targets are **the suggestions** (breakpoints
+on either axis, corners in the plane), **edit ends** (every junction between two parts) and **contig
+boundaries** (the components inside each sequence, from an AGP the reader dropped as the original's own
+description — which is where a curator looks for a misjoin first). The nearest wins; at equal distance
+a suggestion beats an edit end beats a contig boundary. **A snap is a proposal the hand can refuse**: it
+moves the pointer, never the reference. Off every target the pointer rests on the nearest cell edge,
+since a cell is what the picture can place (§4.9 of the design note: *placed by the map, to one cell*).
+
+*Built*: snapping along each axis to the suggestions' points — every junction one takes away or makes,
+and where a move puts its stretch — and to the edit ends — every junction, and every edge between two
+sequences, which the readout names as the edge it is (`between IV and V`) — and to the selection's own
+two ends, in that order at equal distance; to a suggestion's corner in the plane, within 10 pixels,
+both axes at once; the readout names what it snapped to (`snapped to 1 · turn · IV_e1:400,001`,
+`corner of 1 · turn · IV_e1:900,001 × IV_e1:400,001`), and a suggestion under the pointer is lit, its
+label with it. ⌥ frees it, except while a stretch is being dragged, where ⌥ is the copy. Not yet:
+contig boundaries, which come with reading an AGP.
+
+**On the stage a drag selects**, because selecting is what the stage is for; the map's own drag,
+which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms as it does on every map.
+
+- **Select along the diagonal**: a drag starting within 12 pixels of it, both ends snapped, kept inside
+  the sequence it started in; the stretch lights on the diagonal, the pieces bars and the lanes. A press
+  on the diagonal selects the piece under it. *Built*, and **pressed again** without moving — on the
+  map or on a bar — the selection widens to the piece's **whole sequence**, a stitched one whole, and
+  pressed again narrows back to the piece; a press on a sequence's name on a bar, or its row on the
+  sequences card, selects it whole at once.
+- **↑ ↓**: what is selected one place earlier or later — a whole sequence in the order, a piece among
+  its sequence's pieces — one step each, and **nothing is joined** and nothing taken out: at the first
+  or the last place the readout says so and nothing is made. *Built*, as the keys, as *earlier* and
+  *later* on the selection's card, and on a sequence's grip on the sequences card; the selection moves
+  with it, and the view follows it where it would leave the screen.
+- **Select off the diagonal**: a drag in the body of the map draws a box whose sides snap to corners
+  and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a
+  press on one corner names the stretch between its two ends. What is offered is what two stretches
+  admit: bring the rows' stretch next to the columns', swap them, turn either. This is the gesture the
+  off-diagonal signal is for: the corner of a block that stops is where two ends meet, and grabbing it
+  is grabbing both breakpoints at once. *Built*, snapping to edit ends until there are corners: each
+  side of the box is kept inside the sequence it started in, the sidebar offers *rows before columns*,
+  *columns after rows*, *swap them* (two stretches of one sequence, as two steps) and *turn* either, and
+  a press off the diagonal selects the stretch between its row and its column where the two are one
+  sequence's, and boxes the two pieces under it where they are not.
+- **Move**: drag the selection, by its square on the diagonal or its band on a pieces bar. A ghost
+  follows, an insertion line snaps between parts, and the map rearranges under the hand: while the
+  pointer is down the block in hand is regathered on the main thread through the tentative edit, cells
+  whole, at frame rate, and on the drop the worker reads the settled edit exactly and the refine path's
+  swap (§2) replaces the preview. `I` during the drag turns the stretch on the way. *Built* from the
+  square on the map and from its piece on a pieces bar: the stretch's start snaps, or its end where that is nearer a target, the whole map
+  and its lanes are redrawn through the edit the drop would make at every move of the pointer, the
+  readout says that step, and the selection follows the stretch to where it lands. A stretch dropped
+  back on itself is left alone, or turned if it was flipped on the way. **Let go between two
+  sequences** — or before the first, or after the last — it is set there **as a sequence of its own**,
+  a whole sequence moved in the order and a stretch taken out of its own, one `place` step, and nothing
+  is joined; inside a sequence it goes in, as before. With ⇧ held at an edge between two sequences it
+  goes into the one the pointer came from instead, joined to its end, and the readout offers that
+  while the drop would not. At the whole-genome scale the
+  picture *is* the settled edit, so there is nothing for the worker to read; the read on the drop comes
+  with the zoom past the picture (§27.9).
+- **Invert** `I`; **cut** `C`, at the snapped position or at both ends of a selection; **set aside**
+  `⌫`, whose menu asks why; **duplicate** by `⌥`-drag, the platform's own *drag a copy*; **split into a
+  new sequence** `S`; **join** by dragging one sequence's end onto another's on a pieces bar; **set the
+  origin** `O` on a circular sequence. *Built*: invert, cut and split at the pointer (or, with no pointer
+  on the map, at the selection's ends — a stretch made a sequence of its own), set aside with its menu
+  of reasons — and **put back** from its row on the sequences card: one `restore` step, the piece a
+  sequence of its own, last, read as the file reads it whatever way it was set aside, joined to
+  nothing, selected and framed to be moved into place; an original put back whole takes its own name
+  again, and a contig sent to another genome comes back to this one — duplicate by ⌥ held on the drop
+  and as *copy* in the sidebar (the stretch again after
+  itself), and **join** by dropping a whole sequence — selected from the list, the diagonal or a bar —
+  on another's start or end **with ⇧ held**, from the map or along a pieces bar, which puts a 100 bp
+  `N` gap between them and lands the joined sequence where the drop was; without ⇧ the drop puts it
+  between the two, joining nothing. The right-click menu offers the same, for the
+  selection and for the place under the pointer; and **the origin** `O` of a circle — a sequence the
+  reader declared circular (§8.15), or read as one — at the pointer or the selection's start, a
+  `rotate` step, the menu's *start the circle here*; on a sequence that is not one, `O` says so and
+  does nothing.
+- **Undo** `⌘Z`, **redo** `⇧⌘Z`, and a click on a row of the history, which goes back to it. *Built.*
+
+### 27.5 Suggestions: ends and corners
+
+The app's own method; its name is still to be chosen. A reference is a list of **adjacencies** —
+every base is next to the one after it — and a contact map tests every one of them, because contacts
+fall off with distance along the molecule: two stretches that are truly adjacent share the densest
+contacts there are, two that are not share the background. So every place the reference could be wrong
+is a pair of **ends** that either do or do not belong together, and the map answers in the four
+quadrants around the point where their rows and columns cross.
+
+**The expected** is measured from the map itself: a contact law `P(d)` along each edited sequence — a
+trimmed mean of `O / ββ` per distance, made non-increasing, extended past the longest sequence by the
+power law of its last decade — and a trans level `T` between sequences, trimmed the same way so that
+the rearrangements being looked for, centromere clusters and a Rabl configuration do not lift the
+baseline they are judged against. Counts are divided by a measured overdispersion per distance, so a
+junction score means the same thing in a deep file and a shallow one. On a circle the distance is the shorter way
+round; on a circle with an origin the expected includes the inter-arm decay (§7.5), because an
+anti-diagonal read as an inversion would be the largest bow-tie in any bacterial file. Masked and
+uncovered bins are **no evidence**, never evidence of a break.
+
+**The junction score** of two ends `e`, `f` is the log-likelihood that they are adjacent against their
+being apart, over the `W × W` window of their first bins:
+`S(e, f) = Σ_{i,j<W} [ O_ij · log(P(i+j+1)/T) − β_iβ_j (P(i+j+1) − T) ] / φ`. A **breakpoint** is a
+junction the reference makes and the map refuses, `S < 0` across a point — which a TAD boundary, whose
+contacts drop but nowhere near trans, is not. A **corner** is a point off the diagonal whose four
+quadrants are four hypotheses: the two ends *left of* each point meeting, or the two *right of* each, is
+an **inversion** of the stretch between (the two arms of a bow-tie); left-of-the-first meeting
+right-of-the-second is an **excision** — the stretch does not belong there; right-of-the-first meeting
+left-of-the-second is a **tandem duplication**, or a circle. Corners are found by a detector run over
+the whole picture — each point's brightest quadrant over the other three, from an integral image of
+observed over expected, tile by tile — and every peak, and every pair of breakpoints, is then scored
+exactly.
+
+**Every edit trades junctions**: it removes some and adds others, and its gain is the sum of the added
+junction scores less the removed ones. An inversion is two corners, a move three, a set-aside one, a join one.
+A suggestion is the best edit its corners admit, and carries those corners — which is what the stage
+draws when it is hovered and what the pointer snaps to when it is adjusted. The whole assembly is
+searched at the picture's resolution and each candidate refined at every finer rung by bounded reads;
+the map places a junction to the bin, and the evidence below places it to the base — a split-read
+cluster exactly, else an `N` gap, a candidate site, a contig boundary, else the bin edge, with the
+readout saying which.
+
+**Evidence beyond the map** enters as features of a suggestion, never as filters on it: a cut in an
+`N` gap or at a contig boundary; telomeric repeats inside a sequence, or at an end a join would bury;
+the GC skew of a circle (an inversion inside a replichore breaks its V); coverage and mappability under
+each window, which shrink the map's term rather than vote; a candidate site from a chosen feature set;
+split reads joining the two ends; read pairs whose orientation flips across the junction; and the
+edit's size. **The confidence** is a logistic model over them, the map's gain first — *the chance a curator
+would accept this* — with initial weights stated in the code beside the reason for each.
+
+**It is not a structural-variant caller.** No genotype, no allele fraction, no false-discovery control
+across samples, and nothing is reported as a variant: it edits one reference to fit one map. A cancer
+line's rearranged karyotype is a fair use of it, and what comes out is that line's reference.
+
+*Built* (`edit/method.ts`, `edit/corners.ts`, `edit/suggest.ts`), at the stage picture's cells, and
+where it went further than the text above:
+
+- **What it reads.** The same pass that reads the stage's picture keeps, from the same floats before
+  they are bytes, the cells within 64 of the diagonal as they are, the whole map on a coarse grid of at
+  most 2,048 cells a side (never across a sequence's edge), each cell's coverage — every value the
+  mean of one pair of bins, so a pooled cell and a single bin speak one unit — and, sparse, every pair
+  of cells within 160 of any two sequences' ends that held anything, at most four million of them, by
+  row (`metacooler/picture.ts`, `PictureEnds`): whether two contigs meet is weighed at the picture's
+  own cells, never on the coarse grid, where a 1 kb map's cells are seven a side and the corner that
+  says which way round a contig goes is a blur. From them, once per file in the reader's worker: the
+  law, the trans level and the dispersion as above — the law measured cell by cell near the diagonal
+  and from the coarse grid beyond, the dispersion the median variance over mean near the diagonal —
+  and the corners.
+- **The window is the law's.** `W` is half the distance at which the law falls to eight times the
+  trans level, between 4 and 16 cells: as far as an adjacency stands well out of the background and no
+  further, since past that a window weighs clustering as if it were adjacency.
+- **Two questions, two backgrounds.** *Is this junction refused?* is asked against the trans level,
+  as above: a **breakpoint** is an edge whose score is under a fifth of a unit below nought and the
+  lowest within half a window. *Do these two ends meet?* is asked against the window's own mean, where
+  that is above the trans level: an adjacency's contacts fall away from the corner, and telomeres or
+  centromeres clustering light a window evenly, which against its own level is no evidence of meeting
+  at all. What a trade makes and what it takes away are both weighed the second way, so a trade is two
+  configurations compared. The **unit** a gain is counted in is the score of a window that holds
+  exactly the law: one adjacency made is about one, one clean misjoin taken away about two thirds.
+- **Two separate ends meet** — a join — by a third question, the **meeting** (`meetingScore`): each
+  end is walked into its sequence past the cells the balancer emptied — a subtelomere's repeats, an
+  array's edge — to its first `R` cells that hold anything, each kept with its true distance from the
+  end, never more than half the sequence, so a short contig's two ends read different cells; `R` is a
+  third of the distance at which the law falls to eight times the trans level, between 8 and 48. Every
+  cell is expected at `A · P(d + g) + T`: `g` a **gap** the assembly left out, tried from nought to
+  2,048 cells, and `A` how much of the law survived what flanks it, fitted — an assembly breaks in
+  repeats and the reads beside a break often did not map, so a true adjacency is regularly a fraction
+  of the law, and what tells it from two strangers is that its contacts fall away from the corner as
+  the law does, and from which of its ends. The best gap's log-likelihood against the trans level is
+  counted in the score **its own window** would have holding the law at gap nought, so a clean
+  adjacency is one however short its contigs, and at most 1.2 — a join makes one junction, and a
+  window brighter than the law is no more of one. Two ends whose coarse cells hold no more than twice
+  what strangers share are not weighed at all. The fitted gap is said on the suggestion (`a gap of
+  about 16 kb`), and a join across more than a window's worth writes it — `128,000 N between` — since
+  joined with the stage's own hundred `N`, the next count would weigh the junction as a direct
+  adjacency, find it refused, and offer to split it again.
+- **An end has one neighbour.** Each end's offers are ranked by the weight of their evidence; a join's
+  **exclusivity** is how many doublings its own offer stands above the best either of its ends has
+  elsewhere, between −2 and 2 — a cluster of short contigs that all lie near each other, telomeres that
+  all touch, are not each other's (`an end with a better offer`); an offer under a hundredth of an
+  adjacency's evidence is nothing, so two ends whose best is the clustering of their telomeres are not
+  exclusive for lack of anything else. Only joins a curator might take are rivals: one that would bury a
+  telomere or make two centromeres takes no offer from anyone. A join across a long gap — an rDNA array, a megabase no read
+  spanned — is a small share of an adjacency and still the only thing its two ends meet: offered on its
+  exclusivity alone, a doubling or more.
+- **Clustering foci** (`fociOf`): each sequence is asked, of every other one, where in it the
+  brightest coarse cell of their block lies — a cell and its eight neighbours, only cells most of whose
+  own cells the balancer kept, a peak four times the trans level at least — twice: first of all the
+  others, keeping those a third agree on as the clustering ones, then of those alone, and a place
+  nearly half of those name — 45%, which the smallest yeast chromosomes, whose telomeres lie near their
+  centromeres, reach and a stray peak never does — is its **focus**. In a genome whose centromeres cluster it is the centromere; one whose
+  do not answers anywhere, and has none. A join that would put two foci further apart than four coarse
+  cells in one sequence makes a chromosome of **two centromeres**, and says so.
+- **Corners** are found as above, on the coarse grid, from a smoothed log of observed over expected:
+  a point whose quadrant stands three times above expectation and three times above both quadrants it
+  shares a side with, four coarse cells a quadrant, the 240 strongest kept, each placed at the most
+  refused junction within a coarse cell of it, else a sequence's end there — in the file's own order,
+  once, and carried through the edit each time the suggestions are counted.
+- **Candidates** are every sequence's two ends, every junction an edit made, every breakpoint and both
+  ends of every corner, wherever the edit put them; points within a quarter of a window are one.
+- **The trades**: a **split** where a junction is refused; a **turn** of a stretch one of whose ends is
+  refused, or between two points corners name; a **move** of a stretch between refused junctions or a
+  refused one and a sequence's end to any point, either way round, the flanks closing behind it — and
+  of a whole sequence only into another's interior, where a corner pairs one of its ends with the point
+  it goes in at (end to end is a join); a **join** of two sequences' free ends, every pair up to 64
+  sequences and past that only the ends that touch — a corner pairs them, or their first coarse cells
+  share more than twice what strangers do, found from each end's coarse cells against the cells every
+  other end is in — so that an assembly of thousands of contigs costs what its ends touch rather than
+  every pair of them. A junction an edit made that the map
+  cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
+  but the hand is behind it; one of the file's own is trusted.
+- **The sequence** (`edit/sequenceEvidence.ts`), where the session holds the assembly's own FASTA or
+  `.2bit` — read once per stage after its picture, through the annotation worker's ranged reads, the
+  suggestions counted again when it is in: each original sequence's two terminal kilobases, and for an
+  assembly of at most 100 Mb every base. A **telomere** is a run of repeat at least a hundred bases
+  long, starting within an end's outermost hundred — read fifty bases at a time from the end inwards,
+  each fifty half covered by tandem copies of one canonical repeat on either strand, `TTAGGG`,
+  `TTTAGGG`, `TTAGG` or `TTGGGG`, the family covering most, or nine in ten `T` and `G` on one strand
+  and a third of them `G`: the irregular `TG₁₋₃` of budding yeasts, which no fixed unit matches, and
+  not a run of `T`, which is poly-A read backwards. A yeast's telomere is some 300 bases, and an
+  assembly often keeps less of it. A trade that would **bury** one — make a junction of an end whose
+  first base is its original sequence's telomeric one: a join, the turn of a sequence's last stretch, a
+  chromosome moved into another — says `a telomere` and counts against itself, and a join that would
+  is no rival to any other join of its ends. Where the map refuses a junction and every way to mend it
+  buries a telomere, the split is what is offered. A **gap** is a run of ten `N` or more; a break the map finds within a cell of one
+  is placed at the gap's middle, to the base, and says `at a gap of N`. The stage's side panel says
+  what it read: *From SGPMJH_1_MP366_1_reference.fa: telomeric repeats at 27 of 64 ends, 0 gaps of
+  N*.
+- **A shallow map** — a metagenome's genome at a kilobase holds a few contacts a row — is weighed for
+  what it holds. On a raw map every cell's value is weighed by the coverage it was divided by, so a
+  contact or two at a thinly covered end is not the loudest thing in a window, and a cell under a tenth
+  of the median coverage is no evidence; the law and the trans level are counts over the coverage that
+  could have held them and the noise is Pearson's. On any map a cell's value is weighed by the pairs of
+  bins it pools, since a sequence's last cell of a pooled picture is a mean over a bin or two. A
+  refusal needs twenty to one in likelihood whatever the unit (`LEAST_REFUSAL`); and a trade is worth
+  no more adjacencies than the **contacts** it rests on hold, sixteen apiece — past the trans level in
+  the junctions it makes, over the dispersion, which on any map is about the reads — and one resting
+  on fewer says `few contacts`. A split rests on the contacts the law would have put where the map
+  holds none. On a genome map none of this moves a suggestion; on the mock community it is what keeps
+  the best of the many trades a search weighs, which is two or three reads of chance, off even odds.
+- **The confidence** is a logistic over nine features — `log₂(1 + gain)`, the gain capped by the
+  contacts as above, a penalty for a stretch of
+  fewer than four cells, the share of its windows that held anything, how far past the law the
+  brightest thing it makes stands (`brighter than an adjacency`: the elements every telomere carries
+  light the corner between two chromosomes' ends brighter than any true adjacency — a trade's two
+  corner cells past two and a half times the law, a join's whole window past 1.6 times, so that one
+  hot cell at a thinly covered end is not a bright corner), a join's exclusivity, a join that makes
+  two centromeres, a join that buries a telomere, a break a gap of `N` places, and the contacts under
+  sixteen — with the initial weights and their reasons in `edit/suggest.ts`: −1.5, 2, 1.5, 2, 2.5,
+  1.5, 5, 4, 1 and 2. A join whose ends prefer each other by a doubling or more is not counted brighter
+  than an adjacency, and less the nearer it is to that: what a repeat lights, it lights between every
+  end that carries it, and a metagenome's contigs break at the rRNA operons their genome has several
+  of, so their true joins are the brightest thing in the map. Weights learned under another set of features are the initial ones again. The suggestions are the best of each
+  point: best first, no two sharing a point or within a quarter window of one; one under 15% is not
+  offered — a suggestion a curator would take one time in seven or less is noise on the map — though
+  it is still ranked, and an answer about another can raise it.
+- **Placed by the map, to one cell** of the picture, or by a gap of `N` to the base — and then
+  **placed again at the finer rungs** (`edit/refine.ts`): each point a suggestion puts inside a
+  sequence — where it splits, a turned or moved stretch's two ends, where a move puts it — not at a
+  junction the edit already makes, which is exact, nor beside a gap. From the picture's cell, each
+  time to the finest rung at least twice as fine and at most sixteen times — else the coarsest finer
+  one — never below the bin the map is deep enough to show (§27.9), the point is the cut within a
+  cell and a half of where the rung above put it that the map least supports: across it, sixteen
+  bins either side, the contacts over the square's own law, each distance's median over the cells no
+  cut in range crosses — so neither the balancing nor the rung's scale matter, and the junction being
+  placed does not lower the law it is measured against. Under half an adjacency's support, the rung
+  refuses the junction there and places it; else the point stays where the rung above put it and no
+  finer rung is read. One read a rung, through the stage's edit, in the reader's worker, kept by the
+  pieces around the point it covers, so an edit elsewhere reads nothing again; the offered
+  suggestions best first, 24 at most, after every count, the list saying each as it comes in —
+  *refined at 1 kb* among what it rests on — and auto mode taking each as placed. The confidence
+  stays the picture's: the method weighed the suggestion there. A suggestion whose ends the hand
+  dragged is the hand's, and says so instead.
+
+Tried on a real reassembly — a yeast whose chromosome XVI carries the *M. mycoides* genome, 32
+long-read contigs and a Hi-C map of the strain (§27.11) — the meeting, the exclusivity and the foci are
+what it took. Joins scored on the coarse grid never offered the join at the fused chromosome's working
+centromere, and turned chromosome XV's first 25 kb the wrong way round; a fixed-amplitude score
+penalised every true adjacency for the reads lost beside its break; telomeres paired by their
+clustering were the strongest joins in the file until two centromeres counted against them. The map
+alone leaves the fused chromosome two contigs short, and joins those two to each other; with the
+assembly's sequence beside it — telomeres at contig_39's start and contig_4's — auto mode completes
+it, telomere to telomere.
+
+Not yet: suggestions to set a stretch aside or to copy one; the
+rest of the evidence beyond the map — a telomere inside a sequence, the skew of a circle, coverage
+and mappability, candidate sites, split reads, pair orientations; circles and their arms in the expected (§8.15) — on
+the E. coli demo, a circle with its arms, it offers nothing, the arms' contacts falling far short of an
+adjacency's; contig boundaries from an AGP. A stretch turned inside a window's length is below what the
+map can place: across its ends the walk reaches its far end, which truly belongs there.
+
+### 27.6 Manual, review, auto
+
+The three modes are three answers to one question, **who presses accept**, on one surface:
+
+- **Manual**: the suggestions are guides — drawn, labelled, snapped to — and never apply themselves.
+- **Review**: the suggestions are a queue, best first. The stage frames the current one and shows it
+  as it is and as it would be — **`Space` held** shows the map with it applied — and waits: `Y` accepts,
+  `N` rejects, its ends are dragged to adjust it (snapped), `→` skips, `←` goes back. **Every answer
+  re-tunes the confidence**: an accept is a `1` and a reject a `0` for that suggestion's features, one step
+  of logistic regression moves the weights, pulled back towards the initial ones by a prior strong
+  enough that three answers cannot overturn the map and weak enough that thirty can teach it what this
+  file's coverage dips mean. The rest are re-ranked at once, so one answer can sink another suggestion
+  or raise one. What it learned is kept **per file**, with the edit, shown in the settings beside the
+  answers it came from, and replayable by the command line.
+- **Auto**: every suggestion above the threshold is applied, best first, re-scoring what each one
+  touched, until none is left above it; a last pass tries each remaining stretch in every candidate
+  position. Every application is a step marked `auto` with its evidence, undoable like any other.
+
+**`metacooler-run edit`** is auto mode from a shell — the same runner, the same threshold, `--weights`
+for what review mode learned, `--from` for an AGP to start from — writing everything §27.8 lists to
+`--out`, and the console writes that line for every auto run on the stage.
+
+*Built*, the three modes on one surface, an answer the same whichever mode asked it. **Manual**: `Y`
+or *take* makes the step of the suggestion lit under the hand or pressed in the list, `N` or *turn
+down* turns it down. **Review**: the best not turned down is framed, a line under the toolbar says
+which of how many, what it is and its keys, and `Space` held draws the map, its bars and its lanes as
+they would be with it taken; `Y`, `N`, `→` and `←` answer and move, and the next best is framed. Every
+answer is one step of the regression, a learning rate of a tenth and a pull of 0.15 towards the
+initial weights — three rejections of a suggestion at 92% leave it above even odds, thirty-three put it
+below — and the rest are ranked again at once; what it taught — the weights, how many answers, what
+was turned down, by keys that name the file's own cells so a suggestion stays turned down after
+another edit moves it — is kept per file beside the edit (`map:edit-learned`), carried with it in a
+saved workspace and a shared link (`editLearned`), said under the list, and forgotten by *forget*;
+*offer again* brings back one turned down, what its answer taught kept. In review, the ends of the one
+it is on are dragged along the diagonal to adjust it, snapped as every point on the stage is (the
+pointer takes hold within 10 pixels of one): the stretch a turn or a move takes begun or ended
+elsewhere — dragged past the other end, it is the other end — or the point a split cuts at moved, and
+a move in its own sequence kept going to the same place (`edit/adjust.ts`). Its step, its words, its
+outline and its row follow the hand; its confidence stays the method's, which weighed the suggestion
+found, and an `adjusted` chip is added to what it rests on, which puts its ends back where they were
+found when pressed. What is answered is what is shown, so the history says the step taken was the
+adjusted one; an edit clears every adjustment, since it was for the edit as it stood.
+**Auto**: *apply* takes every suggestion at 50% or more, best first,
+counting again after each, forty at most a run, each a step marked `auto` with what it rested on.
+Not yet: the command line.
+
+### 27.7 The session through the lens
+
+*Built so far*: the map is drawn through the edit **in the reader** (`metacooler/lens.ts`). A file
+with an edit kept for it is opened as it is and then presented as the edited assembly — its sequences,
+their bins and every pixel carried to the bins it lands at — and so is each rung opened after it for a
+zoom, so every view, the Chromosomes table and the heading name the edited sequences and nothing above
+the reader knows there is an edit. The analysis worker's mount is opened through the same edit and
+keyed by its steps, so a task measures the edited assembly; the edit is in a result's framing, and the
+next one makes the result stale. The tracks, the marks and the features are fetched in the file's
+coordinates and drawn through it (`edit/axis.ts`): each stretch of an edited sequence on an axis
+becomes the pieces it is made of, each a stretch of its original sequence, forward or backwards. A
+mark placed on the map or the tracks is recorded in the file's coordinates — a click where it lands, a
+box laid across a junction as the stretch of the piece the drag began in, as one laid across a
+sequence's edge is of the sequence (`edit/places.ts`) — and so is the place under the pointer that a
+model's beads and a deck's companions light. The session is **redrawn through the edit** when the
+stage closes on a different one and when the heading's arrow puts the file back: the file opened
+again, as a change of resolution opens it, with the window carried to wherever its middle went, the
+same width and turned where the stretch was turned (`edit/places.ts`) — to the table where the place
+did not survive, and a selection to the table, since an edit renames what it names. An edit kept for a
+file it cannot be drawn on is not drawn, and a line says why: one made on another assembly, and for
+now a `.metacool`'s genome layer and a single-cell file's cells (§27.10). The readout gives each place's
+original beside it, as the stage's does. A bookmark taken on the edited map is kept as the same view of
+the file — its middle where the file has it, the same width around — and gone back to wherever the edit
+the map is then drawn through puts it, as a view is carried when the stage closes; one whose place that
+edit set aside says so. Not yet: a deck's companions, drawn as they are; a `.pairs` re-binned exactly
+through the edit, where it is binned and then moved as a stored map is; and the command line, whose
+line for a task on an edited map says it will measure the file as it is.
+
+**An edit reaches the whole session.** Every view, table and track, every task run after it and
+every export is in the edited assembly until the reader reverts: the Chromosomes table lists edited
+sequences, a locus names one (`IV_e1:1,000,001-1,200,000`), and the readout gives the original beside
+it (`IV_e1:1,150,001 ← IV:1,250,000, turned`), or says the place is in a gap.
+
+- **Tracks** are fetched in original coordinates and drawn through the lens, so the annotations worker
+  does not know there is one: a signal is mirrored in a reversed piece, a feature's strand is its own
+  times the piece's, a feature across a cut is drawn in two, bases are reverse-complemented, an arc's two
+  anchors are each lifted alone.
+- **Marks and bookmarks** stay in original coordinates, as they are stored, and are drawn wherever
+  their loci land.
+- **Tasks are framed with the edit** (§18.4), as they are with the circular declarations, so a result
+  is in the coordinates it was computed in; a further edit makes it stale and offers *recompute*, as a
+  moved view does.
+- **A deck** built beside an edited map draws its companions through the same lens where their
+  sequences are the original's, and refuses a companion whose are not, in its cell, with the sentence.
+
+### 27.8 What comes out
+
+From the stage's export section and from `metacooler-run edit`, each a new file through the save
+dialog (§26.6), none of them touching the file that was opened:
+
+| File | From | Notes |
+|---|---|---|
+| **FASTA** of the edited assembly | a FASTA or `.2bit` in the session | streamed piece by piece through the worker's ranged reads, reversed pieces reverse-complemented, gaps `N`; a `.2bit`'s soft-masking is not carried |
+| **AGP 2.1** and **chrom.sizes** | always | the edited sequences as pieces of the original's; gaps typed `scaffold`, evidence `proximity_ligation`; the history in the comment header; read back as an edit |
+| **Juicebox `.assembly`** | always | for round trips with JBAT, 3D-DNA and YaHS; read back too |
+| **liftOver chain** | always | original → edited, for `liftOver` or `CrossMap` over anything else |
+| **Lifted contacts** | the map | `.cool` or `.mcool`, **raw counts**, `generated-by` saying *unbalanced* as §3.7's does; exact from a `.pairs`, bins moved whole from a stored map, with the junctions that are approximate and the stretches that are duplicated counted in its provenance |
+| **Lifted tracks** | each track | a signal as bigWig or bedGraph, features as BED (strands turned, features across a cut split), pairs as BEDPE, marks as the Manual card writes them |
+| **Contig → MAG table**, FASTA and AGP per MAG | a metagenome | §27.10 |
+
+The contacts writer holds the whole file in memory, as the `.pairs` import's does; a lifted map
+that will not fit is refused with its size and the two ways out — a coarser rung, or the command line,
+which writes to disk.
+
+*Built* (`edit/exports.ts`, `edit/ExportCard.ts`), in the stage's **export** card under its sequences —
+a bordered button per file, each through the save dialog and named after the map
+(`Yeast_microC_G2M_1kb.edited.agp`, `….to-edited.chain`), a line under them saying what was written or
+why not:
+
+- **AGP 2.1**: the header says whose edit it is, what wrote it and when, and lists the applied steps in
+  words; each sequence is its components, 1-based and inclusive, a turned piece `-`, a run of `N` a gap
+  line `N  <length>  scaffold  yes  proximity_ligation` — `U  100` where it is a join's hundred, a gap
+  of unknown size, as AGP 2.1 writes one; `N` where the map measured it.
+- **What was set aside.** A stretch set aside as *unplaced* is still sequence of the assembly: every
+  file writes it as a sequence of its own, `IV_unplaced1`, after the edited ones. One set aside as
+  *debris*, a *contaminant* or a *haplotig* is not: the AGP names it on a comment line
+  (`# aside  debris  I:901-1000`), the chain lifts it nowhere, and chrom.sizes leaves it out.
+- **chrom.sizes**: every sequence the files write, and its length.
+- **The Juicebox `.assembly`**: the original cut into fragments at every piece's ends, in the
+  original's order (`IV:::fragment_2`), then a line of signed fragment numbers per sequence — debris,
+  contaminants and haplotigs as fragments marked `:::debris`, Juicebox's own word, on lines of their
+  own. Refused, before any dialog opens, where a stretch is placed twice: the format lists every
+  fragment once.
+- **The liftOver chain**, original to edited: one chain per piece, one ungapped block, a turned piece
+  on the query's `-` strand counted from its end, as the format has it; a duplicated stretch has two
+  chains, which `liftOver -multiple` follows.
+- **Read back**: *lay out from an AGP or .assembly…* reads either — told apart by its first line — as
+  **one step of the history**, *lay out as in IV_V.agp · 15 sequences*, undone as any step is. It is
+  the one step written in the original's coordinates, since that is what such a file names, and it
+  replaces what the steps before it built. Every component must be a sequence of the map, inside its
+  length — a file of another assembly is refused, naming the first sequence the map does not have — and
+  whatever of the original no component covers is set aside, unplaced. An AGP keeps its gaps, and the
+  comment lines this app writes restore what was set aside and why, so an edit written and read back is
+  the same edit. An `.assembly` has no gaps and no names: its lines become `scaffold_1` and on, with 100
+  `N` where fragments of two sequences meet — a join — and none where two of one sequence do.
+- **The FASTA**, from the session's own sequence — a FASTA or a `.2bit` — piece by piece through the
+  annotation worker's ranged reads, 400,000 bases a request: a turned piece reverse-complemented base
+  for base, case kept so a soft-masked repeat stays one; a gap as `N`; sixty bases a line; each
+  unplaced stretch a record of its own. A sequence the file lacks is written as `N` and named, so every
+  coordinate of the AGP is still the same base here. Where the session has no sequence the button is
+  off and its tooltip says what to load.
+- **The contacts**, `contacts (.mcool)`: the reader's worker opens each rung of the file as it stores
+  it — never through the session's own lens, which may be another edit — draws it through the export's
+  own edit, one layout of the original whose sequences are the AGP's, unplaced stretches among them, and
+  gathers its pixels in the edited bins: the upper triangle, sorted, duplicates summed, raw counts,
+  bins moved whole. Written by the `.pairs` import's writer, `generated-by` saying *lifted through an
+  edit of the reference; unbalanced* and the steps in its metadata. Coarsest rungs first, within 60
+  million pixels: a finer rung past that is left out, and the line under the buttons names it.
+- **A track**, picked from the session's: a signal as **bigWig** — every interval at the file's own
+  resolution, clipped to its piece and carried to where the piece lands, mirrored where it is turned —
+  features as **BED6**, once for each piece an edit cut them into, their strand turned with it, and
+  pairs as **BEDPE**, each anchor where its middle base lands. What lay on a stretch set aside is not
+  written, and the line under the buttons counts it, and the features an edit cut through.
+
+Not yet: a gene model's exons (a lifted GTF is BED6), a derived track, marks, the spans of a tabix-indexed
+track the session never loaded, a writer that streams rather than holds the whole file, and the files
+per MAG.
+
+### 27.9 The whole-genome picture: 16,384 cells
+
+The stage's whole-genome picture is **16,384 cells a side**, fixed — about 190 kb a cell for a human
+genome, near PretextView's 32,768-pixel map, so that a 100 kb contig can be seen and grabbed without a
+zoom — or the finest bins the file stores, where that is fewer. It is held **quantized**, one byte a
+cell, the log of the balanced value over the map's own range, the upper triangle: about 134 MB, where
+32-bit floats would be a gigabyte. **It is a picture and nothing else**: every number the reader is
+shown — a readout, a confidence, an export — is read from the file, never from the byte.
+
+It is read once per file, by a pass over the stored pixels of the rung nearest the cell size —
+§7.3's cost class, priced and gated as that is, with a bar and a cancel — and held in **original** order,
+drawn through the lens: an edit changes the mapping, never the picture, which is what makes one instant
+at this scale. It exists only while a stage is open. §2's other maps keep the 4,096-cell ceiling
+(`RASTER_MAX_DIM`); this is the one picture that does not, and for the one reason a reader cannot curate
+a genome they cannot see.
+
+*Built* (`metacooler/picture.ts`, the reader's `picture` request): read from the finest rung of an
+`.mcool` whose bins fit, whatever rung is open, and pooled a few bins a cell, never across a sequence's
+edge, only where none does — or where the map is too shallow at them: its rows are pooled until each
+holds 64 stored pixels on the mean, counted from the store's row index before anything is read, so
+a metagenome's genome at 1 kb, a few contacts a row, is drawn at 11 kb and weighed there, and a genome
+map deeper than that is not touched; balanced where the map is. **One pass, a band of rows at a time**: the
+pixels whose first bin is in the band — one ranged read of a cooler's pixel table — are summed into a
+band of floats and quantized before the next band is read, so no more than 64 MB of floats is ever in
+hand. The byte scale is set from the first band, a decade below its thousandth-lowest cell to half a
+decade above its highest, since every band carries the far contacts of its rows as well as their
+diagonal; anything past either end is drawn at that end rather than lost. Over it, a **pyramid** of
+means, four cells to one, down to 256 cells a side, and each pixel of the stage shows the level whose
+cell is nearest a pixel — a whole yeast genome is twelve cells to a pixel, and a pixel that showed one
+of them would sparkle where the map is sparse. It opens at the first and ninety-ninth percentiles of
+the cells that hold contacts, the rule every map's automatic range follows, in the map's colours.
+Read each time the stage opens and dropped when it closes: 13.7 million pixels of the yeast micro-C
+at 1 kb take a few seconds over the demo's local server. Refused, with the numbers, for an assembly of
+more sequences than the picture has cells, since a cell never holds two.
+
+**Closer than a cell.** Once a cell of the picture is two pixels wide or more and the view has settled,
+the window on screen — a third more each way — is read again finer, in the reader's worker, from the
+rung whose bins are about a device pixel, drawn through the stage's edit (`MetaCooler.withLens`, kept
+while the edit and the rung stand), and painted over the picture wherever it reaches, each pixel the
+bin under it through the lens (`edit/paint.ts`, `windowSide`, `paintWindow`). It is coloured on the
+picture's own scale: a picture cell is the sum of its rung's pixels, and a pixel of a rung `k` times
+coarser holds `k²` of the window's raw and about `k` balanced, since balancing sets every rung's rows
+to one total. **Never finer than the map is deep enough to show**: the picture says the finest bins
+whose rows hold 64 stored pixels on the mean (`depthFloor`), and nothing is read unless it is half a
+cell or less — a metagenome's genome pooled to 11 kb for its depth stays 11 kb cells enlarged, where
+the yeast assembly at 10 kb cells is read again at 1 kb. An edit drops the window, since it was read
+through the edit before it; a drag draws the picture alone, since the window cannot follow the hand.
+The picture card says when the window is shown (*Closer than a cell, the map on screen is read again
+at 1.0 kb a bin, through the edit*), and offers **the picture's size** — 16,384 cells a side, the
+finest, or 8,192, 4,096, 2,048 — kept per file: a coarser picture is read and weighed faster, and a
+zoom reads what it does not hold.
+
+### 27.10 Metagenomes
+
+On a `.metacool` the edited assembly keeps its genome layer, and two more steps are offered: a contig
+**moved to another MAG** (or to none), and contigs within a MAG **ordered, turned and joined into
+scaffolds**. C4 is untouched — the file is still read in genome-then-length order, and the lens is what
+reorders it. What comes out is what the tools downstream take: the contig → MAG table
+`metacooler create` reads, and a FASTA and an AGP per MAG.
+
+*Built*, **one genome at a time**. A metagenome of twenty thousand contigs has no picture of the stage's
+kind — a cell never holds two sequences — and a curator scaffolds a MAG, not a community. So on a
+`.metacool` the stage is on one genome: the one in view, else the one the reader picks from a list of
+the file's genomes, longest first, each with its size, its contigs and how many steps its edit has, with
+a filter for a file of hundreds (`edit/GenomePicker.ts`); the command reads *Edit genome
+metator_00009_00000* where one is in view and *Edit a genome* where none is. The edit is that genome's
+alone: its original is the genome's contigs in the file's order, marked with the genome's name, kept
+under the file's key and the genome's (`state/referenceEdit.ts`, `genomeEditKey`), and checked against
+the file as a part of it — every contig of it one of the file's, as long — and carried, with what its
+answers taught, in a saved workspace and a shared link (`genomeEdits`, by genome). Its picture is those contigs
+alone (`pictureLayout` over some of a map's sequences): only their rows are read, a contact with a
+contig outside is left out, and the method weighs the genome as it would a genome. Everything the stage
+writes is that genome's, and says so — `Mock_microbial_community.metator_00009_00000.edited.agp` — the
+lifted contacts included, a map of that genome alone through its edit. The session itself is not drawn
+through a genome's edit: the metagenome's views are the file's.
+
+**Where its contigs belong.** The stage's *genome* card reads every contact of the file once — without
+being asked where the file holds at most 50 million pixels, else at a press — counting, for each contig
+of the genome, its contacts with the genome's own contigs and with every other genome's, and for every
+contig outside it, its contacts with the genome's and in all (the reader's `genomeLinks` request, raw
+counts, a contig's contacts with itself left out). It says how much of the genome's contacts stay in
+it — *93% of its contigs' contacts with other contigs are with its own* — lists the contigs that meet
+another genome more than this one, each with its shares and a way to **send** it there, and the contigs
+of other genomes, and of none, that give this genome 40% or more of their contacts, five at least, each
+with a way to **bring** it in. Sending sets every stretch of the contig the edit places aside as a
+contaminant, marked with the genome it goes to — *send NODE_3314:1-1,804 to metator_00025_00000* — which
+the set-aside list and the AGP's comment line (`# aside  contaminant  NODE_3314:1-1804  metator_00025_00000`)
+carry, and read back. Bringing in makes the contig one the edit may name — the original's
+`elsewhere`, each with the genome it came from — and a step, *bring in NODE_10045*, puts it whole after
+the genome's own contigs, undone as any step is; the picture is read again with it, and the method
+weighs it with the rest. On the mock community, metator_00007_00000 keeps 93% of its contacts, two of
+its contigs meet metator_00025_00000 more, and 62 unbinned contigs give it 40% or more of theirs.
+
+**The contig → MAG table** (`edit/binning.ts`), from any genome's export card: every contig of the file
+with its genome, every genome's kept edit applied — a contig sent away is its new genome's, one brought
+in its new one's, one set aside with nowhere to go, as debris or as a haplotig is no genome's and left
+out, as the two-column tables DAS_Tool, anvi'o and `metacooler create` take leave them out — by the
+file's own contigs, so it applies to the assembly the reads were mapped to; how a genome's contigs are
+ordered, turned and joined is its AGP's. What two genomes' edits both claim is said, and so is a contig
+only part of which was sent.
+
+Not yet: files for every genome at once, a suggestion to send or bring a contig among the method's own,
+and the session drawn through a genome's edit.
+
+### 27.11 Validation
+
+The method is its own upstream, so it is held to a truth known by construction rather than to another
+tool's output (§18.9). The harness uses the lens against itself: a good assembly and its `.pairs`
+(`demo/yeast/`; `demo/ecoli/`, a circle with its arms; a human chromosome from a public `.pairs`) are
+**scrambled** by a random edit of known steps — cuts, inversions, moves within and between sequences,
+duplications, stretches set aside, sizes log-uniform from five bins to a fifth of a sequence, seeded —
+the contacts re-binned exactly through it, and auto mode is run on the scramble. What it recovers is
+scored against the scramble's inverse: junction precision and recall, the distance of each breakpoint
+from the truth in bases, orientation, the N50 of correctly assembled stretches, and the steps a reader
+would still need. `metacooler-run edit --simulate` runs one scramble; `notebooks/validation.qmd`
+runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a unit test.
+
+*Built*: maps simulated from a chosen law with Poisson noise, read through the picture's own pass and
+misassembled on purpose — a turned stretch, two chromosomes joined, a stretch moved into the other, one
+cut in two, a stretch dropped against a masked end — each put back by the first suggestion, and nothing
+at even odds on the assembly as it was drawn (`test/unit/edit-method.test.ts`); and the demo `.hic` at
+16 kb, as it is — nothing at even odds — and scrambled through the lens by a turn, a move turned, a
+split and a join, the four put back and nothing else offered at even odds
+(`test/unit/edit-method-demo.test.ts`). On the 1 kb micro-C the same scramble's six breakpoints are
+found to the kilobase. And a real reassembly (`test/unit/edit-method-reassembly.test.ts`, skipped
+without its 70 MB in `data/`): a yeast whose chromosome XVI carries the *Mycoplasma mycoides* genome,
+its long-read assembly in 32 contigs and a Hi-C map of the strain on them, against two truths that
+mostly agree — the theoretical genome, to which each contig was aligned, and the map's own clustering
+centromeres, which put the fused chromosome's working centromere at the first myco stretch's end,
+where the theoretical genome has none. At open, seven joins at even odds or more: chromosome XII
+across its rDNA, XV whole, the fused chromosome's first yeast and myco stretches to its second yeast
+stretch at that centromere, and three joins of the myco contigs — all as the theoretical genome has
+them — and one of two myco contigs the map joins with no gap at the full law where the theoretical
+genome does not; no join of two chromosomes' telomeres, which their clustering lights. Auto mode
+rebuilds XII, XV and the fused chromosome, `39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54-`, in the
+theoretical order and orientation but for contig_49 — fifteen kilobases, most of them emptied by the
+balancer, either way round — and those two. With the assembly's FASTA beside the map, the telomeres
+at contig_39's start and contig_4's end the chromosome, and auto mode completes it,
+`39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54- 5- 4-`, 2,118 kb: contig_5 and contig_4 at its end,
+contig_4's telomere outermost, where the theoretical genome puts contig_5 between contig_61 and
+contig_6 (its dot plot, §28, reads `61- 5- 6+`) — the map and the telomere against it: in 30 kb at
+10 kb, contig_5's start meets contig_4's end at 87 times the trans level, and contig_6's start at 34.
+And the refinement (`test/unit/edit-refine-demo.test.ts`): the demo `.hic` scrambled at breakpoints no
+16 kb cell has an edge at — IV turned from 403 to 797 kb, 196 kb of XI moved into II at 303 kb turned,
+IX joined to III — and the method run on its 16 kb picture offers
+`move II_e1:304,001-496,000 after XI_e1:96,000, turned`, `turn IV_e1:400,001-800,000` and
+`split IX_e1 before 432,001`, each point within a cell of the truth; placed at the 1 kb rung through the
+same scramble, every point is the truth to the base — 303,000, 499,000 and 101,000; 403,000 and
+797,000 — and the split within a kilobase of IX's end, 439,888. Not yet: the grid, `--simulate`,
+and the `.pairs` re-binned exactly.
+
+### 27.12 Costs
+
+| Operation | Budget |
+|---|---|
+| Open the stage | one pass over one rung for its picture, each time it opens (*built*: a bar and a cancel, and what the pass reads said as it starts — `13,735,472 stored pixels at 1 kb`, and how many bins a cell pools where it does; not a time, which a range request's speed decides) — and, in the same pass, what the method weighs, then its law and its corners in the reader's worker: about two seconds more for a yeast genome at 1 kb |
+| Closer than a cell | one dense read of the window on screen, a third more each way, from the rung about a device pixel a bin, through the edit — at most four million cells, 16 MB; the rung's lens built once for the edit and kept while it stands (§27.9) |
+| An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
+| An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
+| A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; until the first is in, the card says it is weighing, never that there is nothing to weigh; then each offered suggestion's points, best first, 24 at most — *built*: one read a rung a point, a square of twice its reach and 96 bins a side — at most about 150, 22,500 cells — through the edit; 0 where the picture is at the finest rung or the map is too shallow for a finer one, or the pieces around a point are as they were |
+| Review: an answer | 0 requests; the re-rank is arithmetic |
+| Export FASTA | one ranged read per piece; no whole sequence held — *built*: 400,000 bases a request; the file itself is held whole before it is saved |
+| Export the lifted map | *built*: one pass over each rung's stored pixels, in the reader's worker; at most 60 million pixels gathered, 720 MB, and the `.mcool` built in memory as the `.pairs` import's is |
+
+### 27.13 Refused, and not yet built
+
+Refused: an edit applied to a file whose sequences are not the ones it was made against; a stage on
+more than one map; a stage on an assembly of more sequences than its picture has cells; a lifted
+`.cool` above the memory it would take, with the way out; for now, a session drawn through an edit of a
+`.metacool` — a genome's edit is its own files, not the session's view — and an edit on a single-cell
+file. Built: the model and the axis (§27.2), the stage and its picture (§27.3, §27.4, §27.9), the edit
+kept with the file and carried in a workspace, the session drawn through it (§27.7), and the method
+with its suggestions — drawn with the rail and the corners, snapped to, and answered in manual, review
+and auto (§27.5, §27.6), and the exports — the text files written from the edit and read back, the
+sequence, the map and the tracks lifted through it (§27.8) — the sequence's own evidence, its telomeres
+and gaps (§27.5), and the stage on one genome of a metagenome, its contigs sent to other genomes and
+brought in from them, and the contig → MAG table of every genome's edit (§27.10), and the stage closer
+than its picture's cell (§27.9). Not yet built, in the order it will be (`docs/reference-editing.md`
+§10): the rest of the evidence beyond the map; files for every genome of a metagenome at once; the
+command line — and, left over, the gaps §27.7 lists. Built since: each suggestion's points placed
+again at the finer rungs (§27.5).
+
+## 28. Two sequences on two axes
+
+A dot plot: one sequence set along the x axis, another along the y, and a mark wherever the two
+share sequence — so that a reordering, an inversion or a translocation between two assemblies is seen at
+a glance, as the line that jumps, turns or leaves. Related to §27 and independent of it: it needs no
+contact map and no edit, only two FASTA or `.2bit` files, and it is computed here, in the browser. A
+**dev feature** (§29) until it is validated; **status: partly built** — the matches (§28.1), the task
+and its figure, table and pairs (§28.3), the command line, and what it says about itself (§28.4).
+**Built since**: the figure a view of its own on screen, zoomed and read under the pointer (§28.2); **not
+yet** a view of its own in the link, with the maps' tracks on its edges.
+
+### 28.1 Matches
+
+Canonical minimizers of `k = 19` over both strands, their window chosen so that the first set's
+minimizers stay under a budget of two million — about one in seven bases of a yeast genome, one in
+1,500 of a human one — found with a deque over the window, sorted by hash with a radix sort in typed
+arrays on each side and **merge-joined**, which needs no hash table and holds nothing but the two sorted
+lists. A hash seen more than 50 times on either side is dropped, as minimap2 drops its most frequent
+minimizers, so that a repeat family is not a square of noise. An **anchor** is one shared minimizer — a
+position on each axis and a strand. Anchors along one diagonal band 500 bases wide — `x − y` forward,
+`x + y` reversed — no more than 5 kb apart along it, ten or more of them, chain into a **streak**: one
+line of the plot, with its anchor count and its extent on both axes. A shared 19-mer on its own is
+chance as often as not, so what is drawn is the anchors of streaks.
+
+**One to one.** Between two sets the streaks are kept **one to one**, unless the reader asks for every
+one: strongest first, each kept unless more than half its stretch along either axis — in steps of 100
+bases, coarser past 40 Mb — is already a stronger kept streak's, as `delta-filter -1` keeps MUMmer's
+alignments. Each stretch of one set is then at its best place in the other, the place its flanks put
+it, and the grid a repeat family's copies draw with each other goes: between a yeast's long-read
+assembly and the genome it was built to be, 106 streaks of 11,738, which still cover 99% of the
+assembly. A set against itself keeps every streak, since that is what it is drawn for — one to one
+would leave it its diagonal.
+
+### 28.2 The view
+
+*Built*, in the figure's own place (`ui/dotplotFigure.ts`, `dotplot/view.ts`): on screen the dot plot is
+its **streaks drawn as the lines they are** — the same way round red, the other blue, a line at 45°
+whatever the two sets' sizes, since both axes are drawn at one scale in a square plot centred across
+the drawer — rather than the cells, so that a zoom stays sharp. The wheel zooms about the pointer, which
+stays over the same bases (the window held only by its centre, over the data, so that a zoom into
+either set's last sequence — where a fused chromosome is usually written — does not slide away under
+the pointer); a drag or a sideways scroll moves it, as over a map (§7.2); a double click, `0` or *the
+whole* in its corner shows both sets whole again; `+ − ←→↑↓` answer when it has the keys. The line
+under it says what the pointer is on: the streak within six pixels, **both loci, its way round and its
+anchors** (`contig_5:43-73,573 × chrXVI-Mmmyco_inv870kb:1,531,421-1,604,949 · the other way round ·
+9,310 anchors`), lit over a halo; else the place on both axes and the bases a pixel. A press keeps a
+streak named while the pointer goes elsewhere, and Escape lets it go. What the PNG and PDF buttons
+draw is the window on screen, as lines; the cells stay the output's, and what a vector export of the
+figure through the Figures block draws. The colour picker a matrix offers is not offered: the lines
+are red and blue whatever it would say.
+
+Still to come: a view of its own, `view=dotplot`, with the two sequence sets' addresses in the link,
+drawn by the map's machinery over two assemblies instead of one: the density of anchors in each cell,
+**signed** — forward positive, reversed negative — in `RdBu_r` about zero, so that a reordering is a red
+line that jumps and an inversion a blue one. It zooms from the two assemblies end to end down to the
+anchors themselves, drawn as dots once a cell is a few bases wide. The x edges carry the first
+assembly's tracks and the y edges the second's, each matched by name to its own sequences; the readout
+gives both loci and the strand. A zoom past what the sample can show recomputes the window at a denser
+sampling, which is bounded work.
+
+### 28.3 The figure, and the command line
+
+A task in the Analysis panel's 1D group, *Two sequences against each other*, taking the two sets from
+the session's sequences — two FASTA or `.2bit` files, or one against itself — and computed in the
+annotations worker beside their residues: several seconds for two yeast genomes. It reads **no map**, so
+the drawer's heading names none, a view that moves leaves its result standing rather than stale, and
+the result's provenance is of the sequences. Its figure is the same signed density at the task's
+resolution — 400 cells along the longer axis unless the reader asks for others, each square in bases —
+drawn **as large as the drawer lets it be** (up to 600 pixels a side, a cell a fraction of a pixel
+wider than whole if that is what fills it, each cell's edges on whole pixels), with a rule where one
+sequence meets the next along each axis and each sequence's name beside its stretch where there is room:
+standing under the picture where that writes more of them than lying down, as it nearly always does for
+an assembly's contigs. The scale is clipped at the middle of the cells a line crosses — three anchors or
+more — so a short line is not the white it is there to stand out of. It is restylable and exported like
+every figure (§18.13), and always painted, never the chart of a small matrix, since a category axis
+cannot mark sequences end to end. The streaks it draws come out as a table (TSV) and as pairs
+(BEDPE, the way round in the name column), which the app reads back as an overlay. The command line
+runs the same task through the same runner — `metacooler-run dotplot --sequence a.fa --sequence b.fa
+--x a.fa --y b.fa --out results/`, which is what the drawer's *copy CLI command* writes — and writes
+the density, the streaks and the pairs, their provenance of the sequences and not of a map.
+
+### 28.4 What it says about itself
+
+The note says what was sampled — `Exact 19-mers, one in about 7 bases; hashes above 50 copies on either
+side dropped` — and how many anchors and streaks there were, and how many of those were kept one to
+one, because a dot plot's blank is only as good as its sampling, and a reader must know which blank they
+are looking at. A dot plot of two human genomes is a picture of chromosome-scale structure and says so;
+it is not an alignment, and it writes none.
+
+## 29. Dev features
+
+A feature on `main` — built, specified, tested and released like any other — that a reader **does not
+see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
+finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
+**Built**: the switch, the registry (`state/devFeatures.ts`), and the `metacool` gate below; `edit` and
+`dotplot` are gated from their first line, as they are built.
+
+### 29.1 One switch
+
+In *About*, under the version: **dev features**, a switch, off by default. It is a **preference**,
+kept in `localStorage` — a fact about this browser, not about a file or a tab (the persistence tiers'
+dividing line) — and it is the **only** trace a dev feature leaves anywhere a reader looks. Turning it
+on or off **reloads the window**, which keeps its tabs: every surface is then built from scratch with
+the new answer, so no card, task list, worker or cached command list can disagree with it — which a
+live re-render of every surface could not promise. The answer is read once per page for the same
+reason. The price is the reload's: a file dropped without a handle comes back as a name to drop again,
+as it does after any reload (§20). A worker has no `localStorage`, so the answer is stamped on every
+open the page sends it — once, in the client, where the credentials are.
+
+**The registry is one file**, each entry a name and the reason it is not public yet, and the names are
+a type: making a feature public is deleting its line, and the compiler then names every gate it left
+behind, rather than each one quietly always opening.
+
+### 29.2 Off is absent
+
+Not greyed, not listed with an instruction, not mentioned. §8.5 as corrected by §18.1 would list a
+control the reader could make work and say what to load; a dev feature is the one case where there is
+something the reader could do and they are deliberately not told. So a dev feature, switched off, leaves
+no row in a table, no task in the Analysis panel, no command in the palette or the shortcuts, no example
+on the landing page, no store row, no format in a file picker's list, no clause in a sentence — in
+*About* included, whose first line names what the viewer opens.
+
+### 29.3 What is dev today
+
+What is dev, and what switched off means for each:
+
+- **`metacool`** — both containers (§3.2, §3.4), the genomes table (§5.1), the genome and genome-pair
+  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the mock
+  community example, and every sentence that names any of them. **Switched off, a `.metacool` or an
+  `.mmetacool` is refused like any file the app does not read**, in that refusal's words. A `.metacool`
+  also passes cooler's own test (§3.1), so this is a refusal the detection makes, not a branch it skips —
+  or it would open as a cooler of twenty thousand contigs. The refusals a *plain* file can meet stop
+  naming it too: an unknown HDF5 file, a gzip, a file with no HDF5 signature and a variable-bin cooler
+  each say what they said, less the multi-genome container and the command that makes one. The lab's
+  store drops the mock community's figure and its two files; the rest of what the switch hides — the
+  genomes table, the genome views, the metagenome tasks and their options — can only be reached with a
+  multi-genome file open, and so goes with it.
+- **`edit`** — the stage, its keys, the heading's word on the reference, the palette's *Edit the
+  reference*, the edit kept with a file, its task once there is one, and every surface of the lens
+  (§27). Switched off, none of them is drawn and a kept edit is left in storage as it was.
+- **`dotplot`** — the task, and the view and its links once they are built (§28). Switched off, the
+  task is not in the Analysis panel.
+
+### 29.4 What a dev feature left in a session
+
+**Kept, and not applied.** A link or a workspace carrying an edit, or naming a dot plot, opens while
+the switch is off as if it did not: the view falls back to the one it would have without the feature,
+and the record is left exactly as it was, so turning the switch on brings it back. A dev feature is
+never the reason a session is lost.
+
+### 29.5 Where the switch is not
+
+- **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
+  browser.
+- **Not on the command line**: `metacooler-run` is a developer's tool, lists every task and runs every
+  one.
+- **Not in the static text** around the app — the page's description, the install prompt's — which
+  cannot follow a switch, so it names nothing that is dev. The name stays **(meta)cooler**.

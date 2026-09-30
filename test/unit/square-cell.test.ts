@@ -98,3 +98,18 @@ describe('a matrix whose rows are a list', () => {
     expect(cell.width).toBe(squareCell(900, 600, 50, 50))
   })
 })
+
+/**
+ * …and the picture read like a map: a dot plot's two assemblies end to end
+ * (§28), four hundred cells a side, which whole pixels would leave four
+ * hundred pixels wide in a card three times that.
+ */
+describe('a matrix read like a map', () => {
+  it('fills the box with square cells a fraction of a pixel wide', () => {
+    const cell = matrixCells(900, 600, { nrows: 400, ncols: 380, large: true })
+    expect(cell.width).toBe(cell.height)
+    expect(cell.height * 400).toBeCloseTo(600, 5)
+    // Whole pixels would have been one each: two thirds of the room.
+    expect(matrixCells(900, 600, { nrows: 400, ncols: 380 }).width).toBe(1)
+  })
+})

@@ -28,6 +28,7 @@ import type {
   MarginProfile,
   MatrixMargins,
   MatrixOutput,
+  MatrixSegment,
   ProfileOutput,
   TableColumn,
   TableOutput,
@@ -1025,13 +1026,18 @@ export function squareCell(
 export function matrixCells(
   availableWidth: number,
   availableHeight: number,
-  output: Pick<MatrixOutput, 'ncols' | 'nrows' | 'aspect'>,
+  output: Pick<MatrixOutput, 'ncols' | 'nrows' | 'aspect' | 'large'>,
 ): { width: number; height: number } {
   if (output.aspect === 'fill') {
     return {
       width: cellSide(availableWidth, output.ncols),
       height: cellSide(availableHeight, output.nrows),
     }
+  }
+  if (output.large === true) {
+    // Unsnapped: the painter puts each cell's edges on whole pixels instead.
+    const side = Math.min(availableWidth / Math.max(1, output.ncols), availableHeight / Math.max(1, output.nrows))
+    return { width: side, height: side }
   }
   const cell = squareCell(availableWidth, availableHeight, output.ncols, output.nrows)
   return { width: cell, height: cell }
@@ -1222,6 +1228,149 @@ function drawMargin(
   ctx.lineWidth = FRAME_WIDTH
 }
 
+/** The most a sequence's name standing under a picture may take, in font sizes; a longer one is cut short. */
+const SEGMENT_NAME_ROOM = 12
+
+/** The fewest pixels between two rules marking where sequences meet; a closer one is left out. */
+const SEGMENT_RULE_GAP = 3
+
+/** How the names of the sequences along x are written: lying down or standing up, and the room they take below the picture. */
+interface SegmentNames {
+  upright: boolean
+  room: number
+}
+
+/** `text`, cut short with an ellipsis to fit `room` pixels. */
+function clipText(ctx: CanvasRenderingContext2D, text: string, room: number): string {
+  if (ctx.measureText(text).width <= room) return text
+  let low = 0
+  let high = text.length
+  while (low < high) {
+    const mid = (low + high + 1) >> 1
+    if (ctx.measureText(`${text.slice(0, mid)}…`).width <= room) low = mid
+    else high = mid - 1
+  }
+  return low === 0 ? '' : `${text.slice(0, low)}…`
+}
+
+/**
+ * Which of a run of sequences' names are written: each at its sequence's
+ * middle, where it fits the sequence's own extent and clears the last one
+ * written.
+ *
+ * @param extent A name's length along the axis, in pixels.
+ */
+function namesWritten(
+  segments: readonly MatrixSegment[],
+  cellPx: number,
+  at: number,
+  extent: (segment: MatrixSegment, index: number) => number,
+  gap: number,
+): boolean[] {
+  let last = Number.NEGATIVE_INFINITY
+  return segments.map((segment, index) => {
+    const from = at + segment.from * cellPx
+    const to = at + segment.to * cellPx
+    const size = extent(segment, index)
+    const middle = (from + to) / 2
+    if (size > to - from + gap * 2 || middle - size / 2 < last + gap) return false
+    last = middle + size / 2
+    return true
+  })
+}
+
+/**
+ * How the names along x are written. Lying down, unless standing them up
+ * writes more of them — two assemblies' dozens of contigs are narrower than
+ * their names nearly always — and then as tall as the longest, up to
+ * {@link SEGMENT_NAME_ROOM} font sizes.
+ *
+ * @param cellPx The widest a cell can be, before the picture's height is known.
+ */
+function segmentNames(ctx: CanvasRenderingContext2D, output: MatrixOutput, cellPx: number, size: number, line: number, gap: number): SegmentNames {
+  const segments = output.xSegments ?? []
+  if (segments.length === 0) return { upright: false, room: 0 }
+  const widths = segments.map((segment) => ctx.measureText(segment.label).width)
+  const count = (written: boolean[]): number => written.filter(Boolean).length
+  const lying = count(namesWritten(segments, cellPx, 0, (_, index) => widths[index], gap))
+  const standing = count(namesWritten(segments, cellPx, 0, () => line, 0))
+  if (standing <= lying) return { upright: false, room: line }
+  return { upright: true, room: Math.min(Math.max(...widths), size * SEGMENT_NAME_ROOM) }
+}
+
+/**
+ * The sequences laid along a matrix's axes (§28): a rule where one ends and
+ * the next begins, across the picture — one a few pixels from the last left
+ * out, where small sequences crowd — and each one's name under or beside it
+ * where there is room, a name wider than its sequence or than the gap to the
+ * last one written left for a closer look.
+ */
+function drawSegments(
+  ctx: CanvasRenderingContext2D,
+  output: MatrixOutput,
+  plot: Rect,
+  cell: { cellW: number; cellH: number; gap: number; line: number },
+  names: SegmentNames,
+  theme: PlotTheme,
+): void {
+  const xs = output.xSegments ?? []
+  const ys = output.ySegments ?? []
+  if (xs.length === 0 && ys.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = theme.grid
+  ctx.lineWidth = RULE_WIDTH
+  ctx.beginPath()
+  let lastRule = Number.NEGATIVE_INFINITY
+  for (const segment of xs) {
+    if (!(segment.from > 0)) continue
+    const x = Math.round(plot.x + segment.from * cell.cellW) + 0.5
+    if (x - lastRule < SEGMENT_RULE_GAP) continue
+    ctx.moveTo(x, plot.y)
+    ctx.lineTo(x, plot.y + plot.height)
+    lastRule = x
+  }
+  lastRule = Number.NEGATIVE_INFINITY
+  for (const segment of ys) {
+    if (!(segment.from > 0)) continue
+    const y = Math.round(plot.y + segment.from * cell.cellH) + 0.5
+    if (y - lastRule < SEGMENT_RULE_GAP) continue
+    ctx.moveTo(plot.x, y)
+    ctx.lineTo(plot.x + plot.width, y)
+    lastRule = y
+  }
+  ctx.stroke()
+  ctx.fillStyle = theme.muted
+  ctx.font = theme.font
+  const under = plot.y + plot.height + TICK_LENGTH + cell.gap / 2
+  if (names.upright) {
+    const written = namesWritten(xs, cell.cellW, plot.x, () => cell.line, 0)
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'middle'
+    xs.forEach((segment, i) => {
+      if (!written[i]) return
+      ctx.save()
+      ctx.translate(plot.x + ((segment.from + segment.to) / 2) * cell.cellW, under)
+      ctx.rotate(-Math.PI / 2)
+      ctx.fillText(clipText(ctx, segment.label, names.room), 0, 0)
+      ctx.restore()
+    })
+  } else {
+    const written = namesWritten(xs, cell.cellW, plot.x, (segment) => ctx.measureText(segment.label).width, cell.gap)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    xs.forEach((segment, i) => {
+      if (written[i]) ctx.fillText(segment.label, plot.x + ((segment.from + segment.to) / 2) * cell.cellW, under)
+    })
+  }
+  const beside = namesWritten(ys, cell.cellH, plot.y, () => cell.line, cell.line * 0.1)
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  ys.forEach((segment, i) => {
+    if (beside[i]) ctx.fillText(segment.label, plot.x - TICK_LENGTH, plot.y + ((segment.from + segment.to) / 2) * cell.cellH)
+  })
+  ctx.restore()
+}
+
 /**
  * Draw a matrix output into `box`, from its own origin.
  *
@@ -1266,6 +1415,9 @@ export function drawMatrix(
   }
   let widestY = 0
   for (const label of output.yTicks) widestY = Math.max(widestY, ctx.measureText(label).width)
+  // Sequences along an axis name themselves where the ticks would be.
+  for (const segment of output.ySegments ?? []) widestY = Math.max(widestY, ctx.measureText(segment.label).width)
+  const xNamed = output.xTicks.length > 0 || (output.xSegments ?? []).length > 0
 
   const barWidth = Math.round(size * 0.9)
   // The marginal profiles, and the two bands they need. A band is three lines
@@ -1289,8 +1441,12 @@ export function drawMatrix(
   // on the top edge — sit inside the box rather than half out of it.
   const top = Math.ceil(line / 2) + keyLine + topBand
   const stats = output.stats ?? []
+  // The row under the picture: its ticks, or its sequences' names — standing,
+  // where that writes more of them, as tall as they are.
+  const names = segmentNames(ctx, output, (box.width - left - right) / Math.max(1, output.ncols), size, line, gap)
+  const tickRow = names.upright ? TICK_LENGTH + gap + Math.ceil(names.room) : xNamed ? TICK_LENGTH + gap + line : gap
   const bottom =
-    (output.xTicks.length > 0 ? TICK_LENGTH + gap + line : gap) +
+    tickRow +
     (output.xLabel === '' ? 0 : line) +
     (stats.length > 0 ? gap + stats.length * line : 0) +
     Math.round(size * 0.3)
@@ -1310,8 +1466,8 @@ export function drawMatrix(
     // so the slack is split rather than pooled against the colour bar.
     x: left + Math.round((availableWidth - cellW * output.ncols) / 2),
     y: top + Math.round((availableHeight - cellH * output.nrows) / 2),
-    width: cellW * output.ncols,
-    height: cellH * output.nrows,
+    width: Math.round(cellW * output.ncols),
+    height: Math.round(cellH * output.nrows),
   }
   if (!(plot.width > 0) || !(plot.height > 0)) {
     drawEmpty(ctx, box, theme, 'too small to draw')
@@ -1319,9 +1475,16 @@ export function drawMatrix(
   }
 
   const scale = 1 / (range.vmax - range.vmin)
+  // A large picture's cells are a fraction of a pixel wider than whole: each
+  // one's edges rounded, so neighbours meet without a seam of half-painted
+  // pixels between them. Whole cells round to themselves.
+  const snap = output.large === true && cellW >= 1 && cellH >= 1
+  const edgeX = (col: number): number => (snap ? Math.round(plot.x + col * cellW) : plot.x + col * cellW)
+  const edgeY = (row: number): number => (snap ? Math.round(plot.y + row * cellH) : plot.y + row * cellH)
   let painted = -1
   for (let row = 0; row < output.nrows; row++) {
-    const y0 = plot.y + row * cellH
+    const y0 = edgeY(row)
+    const h = snap ? edgeY(row + 1) - y0 : cellH
     for (let col = 0; col < output.ncols; col++) {
       const index = colormapIndex((output.values[row * output.ncols + col] - range.vmin) * scale)
       // `-1` is matplotlib's "bad" colour, which is transparent — a `NaN` cell.
@@ -1333,13 +1496,15 @@ export function drawMatrix(
         ctx.fillStyle = colours[index]
         painted = index
       }
-      ctx.fillRect(plot.x + col * cellW, y0, cellW, cellH)
+      const x0 = edgeX(col)
+      ctx.fillRect(x0, y0, snap ? edgeX(col + 1) - x0 : cellW, h)
     }
   }
 
   ctx.strokeStyle = theme.grid
   ctx.lineWidth = FRAME_WIDTH
   ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
+  drawSegments(ctx, output, plot, { cellW, cellH, gap, line }, names, theme)
 
   // The marginals, against the two edges they run along, and the one line of key
   // above both. Drawn before the ticks so the axis furniture is painted over
@@ -1470,7 +1635,6 @@ export function drawMatrix(
 
   ctx.fillStyle = theme.ink
   ctx.font = boldOf(theme.font)
-  const tickRow = output.xTicks.length > 0 ? TICK_LENGTH + gap + line : gap
   const labelBottom = plot.y + plot.height + tickRow
   if (output.xLabel !== '') {
     ctx.textAlign = 'center'
@@ -1527,7 +1691,7 @@ export interface PlotFigure {
 }
 
 /** The width a figure is drawn at before anything has measured its column. */
-const MIN_FIGURE_WIDTH = 240
+export const MIN_FIGURE_WIDTH = 240
 
 /**
  * Call `onChange` whenever the effective theme changes.
@@ -1538,7 +1702,7 @@ const MIN_FIGURE_WIDTH = 240
  * restyled by CSS, so a figure that watched only one of the two would keep the
  * old palette until something else made it redraw.
  */
-function watchTheme(onChange: () => void): () => void {
+export function watchTheme(onChange: () => void): () => void {
   const media = window.matchMedia?.('(prefers-color-scheme: dark)')
   const observer =
     typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => onChange())
@@ -1694,9 +1858,13 @@ function matrixHeight(output: MatrixOutput, width: number): number {
   const band = Math.round(size * 3)
   const tops = output.margins?.top?.length ?? 0
   const sides = output.margins?.right?.length ?? 0
+  // Sequences' names under the picture, taken as standing: at most a few
+  // pixels too many where they lie down after all.
+  const longest = Math.max(0, ...(output.xSegments ?? []).map((segment) => segment.label.length))
+  const names = longest > 0 ? TICK_LENGTH + gap + Math.min(longest * size * 0.6, size * SEGMENT_NAME_ROOM) : 0
   const furniture =
     Math.round(size * 0.9) +
-    (output.xTicks.length > 0 ? TICK_LENGTH + line : 0) +
+    (names > 0 ? names : output.xTicks.length > 0 ? TICK_LENGTH + line : 0) +
     (output.xLabel === '' ? 0 : line) +
     (output.stats?.length ?? 0) * line +
     (tops > 0 ? band + gap : 0) +
@@ -1711,8 +1879,13 @@ function matrixHeight(output: MatrixOutput, width: number): number {
     return Math.round(furniture + Math.max(260, Math.min(560, cells * 0.55)))
   }
   const aspect = output.ncols > 0 ? output.nrows / output.ncols : 1
-  return Math.round(furniture + Math.max(80, Math.min(420, cells * aspect)))
+  // A picture read like a map asks for most of a screen; see `MatrixOutput.large`.
+  const most = output.large === true ? LARGE_MATRIX_SIDE : 420
+  return Math.round(furniture + Math.max(80, Math.min(most, cells * aspect)))
 }
+
+/** The tallest a {@link MatrixOutput.large} picture asks to be, in CSS pixels: most of a laptop's screen, the rest its names and scale. */
+const LARGE_MATRIX_SIDE = 600
 
 export function curveFigure(
   output: CurveOutput,

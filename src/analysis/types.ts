@@ -25,6 +25,7 @@
  */
 
 import type { GroupMode } from '../annotations/groups'
+import type { DevFeature } from '../state/devFeatures'
 import type {
   AnnotationEntry,
   AnnotationKind,
@@ -670,6 +671,12 @@ export interface AnalysisFraming {
    * read.
    */
   contacts?: number
+  /**
+   * The edit of the reference the map was drawn through (§27.7), as its
+   * fingerprint (`genome/edit.ts`); absent for the file as it is. A result is of
+   * the edited assembly it was computed on, and the next edit makes it stale.
+   */
+  edit?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -894,6 +901,21 @@ export interface CurveOutput {
  * same rasteriser and the same colormaps, so a pileup in the drawer and the map
  * behind it agree about what a colour means.
  */
+/** A dot plot's streaks, one entry each, and the two axes they are measured along (§28.2). */
+export interface DotplotStreaks {
+  /** What each axis is — the sequence set's name — and its sequences in order, with their lengths. */
+  x: { label: string; names: string[]; lengths: number[] }
+  y: { label: string; names: string[]; lengths: number[] }
+  /** Extents on each axis, half-open, in bases along the concatenated axis. */
+  x0: Float64Array
+  x1: Float64Array
+  y0: Float64Array
+  y1: Float64Array
+  /** `1` the same way round, `-1` the other. */
+  strand: Int8Array
+  anchors: Int32Array
+}
+
 export interface MatrixOutput {
   kind: 'matrix'
   id: string
@@ -927,6 +949,22 @@ export interface MatrixOutput {
    * thousand columns' worth of width — a narrow ribbon in a wide card.
    */
   aspect?: 'square' | 'fill'
+  /**
+   * A picture read like a map rather than a chart — a dot plot's two
+   * assemblies end to end (§28): as large as the card lets it be, its square
+   * cells a fraction of a pixel wider where that is what fills it, each one's
+   * edges on whole pixels. Absent, a cell is a whole number of pixels, which
+   * leaves a picture of four hundred cells four hundred pixels wide in a card
+   * three times that.
+   */
+  large?: boolean
+  /**
+   * A dot plot's streaks as the lines they are (§28.2): where present, the
+   * figure on screen draws these rather than the cells — at any zoom, sharp,
+   * the one under the pointer named on both axes — and the cells stay what an
+   * export draws.
+   */
+  streaks?: DotplotStreaks
   /**
    * The value a diverging colormap is centred on, if it is one.
    *
@@ -964,8 +1002,23 @@ export interface MatrixOutput {
    * bound where they do*.
    */
   margins?: MatrixMargins
+  /**
+   * Sequences laid end to end along an axis, in its cells — a rule between two
+   * and the name of each under it: a dot plot's two assemblies (§28), whose
+   * ticks are sequences rather than a scale. Where given, they take the place
+   * of that axis's ticks.
+   */
+  xSegments?: MatrixSegment[]
+  ySegments?: MatrixSegment[]
   /** See {@link CurveOutput.acrossMaps}. */
   acrossMaps?: boolean
+}
+
+/** One sequence along an axis of a {@link MatrixOutput}: its name, and the cells it spans, fractional. */
+export interface MatrixSegment {
+  label: string
+  from: number
+  to: number
 }
 
 /**
@@ -1386,6 +1439,13 @@ export interface AnalysisTask {
    */
   needsPeers?: boolean
   /**
+   * Whether this task reads **no map** at all — two sequence sets against
+   * each other (§28) — so the drawer's heading names no framing, and a view
+   * that has moved leaves the result standing rather than stale: nothing it
+   * was computed from has moved.
+   */
+  mapless?: boolean
+  /**
    * Whether this task can run on what is open, and if not, why not.
    *
    * See {@link TaskAvailability}. It replaced a boolean `appliesTo`, which could
@@ -1397,5 +1457,11 @@ export interface AnalysisTask {
   outputs: ReadonlyArray<TaskOutput['kind']>
   /** Ids of tasks whose results are inputs to this one (§18.2's composites). */
   requires?: readonly string[]
+  /**
+   * The dev feature this task belongs to (§29), if it is one: absent from the
+   * Analysis panel — not greyed, not waiting — while the switch is off. The
+   * command line runs it regardless, having no switch.
+   */
+  dev?: DevFeature
   estimate(context: AnalysisContext, params: Params): CostEstimate
 }

@@ -34,6 +34,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetDevFeatures } from '../../src/state/devFeatures'
 
 import {
   setTokenClientFactory,
@@ -133,7 +134,24 @@ describe('routing a name', () => {
     // A Windows path arrives from a dropped file's `name` on that platform, and
     // a `::entries/` URI names a map inside a collection.
     expect(routeOf('C:\\data\\rep1.cool')).toBe('map')
-    expect(routeOf('rep1.mmetacool::entries/rep1')).toBe('map')
+    resetDevFeatures(true)
+    try {
+      expect(routeOf('rep1.mmetacool::entries/rep1')).toBe('map')
+    } finally {
+      resetDevFeatures()
+    }
+  })
+
+  it('does not know the multi-genome containers while they are a dev feature that is off (§29)', () => {
+    resetDevFeatures(false)
+    try {
+      expect(routeOf('rep1.mmetacool::entries/rep1')).toBe('unknown')
+      expect(routeOf('Hum53.metacool')).toBe('unknown')
+      // …and a name that merely contains the word is still what it is.
+      expect(routeOf('rep1.cool')).toBe('map')
+    } finally {
+      resetDevFeatures()
+    }
   })
 
   it('sends a BAM to the genome door', () => {

@@ -36,6 +36,7 @@
  */
 
 import { IS_STANDALONE } from '../version'
+import { devFeature } from '../state/devFeatures'
 import { button, el } from './dom'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { dragHasFileRow, readFileDrag } from './fileDrag'
@@ -141,7 +142,12 @@ export class LoadBox {
           title:
             'Open a file by its address. The host must serve byte ranges and allow a ' +
             'cross-origin GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the ' +
-            'form that works. Add ::entries/<name> to address one entry of a collection.',
+            'form that works. ' +
+            // A collection's entries are the multi-genome container's (§29); an
+            // .mcool's resolutions are what every reader can address.
+            (devFeature('metacool')
+              ? 'Add ::entries/<name> to address one entry of a collection.'
+              : 'Add ::resolutions/<bp> to open one resolution of an .mcool.'),
         }),
       ),
     )

@@ -326,6 +326,20 @@ export function parseMetacoolerRange(
   // The genome list is the *displayable* one: `__unbinned__` is not selectable
   // in any view (§7.4), so offering it as an available name would contradict
   // the refusal a user gets the moment they take the suggestion.
+  //
+  // A file with no genome layer has no genome to name: `ops/range.py` is
+  // metacooler's and only ever sees a metacool, so its sentence — and the empty
+  // `Genomes: []` it would print — is kept exactly for the files that have one,
+  // and a cooler is told about its sequences alone. That is also every file a
+  // page with the multi-genome format switched off can open (§29).
+  if (mc.genomes === null) {
+    throw new ViewerError(
+      'unknown-label',
+      `Range ${pyRepr(rangeStr)}: ${pyRepr(label)} is not a sequence of this file.\n` +
+        `  Sequences: ${truncateNames(contigNames)}`,
+      { label, region: rangeStr },
+    )
+  }
   throw new ViewerError(
     'unknown-label',
     `Range ${pyRepr(rangeStr)}: ${pyRepr(label)} is not a known genome or contig.\n` +

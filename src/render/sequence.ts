@@ -20,10 +20,10 @@
  * its PDF export ask it the same question about the same frame.
  */
 
-import { BASE_CODE } from '../annotations/fasta'
+import { BASE_CODE, complementByte } from '../annotations/fasta'
 import type { BaseRegion } from '../annotations/types'
 import { laneRect, laneText, type LaneFrame } from './lane'
-import type { LocusAxis } from './locus'
+import { stretchOf, strandOf, unitAt, type LocusAxis } from './locus'
 
 /**
  * Base colours, indexed by {@link BASE_CODE}: A, C, G, T/U, anything else.
@@ -100,37 +100,58 @@ export function drawSequence(
   const high = Math.max(frame.alongFrom, frame.alongTo) + width
 
   for (const region of regions) {
-    const segment = axis.segmentOf(region.contig)
-    if (segment === null || !(segment.bpPerUnit > 0)) continue
-    const step = 1 / segment.bpPerUnit
-    const origin = segment.unitStart + (region.start - segment.bpStart) / segment.bpPerUnit
-    for (let i = 0; i < region.bases.length; i++) {
-      const a0 = frame.toPixel(origin + i * step)
-      const a1 = frame.toPixel(origin + (i + 1) * step)
-      const from = Math.min(a0, a1)
-      const to = Math.max(a0, a1)
-      if (to < low || from > high) continue
-      const colour = BASE_COLOURS[BASE_CODE[region.bases[i]]]
-      const [x, y, boxWidth, boxHeight] = laneRect(frame, from, to, 0, frame.thickness)
-      ctx.fillStyle = colour
-      // Under a letter the column is a wash rather than a block: the letter is
-      // what is being read at that zoom, and reading it off a saturated ground
-      // is harder than reading it off a tint of the same colour.
-      //
-      // And even bare, a column is not drawn at full strength. A lane of solid
-      // primaries is a wall: it takes over the picture from the tracks it is
-      // supposed to be annotating, and the lane's own edges disappear into it.
-      // At two thirds it is still four distinguishable colours and it still
-      // reads as a strip of a genome browser rather than as a test card.
-      ctx.globalAlpha = paint.opacity * (letters ? 0.22 : 0.62)
-      ctx.fillRect(x, y, boxWidth, boxHeight)
-      if (!letters) continue
-      ctx.globalAlpha = paint.opacity
-      ctx.fillStyle = colour
-      laneText(ctx, frame, letterOf(region.bases[i]), (from + to) / 2, frame.thickness / 2)
+    // Every stretch of the sequence, each drawing the bases of its own piece:
+    // on an edited axis one original can be several pieces, some read backwards
+    // (§27.2), and a reversed piece shows the other strand — the complement,
+    // read right to left, which is what the edited sequence says there.
+    for (const segment of axis.segmentsOf(region.contig)) {
+      if (!(segment.bpPerUnit > 0)) continue
+      const [lowBp, highBp] = stretchOf(segment)
+      const reversed = strandOf(segment) === -1
+      for (let i = 0; i < region.bases.length; i++) {
+        const bp = region.start + i
+        if (bp < lowBp || bp >= highBp) continue
+        const a0 = frame.toPixel(unitAt(segment, bp))
+        const a1 = frame.toPixel(unitAt(segment, bp + 1))
+        const from = Math.min(a0, a1)
+        const to = Math.max(a0, a1)
+        if (to < low || from > high) continue
+        const byte = reversed ? complementByte(region.bases[i]) : region.bases[i]
+        drawBase(ctx, frame, paint, letters, byte, from, to)
+      }
     }
   }
   ctx.restore()
+}
+
+/** One base's column and, where there is room, its letter. */
+function drawBase(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  paint: SequencePaint,
+  letters: boolean,
+  byte: number,
+  from: number,
+  to: number,
+): void {
+  const colour = BASE_COLOURS[BASE_CODE[byte]]
+  const [x, y, boxWidth, boxHeight] = laneRect(frame, from, to, 0, frame.thickness)
+  ctx.fillStyle = colour
+  // Under a letter the column is a wash rather than a block: the letter is
+  // what is being read at that zoom, and reading it off a saturated ground
+  // is harder than reading it off a tint of the same colour.
+  //
+  // And even bare, a column is not drawn at full strength. A lane of solid
+  // primaries is a wall: it takes over the picture from the tracks it is
+  // supposed to be annotating, and the lane's own edges disappear into it.
+  // At two thirds it is still four distinguishable colours and it still
+  // reads as a strip of a genome browser rather than as a test card.
+  ctx.globalAlpha = paint.opacity * (letters ? 0.22 : 0.62)
+  ctx.fillRect(x, y, boxWidth, boxHeight)
+  if (!letters) return
+  ctx.globalAlpha = paint.opacity
+  ctx.fillStyle = colour
+  laneText(ctx, frame, letterOf(byte), (from + to) / 2, frame.thickness / 2)
 }
 
 /** The residue as a glyph: upper case, whatever the file wrote. */
@@ -144,16 +165,21 @@ export function letterOf(byte: number): string {
  * A linear scan of the windows in hand, which are the windows on screen: three
  * of them at most, and a binary search over a `Uint8Array` whose start is known
  * is arithmetic anyway.
+ *
+ * @param reversed The position is in a stretch drawn the other way round
+ *   (§27.2), whose letters are the other strand's: the complement.
  */
 export function baseAt(
   regions: readonly BaseRegion[],
   contig: string,
   bp: number,
+  reversed = false,
 ): string | null {
   const at = Math.floor(bp)
   for (const region of regions) {
     if (region.contig !== contig || at < region.start || at >= region.end) continue
-    return letterOf(region.bases[at - region.start])
+    const byte = region.bases[at - region.start]
+    return letterOf(reversed ? complementByte(byte) : byte)
   }
   return null
 }

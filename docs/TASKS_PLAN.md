@@ -542,8 +542,9 @@ Stated so they are decisions rather than omissions, and mirrored into `SPECS.md`
 - **No loop or dot calling.** HiCCUPS-class calling needs FDR control over several local backgrounds, and
   a half-good caller inside a viewer is a liability that gets cited. *Scoring* an existing loop set is
   5.8, and that is the honest version of this.
-- **No contig reordering or scaffolding from contacts.** It would only be useful if the app could write
-  the reordered file back, and it will not (below).
+- ~~**No contig reordering or scaffolding from contacts.** It would only be useful if the app could write
+  the reordered file back, and it will not (below).~~ **Reversed since**: the reference editor, SPECS §27
+  and §18.9 — an edit is a lens over the file, written out as new files, never back into it.
 - **No writing of `.cool`, `.mcool` or `.metacool`.** h5wasm could technically create one in its virtual
   filesystem, so this is a decision and not a limitation: derived contact matrices are a format contract
   this app does not want to own, and §13's "no write access of any kind" is extended to cover files the

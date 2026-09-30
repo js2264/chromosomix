@@ -23,6 +23,7 @@
  */
 
 import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
+import { devFeature } from '../state/devFeatures';
 import { CELL_QC_TASK } from "./tasks/cellqc";
 import { HICREP_TASK } from "./tasks/hicrep";
 import { CIS_TRANS_TASK } from "./tasks/cistrans";
@@ -44,6 +45,7 @@ import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
 import { PEAKS_TASK } from "./tasks/peaks";
 import { COMPOSITION_TASK } from "./tasks/composition";
+import { DOTPLOT_TASK } from "./tasks/dotplot";
 import { GROUP_SIGNAL_TASK } from "./tasks/groupsignal";
 import { ORITER_TASK } from "./tasks/oriter";
 import { INSULATION_TASK } from "./tasks/insulation";
@@ -121,6 +123,9 @@ export const TASKS: readonly AnalysisTask[] = [
   // how its values differ between the groups of one — A against B.
   GROUP_SIGNAL_TASK,
   OVERLAP_TASK,
+  // Last of the 1D card, and of a kind of its own: two sequence sets against
+  // each other rather than one read along its length (§28) — a dev feature.
+  DOTPLOT_TASK,
   // **Metagenome**, absent unless the file has genomes, so the card is there
   // for a metacool and nowhere else.
   MAG_QC_TASK,
@@ -149,12 +154,22 @@ export function taskById(id: string): AnalysisTask | undefined {
  * reader the feature does not exist. See {@link TaskAvailability}.
  */
 export function tasksFor(context: AnalysisContext): AnalysisTask[] {
-  return TASKS.filter((task) => task.availability(context).state !== 'absent');
+  return TASKS.filter((task) => shown(task) && task.availability(context).state !== 'absent');
 }
 
 /** The tasks that could be run right now — what the panel counts as usable. */
 export function runnableTasks(context: AnalysisContext): AnalysisTask[] {
-  return TASKS.filter((task) => task.availability(context).state === 'ready');
+  return TASKS.filter((task) => shown(task) && task.availability(context).state === 'ready');
+}
+
+/**
+ * Whether a task is offered at all: always, unless it belongs to a dev feature
+ * that is off (§29) — which is *absent*, the strongest answer, since a greyed
+ * row with *load a metagenome* on it is exactly the sentence the switch exists
+ * to keep off the screen.
+ */
+function shown(task: AnalysisTask): boolean {
+  return task.dev === undefined || devFeature(task.dev);
 }
 
 /**

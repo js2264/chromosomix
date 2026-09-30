@@ -75,6 +75,12 @@ export interface OpenHooks {
    * `createDetachedSource`.
    */
   detached?: boolean
+  /**
+   * Whether the multi-genome containers are read (§29): `false` while the
+   * *dev features* switch is off in the page that asked, absent from a caller
+   * with no switch. See `MetaCooler.open`.
+   */
+  metacool?: boolean
 }
 
 /**
@@ -133,7 +139,10 @@ async function openThroughSource(
   // who knows a thousand reads are in flight and one watching a spinner.
   if (looksSingleCell(uri)) hooks.report?.(0, 0, 'listing cells')
   try {
-    const mc = await MetaCooler.open(uri, source, agreed ? { listingAgreed: true } : {})
+    const mc = await MetaCooler.open(uri, source, {
+      ...(agreed ? { listingAgreed: true } : {}),
+      ...(hooks.metacool === undefined ? {} : { metacool: hooks.metacool }),
+    })
     return { mc, source }
   } catch (error) {
     // The one refusal a caller can answer for itself. Caught on the *code*
