@@ -25,7 +25,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   hold for what it is, count the contacts a suggestion rests on, and say `few contacts` where there
   are few: on the mock community they offer scaffolding joins, and no longer the rearrangements two
   reads of chance had lit at near certainty. Past 64 contigs, the ends weighed for a join are those
-  that touch, not only those a corner pairs.
+  that touch, not only those a corner pairs. A *genome* card reads every contact of the file and says
+  how much of the genome's stay in it, which of its contigs meet another genome more — **send** one
+  there — and which contigs of other genomes, or of none, meet it most — **bring** one in; both are
+  steps to undo, the AGP carries where a contig was sent, and *contig → MAG* writes the binning every
+  genome's edit makes of the file's contigs, in the two columns DAS_Tool, anvi'o and `metacooler
+  create` take.
 
 - **The assembly's own sequence beside the map, when the stage suggests — a dev feature (§27.5).**
   Where the session holds the assembly's FASTA or `.2bit`, the stage reads it once: the ends of every

@@ -774,6 +774,28 @@ export interface PictureResult {
   method?: { contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
 }
 
+/**
+ * Where one genome's contigs, and the contigs of the others, belong by their
+ * contacts (§27.10): a pass over every stored pixel of a metagenome, raw
+ * counts, a contig's contacts with itself left out.
+ */
+export interface GenomeLinksResult {
+  /**
+   * Each contig of the genome's edit: its contacts with every other contig,
+   * with the edit's own, and with the genomes the most of the rest are with,
+   * most first — `__unbinned__` among them, by that name.
+   */
+  inside: Array<{ contig: string; total: number; own: number; partners: Array<{ genome: string; contacts: number }> }>
+  /**
+   * Contigs of other genomes, and of none, in contact with the edit's: the
+   * contacts with it and with every contig, the largest share first, at most
+   * a hundred.
+   */
+  outside: Array<{ contig: string; genome: string; length: number; contacts: number; total: number }>
+  /** Stored pixels walked. */
+  pixels: number
+}
+
 export interface StatsResult {
   /** Everything the byte source has fetched since the file was opened. */
   total: SourceStats
@@ -805,6 +827,7 @@ export interface ResultMap {
   resample: ResampleResult
   contacts: { total: number | null }
   picture: PictureResult
+  genomeLinks: GenomeLinksResult
   cancel: null
   close: null
 }
@@ -1038,6 +1061,12 @@ export type WorkerRequest =
        * file is left out of the picture and of what the method weighs.
        */
       contigs?: string[]
+    }
+  | {
+      id: number
+      kind: 'genomeLinks'
+      /** The contigs of one genome's edit, by name (§27.10). */
+      contigs: string[]
     }
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }

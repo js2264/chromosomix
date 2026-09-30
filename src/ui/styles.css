@@ -13110,6 +13110,55 @@ span.deck-name {
   line-height: 1.5;
 }
 
+/* One genome of a metagenome (§27.10): what its contacts say about where its
+   contigs belong, a row a contig, the way to send it or bring it in at the
+   row's end. */
+.edit-genome-sub {
+  margin: 0.4rem 0 0;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.edit-genome-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.edit-genome-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name act'
+    'share act';
+  column-gap: 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.edit-genome-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-genome-share {
+  grid-area: share;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-genome-act {
+  grid-area: act;
+  white-space: nowrap;
+}
+
 /* The export card (§27.8): a bordered button per format, the way back in,
    and a line saying what was written or why not. */
 .edit-export-files,

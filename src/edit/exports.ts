@@ -25,6 +25,7 @@ import {
   EditedAssembly,
   emptyEdit,
   isGap,
+  lengthsOf,
   withStep,
   type AsideReason,
   type LayoutPart,
@@ -102,7 +103,7 @@ export function writableEdit(edit: ReferenceEdit): ReferenceEdit {
     })),
     aside: assembly.aside
       .filter((item) => item.why !== 'unplaced')
-      .map((item) => ({ sequence: item.piece.sequence, start: item.piece.start, end: item.piece.end, why: item.why })),
+      .map((item) => ({ sequence: item.piece.sequence, start: item.piece.start, end: item.piece.end, why: item.why, ...(item.genome === undefined ? {} : { genome: item.genome }) })),
   }
   return withStep(emptyEdit(edit.original), step, 'reader', 0)
 }
@@ -140,7 +141,8 @@ export function agpOf(assembly: EditedAssembly, context: ExportContext): string 
   for (const item of assembly.aside) {
     if (item.why === 'unplaced') continue
     const { sequence, start, end } = item.piece
-    lines.push(`# aside\t${item.why}\t${sequence}:${start + 1}-${end}`)
+    // Sent to another genome of the metagenome, which one (§27.10).
+    lines.push(`# aside\t${item.why}\t${sequence}:${start + 1}-${end}${item.genome === undefined ? '' : `\t${item.genome}`}`)
   }
   for (const object of objects) {
     let at = 1
@@ -176,7 +178,7 @@ export type ReadBack = { ok: true; step: LayoutStep; notes: string[] } | { ok: f
  * was set aside and why.
  */
 export function readAgp(text: string, original: OriginalAssembly, from: string): ReadBack {
-  const lengthOf = new Map(original.names.map((name, i) => [name, original.lengths[i]]))
+  const lengthOf = lengthsOf(original)
   const order: string[] = []
   const objects = new Map<string, LayoutPart[]>()
   const asideObjects = new Set<string>()
@@ -197,7 +199,10 @@ export function readAgp(text: string, original: OriginalAssembly, from: string):
         continue
       }
       const match = /^(.+):(\d+)-(\d+)$/.exec(comment[2])
-      if (match !== null) aside.push({ sequence: match[1], start: Number(match[2]) - 1, end: Number(match[3]), why })
+      const genome = comment[3]
+      if (match !== null) {
+        aside.push({ sequence: match[1], start: Number(match[2]) - 1, end: Number(match[3]), why, ...(genome === undefined || genome === '' ? {} : { genome }) })
+      }
       continue
     }
     const columns = line.includes('\t') ? line.split('\t') : line.split(/\s+/)
@@ -306,7 +311,10 @@ export function juiceboxAssemblyOf(assembly: EditedAssembly): { ok: true; text: 
   const pieces: Array<{ piece: Piece; debris: boolean }> = []
   for (const object of objects) for (const part of object.parts) if (!isGap(part)) pieces.push({ piece: part, debris: false })
   for (const item of others) pieces.push({ piece: item.piece, debris: true })
-  assembly.original.names.forEach((name, i) => cuts.set(name, new Set([0, assembly.original.lengths[i]])))
+  // The original's sequences, and any of another genome's brought in (§27.10).
+  const lengths = lengthsOf(assembly.original)
+  const named = [...assembly.original.names, ...(assembly.original.elsewhere ?? []).map((contig) => contig.name).filter((name) => pieces.some(({ piece }) => piece.sequence === name))]
+  for (const name of named) cuts.set(name, new Set([0, lengths.get(name) ?? 0]))
   for (const { piece } of pieces) {
     cuts.get(piece.sequence)?.add(piece.start)
     cuts.get(piece.sequence)?.add(piece.end)
@@ -329,7 +337,7 @@ export function juiceboxAssemblyOf(assembly: EditedAssembly): { ok: true; text: 
   // The fragments, numbered from 1 in the original's order.
   const fragments: Fragment[] = []
   const index = new Map<string, number>()
-  for (const name of assembly.original.names) {
+  for (const name of named) {
     const bounds = [...(cuts.get(name) ?? [])].sort((a, b) => a - b)
     for (let k = 0; k + 1 < bounds.length; k++) {
       index.set(`${name}:${bounds[k]}`, fragments.length + 1)
@@ -464,7 +472,7 @@ export function readJuiceboxAssembly(text: string, original: OriginalAssembly, f
  */
 export function chainOf(assembly: EditedAssembly, context: ExportContext): string {
   const lines = provenance(context, 'liftOver chain')
-  const lengthOf = new Map(assembly.original.names.map((name, i) => [name, assembly.original.lengths[i]]))
+  const lengthOf = lengthsOf(assembly.original)
   let id = 0
   for (const object of assemblyObjects(assembly)) {
     let offset = 0

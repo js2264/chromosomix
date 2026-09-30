@@ -75,6 +75,11 @@ export const ASIDE_REASONS: readonly AsideReason[] = ['debris', 'contaminant', '
 export interface Aside {
   piece: Piece
   why: AsideReason
+  /**
+   * The genome of a metagenome it belongs to instead (§27.10), where it was
+   * sent to one: a contaminant of this genome, and a contig of that one.
+   */
+  genome?: string
 }
 
 /** Which end of a sequence. */
@@ -127,7 +132,24 @@ export type EditStep =
       place?: 'a' | 'b'
     }
   | { op: 'split'; sequence: string; at: number; name?: string }
-  | { op: 'aside'; sequence: string; from: number; to: number; why: AsideReason }
+  | {
+      op: 'aside'
+      sequence: string
+      from: number
+      to: number
+      why: AsideReason
+      /** Where it belongs instead: another genome of the metagenome (§27.10). */
+      genome?: string
+    }
+  | {
+      /**
+       * A contig of another genome brought into this one's edit (§27.10), whole,
+       * as a sequence of its own after the others: one of the original's
+       * {@link OriginalAssembly.elsewhere}.
+       */
+      op: 'bring'
+      sequence: string
+    }
   | { op: 'rotate'; sequence: string; at: number }
   | { op: 'rename'; sequence: string; name: string }
   | { op: 'reorder'; names: string[] }
@@ -145,7 +167,7 @@ export interface LayoutStep {
   /** The file it was read from, as the history names it. */
   from: string
   sequences: Array<{ name: string; parts: LayoutPart[]; circular?: boolean }>
-  aside: Array<{ sequence: string; start: number; end: number; why: AsideReason }>
+  aside: Array<{ sequence: string; start: number; end: number; why: AsideReason; genome?: string }>
 }
 
 /** A stretch of an original sequence, or a run of `N`, as a layout names it. */
@@ -174,6 +196,19 @@ export interface OriginalAssembly {
    * file's, not all of them — and the file's other genomes are not the edit's.
    */
   genome?: string
+  /**
+   * Contigs of the file's other genomes the edit may bring in (§27.10), each
+   * with the genome it is of: none of the edit's assembly until a step brings
+   * it, and the edit's own after.
+   */
+  elsewhere?: ReadonlyArray<{ name: string; length: number; genome: string }>
+}
+
+/** Every sequence an edit's steps may name, and its length: the original's, and those it may bring in. */
+export function lengthsOf(original: OriginalAssembly): Map<string, number> {
+  const out = new Map(original.names.map((name, i) => [name, original.lengths[i]]))
+  for (const contig of original.elsewhere ?? []) if (!out.has(contig.name)) out.set(contig.name, contig.length)
+  return out
 }
 
 /** An edit as it is kept: the original it applies to, and its history. */
@@ -217,7 +252,12 @@ export interface Landing {
 export function emptyEdit(original: OriginalAssembly): ReferenceEdit {
   return {
     version: 1,
-    original: { names: [...original.names], lengths: [...original.lengths], ...(original.genome === undefined ? {} : { genome: original.genome }) },
+    original: {
+      names: [...original.names],
+      lengths: [...original.lengths],
+      ...(original.genome === undefined ? {} : { genome: original.genome }),
+      ...(original.elsewhere === undefined ? {} : { elsewhere: original.elsewhere.map((contig) => ({ ...contig })) }),
+    },
     history: [],
     cursor: 0,
   }
@@ -398,7 +438,7 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
   const sequences = state.sequences.map((sequence) => ({ ...sequence, parts: [...sequence.parts] }))
   const next: Folded = { sequences, aside: [...state.aside] }
   const taken = new Set(sequences.map((sequence) => sequence.name))
-  const originals = new Set(original.names)
+  const originals = new Set(lengthsOf(original).keys())
 
   switch (step.op) {
     case 'cut': {
@@ -488,9 +528,23 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
       const [from, to] = stretch(target, step.from, step.to)
       if (to === from) return state
       const [before, middle, after] = extractParts(target.parts, from, to, ids)
-      for (const part of middle) if (!isGap(part)) next.aside.push({ piece: part, why: step.why })
+      const genome = typeof step.genome === 'string' && step.genome !== '' ? step.genome : undefined
+      for (const part of middle) if (!isGap(part)) next.aside.push({ piece: part, why: step.why, ...(genome === undefined ? {} : { genome }) })
       target.parts = merge([...before, ...after])
       if (target.parts.length === 0) next.sequences = next.sequences.filter((sequence) => sequence !== target)
+      return next
+    }
+    case 'bring': {
+      const contig = original.elsewhere?.find((candidate) => candidate.name === step.sequence)
+      if (contig === undefined || !(contig.length > 0)) return state
+      // Once: a contig already somewhere in the edit — brought before, or set
+      // aside since — is not brought again.
+      const held = (piece: Piece): boolean => piece.sequence === contig.name
+      if (next.sequences.some((sequence) => sequence.parts.some((part) => !isGap(part) && held(part))) || next.aside.some((item) => held(item.piece))) {
+        return state
+      }
+      const name = taken.has(contig.name) ? freshName(contig.name, taken) : contig.name
+      next.sequences.push({ name, parts: [{ id: ids.next(contig.name), sequence: contig.name, start: 0, end: contig.length, strand: 1 }] })
       return next
     }
     case 'rotate': {
@@ -524,7 +578,7 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
  * every base of the file is still somewhere.
  */
 function laidOut(step: LayoutStep, original: OriginalAssembly, ids: IdSource): Folded {
-  const lengthOf = new Map(original.names.map((name, i) => [name, original.lengths[i]]))
+  const lengthOf = lengthsOf(original)
   const covered = new Map<string, Array<[number, number]>>()
   const cover = (sequence: string, start: number, end: number): void => {
     const list = covered.get(sequence) ?? []
@@ -574,7 +628,12 @@ function laidOut(step: LayoutStep, original: OriginalAssembly, ids: IdSource): F
     const range = valid(item.sequence, item.start, item.end)
     if (range === null) continue
     cover(item.sequence, range[0], range[1])
-    aside.push({ piece: { id: ids.next(item.sequence), sequence: item.sequence, start: range[0], end: range[1], strand: 1 }, why: item.why })
+    const genome = typeof item.genome === 'string' && item.genome !== '' ? item.genome : undefined
+    aside.push({
+      piece: { id: ids.next(item.sequence), sequence: item.sequence, start: range[0], end: range[1], strand: 1 },
+      why: item.why,
+      ...(genome === undefined ? {} : { genome }),
+    })
   }
   // What no part covers: unplaced, stretch by stretch.
   for (let i = 0; i < original.names.length; i++) {
@@ -615,7 +674,9 @@ function isWhole(sequence: EditedSequence, original: OriginalAssembly): boolean 
   }
   if (name === null) return false
   const index = original.names.indexOf(name)
-  return index >= 0 && expected === original.lengths[index]
+  if (index >= 0) return expected === original.lengths[index]
+  const brought = original.elsewhere?.find((contig) => contig.name === name)
+  return brought !== undefined && expected === brought.length
 }
 
 /**
@@ -628,7 +689,7 @@ function isWhole(sequence: EditedSequence, original: OriginalAssembly): boolean 
  * §5.9's length veto would flag, and here it cannot happen by construction.
  */
 function settleNames(state: Folded, original: OriginalAssembly): Folded {
-  const originals = new Set(original.names)
+  const originals = new Set(lengthsOf(original).keys())
   const taken = new Set(state.sequences.map((sequence) => sequence.name))
   for (const sequence of state.sequences) {
     if (originals.has(sequence.name) && !isWhole(sequence, original)) {
@@ -870,10 +931,10 @@ export function mismatch(edit: ReferenceEdit, names: readonly string[], lengths:
   if (original.genome !== undefined) {
     // One genome's edit: every sequence of it is one of the file's, as long.
     const file = new Map(names.map((name, i) => [name, lengths[i]]))
-    for (let i = 0; i < original.names.length; i++) {
-      const length = file.get(original.names[i])
-      if (length === undefined) return `the edit names ${original.names[i]}, which this file does not have`
-      if (length !== original.lengths[i]) return `${original.names[i]} is ${original.lengths[i]} bp in the edit and ${length} bp here`
+    for (const [name, wanted] of lengthsOf(original)) {
+      const length = file.get(name)
+      if (length === undefined) return `the edit names ${name}, which this file does not have`
+      if (length !== wanted) return `${name} is ${wanted} bp in the edit and ${length} bp here`
     }
     return null
   }

@@ -39,7 +39,12 @@ export function stepText(step: EditStep): string {
     case 'split':
       return `split ${step.sequence} before ${(step.at + 1).toLocaleString('en-US')}`
     case 'aside':
-      return `set aside ${span(step.sequence, step.from, step.to)} as ${WHY[step.why]}`
+      // Sent to another genome of the metagenome, it says which (§27.10).
+      return step.genome !== undefined && step.genome !== ''
+        ? `send ${span(step.sequence, step.from, step.to)} to ${step.genome}`
+        : `set aside ${span(step.sequence, step.from, step.to)} as ${WHY[step.why]}`
+    case 'bring':
+      return `bring in ${step.sequence}`
     case 'rotate':
       return `start ${step.sequence} at ${(step.at + 1).toLocaleString('en-US')}`
     case 'rename':

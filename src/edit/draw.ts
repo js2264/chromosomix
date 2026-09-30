@@ -223,6 +223,9 @@ export interface OverlayFrame {
   under?: (ctx: CanvasRenderingContext2D) => void
 }
 
+/** The fewest pixels between two rules the overlay draws. */
+const RULE_GAP_PX = 8
+
 /**
  * The overlay over the picture: the edges of sequences, the junctions of the
  * edit, the selection and the crosshair.
@@ -234,16 +237,24 @@ export interface OverlayFrame {
 export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
   const { size, grid, toX, toY, ink } = frame
   ctx.clearRect(0, 0, size, size)
+  // Rules closer than a few pixels to the last one drawn are left out: a
+  // metagenome's genome of two thousand contigs, whole on the screen, would
+  // otherwise be a square of rules with no map under it. Zoomed in, every one
+  // is drawn.
+  let lastX = Number.NEGATIVE_INFINITY
+  let lastY = Number.NEGATIVE_INFINITY
   const rule = (unit: number): void => {
     const x = Math.round(toX(unit)) + 0.5
     const y = Math.round(toY(unit)) + 0.5
-    if (x > 0 && x < size) {
+    if (x > 0 && x < size && x - lastX >= RULE_GAP_PX) {
       ctx.moveTo(x, 0)
       ctx.lineTo(x, size)
+      lastX = x
     }
-    if (y > 0 && y < size) {
+    if (y > 0 && y < size && y - lastY >= RULE_GAP_PX) {
       ctx.moveTo(0, y)
       ctx.lineTo(size, y)
+      lastY = y
     }
   }
   ctx.lineWidth = 1
@@ -255,6 +266,8 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
   ctx.globalAlpha = 0.7
   ctx.strokeStyle = ink.dim
   ctx.beginPath()
+  lastX = Number.NEGATIVE_INFINITY
+  lastY = Number.NEGATIVE_INFINITY
   for (const unit of grid.boundaries()) if (unit > 0 && unit < grid.n) rule(unit)
   ctx.stroke()
   ctx.globalAlpha = 1

@@ -1,11 +1,12 @@
 /**
  * The stage on one genome of a metagenome (§27.10), in headless Chromium on the
  * mock community demo: the genome picker the stage asks with, the stage on one
- * MAG's contigs alone, what the method offers there, auto mode's scaffolds, and
- * the AGP of that genome alone.
+ * MAG's contigs alone, what the method offers there, where its contigs and the
+ * others belong by their contacts, auto mode's scaffolds, a contig sent to
+ * another genome and one brought in, and the AGP of that genome alone.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g07
+ *   node scripts/ui-edit-metagenome.mjs [out-dir]     # g01 … g08, g04b, g06b
  */
 
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -49,6 +50,18 @@ console.log('offered:', await g.suggestions())
 console.log('picture:', await text('.edit-card .edit-note'))
 await shot('g04-stage')
 
+// Where the genome's contigs belong, read from every contact of the file.
+for (let i = 0; i < 120; i++) {
+  await sleep(500)
+  if (await page.evaluate(() => document.querySelector('.edit-genome-card .edit-genome-sub') !== null)) break
+}
+await page.evaluate(() => document.querySelector('.edit-genome-card')?.scrollIntoView({ block: 'start' }))
+await sleep(300)
+console.log('genome card:', await page.evaluate(() => document.querySelector('.edit-genome-card')?.innerText.replace(/\n+/g, ' | ') ?? null))
+await shot('g04b-genome-card')
+await page.evaluate(() => document.querySelector('.edit-modes')?.scrollIntoView({ block: 'start' }))
+await sleep(200)
+
 // The best join lit, from its row in the list.
 const first = await page.evaluate(() => {
   const row = document.querySelector('.edit-suggestion')
@@ -68,13 +81,47 @@ await page.click('.edit-modes >> text=auto')
 await sleep(400)
 console.log('auto offers:', await text('.edit-suggestions-card .edit-acts'))
 const acts = await page.$('.edit-suggestions-card .edit-acts button')
-if (acts !== null) {
+if (acts !== null && (await acts.isEnabled())) {
   await acts.click()
   await sleep(1500)
   await g.settled()
 }
 console.log('after auto:', await history())
 await shot('g06-auto')
+
+// A contig sent to the genome it meets more, and one of another genome brought in.
+await page.click('.edit-modes >> text=manual')
+await page.evaluate(() => document.querySelector('.edit-genome-card')?.scrollIntoView({ block: 'start' }))
+await sleep(300)
+const sent = await page.evaluate(() => {
+  const button = [...document.querySelectorAll('.edit-genome-card .edit-genome-act')].find((b) => /^send to/.test(b.textContent ?? ''))
+  if (button === undefined) return null
+  const name = button.closest('.edit-genome-row')?.querySelector('.edit-genome-name')?.textContent ?? null
+  button.click()
+  return name
+})
+console.log('sent:', sent)
+await sleep(600)
+await g.settled()
+const brought = await page.evaluate(() => {
+  const button = [...document.querySelectorAll('.edit-genome-card .edit-genome-act')].find((b) => b.textContent === 'bring in')
+  if (button === undefined) return null
+  const name = button.closest('.edit-genome-row')?.querySelector('.edit-genome-name')?.textContent ?? null
+  button.click()
+  return name
+})
+console.log('brought:', brought)
+for (let i = 0; i < 120; i++) {
+  await sleep(500)
+  if (await page.evaluate(() => document.querySelector('.edit-status')?.classList.contains('hidden'))) break
+}
+await sleep(800)
+await g.settled()
+console.log('history:', await history())
+console.log('stage:', await text('.edit-readout'))
+await page.evaluate(() => document.querySelector('.edit-history')?.scrollIntoView({ block: 'center' }))
+await sleep(300)
+await shot('g06b-sent-brought')
 
 // The genome's AGP, named after it.
 await page.click('.edit-modes >> text=manual')
@@ -88,6 +135,17 @@ const path = join(files, download.suggestedFilename())
 await download.saveAs(path)
 const agp = readFileSync(path, 'utf8')
 console.log(`AGP → ${download.suggestedFilename()}:\n` + agp.split('\n').filter((line) => line !== '' && !line.startsWith('#')).slice(0, 8).join('\n'))
+console.log('AGP comments:\n' + agp.split('\n').filter((line) => line.startsWith('# aside')).join('\n'))
 console.log('status:', await text('.edit-export-status'))
 await shot('g07-export')
+
+// The binning of the whole metagenome, every genome's edit applied.
+const [table] = await Promise.all([page.waitForEvent('download'), page.click('.edit-export-card button[data-format="binning"]')])
+const tablePath = join(files, table.suggestedFilename())
+await table.saveAs(tablePath)
+const rows = readFileSync(tablePath, 'utf8').trim().split('\n')
+console.log(`table → ${table.suggestedFilename()}: ${rows.length} rows`)
+for (const wanted of [sent, brought]) if (wanted !== null) console.log('  ', rows.find((row) => row.startsWith(`${wanted}\t`)))
+console.log('status:', await text('.edit-export-status'))
+await shot('g08-binning')
 await g.close()

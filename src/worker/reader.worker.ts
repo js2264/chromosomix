@@ -61,6 +61,7 @@ import {
   type PairsBinning,
   type PairsImportSummary,
   type PairsProbeResult,
+  type GenomeLinksResult,
   type PictureResult,
   type ResampleResult,
   type SourceKind,
@@ -890,6 +891,83 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     pixels: read.pixels,
     ...(method === undefined ? {} : { method }),
   }
+}
+
+/**
+ * Where one genome's contigs and every other contig belong by their contacts
+ * (§27.10): one pass over the file's stored pixels, raw counts, each contact
+ * of two contigs counted for both — for a contig of the genome, by the genome
+ * of the other; for a contig outside it, with the genome's contigs and in all.
+ */
+async function handleGenomeLinks(request: Extract<WorkerRequest, { kind: 'genomeLinks' }>): Promise<GenomeLinksResult> {
+  const open = requireSession().mc
+  const mc = open.unlensed ?? open
+  if (!mc.hasGenomes) throw new ViewerError('unsupported', 'Only a metagenome has genomes a contig could belong to.')
+  const n = mc.coords.nContigs
+  const index = new Map(mc.chromnames.map((name, c) => [name, c]))
+  const inside = new Uint8Array(n)
+  for (const name of request.contigs) {
+    const c = index.get(name)
+    if (c !== undefined) inside[c] = 1
+  }
+  const binContig = new Int32Array(mc.nBins)
+  for (let c = 0; c < n; c++) {
+    const [lo, hi] = mc.coords.contigBinExtent(c)
+    binContig.fill(c, lo, hi)
+  }
+  const genomeOf = mc.contigGenomeIds
+  const genomes = mc.genomeNames
+  const total = new Float64Array(n)
+  const own = new Float64Array(n)
+  const byGenome = new Map<number, Float64Array>()
+  for (let c = 0; c < n; c++) if (inside[c] === 1) byGenome.set(c, new Float64Array(genomes.length))
+  const hooks = scanHooks(request.id)
+  let pixels = 0
+  await mc.store.scanAll({
+    onChunk: (chunk) => {
+      if (hooks.cancelled()) return false
+      for (let i = 0; i < chunk.length; i++) {
+        const a = binContig[chunk.bin1[i]]
+        const b = binContig[chunk.bin2[i]]
+        if (a === b) continue
+        const v = chunk.count[i]
+        if (!(v > 0)) continue
+        total[a] += v
+        total[b] += v
+        if (inside[b] === 1) own[a] += v
+        if (inside[a] === 1) {
+          own[b] += v
+          const row = byGenome.get(a)
+          if (row !== undefined && genomeOf[b] >= 0) row[genomeOf[b]] += v
+        }
+        if (inside[b] === 1) {
+          const row = byGenome.get(b)
+          if (row !== undefined && genomeOf[a] >= 0) row[genomeOf[a]] += v
+        }
+      }
+      pixels += chunk.length
+      return true
+    },
+    onProgress: (done, all) => hooks.onProgress(done, all, 'reading every contact for where the contigs belong'),
+  })
+  if (hooks.cancelled()) throw abortError()
+  const insideRows: GenomeLinksResult['inside'] = []
+  for (const [c, row] of byGenome) {
+    const partners = [...row]
+      .map((contacts, g) => ({ genome: genomes[g], contacts }))
+      .filter((partner) => partner.contacts > 0)
+      .sort((x, y) => y.contacts - x.contacts)
+      .slice(0, 6)
+    insideRows.push({ contig: mc.chromnames[c], total: total[c], own: own[c], partners })
+  }
+  const outside: GenomeLinksResult['outside'] = []
+  for (let c = 0; c < n; c++) {
+    if (inside[c] === 1 || own[c] < 3) continue
+    const g = genomeOf[c]
+    outside.push({ contig: mc.chromnames[c], genome: g >= 0 ? genomes[g] : '__unbinned__', length: mc.coords.contigLengths[c], contacts: own[c], total: total[c] })
+  }
+  outside.sort((x, y) => y.contacts / y.total - x.contacts / x.total || y.contacts - x.contacts)
+  return { inside: insideRows, outside: outside.slice(0, 100), pixels }
 }
 
 /**
@@ -1888,6 +1966,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleStats()
     case 'picture':
       return handlePicture(request)
+    case 'genomeLinks':
+      return handleGenomeLinks(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

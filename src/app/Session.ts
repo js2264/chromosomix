@@ -28,6 +28,7 @@ import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/e
 import { carryRegion } from '../edit/places'
 import { EditStage } from '../edit/EditStage'
 import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
+import { UNBINNED, binningTable, type BinningTable } from '../edit/binning'
 import { ReferenceChip } from '../edit/ReferenceChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
@@ -5431,6 +5432,30 @@ export class Session {
     return scope?.kind === 'contigs' ? scope.genome : undefined
   }
 
+  /**
+   * The contig → MAG table of the metagenome (§27.10): every contig with the
+   * genome the file puts it in, then every genome's kept edit applied.
+   */
+  private binning(): BinningTable {
+    const base = this.sessionKey()
+    const genomeNames = this.file?.genomes.table.data['name']
+    const table = this.file?.contigs?.table
+    const names = table?.data['name']
+    const ids = table?.data['genome_id']
+    const contigs: Array<{ name: string; genome: string }> = []
+    if (Array.isArray(names) && Array.isArray(genomeNames) && ids !== undefined && !Array.isArray(ids)) {
+      ;(names as string[]).forEach((name, row) => contigs.push({ name, genome: (genomeNames as string[])[Number(ids[row])] ?? UNBINNED }))
+    }
+    const edits = new Map<string, ReferenceEdit>()
+    if (base !== null) {
+      for (const genome of new Set(contigs.map((contig) => contig.genome))) {
+        const edit = readEdit(recall<unknown>(genomeEditKey(base, genome), EDIT_SCOPE))
+        if (edit !== null) edits.set(genome, edit)
+      }
+    }
+    return binningTable(contigs, edits)
+  }
+
   /** The genomes the stage may edit, as the picker lists them (§27.10). */
   private pickableGenomes(): PickableGenome[] {
     const base = this.sessionKey()
@@ -5555,8 +5580,23 @@ export class Session {
       title: this.mapLabel(file.uri),
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
-      readPicture: (onProgress) =>
-        reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, ...(drawn === undefined ? {} : { contigs: drawn }) }, onProgress),
+      readPicture: (onProgress, contigs) => {
+        const wanted = contigs ?? drawn
+        return reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, ...(wanted === undefined ? {} : { contigs: wanted }) }, onProgress)
+      },
+      // The binning every genome's edit makes, as the edits stand (§27.10).
+      ...(scope === undefined ? {} : { binning: () => this.binning() }),
+      // Where a genome's contigs and the others belong (§27.10): read without
+      // being asked where the file is a moment's pass.
+      ...(scope === undefined
+        ? {}
+        : {
+            genomeLinks: {
+              read: (contigs: string[], onProgress: (done: number, total: number) => void) =>
+                reader.cancellable<'genomeLinks'>({ kind: 'genomeLinks', contigs }, onProgress),
+              auto: (numberOr(file.info.info['nnz']) ?? Number.POSITIVE_INFINITY) <= LINKS_AUTO_PIXELS,
+            },
+          }),
       liftContacts: (edit, onProgress) => reader.cancellable<'exportLifted'>({ kind: 'exportLifted', edit }, onProgress),
       colormap: state?.colormap ?? DEFAULT_UI_COLORMAP,
       ...(lanes === undefined
@@ -10318,6 +10358,12 @@ interface LevelChoice {
 }
 
 /** Why `bin × bin` is greyed out, once this tab could not hold it. */
+/**
+ * A metagenome whose every contact the stage reads for where a genome's
+ * contigs belong without being asked (§27.10): a pass of a few seconds at most.
+ */
+const LINKS_AUTO_PIXELS = 50_000_000
+
 const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
 
 /**

@@ -327,16 +327,31 @@ export interface GatherOptions {
 /** The most pairs of end cells a pass keeps: 48 MB of them. */
 export const END_BUDGET = 4_000_000
 
-/** The fewest cells a coarse cell for the coarse grid to fit `cap` a side, anchored to every sequence. */
+/**
+ * The fewest cells a coarse cell for the coarse grid to fit `cap` a side,
+ * anchored to every sequence — or, where there are more sequences than `cap`,
+ * the fewest that make each one coarse cell: no factor does better, and a
+ * search past it would go on for ever.
+ */
 export function coarseFactor(offsets: Int32Array, cap: number): number {
   const at = (factor: number): number => {
     let total = 0
     for (let c = 0; c + 1 < offsets.length; c++) total += Math.ceil((offsets[c + 1] - offsets[c]) / factor)
     return total
   }
-  let factor = 1
-  while (at(factor) > cap && factor < 1 << 20) factor++
-  return factor
+  let longest = 1
+  for (let c = 0; c + 1 < offsets.length; c++) longest = Math.max(longest, offsets[c + 1] - offsets[c])
+  if (at(1) <= cap) return 1
+  if (at(longest) > cap) return longest
+  // The count falls as the factor grows: the least factor that fits, by halving.
+  let low = 1
+  let high = longest
+  while (low + 1 < high) {
+    const mid = (low + high) >> 1
+    if (at(mid) <= cap) high = mid
+    else low = mid
+  }
+  return high
 }
 
 /** What a read of the picture hands back, before the pyramid is built on it. */

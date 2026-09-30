@@ -732,10 +732,12 @@ export function suggest(input: SuggestInput): Suggested {
   // what strangers do — found from each end's coarse cells against the coarse
   // cells every other end is in, so an assembly of hundreds of contigs costs
   // what its ends touch and not every pair of them.
-  const touching = new Set<string>()
+  const endIndex = new Map<string, number>()
+  const endSequence: number[] = []
+  const touching = new Set<number>()
   const endId = (point: Point, dir: 1 | -1): string => `${point.sequence}:${point.x}:${dir}`
   if (!fewSequences) {
-    const ends: Array<{ id: string; sequence: number; coarse: number[] }> = []
+    const coarseOfEnd: number[][] = []
     const byCoarse = new Map<number, number[]>()
     for (const list of points) {
       const first = list[0]
@@ -754,8 +756,10 @@ export function suggest(input: SuggestInput): Suggested {
           const c = map.coarseCell(cell)
           if (c >= 0) coarse.add(c)
         }
-        const at = ends.length
-        ends.push({ id: endId(point, dir), sequence: point.sequence, coarse: [...coarse] })
+        const at = endSequence.length
+        endIndex.set(endId(point, dir), at)
+        endSequence.push(point.sequence)
+        coarseOfEnd.push([...coarse])
         for (const c of coarse) {
           const held = byCoarse.get(c)
           if (held === undefined) byCoarse.set(c, [at])
@@ -763,50 +767,77 @@ export function suggest(input: SuggestInput): Suggested {
         }
       }
     }
+    const count = endSequence.length
     const strangers = 2 * map.trans
-    for (const end of ends) {
-      for (const x of end.coarse) {
-        for (const [y, others] of byCoarse) {
+    const coarseCells = [...byCoarse.keys()]
+    for (let i = 0; i < count; i++) {
+      for (const x of coarseOfEnd[i]) {
+        for (const y of coarseCells) {
           if (!(map.coarseValue(x, y) > strangers)) continue
-          for (const k of others) if (ends[k].sequence !== end.sequence) touching.add(`${end.id}|${ends[k].id}`)
+          for (const j of byCoarse.get(y) ?? []) if (endSequence[j] !== endSequence[i]) touching.add(i * count + j)
         }
       }
     }
   }
-  const touches = (pa: Point, e: End, pb: Point, f: End): boolean =>
-    partnered(pa, pb) || touching.has(`${endId(pa, e.dir)}|${endId(pb, f.dir)}`)
+  const touches = (pa: Point, e: End, pb: Point, f: End): boolean => {
+    if (partnered(pa, pb)) return true
+    const i = endIndex.get(endId(pa, e.dir))
+    const j = endIndex.get(endId(pb, f.dir))
+    return i !== undefined && j !== undefined && touching.has(i * endSequence.length + j)
+  }
+  // The pairs of sequences a join is weighed between: every pair of a few
+  // dozen, and past that those two of whose ends touch or a corner pairs.
+  const pairs: Array<[number, number]> = []
+  if (fewSequences) {
+    for (let a = 0; a < sequences.length; a++) for (let b = a + 1; b < sequences.length; b++) pairs.push([a, b])
+  } else {
+    const listed = new Set<number>()
+    const add = (x: number, y: number): void => {
+      if (x === y || x < 0 || y < 0) return
+      const a = Math.min(x, y)
+      const b = Math.max(x, y)
+      const key = a * sequences.length + b
+      if (listed.has(key)) return
+      listed.add(key)
+      pairs.push([a, b])
+    }
+    const count = endSequence.length
+    for (const key of touching) add(endSequence[Math.floor(key / count)], endSequence[key % count])
+    for (const [key, others] of partners) {
+      const x = Number(key.slice(0, key.indexOf(':')))
+      for (const other of others) add(x, Number(other.slice(0, other.indexOf(':'))))
+    }
+  }
 
   // Joins: two sequences' free ends that meet.
   const joins: Array<{ e: End; f: End; pa: Point; pb: Point; a: number; b: number; step: EditStep; meeting: Meeting; gain: number }> = []
-  for (let a = 0; a < sequences.length; a++) {
-    for (let b = a + 1; b < sequences.length; b++) {
-      const A = points[a]
-      const B = points[b]
-      const aStart = A[0]
-      const aEnd = A[A.length - 1]
-      const bStart = B[0]
-      const bEnd = B[B.length - 1]
-      if (aStart === undefined || aEnd === undefined || bStart === undefined || bEnd === undefined) continue
-      const nameA = sequences[a].name
-      const nameB = sequences[b].name
-      const options: Array<{ e: End | null; f: End | null; pa: Point; pb: Point; step: EditStep }> = [
-        { e: endOf(aEnd, -1, []), f: endOf(bStart, 1, []), pa: aEnd, pb: bStart, step: { op: 'join', a: nameA, aEnd: 'end', b: nameB, bEnd: 'start', gap: JOIN_GAP } },
-        { e: endOf(aEnd, -1, []), f: endOf(bEnd, -1, []), pa: aEnd, pb: bEnd, step: { op: 'join', a: nameA, aEnd: 'end', b: nameB, bEnd: 'end', gap: JOIN_GAP } },
-        { e: endOf(aStart, 1, []), f: endOf(bStart, 1, []), pa: aStart, pb: bStart, step: { op: 'join', a: nameA, aEnd: 'start', b: nameB, bEnd: 'start', gap: JOIN_GAP } },
-        { e: endOf(aStart, 1, []), f: endOf(bEnd, -1, []), pa: aStart, pb: bEnd, step: { op: 'join', a: nameB, aEnd: 'end', b: nameA, bEnd: 'start', gap: JOIN_GAP } },
-      ]
-      for (const option of options) {
-        if (option.e === null || option.f === null) continue
-        // Past a few dozen sequences, only ends that touch.
-        if (!fewSequences && !touches(option.pa, option.e, option.pb, option.f)) continue
-        const meeting = meet(option.e, option.f)
-        // How much of a clean adjacency of these two ends the meeting is: the
-        // gain, counted in adjacencies as every trade's is — and a join makes
-        // one, so a window brighter than the law is worth no more than that:
-        // what is brighter is its brightness, weighed on its own.
-        const gain = meeting.ideal > 0 ? Math.min(JOIN_MOST, meeting.score / meeting.ideal) : 0
-        joins.push({ ...option, e: option.e, f: option.f, a, b, meeting, gain })
-      }
+  for (const [a, b] of pairs) {
+    const A = points[a]
+    const B = points[b]
+    const aStart = A[0]
+    const aEnd = A[A.length - 1]
+    const bStart = B[0]
+    const bEnd = B[B.length - 1]
+    if (aStart === undefined || aEnd === undefined || bStart === undefined || bEnd === undefined) continue
+    const nameA = sequences[a].name
+    const nameB = sequences[b].name
+    const options: Array<{ e: End | null; f: End | null; pa: Point; pb: Point; step: EditStep }> = [
+      { e: endOf(aEnd, -1, []), f: endOf(bStart, 1, []), pa: aEnd, pb: bStart, step: { op: 'join', a: nameA, aEnd: 'end', b: nameB, bEnd: 'start', gap: JOIN_GAP } },
+      { e: endOf(aEnd, -1, []), f: endOf(bEnd, -1, []), pa: aEnd, pb: bEnd, step: { op: 'join', a: nameA, aEnd: 'end', b: nameB, bEnd: 'end', gap: JOIN_GAP } },
+      { e: endOf(aStart, 1, []), f: endOf(bStart, 1, []), pa: aStart, pb: bStart, step: { op: 'join', a: nameA, aEnd: 'start', b: nameB, bEnd: 'start', gap: JOIN_GAP } },
+      { e: endOf(aStart, 1, []), f: endOf(bEnd, -1, []), pa: aStart, pb: bEnd, step: { op: 'join', a: nameB, aEnd: 'end', b: nameA, bEnd: 'start', gap: JOIN_GAP } },
+    ]
+    for (const option of options) {
+      if (option.e === null || option.f === null) continue
+      // Past a few dozen sequences, only ends that touch.
+      if (!fewSequences && !touches(option.pa, option.e, option.pb, option.f)) continue
+      const meeting = meet(option.e, option.f)
+      // How much of a clean adjacency of these two ends the meeting is: the
+      // gain, counted in adjacencies as every trade's is — and a join makes
+      // one, so a window brighter than the law is worth no more than that:
+      // what is brighter is its brightness, weighed on its own.
+      const gain = meeting.ideal > 0 ? Math.min(JOIN_MOST, meeting.score / meeting.ideal) : 0
+      joins.push({ ...option, e: option.e, f: option.f, a, b, meeting, gain })
     }
   }
   // Each end's best offer and second best, by the weight of the evidence —

@@ -24,6 +24,7 @@ import { chooseSaveTarget, exportBaseName, type SaveTarget } from '../ui/export'
 import { fmt } from '../units'
 import { PRODUCER } from '../version'
 import type { LiftedExport } from '../worker/protocol'
+import type { BinningTable } from './binning'
 import { stepText } from './words'
 
 /** The extensions a map's name ends in, taken off before an export's is put on. */
@@ -59,6 +60,11 @@ export interface ExportCardProps {
   annotations?: { store: AnnotationStore; client?: AnnotationClient }
   /** The map lifted through an edit, every rung, by the reader's worker. */
   liftContacts?: (edit: ReferenceEdit, onProgress: (done: number, total: number, note?: string) => void) => LiftJob<LiftedExport>
+  /**
+   * On a metagenome (§27.10): the contig → MAG table every genome's edit
+   * makes of the file's contigs, as it stands when asked.
+   */
+  binning?: () => BinningTable
   /** When a file is written, for its header; a clock the tests can hold. */
   now?: () => Date
 }
@@ -122,6 +128,17 @@ export class ExportCard {
       'div',
       { class: 'edit-export-files' },
       ...TEXT_FILES.map((file) => button(file.label, file.title, () => void this.write(file.label))),
+      ...(this.props.binning === undefined
+        ? []
+        : [
+            button(
+              'contig → MAG',
+              'Every contig of the metagenome and the genome it is in, every genome’s edit applied: the two columns DAS_Tool, anvi’o and metacooler create take',
+              () => void this.writeBinning(),
+              false,
+              'binning',
+            ),
+          ]),
     )
     const sequence = this.sequenceEntry()
     const data = el(
@@ -259,6 +276,20 @@ export class ExportCard {
     const target = await chooseSaveTarget(this.name(file.suffix), 'text/plain')
     if (target === null) return
     await this.save(target, format, async () => new Blob([text], { type: 'text/plain' }))
+  }
+
+  /** The contig → MAG table of the whole metagenome, every genome's edit applied (§27.10). */
+  private async writeBinning(): Promise<void> {
+    const binning = this.props.binning
+    if (binning === undefined) return
+    const table = binning()
+    const target = await chooseSaveTarget(`${exportStem(this.props.title)}.contig-mag.tsv`, 'text/tab-separated-values')
+    if (target === null) return
+    const count = (n: number, one: string, many: string): string => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+    this.note =
+      `${count(table.contigs, 'contig', 'contigs')} in ${count(table.genomes, 'genome', 'genomes')}, ${count(table.moved, 'moved', 'moved')} by the edits.` +
+      (table.notes.length === 0 ? '' : ` ${table.notes.join('; ')}.`)
+    await this.save(target, 'contig → MAG', async () => new Blob([table.text], { type: 'text/tab-separated-values' }))
   }
 
   /** The edited sequence, piece by piece through the annotation worker's ranged reads. */

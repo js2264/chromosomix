@@ -732,6 +732,14 @@ being sure; a break the map finds beside one is placed at it, to the base. Not t
 meeting, which is what the map measures between two contigs' ends, and which a join then writes as
 `N`.
 
+### a genome's edit, send, bring in *(on a metagenome)*
+
+On a `.metacool` the stage edits **one genome at a time** (§27.10): its contigs alone, its edit kept
+apart from every other genome's. A contig of it that meets another genome more is **sent** there — set
+aside, marked with that genome; a contig of another genome, or of none, that meets this one most is
+**brought in** — whole, as a contig of its own after the rest. The **contig → MAG table** is the
+binning every genome's edit makes of the file's contigs.
+
 ### manual, review, auto
 
 The stage's three modes, and three answers to one question — **who presses accept** (§27.6). In

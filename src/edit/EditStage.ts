@@ -25,7 +25,7 @@ import type { ManualStore } from '../annotations/manual'
 import type { MapId } from '../annotations/placement'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { EditedAssembly, type AsideReason, type EditStep } from '../genome/edit'
+import { EditedAssembly, isGap, type AsideReason, type EditStep } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { bpAt } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -37,7 +37,7 @@ import { closeMenu, openMenu, type MenuItem } from '../ui/Menu'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
 import { fmt } from '../units'
-import type { PictureResult } from '../worker/protocol'
+import type { GenomeLinksResult, PictureResult } from '../worker/protocol'
 import { BAR_THICKNESS, drawBar, drawOverlay, readInk, type StageInk } from './draw'
 import {
   dropPlace,
@@ -82,10 +82,25 @@ export interface EditStageProps {
   title: string
   memoryKey: () => string
   store: EditStore
-  /** Start reading the whole-genome picture, reporting progress as it goes. */
-  readPicture(onProgress: (done: number, total: number) => void): PictureRequest
+  /**
+   * Start reading the whole-genome picture, reporting progress as it goes —
+   * of these sequences of the map alone, where they are given: one genome of a
+   * metagenome and the contigs it may bring in (§27.10).
+   */
+  readPicture(onProgress: (done: number, total: number) => void, contigs?: string[]): PictureRequest
+  /**
+   * On one genome of a metagenome (§27.10): read every contact of the file for
+   * where the genome's contigs, and the others, belong — without being asked
+   * where `auto`, as on a file small enough to read in a moment.
+   */
+  genomeLinks?: {
+    read(contigs: string[], onProgress: (done: number, total: number) => void): { promise: Promise<GenomeLinksResult>; cancel(): void }
+    auto: boolean
+  }
   /** The map lifted through an edit, every rung, as an `.mcool` (§27.8). */
   liftContacts?: ExportCardProps['liftContacts']
+  /** On a metagenome: the contig → MAG table every genome's edit makes (§27.10). */
+  binning?: ExportCardProps['binning']
   /** The map's colours, as its Map card has them. */
   colormap: string
   lanes?: StageLanes
@@ -115,6 +130,12 @@ type Drag =
       /** The unit the stretch would start at, before the step. */
       mark: number | null
     }
+
+/** The fewest contacts a contig's links say anything with, on a genome's card (§27.10). */
+const LEAST_LINKS = 5
+
+/** The share of a contig's contacts with a genome from which it is offered to it. */
+const BELONGS = 0.4
 
 /** Pixels within which the pointer snaps along an axis (§27.4). */
 const SNAP_PX = 8
@@ -180,6 +201,8 @@ export class EditStage {
   private readonly sequencesCard: HTMLElement
   private readonly pictureCard: HTMLElement
   private readonly suggestionsCard: HTMLElement
+  /** On one genome of a metagenome: where its contigs and the others belong (§27.10). */
+  private readonly genomeCard: HTMLElement
   private readonly exportCard: ExportCard
   private readonly modes: Record<Mode, HTMLButtonElement>
   private readonly rail: Rail
@@ -211,6 +234,13 @@ export class EditStage {
   private lanesGrid: LensGrid | null = null
   /** What the method weighs, read with the picture (§27.5). */
   private method: NonNullable<PictureResult['method']> | null = null
+  /** The sequences the picture was read of, where not the whole map. */
+  private drawn: Set<string> | null = null
+  /** Where a genome's contigs and the others belong, read for the contigs `linksOf` names. */
+  private links: GenomeLinksResult | null = null
+  private linksOf = ''
+  private linksRequest: { cancel(): void } | null = null
+  private linksDone: number | null = null
   /** What the session's sequence says about the assembly (§27.5), once read; `null` until then or without one. */
   private evidence: SequenceEvidence | null = null
   /** Whether the sequence is being read for it. */
@@ -312,6 +342,7 @@ export class EditStage {
     this.sequencesCard = el('section', { class: 'edit-card' })
     this.pictureCard = el('section', { class: 'edit-card' })
     this.suggestionsCard = el('section', { class: 'edit-card edit-suggestions-card' })
+    this.genomeCard = el('section', { class: 'edit-card edit-genome-card' })
     this.exportCard = new ExportCard({
       title: props.title,
       store: props.store,
@@ -319,6 +350,7 @@ export class EditStage {
         ? {}
         : { annotations: { store: props.lanes.store, ...(props.lanes.client === undefined ? {} : { client: props.lanes.client }) } }),
       ...(props.liftContacts === undefined ? {} : { liftContacts: props.liftContacts }),
+      ...(props.binning === undefined ? {} : { binning: props.binning }),
     })
     const mode = (name: Mode, title: string): HTMLButtonElement =>
       el('button', {
@@ -338,6 +370,7 @@ export class EditStage {
       { class: 'edit-side-body' },
       el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, ...Object.values(this.modes)),
       this.suggestionsCard,
+      ...(props.store.edit.original.genome === undefined ? [] : [this.genomeCard]),
       this.selectionCard,
       this.historyCard,
       this.sequencesCard,
@@ -391,15 +424,17 @@ export class EditStage {
     const genome = this.props.store.edit.original.genome
     const reading = genome === undefined ? 'reading the whole map for the stage…' : `reading ${genome}’s contigs for the stage…`
     this.showStatus(reading, 0, true)
+    const contigs = this.drawnContigs()
     const request = this.props.readPicture((done, total) => {
       if (this.request === request && total > 0) this.showStatus(reading, done / total, true)
-    })
+    }, contigs)
     this.request = request
     request.promise
       .then((picture) => {
         if (this.closed || this.request !== request) return
         this.request = null
         this.picture = picture
+        this.drawn = contigs === undefined ? null : new Set(contigs)
         this.method = picture.method ?? null
         this.layout = { binsize: picture.binsize, sequences: picture.sequences }
         this.colours = pictureColours(this.props.colormap, { low: picture.low, high: picture.high }, picture.vmin, picture.vmax)
@@ -408,6 +443,7 @@ export class EditStage {
         this.computeSuggestions()
         this.paintSide()
         void this.readEvidence()
+        if (this.props.genomeLinks?.auto === true && this.linksOf !== this.linksKey()) this.readLinks()
       })
       .catch((error: unknown) => {
         if (this.closed || this.request !== request) return
@@ -483,9 +519,61 @@ export class EditStage {
 
   /** The store changed: a step made, undone or redone. */
   private edited(): void {
+    // A contig brought in from another genome is not in the picture yet: it
+    // is read again, with it (§27.10).
+    const drawn = this.drawn
+    if (drawn !== null && this.request === null && (this.drawnContigs() ?? []).some((name) => !drawn.has(name))) {
+      this.read()
+      return
+    }
     this.rebuild(false)
     this.paintSide()
     this.scheduleSuggestions()
+  }
+
+  /** The sequences the picture is of, where not the whole map: a genome's contigs and those it may bring in. */
+  private drawnContigs(): string[] | undefined {
+    const original = this.props.store.edit.original
+    if (original.genome === undefined) return undefined
+    return [...original.names, ...(original.elsewhere ?? []).map((contig) => contig.name)]
+  }
+
+  /** The contigs a genome's links are read for: its own and those brought in. */
+  private linksKey(): string {
+    const original = this.props.store.edit.original
+    const brought = this.props.store.assembly.sequences.flatMap((sequence) => sequence.parts.flatMap((part) => (isGap(part) ? [] : [part.sequence])))
+    return [...new Set([...original.names, ...brought])].sort().join('\n')
+  }
+
+  /** Read every contact for where the genome's contigs and the others belong (§27.10). */
+  private readLinks(): void {
+    const links = this.props.genomeLinks
+    if (links === undefined || this.closed) return
+    this.linksRequest?.cancel()
+    const key = this.linksKey()
+    this.linksDone = 0
+    const request = links.read(key.split('\n'), (done, total) => {
+      if (this.linksRequest !== request || !(total > 0)) return
+      this.linksDone = done / total
+      this.paintGenome()
+    })
+    this.linksRequest = request
+    this.paintGenome()
+    request.promise
+      .then((result) => {
+        if (this.closed || this.linksRequest !== request) return
+        this.links = result
+        this.linksOf = key
+      })
+      .catch(() => {
+        // Cancelled, or the file would not be read: the card says to read again.
+      })
+      .finally(() => {
+        if (this.linksRequest !== request) return
+        this.linksRequest = null
+        this.linksDone = null
+        if (!this.closed) this.paintGenome()
+      })
   }
 
   /** The grid for the store's assembly, keeping the view where it can be kept. */
@@ -1448,6 +1536,7 @@ export class EditStage {
     this.paintSelection()
     this.paintHistory()
     this.paintSequences()
+    this.paintGenome()
     this.paintPicture()
     this.paintReadout()
     const store = this.props.store
@@ -1986,7 +2075,12 @@ export class EditStage {
                   'li',
                   {},
                   el('span', { text: formatLocus({ contig: item.piece.sequence, start: item.piece.start, end: item.piece.end }) }),
-                  el('span', { class: 'edit-aside-why', text: item.why }),
+                  // Sent to another genome of the metagenome, which (§27.10).
+                  el('span', {
+                    class: 'edit-aside-why',
+                    text: item.genome === undefined ? item.why : `→ ${item.genome === '__unbinned__' ? 'no genome' : item.genome}`,
+                    title: item.genome === undefined ? '' : `A contig of ${item.genome === '__unbinned__' ? 'no genome' : item.genome} now, by its contacts`,
+                  }),
                 ),
               ),
             ),
@@ -1996,6 +2090,128 @@ export class EditStage {
       list,
       ...(aside === null ? [] : [aside]),
     )
+  }
+
+  /**
+   * On one genome of a metagenome (§27.10): what its contacts say about where
+   * its contigs belong — how much of their contacts stay with the genome, the
+   * contigs that meet another genome more, each with a way to send it there,
+   * and the contigs of other genomes that meet this one most, each with a way
+   * to bring it in.
+   */
+  private paintGenome(): void {
+    const genome = this.props.store.edit.original.genome
+    if (genome === undefined) return
+    const links = this.links
+    const head = el('h3', { class: 'edit-card-head', text: `genome · ${genome}` })
+    if (this.linksRequest !== null) {
+      this.genomeCard.replaceChildren(
+        head,
+        el(
+          'p',
+          { class: 'edit-note' },
+          `Reading every contact for where the contigs belong… ${this.linksDone === null ? '' : `${Math.round(this.linksDone * 100)}%`} `,
+          el('button', { class: 'btn-link', text: 'cancel', attrs: { type: 'button' }, on: { click: () => this.linksRequest?.cancel() } }),
+        ),
+      )
+      return
+    }
+    if (links === null) {
+      this.genomeCard.replaceChildren(
+        head,
+        el('p', { class: 'edit-note', text: 'Which of its contigs meet another genome more, and which of other genomes’ meet this one: one pass over every contact of the file.' }),
+        ...(this.props.genomeLinks === undefined
+          ? []
+          : [el('button', { class: 'btn', text: 'read every contact', attrs: { type: 'button' }, on: { click: () => this.readLinks() } })]),
+      )
+      return
+    }
+    const assembly = this.props.store.assembly
+    const placed = new Set(assembly.sequences.flatMap((sequence) => sequence.parts.flatMap((part) => (isGap(part) ? [] : [part.sequence]))))
+    const inside = links.inside.filter((row) => placed.has(row.contig))
+    const own = inside.reduce((sum, row) => sum + row.own, 0)
+    const total = inside.reduce((sum, row) => sum + row.total, 0)
+    const label = (name: string): string => (name === '__unbinned__' ? 'no genome' : name)
+    const share = (part: number, whole: number): string => `${whole > 0 ? Math.round((100 * part) / whole) : 0}%`
+    // A contig that meets another genome more than this one, with enough contacts to say.
+    const strays = inside
+      .flatMap((row) => {
+        const other = row.partners.find((partner) => partner.genome !== genome)
+        return other !== undefined && other.contacts > row.own && row.total >= LEAST_LINKS ? [{ row, other }] : []
+      })
+      .sort((a, b) => b.other.contacts / b.row.total - a.other.contacts / a.row.total)
+      .slice(0, 8)
+    const candidates = links.outside
+      .filter((row) => !placed.has(row.contig) && row.contacts >= LEAST_LINKS && row.contacts / row.total >= BELONGS)
+      .slice(0, 8)
+    const stale = this.linksOf !== this.linksKey()
+    this.genomeCard.replaceChildren(
+      head,
+      el('p', {
+        class: 'edit-note',
+        text: `${share(own, total)} of its contigs’ contacts with other contigs are with its own${stale ? ' — read before the last contig came in' : ''}.`,
+      }),
+      el('h4', { class: 'edit-genome-sub', text: strays.length === 0 ? 'No contig of it meets another genome more' : 'Meet another genome more' }),
+      ...(strays.length === 0
+        ? []
+        : [
+            el(
+              'ul',
+              { class: 'edit-genome-list' },
+              ...strays.map(({ row, other }) =>
+                el(
+                  'li',
+                  { class: 'edit-genome-row' },
+                  el('span', { class: 'edit-genome-name', text: row.contig, title: row.contig }),
+                  el('span', { class: 'edit-genome-share', text: `${share(row.own, row.total)} here · ${share(other.contacts, row.total)} ${label(other.genome)}` }),
+                  el('button', {
+                    class: 'btn edit-genome-act',
+                    text: `send to ${label(other.genome)}`,
+                    title: `Take ${row.contig} out of ${genome}, as a contig of ${label(other.genome)}: a step to undo like any other`,
+                    attrs: { type: 'button' },
+                    on: { click: () => this.send(row.contig, other.genome) },
+                  }),
+                ),
+              ),
+            ),
+          ]),
+      el('h4', { class: 'edit-genome-sub', text: candidates.length === 0 ? 'No contig elsewhere meets this genome most' : 'Meet this genome most' }),
+      ...(candidates.length === 0
+        ? []
+        : [
+            el(
+              'ul',
+              { class: 'edit-genome-list' },
+              ...candidates.map((row) =>
+                el(
+                  'li',
+                  { class: 'edit-genome-row' },
+                  el('span', { class: 'edit-genome-name', text: row.contig, title: `${row.contig} · ${fmt.bp(row.length)} · of ${label(row.genome)}` }),
+                  el('span', { class: 'edit-genome-share', text: `${label(row.genome)} · ${share(row.contacts, row.total)} of its contacts here` }),
+                  el('button', {
+                    class: 'btn edit-genome-act',
+                    text: 'bring in',
+                    title: `Bring ${row.contig} into ${genome}, whole, as a contig of its own: a step to undo like any other`,
+                    attrs: { type: 'button' },
+                    on: { click: () => this.props.store.bring({ name: row.contig, length: row.length, genome: row.genome }) },
+                  }),
+                ),
+              ),
+            ),
+          ]),
+      ...(stale && this.props.genomeLinks !== undefined
+        ? [el('button', { class: 'btn-link', text: 'read again', attrs: { type: 'button' }, on: { click: () => this.readLinks() } })]
+        : []),
+    )
+  }
+
+  /** Send a contig of this genome to another (§27.10): every stretch of it the edit places, set aside as that genome's. */
+  private send(contig: string, genome: string): void {
+    const store = this.props.store
+    for (const landing of [...store.assembly.landings(contig)].sort((a, b) => b.offset - a.offset)) {
+      const length = landing.piece.end - landing.piece.start
+      store.apply({ op: 'aside', sequence: landing.sequence, from: landing.offset, to: landing.offset + length, why: 'contaminant', genome })
+    }
   }
 
   /** What the picture is of: the whole map, or one genome's contigs of a metagenome (§27.10). */
@@ -2040,6 +2256,8 @@ export class EditStage {
     this.closed = true
     this.request?.cancel()
     this.request = null
+    this.linksRequest?.cancel()
+    this.linksRequest = null
     window.clearTimeout(this.suggesting)
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     window.removeEventListener('keydown', this.onKey, true)

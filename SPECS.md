@@ -10693,8 +10693,33 @@ writes is that genome's, and says so — `Mock_microbial_community.metator_00009
 lifted contacts included, a map of that genome alone through its edit. The session itself is not drawn
 through a genome's edit: the metagenome's views are the file's.
 
-Not yet: moving a contig to another genome or bringing one in, the contig → MAG table across every
-genome's edit, and files for every genome at once.
+**Where its contigs belong.** The stage's *genome* card reads every contact of the file once — without
+being asked where the file holds at most 50 million pixels, else at a press — counting, for each contig
+of the genome, its contacts with the genome's own contigs and with every other genome's, and for every
+contig outside it, its contacts with the genome's and in all (the reader's `genomeLinks` request, raw
+counts, a contig's contacts with itself left out). It says how much of the genome's contacts stay in
+it — *93% of its contigs' contacts with other contigs are with its own* — lists the contigs that meet
+another genome more than this one, each with its shares and a way to **send** it there, and the contigs
+of other genomes, and of none, that give this genome 40% or more of their contacts, five at least, each
+with a way to **bring** it in. Sending sets every stretch of the contig the edit places aside as a
+contaminant, marked with the genome it goes to — *send NODE_3314:1-1,804 to metator_00025_00000* — which
+the set-aside list and the AGP's comment line (`# aside  contaminant  NODE_3314:1-1804  metator_00025_00000`)
+carry, and read back. Bringing in makes the contig one the edit may name — the original's
+`elsewhere`, each with the genome it came from — and a step, *bring in NODE_10045*, puts it whole after
+the genome's own contigs, undone as any step is; the picture is read again with it, and the method
+weighs it with the rest. On the mock community, metator_00007_00000 keeps 93% of its contacts, two of
+its contigs meet metator_00025_00000 more, and 62 unbinned contigs give it 40% or more of theirs.
+
+**The contig → MAG table** (`edit/binning.ts`), from any genome's export card: every contig of the file
+with its genome, every genome's kept edit applied — a contig sent away is its new genome's, one brought
+in its new one's, one set aside with nowhere to go, as debris or as a haplotig is no genome's and left
+out, as the two-column tables DAS_Tool, anvi'o and `metacooler create` take leave them out — by the
+file's own contigs, so it applies to the assembly the reads were mapped to; how a genome's contigs are
+ordered, turned and joined is its AGP's. What two genomes' edits both claim is said, and so is a contig
+only part of which was sent.
+
+Not yet: files for every genome at once, a suggestion to send or bring a contig among the method's own,
+and the session drawn through a genome's edit.
 
 ### 27.11 Validation
 
@@ -10759,11 +10784,11 @@ kept with the file and carried in a workspace, the session drawn through it (§2
 with its suggestions — drawn with the rail and the corners, snapped to, and answered in manual, review
 and auto (§27.5, §27.6), and the exports — the text files written from the edit and read back, the
 sequence, the map and the tracks lifted through it (§27.8) — the sequence's own evidence, its telomeres
-and gaps (§27.5), and the stage on one genome of a metagenome (§27.10). Not yet built, in the order it
-will be (`docs/reference-editing.md` §10): the rest of the evidence beyond the map; a metagenome's
-genome layer — contigs moved between genomes, the contig → MAG table; the command line — and, left
-over, the zoom past the stage's picture, the gaps §27.7 lists, and the method's refinement at finer
-rungs.
+and gaps (§27.5), and the stage on one genome of a metagenome, its contigs sent to other genomes and
+brought in from them, and the contig → MAG table of every genome's edit (§27.10). Not yet built, in the order it
+will be (`docs/reference-editing.md` §10): the rest of the evidence beyond the map; files for every
+genome of a metagenome at once; the command line — and, left over, the zoom past the stage's picture,
+the gaps §27.7 lists, and the method's refinement at finer rungs.
 
 ## 28. Two sequences on two axes
 

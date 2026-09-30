@@ -111,9 +111,24 @@ export function readEdit(stored: unknown): ReferenceEdit | null {
   }
   const cursor = value['cursor']
   const genome = original?.['genome']
+  const listed = original?.['elsewhere']
+  const elsewhere = Array.isArray(listed)
+    ? listed.flatMap((item: unknown) => {
+        if (item === null || typeof item !== 'object') return []
+        const { name, length, genome: of } = item as Record<string, unknown>
+        return typeof name === 'string' && typeof of === 'string' && typeof length === 'number' && Number.isFinite(length) && length > 0
+          ? [{ name, length, genome: of }]
+          : []
+      })
+    : []
   return {
     version: 1,
-    original: { names: names as string[], lengths: lengths as number[], ...(typeof genome === 'string' ? { genome } : {}) },
+    original: {
+      names: names as string[],
+      lengths: lengths as number[],
+      ...(typeof genome === 'string' ? { genome } : {}),
+      ...(elsewhere.length > 0 ? { elsewhere } : {}),
+    },
     history: entries,
     cursor:
       typeof cursor === 'number' && Number.isInteger(cursor) ? Math.max(0, Math.min(entries.length, cursor)) : entries.length,
@@ -194,6 +209,19 @@ export class EditStore {
    */
   apply(step: EditStep, by: StepAuthor = 'reader', suggestion?: string): void {
     this.set(withStep(this.held, step, by, this.clock(), suggestion))
+  }
+
+  /**
+   * Bring a contig of another genome into this genome's edit (§27.10): it is
+   * made one the edit may name, and a step brings it in, whole, after the
+   * others — undone as any step is, and the contig stays one the edit knows.
+   */
+  bring(contig: { name: string; length: number; genome: string }, by: StepAuthor = 'reader', suggestion?: string): void {
+    const original = this.held.original
+    if (original.genome === undefined) return
+    const known = original.names.includes(contig.name) || (original.elsewhere ?? []).some((held) => held.name === contig.name)
+    const edit = known ? this.held : { ...this.held, original: { ...original, elsewhere: [...(original.elsewhere ?? []), { ...contig }] } }
+    this.set(withStep(edit, { op: 'bring', sequence: contig.name }, by, this.clock(), suggestion))
   }
 
   /** What the reader's answers have taught the stage about this file (§27.6). */
