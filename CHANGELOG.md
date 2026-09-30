@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A dot plot in the stage's corner, redrawn through every edit — a dev feature (§27.3).** With another
+  reference loaded beside the file's own sequence — the theoretical genome a strain was built to be —
+  the stage draws the assembly against it in the map's corner, and after every step the lines move
+  with the pieces they fall in: auto mode on the chrXVI–mycoides reassembly brings the fused
+  chromosome's scattered contigs into one line. The streaks are found once, by the dot plot task, and
+  only moved after that; the one under the pointer is named in the readout and a press frames it on
+  the map. Folds away to a button, remembered.
+
 - **The dot plot is a view you can move through — a dev feature (§28.2).** On screen its streaks are drawn
   as lines, sharp at any zoom, in a square plot at one scale on both axes: the wheel zooms about the
   pointer, a drag or a sideways scroll moves it, a double click shows both sets whole, and the line under

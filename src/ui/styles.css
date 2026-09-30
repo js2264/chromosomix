@@ -13569,3 +13569,53 @@ span.deck-name {
   font-size: calc(var(--step--1) * var(--text-scale, 1));
   font-variant-numeric: tabular-nums;
 }
+
+/* The stage's corner dot plot (§27.3): over the map's upper triangle, which the
+   lower one mirrors, anchored by its right edge so that folded to its button it
+   stands where the plot's corner does. */
+.edit-dotplot {
+  position: absolute;
+  z-index: 3;
+  transform: translateX(-100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+}
+.edit-dotplot-head {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.edit-dotplot-picker {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.edit-dotplot-canvas {
+  display: block;
+  cursor: default;
+}
+.edit-dotplot-canvas.is-on-streak {
+  cursor: pointer;
+}
+.edit-dotplot-caption {
+  max-width: 100%;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.3;
+}
+.edit-dotplot.is-folded {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.edit-dotplot.is-folded > :not(.edit-dotplot-open),
+.edit-dotplot:not(.is-folded) > .edit-dotplot-open {
+  display: none;
+}

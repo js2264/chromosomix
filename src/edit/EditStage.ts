@@ -58,6 +58,7 @@ import {
 import { LensGrid, type GridLayout } from './grid'
 import { adjustableEnds, adjustSuggestion } from './adjust'
 import { pointKey, pointsOf, refinedSuggestion, type RefinedPoint, type RefinePoint } from './refine'
+import { LiveDotplot } from './LiveDotplot'
 import { ExportCard, type ExportCardProps } from './ExportCard'
 import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
@@ -301,6 +302,8 @@ export class EditStage {
   private readonly exportCard: ExportCard
   private readonly modes: Record<Mode, HTMLButtonElement>
   private readonly modesEl: HTMLElement
+  /** The corner dot plot against another reference, where the session holds one (§27.3). */
+  private readonly dotplot: LiveDotplot | null
   private readonly rail: Rail
   private readonly reviewBar: HTMLElement
 
@@ -498,6 +501,39 @@ export class EditStage {
     this.wireCanvas()
     this.wireBar(this.topBar, 'top')
     this.wireBar(this.leftBar, 'left')
+    // The assembly against another reference the session holds, through the
+    // edit, in the map's corner (§27.3).
+    const lanes = props.lanes
+    this.dotplot =
+      lanes?.client === undefined
+        ? null
+        : LiveDotplot.of({
+            store: lanes.store,
+            client: lanes.client,
+            assembly: () => this.props.store.assembly,
+            framing: () => ({
+              uri: props.title,
+              rows: [0, 0],
+              cols: [0, 0],
+              binsize: 0,
+              binsPerCell: 1,
+              balance: false,
+              value: 'count',
+              normalise: null,
+              level: 'bin',
+              label: `${props.title} · sequences, no contact map`,
+            }),
+            say: (text) => {
+              if (text === null) this.paintReadout()
+              else this.readoutEl.textContent = text
+            },
+            frame: (sequence, from, to) => {
+              const units = this.grid === null ? null : stretchUnits(this.grid, { sequence, from, to })
+              if (units !== null) this.frameUnits(units[0], units[1])
+            },
+            memoryKey: props.memoryKey(),
+          })
+    if (this.dotplot !== null) this.plot.append(this.dotplot.element)
     this.onKey = (event) => this.key(event)
     this.onKeyUp = (event) => this.keyUp(event)
     this.onBlur = () => this.letGo()
@@ -671,6 +707,8 @@ export class EditStage {
     // and where the finer rungs placed the points, named as the edit named them.
     this.adjustments.clear()
     this.dropPlacements()
+    // The corner dot plot's lines, moved through the edit as it now stands.
+    this.dotplot?.refresh()
     this.editVersion++
     this.windowRead = null
     this.windowRequest?.cancel()
@@ -983,6 +1021,7 @@ export class EditStage {
     this.rail.place(x - BAR_THICKNESS - left - rail, y, rail - 4, size, this.dpr)
     this.railSignature = ''
     this.mapAt = { x, y }
+    this.dotplot?.place(x, y, size)
     this.sx.setPixels(size)
     this.sy.setPixels(size)
     this.image = null
@@ -3181,6 +3220,7 @@ export class EditStage {
     this.recountRequest = null
     this.refineRequest?.cancel()
     this.refineRequest = null
+    this.dotplot?.destroy()
     this.windowRequest?.cancel()
     this.windowRequest = null
     window.clearTimeout(this.windowTimer)

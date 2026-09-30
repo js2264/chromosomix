@@ -10192,6 +10192,19 @@ What is on it:
   between two sequences a sequence of its own there, and ⇧ joining it to the end it is let go on; a
   double click turns a piece; and the readout over a bar names the piece and, where it is not the
   same, the stretch of the file it is (`V_e1:1-576,874 ← V:1-576,874, turned`).
+- **A dot plot in the map's corner** against another reference the session holds — the theoretical
+  genome a strain was built to be, the assembly it came from — **drawn through the edit as it stands**
+  and redrawn after every step, so that whether the assembly is coming to read as the other one does
+  is seen as the steps are made. *Built* (`edit/LiveDotplot.ts`, `edit/dotplotLines.ts`): offered
+  where the session holds a sequence set besides the file's own — the one naming the most of the map's
+  sequences — and a picker for which; the streaks found **once**, by the dot plot task itself (§28) in
+  the annotations worker beside the residues, one to one, and after that only moved: each cut into the
+  pieces of the edited assembly it falls in, placed where its piece went, turned with it, its other
+  side the matching share of its extent along the reference, and what was set aside not drawn — an
+  edit moves the lines and makes none. A square of up to 220 pixels over the map's upper triangle,
+  which the lower one mirrors; folded to a button when it is in the way and remembered folded, and
+  nothing found until it is unfolded; the streak under the pointer named in the readout, both loci,
+  its way round and its anchors, and a press frames it on the map.
 - **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
   dragged, so a track moves with the stretch under the hand; the selection is lit across them.
   *Built.*
