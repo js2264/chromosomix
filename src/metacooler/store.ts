@@ -56,6 +56,11 @@ export interface ScanAllOptions {
   /** Returning `false` abandons the scan where it stands. */
   onChunk(chunk: PixelChunk): boolean | void
   onProgress?(done: number, total: number): void
+  /**
+   * Awaited between steps in place of a bare yield: what a walk nobody is
+   * waiting for — the census of §6.5 — waits on while a view is reading (§12).
+   */
+  pause?(): Promise<void>
 }
 
 /**
@@ -208,7 +213,7 @@ export class CoolerStore implements PixelStore {
       if (keepGoing === false) return
       // A *real* yield, not `await Promise.resolve()`: the cancel arrives as a
       // message, and a microtask never lets the message queue run (`../async`).
-      await yieldToEventLoop()
+      await (options.pause?.() ?? yieldToEventLoop())
     }
   }
 

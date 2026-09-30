@@ -581,7 +581,8 @@ export class MapPanel {
     if (info.contacts !== null || this.counted !== undefined) return
     this.counted = null
     this.client
-      .request<'contacts'>({ kind: 'contacts' })
+      // Followed silently — see `Session.countOf`.
+      .request<'contacts'>({ kind: 'contacts' }, () => undefined)
       .then(({ total }) => {
         if (this.disposed || this.opened !== info) return
         this.counted = total

@@ -29,6 +29,7 @@ import {
   covers,
   gridFor,
   pad,
+  poolingRung,
   recentre,
   refineEnabled,
   rungsOf,
@@ -621,5 +622,49 @@ describe('BlockLadder, inside a frame across a circle’s origin', () => {
       binsPerCell: 1,
     })
     expect(l.asked).toHaveLength(0)
+  })
+})
+
+describe('the first read of a pooled window (§12)', () => {
+  /** A 4DN `.hic`'s ladder, opened at 25 kb. */
+  const HIC = rungsOf(['2500000', '1000000', '500000', '250000', '100000', '50000', '25000', '10000', '5000'])
+  /** Mouse chr1 at 25 kb. */
+  const CHR1: Extent = [0, 7849]
+
+  it('comes from the rung that is the grid the reader would pool the open map into', () => {
+    // 7,849 bins into 4,096 cells is two bins a cell: a 50 kb picture, which
+    // the 50 kb rung holds in a quarter of the pixels.
+    expect(gridFor(CHR1, CHR1)).toBe(2)
+    expect(poolingRung(HIC, CHR1, CHR1, 25_000)).toBe('50000')
+  })
+
+  it('never reads coarser than that grid, so the picture is the one it was', () => {
+    // Six bins a cell is 150 kb: the 50 kb rung divides it, the 100 kb one does
+    // not, and 250 kb would be a coarser picture.
+    const wide: Extent = [0, 6 * POOLED_CELL_CAP]
+    expect(poolingRung(HIC, wide, wide, 25_000)).toBe('50000')
+    const wider: Extent = [0, 10 * POOLED_CELL_CAP]
+    expect(poolingRung(HIC, wider, wider, 25_000)).toBe('250000')
+  })
+
+  it('reads the open map where nothing is pooled, or no rung is the grid', () => {
+    const window: Extent = [0, 400]
+    expect(poolingRung(HIC, window, window, 25_000)).toBeUndefined()
+    expect(poolingRung(rungsOf(['25000', '100000']), CHR1, CHR1, 25_000)).toBeUndefined()
+    expect(poolingRung([], CHR1, CHR1, 25_000)).toBeUndefined()
+  })
+
+  it('is taken by the ladder as it is, so no refine follows until the reader zooms', () => {
+    const l = ladder({ ceiling: CHR1 })
+    // The rung's block describes itself in its own bins; `source` is the window
+    // in the open map's, which is what the ladder plans against.
+    const rung: MatrixResult = {
+      ...block([0, 3925], 1),
+      binsize: 50_000,
+      source: { rows: CHR1, cols: CHR1 },
+    }
+    l.it.adopt(rung)
+    l.it.consider({ rows: CHR1, cols: CHR1, binsPerCell: 2 })
+    expect(l.asked).toEqual([])
   })
 })

@@ -193,7 +193,12 @@ class SequenceIndex {
 export async function takeCensus(
   store: PixelStore,
   starts: ArrayLike<number>,
-  options: { onProgress?(done: number, total: number): void; cancelled?(): boolean } = {},
+  options: {
+    onProgress?(done: number, total: number): void
+    cancelled?(): boolean
+    /** Awaited between chunks — see `ScanAllOptions.pause`. */
+    pause?(): Promise<void>
+  } = {},
 ): Promise<Census> {
   const index = new SequenceIndex(starts)
   const sequences = index.count
@@ -206,6 +211,7 @@ export async function takeCensus(
   let stopped = false
   await store.scanAll({
     chunkSize: CENSUS_CHUNK,
+    ...(options.pause === undefined ? {} : { pause: options.pause }),
     onChunk: (chunk) => {
       if (options.cancelled?.() === true) {
         stopped = true

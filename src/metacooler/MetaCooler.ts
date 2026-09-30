@@ -390,6 +390,8 @@ export class MetaCooler {
    * the total, so a second number typed costs no second walk.
    */
   private census: Promise<Census> | null = null
+  /** A resample is waiting on the census, which then no longer pauses (§12). */
+  private censusWanted = false
   private readonly chromOffset: Float64Array
   private readonly genomeOffset: Float64Array
   private readonly genomeIds: Map<string, number>
@@ -1966,6 +1968,8 @@ export class MetaCooler {
       return null
     }
     const refusal = this.resampleRefusal()
+    // Waited on now, so a census begun in the background stops standing aside.
+    this.censusWanted = true
     if (options.census !== undefined) this.census = Promise.resolve(options.census)
     let census: Promise<Census>
     if (refusal !== null) {
@@ -2014,12 +2018,24 @@ export class MetaCooler {
    * exactly, and counted by the census otherwise — the one a resample takes,
    * kept for it. `null` for a map whose stored values are not contacts.
    */
-  async countContacts(options: { onProgress?(done: number, total: number): void } = {}): Promise<number | null> {
+  async countContacts(
+    options: {
+      onProgress?(done: number, total: number): void
+      /**
+       * What the census waits on between steps while nothing else needs it
+       * (§12); handed a test that says when something has come to (a resample),
+       * which must end the wait.
+       */
+      pause?(wanted: () => boolean): Promise<void>
+    } = {},
+  ): Promise<number | null> {
     const declared = this.declaredContacts
     if (declared !== null) return declared
     if (this.resampleRefusal() !== null) return null
+    const pause = options.pause
     this.census ??= takeCensus(this.pixelStore, this.chromOffset, {
       ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
+      ...(pause === undefined ? {} : { pause: () => pause(() => this.censusWanted) }),
       cancelled: () => this.closed,
     })
     try {

@@ -1794,6 +1794,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   compiles h5wasm the moment it exists, was only made once a file was opened; it is now made while
   the picker is on screen, and a 1 GB `.mcool` dropped on a fresh tab lands in 0.3 s where it took 3.2.
 
+- **A chromosome clicked while a large map is still being counted draws in seconds, not a minute
+  (§6.5, §8.15, §9, §12).** On a 1 GB `.hic` from S3 (4DNFIYUR29KO), chr1 opened from the
+  Chromosomes table sat under *counting contacts…* for 10 s here, and for a minute on a slower
+  line. Three things held it. The contact count and the circularity check took turns with the view's
+  reads on the one reader thread, each turn a round trip; they now wait until no view has read for a
+  quarter of a second. The whole chromosome was summed out of every 25 kb pixel into a 50 kb picture,
+  where the file stores the 50 kb rung; a region wider than the picture's cells now reads the rung
+  that is that grid, the same picture from a quarter of the pixels, and a zoom still refines to the
+  open rung. And the veil said *counting contacts* because the count's progress was written on it;
+  it says *loading* now, which is what it was. chr1 is on screen in under 4 s, its read 1.3 s where
+  it was 7.4.
+
+- **The resolution picker of a `.hic` opened by its URL stands on the rung it opened at.** It fell
+  back to the first rung when the address named none, which was right while a `.hic` opened at its
+  finest and read `1 kb` beside a File card saying `25 kb` once it landed a third of the way up.
+
 - **A large `.hic` opens in seconds, and its contacts are counted without holding it up (§3.6, §6.5,
   §12).** The 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y) sat on its spinner for minutes.
   The contact count every `.hic` takes in the background began by reading every chromosome pair's
