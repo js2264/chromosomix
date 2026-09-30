@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A suggestion's ends are dragged to adjust it, in review — a dev feature (§27.6).** The ends of the
+  suggestion review is on take the pointer: a turn's or a move's stretch begun or ended elsewhere, a
+  split's point moved, snapped as everything on the stage is, with its outline, its words and its row
+  following the hand, and taken as adjusted. Its `adjusted` chip puts the ends back where the method
+  found them.
+
+- **The stage's suggestions are counted off its thread — a dev feature (§27.12).** The reader's worker
+  keeps what the method weighs from the picture's pass, tens of megabytes it no longer sends, and counts
+  the suggestions there after every edit and answer, so dragging, zooming and answering are never held
+  up by them; auto mode waits for each count before taking the next.
+
 - **The stage says what its picture reads as the read starts — a dev feature (§27.12):** *reading
   the whole map for the stage: 13,735,472 stored pixels at 1 kb*, and how many bins a cell pools on a
   shallow map, beside the bar and the cancel.

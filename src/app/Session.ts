@@ -5587,10 +5587,13 @@ export class Session {
       title: this.mapLabel(file.uri),
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
+      // What the method weighs is kept by the reader, where the suggestions
+      // are then counted, off the stage's thread (§27.12).
       readPicture: (onProgress, contigs) => {
         const wanted = contigs ?? drawn
-        return reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, ...(wanted === undefined ? {} : { contigs: wanted }) }, onProgress)
+        return reader.cancellable<'picture'>({ kind: 'picture', balance, method: true, keep: true, ...(wanted === undefined ? {} : { contigs: wanted }) }, onProgress)
       },
+      suggest: (input) => reader.cancellable<'suggest'>({ kind: 'suggest', ...input }),
       // The binning every genome's edit makes, as the edits stand (§27.10).
       ...(scope === undefined ? {} : { binning: () => this.binning() }),
       // Where a genome's contigs and the others belong (§27.10): read without

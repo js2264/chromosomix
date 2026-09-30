@@ -22,7 +22,7 @@
  * spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25, e01b, e17b, e24b
+ *   node scripts/ui-edit.mjs [out-dir]     # e01 … e25, e01b, e14b, e17b, e24b
  */
 
 import { createRequire } from 'node:module'
@@ -312,6 +312,24 @@ await page.click('.edit-modes >> text=review')
 await sleep(900)
 console.log('review:', await text('.edit-review'))
 await shot('e14-review')
+
+// An end of the one review is on, dragged along the diagonal to adjust it,
+// then put back where the method found it.
+{
+  const box = await mapBox()
+  const words = (await text('.edit-review-words')) ?? ''
+  const found = /IV_e1:([\d,]+)-([\d,]+)/.exec(words)
+  const iv = await cellsOf('IV_e1')
+  if (found !== null && iv !== null) {
+    const end = Math.round(Number(found[2].replaceAll(',', '')) / 1000) + iv[0]
+    await drag(at(box, end, end), at(box, end - 60, end - 60))
+    console.log('adjusted:', await text('.edit-review'), '·', await suggestions())
+    await shot('e14b-adjusted')
+    await page.locator('.edit-chip-button', { hasText: 'adjusted' }).first().click()
+    await sleep(300)
+    console.log('as found:', await text('.edit-review-words'))
+  } else console.log('adjust: no suggestion to adjust')
+}
 
 // Space held: the map as it would be with the suggestion taken.
 await page.keyboard.down(' ')

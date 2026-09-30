@@ -245,6 +245,9 @@ describe('the suggestions', () => {
     button('auto').click()
     button('apply 1 at 50% or more').click()
     expect(store.edit.history.map((entry) => entry.by)).toEqual(['auto'])
+    // Each one taken is counted again before the next, and the count may be
+    // another thread's (§27.12): the run settles, then the button says so.
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(document.querySelector('.edit-suggestions-card .edit-acts button')?.textContent).toBe('none at 50% or more')
   })
 })

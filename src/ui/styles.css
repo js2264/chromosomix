@@ -12912,6 +12912,13 @@ span.deck-name {
 .edit-overlay.is-panning {
   cursor: grab;
 }
+/* A suggestion's end a drag would take hold of, and one being dragged (§27.6). */
+.edit-overlay.is-on-end {
+  cursor: grab;
+}
+.edit-overlay.is-adjusting {
+  cursor: grabbing;
+}
 .edit-lane {
   pointer-events: none;
 }
@@ -13358,6 +13365,18 @@ span.deck-name {
   color: var(--text-dim);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   line-height: 1.6;
+}
+/* The chip that says a suggestion's ends were dragged is the way back too (§27.6). */
+.edit-chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+.edit-chip-button:hover {
+  color: var(--accent);
 }
 .edit-suggestion-acts {
   display: flex;

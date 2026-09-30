@@ -21,7 +21,10 @@
 import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
 import type { FileCorner } from '../edit/corners'
+import type { GridLayout } from '../edit/grid'
 import type { Expected } from '../edit/method'
+import type { SequenceEvidence } from '../edit/sequenceEvidence'
+import type { Suggested } from '../edit/suggest'
 import type { PictureContacts } from '../metacooler/picture'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
@@ -772,6 +775,13 @@ export interface PictureResult {
    * the file in its own order. Absent where the request did not ask for them.
    */
   method?: { contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
+  /**
+   * Where the request asked the worker to **keep** what the method weighs
+   * rather than send it: the picture's id, which a `suggest` request names —
+   * tens of megabytes held where the suggestions are counted, off the stage's
+   * thread (§27.12), in place of {@link method}.
+   */
+  methodKept?: number
 }
 
 /**
@@ -827,6 +837,7 @@ export interface ResultMap {
   resample: ResampleResult
   contacts: { total: number | null }
   picture: PictureResult
+  suggest: Suggested
   genomeLinks: GenomeLinksResult
   cancel: null
   close: null
@@ -1061,6 +1072,26 @@ export type WorkerRequest =
        * file is left out of the picture and of what the method weighs.
        */
       contigs?: string[]
+      /**
+       * Keep what the method weighs here, for `suggest` requests, rather than
+       * send it (`PictureResult.methodKept`). The last picture kept is the one
+       * kept.
+       */
+      keep?: boolean
+    }
+  /**
+   * The suggestions for an edit (§27.5), counted here against what the method
+   * weighs of the picture `picture` names — kept by its read — so the stage's
+   * thread stays with the hand (§27.12).
+   */
+  | {
+      id: number
+      kind: 'suggest'
+      picture: number
+      edit: ReferenceEdit
+      layout: GridLayout
+      weights?: number[]
+      evidence?: SequenceEvidence
     }
   | {
       id: number

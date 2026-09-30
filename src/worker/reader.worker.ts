@@ -17,13 +17,15 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
-import { PICTURE_CELLS, depthStride, displayRange, pictureLayout, pictureStride } from '../metacooler/picture'
-import { findCorners } from '../edit/corners'
-import { METHOD_GATHER, expectedOf } from '../edit/method'
+import { PICTURE_CELLS, depthStride, displayRange, pictureLayout, pictureStride, type PictureContacts } from '../metacooler/picture'
+import { findCorners, type FileCorner } from '../edit/corners'
+import { LensGrid } from '../edit/grid'
+import { METHOD_GATHER, expectedOf, type Expected } from '../edit/method'
+import { suggest, type Suggested } from '../edit/suggest'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
-import type { ReferenceEdit } from '../genome/edit'
+import { EditedAssembly, type ReferenceEdit } from '../genome/edit'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -158,6 +160,12 @@ interface Session {
    * the second lock on a door the first already shut.
    */
   metacool?: boolean
+  /**
+   * What the method weighs of the stage's last picture (§27.5), kept here for
+   * the `suggest` requests that count its suggestions off the stage's thread
+   * (§27.12), under the id of the read that made it.
+   */
+  stageMethod?: { picture: number; contacts: PictureContacts; expected: Expected; corners: FileCorner[] }
 }
 
 /**
@@ -885,6 +893,10 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
   const expected = contacts === undefined ? null : expectedOf(contacts, balanced)
   const method =
     contacts === undefined || expected === null ? undefined : { contacts, expected, corners: findCorners(contacts, expected) }
+  // Kept rather than sent, where asked: the suggestions are counted here.
+  const kept = request.keep === true && method !== undefined
+  const active = requireSession()
+  if (kept) active.stageMethod = { picture: request.id, ...method }
   return {
     rung: seen === open ? null : (rung ?? null),
     binsize: mc.binsize * stride,
@@ -903,8 +915,30 @@ async function handlePicture(request: Extract<WorkerRequest, { kind: 'picture' }
     vmax,
     balanced,
     pixels: read.pixels,
-    ...(method === undefined ? {} : { method }),
+    ...(method === undefined ? {} : kept ? { methodKept: request.id } : { method }),
   }
+}
+
+/**
+ * The suggestions for an edit (§27.5), counted against what the method weighs
+ * of the stage's picture, kept here by its read — the whole of `suggest`, the
+ * lens built from the edit and the picture's layout as the stage builds it,
+ * off the stage's thread (§27.12).
+ */
+function handleSuggest(request: Extract<WorkerRequest, { kind: 'suggest' }>): Suggested {
+  const held = requireSession().stageMethod
+  if (held === undefined || held.picture !== request.picture) {
+    throw new ViewerError('unsupported', 'The picture these suggestions were asked of has been read again; they are counted against the new one.')
+  }
+  const grid = LensGrid.of(EditedAssembly.of(request.edit), request.layout)
+  return suggest({
+    contacts: held.contacts,
+    expected: held.expected,
+    corners: held.corners,
+    grid,
+    ...(request.weights === undefined ? {} : { weights: request.weights }),
+    ...(request.evidence === undefined ? {} : { evidence: request.evidence }),
+  })
 }
 
 /**
@@ -1996,6 +2030,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleStats()
     case 'picture':
       return handlePicture(request)
+    case 'suggest':
+      return handleSuggest(request)
     case 'genomeLinks':
       return handleGenomeLinks(request)
     case 'cancel':

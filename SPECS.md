@@ -10524,10 +10524,18 @@ below — and the rest are ranked again at once; what it taught — the weights,
 was turned down, by keys that name the file's own cells so a suggestion stays turned down after
 another edit moves it — is kept per file beside the edit (`map:edit-learned`), carried with it in a
 saved workspace and a shared link (`editLearned`), said under the list, and forgotten by *forget*;
-*offer again* brings back one turned down, what its answer taught kept.
+*offer again* brings back one turned down, what its answer taught kept. In review, the ends of the one
+it is on are dragged along the diagonal to adjust it, snapped as every point on the stage is (the
+pointer takes hold within 10 pixels of one): the stretch a turn or a move takes begun or ended
+elsewhere — dragged past the other end, it is the other end — or the point a split cuts at moved, and
+a move in its own sequence kept going to the same place (`edit/adjust.ts`). Its step, its words, its
+outline and its row follow the hand; its confidence stays the method's, which weighed the suggestion
+found, and an `adjusted` chip is added to what it rests on, which puts its ends back where they were
+found when pressed. What is answered is what is shown, so the history says the step taken was the
+adjusted one; an edit clears every adjustment, since it was for the edit as it stood.
 **Auto**: *apply* takes every suggestion at 50% or more, best first,
 counting again after each, forty at most a run, each a step marked `auto` with what it rested on.
-Not yet: dragging a suggestion's ends to adjust it, and the command line.
+Not yet: the command line.
 
 ### 27.7 The session through the lens
 
@@ -10783,7 +10791,7 @@ Not yet: the grid, `--simulate`, and the `.pairs` re-binned exactly.
 | An edit, at the whole-genome scale | 0 requests: the mapping changes, the picture does not |
 | An edit, zoomed past the picture | one bounded read through the lens, once the drop settles; the drag itself 0 |
 | A view of the session through an edit | *built*: the stored rows its pixels are kept in, each at the lower of its two original bins — as many rows as a window on the diagonal reads without an edit, wherever its pieces now sit, and never more than its bins on both axes; from a `.hic`, whose index is two-dimensional, the rectangles between them, at most 64, and past that the rows |
-| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer on the stage's own thread once the hand has let go: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; the cells between sequence ends at most four million, 32 MB, kept by the picture's pass; not yet in a worker, not yet refined |
+| Suggestions over the assembly | the picture's resolution in the analysis worker, then ≤ 5 range requests per candidate per rung refined; the map live throughout (§18.3) — *built* at the picture's resolution, 0 requests, counted again after every edit and answer once the hand has let go, **in the reader's worker**, which keeps what the method weighs from the picture's pass rather than sending it — the cells between sequence ends at most four million, 32 MB — so the stage's thread stays with the hand: about a fifth of a second for a yeast genome at 1 kb in 16 sequences, half a second in 32 contigs, whose every pair of ends is weighed; a count an edit overtakes is dropped for the next, and auto mode waits for each before taking the next; not yet refined |
 | Review: an answer | 0 requests; the re-rank is arithmetic |
 | Export FASTA | one ranged read per piece; no whole sequence held — *built*: 400,000 bases a request; the file itself is held whole before it is saved |
 | Export the lifted map | *built*: one pass over each rung's stored pixels, in the reader's worker; at most 60 million pixels gathered, 720 MB, and the `.mcool` built in memory as the `.pairs` import's is |

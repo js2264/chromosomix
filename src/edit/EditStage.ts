@@ -25,7 +25,7 @@ import type { ManualStore } from '../annotations/manual'
 import type { MapId } from '../annotations/placement'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { EditedAssembly, isGap, type AsideReason, type EditStep } from '../genome/edit'
+import { EditedAssembly, isGap, type AsideReason, type EditStep, type ReferenceEdit } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { bpAt } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -53,6 +53,7 @@ import {
   type Stretch,
 } from './gestures'
 import { LensGrid, type GridLayout } from './grid'
+import { adjustableEnds, adjustSuggestion } from './adjust'
 import { ExportCard, type ExportCardProps } from './ExportCard'
 import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
@@ -97,6 +98,13 @@ export interface EditStageProps {
     read(contigs: string[], onProgress: (done: number, total: number) => void): { promise: Promise<GenomeLinksResult>; cancel(): void }
     auto: boolean
   }
+  /**
+   * Count the suggestions for an edit off the stage's thread (§27.12), against
+   * what the method weighs of the picture — kept where it was read, under the
+   * picture's id (`PictureResult.methodKept`). Absent, a picture that carries
+   * the method's data is weighed here.
+   */
+  suggest?(input: SuggestRequest): { promise: Promise<Suggested>; cancel(): void }
   /** The map lifted through an edit, every rung, as an `.mcool` (§27.8). */
   liftContacts?: ExportCardProps['liftContacts']
   /** On a metagenome: the contig → MAG table every genome's edit makes (§27.10). */
@@ -107,6 +115,15 @@ export interface EditStageProps {
   onClose(): void
 }
 
+/** What a count of the suggestions off the stage's thread is asked for. */
+export interface SuggestRequest {
+  picture: number
+  edit: ReferenceEdit
+  layout: GridLayout
+  weights?: number[]
+  evidence?: SequenceEvidence
+}
+
 /** What is selected: a stretch on the diagonal, or a box of two off it. */
 type Selection = { kind: 'stretch'; stretch: Stretch } | { kind: 'box'; rows: Stretch; cols: Stretch }
 
@@ -115,6 +132,8 @@ type Drag =
   | { kind: 'pan'; x: number; y: number }
   | { kind: 'along'; anchor: number; x: number; y: number; moved: boolean }
   | { kind: 'box'; ax: number; ay: number; x: number; y: number; moved: boolean }
+  /** An end of a suggestion dragged to adjust it (§27.6): which suggestion, which end. */
+  | { kind: 'adjust'; key: string; end: 0 | 1; x: number; y: number; moved: boolean }
   | {
       kind: 'move'
       stretch: Stretch
@@ -232,8 +251,15 @@ export class EditStage {
   private mapAt: { x: number; y: number } = { x: 0, y: 0 }
   /** The grid the lanes were last pointed at. */
   private lanesGrid: LensGrid | null = null
-  /** What the method weighs, read with the picture (§27.5). */
+  /** What the method weighs, read with the picture (§27.5) — here, or kept where it was read under the picture's id. */
   private method: NonNullable<PictureResult['method']> | null = null
+  private methodKept: number | null = null
+  /** A count of the suggestions in flight off the stage's thread. */
+  private recountRequest: { cancel(): void } | null = null
+  /** Auto mode applying, one suggestion and one count at a time. */
+  private autoRunning = false
+  /** Suggestions whose ends the hand has dragged, by key, until the edit changes (§27.6). */
+  private readonly adjustments = new Map<string, Suggestion>()
   /** The sequences the picture was read of, where not the whole map. */
   private drawn: Set<string> | null = null
   /** Where a genome's contigs and the others belong, read for the contigs `linksOf` names. */
@@ -444,11 +470,12 @@ export class EditStage {
         this.picture = picture
         this.drawn = contigs === undefined ? null : new Set(contigs)
         this.method = picture.method ?? null
+        this.methodKept = picture.methodKept ?? null
         this.layout = { binsize: picture.binsize, sequences: picture.sequences }
         this.colours = pictureColours(this.props.colormap, { low: picture.low, high: picture.high }, picture.vmin, picture.vmax)
         this.hideStatus()
         this.rebuild(true)
-        this.computeSuggestions()
+        this.countNow()
         this.paintSide()
         void this.readEvidence()
         if (this.props.genomeLinks?.auto === true && this.linksOf !== this.linksKey()) this.readLinks()
@@ -491,7 +518,7 @@ export class EditStage {
       )
       if (evidence === null || this.closed) return
       this.evidence = evidence
-      this.computeSuggestions()
+      this.countNow()
       this.paintSide()
       this.schedule()
     } catch {
@@ -527,6 +554,8 @@ export class EditStage {
 
   /** The store changed: a step made, undone or redone. */
   private edited(): void {
+    // An adjusted suggestion was for the edit as it stood.
+    this.adjustments.clear()
     // A contig brought in from another genome is not in the picture yet: it
     // is read again, with it (§27.10).
     const drawn = this.drawn
@@ -1121,6 +1150,9 @@ export class EditStage {
       const { x, y } = local(event)
       if (event.button === 1 || (event.button === 0 && this.space)) {
         this.drag = { kind: 'pan', x, y }
+      } else if (event.button === 0 && this.endUnder(x, y) !== null) {
+        const grab = this.endUnder(x, y) as { key: string; end: 0 | 1 }
+        this.drag = { kind: 'adjust', ...grab, x, y, moved: false }
       } else if (event.button === 0) {
         this.alt = event.altKey
         const ux = this.sx.toUnit(x)
@@ -1176,6 +1208,8 @@ export class EditStage {
         if (drag.kind === 'move') {
           drag.copy = event.altKey
           this.updateMove(drag)
+        } else if (drag.kind === 'adjust') {
+          this.updateAdjust(drag)
         }
       }
       this.schedule()
@@ -1212,6 +1246,9 @@ export class EditStage {
             this.selection = rows !== null && cols !== null ? { kind: 'box', rows, cols } : null
           }
         }
+      } else if (drag.kind === 'adjust') {
+        // Kept as the hand left it, to be answered: nothing is made until it is taken.
+        this.paintReadout()
       } else if (drag.kind === 'move') {
         const step = drag.moved ? drag.step : null
         this.preview = null
@@ -1399,6 +1436,9 @@ export class EditStage {
       this.hover = { x: this.snapX(this.sx.toUnit(x)), y: this.snapY(this.sy.toUnit(y)), px: x, py: y }
     }
     if (this.drag === null) this.setLit(within?.key ?? this.hover.x.target?.key ?? this.hover.y.target?.key ?? null)
+    // An end a drag would take hold of says so under the pointer (§27.6).
+    this.overlayCanvas.classList.toggle('is-on-end', this.drag === null && this.endUnder(x, y) !== null)
+    this.overlayCanvas.classList.toggle('is-adjusting', this.drag?.kind === 'adjust')
     this.paintReadout()
     this.schedule()
   }
@@ -1606,7 +1646,7 @@ export class EditStage {
     // is two points at once.
     const onKey = hover.x.target?.kind === 'suggestion' ? hover.x.target.key : hover.y.target?.kind === 'suggestion' ? hover.y.target.key : undefined
     const suggestion = onKey === undefined ? null : this.byKey(onKey)
-    const number = suggestion === null ? 0 : this.open().indexOf(suggestion) + 1
+    const number = suggestion === null ? 0 : this.open().findIndex((open) => open.key === suggestion.key) + 1
     const corner = suggestion !== null && hover.x.target?.kind === 'suggestion' && hover.y.target?.kind === 'suggestion' && offDiagonal
     const snapped =
       suggestion !== null
@@ -1669,7 +1709,52 @@ export class EditStage {
   /** The suggestions offered: not turned down, and at the floor or above, best first. */
   private open(): Suggestion[] {
     const rejected = new Set(this.learned.rejected)
-    return (this.suggested?.list ?? []).filter((suggestion) => !rejected.has(suggestion.key) && suggestion.confidence >= OFFER_FLOOR)
+    return (this.suggested?.list ?? [])
+      .filter((suggestion) => !rejected.has(suggestion.key) && suggestion.confidence >= OFFER_FLOOR)
+      .map((suggestion) => this.effective(suggestion))
+  }
+
+  /**
+   * A suggestion as the hand left it: its ends where they were dragged, the
+   * confidence and what it rests on the method's latest count's (§27.6).
+   */
+  private effective(suggestion: Suggestion): Suggestion {
+    const moved = this.adjustments.get(suggestion.key)
+    return moved === undefined ? suggestion : { ...moved, confidence: suggestion.confidence, features: suggestion.features, gain: suggestion.gain }
+  }
+
+  /**
+   * An end of the suggestion review is on within reach of the pointer, that a
+   * drag would take hold of (§27.6). In review only: there the suggestion is
+   * the one thing being answered, where in manual its ends sit on the very
+   * places a selection's square is pressed to move it.
+   */
+  private endUnder(x: number, y: number): { key: string; end: 0 | 1 } | null {
+    if (this.mode !== 'review' || this.preview !== null) return null
+    const suggestion = this.byKey(this.current)
+    if (suggestion === null) return null
+    const ends = adjustableEnds(suggestion)
+    for (let i = 0; i < ends.length; i++) {
+      if (Math.hypot(this.sx.toPixel(ends[i]) - x, this.sy.toPixel(ends[i]) - y) <= CORNER_PX) return { key: suggestion.key, end: i === 0 ? 0 : 1 }
+    }
+    return null
+  }
+
+  /** An end of a suggestion followed to where the pointer is, snapped along the diagonal (§27.6). */
+  private updateAdjust(drag: Extract<Drag, { kind: 'adjust' }>): void {
+    const grid = this.grid
+    const suggestion = this.byKey(drag.key)
+    if (grid === null || suggestion === null) return
+    const unit = this.alongUnit(drag.x, drag.y).unit
+    const next = adjustSuggestion(grid, suggestion, drag.end, unit)
+    if (next !== null) {
+      this.adjustments.set(drag.key, next)
+      // Dragged past the other end, it is the other end now.
+      if (suggestion.stretch !== null && next.stretch !== null) drag.end = unit <= next.stretch[0] ? 0 : 1
+    }
+    const number = this.open().findIndex((open) => open.key === drag.key) + 1
+    this.readoutEl.textContent = `adjusting ${number} · ${(next ?? suggestion).words}${next === null ? ' · not here' : ''}`
+    this.railSignature = ''
   }
 
   /** The ones turned down, which the list strikes through. */
@@ -1680,7 +1765,8 @@ export class EditStage {
 
   private byKey(key: string | null | undefined): Suggestion | null {
     if (key === null || key === undefined) return null
-    return this.suggested?.list.find((suggestion) => suggestion.key === key) ?? null
+    const found = this.suggested?.list.find((suggestion) => suggestion.key === key)
+    return found === undefined ? null : this.effective(found)
   }
 
   /** The suggestions as the map draws them, numbered as the rail and the list number them. */
@@ -1692,26 +1778,81 @@ export class EditStage {
     }))
   }
 
+  /**
+   * Count the suggestions now rather than once the hand has let go: when the
+   * picture or the sequence's evidence arrives. Here, the count is in before
+   * this returns; kept where it was read, it is on its way.
+   */
+  private countNow(): void {
+    window.clearTimeout(this.suggesting)
+    this.suggesting = 0
+    void this.recount().then(() => {
+      if (this.closed) return
+      this.paintSide()
+      this.schedule()
+    })
+  }
+
+  /** Whether there is anything to weigh suggestions against: the method's data here, or kept where it was read. */
+  private weighs(): boolean {
+    return this.method !== null || (this.methodKept !== null && this.props.suggest !== undefined)
+  }
+
   /** Count the suggestions again once the hand has let go — after an edit, or an answer. */
   private scheduleSuggestions(): void {
-    if (this.method === null || this.closed) return
+    if (!this.weighs() || this.closed) return
     window.clearTimeout(this.suggesting)
     this.suggesting = window.setTimeout(() => {
       this.suggesting = 0
       if (this.closed) return
-      this.computeSuggestions()
-      this.paintSide()
-      this.schedule()
+      void this.recount().then(() => {
+        if (this.closed) return
+        this.paintSide()
+        this.schedule()
+      })
     }, 30)
     this.paintSuggestions()
   }
 
-  /** The suggestions for the edit as it stands (§27.5). */
-  private computeSuggestions(): void {
-    const method = this.method
+  /**
+   * The suggestions for the edit as it stands (§27.5): counted where the
+   * method's data is kept — off the stage's thread, so a hand on the map is
+   * never held up by them (§27.12) — or here where the picture brought it.
+   * Settles once they are in; a count overtaken by another edit is dropped
+   * for the one that follows it.
+   */
+  private recount(): Promise<void> {
     const grid = this.grid
-    if (method === null || grid === null) return
-    this.suggested = suggest({ ...method, grid, weights: this.learned.weights ?? INITIAL_WEIGHTS, ...(this.evidence === null ? {} : { evidence: this.evidence }) })
+    if (grid === null || this.closed) return Promise.resolve()
+    const weights = this.learned.weights ?? INITIAL_WEIGHTS
+    if (this.method !== null) {
+      this.tookSuggestions(suggest({ ...this.method, grid, weights, ...(this.evidence === null ? {} : { evidence: this.evidence }) }))
+      return Promise.resolve()
+    }
+    const kept = this.methodKept
+    const ask = this.props.suggest
+    const layout = this.layout
+    if (kept === null || ask === undefined || layout === null) return Promise.resolve()
+    this.recountRequest?.cancel()
+    const edit = this.props.store.edit
+    const request = ask({ picture: kept, edit, layout, weights: [...weights], ...(this.evidence === null ? {} : { evidence: this.evidence }) })
+    this.recountRequest = request
+    this.paintSuggestions()
+    return request.promise.then(
+      (suggested) => {
+        if (this.closed || this.recountRequest !== request) return
+        this.recountRequest = null
+        if (this.props.store.edit === edit) this.tookSuggestions(suggested)
+      },
+      () => {
+        if (this.recountRequest === request) this.recountRequest = null
+      },
+    )
+  }
+
+  /** A count of the suggestions, taken: the one review is on and the one lit kept where they still are. */
+  private tookSuggestions(suggested: Suggested): void {
+    this.suggested = suggested
     const open = this.open()
     if (this.current !== null && !open.some((suggestion) => suggestion.key === this.current)) this.current = null
     if (this.mode === 'review' && this.current === null) this.current = open[0]?.key ?? null
@@ -1789,16 +1930,23 @@ export class EditStage {
    * applied as a step marked `auto`, the rest counted again, until none is left
    * above it.
    */
-  private runAuto(): void {
-    for (let k = 0; k < AUTO_MOST; k++) {
-      const next = this.open().find((suggestion) => suggestion.confidence >= AUTO_THRESHOLD)
-      if (next === undefined) break
-      const before = this.props.store.applied
-      this.accept(next, 'auto')
-      window.clearTimeout(this.suggesting)
-      this.suggesting = 0
-      if (this.props.store.applied === before) break
-      this.computeSuggestions()
+  private async runAuto(): Promise<void> {
+    if (this.autoRunning) return
+    this.autoRunning = true
+    try {
+      for (let k = 0; k < AUTO_MOST; k++) {
+        const next = this.open().find((suggestion) => suggestion.confidence >= AUTO_THRESHOLD)
+        if (next === undefined) break
+        const before = this.props.store.applied
+        this.accept(next, 'auto')
+        window.clearTimeout(this.suggesting)
+        this.suggesting = 0
+        if (this.props.store.applied === before) break
+        await this.recount()
+        if (this.closed) return
+      }
+    } finally {
+      this.autoRunning = false
     }
     this.paintSide()
     this.schedule()
@@ -1882,7 +2030,7 @@ export class EditStage {
     }
     const key = (text: string): HTMLElement => el('kbd', { class: 'kbd', text })
     bar.replaceChildren(
-      el('span', { class: 'edit-review-where', text: `${open.indexOf(current) + 1} of ${open.length}` }),
+      el('span', { class: 'edit-review-where', text: `${open.findIndex((one) => one.key === current.key) + 1} of ${open.length}` }),
       el('span', { class: 'edit-review-words', text: `${current.words} · ${percent(current.confidence)}` }),
       el(
         'span',
@@ -1897,6 +2045,7 @@ export class EditStage {
         ' the others ',
         key('space'),
         ' held: as it would be',
+        adjustableEnds(current).length > 0 ? ' · drag its ends to adjust it' : '',
       ),
     )
   }
@@ -1905,12 +2054,12 @@ export class EditStage {
   private paintSuggestions(): void {
     const card = this.suggestionsCard
     const open = this.open()
-    const weighing = this.suggesting !== 0
+    const weighing = this.suggesting !== 0 || this.recountRequest !== null || this.autoRunning
     const head = el('h3', {
       class: 'edit-card-head',
       text: this.suggested === null ? 'suggestions' : `suggestions · ${open.length}${weighing ? ' · weighing…' : ''}`,
     })
-    if (this.method === null || this.suggested === null) {
+    if (!this.weighs() || this.suggested === null) {
       card.replaceChildren(
         head,
         el('p', {
@@ -1930,9 +2079,9 @@ export class EditStage {
         ready === 0 ? `none at ${percent(AUTO_THRESHOLD)} or more` : `apply ${ready} at ${percent(AUTO_THRESHOLD)} or more`,
         'play',
         'Apply them best first, counting again after each: every one a step marked auto, to undo like any other',
-        () => this.runAuto(),
+        () => void this.runAuto(),
       )
-      run.disabled = ready === 0
+      run.disabled = ready === 0 || this.autoRunning
       children.push(el('div', { class: 'edit-acts' }, run))
     }
     if (open.length === 0) {
@@ -2002,7 +2151,27 @@ export class EditStage {
       el('span', { class: 'edit-suggestion-words', text: suggestion.words }),
       el('span', { class: 'edit-suggestion-confidence', text: percent(suggestion.confidence) }),
     )
-    const chips = el('div', { class: 'edit-suggestion-chips' }, ...suggestion.evidence.map((chip) => el('span', { class: 'edit-chip', text: chip })))
+    // `adjusted` is the way back as well as the word (§27.6): its ends put
+    // back where the method found them, from the chip that says they moved.
+    const chipOf = (chip: string): HTMLElement => {
+      if (chip !== 'adjusted' || !this.adjustments.has(suggestion.key)) return el('span', { class: 'edit-chip', text: chip })
+      const back = el('button', {
+        class: 'edit-chip edit-chip-button',
+        title: 'Put its ends back where the method found them',
+        attrs: { type: 'button' },
+        on: {
+          click: () => {
+            this.adjustments.delete(suggestion.key)
+            this.railSignature = ''
+            this.paintSide()
+            this.schedule()
+          },
+        },
+      })
+      back.append(el('span', { text: 'adjusted' }), icon('undo-2', { size: 11 }))
+      return back
+    }
+    const chips = el('div', { class: 'edit-suggestion-chips' }, ...suggestion.evidence.map(chipOf))
     const take = el('button', {
       class: 'btn edit-suggestion-act',
       title: 'Take it: its step, made (Y)',
@@ -2372,6 +2541,8 @@ export class EditStage {
     this.request = null
     this.linksRequest?.cancel()
     this.linksRequest = null
+    this.recountRequest?.cancel()
+    this.recountRequest = null
     window.clearTimeout(this.suggesting)
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     window.removeEventListener('keydown', this.onKey, true)
