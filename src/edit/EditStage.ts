@@ -38,13 +38,16 @@ import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
 import { fmt } from '../units'
 import type { GenomeLinksResult, PictureResult, StageWindowSide } from '../worker/protocol'
-import { BAR_THICKNESS, drawBar, drawOverlay, readInk, type StageInk } from './draw'
+import { BAR_NAMES, BAR_THICKNESS, drawBar, drawOverlay, readInk, type StageInk } from './draw'
 import {
   dropPlace,
   dropStep,
   endTargets,
+  isWholeSequence,
   landed,
   partStretch,
+  sequenceStretch,
+  shiftStep,
   snapUnit,
   stretchBetween,
   stretchUnits,
@@ -185,6 +188,12 @@ type Drag =
       moved: boolean
       strand: 1 | -1
       copy: boolean
+      /** ⇧ held: at an edge between two sequences it goes into one, joined to its end, rather than between them (§27.4). */
+      fuse: boolean
+      /** Pressed on what was selected already: a press that does not travel widens it to its sequence, or narrows it back. */
+      again: boolean
+      /** Where it would go is between two sequences: ⇧ would join it instead. */
+      between?: boolean
       step: EditStep | null
       /** The unit the stretch would start at, before the step. */
       mark: number | null
@@ -291,6 +300,7 @@ export class EditStage {
   private readonly genomeCard: HTMLElement
   private readonly exportCard: ExportCard
   private readonly modes: Record<Mode, HTMLButtonElement>
+  private readonly modesEl: HTMLElement
   private readonly rail: Rail
   private readonly reviewBar: HTMLElement
 
@@ -481,18 +491,9 @@ export class EditStage {
       review: mode('review', 'Work through the suggestions, best first: Y takes one, N turns it down, and every answer teaches the ranking'),
       auto: mode('auto', `Apply every suggestion at ${percent(AUTO_THRESHOLD)} or more, best first — each a step to undo like any other`),
     }
-    this.side = el(
-      'div',
-      { class: 'edit-side-body' },
-      el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, ...Object.values(this.modes)),
-      this.suggestionsCard,
-      ...(props.store.edit.original.genome === undefined ? [] : [this.genomeCard]),
-      this.selectionCard,
-      this.historyCard,
-      this.sequencesCard,
-      this.exportCard.element,
-      this.pictureCard,
-    )
+    this.modesEl = el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, ...Object.values(this.modes))
+    this.side = el('div', { class: 'edit-side-body' })
+    this.arrangeSide()
 
     this.wireCanvas()
     this.wireBar(this.topBar, 'top')
@@ -1423,6 +1424,8 @@ export class EditStage {
             moved: false,
             strand: 1,
             copy: event.altKey,
+            fuse: event.shiftKey,
+            again: true,
             step: null,
             mark: null,
           }
@@ -1459,6 +1462,7 @@ export class EditStage {
         drag.y = y
         if (drag.kind === 'move') {
           drag.copy = event.altKey
+          drag.fuse = event.shiftKey
           this.updateMove(drag)
         } else if (drag.kind === 'adjust') {
           this.updateAdjust(drag)
@@ -1509,6 +1513,7 @@ export class EditStage {
           this.step(step)
           return
         }
+        if (!drag.moved && drag.again) this.widen((this.sx.toUnit(x) + this.sy.toUnit(y)) / 2)
       }
       this.paintSide()
       this.schedule()
@@ -1577,10 +1582,14 @@ export class EditStage {
       closeMenu()
       this.overlayCanvas.focus({ preventScroll: true })
       const unit = unitOf(event)
+      const rect = canvas.getBoundingClientRect()
+      // The row of names is the sequence's, whole (§27.4); the row of pieces, a piece's.
+      const onName = (side === 'top' ? event.clientY - rect.top : event.clientX - rect.left) < BAR_NAMES
       const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
       const lit = held === null ? null : stretchUnits(grid, held)
-      const inside = held !== null && lit !== null && unit >= lit[0] && unit <= lit[1]
-      const stretch = inside ? held : partStretch(grid, unit)
+      const whole = onName ? sequenceStretch(grid, unit) : null
+      const inside = !onName && held !== null && lit !== null && unit >= lit[0] && unit <= lit[1]
+      const stretch = whole ?? (inside ? held : partStretch(grid, unit))
       if (stretch === null) return
       const units = inside && lit !== null ? lit : stretchUnits(grid, stretch)
       if (!inside) {
@@ -1588,7 +1597,20 @@ export class EditStage {
         this.paintSide()
       }
       if (units !== null) {
-        this.drag = { kind: 'move', stretch, units, grip: unit - units[0], ...onDiagonal(unit), moved: false, strand: 1, copy: event.altKey, step: null, mark: null }
+        this.drag = {
+          kind: 'move',
+          stretch,
+          units,
+          grip: unit - units[0],
+          ...onDiagonal(unit),
+          moved: false,
+          strand: 1,
+          copy: event.altKey,
+          fuse: event.shiftKey,
+          again: inside,
+          step: null,
+          mark: null,
+        }
         this.barPress = { x: event.clientX, y: event.clientY }
         canvas.setPointerCapture(event.pointerId)
         canvas.classList.add('is-dragging')
@@ -1603,6 +1625,7 @@ export class EditStage {
         drag.moved = true
         Object.assign(drag, onDiagonal(unitOf(event)))
         drag.copy = event.altKey
+        drag.fuse = event.shiftKey
         this.updateMove(drag)
         this.schedule()
         return
@@ -1623,6 +1646,7 @@ export class EditStage {
         this.step(step)
         return
       }
+      if (!drag.moved && drag.again) this.widen(unitOf(event))
       this.paintReadout()
       this.paintSide()
       this.schedule()
@@ -1660,7 +1684,55 @@ export class EditStage {
     const here = formatLocus({ contig: stretch.sequence, start: stretch.from, end: stretch.to })
     const from = formatLocus({ contig: piece.sequence, start: piece.start, end: piece.end })
     const origin = from === here && piece.strand === 1 ? '' : ` ← ${from}${piece.strand === -1 ? ', turned' : ''}`
-    this.readoutEl.textContent = `${here}${origin} · drag to move it, double-click to turn it`
+    this.readoutEl.textContent = `${here}${origin} · drag to move it, double-click to turn it · its name above, the whole of ${stretch.sequence}`
+  }
+
+  /**
+   * A press that did not travel, on what was selected already (§27.4): a piece
+   * — or any stretch short of its sequence — widens to the whole sequence; the
+   * whole sequence narrows back to the piece under the pointer.
+   */
+  private widen(unit: number): void {
+    const grid = this.grid
+    const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
+    if (grid === null || held === null) return
+    const whole = sequenceStretch(grid, unit)
+    const part = partStretch(grid, unit)
+    if (whole === null || part === null || whole.sequence !== held.sequence) return
+    const next = isWholeSequence(this.props.store.assembly, held) ? part : whole
+    if (next.from === held.from && next.to === held.to) return
+    this.selection = { kind: 'stretch', stretch: next }
+  }
+
+  /**
+   * ↑ or ↓ (§27.4): what is selected one place earlier or later — a whole
+   * sequence in the order, a piece among its sequence's — joining nothing.
+   * Where it cannot go, the readout says why.
+   */
+  private shiftSelection(delta: -1 | 1): void {
+    const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
+    if (held === null) return
+    const assembly = this.props.store.assembly
+    const step = shiftStep(assembly, held, delta)
+    if (step !== null) {
+      this.step(step)
+      const units = this.grid === null || this.selection?.kind !== 'stretch' ? null : stretchUnits(this.grid, this.selection.stretch)
+      if (units !== null && !this.inView(units)) this.frameUnits(units[0], units[1])
+      return
+    }
+    const whole = isWholeSequence(assembly, held)
+    const pieces = assembly.piecesIn(held.sequence, 0, assembly.lengthOf(held.sequence) ?? 0).length
+    this.readoutEl.textContent = whole
+      ? `${held.sequence} is ${delta < 0 ? 'first' : 'last'} already`
+      : pieces > 1 && assembly.piecesIn(held.sequence, held.from, held.to).length === 1
+        ? `it is the ${delta < 0 ? 'first' : 'last'} piece of ${held.sequence} already: ↑ ↓ never take it out`
+        : '↑ ↓ move a whole sequence, or a piece among its sequence’s pieces'
+  }
+
+  /** Whether a stretch of the axis is on screen, both of its ends. */
+  private inView(units: readonly [number, number]): boolean {
+    const [a, b] = [this.sx.toPixel(units[0]), this.sx.toPixel(units[1])]
+    return a >= 0 && b <= this.size
   }
 
   /**
@@ -1715,8 +1787,10 @@ export class EditStage {
     // Before the step, a start past the stretch is measured with it still in.
     const at = unit > drag.units[0] ? unit + length : unit
     drag.mark = Math.max(0, Math.min(grid.n, at))
-    const place = dropPlace(grid, drag.mark, along)
+    // A copy goes into a sequence, as a join does: only a move has a place between.
+    const place = dropPlace(grid, drag.mark, along, drag.fuse || drag.copy)
     const step = place === null ? null : dropStep(this.props.store.assembly, drag.stretch, place, drag.strand, drag.copy)
+    drag.between = place !== null && 'before' in place
     drag.step = step
     if (step === null) {
       this.preview = null
@@ -1806,6 +1880,21 @@ export class EditStage {
       else this.reject(suggestion)
     } else if (this.mode === 'review' && (key === 'ArrowRight' || key === 'ArrowLeft')) {
       this.moveCurrent(key === 'ArrowRight' ? 1 : -1)
+    } else if (key === 'ArrowUp' || key === 'ArrowDown') {
+      // A sequence's grip on the card moves its own sequence; elsewhere, what is selected.
+      const grip = target?.closest?.('.edit-sequence-grip') as HTMLElement | null | undefined
+      const named = grip?.dataset.sequence
+      if (named !== undefined) this.selectWhole(named)
+      if (this.selection?.kind === 'stretch') this.shiftSelection(key === 'ArrowUp' ? -1 : 1)
+      else handled = false
+      if (named !== undefined) this.focusGrip(this.selection?.kind === 'stretch' ? this.selection.stretch.sequence : named)
+    } else if (key === 'Shift') {
+      if (this.drag?.kind === 'move') {
+        this.drag.fuse = true
+        this.updateMove(this.drag)
+        this.schedule()
+      }
+      handled = false
     } else if (key === '0') {
       this.fit()
     } else if (key === '+' || key === '=') {
@@ -1823,6 +1912,11 @@ export class EditStage {
 
   private keyUp(event: KeyboardEvent): void {
     if (event.key === 'Alt') this.alt = false
+    if (event.key === 'Shift' && this.drag?.kind === 'move') {
+      this.drag.fuse = false
+      this.updateMove(this.drag)
+      this.schedule()
+    }
     if (event.key === ' ') this.letGoOfSpace()
   }
 
@@ -1876,7 +1970,9 @@ export class EditStage {
     const drag = this.drag
     if (drag?.kind === 'move' && drag.moved) {
       this.readoutEl.textContent =
-        drag.step === null ? 'drop it here to leave it where it is' : `${stepText(drag.step)}${drag.copy ? '' : ' · ⌥ to copy'} · I to turn it`
+        drag.step === null
+          ? 'drop it here to leave it where it is'
+          : `${stepText(drag.step)}${drag.between === true ? ' · ⇧ to join it instead' : ''}${drag.copy ? '' : ' · ⌥ to copy'} · I to turn it`
       return
     }
     const hover = this.hover
@@ -2288,9 +2384,34 @@ export class EditStage {
     this.schedule()
   }
 
+  /**
+   * The sidebar's cards, in their order (§27.3): what is selected, the
+   * sequences, the history, then the suggestions — first instead while review
+   * or auto mode is answering them — the export and the picture. Moved rather
+   * than built again, so a card keeps its scroll and whatever is typed in it.
+   */
+  private arrangeSide(): void {
+    const answering = this.mode !== 'manual'
+    const cards = [
+      this.modesEl,
+      ...(answering ? [this.suggestionsCard] : []),
+      this.selectionCard,
+      this.sequencesCard,
+      ...(this.props.store.edit.original.genome === undefined ? [] : [this.genomeCard]),
+      this.historyCard,
+      ...(answering ? [] : [this.suggestionsCard]),
+      this.exportCard.element,
+      this.pictureCard,
+    ]
+    cards.forEach((card, i) => {
+      if (this.side.children[i] !== card) this.side.insertBefore(card, this.side.children[i] ?? null)
+    })
+  }
+
   private setMode(mode: Mode): void {
     if (mode !== 'manual' && this.suggested === null) return
     this.mode = mode
+    this.arrangeSide()
     this.stopPreview()
     this.current = mode === 'review' ? (this.open()[0]?.key ?? null) : null
     const current = this.byKey(this.current)
@@ -2555,7 +2676,7 @@ export class EditStage {
         head,
         el('p', {
           class: 'edit-empty',
-          text: 'Drag along the diagonal to select a stretch, or press a piece, on the map or on a bar; drag off it to box two stretches, or press a corner for the stretch between its two ends.',
+          text: 'Press a piece, on the map or on a bar, and press it again for its whole sequence — or press the sequence’s name on a bar. Drag along the diagonal to select a stretch; drag off it to box two stretches, or press a corner for the stretch between its two ends.',
         }),
       )
       return
@@ -2563,6 +2684,12 @@ export class EditStage {
     if (selection.kind === 'stretch') {
       const stretch = selection.stretch
       const pieces = this.props.store.assembly.piecesIn(stretch.sequence, stretch.from, stretch.to).length
+      // One place earlier or later (§27.4): a sequence in the order, a piece among its sequence's.
+      const whole = isWholeSequence(this.props.store.assembly, stretch)
+      const earlier = this.act('earlier', 'chevron-up', whole ? 'One place earlier in the order — nothing is joined' : 'One place earlier among its sequence’s pieces', () => this.shiftSelection(-1), '↑')
+      const later = this.act('later', 'chevron-down', whole ? 'One place later in the order — nothing is joined' : 'One place later among its sequence’s pieces', () => this.shiftSelection(1), '↓')
+      earlier.disabled = shiftStep(this.props.store.assembly, stretch, -1) === null
+      later.disabled = shiftStep(this.props.store.assembly, stretch, 1) === null
       card.replaceChildren(
         head,
         el('div', { class: 'edit-locus', text: formatLocus({ contig: stretch.sequence, start: stretch.from, end: stretch.to }) }),
@@ -2573,6 +2700,8 @@ export class EditStage {
         el(
           'div',
           { class: 'edit-acts' },
+          earlier,
+          later,
           this.act('turn', 'flip-horizontal', 'Turn the stretch round', () => this.turn(stretch), 'I'),
           this.act('copy', 'copy', 'Copy the stretch in after itself', () => this.copy(stretch)),
           this.act('own sequence', 'split', 'Make the stretch a sequence of its own', () => this.splitOut(stretch), 'S'),
@@ -2583,7 +2712,7 @@ export class EditStage {
         ),
         el('p', {
           class: 'edit-hint',
-          text: 'Drag its square, or its piece on a bar, to move it: ⌥ copies it, I turns it on the way, and a whole sequence dropped on another’s end joins the two. A double click on a bar turns a piece.',
+          text: 'Drag its square, or its piece on a bar, to move it: let go between two sequences and it is a sequence of its own there, inside one and it goes in — ⇧ joins it to the end it is let go on, ⌥ copies it, I turns it on the way. Press it again for its whole sequence. A double click on a bar turns a piece.',
         }),
       )
       return
@@ -2652,6 +2781,79 @@ export class EditStage {
     )
   }
 
+  /** A sequence selected whole, as a press on its row or on its name on a bar does. */
+  private selectWhole(name: string): void {
+    const length = this.props.store.assembly.lengthOf(name)
+    if (length === null) return
+    this.selection = { kind: 'stretch', stretch: { sequence: name, from: 0, to: length } }
+  }
+
+  /** The grip of a sequence's row, focused again once the card is painted anew. */
+  private focusGrip(name: string): void {
+    for (const grip of this.sequencesCard.querySelectorAll<HTMLElement>('.edit-sequence-grip')) {
+      if (grip.dataset.sequence === name) grip.focus({ preventScroll: true })
+    }
+  }
+
+  /**
+   * A sequence's grip on the card (§27.4): dragged up or down the list, the
+   * sequence goes where it is let go — before the row under the pointer, or
+   * last — as one step, and nothing is joined. The card is not painted anew
+   * while it is held: the rows it measures stay the rows on screen.
+   */
+  private wireGrip(grip: HTMLElement, name: string, list: HTMLElement): void {
+    grip.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      grip.focus({ preventScroll: true })
+      grip.setPointerCapture(event.pointerId)
+      this.selectWhole(name)
+      this.paintSelection()
+      this.schedule()
+      const rows = [...list.querySelectorAll<HTMLElement>('.edit-sequence-row')]
+      const from = rows.findIndex((row) => row.contains(grip))
+      rows.forEach((row, i) => {
+        row.classList.toggle('is-lifted', i === from)
+        row.querySelector('.edit-sequence')?.classList.toggle('is-selected', i === from)
+      })
+      let target = from
+      const mark = (clientY: number): void => {
+        target = rows.findIndex((row) => {
+          const box = row.getBoundingClientRect()
+          return clientY < box.top + box.height / 2
+        })
+        if (target < 0) target = rows.length
+        const moves = target !== from && target !== from + 1
+        rows.forEach((row, i) => {
+          row.classList.toggle('is-drop-before', moves && i === target)
+          row.classList.toggle('is-drop-after', moves && target === rows.length && i === rows.length - 1)
+        })
+      }
+      const done = (commit: boolean): void => {
+        grip.removeEventListener('pointermove', onMove)
+        grip.removeEventListener('pointerup', onUp)
+        grip.removeEventListener('pointercancel', onCancel)
+        if (grip.hasPointerCapture(event.pointerId)) grip.releasePointerCapture(event.pointerId)
+        rows.forEach((row) => row.classList.remove('is-drop-before', 'is-drop-after', 'is-lifted'))
+        const assembly = this.props.store.assembly
+        const length = assembly.lengthOf(name)
+        if (!commit || length === null || target === from || target === from + 1) {
+          this.paintSide()
+          return
+        }
+        const before = assembly.sequences[target]?.name ?? null
+        this.step({ op: 'place', sequence: name, from: 0, to: length, before, strand: 1, whole: true })
+        this.focusGrip(name)
+      }
+      const onMove = (move: PointerEvent): void => mark(move.clientY)
+      const onUp = (): void => done(true)
+      const onCancel = (): void => done(false)
+      grip.addEventListener('pointermove', onMove)
+      grip.addEventListener('pointerup', onUp)
+      grip.addEventListener('pointercancel', onCancel)
+    })
+  }
+
   private paintSequences(): void {
     const assembly = this.props.store.assembly
     const list = el('ul', { class: 'edit-sequences' })
@@ -2687,7 +2889,7 @@ export class EditStage {
         el('span', { class: 'edit-sequence-pieces', text: `${circle ? '○ ' : ''}${pieces === 1 ? '' : `${pieces} pieces`}` }),
       )
       if (this.renaming === sequence.name) {
-        list.append(el('li', { class: 'edit-sequence-row' }, this.renameBox(sequence.name)))
+        list.append(el('li', { class: 'edit-sequence-row is-renaming' }, this.renameBox(sequence.name)))
         continue
       }
       // A name of its own (§27.3): the pencil, or a double click on the row.
@@ -2702,7 +2904,15 @@ export class EditStage {
         on: { click: () => this.startRename(sequence.name) },
       })
       pencil.append(icon('pencil', { size: 12 }))
-      list.append(el('li', { class: 'edit-sequence-row' }, button, pencil))
+      // Its place in the order (§27.4): dragged by its grip, or ↑ ↓ on it.
+      const grip = el('button', {
+        class: 'edit-sequence-grip',
+        title: `Drag ${sequence.name} to another place in the order, or press ↑ ↓ — nothing is joined`,
+        attrs: { type: 'button', 'aria-label': `Move ${sequence.name} in the order`, 'data-sequence': sequence.name },
+      })
+      grip.append(icon('grip-vertical', { size: 13 }))
+      this.wireGrip(grip, sequence.name, list)
+      list.append(el('li', { class: 'edit-sequence-row' }, grip, button, pencil))
     }
     const aside =
       assembly.aside.length === 0

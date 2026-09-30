@@ -52,6 +52,8 @@ export function originalHue(index: number): string {
 export const BAR_THICKNESS = 32
 const NAMES = 13
 const PIECES_FROM = 15
+/** How far across a bar, from its outer edge, the row of names reaches: a press there is on the sequence, whole. */
+export const BAR_NAMES = PIECES_FROM
 
 /** Which edge a bar runs along. */
 export type BarEdge = 'top' | 'left'

@@ -13,6 +13,8 @@ import {
   endTargets,
   landed,
   partStretch,
+  sequenceStretch,
+  shiftStep,
   snapUnit,
   stretchBetween,
   type SnapTarget,
@@ -83,11 +85,46 @@ describe('a drop', () => {
   const assembly = EditedAssembly.of(value)
   const grid = lens(value)
 
-  it('lands at the end of the sequence the pointer came from, at an edge between two', () => {
-    expect(dropPlace(grid, 10, 9.8)).toEqual({ sequence: 'I', at: 10_000 })
-    expect(dropPlace(grid, 10, 10.2)).toEqual({ sequence: 'II', at: 0 })
+  it('lands between two sequences at the edge between them, before the first and after the last', () => {
+    expect(dropPlace(grid, 10, 9.8)).toEqual({ before: 'II' })
+    expect(dropPlace(grid, 10, 10.2)).toEqual({ before: 'II' })
+    expect(dropPlace(grid, 0, 0.3)).toEqual({ before: 'I' })
+    expect(dropPlace(grid, 20, 20)).toEqual({ before: null })
+    // Inside a sequence, it goes into it.
     expect(dropPlace(grid, 12, 12)).toEqual({ sequence: 'II', at: 2000 })
-    expect(dropPlace(grid, 20, 20)).toEqual({ sequence: 'III', at: 4000 })
+  })
+
+  it('lands at the end of the sequence the pointer came from with ⇧ held, at an edge between two', () => {
+    expect(dropPlace(grid, 10, 9.8, true)).toEqual({ sequence: 'I', at: 10_000 })
+    expect(dropPlace(grid, 10, 10.2, true)).toEqual({ sequence: 'II', at: 0 })
+    expect(dropPlace(grid, 20, 20, true)).toEqual({ sequence: 'III', at: 4000 })
+  })
+
+  it('places a whole sequence dropped between two in the order, joining nothing', () => {
+    const step = dropStep(assembly, { sequence: 'III', from: 0, to: 4000 }, { before: 'I' }, 1, false)
+    expect(step).toEqual({ op: 'place', sequence: 'III', from: 0, to: 4000, before: 'I', strand: 1, whole: true })
+    const placed = EditedAssembly.of(withStep(value, step as EditStep, 'reader', 0))
+    expect(placed.sequences.map((sequence) => sequence.name)).toEqual(['III', 'I', 'II'])
+    expect(stepText(step as EditStep)).toBe('put III before I')
+    // Where it already is, it is left — or turned, if it was flipped on the way.
+    expect(dropStep(assembly, { sequence: 'II', from: 0, to: 6000 }, { before: 'III' }, 1, false)).toBeNull()
+    expect(dropStep(assembly, { sequence: 'II', from: 0, to: 6000 }, { before: 'II' }, -1, false)).toEqual({ op: 'invert', sequence: 'II', from: 0, to: 6000 })
+    // A copy has no place of its own to go.
+    expect(dropStep(assembly, { sequence: 'II', from: 0, to: 6000 }, { before: 'I' }, 1, true)).toBeNull()
+  })
+
+  it('makes a stretch dropped between two a sequence of its own there', () => {
+    const step = dropStep(assembly, { sequence: 'I', from: 2000, to: 5000 }, { before: null }, -1, false)
+    expect(step).toEqual({ op: 'place', sequence: 'I', from: 2000, to: 5000, before: null, strand: -1 })
+    const placed = EditedAssembly.of(withStep(value, step as EditStep, 'reader', 0))
+    expect(placed.sequences.map((sequence) => [sequence.name, placed.lengthOf(sequence.name)])).toEqual([
+      ['I_e1', 7000],
+      ['II', 6000],
+      ['III', 4000],
+      ['I_e2', 3000],
+    ])
+    expect(placed.toOriginal('I_e2', 0)).toEqual({ sequence: 'I', bp: 4999, strand: -1 })
+    expect(stepText(step as EditStep)).toBe('make I:2,001-5,000 a sequence of its own, last, turned')
   })
 
   it('moves, measuring the place after the stretch is out', () => {
@@ -111,7 +148,7 @@ describe('a drop', () => {
     expect(step?.op).toBe('duplicate')
   })
 
-  it('joins a whole sequence dropped on another’s end or start', () => {
+  it('joins a whole sequence dropped on another’s end or start, as ⇧ lands it', () => {
     const end = dropStep(assembly, { sequence: 'III', from: 0, to: 4000 }, { sequence: 'II', at: 6000 }, 1, false)
     expect(end).toMatchObject({ op: 'join', a: 'II', aEnd: 'end', b: 'III', bEnd: 'start' })
     const start = dropStep(assembly, { sequence: 'III', from: 0, to: 4000 }, { sequence: 'I', at: 0 }, 1, false)
@@ -123,7 +160,56 @@ describe('a drop', () => {
   })
 })
 
+describe('↑ and ↓', () => {
+  it('move a whole sequence one place in the order, and no further than either end', () => {
+    const assembly = EditedAssembly.of(emptyEdit(ORIGINAL))
+    expect(shiftStep(assembly, { sequence: 'II', from: 0, to: 6000 }, -1)).toEqual({ op: 'place', sequence: 'II', from: 0, to: 6000, before: 'I', strand: 1, whole: true })
+    expect(shiftStep(assembly, { sequence: 'I', from: 0, to: 10_000 }, 1)).toEqual({ op: 'place', sequence: 'I', from: 0, to: 10_000, before: 'III', strand: 1, whole: true })
+    expect(shiftStep(assembly, { sequence: 'II', from: 0, to: 6000 }, 1)).toMatchObject({ before: null })
+    expect(shiftStep(assembly, { sequence: 'I', from: 0, to: 10_000 }, -1)).toBeNull()
+    expect(shiftStep(assembly, { sequence: 'III', from: 0, to: 4000 }, 1)).toBeNull()
+    const down = EditedAssembly.of(withStep(emptyEdit(ORIGINAL), shiftStep(assembly, { sequence: 'I', from: 0, to: 10_000 }, 1) as EditStep, 'reader', 0))
+    expect(down.sequences.map((sequence) => sequence.name)).toEqual(['II', 'I', 'III'])
+  })
+
+  it('move a piece among its sequence’s pieces, and never out of it', () => {
+    // I joined to II: two pieces, I's then II's.
+    const joined = edit({ op: 'join', a: 'I', aEnd: 'end', b: 'II', bEnd: 'start', gap: 0 })
+    const assembly = EditedAssembly.of(joined)
+    const name = assembly.sequences[0].name
+    const second = { sequence: name, from: 10_000, to: 16_000 }
+    const up = shiftStep(assembly, second, -1)
+    expect(up).toEqual({ op: 'move', sequence: name, from: 10_000, to: 16_000, into: name, at: 0, strand: 1 })
+    const swapped = EditedAssembly.of(withStep(joined, up as EditStep, 'reader', 1))
+    expect(swapped.sequences).toHaveLength(2)
+    expect(swapped.toOriginal(swapped.sequences[0].name, 0)).toEqual({ sequence: 'II', bp: 0, strand: 1 })
+    expect(shiftStep(assembly, second, 1)).toBeNull()
+    expect(shiftStep(assembly, { sequence: name, from: 0, to: 10_000 }, 1)).toEqual({ op: 'move', sequence: name, from: 0, to: 10_000, into: name, at: 6000, strand: 1 })
+    // Neither a whole sequence nor a piece: nothing.
+    expect(shiftStep(assembly, { sequence: name, from: 2000, to: 3000 }, 1)).toBeNull()
+  })
+
+  it('select a whole sequence from any unit of it', () => {
+    const grid = lens(edit({ op: 'join', a: 'I', aEnd: 'end', b: 'II', bEnd: 'start', gap: 0 }))
+    expect(sequenceStretch(grid, 12)).toEqual({ sequence: grid.sequences[0].name, from: 0, to: 16_000 })
+    expect(sequenceStretch(grid, 17)).toEqual({ sequence: 'III', from: 0, to: 4000 })
+  })
+})
+
 describe('the selection follows the stretch', () => {
+  it('to where a place put it, before the sequence it went before', () => {
+    const before = EditedAssembly.of(emptyEdit(ORIGINAL))
+    const whole: EditStep = { op: 'place', sequence: 'III', from: 0, to: 4000, before: 'II', strand: 1, whole: true }
+    const afterWhole = EditedAssembly.of(withStep(emptyEdit(ORIGINAL), whole, 'reader', 0))
+    expect(landed(before, afterWhole, whole)).toEqual({ sequence: 'III', from: 0, to: 4000 })
+    const down: EditStep = { op: 'place', sequence: 'I', from: 0, to: 10_000, before: null, strand: 1, whole: true }
+    expect(landed(before, EditedAssembly.of(withStep(emptyEdit(ORIGINAL), down, 'reader', 0)), down)).toEqual({ sequence: 'I', from: 0, to: 10_000 })
+    const part: EditStep = { op: 'place', sequence: 'II', from: 1000, to: 3000, before: 'I', strand: 1 }
+    const afterPart = EditedAssembly.of(withStep(emptyEdit(ORIGINAL), part, 'reader', 0))
+    expect(afterPart.sequences.map((sequence) => sequence.name)).toEqual(['II_e2', 'I', 'II_e1', 'III'])
+    expect(landed(before, afterPart, part)).toEqual({ sequence: 'II_e2', from: 0, to: 2000 })
+  })
+
   it('to where a move put it, in the sequence’s new name', () => {
     const before = EditedAssembly.of(emptyEdit(ORIGINAL))
     const step: EditStep = { op: 'move', sequence: 'I', from: 1000, to: 3000, into: 'II', at: 6000, strand: 1 }

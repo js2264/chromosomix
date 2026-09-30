@@ -51,6 +51,13 @@ export function stepText(step: EditStep): string {
       return `rename ${step.sequence} to ${step.name}`
     case 'reorder':
       return 'reorder the sequences'
+    case 'place': {
+      const where = step.before === null ? 'last' : `before ${step.before}`
+      const turned = step.strand === -1 ? ', turned' : ''
+      return step.whole === true
+        ? `put ${step.sequence} ${where}${turned}`
+        : `make ${span(step.sequence, step.from, step.to)} a sequence of its own, ${where}${turned}`
+    }
     case 'layout': {
       const count = step.sequences.length
       return `lay out as in ${step.from} · ${count.toLocaleString('en-US')} sequence${count === 1 ? '' : 's'}`

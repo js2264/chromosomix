@@ -149,7 +149,62 @@ describe('the stage', () => {
   it('offers a whole sequence its own acts, and names what a box would', async () => {
     await open()
     sequence('I').click()
-    expect(textsOf(document.body, '.edit-act span')).toEqual(['turn', 'copy', 'own sequence', 'set aside'])
+    expect(textsOf(document.body, '.edit-act span')).toEqual(['earlier', 'later', 'turn', 'copy', 'own sequence', 'set aside'])
+    // The first sequence has no earlier place to go.
+    expect(button('earlier').disabled).toBe(true)
+    expect(button('later').disabled).toBe(false)
+  })
+
+  it('moves a whole sequence one place in the order with ↑ and ↓, joining nothing, the selection with it', async () => {
+    const { store } = await open()
+    sequence('II').click()
+    key('ArrowUp')
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'place', sequence: 'II', from: 0, to: 5500, before: 'I', strand: 1, whole: true })
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['II', 'I'])
+    expect(document.querySelector('.edit-sequence.is-selected .edit-sequence-name')?.textContent).toBe('II')
+    expect(textsOf(document.body, '.edit-history-button').at(-1)).toBe('1put II before I')
+    // Already first: nothing is made, and the readout says so.
+    key('ArrowUp')
+    expect(store.applied).toBe(1)
+    expect(document.querySelector('.edit-readout')?.textContent).toBe('II is first already')
+  })
+
+  it('moves a sequence by its grip, dragged or with ↑ ↓ on it', async () => {
+    const { store } = await open()
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>
+    const held = { set: proto.setPointerCapture, has: proto.hasPointerCapture, release: proto.releasePointerCapture }
+    proto.setPointerCapture = () => {}
+    proto.hasPointerCapture = () => false
+    proto.releasePointerCapture = () => {}
+    try {
+      const grip = (name: string): HTMLElement => document.querySelector(`.edit-sequence-grip[data-sequence="${name}"]`) as HTMLElement
+      // Held by I's grip and let go past the last row: I goes last.
+      grip('I').dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientY: -10, bubbles: true }))
+      grip('I').dispatchEvent(new MouseEvent('pointermove', { clientY: 400, bubbles: true }))
+      grip('I').dispatchEvent(new MouseEvent('pointerup', { clientY: 400, bubbles: true }))
+      expect(store.edit.history.at(-1)?.step).toEqual({ op: 'place', sequence: 'I', from: 0, to: 10_000, before: null, strand: 1, whole: true })
+      expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['II', 'I'])
+      // ↑ on I's grip, which keeps the focus: back where it was.
+      grip('I').focus()
+      grip('I').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
+      expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['I', 'II'])
+      expect((document.activeElement as HTMLElement | null)?.dataset.sequence).toBe('I')
+    } finally {
+      proto.setPointerCapture = held.set
+      proto.hasPointerCapture = held.has
+      proto.releasePointerCapture = held.release
+    }
+  })
+
+  it('orders its cards selection, sequences, history, suggestions, export and picture — the suggestions first in review', async () => {
+    const { stage } = await open()
+    void stage
+    const order = (): string[] =>
+      [...document.querySelectorAll('.edit-side-body > *')].map((card) => {
+        const kind = [...card.classList].find((name) => /^edit-(modes|[a-z]+-card)$/.test(name))
+        return kind ?? (card.querySelector('.edit-card-head')?.textContent?.split(' ')[0] ?? '')
+      })
+    expect(order()).toEqual(['edit-modes', 'selection', 'edit-sequences-card', 'history', 'edit-suggestions-card', 'edit-export-card', 'edit-picture-card'])
   })
 
   it('renames a sequence from its pencil, as a step, and refuses a name another has', async () => {
@@ -270,6 +325,18 @@ describe('the suggestions', () => {
     ;(document.querySelector('.edit-declined-list button') as HTMLButtonElement).click()
     await recount()
     expect(textsOf(document.body, '.edit-suggestion-words')).toEqual(['turn s1:60,001-120,000'])
+  })
+
+  it('puts the suggestions card first in review and auto, and back after the history in manual', async () => {
+    await openOnATurn()
+    const first = (): string | undefined => [...(document.querySelector('.edit-side-body')?.children ?? [])][1]?.className
+    expect(first()).toBe('edit-card')
+    button('review').click()
+    expect(first()).toBe('edit-card edit-suggestions-card')
+    button('auto').click()
+    expect(first()).toBe('edit-card edit-suggestions-card')
+    button('manual').click()
+    expect(first()).toBe('edit-card')
   })
 
   it('works through them in review, answering with the keys it prints', async () => {

@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage reorders without joining — a dev feature (§27.4).** A piece pressed again selects its whole
+  sequence, a stitched one whole, as a press on the sequence's name on a pieces bar does; **↑ ↓** — or
+  *earlier* and *later* on the selection's card — move a whole sequence one place in the order, or a
+  piece among its sequence's pieces, and join nothing; and each row of the sequences card has a
+  **grip** that drags the sequence to another place in the order. A stretch let go between two
+  sequences is set there as a sequence of its own, where it used to be joined to the nearer end:
+  joining is ⇧ held on the drop.
+
+- **The stage's sidebar is cards (§27.3)**, bordered and raised as the panels' are, in the order
+  *selection*, *sequences*, *history*, *suggestions*, *export* and *picture* — the suggestions first
+  in review and auto mode, whose work they are.
+
 - **The stage places a suggestion finer than its picture's cell — a dev feature (§27.5).** Each point a
   suggestion puts inside a sequence — where it splits, a turned or moved stretch's ends, where a move
   puts it — is placed again at the map's finer rungs, down to the finest it is deep enough for, by one

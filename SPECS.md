@@ -10108,8 +10108,9 @@ Taking the lens away is taking the edit away.
 **The steps**: `cut`, `invert`, `move` (within a sequence or to another, either way round),
 `duplicate`, `join` (two sequences end to end, either orientation, with an `N` gap), `split` (the
 right half becomes a sequence of its own), `set aside` (as *debris*, *contaminant*, *haplotig* or
-*unplaced*), `rotate` (a circular sequence's first base), `rename` and `reorder`, and on a metagenome
-`reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
+*unplaced*), `rotate` (a circular sequence's first base), `rename`, `reorder` and `place` (a stretch
+set in the order as a sequence of its own, taken out of its sequence, or a whole sequence moved in the
+order — before another, or last — which joins nothing), and on a metagenome `reassign` (§27.10). Each is a pure function of the edit before it, recorded with **who** made it — the
 reader, a suggestion, or auto mode — **when**, and for a suggestion **the evidence it was accepted
 on**. The history is the provenance: the console writes it, an exported AGP quotes it, the command
 line replays it. **Undo** and **redo** move a cursor along it; a step made after an undo drops the
@@ -10178,11 +10179,13 @@ What is on it:
   hue** (a golden angle apart, so neighbours never share one), with chevrons pointing the way it reads,
   and every edited sequence's name over its span. A moved piece keeps its colour, so the bar says at a
   glance where each stretch came from, and a reversed one points the other way. *Built*, and a handle
-  as well as a picture: a press on a bar selects the piece under it, or holds the selection where it is
-  inside it; a drag moves what is held — the map's own move, snapped and previewed under the hand, `I`
-  turning it and ⌥ copying it on the way, and a whole sequence dropped on another's end joining the
-  two; a double click turns a piece; and the readout over a bar names the piece and, where it is not
-  the same, the stretch of the file it is (`V_e1:1-576,874 ← V:1-576,874, turned`).
+  as well as a picture: a press on a bar's row of pieces selects the piece under it, or holds the
+  selection where it is inside it, and pressed again, without moving, widens it to its whole sequence;
+  a press on its row of names selects the **sequence whole**; a drag moves what is held — the map's own
+  move, snapped and previewed under the hand, `I` turning it and ⌥ copying it on the way, let go
+  between two sequences a sequence of its own there, and ⇧ joining it to the end it is let go on; a
+  double click turns a piece; and the readout over a bar names the piece and, where it is not the
+  same, the stretch of the file it is (`V_e1:1-576,874 ← V:1-576,874, turned`).
 - **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
   dragged, so a track moves with the stretch under the hand; the selection is lit across them.
   *Built.*
@@ -10204,9 +10207,14 @@ What is on it:
   confidence, each its number, its kind, its words, its confidence, the chips of its evidence and its
   two answers, *take* `Y` and *turn down* `N`, those turned down struck through beneath with *offer
   again*, and what the answers taught with *forget*; and **picture**, what the stage's picture is.
-  *Built*, the suggestions first under the modes, and a step a suggestion made is tagged in the
-  history — *suggested* or *auto* — with what it rested on; **export** (§27.8); and on the sequences
-  card, a **rename** — its pencil, shown on the row's hover, or a double click, Enter making it a step
+  *Built*, each a card as the panels' are — bordered and raised on the sunken ground of the column, so
+  that one reads as ending where the next begins — in the order *selection*, *sequences* (and on a
+  metagenome the genome's card), *history*, *suggestions*, **export** (§27.8) and *picture*; in review
+  and auto mode, whose work is the suggestions, their card comes first, under the modes. A step a
+  suggestion made is tagged in the history — *suggested* or *auto* — with what it rested on; and on the
+  sequences card, a **grip** before each row that drags the sequence to another place in the order —
+  a line across the list where it would go, one `place` step on the drop, nothing joined — and takes
+  ↑ ↓ when it has the keys; a **rename** — its pencil, shown on the row's hover, or a double click, Enter making it a step
   and Escape leaving the name — which a later edit keeps even where the sequence is an original whole
   again, and which refuses two words, another sequence's name, and a name of the file's own for any
   stretch but that sequence whole; **longest first**, one `reorder` step, greyed when they are; and a
@@ -10266,7 +10274,15 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
 
 - **Select along the diagonal**: a drag starting within 12 pixels of it, both ends snapped, kept inside
   the sequence it started in; the stretch lights on the diagonal, the pieces bars and the lanes. A press
-  on the diagonal selects the piece under it. *Built.*
+  on the diagonal selects the piece under it. *Built*, and **pressed again** without moving — on the
+  map or on a bar — the selection widens to the piece's **whole sequence**, a stitched one whole, and
+  pressed again narrows back to the piece; a press on a sequence's name on a bar, or its row on the
+  sequences card, selects it whole at once.
+- **↑ ↓**: what is selected one place earlier or later — a whole sequence in the order, a piece among
+  its sequence's pieces — one step each, and **nothing is joined** and nothing taken out: at the first
+  or the last place the readout says so and nothing is made. *Built*, as the keys, as *earlier* and
+  *later* on the selection's card, and on a sequence's grip on the sequences card; the selection moves
+  with it, and the view follows it where it would leave the screen.
 - **Select off the diagonal**: a drag in the body of the map draws a box whose sides snap to corners
   and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a
   press on one corner names the stretch between its two ends. What is offered is what two stretches
@@ -10285,7 +10301,12 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   square on the map and from its piece on a pieces bar: the stretch's start snaps, or its end where that is nearer a target, the whole map
   and its lanes are redrawn through the edit the drop would make at every move of the pointer, the
   readout says that step, and the selection follows the stretch to where it lands. A stretch dropped
-  back on itself is left alone, or turned if it was flipped on the way. At the whole-genome scale the
+  back on itself is left alone, or turned if it was flipped on the way. **Let go between two
+  sequences** — or before the first, or after the last — it is set there **as a sequence of its own**,
+  a whole sequence moved in the order and a stretch taken out of its own, one `place` step, and nothing
+  is joined; inside a sequence it goes in, as before. With ⇧ held at an edge between two sequences it
+  goes into the one the pointer came from instead, joined to its end, and the readout offers that
+  while the drop would not. At the whole-genome scale the
   picture *is* the settled edit, so there is nothing for the worker to read; the read on the drop comes
   with the zoom past the picture (§27.9).
 - **Invert** `I`; **cut** `C`, at the snapped position or at both ends of a selection; **set aside**
@@ -10295,8 +10316,9 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   on the map, at the selection's ends — a stretch made a sequence of its own), set aside with its menu
   of reasons, duplicate by ⌥ held on the drop and as *copy* in the sidebar (the stretch again after
   itself), and **join** by dropping a whole sequence — selected from the list, the diagonal or a bar —
-  on another's start or end, from the map or along a pieces bar, which puts a 100 bp `N` gap between
-  them and lands the joined sequence where the drop was. The right-click menu offers the same, for the
+  on another's start or end **with ⇧ held**, from the map or along a pieces bar, which puts a 100 bp
+  `N` gap between them and lands the joined sequence where the drop was; without ⇧ the drop puts it
+  between the two, joining nothing. The right-click menu offers the same, for the
   selection and for the place under the pointer; and **the origin** `O` of a circle — a sequence the
   reader declared circular (§8.15), or read as one — at the pointer or the selection's start, a
   `rotate` step, the menu's *start the circle here*; on a sequence that is not one, `O` says so and

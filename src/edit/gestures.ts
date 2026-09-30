@@ -111,15 +111,39 @@ export function partStretch(grid: LensGrid, unit: number): Stretch | null {
 }
 
 /**
- * Where a stretch dropped at `unit` lands: an edited sequence and a base pair
- * in it, in the coordinates before the step. At the edge between two sequences
- * the side the pointer came from decides — the end of the one on its left, or
- * the start of the one on its right.
+ * The edited sequence a unit is in, whole, as a stretch — what a press on its
+ * name selects, or a second press on a piece of it (§27.4).
  */
-export function dropPlace(grid: LensGrid, unit: number, pointer: number): { sequence: string; at: number } | null {
+export function sequenceStretch(grid: LensGrid, unit: number): Stretch | null {
+  const sequence = grid.sequenceAt(Math.min(Math.max(unit, 0), grid.n - 1e-9))
+  if (sequence === null || !(sequence.length > 0)) return null
+  return { sequence: sequence.name, from: 0, to: sequence.length }
+}
+
+/** Whether a stretch is the whole of its sequence. */
+export function isWholeSequence(assembly: EditedAssembly, stretch: Stretch): boolean {
+  return stretch.from === 0 && stretch.to === assembly.lengthOf(stretch.sequence)
+}
+
+/**
+ * Where a dropped stretch lands: inside an edited sequence, at a base pair in
+ * the coordinates before the step; or **between two sequences**, as a sequence
+ * of its own before one of them — or after the last.
+ */
+export type DropPlace = { sequence: string; at: number } | { before: string | null }
+
+/**
+ * Where a stretch dropped at `unit` lands. At the edge between two sequences —
+ * or before the first, or after the last — it is set there as a sequence of its
+ * own, and nothing is joined (§27.4). With `fuse` (⇧ held) it goes into the
+ * sequence the pointer came from instead: the end of the one on its left, or the
+ * start of the one on its right.
+ */
+export function dropPlace(grid: LensGrid, unit: number, pointer: number, fuse = false): DropPlace | null {
   const inside = Math.min(Math.max(unit, 0), grid.n)
   const left = grid.sequenceAt(inside - 0.5)
   const right = grid.sequenceAt(inside)
+  if (!fuse && (right === null ? left !== null : inside <= right.from)) return { before: right?.name ?? null }
   const boundary = left !== null && right !== null && left !== right
   const atEnd = (right === null && left !== null) || (boundary && pointer < inside)
   if (atEnd && left !== null) return { sequence: left.name, at: left.length }
@@ -133,23 +157,31 @@ export function dropPlace(grid: LensGrid, unit: number, pointer: number): { sequ
  * The step a stretch dropped at `place` makes, or `null` for a drop that
  * changes nothing.
  *
+ * - **Between two sequences**, it is **placed** there as a sequence of its own —
+ *   a whole sequence moved in the order, a stretch taken out of its own — and
+ *   nothing is joined; a whole sequence dropped where it already is is left
+ *   as it was, or turned if it was flipped on the way.
  * - `copy` (⌥ held) duplicates it there, the original staying where it was.
  * - Dropped on itself, it is left as it was — or turned, if it was flipped on
  *   the way.
- * - A **whole sequence** dropped on another's start or end is **joined** to it,
- *   with an `N` gap between, and takes the other's place.
+ * - A **whole sequence** dropped on another's start or end, with ⇧ held, is
+ *   **joined** to it, with an `N` gap between, and takes the other's place.
  * - Anything else **moves**, with the place re-measured as the step records it:
  *   after the stretch has been taken out.
  */
-export function dropStep(
-  assembly: EditedAssembly,
-  stretch: Stretch,
-  place: { sequence: string; at: number },
-  strand: 1 | -1,
-  copy: boolean,
-): EditStep | null {
+export function dropStep(assembly: EditedAssembly, stretch: Stretch, place: DropPlace, strand: 1 | -1, copy: boolean): EditStep | null {
   const { sequence, from, to } = stretch
   if (!(to > from)) return null
+  if ('before' in place) {
+    // A copy has no place of its own to go: it goes into a sequence.
+    if (copy) return null
+    if (!isWholeSequence(assembly, stretch)) return { op: 'place', sequence, from, to, before: place.before, strand }
+    const names = assembly.sequences.map((edited) => edited.name)
+    const at = names.indexOf(sequence)
+    const target = place.before === null ? names.length : names.indexOf(place.before)
+    if (target === at || target === at + 1) return strand === 1 ? null : { op: 'invert', sequence, from, to }
+    return { op: 'place', sequence, from, to, before: place.before, strand, whole: true }
+  }
   if (copy) {
     return { op: 'duplicate', sequence, from, to, into: place.sequence, at: place.at, strand }
   }
@@ -173,6 +205,36 @@ export function dropStep(
   }
   const at = place.sequence === sequence && place.at > to ? place.at - (to - from) : place.at
   return { op: 'move', sequence, from, to, into: place.sequence, at, strand }
+}
+
+/**
+ * The step ↑ or ↓ makes of what is selected (§27.4): a whole sequence one
+ * place earlier or later in the order; a piece of a sequence of several, one
+ * place earlier or later among its pieces. Nothing is joined and nothing taken
+ * out: `null` where it is first or last already, or is neither.
+ */
+export function shiftStep(assembly: EditedAssembly, stretch: Stretch, delta: -1 | 1): EditStep | null {
+  const { sequence, from, to } = stretch
+  const length = assembly.lengthOf(sequence)
+  if (length === null || !(to > from)) return null
+  if (isWholeSequence(assembly, stretch)) {
+    const names = assembly.sequences.map((edited) => edited.name)
+    const at = names.indexOf(sequence)
+    if (delta < 0) return at <= 0 ? null : { op: 'place', sequence, from, to, before: names[at - 1], strand: 1, whole: true }
+    return at >= names.length - 1 ? null : { op: 'place', sequence, from, to, before: names[at + 2] ?? null, strand: 1, whole: true }
+  }
+  const pieces = assembly.piecesIn(sequence, 0, length)
+  const index = pieces.findIndex(({ offset, piece }) => offset === from && offset + (piece.end - piece.start) === to)
+  if (index < 0) return null
+  if (delta < 0) {
+    const previous = pieces[index - 1]
+    return previous === undefined ? null : { op: 'move', sequence, from, to, into: sequence, at: previous.offset, strand: 1 }
+  }
+  const next = pieces[index + 1]
+  if (next === undefined) return null
+  // After the piece is out, the next one ends that much sooner.
+  const end = next.offset + (next.piece.end - next.piece.start)
+  return { op: 'move', sequence, from, to, into: sequence, at: end - (to - from), strand: 1 }
 }
 
 /**
@@ -201,6 +263,15 @@ export function landed(before: EditedAssembly, after: EditedAssembly, step: Edit
       if (name === undefined) return null
       const length = step.to - step.from
       return { sequence: name, from: step.at, to: step.at + length }
+    }
+    case 'place': {
+      // Before the sequence it was put before, in the order the step left.
+      const at = index(step.sequence)
+      const target = step.before === null ? before.sequences.length : index(step.before)
+      const whole = after.sequences.length === before.sequences.length
+      const k = !whole ? target : target > at ? target - 1 : target
+      const name = after.sequences[k]?.name
+      return name === undefined ? null : { sequence: name, from: 0, to: after.lengthOf(name) ?? 0 }
     }
     case 'join': {
       const keeps = step.place === 'b' ? step.b : step.a

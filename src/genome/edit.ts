@@ -159,6 +159,23 @@ export type EditStep =
   | { op: 'rotate'; sequence: string; at: number }
   | { op: 'rename'; sequence: string; name: string }
   | { op: 'reorder'; names: string[] }
+  | {
+      /**
+       * A stretch set in the order as a sequence of its own (§27.4): taken out
+       * of its sequence — or, whole, the sequence itself moved — and put before
+       * `before`, or last where `null`, turned where `strand` says. What ↑ and
+       * ↓, a sequence's grip and a drop between two sequences make: nothing is
+       * joined to anything.
+       */
+      op: 'place'
+      sequence: string
+      from: number
+      to: number
+      before: string | null
+      strand: 1 | -1
+      /** The whole sequence, as the hand held it: how the history says it. */
+      whole?: boolean
+    }
   | LayoutStep
 
 /**
@@ -573,6 +590,38 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
     case 'reorder': {
       const rank = new Map(step.names.map((name, i) => [name, i]))
       next.sequences.sort((a, b) => (rank.get(a.name) ?? Infinity) - (rank.get(b.name) ?? Infinity))
+      return next
+    }
+    case 'place': {
+      const source = find(next, step.sequence)
+      if (source === null) return state
+      const [from, to] = stretch(source, step.from, step.to)
+      if (to === from) return state
+      const order = next.sequences
+      const index = order.indexOf(source)
+      // Where it goes, by the order as it stands: before a sequence, or last.
+      const target = step.before === null ? order.length : order.findIndex((sequence) => sequence.name === step.before)
+      const [before, middle, after] = extractParts(source.parts, from, to, ids)
+      const carried = merge(step.strand === 1 ? middle : reverseParts(middle))
+      const rest = merge([...before, ...after])
+      if (rest.every((part) => isGap(part))) {
+        // The whole sequence: it moves in the order, as it was or turned.
+        source.parts = carried
+        order.splice(index, 1)
+        const at = target < 0 ? order.length : target > index ? target - 1 : target
+        order.splice(at, 0, source)
+        return next
+      }
+      source.parts = rest
+      // What is left keeps the first new name, as a split's left half does.
+      if (originals.has(source.name)) {
+        taken.delete(source.name)
+        source.name = freshName(baseName(source.name), taken)
+        taken.add(source.name)
+      }
+      const name = freshName(baseName(source.name), taken)
+      taken.add(name)
+      order.splice(target < 0 ? order.length : target, 0, { name, parts: carried })
       return next
     }
     case 'layout':

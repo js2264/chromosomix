@@ -1,9 +1,10 @@
 /**
  * The pieces bars as handles (§27.3, §27.4), in headless Chromium on the yeast
  * micro-C demo: the readout over a piece of the top bar, a sequence pressed and
- * dragged along the bar onto another's end with the map rearranged under the
- * hand, the drop and the join it made, and a piece of the left bar turned by a
- * double click.
+ * dragged along the bar onto another's end with ⇧ held, the map rearranged
+ * under the hand, the drop and the join it made — without ⇧ it would go between
+ * the two, joining nothing — and a piece of the left bar turned by a double
+ * click.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-edit-bar.mjs [out-dir]     # b01 … b04
@@ -40,9 +41,11 @@ await sleep(300)
 console.log('over IV on the bar:', await text('.edit-readout'))
 await shot('b01-bar-hover')
 
-// Pressed and dragged along the bar to IX's end — measured, as a drop is, on
-// the axis without IV — which joins the two: the map rearranged under the hand.
+// Pressed and dragged along the bar to IX's end with ⇧ held — measured, as a
+// drop is, on the axis without IV — which joins the two: the map rearranged
+// under the hand.
 await page.mouse.down()
+await page.keyboard.down('Shift')
 const to = await onBar('top', ix[1] - (iv[1] - iv[0]) / 2)
 for (let k = 1; k <= 16; k++) {
   await page.mouse.move(middle.x + ((to.x - middle.x) * k) / 16, middle.y)
@@ -52,6 +55,7 @@ await sleep(300)
 console.log('while dragging on the bar:', await text('.edit-readout'))
 await shot('b02-bar-dragging')
 await page.mouse.up()
+await page.keyboard.up('Shift')
 await sleep(1200)
 console.log('after the drop:', await history())
 await shot('b03-bar-dropped')
