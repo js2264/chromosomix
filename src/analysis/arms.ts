@@ -254,21 +254,33 @@ export function interArmProfile(
 const SUMMARY_SMOOTHING = 0.02
 
 /**
+ * Where the reach ends: the share of the peak's `log2` the running mean must
+ * fall below, so `0.2` is four-fifths of the way back to no enrichment.
+ */
+const REACH_FLOOR = 0.2
+
+/**
  * Two numbers for comparing one chromosome's arm alignment with another's.
  *
  * - **reach** — how far from the origin the enrichment holds: going outwards
- *   from its peak, the last distance before it first falls below half of it, in
- *   bins. A species whose arms are zipped from origin to terminus reaches most
- *   of the arm; one whose alignment is confined round parS reaches a fraction.
+ *   from its peak, the last distance before it first falls below a fifth of it,
+ *   in bins — where the alignment ends, rather than where it is half-way down.
+ *   A species whose arms are zipped from origin to terminus reaches most of the
+ *   arm; one whose alignment is confined round parS reaches a fraction. Half of
+ *   the peak was the floor first, and it read the middle of the fall: where the
+ *   alignment is still spreading out from parS its edge is a slope tens of bins
+ *   long, and half-way down it is well behind the last aligned loci — a time
+ *   course of ParB induced in *B. subtilis* reached 600 kb at 15 minutes and
+ *   1.5 Mb at 45, where a fifth of the peak reads 930 kb and 1.9 Mb.
  * - **score** — how strong it is **over that stretch**: the mean `log2`
  *   enrichment of the secondary diagonal from the origin out to the reach. So
  *   the two say different things — how far, and how strongly within it — where a
  *   mean over the whole arm is both at once, and a strong alignment confined
  *   round parS reads there like a weak one that runs to the terminus. It is
- *   read over the stretch that holds above half the peak, so on a chromosome
- *   whose arms are not aligned it is the mean of the noise's highest stretch and
- *   reads above zero: 0.23 on *E. coli* at 5 kb, where the whole arm's mean is
- *   0.08. Where nothing reaches — no stretch above zero at all — it is the mean
+ *   read over the stretch that holds above a fifth of the peak, so on a
+ *   chromosome whose arms are not aligned it is the mean of the noise's highest
+ *   stretch and reads above zero: 0.29 on *E. coli* at 5 kb, where the whole
+ *   arm's mean is 0.08. Where nothing reaches — no stretch above zero at all — it is the mean
  *   over the whole arm.
  *
  * `over`, where given, is the stretch to average over in place of this
@@ -277,7 +289,7 @@ const SUMMARY_SMOOTHING = 0.02
  *
  * The peak and the reach are read from a **running mean over 2% of the arm**
  * either side. Read cell by cell, one noisy distance set the peak, and the last
- * distance anywhere above half of it set the reach — which on a flat profile is
+ * distance anywhere above the floor set the reach — which on a flat profile is
  * wherever the noise last happened to be high: *Escherichia coli*, whose arms
  * are not aligned at all, was reported as aligned to within a few bins of its
  * terminus.
@@ -323,7 +335,7 @@ export function interArmSummary(
     reach = at
     for (let d = at + 1; d < n; d++) {
       if (!Number.isFinite(smoothed[d])) continue
-      if (smoothed[d] < peak / 2) break
+      if (smoothed[d] < peak * REACH_FLOOR) break
       reach = d
     }
   }
