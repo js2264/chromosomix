@@ -1,6 +1,13 @@
 {
-  "latest": "1156ed4",
+  "latest": "54f178c",
   "versions": [
+    {
+      "commit": "54f178c",
+      "version": "0.13.0",
+      "date": "2026-10-01T16:46:59+02:00",
+      "subject": "Vector PDF export and 3D model support improvements (#86)",
+      "tag": ""
+    },
     {
       "commit": "1156ed4",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.12.0",
       "date": "2026-09-20T12:11:32+02:00",
       "subject": "A 3D structure beside the map, and every figure restyles (§25, §18.13) (#66)",
-      "tag": ""
-    },
-    {
-      "commit": "9401fbd",
-      "version": "0.12.0",
-      "date": "2026-09-16T18:44:04+02:00",
-      "subject": "Redesign landing page, unify button styles, and improve visual hierarchy (#65)",
       "tag": ""
     },
     {
