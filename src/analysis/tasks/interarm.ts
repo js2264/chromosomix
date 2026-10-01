@@ -18,7 +18,7 @@
  * literature draws; a **track** along the chromosome, how much each locus
  * touches its mirror image; and a **table** of two numbers per sequence for a
  * comparison across maps — how far from the origin the enrichment holds before
- * falling half-way back from its peak, and how strong it is from the origin out
+ * falling nine-tenths of the way back from its peak, and how strong it is from the origin out
  * to there, as a fold over expected.
  *
  * Each sequence has a **second row** of the same numbers over the O/E along both
@@ -103,7 +103,9 @@ export const INTERARM_TASK: AnalysisTask = {
   // the mean from the origin out to the reach, where it was over the whole arm.
   // 3: the table's score is its enrichment, and it and the peak are folds over
   // expected rather than log2.
-  version: 3,
+  // 4: the reach runs until the enrichment is a tenth of its peak, where it was
+  // half, so it reads where the alignment ends rather than the middle of its fall.
+  version: 4,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>

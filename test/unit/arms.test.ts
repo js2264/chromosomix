@@ -146,7 +146,8 @@ describe('the secondary diagonal', () => {
     expect(Number.isNaN(byDistance[0])).toBe(true)
     const summary = interArmSummary(byDistance)
     expect(summary.peak).toBeCloseTo(2, 6)
-    expect(summary.reach).toBe(20)
+    // The plateau ends at 20; the running mean carries a sharp edge one bin on.
+    expect(summary.reach).toBe(21)
     expect(summary.score).toBeGreaterThan(0)
   })
 
@@ -157,7 +158,16 @@ describe('the secondary diagonal', () => {
     const byDistance = new Float64Array(40).fill(1)
     for (let d = 2; d <= 20; d++) byDistance[d] = 4
     byDistance[35] = 4
-    expect(interArmSummary(byDistance).reach).toBe(20)
+    expect(interArmSummary(byDistance).reach).toBe(21)
+  })
+
+  it('reads the reach where a sloping edge ends, not half-way down it', () => {
+    // Four times as close out to 10 bins, falling evenly in log2 to nothing at
+    // 30: half-way down is 20, and the alignment runs on to 28 before it is
+    // within a tenth of its peak of none.
+    const byDistance = new Float64Array(40).fill(1)
+    for (let d = 2; d <= 30; d++) byDistance[d] = 2 ** (d <= 10 ? 2 : (2 * (30 - d)) / 20)
+    expect(interArmSummary(byDistance).reach).toBe(28)
   })
 
   it('scores the stretch the enrichment reaches, not the whole arm', () => {
@@ -167,8 +177,8 @@ describe('the secondary diagonal', () => {
     const byDistance = new Float64Array(40).fill(1)
     for (let d = 2; d <= 20; d++) byDistance[d] = 4
     const summary = interArmSummary(byDistance)
-    expect(summary.reach).toBe(20)
-    expect(summary.score).toBeCloseTo((19 * 2) / 21, 9)
+    expect(summary.reach).toBe(21)
+    expect(summary.score).toBeCloseTo((19 * 2) / 22, 9)
   })
 
   it('reads a control over the stretch it is handed, and the whole arm where nothing reaches', () => {
