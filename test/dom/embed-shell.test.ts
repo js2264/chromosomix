@@ -17,6 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { App } from '@/app/App'
+import type { Command } from '@/ui/commands'
 import { resetMounting } from '@/embed'
 import type { ViewState } from '@/types'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
@@ -127,6 +128,21 @@ describe('a window mounted as an embed', () => {
     const { root } = windowAt('?embed=1')
     expect(root.querySelector('.console-drawer')).toBeNull()
     expect(root.querySelector('[aria-label="console"]')).toBeNull()
+  })
+
+  it('greys the palette rows for the columns and the places it does not mount', () => {
+    // The same rule as the landing page above, kept by the palette: an embed
+    // mounts Annotations and Aesthetics alone, so *Connect a folder* — whose
+    // folder goes into the Files column — and the folds of the three columns it
+    // leaves out are greyed rather than live over nothing (§21.2). A window
+    // that is not an embed keeps them.
+    const unmounted = ['connect-folder', 'fold-files', 'fold-sidebar', 'fold-analysis', 'console']
+    const embed = (windowAt('?embed=1').app as unknown as { commands(): Command[] }).commands()
+    for (const id of unmounted) {
+      expect(embed.find((command) => command.id === id)?.enabled, id).toBe(false)
+    }
+    const page = (windowAt('').app as unknown as { commands(): Command[] }).commands()
+    expect(page.find((command) => command.id === 'connect-folder')?.enabled).not.toBe(false)
   })
 
   it('lands on Load files alone, with no stores and no places to connect', () => {

@@ -8784,7 +8784,9 @@ embed — which has no drawer — ignores it.
   **The landing page loses the two doors that led to what is gone.** A store tile opens the drawer
   and a place is connected into the Files column, so an embed's picker is *Load files* alone, with
   neither the tiles nor the row of places (§24.2): it had both, and in a frame a tile pressed did
-  nothing and a folder chosen was connected into a column nobody could see.
+  nothing and a folder chosen was connected into a column nobody could see. The palette keeps its
+  shape (§26.6) and greys the same rows — *Connect a folder*, and the folds of the Files, General
+  and Analysis columns, as it greys the console's.
 
   Everything else — the view, the analysis drawer, the content area, dropping a file, every keyboard
   shortcut — is built exactly as it is for a top-level window, so no view knows it is embedded.

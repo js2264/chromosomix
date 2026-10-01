@@ -2037,6 +2037,10 @@ export class App implements SessionHost {
         // which has no remote half in the standalone build (§19).
         title: CONNECT_FOLDER_TITLE,
         hint: CONNECT_HINT,
+        // Greyed in an embed, which mounts no Files column for a folder to go
+        // into (§21.2): the landing page there offers no place to connect, and
+        // the palette must not be the one door left to a column nobody sees.
+        enabled: !this.embed,
         run: () => this.openConnectDialog(),
       },
       // Absent from the single file rather than greyed (§19). Greying is for a
@@ -2194,7 +2198,7 @@ export class App implements SessionHost {
         title: 'General panel',
         hint: 'A reference card about the open file: what it is, its genome, its metadata.',
         keys: GENERAL_PANEL.keys,
-        enabled: file,
+        enabled: file && !this.embed,
         state: chipOf(!this.generalPanel.isCollapsed),
         run: () => this.generalPanel.toggle.click(),
       },
@@ -2215,7 +2219,7 @@ export class App implements SessionHost {
             ? 'The folders you have connected, and what is in them.'
             : 'Connect a folder first — there is no Files column until you have one.',
         keys: FILES_PANEL.keys,
-        enabled: connectedFolders().length > 0,
+        enabled: connectedFolders().length > 0 && !this.embed,
         state: chipOf(!this.filesPanel.isCollapsed),
         run: () => this.filesPanel.toggle.click(),
       },
@@ -2258,7 +2262,7 @@ export class App implements SessionHost {
         title: 'Analysis panel',
         hint: 'What can be computed from this file, as against what is drawn on it.',
         keys: ANALYSIS_PANEL.keys,
-        enabled: file,
+        enabled: file && !this.embed,
         state: chipOf(!this.analysisPanel.isCollapsed),
         run: () => this.analysisPanel.toggle.click(),
       },

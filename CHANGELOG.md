@@ -2131,7 +2131,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **An embed's landing page is *Load files* alone (§21.2).** It offered the store tiles and the row
   of places to connect, and a frame builds neither the drawer a tile opens nor the Files column a
   place is connected into: a tile did nothing when pressed, and a folder chosen was connected into a
-  column nobody could see.
+  column nobody could see. Its palette greys the same rows — *Connect a folder*, and the folds of
+  the three columns it does not mount — which were live over nothing.
 
 - **The 1D browser's track-height box reads its lanes, as the map's does (§8.8).** It was built
   without them, so it went on showing the last number it had applied — `90` over a stack the same
