@@ -597,8 +597,8 @@ function tableOf(calls: Call[], binsize: number): TableOutput {
     label: rows.length < calls.length ? `Strongest ${rows.length} of ${calls.length}` : 'Patterns',
     columns: [
       { key: 'sequence', label: 'Sequence', kind: 'text' },
-      { key: 'start1', label: 'Start 1', kind: 'number', digits: 0 },
-      { key: 'start2', label: 'Start 2', kind: 'number', digits: 0 },
+      { key: 'start1', label: 'Start 1', kind: 'number', coordinate: 'start' },
+      { key: 'start2', label: 'Start 2', kind: 'number', coordinate: 'start' },
       { key: 'separation', label: 'Separation (bp)', kind: 'number', digits: 0 },
       { key: 'score', label: 'Score', kind: 'number', digits: 4, hint: 'Pearson r with the template.' },
       { key: 'pvalue', label: 'p', kind: 'number', digits: 6 },

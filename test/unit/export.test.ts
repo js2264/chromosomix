@@ -40,6 +40,17 @@ describe('exportBaseName', () => {
     expect(exportBaseName('   ')).toBe('contact-map')
     expect(exportBaseName('')).toBe('contact-map')
   })
+
+  // A map's figure is named after its window as the caption prints it (§26.1):
+  // 1-based, with the grouping dropped rather than turned into underscores.
+  it('names a window by the bases its caption names, without the grouping', () => {
+    expect(exportBaseName('IV:1,000,001-1,400,000')).toBe('IV_1000001-1400000')
+    expect(exportBaseName('IV:1,000,001-1,400,000 × V:1-250,000')).toBe('IV_1000001-1400000_x_V_1-250000')
+    expect(exportBaseName('4C · IV:1,200,001-1,202,000')).toBe('4C_IV_1200001-1202000')
+    // A comma that is not a thousands separator is left to the rule above.
+    expect(exportBaseName('a,b')).toBe('a_b')
+    expect(exportBaseName('run 1,12')).toBe('run_1_12')
+  })
 })
 
 describe('the formats a map writes', () => {

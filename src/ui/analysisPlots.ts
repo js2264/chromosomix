@@ -30,7 +30,6 @@ import type {
   MatrixOutput,
   MatrixSegment,
   ProfileOutput,
-  TableColumn,
   TableOutput,
 } from '../analysis/types'
 import {
@@ -40,6 +39,7 @@ import {
   colormapIndex,
   isColormap,
 } from '../render/colormaps'
+import { cellText } from '../figures/tableFigure'
 import { el, fmt, trimNumber } from './dom'
 import { axisNumber, resolutionLabel } from '../units'
 import { scaleFont, subscribeTextScale } from './textScale'
@@ -1997,21 +1997,6 @@ export function matrixFigure(output: MatrixOutput): PlotFigure {
 // ---------------------------------------------------------------------------
 // Tables
 // ---------------------------------------------------------------------------
-
-function cellText(column: TableColumn, raw: string | number | undefined): string {
-  if (raw === undefined) return '—'
-  if (column.kind !== 'number') return String(raw)
-  const value = typeof raw === 'number' ? raw : Number(raw)
-  // `NaN` is *no value here*, the same as everywhere else in this codebase — an
-  // em dash, never a zero and never the word NaN.
-  if (!Number.isFinite(value)) return '—'
-  if (column.digits === undefined) return fmt.int(value)
-  // Too small for its digits, in a column that says it may be (a P-value).
-  if (column.scientific === true && value !== 0 && Math.abs(value) < 10 ** -column.digits) {
-    return value.toExponential(2)
-  }
-  return value.toFixed(column.digits)
-}
 
 export interface TableFigure {
   el: HTMLElement

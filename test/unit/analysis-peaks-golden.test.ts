@@ -344,7 +344,7 @@ suite('peak calling, against yapc 0.1 on two tracks with IDR', () => {
       // region's global IDR as yapc scales it.
       const rows = tableOf(outputs, 'peaks-list').rows
       expect(rows.length).toBe(g.table.start.length)
-      const byKey = new Map(rows.map((row) => [`${row.sequence}:${Number(row.start) - 1}`, row]))
+      const byKey = new Map(rows.map((row) => [`${row.sequence}:${Number(row.start)}`, row]))
       const score1 = new Float64Array(rows.length)
       const score2 = new Float64Array(rows.length)
       const scaled = new Float64Array(rows.length)
@@ -353,7 +353,7 @@ suite('peak calling, against yapc 0.1 on two tracks with IDR', () => {
         const row = byKey.get(key)
         expect(row, key).toBeDefined()
         expect(row!.end, `${key} end`).toBe(g.table.end[i])
-        expect(Number(row!.summit) - 1, `${key} summit`).toBe(g.table.mode[i])
+        expect(Number(row!.summit), `${key} summit`).toBe(g.table.mode[i])
         score1[i] = Number(row!.curvature0)
         score2[i] = Number(row!.curvature1)
         scaled[i] = -Math.log10(Math.max(1e-5, Number(row!.idr)))

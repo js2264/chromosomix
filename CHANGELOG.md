@@ -1462,7 +1462,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Chromosomes table's origin column and `fmt.pos` now group a coordinate with commas in every
   locale, where a German browser showed `1.162.001` beside a breadcrumb grouped with commas, and
   refused an origin typed the way its own box had just written one. A range that does not parse
-  says how a locus is read, rather than calling it *cooler syntax*.
+  says how a locus is read, rather than calling it *cooler syntax*. A map's saved figure is named
+  after the window its caption prints, `IV_1000001-1400000-<stamp>.pdf`, where it was named after
+  the link's 0-based string, a base off the caption inside it; and a file named after a locus drops
+  the grouping rather than turning each comma into an underscore (`ui/export.ts`).
+
+- **An analysis table prints a start 1-based and saves it 0-based (§18.7).** FRiP's and Group
+  signal's *Per feature*, chromosight's patterns and the dot plot's streaks printed their starts
+  0-based, the one place a coordinate on screen still did; Peaks' row per peak held its start and
+  summit 1-based, so the TSV saved from it, which this app reads as BED's (§8.3), put every peak a
+  base to the right when it was dropped back on a map. Each now holds the start as its TSV does and
+  prints it 1-based, every start and end in them is grouped as en-US where some printed ungrouped
+  and some in the reader's locale, the filter finds the base printed, and the TSV's columns line
+  marks the column `(0-based)`. A Peaks TSV saved before this has 1-based starts.
 
 - **Every export asks where to save, in a dialog opened in Downloads (§26.6).** Figures, decks,
   structures, bigWigs, bedGraphs, tables, marks, the console's script, a workspace and an `.mcool`

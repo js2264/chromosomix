@@ -655,8 +655,8 @@ async function perFeatureTable(
     label: 'Per feature',
     columns: [
       { key: 'contig', label: 'Sequence', kind: 'text' },
-      { key: 'start', label: 'Start', kind: 'number' },
-      { key: 'end', label: 'End', kind: 'number' },
+      { key: 'start', label: 'Start', kind: 'number', coordinate: 'start' },
+      { key: 'end', label: 'End', kind: 'number', coordinate: 'end' },
       { key: 'name', label: 'Name', kind: 'text' },
       ...tracks.map((id, t) => ({ key: columns[t], label: labelOf(id), kind: 'number' as const, digits: 4 })),
     ],

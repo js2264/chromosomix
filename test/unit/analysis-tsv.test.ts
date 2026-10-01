@@ -274,6 +274,26 @@ describe('outputToTsv, table', () => {
     // Zero is zero, and a column that did not ask keeps its places.
     expect(rows[3]).toEqual(['Mann–Whitney U', '0', '0'])
   })
+
+  // A table whose first columns are a sequence, a start and an end is
+  // BED-shaped, and is read back 0-based (§8.3): the start is written as it is
+  // held, and the columns line says so, since the table printed it 1-based.
+  it('writes a start as it is held, 0-based, and says so', () => {
+    const features: TableOutput = {
+      kind: 'table',
+      id: 'frip-features',
+      label: 'Per feature',
+      columns: [
+        { key: 'contig', label: 'Sequence', kind: 'text' },
+        { key: 'start', label: 'Start', kind: 'number', coordinate: 'start' },
+        { key: 'end', label: 'End', kind: 'number', coordinate: 'end' },
+      ],
+      rows: [{ contig: 'IV', start: 1_000_000, end: 1_000_500 }],
+    }
+    const text = outputToTsv(features, PROVENANCE)
+    expect(text).toMatch(/^# columns: Sequence, Start \(0-based\), End$/m)
+    expect(body(text)[1]).toEqual(['IV', '1000000', '1000500'])
+  })
 })
 
 describe('tsvName', () => {

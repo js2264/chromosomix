@@ -1890,7 +1890,9 @@ lane, key and caption round them written as paths and text on the same vector pa
 PDF is (`ui/vector.ts`). The page is drawn at 1:1 and has no resolution, so the DPI beside the
 format is the PNG's alone and is **absent while PDF is chosen**, as it is on the browser's card —
 the copy's tooltip then names the resolution its PNG takes. The resolution is in a PNG's file name
-and not in a PDF's.
+and not in a PDF's. Either is named after the window as its caption prints it, 1-based (§26.1), with
+the grouping dropped rather than turned into underscores — `IV_1000001-1400000-<stamp>.pdf` for
+`IV:1,000,001-1,400,000` — and so is any other file named after a locus (`exportBaseName`).
 
 Both cards label the format **PDF (vector)**, and so does the 3D model's (§25.7): a biologist who
 saved a map as `PDF` for a figure and opened it in Illustrator expecting paths had been told which
@@ -6849,6 +6851,16 @@ on the Annotations panel so a called boundary becomes an overlay on the map imme
 Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
 them a true vector figure rather than a photograph of a chart.
 
+**A table prints a coordinate 1-based and saves it 0-based.** A column that holds a position — a
+feature's start in FRiP's and Group signal's *Per feature*, a peak's start and summit, a pattern's two
+bins in chromosight's table, a streak's two starts in the dot plot's — holds it 0-based, as the TSV it
+is saved to holds it: a table whose first columns are a sequence, a start and an end is BED-shaped,
+and this app reads such a file 0-based (§8.3), so a start written 1-based would come back a base to
+the right when the table is dropped on a map. The table prints it 1-based and grouped as en-US like
+every other coordinate on the screen (§26.1, `TableColumn.coordinate`), its filter finds the base it
+prints, and the TSV's `# columns` line says `(0-based)` beside it. An end is the same number
+half-open or inclusive, so only its grouping is the screen's.
+
 **A matrix may carry profiles along its top and right edges.** One value per column above the picture
 and one per row beside it, so they line up with it by construction rather than by a second resampling
 in the renderer. The two edges rather than two arbitrary ones: the colour bar is on the right in this
@@ -7602,8 +7614,8 @@ memory is a window's rather than a chromosome's (yapc holds each chromosome of e
 float64), and a Stop is read between windows and between IDR's rounds (§18.3). What comes out: the
 peaks as an interval set, with each summit as its thick part and a BED on export; a table per
 sequence; with a replicate, yapc's six thresholds as rows, each with the peaks its BED file would
-hold; and on request a row per peak, 1-based (§26.1), with its curvature on each track and its local
-and global IDR. A fit that ends at the edge of IDR's parameter box — where two tracks that are not
+hold; and on request a row per peak — its start and summit printed 1-based and saved 0-based, as
+§18.7's tables are — with its curvature on each track and its local and global IDR. A fit that ends at the edge of IDR's parameter box — where two tracks that are not
 replicates of one experiment put it — is said, naming the parameters that hit it, since its IDRs are
 then not a statement about reproducibility.
 
@@ -10995,7 +11007,10 @@ tokenizer refuses, so that a
 refusal is about what the reader typed rather than about what a helper made of it.
 
 **Copying is not displaying.** What the clipboard takes is 1-based inclusive and **ungrouped**, so it
-pastes into a terminal, a spreadsheet or a BED-adjacent tool without separators to strip.
+pastes into a terminal, a spreadsheet or a BED-adjacent tool without separators to strip. A file
+named after a locus is in the same form, `:` made `_` — `IV_1000001-1400000-<stamp>.pdf` for a
+figure captioned `IV:1,000,001-1,400,000` (§7.2) — so the name on disk and the caption inside the
+file name the same bases.
 
 ### 26.2 Units: one spelling of each quantity
 

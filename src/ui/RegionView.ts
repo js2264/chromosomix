@@ -938,7 +938,11 @@ export class RegionView {
         // every coordinate on screen is the bin size times a cell offset, so the
         // panel is told before it is given the block.
         this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
-        this.panel.setData(result, this.props.region, second)
+        // The panel names its figure after this (`exportBaseName`), so it is
+        // given the window as the heading prints it, 1-based, rather than the
+        // state's 0-based string — a saved PDF was otherwise named one base off
+        // the caption inside it.
+        this.panel.setData(result, regionLabel(this.props.region), second)
         // After the block and *before* the ladder is armed, which is the whole
         // reason it is here rather than in the panel's own setup: the refine
         // reads the window that is on screen, so focusing first means the finer
@@ -976,7 +980,7 @@ export class RegionView {
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
       this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
-      this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
+      this.panel.setData(result, `${regionLabel(this.props.region)} × ${regionLabel(this.props.region2)}`, second)
       await this.armRefine(parsed, result, other)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the

@@ -66,9 +66,18 @@ export function pointsForCssPixels(cssPixels: number): number {
 /**
  * A filename stem from whatever the view calls itself, with everything a
  * filesystem might object to removed. Empty in, `contact-map` out.
+ *
+ * A locus comes in as the reader reads it — `IV:1,000,001-1,400,000`, the
+ * display form (§26.1) — and goes out as `IV_1000001-1400000`: the grouping
+ * commas dropped rather than turned into underscores, which would write a
+ * figure of one window as `IV_1_000_001-1_400_000`, a name that reads as four
+ * numbers. The bases stay the ones the caption under the picture names; the
+ * map's figure was named after the hash's 0-based grammar instead, one base
+ * off the window printed inside it.
  */
 export function exportBaseName(title: string): string {
   const cleaned = title
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
     .replace(/[×✓]/g, 'x')
     .replace(/[^\w.-]+/g, '_')
     .replace(/^_+|_+$/g, '')
