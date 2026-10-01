@@ -68,3 +68,5 @@ notebooks/figures/
 notebooks/*.html
 notebooks/*_files/
 notebooks/.quarto/
+# The notebook Quarto executes, written beside the .qmd for as long as a render runs.
+notebooks/*.quarto_ipynb
