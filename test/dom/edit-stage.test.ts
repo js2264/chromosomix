@@ -12,6 +12,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { AnnotationStore } from '@/annotations/store'
+import type { AnnotationClient } from '@/annotations/worker/client'
 import { findCorners } from '@/edit/corners'
 import { EditStage, type EditStageProps } from '@/edit/EditStage'
 import { expectedOf } from '@/edit/method'
@@ -19,7 +21,7 @@ import type { Suggested } from '@/edit/suggest'
 import { EditStore } from '@/state/referenceEdit'
 import type { PictureResult } from '@/worker/protocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
-import { simulate } from '../support/simulatedMap'
+import { simulate, type TruePiece } from '../support/simulatedMap'
 
 let teardown: DomTeardown
 /** Every stage a test opened, closed after it — each listens on the window. */
@@ -95,6 +97,13 @@ const sequence = (name: string): HTMLButtonElement => {
 }
 const key = (name: string, init: KeyboardEventInit = {}): void => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...init }))
+}
+/** Rename a sequence from its pencil, Enter committing what is typed. */
+const rename = (name: string, to: string): void => {
+  ;(document.querySelector(`.edit-sequence-rename[aria-label="Rename ${name}"]`) as HTMLButtonElement).click()
+  const input = document.querySelector('.edit-rename-input') as HTMLInputElement
+  input.value = to
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
 }
 
 describe('the stage', () => {
@@ -223,12 +232,6 @@ describe('the stage', () => {
 
   it('renames a sequence from its pencil, as a step, and refuses a name another has', async () => {
     const { store } = await open()
-    const rename = (name: string, to: string): void => {
-      ;(document.querySelector(`.edit-sequence-rename[aria-label="Rename ${name}"]`) as HTMLButtonElement).click()
-      const input = document.querySelector('.edit-rename-input') as HTMLInputElement
-      input.value = to
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-    }
     rename('I', 'chrI')
     expect(store.edit.history.at(-1)?.step).toEqual({ op: 'rename', sequence: 'I', name: 'chrI' })
     expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['chrI', 'II'])
@@ -239,6 +242,70 @@ describe('the stage', () => {
     rename('II', 'chr II')
     expect(store.applied).toBe(1)
     expect(document.querySelector('.edit-sequences-note')?.textContent).toMatch(/^A name is one word/)
+  })
+
+  it('gives a sequence its own name back, and that name to nothing but that sequence whole', async () => {
+    const { store } = await open()
+    rename('I', 'chrI')
+    // I whole, renamed: its own name is its to take back, as the step allows
+    // and the refusal's own words say.
+    rename('chrI', 'I')
+    expect(store.applied).toBe(2)
+    expect(store.edit.history.at(-1)?.step).toEqual({ op: 'rename', sequence: 'chrI', name: 'I' })
+    expect(textsOf(document.body, '.edit-sequence-name')).toEqual(['I', 'II'])
+    expect(document.querySelector('.edit-sequences-note')).toBeNull()
+    // A stretch of it is not it, and nor is another sequence.
+    store.apply({ op: 'split', sequence: 'I', at: 4_000 })
+    const [left, , other] = textsOf(document.body, '.edit-sequence-name')
+    expect(left).not.toBe('I')
+    expect(other).toBe('II')
+    for (const name of [left, other]) {
+      rename(name, 'I')
+      expect(store.applied).toBe(3)
+      expect(document.querySelector('.edit-sequences-note')?.textContent).toBe(
+        'I is a name of the file’s own, for that sequence whole and no other.',
+      )
+    }
+  })
+
+  it('reads the ends and gaps from the file’s own sequence, not from a reference loaded before it (§27.5)', async () => {
+    // The theoretical genome first, naming none of the map's sequences, then
+    // the assembly's own FASTA: the one the corner plot calls the file's own.
+    const lanes = new AnnotationStore(`stage-evidence-${Math.random()}.cool`, { persist: false })
+    for (const [id, label, matched] of [
+      ['theory', 'theory.fa', 0],
+      ['own', 'assembly.fa', 2],
+    ] as const) {
+      lanes.begin({ card: 'linear', kind: 'sequence', id, label, source: { kind: 'remote', url: `https://data.example/${label}`, name: label } })
+      lanes.update(id, { status: 'ready', overlap: { matched, total: 2, missing: [], extra: [] } })
+    }
+    const asked = new Set<string>()
+    const client = {
+      request: (payload: { kind: string; entry?: string; regions?: Array<{ contig: string; start: number; end: number }> }) => {
+        // Every other read the stage's lanes make is left unanswered.
+        if (payload.kind !== 'bases' || payload.regions === undefined) return new Promise(() => {})
+        asked.add(payload.entry ?? '')
+        return Promise.resolve({
+          regions: payload.regions.map((region) => ({ ...region, bases: new TextEncoder().encode('ACGT'.repeat(region.end - region.start).slice(0, region.end - region.start)) })),
+        })
+      },
+      // The corner plot's run, which is not what this is about.
+      cancellable: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
+    } as unknown as AnnotationClient
+    const store = new EditStore('stage|evidence.cool', ORIGINAL)
+    const stage = new EditStage({
+      title: 'evidence.cool',
+      memoryKey: () => 'stage|evidence.cool',
+      store,
+      readPicture: () => ({ promise: Promise.resolve(picture()), cancel: () => {} }),
+      colormap: 'default',
+      lanes: { store: lanes, client },
+      onClose: () => {},
+    })
+    opened.push(stage)
+    for (let k = 0; k < 8; k++) await new Promise((resolve) => setTimeout(resolve, 0))
+    expect([...asked]).toEqual(['own'])
+    expect(document.querySelector('.edit-evidence-note')?.textContent).toMatch(/^From assembly\.fa: telomeric repeats at 0 of 4 ends/)
   })
 
   it('puts the sequences longest first, as one step, and says when they are', async () => {
@@ -258,8 +325,13 @@ describe('the suggestions', () => {
    * A stage over a simulated map whose first sequence reads `[60, 120)`
    * backwards — the method's one suggestion is to turn it back.
    */
-  async function openOnATurn(extra: Partial<EditStageProps> = {}): Promise<{ store: EditStore }> {
-    const simulated = await simulate([[[0, 0, 60, 1], [0, 60, 120, -1], [0, 120, 180, 1]], [[1, 0, 120, 1]]])
+  function openOnATurn(extra: Partial<EditStageProps> = {}): Promise<{ store: EditStore; stage: EditStage }> {
+    return openOn([[[0, 0, 60, 1], [0, 60, 120, -1], [0, 120, 180, 1]], [[1, 0, 120, 1]]], extra)
+  }
+
+  /** A stage over a map simulated from an assembly of these pieces (`simulate`). */
+  async function openOn(pieces: TruePiece[][], extra: Partial<EditStageProps> = {}): Promise<{ store: EditStore; stage: EditStage }> {
+    const simulated = await simulate(pieces)
     const expected = expectedOf(simulated.contacts, true)
     const n = simulated.contacts.n
     const result: PictureResult = {
@@ -286,7 +358,7 @@ describe('the suggestions', () => {
     })
     opened.push(stage)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    return { store }
+    return { store, stage }
   }
   /** Long enough for the stage to count the suggestions again after a step. */
   const recount = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 60))
@@ -362,6 +434,35 @@ describe('the suggestions', () => {
     expect(store.edit.history[0].by).toBe('suggestion')
     await recount()
     expect(document.querySelector('.edit-review-words')?.textContent).toBe('review · nothing left to answer')
+  })
+
+  it('frames the next best once one is answered, as it frames the first (§27.6)', async () => {
+    // Two turns, one in each sequence: far enough apart that framing either
+    // leaves the other off the map.
+    const { stage } = await openOn([
+      [[0, 0, 60, 1], [0, 60, 120, -1], [0, 120, 180, 1]],
+      [[1, 0, 60, 1], [1, 60, 120, -1], [1, 120, 200, 1]],
+    ])
+    const inside = stage as unknown as {
+      current: string | null
+      byKey(key: string | null): { extent: [number, number] } | null
+      sx: { domain: [number, number] }
+    }
+    /** Whether the map shows the whole of what the one review is on concerns. */
+    const framed = (): boolean => {
+      const extent = inside.byKey(inside.current)?.extent
+      const [from, to] = inside.sx.domain
+      return extent !== undefined && from <= extent[0] && extent[1] <= to
+    }
+    button('review').click()
+    expect(document.querySelector('.edit-review-where')?.textContent).toBe('1 of 2')
+    const first = inside.current
+    expect(framed()).toBe(true)
+    key('n')
+    await recount()
+    expect(document.querySelector('.edit-review-where')?.textContent).toBe('1 of 1')
+    expect(inside.current).not.toBe(first)
+    expect(framed()).toBe(true)
   })
 
   it('lets go of the map as it would be when the window loses focus with Space held', async () => {

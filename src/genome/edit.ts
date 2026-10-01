@@ -794,8 +794,14 @@ function settleNames(state: Folded, original: OriginalAssembly): Folded {
   return state
 }
 
-/** The original a sequence is exactly, forward and whole, or `null`. */
-function wholeOriginal(sequence: EditedSequence, original: OriginalAssembly): string | null {
+/**
+ * The original a sequence is exactly, forward and whole, or `null`.
+ *
+ * The one sequence a name of the file's own may be given to (§27.3), so the
+ * stage's rename box asks this rather than saying the rule again: it used to
+ * refuse that name even to the sequence the step would have given it to.
+ */
+export function wholeOriginal(sequence: EditedSequence, original: OriginalAssembly): string | null {
   if (!isWhole(sequence, original)) return null
   const first = sequence.parts[0]
   return isGap(first) ? null : first.sequence

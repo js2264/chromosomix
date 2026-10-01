@@ -25,7 +25,7 @@ import type { ManualStore } from '../annotations/manual'
 import type { MapId } from '../annotations/placement'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { EditedAssembly, isGap, type AsideReason, type EditStep, type Piece, type ReferenceEdit } from '../genome/edit'
+import { EditedAssembly, isGap, lengthsOf, wholeOriginal, type AsideReason, type EditStep, type Piece, type ReferenceEdit } from '../genome/edit'
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { bpAt } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -59,6 +59,7 @@ import { LensGrid, type GridLayout } from './grid'
 import { adjustableEnds, adjustSuggestion } from './adjust'
 import { pointKey, pointsOf, refinedSuggestion, type RefinedPoint, type RefinePoint } from './refine'
 import { LiveDotplot } from './LiveDotplot'
+import { sequenceSets } from './dotplotLines'
 import { ExportCard, type ExportCardProps } from './ExportCard'
 import { readSequenceEvidence, type SequenceEvidence } from './sequenceEvidence'
 import { drawSuggestions, markSpots, type MarkedSuggestion } from './marks'
@@ -645,13 +646,18 @@ export class EditStage {
    * The session's sequence read for what it says about the assembly — the
    * telomeres at its ends, the gaps of `N` inside it — and the suggestions
    * counted again with it (§27.5). Nothing where the session has no sequence.
+   *
+   * The file's own sequence, chosen as the corner plot chooses it
+   * (`sequenceSets`): the set naming the most of the map's sequences, not the
+   * first one loaded, which may be the other reference the plot sets it
+   * against.
    */
   private async readEvidence(): Promise<void> {
     const lanes = this.props.lanes
     const client = lanes?.client
-    const entry = lanes?.store.entries.find((candidate) => candidate.kind === 'sequence' && candidate.status === 'ready')
+    const entry = lanes === undefined ? null : sequenceSets(lanes.store.entries).own
     const original = this.props.store.edit.original
-    if (client === undefined || entry === undefined || this.readingEvidence) return
+    if (client === undefined || entry === null || this.readingEvidence) return
     this.readingEvidence = true
     this.paintPicture()
     try {
@@ -2323,7 +2329,16 @@ export class EditStage {
     this.placeSuggestions()
     const open = this.open()
     if (this.current !== null && !open.some((suggestion) => suggestion.key === this.current)) this.current = null
-    if (this.mode === 'review' && this.current === null) this.current = open[0]?.key ?? null
+    if (this.mode === 'review' && this.current === null) {
+      // The next best, and framed (§27.6), as entering review and → and ←
+      // frame theirs. It used to become the one review was on without the map
+      // moving to it, so after a `Y` or an `N` the line under the toolbar
+      // named a suggestion the map was not showing, and the next answer was
+      // given looking at the last one's place.
+      this.current = open[0]?.key ?? null
+      const next = this.byKey(this.current)
+      if (next !== null) this.frameSuggestion(next)
+    }
     if (this.lit !== null && this.byKey(this.lit) === null) this.lit = null
     this.railSignature = ''
   }
@@ -3030,7 +3045,11 @@ export class EditStage {
    * The box a sequence is renamed in: Enter makes it a step, Escape or a click
    * away leaves the name as it was. A name is one word, and one no other
    * sequence of the edit has — a FASTA header and an AGP line are split on
-   * spaces, and two sequences of one name are one too many for either.
+   * spaces, and two sequences of one name are one too many for either. And a
+   * name of the file's own is the sequence's that is that original whole, and
+   * nobody else's: the rename step's own rule, asked of it (`wholeOriginal`)
+   * rather than said again here, where it had come out as *nobody's* — a
+   * sequence renamed and wanting its own name back was refused it.
    */
   private renameBox(name: string): HTMLElement {
     const input = el('input', { class: 'input edit-rename-input', attrs: { type: 'text', value: name, 'aria-label': `New name for ${name}`, spellcheck: 'false' } }) as HTMLInputElement
@@ -3040,7 +3059,9 @@ export class EditStage {
       const wanted = input.value.trim()
       if (commit && wanted !== name) {
         const taken = this.props.store.assembly.sequences.some((sequence) => sequence.name === wanted)
-        const theFiles = this.props.store.edit.original.names.includes(wanted)
+        const original = this.props.store.edit.original
+        const renamed = this.props.store.assembly.sequence(name)
+        const theFiles = lengthsOf(original).has(wanted) && (renamed === null || wholeOriginal(renamed, original) !== wanted)
         if (wanted === '' || /\s/.test(wanted)) this.sequencesNote = 'A name is one word: a FASTA header and an AGP line are split on spaces.'
         else if (taken) this.sequencesNote = `${wanted} is the name of another sequence already.`
         else if (theFiles) this.sequencesNote = `${wanted} is a name of the file’s own, for that sequence whole and no other.`

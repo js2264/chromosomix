@@ -10,6 +10,7 @@
  * it — so it is undone as any step is.
  */
 
+import { sequenceSets } from './dotplotLines'
 import { agpOf, chainOf, chromSizesOf, juiceboxAssemblyOf, readAgp, readJuiceboxAssembly, writableEdit, type ExportContext, type ReadBack } from './exports'
 import { fastaOf, liftedFeaturesBed, liftedPairsBedpe, liftedSignal, type LiftContext } from './lifted'
 import { writeBigWig } from '../analysis/write/bigwig'
@@ -98,9 +99,15 @@ export class ExportCard {
     this.paint()
   }
 
-  /** The session's sequence, where it has one ready. */
+  /**
+   * The session's sequence, where it has one ready: the file's own, as the
+   * stage's corner plot and its evidence choose it (`sequenceSets`) — not the
+   * first set loaded, which may be the other reference the plot sets it
+   * against, and from which the edited sequence came out as `N`.
+   */
   private sequenceEntry(): AnnotationEntry | null {
-    return this.props.annotations?.store.entries.find((entry) => entry.kind === 'sequence' && entry.status === 'ready') ?? null
+    const entries = this.props.annotations?.store.entries
+    return entries === undefined ? null : sequenceSets(entries).own
   }
 
   /** The tracks that can be lifted, with what each is written as. */

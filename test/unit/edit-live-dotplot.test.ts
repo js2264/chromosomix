@@ -9,7 +9,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DotplotStreaks } from '@/analysis/types'
-import { foundFrom, pickSets, throughEdit, type FoundStreaks } from '@/edit/dotplotLines'
+import type { AnnotationEntry } from '@/annotations/types'
+import { foundFrom, pickSets, sequenceSets, throughEdit, type FoundStreaks } from '@/edit/dotplotLines'
 import { EditedAssembly, emptyEdit, withStep, type EditStep } from '@/genome/edit'
 
 const ORIGINAL = { names: ['I', 'II'], lengths: [5000, 3000] }
@@ -42,6 +43,28 @@ describe('the sets', () => {
     expect(picked.own?.id).toBe('own')
     expect(picked.others.map((set) => set.id)).toEqual(['theory', 'other'])
     expect(pickSets([{ id: 'theory', matched: 0 }]).own).toBeNull()
+  })
+
+  it('makes the same choice over the session’s rows, for every reader of a sequence on the stage', () => {
+    const row = (id: string, matched: number | undefined, extra: Record<string, unknown> = {}): AnnotationEntry =>
+      ({
+        id,
+        kind: 'sequence',
+        status: 'ready',
+        label: `${id}.fa`,
+        ...(matched === undefined ? {} : { overlap: { matched, total: 32, missing: [], extra: [] } }),
+        ...extra,
+      }) as unknown as AnnotationEntry
+    const theory = row('theory', 0)
+    const own = row('own', 32)
+    // A sequence still loading, and a track naming every sequence, are not sets.
+    const picked = sequenceSets([theory, row('loading', 32, { status: 'loading' }), row('track', 32, { kind: 'track' }), own])
+    expect(picked.own?.id).toBe('own')
+    expect(picked.others.map((set) => set.id)).toEqual(['theory'])
+    // A set naming none of the map's sequences is nobody's own, and leaves
+    // nothing to set against it.
+    expect(sequenceSets([theory])).toEqual({ own: null, others: [] })
+    expect(sequenceSets([row('unreported', undefined)])).toEqual({ own: null, others: [] })
   })
 
   it('reads a dot plot’s streaks as streaks of the file’s own sequences', () => {

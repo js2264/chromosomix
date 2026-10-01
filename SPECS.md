@@ -11308,8 +11308,10 @@ What is on it:
   and redrawn after every step, so that whether the assembly is coming to read as the other one does
   is seen as the steps are made. *Built* (`edit/LiveDotplot.ts`, `edit/dotplotLines.ts`): offered
   where the session holds a sequence set besides the file's own — the one naming the most of the map's
-  sequences — and a picker for which; the streaks found **once**, by the dot plot task itself (§28) in
-  the annotations worker beside the residues, one to one, and after that only moved: each cut into the
+  sequences, and none where no set names any (`sequenceSets`, the one choice the stage's evidence and
+  its FASTA make too, §27.5, §27.8) — and a picker for which; the streaks found **once**, by the dot
+  plot task itself (§28) in the annotations worker beside the residues, one to one, and after that
+  only moved: each cut into the
   pieces of the edited assembly it falls in, placed where its piece went, turned with it, its other
   side the matching share of its extent along the reference, and what was set aside not drawn — an
   edit moves the lines and makes none. A square of up to 220 pixels over the map's upper triangle,
@@ -11348,9 +11350,11 @@ What is on it:
   ↑ ↓ when it has the keys; a **rename** — its pencil, shown on the row's hover, or a double click,
   Enter making it a step and Escape or a click away leaving the name — which a later edit keeps even
   where the sequence is an original whole again, and which refuses two words, another sequence's
-  name, and a name of the file's own for any stretch but that sequence whole; **longest first**, one
+  name, and a name of the file's own for any stretch but that sequence whole — asking the step's own
+  rule (`wholeOriginal`), so that sequence whole, renamed, takes its own name back, which the box
+  used to refuse in the very words that said it may; **longest first**, one
   `reorder` step, greyed when they are; and a circle marked `○`; and on the picture card, the
-  picture's size (§27.9), the resolution the stage and the method work at, and what the session's
+  picture's size (§27.9), the resolution the stage and the method work at, and what the file's own
   sequence said of the assembly's ends and gaps (§27.5). Still to come: a circular tick on a
   sequence, and the evidence the method may use.
 
@@ -11597,7 +11601,10 @@ where it went further than the text above:
   cannot measure — a stretch dropped against a masked subtelomere — is open to a trade, since nothing
   but the hand is behind it; one of the file's own is trusted.
 - **The sequence** (`edit/sequenceEvidence.ts`), where the session holds the assembly's own FASTA or
-  `.2bit` — read once per stage after its picture, through the annotation worker's ranged reads, the
+  `.2bit` — of its sequence sets the one naming the most of the map's sequences, as the corner dot
+  plot calls the file's own (§27.3), and none where no set names any: it was the first set loaded,
+  so a theoretical genome opened before the assembly's FASTA was where the telomeres were looked
+  for — read once per stage after its picture, through the annotation worker's ranged reads, the
   suggestions counted again when it is in: each original sequence's two terminal kilobases, and for an
   assembly of at most 100 Mb every base. A **telomere** is a run of repeat at least a hundred bases
   long, starting within an end's outermost hundred — read fifty bases at a time from the end inwards,
@@ -11702,7 +11709,9 @@ for what review mode learned, `--from` for an AGP to start from — writing ever
 or *take* makes the step of the suggestion lit under the hand or pressed in the list, `N` or *turn
 down* turns it down. **Review**: the best not turned down is framed, a line under the toolbar says
 which of how many, what it is and its keys, and `Space` held draws the map, its bars and its lanes as
-they would be with it taken; `Y`, `N`, `→` and `←` answer and move, and the next best is framed. Every
+they would be with it taken; `Y`, `N`, `→` and `←` answer and move, and the next best is framed —
+after an answer, or an edit that took away the one review was on, as after a move; it used to
+become the one review was on without the map going to it. Every
 answer is one step of the regression, a learning rate of a tenth and a pull of 0.15 towards the
 initial weights — three rejections of a suggestion at 92% leave it above even odds, thirty-three put it
 below — and the rest are ranked again at once; what it taught — the weights, how many answers, what
@@ -11819,11 +11828,14 @@ why not:
   the same edit. An `.assembly` has no gaps and no names: its lines become `scaffold_1` and on, with 100
   `N` where fragments of two sequences meet — a join — and none where two of one sequence do, and a
   line all of whose fragments are `:::debris` is set aside as debris.
-- **The FASTA**, from the session's own sequence — a FASTA or a `.2bit` — piece by piece through the
-  annotation worker's ranged reads, 400,000 bases a request: a turned piece reverse-complemented base
-  for base, case kept so a soft-masked repeat stays one; a gap as `N`; sixty bases a line; each
-  unplaced stretch a record of its own. A sequence the file lacks is written as `N` and named, so every
-  coordinate of the AGP is still the same base here. Where the session has no sequence the button is
+- **The FASTA**, from the session's own sequence — a FASTA or a `.2bit`, and of several the one
+  naming the most of the map's sequences, as the corner dot plot and the evidence choose it (§27.3,
+  §27.5); it was the first loaded, and from a theoretical genome loaded before the assembly's own
+  every sequence came out as `N` — piece by piece through the annotation worker's ranged reads,
+  400,000 bases a request: a turned piece reverse-complemented base for base, case kept so a
+  soft-masked repeat stays one; a gap as `N`; sixty bases a line; each unplaced stretch a record of
+  its own. A sequence the file lacks is written as `N` and named, so every coordinate of the AGP is
+  still the same base here. Where the session has no sequence naming any of the map's, the button is
   off and its tooltip says what to load.
 - **The contacts**, `contacts (.mcool)`: the reader's worker opens each rung of the file as it stores
   it — never through the session's own lens, which may be another edit — draws it through the export's

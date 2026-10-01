@@ -55,20 +55,31 @@ function card(extra: Partial<ExportCardProps> = {}): { card: ExportCard; store: 
 
 const BASES: Record<string, string> = { I: 'A'.repeat(500) + 'C'.repeat(500), II: 'G'.repeat(600) }
 
-/** A session with a FASTA and a BED of two features, read through stubs of the store and the client. */
-function annotations(): NonNullable<ExportCardProps['annotations']> {
+/**
+ * A session with a FASTA and a BED of two features, read through stubs of the
+ * store and the client — and `before` them, any other rows, which have no
+ * bases of the map's sequences to give. Which rows the bases were asked of is
+ * kept in `asked`.
+ */
+function annotations(before: unknown[] = [], asked: string[] = []): NonNullable<ExportCardProps['annotations']> {
   const genes = new FeatureBuilder()
   genes.add('I', 100, 200, { strand: 1, name: 'g1' })
   genes.add('II', 10, 20, { strand: -1, name: 'g2' })
   const entries = [
-    { id: 'seq', card: 'linear', kind: 'sequence', label: 'genome.fa', status: 'ready' },
+    ...before,
+    // Naming both of the map's sequences, as its overlap report says.
+    { id: 'seq', card: 'linear', kind: 'sequence', label: 'genome.fa', status: 'ready', overlap: { matched: 2, total: 2, missing: [], extra: [] } },
     { id: 'genes', card: 'linear', kind: 'segments', label: 'genes', status: 'ready', payload: { kind: 'features', data: genes.finish() } },
   ] as unknown as AnnotationEntry[]
   const client = {
-    request: async (payload: { kind: string; regions: Array<{ contig: string; start: number; end: number }> }) => {
+    request: async (payload: { kind: string; entry: string; regions: Array<{ contig: string; start: number; end: number }> }) => {
       if (payload.kind !== 'bases') throw new Error(`unexpected ${payload.kind}`)
+      asked.push(payload.entry)
       return {
-        regions: payload.regions.map((region) => ({ ...region, bases: new TextEncoder().encode(BASES[region.contig].slice(region.start, region.end)) })),
+        regions: payload.regions.map((region) => ({
+          ...region,
+          bases: payload.entry === 'seq' ? new TextEncoder().encode(BASES[region.contig].slice(region.start, region.end)) : null,
+        })),
       }
     },
   } as unknown as AnnotationClient
@@ -134,6 +145,20 @@ describe('the export card', () => {
     const I = lines.join('').split('>')[0]
     // A×400, then the turn: revcomp(A×100 C×100) = G×100 T×100, then C×400.
     expect(I).toBe('A'.repeat(400) + 'G'.repeat(100) + 'T'.repeat(100) + 'C'.repeat(400))
+    expect(document.querySelector('.edit-export-status')?.textContent).toMatch(/^Wrote Yeast_1kb\.edited\.fa \(/)
+  })
+
+  it('writes it from the file’s own sequence, not from a reference loaded before it (§27.8)', async () => {
+    // The theoretical genome a strain was built to be, first in the list and
+    // naming none of the map's sequences: written from, it was a file of N.
+    const theory = { id: 'theory', card: 'linear', kind: 'sequence', label: 'theory.fa', status: 'ready', overlap: { matched: 0, total: 2, missing: ['I', 'II'], extra: ['chrA'] } }
+    const asked: string[] = []
+    card({ annotations: annotations([theory], asked) })
+    expect(button('FASTA').title).toContain('from genome.fa')
+    button('FASTA').click()
+    for (let k = 0; k < 6; k++) await settle()
+    expect(new Set(asked)).toEqual(new Set(['seq']))
+    expect(saved['Yeast_1kb.edited.fa']).not.toContain('N')
     expect(document.querySelector('.edit-export-status')?.textContent).toMatch(/^Wrote Yeast_1kb\.edited\.fa \(/)
   })
 

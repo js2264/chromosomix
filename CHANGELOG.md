@@ -2149,6 +2149,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   opened fresh has it: the marks drawn on the map stayed in the session with no card to see, place
   or remove one by.
 
+- **A sequence on the stage can be given its own name back — a dev feature (§27.3).** The rename box
+  refused every name of the file's own, to the sequence that is that original whole as well — which
+  the step allows, and which the refusal's own words, *for that sequence whole and no other*, said
+  it did. It asks the step's rule now, and refuses the name to anything else.
+
+- **Review frames the next suggestion once one is answered — a dev feature (§27.6).** After `Y` or
+  `N` the next best became the one review was on without the map going to it, so the line under the
+  toolbar named a suggestion that was not on screen; `→` and `←` framed theirs, and an answer now
+  does too.
+
+- **The stage reads the file's own sequence, whatever was loaded first — a dev feature (§27.5,
+  §27.8).** The evidence of the ends and gaps and the edited FASTA took the first sequence track that
+  was ready, which with a theoretical genome loaded before the assembly's own FASTA meant telomeres
+  looked for in the wrong set and an edited sequence written as `N`. Both now choose as the corner
+  dot plot does — the set naming the most of the map's sequences — through one helper.
+
 - **A tracks cell marks both ends of the map's cell under the pointer (§25.4).** It drew one hairline,
   at the first of the two anchors, where the lanes beside the map mark both.
 

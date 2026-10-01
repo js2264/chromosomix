@@ -11,6 +11,7 @@
  */
 
 import type { DotplotStreaks } from '../analysis/types'
+import type { AnnotationEntry } from '../annotations/types'
 import type { DotplotAxis, DotplotLines } from '../dotplot/view'
 import type { EditedAssembly } from '../genome/edit'
 
@@ -44,6 +45,26 @@ export function pickSets<T extends { id: string; matched: number }>(sets: readon
   let own: T | null = null
   for (const set of sets) if (set.matched > 0 && (own === null || set.matched > own.matched)) own = set
   return { own, others: sets.filter((set) => set !== own) }
+}
+
+/**
+ * {@link pickSets} over the session's rows: of its sequence tracks that are
+ * ready, the file's own and the others — and none of either where no set names
+ * any of the map's sequences, since then nothing is the file's.
+ *
+ * The one choice for the three things on the stage that read a sequence: this
+ * corner plot, the evidence of the ends and gaps (§27.5) and the FASTA written
+ * from the edit (§27.8). The last two took the first ready row, which with the
+ * theoretical genome a strain was built to be loaded before the assembly's own
+ * FASTA is a set naming none of the map's sequences: the telomeres were looked
+ * for in it, and the edited sequence written from it as a file of `N`.
+ */
+export function sequenceSets(entries: readonly AnnotationEntry[]): { own: AnnotationEntry | null; others: AnnotationEntry[] } {
+  const sets = entries
+    .filter((entry) => entry.kind === 'sequence' && entry.status === 'ready')
+    .map((entry) => ({ id: entry.id, matched: entry.overlap?.matched ?? 0, entry }))
+  const { own, others } = pickSets(sets)
+  return own === null ? { own: null, others: [] } : { own: own.entry, others: others.map((set) => set.entry) }
 }
 
 /** A dot plot's streaks, found along the file's sequence set, as streaks of its own sequences. */
