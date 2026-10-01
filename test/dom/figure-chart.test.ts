@@ -19,10 +19,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { chartFigure } from '@/figures/echartsFigure'
-import { specOf, type XyFigureSpec } from '@/figures/spec'
+import { specOf, type MatrixFigureSpec, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle } from '@/figures/style'
 import { VectorPage, pdfColour } from '@/ui/vector'
-import type { CurveOutput } from '@/analysis/types'
+import type { CurveOutput, MatrixOutput } from '@/analysis/types'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -274,6 +274,47 @@ describe('chartFigure', () => {
     const content = await contentOf(await pdfOf(page, 'points'))
     // A scatter of five points per series is filled dots, not stroked runs.
     expect(content).toMatch(/\bf\b/)
+
+    figure.destroy()
+  })
+
+  /**
+   * A matrix's colour bar is a gradient in the chart's SVG, and a page cannot
+   * hold one — so the replay draws it as bands. It used to be flattened to its
+   * middle stop: every pileup in a PDF had a key of one orange rectangle.
+   */
+  it('keeps a matrix’s colour bar a ramp on the page', async () => {
+    // Two values only, so the cells are two colours and every other colour on
+    // the page is the bar's.
+    const n = 6
+    const output = {
+      kind: 'matrix',
+      id: 'pileup',
+      label: 'Pileup',
+      nrows: n,
+      ncols: n,
+      values: new Float32Array(n * n).map((_, i) => (i % 2 === 0 ? 0 : 1)),
+      xLabel: 'x',
+      yLabel: 'y',
+      xTicks: [],
+      yTicks: [],
+      colormap: 'fall',
+    } as unknown as MatrixOutput
+    const built = specOf(output) as MatrixFigureSpec
+    const figure = chartFigure({ spec: built, style: defaultStyle(built) })
+    document.body.append(figure.el)
+    Object.defineProperty(figure.el, 'clientWidth', { value: 480, configurable: true })
+    Object.defineProperty(figure.el, 'clientHeight', { value: 400, configurable: true })
+    await figure.ready
+
+    const page = new VectorPage(480, 400)
+    figure.draw(page.ctx, { width: 480, height: 400 })
+    const content = await contentOf(await pdfOf(page, 'pileup'))
+    const fills = new Set(content.match(/^[\d.]+ [\d.]+ [\d.]+ rg$/gm) ?? [])
+    expect(fills.size).toBeGreaterThan(40)
+    // Both ends of `fall`, white and black, are on the page.
+    expect(fills).toContain('1 1 1 rg')
+    expect([...fills].some((fill) => fill.split(' ').slice(0, 3).every((v) => Number(v) < 0.03))).toBe(true)
 
     figure.destroy()
   })

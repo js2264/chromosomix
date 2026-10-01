@@ -507,6 +507,29 @@ describe('what the cell says', () => {
     expect(store.restyled.at(-1)?.patch.structure?.mirrorY).toBe(true)
   })
 
+  it('saves its PDF as a drawing, with no resolution beside it (§25.7)', () => {
+    // A tube was a raster in the PDF, at the row's resolution; nothing is now,
+    // so the format says `vector` as the map's and the browser's do, and the
+    // resolution goes while it is chosen.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const row = settingsRow(deck, 'export')
+    const format = row?.querySelector<HTMLSelectElement>('.select-format')
+    const dpi = row?.querySelector<HTMLSelectElement>('.select-dpi')
+    const copy = row?.querySelectorAll<HTMLButtonElement>('.export-acts button')[1]
+    if (format === null || format === undefined || dpi === null || dpi === undefined || copy === undefined) {
+      throw new Error('no export row')
+    }
+    expect([...format.options].map((option) => option.textContent)).toEqual(['PNG', 'PDF (vector)'])
+    expect(format.title).not.toMatch(/raster/)
+    expect(dpi.hidden).toBe(false)
+    format.value = 'pdf'
+    format.dispatchEvent(new Event('change'))
+    expect(dpi.hidden).toBe(true)
+    // The copy is a PNG whatever the format, and says at what.
+    expect(copy.title).toMatch(/PNG at 300 dpi/)
+  })
+
   it('replants the axes along the view, moving neither the model nor the centre', () => {
     const store = fakeStore([structureEntry()])
     const { deck } = make(store)

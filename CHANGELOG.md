@@ -1608,11 +1608,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   an overlay that was off — pressed, it threw the reader's pan away. The crosshair and the hover card,
   which are about both pictures, are offered once per column rather than in both rows lit together.
 
-- **The map's PDF says it is an image (§7.2).** The browser's option has always read `PDF (vector)`;
-  the map's read `PDF`, and a biologist who saved one for a figure and opened it in Illustrator
-  expecting paths had been told which they were getting by one card and nothing at all by the other.
-  Its cells are that image, one lossless raster, on a page whose axes, lanes, key and caption are
-  paths and text.
+- **The map's PDF says it is vector, and asks for no resolution (§7.2).** The browser's option has
+  always read `PDF (vector)`; the map's read `PDF`, and a biologist who saved one for a figure and
+  opened it in Illustrator expecting paths had been told which they were getting by one card and
+  nothing at all by the other. It is the same kind of page: the cells one lossless image, and every
+  axis, lane, key and caption round them paths and text. So the resolution goes while PDF is chosen,
+  as it does beside the browser — the copy's tooltip naming the one its PNG takes — and the PDF's file
+  name stops carrying a `-300dpi` it never had.
+
+- **The deck's PDF is a drawing (§16.5).** Each cell is drawn on the page as its own PDF draws it —
+  a map's cells the one image of that map, its axes, lanes, key and caption round them paths and
+  text; the tracks, the browser as lead and a 3D model paths and text throughout — laid out by the
+  one composition the PNG is, so the two files cannot disagree about where a cell stands. It was the
+  300 dpi PNG on a page: six panels' axes and track names as pixels, in the one file meant to be
+  restyled. Its name no longer carries a resolution.
+
+- **A 3D model's PDF is paths, the tube included (§25.7).** The tube — the representation a model
+  opens in — left as the raster the GPU drew, on the argument that a lit surface is no path, so most
+  models were a picture of pixels in the one file meant to be a drawing. It is now a stroke per bead
+  along the GPU's own curve, a darker rim under a lighter core, and the page holds what the PNG does,
+  from the same numbers: a gap's dashes whatever the model is drawn as, the centre of rotation, the
+  ruler's ticks, the depth slab, the fog and the cell's own colours. The words on the model are one
+  function for both files, so the PNG gains the ruler's labels, the bookmarks and the measurements'
+  distances the cell shows, and the PDF's distances are in the file's units rather than the model's
+  normalised ones. The format reads `PDF (vector)`, and the resolution goes while it is chosen.
+
+- **A chart's colour bar keeps its ramp in a saved figure (§18.13).** The replay that writes a chart
+  into a PDF or a PNG flattened every gradient to its middle stop, and a matrix chart's continuous
+  colour bar is one: every exported pileup, saddle plot and cis/trans square had a key of one orange
+  rectangle beside a picture in a hundred colours. A linear gradient is drawn as a hundred bands of
+  its own colours now, clipped to the shape it fills.
 
 - **The dark theme reaches the landing page, the tables and the gates (§16.5).** A contact map is a
   figure and stays light whatever the screen is, which is why the centre column pinned the light

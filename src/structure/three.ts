@@ -64,9 +64,9 @@ import {
   WebGLRenderer,
 } from 'three'
 
-import { basis, eyeOf, halfHeight, project } from './camera'
+import { basis, eyeOf, halfHeight } from './camera'
 import { hexOf } from './colour'
-import { MARKED_BEAD } from './painter'
+import { MARKED_BEAD, drawStructureLabels } from './painter'
 import type { StructureView } from './painter'
 import { centroidOf } from './scene'
 import type { Structure } from './scene'
@@ -298,7 +298,13 @@ export class StructureRenderer {
       renderer.setSize(heldWidth, heldHeight, false)
       this.render()
     }
-    drawLabels(ctx, { width: out.width, height: out.height }, view, this.palette, out.width / heldWidth)
+    // The words on the model, in the cell's own CSS pixels scaled to this
+    // canvas: the same function the vector page writes them with
+    // (`structure/painter.ts`), so the PNG and the PDF name the same things.
+    ctx.save()
+    ctx.setTransform(out.width / heldWidth, 0, 0, out.height / heldHeight, 0, 0)
+    drawStructureLabels(ctx, { width: heldWidth, height: heldHeight }, view, this.palette)
+    ctx.restore()
     return out
   }
 
@@ -1374,42 +1380,4 @@ function buildKey(view: StructureView): string {
     style.others,
     litKey,
   ].join('|')
-}
-
-/**
- * The chain names onto a 2D canvas over the GL frame, for the export.
- *
- * Projected through the pure camera, which is the same projection the GL
- * camera was built from, so a label lands on its chain.
- */
-function drawLabels(
-  ctx: CanvasRenderingContext2D,
-  box: { width: number; height: number },
-  view: StructureView,
-  palette: RenderPalette,
-  scale: number,
-): void {
-  if (!view.style.labels) return
-  const { structure } = view
-  ctx.save()
-  ctx.font = `${Math.round(11 * scale)}px sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  for (const chain of structure.chains) {
-    if (view.haplotype >= 0 && chain.hap !== view.haplotype) continue
-    const mid = chain.beads[chain.beads.length >> 1]
-    if (structure.present[mid] === 0) continue
-    const at = project(view.camera, box, structure.x[mid], structure.y[mid], structure.z[mid])
-    if (at === null) continue
-    const name = structure.contigs[chain.contig]
-    const label =
-      structure.haplotypes.length > 1 && view.haplotype < 0
-        ? `${name} ${structure.haplotypes[chain.hap]}`
-        : name
-    ctx.fillStyle = palette.halo
-    ctx.fillText(label, at.px + scale, at.py + scale)
-    ctx.fillStyle = palette.ink
-    ctx.fillText(label, at.px, at.py)
-  }
-  ctx.restore()
 }

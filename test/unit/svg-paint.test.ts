@@ -300,7 +300,10 @@ describe('paintSvgString', () => {
     expect(ops(calls, 'transform')[0].args).toEqual([2, 0, 0, 2, 0, 0])
   })
 
-  it('flattens a gradient to a colour, since a page cannot hold one', () => {
+  // A page's `fillStyle` is a colour string, so a gradient is drawn as bands of
+  // its colours, clipped to the shape. It used to be flattened to its middle
+  // stop, and every chart's continuous colour bar left as one flat rectangle.
+  it('draws a linear gradient as bands of its colours, clipped to the shape', () => {
     const { ctx, calls } = recorder()
     paintSvgString(
       `<svg width="10" height="10">
@@ -309,8 +312,75 @@ describe('paintSvgString', () => {
       </svg>`,
       ctx,
     )
-    expect(ops(calls, 'set:fillStyle').map((call) => call.args[0])).toContain('#000000')
+    expect(ops(calls, 'clip')).toHaveLength(1)
+    const colours = ops(calls, 'set:fillStyle').map((call) => String(call.args[0]))
+    expect(colours.length).toBeGreaterThanOrEqual(50)
+    expect(ops(calls, 'fill')).toHaveLength(colours.length)
+    // From the first stop to the last, red rising band by band.
+    const reds = colours.map((colour) => Number(/^rgb\((\d+)/.exec(colour)?.[1]))
+    expect(reds[0]).toBeLessThan(5)
+    expect(reds[reds.length - 1]).toBeGreaterThan(250)
+    expect(reds.every((red, index) => index === 0 || red >= reds[index - 1])).toBe(true)
+    // The bands are clipped, and the clip is let go of.
+    expect(ops(calls, 'save').length).toBe(ops(calls, 'restore').length)
+  })
+
+  it('reads a chart colour bar’s gradient in the box of the shape it fills', () => {
+    // `zrender`'s own shape for a continuous colour bar: a polygon, turned
+    // half a turn, filled top to bottom in its own box.
+    const { ctx, calls } = recorder()
+    paintSvgString(
+      `<svg width="40" height="200">
+        <defs><linearGradient gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1" id="bar">
+          <stop offset="0%" stop-color="rgb(255,255,255)"/>
+          <stop offset="50%" stop-color="rgb(251,127,4)"/>
+          <stop offset="100%" stop-color="rgb(0,0,0)"/>
+        </linearGradient></defs>
+        <polygon points="0 0 10 0 10 100 0 100" fill="url(#bar)"/>
+      </svg>`,
+      ctx,
+    )
+    // Every band spans the bar's width and stacks down its height: the first
+    // white at the top, the last black at the bottom.
+    const channels = ops(calls, 'set:fillStyle').map((call) =>
+      (/^rgb\((\d+), (\d+), (\d+)\)$/.exec(String(call.args[0])) ?? []).slice(1).map(Number),
+    )
+    expect(channels[0].every((value) => value > 250)).toBe(true)
+    expect(channels[channels.length - 1].every((value) => value < 5)).toBe(true)
+    // …and the orange of the middle stop half way down.
+    const middle = channels[Math.floor(channels.length / 2)]
+    expect(middle[0]).toBeGreaterThan(240)
+    expect(middle[2]).toBeLessThan(20)
+    const ys = ops(calls, 'moveTo').map((call) => Number(call.args[1]))
+    expect(Math.min(...ys)).toBeLessThanOrEqual(0)
+    expect(Math.max(...ys)).toBeLessThan(100)
+  })
+
+  it('is one fill where every stop is one colour', () => {
+    const { ctx, calls } = recorder()
+    const stops = Array.from({ length: 101 }, (_, i) => `<stop offset="${i}%" stop-color="rgb(207,210,215)"/>`)
+    paintSvgString(
+      `<svg width="10" height="10">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">${stops.join('')}</linearGradient></defs>
+        <rect x="0" y="0" width="10" height="10" fill="url(#g)"/>
+      </svg>`,
+      ctx,
+    )
     expect(ops(calls, 'fill')).toHaveLength(1)
+    expect(ops(calls, 'set:fillStyle').map((call) => call.args[0])).toEqual(['rgb(207, 210, 215)'])
+  })
+
+  it('still stands a gradient’s middle stop in for it on a stroke', () => {
+    const { ctx, calls } = recorder()
+    paintSvgString(
+      `<svg width="10" height="10">
+        <defs><linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ff0000"/></linearGradient></defs>
+        <path d="M0 0L9 9" fill="none" stroke="url(#g)"/>
+      </svg>`,
+      ctx,
+    )
+    expect(ops(calls, 'set:strokeStyle').map((call) => call.args[0])).toEqual(['#000000'])
+    expect(ops(calls, 'clip')).toHaveLength(0)
   })
 
   it('reads a dash pattern', () => {

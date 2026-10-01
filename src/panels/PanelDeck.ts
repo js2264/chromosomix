@@ -78,15 +78,14 @@ import {
   chooseSaveTarget,
   fileStamp,
   readPageBackground,
-  scaleForDpi,
   type ExportFormat,
 } from '../ui/export'
-import { VectorPage } from '../ui/vector'
 import { KEYS, withKey } from '../ui/commands'
 import { cardTitle, icon, iconButton, setPressed } from '../ui/icons'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
+import { rasterDeck, vectorDeck, type CellFigure } from './deckFigure'
 import type { LocusWindow } from '../render/locus'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
 import { TRACKS_CELL_NAME, TracksPanel, type TracksCellProps } from './TracksPanel'
@@ -500,11 +499,11 @@ export interface LeadAxis {
   /** Put a stretch on the axis; `false` where it could not. */
   show(range: { contig: string; start: number; end: number }): boolean
   /**
-   * The tracks at an export dpi, for the deck's figure — its cell of it,
-   * which was left empty before the browser could be asked. `null` where the
-   * page cannot draw one.
+   * The tracks as the deck's figure's cell of them (`panels/deckFigure.ts`),
+   * which was left empty before the browser could be asked: pixels for its
+   * PNG, paths for its PDF. `null` where there is nothing to draw.
    */
-  exportCanvas?(dpi: number): HTMLCanvasElement | null
+  figure?(now: Date): CellFigure | null
   /** Hand the browser's Export card and keys to the deck's figure, or back (`null`). */
   setDeckExport?(hook: DeckExport | null): void
 }
@@ -540,14 +539,14 @@ interface Slot {
 }
 
 /**
- * What a deck-wide figure is rasterised at, and the air between its cells.
+ * What the deck's bar rasterises its PNG at.
  *
  * A fixed 300 dpi rather than a picker of its own: the per-panel export already
  * has one, and a second dpi control in the deck's bar would be a shared setting
- * that is not shared with anything. 300 is what a figure is for.
+ * that is not shared with anything. 300 is what a figure is for. The air
+ * between cells is `deckFigure.ts`'s, with the rest of the layout.
  */
 const DECK_EXPORT_DPI = 300
-const DECK_EXPORT_GAP = 0.02
 
 /**
  * What a reader is told when the deck will not open another cell.
@@ -3887,11 +3886,17 @@ export class PanelDeck {
   /**
    * Save the whole deck as one figure — the download in the bar.
    *
-   * The picture is {@link composeDeck}'s; this is the half that names a file and
-   * hands it to the browser. Its twin is {@link copyDeck}, and the two share the
-   * drawing for the reason a single map's save and copy do: they are the same
-   * figure going to two places, and a second composition would be a second thing
-   * to keep in step.
+   * The picture is `deckFigure.ts`'s, from {@link deckFigures}; this is the
+   * half that names a file and hands it to the browser. Its twin is
+   * {@link copyDeck}, and the two share the drawing for the reason a single
+   * map's save and copy do: they are the same figure going to two places, and a
+   * second composition would be a second thing to keep in step.
+   *
+   * The PDF is a **vector page**, each cell drawn on it as its own PDF draws it
+   * — a map's cells the one image, everything else paths and text — laid out by
+   * the same composition the PNG is. It used to be the PNG on a page, which
+   * kept every axis and track name of six panels as pixels in the one file
+   * meant to be a drawing. So its name carries no dpi: a vector page has none.
    */
   private async saveDeck(format: ExportFormat = 'png', dpi = DECK_EXPORT_DPI): Promise<void> {
     const now = new Date()
@@ -3899,23 +3904,19 @@ export class PanelDeck {
     // panels at 300 dpi can outlast the moment a browser will still open a save
     // dialog for (`ui/export.ts`).
     const target = await chooseSaveTarget(
-      `deck-${fileStamp(now)}-${dpi}dpi.${format}`,
+      format === 'pdf' ? `deck-${fileStamp(now)}.pdf` : `deck-${fileStamp(now)}-${dpi}dpi.png`,
       format === 'pdf' ? 'application/pdf' : 'image/png',
     )
     if (target === null) return
-    const out = this.composeDeck(now, dpi)
-    if (out === null) return
+    const figures = this.deckFigures(now)
     if (format === 'pdf') {
-      // One page carrying the composed raster at the dpi it was drawn at: every
-      // panel's own PDF is vector, but the deck is an arrangement of pictures,
-      // and a page of six pictures is what the reader laid out.
-      const scale = scaleForDpi(dpi)
-      const page = new VectorPage(out.width / scale, out.height / scale)
-      page.ctx.drawImage(out, 0, 0, out.width / scale, out.height / scale)
+      const page = vectorDeck(figures, this.columnsNow(), readPageBackground())
       const blob = await page.toBlob({ title: 'deck', created: now })
       await target.write(blob)
       return
     }
+    const out = rasterDeck(figures, this.columnsNow(), readPageBackground(), dpi)
+    if (out === null) return
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (blob === null) return
     await target.write(blob)
@@ -4186,7 +4187,7 @@ export class PanelDeck {
    * a PDF pasted into a slide arrives as a file attachment instead of a picture.
    */
   async copyDeck(dpi = DECK_EXPORT_DPI): Promise<void> {
-    const out = this.composeDeck(new Date(), dpi)
+    const out = rasterDeck(this.deckFigures(new Date()), this.columnsNow(), readPageBackground(), dpi)
     if (out === null) return
     try {
       await copyPngToClipboard(canvasToPng(out))
@@ -4200,63 +4201,33 @@ export class PanelDeck {
   }
 
   /**
-   * Every panel drawn into one canvas, laid out as it is on screen.
+   * Every cell's picture for the deck's figure, in the order they stand on
+   * screen (`panels/deckFigure.ts`).
    *
-   * The thing somebody assembling a figure actually wants, and the one export no
-   * panel can produce for itself. Each panel draws its own — the same
-   * `exportCanvas` the single map has always had, at the same dpi, with its own
-   * key in its own corner — and they are placed into the grid the reader drew,
-   * every cell the size of the largest so the columns line up. An empty cell is
-   * left empty rather than closed up: it is part of the arrangement, and a
-   * figure that silently reflowed on the way to disk would not be the picture
-   * that was on screen.
-   *
-   * `null` only where there is no 2d context to draw into, which is a browser
-   * that cannot export at all rather than a deck that cannot.
+   * The thing somebody assembling a figure actually wants, and the one export
+   * no panel can produce for itself. Each cell draws its own — a map the same
+   * figure its own Export card saves, with its own key in its own corner and its
+   * own caption under it; a model, the tracks, the browser as lead each theirs —
+   * and the composition places them into the grid the reader drew. An empty
+   * cell is `null`, and stays a cell.
    */
-  private composeDeck(now: Date, dpi = DECK_EXPORT_DPI): HTMLCanvasElement | null {
-    // In the order they stand on screen, the lead's wherever it was moved to and
-    // not at all while it is hidden (§16.9): the figure is the arrangement.
+  private deckFigures(now: Date): Array<CellFigure | null> {
+    // The lead's wherever it was moved to and not at all while it is hidden
+    // (§16.9): the figure is the arrangement.
     const leadAxis = this.leadAxis
-    const cells: Array<{ exportCanvas(dpi: number, now: Date): HTMLCanvasElement | null } | null> = this.shownOrder().map((cell) =>
-      cell === LEAD_CELL
-        ? (this.lead ??
-          // The browser as lead draws its own cell (§25 stage D) — it was a gap
-          // in the figure where the tracks stood on screen.
-          (leadAxis?.exportCanvas === undefined
-            ? null
-            : { exportCanvas: (at: number) => leadAxis.exportCanvas?.(at) ?? null }))
-        : (cell.panel?.map ?? cell.cell ?? null),
-    )
-    const drawn = cells.map((cell) => {
+    return this.shownOrder().map((cell) => {
       try {
-        return cell === null ? null : cell.exportCanvas(dpi, now)
+        if (cell !== LEAD_CELL) return cell.panel?.map?.deckFigure(now) ?? cell.cell?.figure(now) ?? null
+        // The browser as lead draws its own cell (§25 stage D) — it was a gap
+        // in the figure where the tracks stood on screen.
+        if (this.lead === null) return leadAxis?.figure?.(now) ?? null
+        return this.lead.deckFigure(now)
       } catch {
-        // One panel past what a browser will rasterise must not take the other
-        // five with it; the gap says which one, and every other cell is right.
+        // A cell that cannot even say how big it is leaves its place empty,
+        // and every other cell is right.
         return null
       }
     })
-    const cellWidth = Math.max(1, ...drawn.map((canvas) => canvas?.width ?? 0))
-    const cellHeight = Math.max(1, ...drawn.map((canvas) => canvas?.height ?? 0))
-    const columns = this.columnsNow()
-    const rows = Math.ceil(drawn.length / columns)
-    const gap = Math.round(cellWidth * DECK_EXPORT_GAP)
-
-    const out = document.createElement('canvas')
-    out.width = columns * cellWidth + (columns - 1) * gap
-    out.height = rows * cellHeight + (rows - 1) * gap
-    const ctx = out.getContext('2d')
-    if (ctx === null) return null
-    ctx.fillStyle = readPageBackground()
-    ctx.fillRect(0, 0, out.width, out.height)
-    drawn.forEach((canvas, cell) => {
-      if (canvas === null) return
-      const column = cell % columns
-      const row = Math.floor(cell / columns)
-      ctx.drawImage(canvas, column * (cellWidth + gap), row * (cellHeight + gap))
-    })
-    return out
   }
 
   private warn(message: string): void {

@@ -4,9 +4,9 @@
  * A model zoomed past its cell is cut by the cell's edge; on screen the cell's
  * border says where, and an export without one left the model floating on the
  * page with a straight side sliced off it. `drawCellFrame` is what every export
- * of a model draws that edge with — the deck's figure, the card's PNG, the
- * clipboard and the tube's raster through `StructurePanel.exportCanvas`, and a
- * PDF of paths directly — so the rule is pinned here, once.
+ * of a model draws that edge with — the deck's PNG, the card's PNG and the
+ * clipboard through `StructurePanel.exportCanvas`, and every PDF, the deck's
+ * included, as a path — so the rule is pinned here, once.
  */
 
 import { describe, expect, it } from 'vitest'

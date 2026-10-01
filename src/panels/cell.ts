@@ -19,6 +19,7 @@ import type { LocusWindow } from '../render/locus'
 import type { ViewState } from '../types'
 import type { PickHandlers } from '../ui/mapPick'
 import type { Command } from '../ui/commands'
+import type { CellFigure } from './deckFigure'
 
 export type DeckCellKind = 'structure' | 'tracks'
 
@@ -39,8 +40,12 @@ export interface DeckCell {
   repaint(): void
   /** The heading's name may have changed. */
   syncName(): void
-  /** The picture at an export dpi, or `null` where there is nothing to draw. */
-  exportCanvas(dpi: number, now: Date): HTMLCanvasElement | null
+  /**
+   * The cell's picture for the deck's figure (`panels/deckFigure.ts`): its
+   * size, its pixels at a dpi for the PNG, and its paths for the PDF — or
+   * `null` where there is nothing to draw.
+   */
+  figure(now: Date): CellFigure | null
   /**
    * Another surface's pointer, as a mark at each place it names (§25.4) — one
    * for a track or a bead, **two** for a cell of a map, whose contact is a

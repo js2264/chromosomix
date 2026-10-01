@@ -7017,7 +7017,7 @@ export class Session {
               browser.showLocus(formatLocus(range))
               return true
             },
-            exportCanvas: (dpi) => browser.exportCanvas(dpi),
+            figure: () => browser.deckFigure(),
             setDeckExport: (hook) => browser.setDeckExport(hook),
           }
         : null,

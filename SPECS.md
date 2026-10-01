@@ -1877,12 +1877,15 @@ rather than enlarged, and the framing — pan and zoom included — is what is o
 page written by the app, its size in points derived from the CSS size, and only the matrix on it is
 an image: the cells as the screen draws them, in one lossless raster, with every axis, tick, label,
 lane, key and caption round them written as paths and text on the same vector page the 1D browser's
-PDF is (`ui/vector.ts`). The page is drawn at 1:1, so the DPI beside the format, which the map's card
-keeps on screen for both, is the PNG's.
+PDF is (`ui/vector.ts`). The page is drawn at 1:1 and has no resolution, so the DPI beside the
+format is the PNG's alone and is **absent while PDF is chosen**, as it is on the browser's card —
+the copy's tooltip then names the resolution its PNG takes. The resolution is in a PNG's file name
+and not in a PDF's.
 
-The map's format option is labelled **PDF (image)** and the browser's **PDF (vector)**: a
-biologist who saved a map as `PDF` for a figure and opened it in Illustrator expecting paths had been
-told which they were getting by one card and nothing at all by the other.
+Both cards label the format **PDF (vector)**, and so does the 3D model's (§25.7): a biologist who
+saved a map as `PDF` for a figure and opened it in Illustrator expecting paths had been told which
+they were getting by one card and nothing at all by the other — and on a map there are paths to
+restyle, everything but the cells.
 
 **The 1D browser's PDF is vector throughout**, and the map's matrix is the one raster either PDF
 holds. A contact map is a raster honestly — twelve thousand bins are pixels and writing them as a
@@ -5403,9 +5406,21 @@ clip or bin size onto every panel once — greyed, with that reason on them, whi
 there being nothing to match *to*; how many across; and the whole deck as one figure — saved, or
 copied to the clipboard, which is what `⌘C` reaches while a deck is on.
 
+The deck's figure is **one arrangement written two ways**: a PNG at a resolution — the bar's 300
+dpi, or the Export card's — and a PDF that is a vector page, each cell drawn on it as its own PDF
+draws it: a map's cells the one image of that map, its axes, lanes, key and caption round them
+paths and text; the tracks, the browser as lead and a model paths and text throughout. One
+composition lays both out (`panels/deckFigure.ts`) — every cell the size of the largest, the same
+air between — so the two files cannot disagree about where a cell stands; the PNG rasterises each
+cell and places it, the page places each cell's own drawing. The deck adds nothing of its own but the
+page under them: each cell carries its own caption, key and frame, as on screen, and an empty cell
+stays empty. The PDF used to be the PNG on a page, so six panels' axes and track names left as
+pixels in the one file meant to be a drawing. A PDF's file name carries no resolution; a PNG's
+does.
+
 The Aesthetics column's **Export** card saves and copies that same figure whenever any cell beside
 the first map has a picture of its own — a map, a structure, a stack of tracks — and the first map's
-own figure, vector PDF and all, only while every other cell is empty. The figure is the cells as
+own figure only while every other cell is empty. The figure is the cells as
 they stand on screen: the first map where it was moved to, and not at all while it is hidden (§16.9). It used to ask for another
 *map*, so a deck of a map beside its 3D model exported the map alone from the card, while the bar's
 button beside it wrote both: two exports of one screen disagreeing about what was on it.
@@ -8217,10 +8232,14 @@ and no way for them to differ. `VectorPage` gained `bezierCurveTo` (a chart's cu
 `transform` (a `<g transform>` composes with the caller's placement rather than replacing it) and
 `lineCap` for this.
 
-Three limits of the replay are stated rather than hidden: a gradient fill becomes its middle stop,
-because a page's `fillStyle` is a colour string and nothing here asks for a gradient; `<image>` is
-skipped, because nothing these charts draw is a raster; and `<style>` is ignored, because what the
-renderer puts there is `:hover` rules.
+Three limits of the replay are stated rather than hidden: a **linear gradient fill is drawn as
+bands** — a hundred strips across its line, each the colour the gradient has at its middle, clipped
+to the shape — because a page's `fillStyle` is a colour string, and a radial gradient or a gradient
+stroke, which nothing here draws, stands as its middle stop; `<image>` is skipped, because nothing
+these charts draw is a raster; and `<style>` is ignored, because what the renderer puts there is
+`:hover` rules. The gradient was flattened to its middle stop until a matrix chart's continuous colour
+bar was found to be one: every exported pileup's key was a single orange rectangle beside a picture
+in a hundred colours.
 
 **The library arrives in a chunk of its own**, fetched when the first figure is built, exactly as
 three.js is for the 3D cell (§25.3) — a reader who never runs an analysis never downloads a chart
@@ -10324,8 +10343,9 @@ each cell as it was and a cell moved or closed takes both with it rather than le
 **The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
 session's view, re-parented into a cell as a map's is — moved and hidden as a map's is (§16.9) — and
 the cells beside it are tracks and the structure. The deck learns a lead that is not a map — the
-browser's windows as loci, a way to be taken somewhere, and its tracks drawn at an export's dpi, so
-the deck's figure has them in their cell where it used to leave a gap — and the browser reports every
+browser's windows as loci, a way to be taken somewhere, and its tracks as a cell of the deck's
+figure — pixels for its PNG, paths for its PDF (§16.5) — so the deck's figure has them in their
+cell where it used to leave a gap — and the browser reports every
 move of its window, a link's included. Its Export card saves and copies the deck's figure while a cell
 beside it has a picture, as the map's does (§16.5). A map may not join such a deck: the bar refuses
 it in words, the add row puts its map roads away, a map a link names is held as the cell it would
@@ -10721,11 +10741,25 @@ diagonal about twice as well under the fitted dispersion as under a flat Poisson
 
 The card's last row is **the export row** (§26.6) — `[resolution] [format] [⭳] [⧉]` with a line
 under it — so a model is saved the way a map and a browser are, and at the resolution the reader
-chose rather than at a fixed one. Beads and sticks export as **paths** through
-`structure/painter.ts`, projected through the same camera the screen was; a tube is a lit surface no
-`arc` can be and exports as the raster the GPU drew, **at the row's own resolution**; the deck's
-figure takes the cell's canvas like any other, at the figure's resolution — 300 dpi from the deck's
-bar, the Export card's own from that card (§16.5). The clipboard takes a PNG, as it does for a map.
+chose rather than at a fixed one. The PNG is the picture the GPU lit, at that resolution. The PDF is
+**paths, whatever the model is drawn as**, through `structure/painter.ts`, projected through the
+same camera the screen was: beads as discs, sticks as segments, and the **tube** as a stroke per
+bead along the Catmull–Rom curve the GPU draws it on, a darker rim under a lighter core, each bead's
+stretch running from half way to one neighbour to half way to the next — the stretch the GPU colours
+by that bead — and meeting the next butt to butt, so no rim is laid across another stretch's core;
+a run ends round, and a tube thinner than three pixels is one flat stroke. The tube used to export
+as the raster the GPU drew, on the argument that a lit surface is no `arc`; it is the default
+representation, so most models left as a picture of pixels in the one file meant to be a drawing.
+Nothing in a model's PDF is a raster now, so the format reads **PDF (vector)** and the row's
+resolution is **absent while it is chosen**, as on the map's and the browser's cards (§7.2). The
+page holds what the PNG holds, from the same numbers: the dashes across a gap, whatever the model is
+drawn as; the centre of rotation when it is shown; the ruler's ticks, the marks and the telomeres;
+the measurements; the depth slab and the fog; and the cell's own colours. What is written on the
+model — the sequence names and the bookmarks under *names*, the ruler's labels, each measurement's
+distance in the file's units — is one function for both files, so the PNG and the PDF name the same
+things in the same places. The deck's figure takes the cell's canvas for its PNG, at the figure's
+resolution — 300 dpi from the deck's bar, the Export card's own from that card — and the cell's paths
+for its PDF (§16.5). The clipboard takes a PNG, as it does for a map.
 
 **An exported model is framed by its cell's edge**: a thin rule round the picture, at the weight and
 in the colour of the map's plot border (`--border-strong`, 0.75 px scaled to the export's

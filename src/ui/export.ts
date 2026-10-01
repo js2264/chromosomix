@@ -1,5 +1,6 @@
 /**
- * Saving the picture: a raster at a chosen resolution, as PNG or as PDF.
+ * Saving the picture: a raster at a chosen resolution as PNG, or a drawing as
+ * PDF.
  *
  * The figure is re-rendered rather than screen-grabbed. Everything the canvas
  * draws — the matrix, the separators, the labels, the ticks — is redrawn at the
@@ -8,14 +9,16 @@
  * view is exported exactly as it is framed on screen, including the pan and the
  * zoom, because that framing is the thing the user is asking to keep.
  *
- * The PDF is written here, in about eighty lines, rather than by pulling in a
- * PDF library. A single-page document holding one image is four objects and a
- * cross-reference table; a dependency for that would be several hundred
- * kilobytes to do the same arithmetic, in an app whose entire point is that it
- * has no server and little else.
+ * The PDF is the same drawing written down as drawing, by `ui/vector.ts`: a
+ * page that takes the canvas calls every figure here is drawn with and emits
+ * paths and text, with a contact map's cells the one image on it. It is
+ * written by hand rather than by a PDF library — a dependency for it would be
+ * several hundred kilobytes to do the same arithmetic, in an app whose entire
+ * point is that it has no server and little else. This module keeps the parts
+ * both files share: the DPI arithmetic, the names, the save dialog, the
+ * clipboard and the compression.
  */
 
-import { PRODUCER } from '../version'
 import { logAction } from '../state/actions'
 import { fmt } from './dom'
 import { messageToast } from './toast'
@@ -30,18 +33,22 @@ export const EXPORT_DPI_CHOICES = [96, 150, 300, 600] as const
  * The two files a **map** writes, in the order they are offered.
  *
  * PDF leads because it is the default: a figure ends up in a manuscript, and a
- * one-page PDF carrying a lossless image is what a journal asks for. PNG is the
- * same picture for a slide or an email.
+ * page a journal can restyle is what it asks for. PNG is the same picture for
+ * a slide or an email.
  *
- * `PDF (image)`, and the word earns its place: a contact map is a raster, so
- * this PDF is a page carrying one — pretending otherwise would mean writing
- * down a million rectangles. The 1D browser's own list says `PDF (vector)`
- * because nothing it draws is a raster, and a reader who saved a map as `PDF`
- * and opened it in Illustrator expecting paths had been told that by the other
- * card and nothing at all by this one.
+ * `PDF (vector)`, as the 1D browser's own list says, because that is what the
+ * page is: the matrix's cells are the one image on it — a contact map *is* a
+ * raster, and twelve thousand bins written as a million rectangles would be a
+ * larger, slower file of the same picture — and every axis, tick, label, lane,
+ * key and caption round them is paths and text (`MatrixPanel.vectorFigure`).
+ * It was briefly `PDF (image)`, on the argument that the cells are an image;
+ * but the word is there to tell a reader opening the file in Illustrator
+ * whether there is anything to restyle, and there is — everything but the
+ * cells. The resolution beside it is the PNG's alone, and goes while PDF is
+ * chosen, as the browser's does.
  */
 export const EXPORT_FORMATS = [
-  { value: 'pdf', label: 'PDF (image)' },
+  { value: 'pdf', label: 'PDF (vector)' },
   { value: 'png', label: 'PNG' },
 ] as const
 export type ExportFormat = (typeof EXPORT_FORMATS)[number]['value']
@@ -92,11 +99,6 @@ export function captionStamp(now: Date): string {
     `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
     `${pad(now.getHours())}:${pad(now.getMinutes())}`
   )
-}
-
-/** `D:20260803145233` — PDF's own date syntax, for `/CreationDate`. */
-function pdfDate(now: Date): string {
-  return `D:${fileStamp(now).replace('-', '')}`
 }
 
 /**
@@ -346,96 +348,6 @@ export async function deflateBytes(
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new Compression('deflate'))
   const packed = new Uint8Array(await new Response(stream).arrayBuffer())
   return { data: packed, filter: '/FlateDecode' }
-}
-
-/** Drop the alpha channel: the page is opaque, and PDF has no use for it. */
-function toRgb(image: ImageData): Uint8Array {
-  const rgba = image.data
-  const rgb = new Uint8Array((rgba.length / 4) * 3)
-  for (let i = 0, o = 0; i < rgba.length; i += 4, o += 3) {
-    rgb[o] = rgba[i]
-    rgb[o + 1] = rgba[i + 1]
-    rgb[o + 2] = rgba[i + 2]
-  }
-  return rgb
-}
-
-/**
- * A one-page PDF holding the canvas as a single lossless image.
- *
- * The page is sized in points from the *CSS* size, so the image lands at
- * exactly `dpi` dots per inch on paper however many pixels it carries; the two
- * are the same fact stated in the two units a PDF needs.
- */
-export async function canvasToPdf(
-  canvas: HTMLCanvasElement,
-  options: { dpi: number; title?: string; subject?: string; created?: Date },
-): Promise<Blob> {
-  const ctx = canvas.getContext('2d')
-  if (ctx === null) throw new Error('Could not read the canvas back for export.')
-  const { width, height } = canvas
-  const { data, filter } = await deflateBytes(toRgb(ctx.getImageData(0, 0, width, height)))
-
-  const scale = scaleForDpi(options.dpi)
-  const pageWidth = pointsForCssPixels(width / scale)
-  const pageHeight = pointsForCssPixels(height / scale)
-  const round = (n: number): string => n.toFixed(2)
-
-  const chunks: Uint8Array[] = []
-  const offsets: number[] = []
-  let length = 0
-  const encoder = new TextEncoder()
-  const push = (part: Uint8Array | string): void => {
-    const bytes = typeof part === 'string' ? encoder.encode(part) : part
-    chunks.push(bytes)
-    length += bytes.length
-  }
-  const startObject = (): void => {
-    offsets.push(length)
-  }
-
-  const content = `q ${round(pageWidth)} 0 0 ${round(pageHeight)} 0 0 cm /Im0 Do Q\n`
-
-  push('%PDF-1.4\n%âãÏÓ\n')
-  startObject()
-  push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n')
-  startObject()
-  push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
-  startObject()
-  push(
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${round(pageWidth)} ${round(pageHeight)}] ` +
-      '/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
-  )
-  startObject()
-  push(
-    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} ` +
-      `/ColorSpace /DeviceRGB /BitsPerComponent 8 ${filter === null ? '' : `/Filter ${filter} `}` +
-      `/Length ${data.length} >>\nstream\n`,
-  )
-  push(data)
-  push('\nendstream\nendobj\n')
-  startObject()
-  push(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`)
-  startObject()
-  // The caption drawn on the page, repeated as document metadata: a figure
-  // dropped into a manuscript keeps its provenance even when the caption is
-  // cropped off, and `pdfinfo` is where anyone looks for it first.
-  const clean = (text: string): string => text.replace(/[()\\]/g, '')
-  const title = clean(options.title ?? 'contact map')
-  const subject = options.subject === undefined ? '' : ` /Subject (${clean(options.subject)})`
-  const created =
-    options.created === undefined ? '' : ` /CreationDate (${pdfDate(options.created)})`
-  push(`6 0 obj\n<< /Title (${title})${subject}${created} /Producer (${PRODUCER}) >>\nendobj\n`)
-
-  const xrefAt = length
-  let xref = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`
-  for (const offset of offsets) xref += `${String(offset).padStart(10, '0')} 00000 n \n`
-  push(xref)
-  push(
-    `trailer\n<< /Size ${offsets.length + 1} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`,
-  )
-
-  return new Blob(chunks as BlobPart[], { type: 'application/pdf' })
 }
 
 /**
