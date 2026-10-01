@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A 3D model coloured by a BED's names, A red and B blue (§25.5, §8.16).** Every feature set with a
+  name column — a BED4 or wider, a bigBed, a task's segments — is offered under the model's *colour by*
+  as *· names*: each bead takes the name that overlaps it most, so a compartment call colours the
+  model A and B, and a bead under no feature stays grey. The key lists each name with a swatch that
+  is a colour picker; the colour is kept on the set's row with the session, so it is that name's
+  colour on every model coloured by the set and on the set's own lane, which can now be coloured by
+  *name* too. Exactly `A` and `B` start red and blue, anything else on the categorical palette by
+  base pairs covered; past twenty-three names the rest are one `other` the key counts.
+
 - **Every map drawn to one number of contacts (§6.5).** A box labelled *contacts* ends the
   breadcrumb, showing the map's own total in grey — the `sum` of `cooler info`, 179,175,551 for the
   yeast micro-C. A total typed into it — `10M`, `23,000,000`, `2.5e7` — draws every map of the tab

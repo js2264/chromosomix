@@ -63,6 +63,7 @@ node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sas
 node scripts/ui-vector-pdf.mjs gallery      # the Export card with PDF (vector) and no resolution, then the map's, the deck's and the model's PDFs kept whole, each rendered with poppler and its images counted: v01 … v05, v-map.pdf, v-deck.pdf, v-model.pdf, *-page.png
 node scripts/ui-loci.mjs gallery             # every locus a reader sees or types, 1-based: bookmarks, marks, the map's menu, 4C's anchor, its lane and the console's line, FRiP per feature, a genome view's box: lo01 … lo10
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
+node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

@@ -2851,6 +2851,30 @@ p {
   flex: none;
 }
 
+/* …and a name's chip is a colour picker of the same size (§8.16), the swatch
+   the 3D key draws for the same name. */
+.ann-key-swatch {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.ann-key-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.ann-key-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.ann-key-swatch::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
 /* A numeric colouring's key: the ramp itself, with its two ends written on it.
 
    Chips are the wrong shape for a hundred thousand p-values — there are no
@@ -10382,6 +10406,12 @@ span.deck-name {
   grid-template-columns: repeat(2, auto);
   column-gap: 8px;
   max-width: 75%;
+}
+
+/* …and three to a row from seventeen levels (a set’s names, §25.5, run to twenty-four):
+   twelve rows of two stood over half the model they were the key to. */
+.structure-key:has(> .structure-key-level:nth-child(18)) {
+  grid-template-columns: repeat(3, auto);
 }
 
 /* …except the marks (§25.5): each is a locus or two, `▭ IV:1,100,000-1,150,000`,

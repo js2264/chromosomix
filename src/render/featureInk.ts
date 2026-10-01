@@ -62,6 +62,7 @@ import { STAIN_ORDER, stainColour, stainLabel } from './ideogram'
 import { colormapCss } from './colormaps'
 import { rotateHue } from './hue'
 import { categoryColour } from './meta'
+import { nameLevels, namePalette, type NameOverrides } from './nameColours'
 import { BASE_COLOURS } from './sequence'
 import { variantInk } from './variants'
 
@@ -91,6 +92,11 @@ export const NO_ANSWER = BASE_COLOURS[4]
 export interface KeyLevel {
   label: string
   colour: string
+  /**
+   * Where the row can be recoloured — a name, under colour by name — what a
+   * swatch picked on it is stored under (`FeatureStyle.nameColours`).
+   */
+  name?: string
 }
 
 /** What the settings card draws under the picker, and the lane label reads. */
@@ -141,6 +147,8 @@ export function featureColouring(
   kind: AnnotationKind,
   colourBy: string,
   colour: string,
+  /** The reader's own colours for the set's names (`FeatureStyle.nameColours`). */
+  names: NameOverrides = {},
 ): FeatureColouring {
   const fields = featureFields(set, kind)
   const field = fieldFor(fields, colourBy) ?? fields[0]
@@ -219,6 +227,21 @@ export function featureColouring(
         ramp: null,
       },
       chip: colour,
+    }
+  }
+
+  if (field.kind === 'name') {
+    // The set's names as categories, from the one mapping a model coloured by
+    // the same set uses (§25.5), so the lane and the model agree name for name.
+    const palette = namePalette(nameLevels(set), names)
+    return {
+      colourOf: (index) => palette.colourOf(set.name[index] ?? '') ?? NO_ANSWER,
+      key: {
+        field,
+        levels: palette.levels.map((level) => ({ label: level.label, colour: level.colour, name: level.name })),
+        ramp: null,
+      },
+      chip: palette.levels[0]?.colour ?? colour,
     }
   }
 

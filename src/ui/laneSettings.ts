@@ -1009,9 +1009,9 @@ export function barScaleToggle(store: AnnotationStore, entry: AnnotationEntry): 
  * of chips, because a hundred thousand p-values have no categories to name and
  * the only two numbers worth printing are the ones the ramp runs between.
  */
-export function featureLegend(entry: AnnotationEntry): HTMLElement {
+export function featureLegend(entry: AnnotationEntry, store?: AnnotationStore): HTMLElement {
   const host = el('div', { class: 'ann-key' })
-  fillFeatureLegend(host, entry)
+  fillFeatureLegend(host, entry, undefined, store)
   return host
 }
 
@@ -1020,6 +1020,12 @@ export function fillFeatureLegend(
   host: HTMLElement,
   entry: AnnotationEntry,
   by?: string,
+  /**
+   * Where given, a name's chip is a colour picker (§8.16): the colour is
+   * written to the row's `nameColours`, the one mapping a model coloured by
+   * this set's names reads too (§25.5).
+   */
+  store?: AnnotationStore,
 ): void {
   const style = featuresOf(entry.style, entry.kind)
   const { key } = featureColouring(
@@ -1027,6 +1033,7 @@ export function fillFeatureLegend(
     entry.kind,
     by ?? style.colourBy,
     entry.style.colour,
+    style.nameColours,
   )
   if (key.ramp !== null) {
     host.replaceChildren(
@@ -1039,19 +1046,35 @@ export function fillFeatureLegend(
     )
     return
   }
-  // One chip is not a key, it is a restatement of the lane's own colour.
-  if (key.levels.length <= 1) {
+  // One chip is not a key, it is a restatement of the lane's own colour —
+  // except a name's, which is a control.
+  if (key.levels.length === 0 || (key.levels.length === 1 && key.field.kind !== 'name')) {
     host.replaceChildren()
     return
   }
   host.replaceChildren(
-    ...key.levels.map((level) =>
-      el(
-        'span',
-        { class: 'ann-key-item' },
-        el('span', { class: 'ann-key-chip', style: { background: level.colour } }),
-        el('span', { text: level.label }),
-      ),
-    ),
+    ...key.levels.map((level) => {
+      const name = level.name
+      if (store === undefined || name === undefined) {
+        return el(
+          'span',
+          { class: 'ann-key-item' },
+          el('span', { class: 'ann-key-chip', style: { background: level.colour } }),
+          el('span', { text: level.label }),
+        )
+      }
+      const swatch = el('input', {
+        class: 'ann-key-swatch',
+        type: 'color',
+        value: level.colour,
+        title: `Colour for ${level.label}, on this lane and on a model coloured by these names`,
+      })
+      swatch.addEventListener('input', () => {
+        const live = store.byId(entry.id) ?? entry
+        const held = featuresOf(live.style, live.kind).nameColours ?? {}
+        patchFeatures(store, live, { nameColours: { ...held, [name]: swatch.value } })
+      })
+      return el('label', { class: 'ann-key-item' }, swatch, el('span', { text: level.label }))
+    }),
   )
 }

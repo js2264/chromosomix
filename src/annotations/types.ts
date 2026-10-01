@@ -1275,6 +1275,12 @@ export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 export const STRUCTURE_COLOUR_TRACK = 'track:'
 /** `features:<row id>` — a feature set's colour where a bead overlaps one. */
 export const STRUCTURE_COLOUR_FEATURES = 'features:'
+/**
+ * `names:<row id>` — a feature set's **names** as categories (§25.5): each bead
+ * the colour of the name over it, `A` and `B` on a compartment call. The
+ * colours are the set's own (`render/nameColours.ts`), kept on its row.
+ */
+export const STRUCTURE_COLOUR_NAMES = 'names:'
 
 /**
  * Everything the structure cell's own menu controls.

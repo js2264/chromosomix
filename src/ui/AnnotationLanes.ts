@@ -1488,7 +1488,7 @@ export class AnnotationLanes {
         // **committed** pair, never the one under a drag — a half-finished
         // gesture is not a decision.
         if (glyphAxis !== undefined) state.limits.set(entry.id, glyphAxis)
-        const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
+        const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour, features.nameColours)
         const paint = {
           colour: entry.style.colour,
           guideColour: geometry.palette.guide,

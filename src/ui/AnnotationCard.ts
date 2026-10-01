@@ -1172,7 +1172,7 @@ export class AnnotationCard {
       // picker nor the arrowheads have anything to change. The **key** is what
       // is left, and it is the one of the three this lane needs most: it is
       // where the bars get their names.
-      const key = featureLegend(entry)
+      const key = featureLegend(entry, this.props.store)
       if (entry.kind === 'ideogram') {
         // A karyotype's ink is its stains' and its glyph is one shape rather
         // than boxes on rows (§8.22), so the picker, the arrowheads and the row
@@ -1188,7 +1188,7 @@ export class AnnotationCard {
         // packed into rows.
         out.push(
           this.limits(entry),
-          featureColourField(this.props.store, entry, (by) => fillFeatureLegend(key, entry, by)),
+          featureColourField(this.props.store, entry, (by) => fillFeatureLegend(key, entry, by, this.props.store)),
           key,
         )
       } else if (entry.kind === 'barchart') {
@@ -1209,7 +1209,7 @@ export class AnnotationCard {
             'div',
             { class: 'ann-inline' },
             featureColourField(this.props.store, entry, (by) =>
-              fillFeatureLegend(key, entry, by),
+              fillFeatureLegend(key, entry, by, this.props.store),
             ),
             arrowsToggle(this.props.store, entry),
           ),

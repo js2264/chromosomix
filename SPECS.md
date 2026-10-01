@@ -4029,6 +4029,21 @@ without saying so. A row carrying no value for the chosen column is the neutral 
 half the genes have a biotype is a file saying two things, and colouring the silent half as if they
 were some category would be inventing the fact.
 
+**The name column is a colouring too**, offered as *name* wherever some feature of the set has one —
+a BED4 or wider, a bigBed, a task's segments — because a BED's fourth column is as often a *class* as
+a name: `A` and `B` on a compartment call, the fifteen states of a segmentation. Its colours come
+from `render/nameColours.ts`, the one name→colour mapping a 3D model coloured by the same set reads
+(§25.5), so the lane and the model agree name for name. Names are ranked by the **base pairs** they
+cover over the whole set, and the first twenty-three take a colour each — `CATEGORY_PALETTE` without
+its grey, which on a model is the colour of *nothing here*, then Paul Tol's muted and light sets —
+and the rest are one `other` bucket that the key names with a count, `other (7 more names)`.
+Twenty-four rather than twelve, because the sets this is for are segmentations and a key that folded
+three chromatin states into `other` would fail exactly the file it was asked of. A set whose names
+are exactly **`A` and `B`** takes the compartments' own red and blue instead, the convention every
+compartment figure uses. The key lists the names in natural order (`state2` before `state10`), and
+each chip is a **colour picker**: the colour is kept on the set's row (`FeatureStyle.nameColours`),
+stored with the session, and is the colour that name has on every model coloured by the set.
+
 Both keys live in the **card**, under the control that decides them, for §8.13's reason and one more:
 a feature lane can be sixteen pixels tall beside a map, which is not a legend's worth of room at any
 font. They are built from `featureColouring` — the function the renderer itself calls — so a key that
@@ -10608,7 +10623,26 @@ model's colouring, and a **double-click shows it alone** (a second brings all ba
 held in the model's style by the mark's id and hides the colouring only — the mark stays drawn
 wherever it was put, since a key that removed it would be a second ×. With no marks yet the key
 says where they are made. This colouring used to have no key at all, so a model coloured by six
-marks was six colours nobody could name. The reader's own
+marks was six colours nobody could name.
+
+**A feature set's names are a colouring of their own.** Every interval set whose features carry a
+name — a BED4 or wider, a bigBed, a task's segments — is offered twice in the picker: *· features*,
+the lane's own ink where a bead overlaps a feature, and right under it **· names**, the names as
+categories — a compartment call's `A` and `B`, a segmentation's states. Each bead takes the name
+that overlaps it by the **most base pairs**, summed per name, so a compartment called as two
+touching intervals is still one compartment; a tie goes to the name the file gives first, and a bead
+no named feature overlaps keeps the neutral grey. This is not E1's ramp: a name is a level, not a
+value, so the colour-scale picker is not offered. The colours are the set's (§8.16): `A` red and `B`
+blue where those are the only names, the categorical palette by base pairs covered otherwise, and
+past twenty-three names one `other` bucket that the key says the size of. **The key lists the names
+some bead is under** — a legend naming a colour nothing on the model is drawn in is a legend for
+another model — and its swatches are pickers, as a sequence's and a mark's are. What a swatch writes
+is the **set's** colour for that name, kept on the set's row with the session, for the reason a
+mark's colour is the mark's: `A` is a fact about the call, so `A` picked green here is green on the
+next model coloured by the same call and on its lane coloured by name.
+
+The reader's own
+
 **arrowhead marks** are offered under *loops as chords* as *manual annotations*, beside the loaded loop
 sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
 set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
@@ -10727,7 +10761,7 @@ two words say which one each colouring is. After them, **haplotype** where there
 any column the file carries, and from the session **a track's values** at each bead — read
 through the same sample cache the lanes use at one bucket per bead and on the lane's own limits, so
 a bead coloured by a bigWig agrees with the lane at every value — and **a feature set's** colour
-where a bead overlaps one. The file's **score column** was a colouring and is not now: a g3d carries
+where a bead overlaps one, or its **names** as categories (above). The file's **score column** was a colouring and is not now: a g3d carries
 none worth a ramp, so the row was a column of nothing, and a session stored coloured by it opens by
 sequence. Any other colouring the list no longer has stays named in the picker rather than silently
 becoming the first option. Two rules carried from the modules reused: fit the

@@ -2528,7 +2528,7 @@ export class BrowserView {
       const fixed = hasAMovableAxis(entry.kind) ? barLimitsOf(entry.style.limits) : undefined
       const axis = fixed ?? glyphExtentOf(entry.kind, set, layout) ?? undefined
       const axisLimits = dragged === null || axis === undefined ? fixed : scaledTo(axis, dragged)
-      const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
+      const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour, features.nameColours)
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
