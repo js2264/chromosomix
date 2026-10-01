@@ -235,11 +235,17 @@ export class ContigsTable {
         label: 'circular',
         kind: 'string',
         width: '5.5rem',
+        // What a tick changes, and no more than it changes (§8.15). The map
+        // does not slide round a circle: `ori` is the way across the origin,
+        // and so is a window typed across it. Nor is every cis task circular:
+        // the ones that are are named, and so are the two that read a line.
         title:
           `Tick a ${noun} that joins its own ends — a plasmid, a mitochondrion, a bacterial ` +
-          'chromosome. The map then slides past its end and back on at its beginning, a window ' +
-          'may be typed across the junction, and every cis analysis measures separation the short ' +
-          'way round. Nothing in a .cool can say this, so it is the reader who does.',
+          'chromosome. The map then offers ori, which frames the whole circle with the origin in ' +
+          'the middle; a window may be typed across the junction; and P(s), insulation, the ' +
+          'directionality index, the HiC score, the scalogram, compartments and the tasks read ' +
+          'from the origin measure separation the short way round — chromosight and the O/E map ' +
+          'do not. Nothing in a .cool can say this, so it is the reader who does.',
         // A value as well as a box, so the column sorts and the search box
         // reaches it: on a draft assembly the three declared sequences are three
         // rows in a hundred thousand.

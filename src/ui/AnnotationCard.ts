@@ -824,11 +824,14 @@ export class AnnotationCard {
       'span',
       {
         class: 'ann-grip',
+        // Where a row can be let go (§16.9): a rectangle on any of the four
+        // edges of any map, a `+` of the deck, or an empty cell, the last two
+        // opening a tracks cell drawing it. It named two edges of one map.
         title:
           this.props.context === 'browser'
             ? 'Drag, or press the arrow keys, to reorder this track'
-            : 'Drag to reorder — or onto the map’s bottom or right edge to draw it there. ' +
-              'Arrow keys reorder.',
+            : 'Drag to reorder — or onto any edge of any map to draw it there, or onto a + or an ' +
+              'empty cell to give it a tracks cell of its own. Arrow keys reorder.',
         attrs: {
           draggable: 'true',
           tabindex: '0',

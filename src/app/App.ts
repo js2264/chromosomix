@@ -24,7 +24,7 @@ import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
 import { LoadBox } from '../ui/LoadBox'
-import type { ProviderId } from '../ui/connectFronts'
+import { CONNECT_FOLDER_TITLE, CONNECT_PLACES, type ProviderId } from '../ui/connectFronts'
 import { Modal } from '../ui/Modal'
 import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
@@ -135,10 +135,10 @@ const ADD_FILE_HINT =
  * a Dropbox are browsed identically, which is true of the code rather than a
  * slogan (`browse/folder.ts`). "Kept in the Files panel" carries the lasting
  * half — what a reader gets is not a file but a column they can keep working
- * out of — in the one line a hint is allowed (§26.4).
+ * out of — in the one line a hint is allowed (§26.4). The kinds are the build's
+ * (`CONNECT_PLACES`): the standalone has the first and none of the others (§19).
  */
-const CONNECT_HINT =
-  'A folder here, a bucket, a Google Drive folder or a Dropbox, kept in the Files panel.'
+const CONNECT_HINT = `${CONNECT_PLACES}, kept in the Files panel.`
 
 /**
  * How many sessions may be open at once.
@@ -2021,7 +2021,9 @@ export class App implements SessionHost {
         // *Connect*, because that is what happens to a folder everywhere else in
         // the app (§24.2): a file is opened, a place is connected, and this row
         // was the last one that said "open" about a folder.
-        title: 'Connect a local or remote folder',
+        // The same name the landing page and the Files column give the door,
+        // which has no remote half in the standalone build (§19).
+        title: CONNECT_FOLDER_TITLE,
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
       },
@@ -2029,7 +2031,9 @@ export class App implements SessionHost {
         id: 'open-store',
         group: 'File',
         title: 'Stores',
-        hint: 'The lab’s data, IGV’s genomes, 4DN, ENCODE, as a drawer down the left.',
+        // Not a list of them, which named four of the seven that ship: the
+        // drawer's tiles are the list, read off the registry (§24.2).
+        hint: 'Every data store this viewer ships with, and any you connected, as a drawer down the left.',
         keys: KEYS.stores,
         enabled: this.storeDrawer !== null,
         ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),

@@ -2435,10 +2435,13 @@ export class HeatmapView {
    * columns and left the rows carried the diagonal off the side of the picture
    * within a screen; the reference editor's stage slid along it from the first
    * day, and a reader who learned it there found the session's map doing the
-   * other thing. On, wherever the diagonal is in the picture; off for a turned
-   * map, whose diagonal already runs across the screen, and for a block of two
-   * stretches that share none — a trans block, or two genomes — which has no
-   * diagonal to slide along.
+   * other thing. On wherever the block is cis: where the diagonal is in the
+   * picture, and on a block of two stretches of one sequence, whose diagonal is
+   * off it but whose bands of one separation run parallel to it — moving both
+   * axes keeps the band under the pointer where it is. Off for a turned map,
+   * whose diagonal already runs across the screen, and for a trans block — two
+   * sequences, or two genomes — which has no separation to keep. The panel
+   * decides which (`MatrixPanel.slidesAlongDiagonal`); this only obeys.
    */
   setDiagonalSlide(on: boolean): void {
     this.diagonalSlide = on

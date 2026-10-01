@@ -179,12 +179,14 @@ export interface RegionViewProps {
    * *This sequence is circular* (SPECS §8.15) — the reader's declaration.
    *
    * The declaration is made in the Chromosomes table, a column of ticks beside
-   * the lengths; this view *reads* it. Absent on a two-contig block, which has
-   * no diagonal to slide along, and on a file the session has no circular store
-   * for. When it is present and `on`, the block is read **wrapped**: the window
-   * may run off either end of the sequence and comes back on at the other, and
-   * the ladder's ceiling becomes a cap on the window's *width* rather than on
-   * where it may sit.
+   * the lengths; this view *reads* it. Absent on a two-contig block, which is
+   * two sequences and has no origin to frame across, and on a file the session
+   * has no circular store for. When it is present and `on`, a window typed
+   * across the origin — or `ori`'s — is a legal region, read **wrapped**: its
+   * extent runs off the end of the sequence and is resolved modulo it, and that
+   * extent is the ladder's ceiling, so a zoom refines inside the frame and no
+   * pan or read goes past it. A window that does not cross the origin is read,
+   * panned and zoomed exactly as on a line.
    */
   circular?: CircularPresentation
 }
@@ -218,9 +220,8 @@ export const ZOOM_STEPS: ReadonlyArray<{ factor: number; label: string; out: boo
  * below one narrows, and one press of each button is one of {@link ZOOM_STEPS}.
  * One function for both directions because it is one piece of arithmetic, and
  * every interesting case is an edge it shares: a window against the end of a
- * chromosome cannot be centred, a window one press from the whole sequence has
- * to *become* the whole sequence rather than `chrI:0-230218`, and on a circle
- * there are no ends to be stopped by at all.
+ * chromosome cannot be centred, and a window one press from the whole sequence
+ * has to *become* the whole sequence rather than `chrI:0-230218`.
  *
  * `null` when the press would change nothing, which is what greys the button: a
  * window that already covers the sequence has nowhere wider to go, and one
@@ -228,12 +229,18 @@ export const ZOOM_STEPS: ReadonlyArray<{ factor: number; label: string; out: boo
  * caller knows it, because a window narrower than one bin is a window of one bin
  * drawn with a coordinate nobody can act on.
  *
- * **On a circle the window wraps rather than clamping** (§8.15). Zooming out
- * from a window near the origin of a bacterial chromosome is how a reader gets
- * to look *across* it, and a clamp would shove the window sideways to fit inside
- * a boundary the molecule has not got — which is the whole of what the
- * declaration is for. Past one lap it is the whole sequence, because a window
- * wider than the circle would draw the same bins twice.
+ * **On a circle a press stops at the ends, as on a line** (§8.15). The way across
+ * the origin is `ori`, which frames the whole circle with the origin in the
+ * middle, or a window typed across it — and nothing else. A press outward near
+ * an end used to wrap past the origin instead, which made the zoom steps a third
+ * door to the other side and the one a reader walked through without meaning
+ * to: one press from `chr:10,001-30,000` and the picture was split down the
+ * middle at the junction. `circular` now says only that a window **already**
+ * across the origin — the one window whose end is below its start — is a
+ * window, measured the long way round the outside: it widens and narrows about
+ * its own middle as any window does, a widening keeping the origin inside it,
+ * and past one lap it is the whole sequence, because a window wider than the
+ * circle would draw the same bins twice.
  */
 export function zoomedRegion(
   window: FramedRegion,
@@ -243,10 +250,10 @@ export function zoomedRegion(
   const { contig, length } = window
   // **A window across the origin is measured the long way round the outside.**
   // It is the one window whose end is below its start, and subtracting them
-  // gives a negative span — which would refuse to widen exactly the view a
-  // reader most wants to widen, since a junction is a place you arrive at by
-  // zooming out (§8.15).
-  const round = options.circular === true
+  // gives a negative span — which would refuse to widen or narrow a frame the
+  // reader typed or reached with `ori` (§8.15). Only that window: one that does
+  // not cross the origin is zoomed as on a line, circle or not.
+  const round = options.circular === true && !(window.end > window.start)
   const span =
     window.end > window.start
       ? window.end - window.start

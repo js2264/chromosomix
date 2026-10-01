@@ -9603,15 +9603,60 @@ function watchTheme(onChange: () => void): () => void {
  */
 /**
  * Whether a sideways scroll over a block slides along its diagonal (see
- * `HeatmapView.setDiagonalSlide`): where the diagonal is in the picture — its
- * rows and its columns share a stretch of bins — and the block is square, not
- * turned into a band whose diagonal already runs across the screen.
+ * `HeatmapView.setDiagonalSlide`): wherever the block is **cis** and square,
+ * not turned into a band whose diagonal already runs across the screen.
+ *
+ * Cis is two things, and both slide. The diagonal is in the picture where the
+ * rows and the columns share a stretch of bins. And a block of **two stretches
+ * of one sequence** — `chrI:1-100,000 × chrI:400,001-500,000`, what an
+ * Option-drag off the diagonal opens — has its diagonal off the picture but is
+ * read the same way, by separation: moving rows and columns together keeps
+ * every band parallel to the diagonal, one distance apart, where it is under
+ * the pointer, where a slide of the columns alone carried the reader across
+ * separations they had not asked to leave. It used to take the columns alone,
+ * as a trans block does.
+ *
+ * Trans stays as it was — two sequences, two genomes, where there is no
+ * separation to keep — and so does every picture above bin level, whose cells
+ * are whole sequences or genomes and slide along the diagonal exactly where
+ * their axes share cells.
  */
-export function slidesAlongDiagonal(data: Pick<MatrixResult, 'rowExtent' | 'colExtent'>, turned: RotatedBlock | null): boolean {
+export function slidesAlongDiagonal(
+  data: Pick<MatrixResult, 'rowExtent' | 'colExtent' | 'level' | 'rowGroups' | 'colGroups'> &
+    Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
+  turned: RotatedBlock | null,
+): boolean {
   if (turned !== null) return false
   const [r0, r1] = data.rowExtent
   const [c0, c1] = data.colExtent
-  return Math.max(r0, c0) < Math.min(r1, c1)
+  if (Math.max(r0, c0) < Math.min(r1, c1)) return true
+  return data.level === 'bin' && oneSequence(data)
+}
+
+/**
+ * Whether every run on both axes of a block is one and the same sequence.
+ *
+ * By {@link sameSequence}, the test the readout's distance already makes —
+ * `unitBin` first, the identity that tells two windows of one contig from two
+ * contigs that share a name in two MAGs — so the slide and the separation the
+ * tooltip prints cannot disagree about whether a block is cis. A run holding
+ * several small sequences is none of them.
+ */
+function oneSequence(
+  data: Pick<MatrixResult, 'rowGroups' | 'colGroups'> & Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
+): boolean {
+  const sides = [
+    ...data.rowGroups.map((group) => ({ group, genomes: data.rowGenomes })),
+    ...data.colGroups.map((group) => ({ group, genomes: data.colGenomes })),
+  ].map(({ group, genomes }): AxisSide => ({
+    group,
+    offset: group.start,
+    blockStart: 0,
+    genome: groupAt(genomes, group.start)?.label,
+  }))
+  const first = sides[0]
+  if (first === undefined || data.rowGroups.length === 0 || data.colGroups.length === 0) return false
+  return sides.every((side) => (side.group?.merged?.length ?? 1) <= 1 && sameSequence(first, side))
 }
 
 export function separatorsFor(data: MatrixResult): SeparatorSet {
@@ -10094,13 +10139,15 @@ export function openLaneMenu(
         run: () => patchFeatures(store, entry, { display }),
       })),
     )
-    if (entry.kind !== 'variants') {
-      items.push({
-        label: 'Point the way each runs',
-        checked: features.arrows,
-        run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
-      })
-    }
+    // On every lane that has rows, a call set's included, as the card offers it
+    // (`laneSettings.arrowsToggle`): the switch changes nothing on a feature
+    // the file gives no strand, and the menu leaving it off one kind of lane
+    // the card kept it on was two answers to one question.
+    items.push({
+      label: 'Point the way each runs',
+      checked: features.arrows,
+      run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
+    })
   }
 
   if (hasAMovableAxis(entry.kind)) {

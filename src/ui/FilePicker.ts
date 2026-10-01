@@ -41,7 +41,7 @@ import { LoadBox } from './LoadBox'
 import { appMark } from './mark'
 import { splitUri } from './labels'
 import { connectDirectory } from '../browse/connected'
-import { providerFronts, type ProviderId } from './connectFronts'
+import { CONNECT_FOLDER_TITLE, providerFronts, type ProviderId } from './connectFronts'
 import { storeFronts } from './stores/registry'
 import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
@@ -221,11 +221,9 @@ export class FilePicker {
       // *connect*. A file is opened; a folder is connected (§26.4).
       //
       // The standalone build reaches no remote place at all (§19), so it does
-      // not offer a heading naming two kinds and a row holding one.
-      pickerHeading(
-        IS_STANDALONE ? 'Connect a folder' : 'Connect a local or remote folder',
-        'folder-tree',
-      ),
+      // not offer a heading naming two kinds and a row holding one — and the
+      // name is the one the Files column and the palette use (`CONNECT_FOLDER`).
+      pickerHeading(CONNECT_FOLDER_TITLE, 'folder-tree'),
       el(
         'div',
         { class: 'picker-providers' },

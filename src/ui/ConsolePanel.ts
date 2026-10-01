@@ -112,12 +112,21 @@ const KIND_LABEL: Record<ActionKind, string> = {
   write: 'file written',
 }
 
+/**
+ * What a row's mark says its job got to: §26.7's words for a state, the ones
+ * every other surface that runs things uses.
+ *
+ * *done*, not *finished*, which was this list's own word for it. And
+ * *interrupted* rather than a sentence about the window closing — the status
+ * §23.5 names for a run this window was still watching when it went away, and
+ * one word where every other row has one.
+ */
 const STATUS_LABEL: Record<ActionStatus, string> = {
   running: 'running',
-  ok: 'finished',
+  ok: 'done',
   failed: 'failed',
   cancelled: 'cancelled',
-  interrupted: 'the window closed while this was running',
+  interrupted: 'interrupted',
 }
 
 function readNumber(key: string): number | null {

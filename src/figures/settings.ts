@@ -20,7 +20,8 @@
  *   sequences would be four thousand rows, so the list is capped and says so.
  * - **Text** — the title, the type size, where the legend goes.
  * - **Colour** (a matrix) and **Rows** (a table) replace the first three where
- *   the figure is not a chart of series.
+ *   the figure is not a chart of series. Not Colour on a dot plot, whose lines
+ *   are red and blue whatever it would say (§28.2): Text is its one card.
  *
  * Laid out with the same `settingsField` rows and `controls-card` heads as the
  * annotation cards and the 3D model's settings, because they are the same kind
@@ -83,7 +84,12 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
             textCard(style, set),
           ]
         : props.spec.kind === 'matrix'
-          ? [colourCard(style, set), textCard(style, set)]
+          ? // A dot plot's figure is its streaks, red and blue whatever a
+            // colormap says (§28.2): a Colour card beside it changed nothing on
+            // screen, and the rebuild its every pick asked for threw the zoom away.
+            props.spec.output.streaks !== undefined
+            ? [textCard(style, set)]
+            : [colourCard(style, set), textCard(style, set)]
           : [rowsCard(props.spec, style, set), textCard(style, set)]
 
     host.replaceChildren(

@@ -417,7 +417,11 @@ export class PortalView {
     // file cannot be asked about is not shown — and the banner is the one thing
     // on the pane a reader can act on.
     this.toolbar.classList.toggle('hidden', status.kind === 'error')
-    this.rail.el.classList.toggle('hidden', status.kind === 'error')
+    // …**except the shard choice**, which is the other thing a reader can act
+    // on. Where every ticked shard failed the rail holds nothing but the two
+    // groups that chose them, and they are the way to a shard that was written:
+    // hidden with the toolbar, they left a red line and no control on the page.
+    this.rail.el.classList.toggle('hidden', status.kind === 'error' && this.props.front.shards === undefined)
   }
 
   private paintRail(): void {

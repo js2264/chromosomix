@@ -99,11 +99,16 @@ describe('the rows, from the menu', () => {
     expect(ticked()).not.toContain('Point the way each runs')
   })
 
-  it('offers a call set its rows but no points, since a variant has no strand', () => {
+  it('offers a call set its rows and the point, as its card does', () => {
+    // The card's switch is on every lane of intervals, a VCF's included; the
+    // menu left it off this one, so the two surfaces answered one question two
+    // ways.
     const { store, entry } = made('variants')
     openLaneMenu(10, 10, entry(), store, 'bottom')
     expect(textsOf(document.body, '.context-menu-head')).toContain('Rows')
-    expect(() => item('Point the way each runs')).toThrow()
+    expect(ticked()).toContain('Point the way each runs')
+    item('Point the way each runs').click()
+    expect(featuresOf(entry().style, entry().kind).arrows).toBe(false)
   })
 
   it('offers neither to a signal track or a barChart', () => {

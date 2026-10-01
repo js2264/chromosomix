@@ -363,6 +363,20 @@ describe('asking for a resolution', () => {
     expect(addButton().disabled).toBe(true)
   })
 
+  it('says so when the file has the most it takes, rather than closing on nothing', () => {
+    // Twelve added: the store refuses a thirteenth, and the refusal used to
+    // happen after this dialog had closed — `add` pressed, nothing added,
+    // nothing said.
+    const full = Array.from({ length: 12 }, (_, at) => (at + 3) * 10_000)
+    const { added } = dialog(full)
+    type('3')
+    expect(verdict().classList.contains('is-bad')).toBe(true)
+    expect(verdict().textContent).toContain('the most one file takes')
+    expect(addButton().disabled).toBe(true)
+    box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(added).toEqual([])
+  })
+
   it('reads the unit beside the box, not a suffix in it', () => {
     dialog()
     type('3')

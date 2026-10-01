@@ -170,7 +170,10 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     // instance — and therefore the element the dialog may be holding.
     const live = chart()
     if (live !== null && sameFigure(spec, before, style)) live.update(style)
-    else swap()
+    // A dot plot is not rebuilt for a style: its view draws the streaks and
+    // nothing the style says (§28.2), and a new one would throw away the window
+    // the reader had zoomed to — for a title, which is the head's.
+    else if (!(spec.kind === 'matrix' && spec.output.streaks !== undefined)) swap()
     settings?.refresh()
     paintStrip()
     // The head carries the title, which is one of the things a control sets.

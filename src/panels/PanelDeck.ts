@@ -2172,24 +2172,23 @@ export class PanelDeck {
 
     // A turned panel's rows are **separation**, not position, so a row
     // disagreement there is a different fact from a column one and must not
-    // borrow its sentence. The depth each band opens at is a fraction of its
-    // own block rounded up to a whole bin (`MatrixPanel.turnDepth`), so two
-    // files at different resolutions round it differently and the two bands
-    // reach different distances from the diagonal — which is a real reason not
-    // to share a row window, and is nothing whatever to do with the sequences
-    // agreeing. Telling a reader their files resolved one name against
-    // different sequences when they did not is worse than not telling them
-    // anything: it is a claim they may act on. A cell is half a bin under a
-    // turn and height is half of separation, so the number a reader wants is
-    // twice the lock's (`render/rotate.ts`).
+    // borrow its sentence. The deck cuts every companion's band to the first
+    // map's reach, in base pairs ({@link syncTurnReach}), so two bands agree by
+    // construction — except where a companion's block does not hold that much,
+    // since a band cannot be deeper than its block has cells
+    // (`render/rotate.ts`'s `turnDepthFor`). That is a real reason not to share
+    // a row window, and is nothing whatever to do with the sequences agreeing.
+    // Telling a reader their files resolved one name against different
+    // sequences when they did not is worse than not telling them anything: it
+    // is a claim they may act on. A cell is half a bin under a turn and height
+    // is half of separation, so the number a reader wants is twice the lock's.
     if (map.isTurned() && lead.isTurned() && cols) {
       return (
         'not following while turned: this band reaches ' +
         `${fmt.bp(mine.rows * 2)} from the diagonal where the first map ` +
-        `reaches ${fmt.bp(theirs.rows * 2)}. Each map opens on a fraction of ` +
-        'its own block and rounds that to a whole bin, so two files at different resolutions do ' +
-        'not turn to the same depth — and one row window would be two distances. Turning the ' +
-        'deck back off puts this panel in step.'
+        `reaches ${fmt.bp(theirs.rows * 2)}. The deck cuts every band to the first map’s reach, ` +
+        'and this map’s block does not hold that much — so one row window would be two ' +
+        'distances. Turning the deck back off puts this panel in step.'
       )
     }
 

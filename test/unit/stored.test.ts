@@ -95,6 +95,47 @@ describe('storedItems', () => {
     expect(items.find((item) => item.label === 'Bucket keys')?.detail).not.toContain('secret')
   })
 
+  it('lists a public bucket as an address, not as a key, since it holds none', async () => {
+    // A scope with no key is a bookmark of a public prefix (`s3/credentials.ts`).
+    // It was listed as *Bucket keys — access keys for private buckets*, which
+    // told a reader with nothing secret on the disk that there was a key to
+    // forget.
+    window.localStorage.setItem(
+      `${PREFIX}buckets`,
+      JSON.stringify([{ id: 'p', label: 'demo data', base: 'https://lab.s3.eu-west-3.amazonaws.com/demo/' }]),
+    )
+    const items = await storedItems()
+    const labels = items.map((item) => item.label)
+    expect(labels).toContain('Buckets you connected')
+    expect(labels).not.toContain('Bucket keys')
+    expect(items.find((item) => item.label === 'Buckets you connected')?.detail).toMatch(/^demo data — /)
+    // A bucket is not a preference either, whichever line it is on.
+    expect(labels).not.toContain('Preferences')
+  })
+
+  it('lists a key and a public bucket each as what it is, side by side', async () => {
+    window.localStorage.setItem(
+      `${PREFIX}buckets`,
+      JSON.stringify([
+        { id: 'p', label: 'demo data', base: 'https://lab.s3.eu-west-3.amazonaws.com/demo/' },
+        {
+          id: 's',
+          label: 'collections',
+          base: 'https://lab.s3.eu-west-3.amazonaws.com/collections/',
+          region: 'eu-west-3',
+          accessKeyId: 'AKIAEXAMPLE',
+          secretAccessKey: 'shh',
+        },
+      ]),
+    )
+    const items = await storedItems()
+    expect(items.find((item) => item.label === 'Buckets you connected')?.detail).toMatch(/^demo data — /)
+    expect(items.find((item) => item.label === 'Buckets you connected')?.detail).not.toContain('collections')
+    expect(items.map((item) => item.label)).toContain('Bucket keys')
+    expect(JSON.stringify(items)).not.toContain('shh')
+    expect(JSON.stringify(items)).not.toContain('AKIAEXAMPLE')
+  })
+
   it('lists nothing for Google or Dropbox, because this browser keeps nothing of them', async () => {
     // The site's client id, API key and app key are in the page rather than
     // in storage (`config/siteDefaults.ts`), and the tokens a sign-in produces

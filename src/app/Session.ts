@@ -1116,9 +1116,18 @@ export class Session {
     return this.file?.info.layout.kind === 'scool'
   }
 
-  /** The reader client, or `null` where nothing has ever been opened here. */
+  /**
+   * The reader client of the file open here, or `null` while none is.
+   *
+   * *While none is*, and not *where nothing has ever been opened*: the picker
+   * starts its reader before anything is chosen ({@link warmReader}), so a tab
+   * on the picker holds a worker with no file in it. The status bar reads this
+   * to decide whether *read* and *validation* are on it (§6.3), and handed that
+   * worker it showed both on a tab switched back to — a counter of nothing, and
+   * a check that failed on the press, there being no file to scan.
+   */
   get client(): ReaderClient | null {
-    return this.reader
+    return this.file === null ? null : this.reader
   }
 
   /**

@@ -136,6 +136,29 @@ describe('the file card', () => {
     expect(rows['sum']).toBe('—')
   })
 
+  it('names the normalisation a .hic’s balanced map is drawn with (§3.6)', () => {
+    // The reader chooses the file's best vector by name — SCALE, then KR, then
+    // the coverage ones — and it was chosen silently.
+    const hic = (normalisation?: string): OpenResult =>
+      openResult({
+        uri: 'map.hic',
+        hasGenomes: false,
+        layout: { kind: 'cool', group: '/' },
+        info: {
+          ...openResult().info,
+          format: 'HIC',
+          'format-version': 9,
+          ...(normalisation === undefined ? {} : { 'hic-normalisation': normalisation }),
+        },
+      })
+    expect(table(panel(hic('SCALE')))['normalisation']).toBe('SCALE')
+    // A rung with no vector at all says so: *balanced* is not on offer there.
+    expect(table(panel(hic()))['normalisation']).toBe('none at this resolution')
+    // A cooler's weights are its own column, not a choice among vectors, and it
+    // gets no row.
+    expect(table(panel(openResult()))['normalisation']).toBeUndefined()
+  })
+
   it('calls a cooler’s sequences chromosomes, and does not count genomes it has none of', () => {
     const view = panel(openResult({ hasGenomes: false, nGenomes: 1, layout: { kind: 'cool', group: '/' } }))
     const rows = table(view)

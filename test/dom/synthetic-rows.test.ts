@@ -404,4 +404,13 @@ describe('dragging a row by its grip', () => {
     expect(transfer.effectAllowed).toBe('copyMove')
     expect(data.get('application/x-metacooler-track')).toBe('ATAC')
   })
+
+  it('says in its tooltip where it can be let go: any edge of any map, a + or an empty cell', () => {
+    const made = make({ also: ['ATAC'] })
+    const grip = rowOf(made.card, 'ATAC').querySelector<HTMLElement>('.ann-grip')
+    // It named the map's bottom and right edges, two of the four, on one map.
+    expect(grip?.title).toContain('any edge of any map')
+    expect(grip?.title).toContain('a + or an empty cell')
+    expect(grip?.title).not.toContain('bottom or right edge')
+  })
 })

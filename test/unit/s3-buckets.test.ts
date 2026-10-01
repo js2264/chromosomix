@@ -663,4 +663,35 @@ describe('listing a prefix', () => {
       }),
     ).rejects.toThrow(/AllowedHeaders/)
   })
+
+  /**
+   * And every one of them is plain text (§26.4).
+   *
+   * They are drawn as DOM text, in the Files column and the Connect dialog,
+   * where nothing renders Markdown: backticks round `s3:ListBucket` were two
+   * stray marks either side of the very word a reader copies into a policy.
+   */
+  it('writes its refusals without Markdown, the names in them bare', async () => {
+    const open: BucketScope = {
+      id: 'p0',
+      label: 'demos',
+      base: 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/',
+    }
+    const refused = (): Promise<never> => Promise.reject(new TypeError('Failed to fetch'))
+    const messages: string[] = []
+    for (const [target, fetchImpl] of [
+      [open, respondWith('<Error/>', 403)],
+      [scope(), respondWith('', 403)],
+      [open, refused],
+      [scope(), refused],
+    ] as const) {
+      await listPrefix(target, 'collections/', { fetchImpl: fetchImpl as never }).catch((err: unknown) =>
+        messages.push(err instanceof Error ? err.message : String(err)),
+      )
+    }
+    expect(messages).toHaveLength(4)
+    for (const message of messages) expect(message).not.toContain('`')
+    expect(messages[0]).toContain('s3:ListBucket')
+    expect(messages[3]).toContain('AllowedHeaders')
+  })
 })

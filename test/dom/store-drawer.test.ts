@@ -162,6 +162,16 @@ describe('opening', () => {
     expect(drawer.isOpen).toBe(false)
   })
 
+  it('says what the header button opens without a list of stores to go stale', () => {
+    // It named four — the lab's data, IGV's genomes, 4DN, ENCODE — beside a
+    // drawer whose tiles were seven of the shipped ones; the tiles are the list.
+    const { drawer } = build()
+    expect(drawer.toggle.title).toMatch(/^Open the stores — every data store this viewer ships with/)
+    expect(drawer.toggle.title).not.toContain('IGV’s genomes')
+    drawer.toggle.click()
+    expect(drawer.toggle.title).toMatch(/^Close the stores/)
+  })
+
   it('tells the shell about its layout on open and close', () => {
     const built = build()
     built.drawer.open()

@@ -113,6 +113,9 @@ describe('naming a tab', () => {
     // and one who presses Enter on the file's own name has named nothing.
     expect(box?.value).toBe('')
     expect(box?.getAttribute('placeholder')).toBe('yeast.cool')
+    // Named in the reader's word, which is what a screen reader says (§5.6):
+    // it said *Session name*, a word the strip never shows.
+    expect(box?.getAttribute('aria-label')).toBe('Tab name')
   })
 
   it('opens on the name there is, when there is one', () => {

@@ -241,6 +241,9 @@ resolution" does not.
 Several rungs may divide a target — 20 kb is twenty 1 kb bins or two 10 kb ones — and the **coarsest**
 is taken: same picture, a twentieth of the stored pixels walked, and on a `--balance`d file the
 values summed are the ones balanced closest to the resolution asked for.
+**Twelve to a file** (`MAX_DERIVED_RUNGS`), which is more than anybody has wanted and still a number:
+with twelve added the dialog says so as it opens, whatever is typed, and names the way out — take one
+off the ladder — where a thirteenth used to close the dialog and add nothing.
 
 Three properties make it a resolution rather than a rendering:
 
@@ -343,7 +346,9 @@ could hold more than 64 MiB of pixels between them, since a pair is decoded whol
 - **Normalisation vectors become `bins/weight`**, reciprocated: `.hic` stores a divisor per bin and
   cooler's weight is a multiplier. A file's best available normalisation is chosen — `SCALE`, then
   `KR` and its `INTER_KR` and `GW_KR` variants, then the coverage ones — and *named* in the info
-  panel, so a reader is never guessing which. A chromosome whose vector of that name holds no
+  panel, so a reader is never guessing which: the File card's *normalisation* row, beside the format,
+  reading *none at this resolution* where the rung open carries no vector. The choice was made and
+  never shown, the card having no row for it. A chromosome whose vector of that name holds no
   finite value — Juicer writes one for a balancing that did not converge — takes the first of the
   others, in that order, that has. A bin the balancer dropped becomes `NaN`, which is what a
   balanced cooler writes for one.
@@ -882,8 +887,11 @@ middle of what comes back. Against an end of the sequence the window slides in r
 for a negative coordinate; once a press outward would cover the whole sequence it *is* the whole
 sequence, named as such rather than spelled out in coordinates; inward it stops at the file's own
 bin size, since a window narrower than a bin is a window the file cannot answer; and on a declared
-circle (§8.15) it wraps past the origin rather than clamping, because a clamp would shove the window
-sideways to fit inside a boundary the molecule has not got. Each button greys itself the moment
+circle (§8.15) it slides in at an end exactly as on a line, because `ori` and a window typed across
+the origin are the ways to the other side of it, while a window already across the origin widens and
+narrows about its own middle as any window does. It used to wrap past the origin from a window
+near an end, which made a press outward a third way across the junction and the one a reader took
+without meaning to. Each button greys itself the moment
 there is nothing in its direction to go to — all four on a `contig × contig` block, which is a
 picture of two places and has no one range to scale — and they navigate through the ordinary road,
 so three presses and three presses of the back button are the same journey in reverse (§5.5).
@@ -1033,9 +1041,10 @@ the note: reopening a week's files unasked would reverse the reader's own closin
 shared machine would put somebody's unpublished data in front of whoever sat down next.
 
 **The reader's word is *tab*.** Every string on screen says tab — *New tab*, *Rename this tab*,
-*Close this tab*, *Share this tab* — because a tab is what is on screen and *session* is a word the
-strip never shows: "Close this session" read as something larger than closing the thing being looked
-at. *Session* stays as the implementation's word, in this document and in the code. The every-tab
+*Close this tab*, *Share this tab* — and so does every label a screen reader speaks, the rename box's
+*Tab name* among them, because a tab is what is on screen and *session* is a word the strip never
+shows: "Close this session" read as something larger than closing the thing being looked at.
+*Session* stays as the implementation's word, in this document and in the code. The every-tab
 file keeps its own name, said as *Save every tab as a file*, because it genuinely is a different
 thing. No key closes one: ⌘W is the browser's chord for closing the window, and a binding that is
 right about what it does and wrong about what it closes costs a workspace. `o` opens one and ⌘[ /
@@ -1567,7 +1576,10 @@ a total (§6.5). Offered as an explicit debug action only: the status bar says *
 is pressed, and the offer — what a press will scan, and what it costs over a network — is in the
 panel the item opens rather than in a second tooltip behind it. The item is absent altogether while
 no file is open, since there is nothing to check and a check button that silently does nothing is
-what §8.5 forbids.
+what §8.5 forbids — and so is *read* (§12). That includes a tab on the picker, whose reader is
+started before anything is chosen (§6.1): the tab handed the bar that worker, so on a tab switched
+back to both items came back, a counter of nothing beside a check that failed when pressed. A tab
+hands the bar its reader only while a file is open in it.
 
 ### 6.4 Balancing
 
@@ -1781,9 +1793,15 @@ is and what they already meant over this app's own tracks — and on a map, **al
 rows and columns together, by the same distance, so the diagonal stays where it is on the screen
 and the picture moves down the genome under it, as the reference editor's stage (§27.3) has always
 slid. A slide that took the columns alone carried a cis map's diagonal off the side of the picture
-within a screen. Along the columns alone where there is no diagonal to follow: over a turned band
-(§17), whose diagonal already runs across the screen, and over a block of two stretches that share
-no bins — a trans block, two genomes. It used to be left to the page so that the
+within a screen. **Every cis block slides that way**, a block of two stretches of one sequence
+included — the off-diagonal window an Option-drag opens, whose diagonal is off the picture: it is
+read by separation as the diagonal is, and moving rows and columns together keeps a band parallel to
+the diagonal, one distance apart, under the pointer, where the columns alone carried the reader
+across distances they had not asked to leave. Such a block used to slide its columns alone, as a
+trans block does. Along the columns alone where there is no separation to keep: over a turned band
+(§17), whose diagonal already runs across the screen, and over a trans block — two sequences, two
+genomes; a picture above bin level slides along its diagonal where its axes share cells, as it
+always has. The sideways scroll used to be left to the page so that the
 platform's back-and-forward swipe would work over a map as it does over the rest of a document; that
 is the wrong trade over the one element a reader navigates *by* sliding, and the swipe still works
 everywhere outside the picture. Over a lane stack it means the same thing as over the map, because a
@@ -3728,9 +3746,12 @@ extent is the view's ceiling: a zoom inside it refines as it does anywhere (§2)
 every read stays inside it, and a pan stops at its edges. A window that does not
 cross the origin pans as a window on a line does, to the sequence's ends. The way
 to the other side of the origin is `ori`, which frames the whole circle with the
-origin in the middle, or a window typed across it — or a zoom button pressed
-outward near an end, which on a circle wraps past the origin rather than clamping
-(§5.5).
+origin in the middle, or a window typed across it, and nothing else: the zoom
+steps beside the region box stop at a circle's ends as they stop at a line's, and
+widen or narrow a window already across the origin about its own middle (§5.4).
+They used to wrap past the origin from a window near an end, so a press outward
+split the picture at the junction — a third door to the other side, and the one
+a reader walked through by accident.
 
 It used to slide. Any window on a declared sequence was read with no ends: every
 edge of a block gave, a pan past one read the same width rotated round to where
@@ -4012,7 +4033,10 @@ are its value axis (§8.17), and nor have a karyotype and a junction lane, each 
 The choice is offered in the card, as `rows`, and in the lane's **right-click menu** — which opens
 under the track's name with *Copy this*, the lane alone on the clipboard (§7.2) — and which a feature
 lane now fills with what a reader changes about a gene track while looking at it: the three row modes
-with a tick on the one in force, and the point as a switch with its own tick. Opened *on* a feature,
+with a tick on the one in force, and the point as a switch with its own tick — on a call set's lane
+too, as its card has it, since the switch changes nothing on a feature the file gives no strand and
+a menu that left it off a VCF's lane while the card kept it answered one question two ways. Opened
+*on* a feature,
 the menu leads with that feature — named, with its card a click away (what a click on it opens), its
 name and its position to copy (the position as the locus box writes a window, so it can be pasted
 into one; where the browser will not allow the clipboard, the text is shown to be copied by hand), and
@@ -5305,8 +5329,11 @@ about the sequences, and it is worded as such: borrowing the sentence above woul
 files resolved one name against different sequences when they did not, which is a claim they may act
 on. It goes away when the deck is turned back off. The deck cuts every turned companion to the first
 map's reach, in base pairs (§17.3), so two bands agree by construction wherever both blocks hold that
-much; each used to be cut to its own box, and boxes measured while the grid was still settling made
-two depths out of a layout race, which this refusal then blamed on the files' resolutions.
+much, and the refusal says the one way left for them not to: the band was cut to the first map's
+reach, and this map's block does not hold that much. Each used to be cut to its own box, and boxes
+measured while the grid was still settling made two depths out of a layout race, which this refusal
+then blamed on the files' resolutions — and went on blaming them, *each map opens on a fraction of
+its own block*, after the deck had stopped cutting that way.
 
 A panel the gate refuses is **still shown**, still readable and still exportable. Only the lock is
 off, and the panel says so in a line under its own heading rather than only in a tooltip on a chain
@@ -8321,8 +8348,10 @@ written, and each is absolute rather than a degradation:
 URL box and the store tiles (the version picker is gone already, as it is from every target that is
 not the web), leaves the landing page's folder row with the one
 place this build can reach — under *Connect a folder*, since a heading naming two kinds over a row
-holding one is the same false promise in smaller type — and says under the drop zone that this copy
-opens local files only and where to go for the rest. A build that offered a URL field
+holding one is the same false promise in smaller type, and the Files column's button and the
+palette's command say *connect a folder* with it rather than offering a remote half there is not —
+and says under the drop zone that this copy opens local files only and where to go for the rest. A
+build that offered a URL field
 which could never succeed would be a worse artefact than one that does not offer it.
 
 **It is about 14 MB and more than half of that is h5wasm.** The runtime ships its wasm
@@ -8412,7 +8441,9 @@ build's Drive pane keeps its title and its `?` and says under them why there is 
 
 **One verb names this door wherever it is.** The dialog is *Connect a folder*; the landing page's
 heading, the Files column's button and the command palette all say *connect a local or remote
-folder*. There were three — the landing page said *Mount*, jargon used nowhere else in the app, the
+folder* — and all three say *connect a folder* in the standalone build, which has no remote half
+(§19), from the one name in `ui/connectFronts.ts`; the landing page used to say it there alone.
+There were three — the landing page said *Mount*, jargon used nowhere else in the app, the
 dialog it opened was titled *Open a local/remote folder*, and every button and every sentence about
 the result said *connect* — so a reader pressed under one word, landed on a second and was
 reassured in a third. A file is opened; a folder is connected (§26.4). The Files column's button
@@ -8482,6 +8513,12 @@ configuration, not a fault.** With no backend (C1) there is nothing the app can 
 The rule inside a scope is **all three signing fields or none**; a row holding one or two is dropped
 rather than downgraded to an unsigned one, because falling back would turn a mistyped secret into a
 bucket that 403s on data the reader believes they have a key for.
+
+The stored-data screen (§20.6) lists each as what it is. A scope with no key is *Buckets you
+connected*, named, as the folders and the stores are — an address, kept with nothing secret in it —
+and *Bucket keys* is there only where some part of a key is on the disk, a dropped row's included.
+Every scope used to be *Bucket keys — access keys for private buckets*, which told a reader who had
+connected one public bucket that there was a credential to forget.
 
 The form's one button is **connect this bucket**. It was *save*, from when the same form stood in a
 credentials dialog where saving was the whole of it; behind a door that said *connect a bucket…*,
@@ -9245,7 +9282,10 @@ switching without closing, and *copy link*. The header has a toggle for it besid
 column's, on the backslash key — punctuation, like the console's backtick, so it cannot collide with
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette lists it as *Stores*, wearing its state as a
-chip. Opened that way rather than by a tile, it lands on the store it was last on — in this page,
+chip. Neither the toggle's tooltip nor the palette's hint lists the stores — *every data store this
+viewer ships with, and any you connected* — because the tiles are the list, read off the registry,
+and the two lists kept beside it named four stores while seven shipped. Opened that way rather than
+by a tile, it lands on the store it was last on — in this page,
 else the last one this browser opened, else the lab's — and its dragged width is kept the same way,
 in `localStorage`; whether it is open is the address bar's to say (below). The header holds
 nothing else on that side: the plug and the `+` that stood there were the Files column's own
@@ -9277,7 +9317,10 @@ list with the two values written on every row under the facets' own keys, so a l
 choice as two ordinary facets and the matrix crosses the union. A shard read once is kept while the
 store stays open and not read again when unticked and re-ticked; a shard the workflow has not written
 is a sentence beside the rows that were read, not a blank store; and a shard nobody has ticked shows
-*on request* where its count would go, because nothing is read for a value nobody asked for.
+*on request* where its count would go, because nothing is read for a value nobody asked for. Where
+**every** ticked shard failed, the sentence stands where the rows would and the toolbar goes, but the
+two groups of checkboxes stay beside it: they are what reaches a shard that was written, and they
+used to go with the toolbar, which left a red line and nothing on the page to press.
 
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
@@ -11000,8 +11043,10 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 ### 26.7 The words for a state
 
 A thing that can run says exactly one of: **never run**, **queued**, **starting…** until its first
-word of progress, **running**, **done**, **failed**, **cancelled**, or **reading…** while it fetches.
-No surface invents another.
+word of progress, **running**, **done**, **failed**, **cancelled**, or **reading…** while it fetches
+— and, in the console's record of a window that has gone, **interrupted**, for a run that window was
+still watching (§23.5). No surface invents another: a console row's mark said *finished* where
+everything else says *done*, and *the window closed while this was running* where one word does.
 
 ## 27. Editing the reference
 
@@ -11942,7 +11987,10 @@ else the place on both axes and the bases a pixel; and off the plot, how many st
 gestures, and which set is along which axis. A press keeps a streak named while the pointer goes
 elsewhere, and Escape lets it go. What the PNG and PDF buttons draw is the window on screen, as
 lines, without the pointer's light; the cells stay the output's, in its TSV (§28.3). The colour
-picker a matrix offers is not offered: the lines are red and blue whatever it would say.
+picker a matrix offers is not offered: the lines are red and blue whatever it would say — not on the
+strip above the figure, and not in *Customise this figure*, whose column is the Text card alone. A
+change made there, a title, leaves the view where it was, zoom and all: the dialog used to offer the
+matrix's Colour card, whose picks changed nothing on screen and rebuilt the view at the whole.
 
 Still to come: a view of its own, `view=dotplot`, with the two sequence sets' addresses in the link,
 drawn by the map's machinery over two assemblies instead of one: the density of anchors in each cell,
@@ -12056,5 +12104,7 @@ never the reason a session is lost.
   browser.
 - **Not on the command line**: `metacooler-run` is a developer's tool, lists every task and runs every
   one.
-- **Not in the static text** around the app — the page's description, the install prompt's — which
-  cannot follow a switch, so it names nothing that is dev. The name stays **(meta)cooler**.
+- **Not in the static text** around the app — the page's title and description, the install
+  prompt's name and description — which cannot follow a switch, so it names nothing that is dev:
+  *(meta)cooler – cool files, in the browser*, where both titles said *(multi-genome) cool files*.
+  The name stays **(meta)cooler**.

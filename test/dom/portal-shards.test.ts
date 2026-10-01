@@ -165,6 +165,30 @@ describe('reading shards', () => {
     expect(built.view.el.querySelector('.portal-count')?.textContent).toContain('mouse · peaks')
   })
 
+  it('keeps the shard choice on screen when every ticked shard failed, so another can be picked', async () => {
+    // mouse · peaks is the one file the workflow has not written. With nothing
+    // read, the rows give way to the sentence and the toolbar goes with them —
+    // but the two groups that chose the shard are the way to one that exists,
+    // and they used to go too, leaving a red line and nothing to press.
+    serve()
+    const built = build({
+      ...EMPTY_VIEW,
+      facets: new Map([
+        ['group', new Set(['mm10'])],
+        ['category', new Set(['peaks'])],
+      ]),
+    })
+    const status = (): HTMLElement => built.view.el.querySelector('.portal-status-error') as HTMLElement
+    await vi.waitFor(() => expect(status()).not.toBeNull())
+    expect(status().classList.contains('hidden')).toBe(false)
+    const rail = built.view.el.querySelector('.facet-group-shard')?.parentElement as HTMLElement
+    expect(rail.classList.contains('hidden')).toBe(false)
+    expect(all(built.view.el, '.facet-group-shard input[type="checkbox"]')).toHaveLength(4)
+    // …and a tick there reads the shard that was written.
+    tickShard(built.view.el, 'category', 'signal')
+    await vi.waitFor(() => expect(names(built.view.el)).toEqual(['m1']))
+  })
+
   it('opens on the shards a link named', async () => {
     serve()
     const built = build({

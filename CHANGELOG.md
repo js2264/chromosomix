@@ -1675,6 +1675,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   page, and said it again, undimmed, on a `.cool` whose Annotations column was on screen. Each hint
   is now computed from the state it is about.
 
+- **The zoom steps stop at a circle's ends, as at a line's (§5.4, §8.15).** Pressed outward near the
+  end of a declared circle they wrapped past the origin — one press from `chr:10,001-30,000` came
+  back as `chr:2,990,001-50,000`, the picture split at the junction — which made them a third way
+  across the origin beside `ori` and a window typed across it, and the one a reader took without
+  asking. They slide the window in at the end as on a line; a window already across the origin still
+  widens and narrows about its own middle.
+
+- **A sideways scroll slides along the diagonal on every cis block (§7.2).** A block of two
+  stretches of one chromosome — what an Option-drag off the diagonal opens — slid its columns alone,
+  as a trans block does, so a band one distance from the diagonal walked out from under the pointer.
+  Rows and columns move together wherever both axes are one sequence, which keeps that band where it
+  is; trans blocks, pictures above bin level and turned maps slide as they did.
+
 - **Refinement is a palette command, and the palette now says so (§2).** The hint sent a reader to
   "the first button on a map's picture row", where they found the turn and turned their map instead:
   the button was pulled a release ago, because the preference is one setting for the whole window.
@@ -1716,11 +1729,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   draw both files to one total first. Sessions that stored the switch open without it.
 
 - **Panning round a circular chromosome (§8.15).** A pan past the end of a declared circle no
-  longer reads its way round to the beginning: it stops at the sequence's end, as on a line. `ori`
-  is the way across the origin — it frames the whole circle with the origin in the middle — and
-  that frame, or a window typed across the origin, is zoomed and refined inside but not slid past.
-  The slide read a block per stretch of drag with the map frozen while each landed, and left no
-  edge to tell how far round the reader had come.
+  longer reads its way round to the beginning: it stops at the sequence's end, as on a line — and
+  so does a zoom step pressed outward near an end, which wrapped past the origin (§5.4). `ori` is
+  the way across the origin — it frames the whole circle with the origin in the middle — and that
+  frame, or a window typed across the origin, is zoomed and refined inside but not slid past. The
+  slide read a block per stretch of drag with the map frozen while each landed, and left no edge
+  to tell how far round the reader had come.
 
 - **The *size by* setting (§25.3).** A track whose value at each bead set the bead's size, as a
   second channel beside the colour. The channel is gone with the control: every bead is the bead
@@ -2337,6 +2351,87 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A structure key of sixteen sequences goes in two columns**, instead of a translucent list to be
   scrolled to reach `XVI`. **The spinner beside a running task is a ring with a track**, not a ring
   with a hole, which at any still frame drew a capital `C` in front of the sentence.
+
+- **The Chromosomes table's *circular* tooltip says what a tick does now (§8.15).** It promised a
+  map that slides past the sequence's end and back on at its beginning — removed this release — and
+  that every cis analysis measures separation the short way round. It names `ori` as the way across
+  the origin, the tasks that read a circle, and the two that do not: chromosight and the
+  observed/expected map.
+
+- **The shortcuts dialog's map gestures are the ones the map answers (§7.2, §8.9, §16.9).** Two
+  fingers sideways slide *along the diagonal*, not *the map left and right*; a lane is resized by
+  its far edge, not its inner one; a file is taken on any of the map's four edges, not only below or
+  right of it; and a lane's grip reaches a tracks cell too. Shift-drag, the map's own zoom in one
+  dimension, and a drag across a lane, which moves its ceiling, were not listed at all.
+
+- **A ladder dropped at its root is said to open on its landing rung (§9).** The refusal's advice
+  read *drop the file again and the finest one opens*; it opens a third of the way up from the
+  finest, whose reads are the largest the file has.
+
+- **A turned companion that does not follow says why (§16.4).** *Each map opens on a fraction of its
+  own block and rounds that to a whole bin* was how bands were cut before the deck cut every
+  companion to the first map's reach. The refusal says the one way two bands can still disagree:
+  this map's block does not hold that much.
+
+- **A Tracks card row's grip says where it can be let go (§16.9).** Its tooltip offered *the map's
+  bottom or right edge*; a row is taken on any edge of any map, a `+` and an empty cell, the last
+  two opening a tracks cell drawing it.
+
+- **The page's title and the install prompt's name say nothing of a dev feature (§29.5).** Both read
+  *(meta)cooler — (multi-genome) cool files, in the browser*, with the multi-genome format off by
+  default; the words in brackets are gone, and a test reads both files for them.
+
+- **The stores' toggle and the palette's *Stores* name no list to go stale (§24.2).** Both named the
+  lab's data, IGV's genomes, 4DN and ENCODE while seven stores ship; they say *every data store this
+  viewer ships with, and any you connected*, and the drawer's own tiles are the list.
+
+- **The tab strip's rename box is announced as *Tab name* (§5.6)**, the reader's word, where a
+  screen reader was told *Session name*, a word the strip never shows.
+
+- **A public bucket is listed as an address, not as a key (§20.3).** The stored-data screen called
+  every bucket scope *Bucket keys — access keys for private buckets*, so a reader who had connected
+  one public prefix was told a credential was on the disk. A scope with no key is *Buckets you
+  connected*, named; *Bucket keys* is there only where part of a key is.
+
+- **A console row's mark names its state in §26.7's words.** *finished* is *done*, and *the window
+  closed while this was running* is *interrupted*, the status §23.5 gives a run whose window went
+  away.
+
+- **A refused bucket listing is plain text (§26.4).** The 403 and CORS messages wrapped
+  `s3:ListBucket`, `s3:GetObject`, `AllowedHeaders` and the headers they name in Markdown backticks,
+  which nothing renders in the Files column or the Connect dialog.
+
+- **The standalone build calls its folder door *connect a folder* everywhere (§19, §20).** Its
+  landing page did, over the one place it reaches; the Files column's button and the palette's
+  command still offered *a local or remote folder*, with a bucket, a Drive folder and a Dropbox in
+  their hints, in a build with no remote half.
+
+- **A variant lane's right-click menu has the point switch its card has (§8.16).** The menu left
+  *Point the way each runs* off a call set's lane while the card kept it on, so the two surfaces
+  answered one question two ways.
+
+- **A dot plot's *Customise this figure* keeps its zoom (§28.2).** The column offered the matrix's
+  Colour card, whose picks changed nothing on the red and blue lines and rebuilt the view at the
+  whole; it holds the Text card alone, and a title set there leaves the view where it was.
+
+- **A thirteenth resolution is refused in the dialog that asks for it (§3.4).** A file takes twelve
+  added; the thirteenth closed the dialog and added nothing, with nothing said. The dialog says so
+  as it opens, and names the way out — take one off the ladder.
+
+- **The File card names the normalisation a `.hic` is balanced with (§3.6).** The reader chose the
+  file's best vector — SCALE, then KR, then the coverage ones — and showed the choice nowhere,
+  though the section said the info panel names it. A *normalisation* row does, and says *none at
+  this resolution* where the rung open has no vector.
+
+- **ENCODE's shard choice stays on screen when every ticked shard failed (§24.2).** The rail went
+  with the toolbar, so a reader who ticked a shard the workflow has not written was left a red line
+  and no checkbox to pick another; the sentence takes the rows' place and the two groups stay beside
+  it.
+
+- **A tab on the picker has no *read* or *validation* on the status bar (§6.3).** The picker starts
+  its reader before a file is chosen, and a tab switched back to handed the bar that worker: both
+  items came back, a counter of nothing and a check that failed when pressed. A tab hands the bar
+  its reader only while a file is open in it.
 
 - **The palette's door survives a half-width window.** Below 60 rem the search bar was hidden
   outright, which left `⌘P` — and every command with no button of its own — with nothing on screen

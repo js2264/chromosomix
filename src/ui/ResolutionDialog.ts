@@ -39,6 +39,7 @@
 import { button, el } from './dom'
 import { Modal } from './Modal'
 import { derivable, isDerived, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import { MAX_DERIVED_RUNGS } from '../state/resolutions'
 import { resolutionLabel } from './Breadcrumb'
 
 export interface ResolutionDialogProps {
@@ -121,6 +122,19 @@ function dialogBody(
   let answer: DerivedRung | null = null
 
   const refresh = (): void => {
+    // **A file with its twelve says so, whatever is typed.** The store refuses
+    // a thirteenth (`MAX_DERIVED_RUNGS`), and the refusal used to happen after
+    // this dialog had closed — `add` pressed, nothing added, nothing said. It
+    // is the one answer that does not depend on the number, so it comes first.
+    if (props.declared.length >= MAX_DERIVED_RUNGS) {
+      answer = null
+      verdict.classList.add('is-bad')
+      verdict.textContent =
+        `${props.fileLabel} has ${MAX_DERIVED_RUNGS} added resolutions, the most one file takes — ` +
+        'take one of them off the ladder, with its ×, to add another.'
+      add.disabled = true
+      return
+    }
     const target = asked()
     const judged = derivable(target, props.rungs, props.declared)
     if (isDerived(judged)) {

@@ -86,7 +86,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'This is a resolution ladder, not a single map',
     advice: [
       'An .mcool holds one complete cooler per resolution and is not itself a cooler, so it cannot be opened at its root.',
-      'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and the finest one opens.',
+      // The landing rung, not the finest (§9): a third of the way up the ladder,
+      // whose reads are not the largest the file has.
+      'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and it opens a third of the way up from the finest.',
     ],
   },
   'pairs-binning-needed': {
