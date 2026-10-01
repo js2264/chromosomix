@@ -378,6 +378,8 @@ export class EditStage {
   private suggesting = 0
   /** What the reader's answers have taught the stage about this file (§27.6). */
   private learned: Learned
+  /** The stretch a line hovered in the corner dot plot lies along, lit on the map (§27.3). */
+  private linked: Stretch | null = null
   /** The suggestion lit — hovered on the map, the rail or the list — by key. */
   private lit: string | null = null
   private mode: Mode = 'manual'
@@ -531,6 +533,10 @@ export class EditStage {
             frame: (sequence, from, to) => {
               const units = this.grid === null ? null : stretchUnits(this.grid, { sequence, from, to })
               if (units !== null) this.frameUnits(units[0], units[1])
+            },
+            light: (stretch) => {
+              this.linked = stretch
+              this.schedule()
             },
             memoryKey: props.memoryKey(),
           })
@@ -1236,6 +1242,7 @@ export class EditStage {
     this.overlayCanvas.dataset.view = [vx0, vx1, vy0, vy1].map((value) => value.toFixed(3)).join(' ')
     const overlay = this.overlayCanvas.getContext('2d')
     const lit = this.litUnits(grid)
+    const linked = this.linkedUnits(grid)
     // The suggestions are about the edit as it stands: while a drag or a
     // preview shows another, they are not drawn over it.
     const marks = this.preview === null ? this.marks() : []
@@ -1251,6 +1258,7 @@ export class EditStage {
         under: (ctx) => drawSuggestions(ctx, { size, toX, toY, ink, marks }),
         square: box === null ? lit : null,
         box,
+        linked,
         cross:
           this.hover === null || (this.drag !== null && this.drag.kind === 'move')
             ? null
@@ -1271,13 +1279,13 @@ export class EditStage {
     if (top !== null) {
       top.setTransform(dpr, 0, 0, dpr, 0, 0)
       const cols = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.cols ?? null : lit
-      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? mark : null, ticks)
+      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? mark : null, ticks, linked)
     }
     const left = this.leftBar.getContext('2d')
     if (left !== null) {
       left.setTransform(dpr, 0, 0, dpr, 0, 0)
       const rows = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.rows ?? null : lit
-      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, null, ticks)
+      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, null, ticks, linked)
     }
     this.paintRail(marks, toY, ink)
 
@@ -1365,6 +1373,19 @@ export class EditStage {
     }
     if (this.selection?.kind !== 'stretch') return null
     return stretchUnits(grid, this.selection.stretch)
+  }
+
+  /**
+   * What the corner dot plot's hovered line lights on the map (§27.3): the
+   * piece it lies along — the contig, where nothing is edited yet — in units;
+   * not while a drag or a preview shows another edit than the one it was drawn through.
+   */
+  private linkedUnits(grid: LensGrid): [number, number] | null {
+    if (this.linked === null || this.preview !== null || this.drag !== null) return null
+    const units = stretchUnits(grid, this.linked)
+    if (units === null) return null
+    const piece = partStretch(grid, (units[0] + units[1]) / 2)
+    return (piece === null ? null : stretchUnits(grid, piece)) ?? units
   }
 
   private boxUnits(
@@ -1621,15 +1642,19 @@ export class EditStage {
       return side === 'top' ? this.sx.toUnit(event.clientX - rect.left) : this.sy.toUnit(event.clientY - rect.top)
     }
     const onDiagonal = (unit: number): { x: number; y: number } => ({ x: this.sx.toPixel(unit), y: this.sy.toPixel(unit) })
+    const onNames = (event: MouseEvent): boolean => {
+      const rect = canvas.getBoundingClientRect()
+      return (side === 'top' ? event.clientY - rect.top : event.clientX - rect.left) < BAR_NAMES
+    }
     canvas.addEventListener('pointerdown', (event) => {
       const grid = this.grid
       if (grid === null || event.button !== 0) return
       closeMenu()
       this.overlayCanvas.focus({ preventScroll: true })
       const unit = unitOf(event)
-      const rect = canvas.getBoundingClientRect()
+      this.dotplot?.focusOn(null)
       // The row of names is the sequence's, whole (§27.4); the row of pieces, a piece's.
-      const onName = (side === 'top' ? event.clientY - rect.top : event.clientX - rect.left) < BAR_NAMES
+      const onName = onNames(event)
       const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
       const lit = held === null ? null : stretchUnits(grid, held)
       const whole = onName ? sequenceStretch(grid, unit) : null
@@ -1675,7 +1700,13 @@ export class EditStage {
         this.schedule()
         return
       }
-      if (this.drag === null) this.describeBar(unitOf(event))
+      if (this.drag !== null) return
+      const unit = unitOf(event)
+      this.describeBar(unit)
+      // What is under the pointer lit in the corner dot plot (§27.3): over a
+      // name the sequence whole, over the pieces the piece.
+      const grid = this.grid
+      this.dotplot?.focusOn(grid === null ? null : onNames(event) ? sequenceStretch(grid, unit) : partStretch(grid, unit))
     })
     const finish = (event: PointerEvent): void => {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
@@ -1704,6 +1735,7 @@ export class EditStage {
       this.cancelDrag()
     })
     canvas.addEventListener('pointerleave', () => {
+      this.dotplot?.focusOn(null)
       if (this.drag === null) this.paintReadout()
     })
     canvas.addEventListener('dblclick', (event) => {
@@ -2943,6 +2975,9 @@ export class EditStage {
             this.paintSide()
             this.schedule()
           },
+          // Its lines lit in the corner dot plot, as its name on a bar lights them (§27.3).
+          pointerenter: () => this.dotplot?.focusOn({ sequence: sequence.name, from: 0, to: length }),
+          pointerleave: () => this.dotplot?.focusOn(null),
         },
       })
       const units = this.grid?.sequence(sequence.name)

@@ -2484,6 +2484,9 @@ set a task called (§18.5) marks on-diagonal borders or elements; a BED the read
 These answer a different question from a lane — not "what is on the sequence here" but "this pixel
 is a feature" — so every one is an outline, a rule or a glyph beside what it points at: an overlay
 must not hide the pixel it is about.
+A set a task *called* is the one thing wanted in both roles, since a peak set is checked against its
+coverage and a boundary against its map: it arrives as both, an overlay row and a lane row linked to
+it, each with its switch (§18.7).
 
 An overlay is **placed per map**, as a track is, and a map draws only the overlays placed on it. It
 used to be drawn on every map of a deck: a loop set called on one of six maps was circled on all
@@ -2916,6 +2919,44 @@ come out of the annotations worker, which holds the FASTA and answers a window a
 it answers a bigWig (§8.2), and the FASTA is also the assembly — every sequence and its exact length
 — which is what lets a genome be browsed with nothing else open (§5.8).
 
+**A sequence lane can read its six frames.** *Reading frames* in the row's settings adds a band of
+six rows under the residues — `+1`, `+2`, `+3` over `−1`, `−2`, `−3` — and the lane grows by the
+band, so the height the reader set stays the residues' and a drag on the lane's border sets it alone.
+It is one lane and not two: the frames move, hide and close with the sequence they read. Its picture
+changes with the zoom as the residues' does, decided from the frame alone (`render/frames.ts`) by the
+fetch, the paint and the readout: where a codon is nine pixels wide, every codon is a box, every
+other one shaded darker so its ends can be seen, with its amino acid written in it, a start filled
+green and a stop red; down to a pixel a base, the same boxes without the letters; out to 24 bases a
+pixel, the starts and stops alone as ticks, the picture IGV and UCSC draw — a long frame with no red
+in it is a gene or the place for one; further out, nothing, and the band says *reading frames at 24
+bp per pixel or closer — zoom in*. The residues come from the same cache and the same windows as the
+letters, from further out: three screens at 24 bases a pixel is under a hundred and fifty thousand
+bases on a 2000-pixel lane, inside the worker's cap.
+
+**A frame is the genome's, not the window's.** `+1` reads the codons that begin at a multiple of
+three counted from the sequence's first base, `+2` and `+3` one and two bases on, so a frame does not
+move when the view pans; `−1`, `−2` and `−3` are the reverse complement read in the **same boxes** as
+`+1`, `+2` and `+3`, so a codon sits directly over its complement. A lowercase base — soft-masking —
+translates as the upper-case one, a `U` as a `T`, and a codon with an `N` or any other letter in it
+is an `X`. On an edited axis a stretch read backwards (§27.2) shows its other strand, as the residues
+do, so there the top three rows are the file's reverse frames. Over a row, the readout names the
+codon as its strand reads it and what it codes for: *frame +1: ATG → M*.
+
+**The genetic code is chosen, and it is NCBI's.** Beside the switch, every translation table NCBI
+publishes, by number and name — 1 to 6, 9 to 16, 21 to 33; 7, 8 and 17 – 20 were retired — each held
+as NCBI writes it (`annotations/codons.ts`): 64 amino acids and 64 start marks over the codons in
+`TCAG` order, which is the form every other tool prints and the one a reader checking a table would
+hold it against. Table 4 is what a Mycoplasma or a Spiroplasma reads, where `TGA` is tryptophan and
+the frames of the standard code are broken every few dozen codons by stops that are not there. A
+start is green where the table lets a protein begin *and* the codon reads as methionine; the other
+starts a table allows — `TTG` and `GTG` in a bacterium — read as their amino acid inside a gene, and
+are tinted rather than filled, since filling them would mark a start every few codons of every frame.
+Tables 27, 28 and 31, whose stops depend on context, draw the sense reading NCBI gives. Both the
+switch and the code are remembered with the row (§8.6) — the code with the frames off, since it is a
+fact about the genome — and a stored code NCBI never published is read as the standard one. Beside a
+map the lane is GC content and has no codons to read; the frames are drawn wherever the residues are,
+in the 1D browser and a deck's tracks cells, and in the figure saved from either.
+
 **How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
 read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
 and forty, and holding one is what makes every zoom draw GC content, every pan free and the motif
@@ -3283,7 +3324,7 @@ A `.bam` opens as a lane, and it is the first kind here that arrives with a rule
 to it (§1). Everything below is that rule and what follows from it.
 
 **What is built is the reader, the depth track and the pile of reads**, with their controls, the
-per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
+per-read card, mates and split reads drawn, and base modifications from the reads' `MM`/`ML` tags. What is deliberately absent is listed at the end of
 this section, each with its own reason.
 
 **A BAM is read by region and nothing else**: there is no zoom level in the file, no summary layer,
@@ -3348,7 +3389,8 @@ needed no case for either.
 What has to be paid for that is one link. The two rows point at each other, and everything that is
 about *which reads count* — the mapping-quality floor and the duplicate switch — is written through
 to both: a floor applied to the pile and not to the depth beside it is two pictures of two different
-files under one name, and nothing on screen would say so. How the pile is *drawn* — the colouring,
+files under one name, and nothing on screen would say so. The modification code and its threshold
+are written through for the same reason (below). How the pile is *drawn* — the colouring,
 the pair layout, the split-read switch — is the pile's alone, because none of it means anything to a
 curve; and the arcs drawn over the depth, with their floor, are the depth's alone (§8.23). Closing one
 row clears the other's link, so a write-through cannot chase a row that has gone.
@@ -3558,6 +3600,56 @@ sixteen bits of every offset, deliberately and for a reason that holds there —
 whole `FeatureSet` and draws the visible part (§8.4). A contig's worth of BAM cannot work that way,
 so `annotations/bam/index.ts` keeps bin-level chunks, both halves of every offset, the linear index
 and the forecast.
+
+**Base modifications are read from the reads' own `MM` and `ML` tags** (SAMtags §1.7) — what a
+nanopore or PacBio basecaller writes beside every read, and the file `modkit pileup` turns into the
+bedMethyl of §8.20. `MM` lists groups of a canonical base, a strand, one or more codes (`m` 5mC, `h`
+5hmC, `a` 6mA, letters run together as `mh`, or one ChEBI number; `N` for any base) and skip counts
+over that base; `ML` carries one byte per call, in the groups' order and position by position inside
+a group with two codes, read as the probability `(p + 0.5) / 256`. Both draft spellings, `Mm` and
+`Ml`, are read too, because the first basecallers to write the tags wrote those and the files are
+still about. Three readings are the ones a decoder gets wrong without anything erroring, and each is
+pinned by a test: the skips are counted on the read **as it was sequenced** — the reverse complement
+of SEQ for a reverse-strand alignment, so a reverse read's 5mC calls land on the CpG's G — and the
+`MM` letter is matched there whatever the strand sign says (htslib's reading of `G-m`); the **mode**
+decides what an unlisted base means — under `.`, or no mode, every base a group steps over and every
+base after its last skip is an unmodified call, and under `?` it is nothing — so a fraction computed
+without the difference reports a 5 % site as 100 % on any file written with `?`; and a call is placed
+on the reference through the CIGAR, so one in a soft clip or an insertion has no column and is
+dropped, and a deletion moves on past bases the read does not have. A record whose tags do not fit
+its own sequence — skips running off the end, an `ML` shorter than the calls, an `MN` that is not the
+length of SEQ because the tags outlived a hard clip — yields no calls at all, since a partial reading
+of it would be calls on the wrong bases.
+
+**On the pile, *colour by → base modification*** draws the reads plain grey and each call of one code
+at its base: red where the call is modified, blue where it is not, as opaque as the caller was sure —
+a sixth at a call that only just cleared the threshold, whole at a certain one — and at least two
+pixels wide, so the calls are visible at the zoom where reads first are. Which code is a select under
+the colouring, listing the codes this file's reads have been seen to carry and, first, *most modified
+in view*: the code with most calls at `p ≥ ½` in the window. Ranked by those rather than by all
+calls, because a `.` group makes an implicit call on every base it steps over — a file with `A+a.`
+has a call on every adenine — and ranking by those would choose 6mA on a file that is about 5mC. The
+**threshold** is two-sided, as modkit's is: modified at or above it, unmodified at or below one minus
+it, and between the two a call is neither drawn nor counted; `0.5`, the default, counts every call.
+The mismatch marks are not drawn under this colouring, because they are coloured by base and a red
+`T` a column from a red 5mC would be one ink making two claims. The pile is fetched with the calls
+only under this colouring — the tag walk is cheap, unpacking every read's sequence is not — so
+choosing it refetches like any colouring, and choosing a code or a threshold does not. A hover on a
+call says its code, its probability, its base and which side of the threshold it fell, with every
+other code's call at that base under it; the read's card counts its calls per code.
+
+**On the depth row, *% modified*** draws the row as the percentage of calls of that code that are
+modified, at each base or bin — a bedMethyl's picture made from the reads, on the depth's own pass and
+under the depth's own filters, so the percentage never stands on reads the pile beside it left out. A
+bin with no call is a gap rather than a zero, the axis is 0–100, the arcs and the mismatch share are
+not drawn over it, and the row's name says what it is the percentage of. The code and the threshold
+are **written through** between the two rows, like the filters: the pile's marks and the percentage
+beside them are one measurement, and two codes under one file's name would read as one. That puts
+them in the depth's cache key while the row draws the percentage, and only then — so trying codes on
+the pile with the switch off costs the depth nothing. It is a switch on the row rather than a third
+row because a BAM's rows are made once, at import (above), and this is a different reading of the
+same count the depth row already makes; a reader who wants the depth and the percentage at once has
+one row too few for that, which is a limit.
 
 **Not built, and each for its own reason.** No **mate fetching**: a mate lives at `PNEXT`, which is
 off-screen by definition for anything but a short insert, so following them is one uncoalescable
@@ -4017,6 +4109,11 @@ per set, and a row's value is read from its own string once per *placement*, whi
 already bounded by the pixels on screen. A key with its number on the wrong side (`4 exons`) is not
 a column and is not offered; a part with no key at all (a VCF's leading `A>G`) is not either.
 
+The set's own **name** column is offered beside them where any sampled row writes one — a BED's
+fourth column, read from the column rather than from the detail string — as a category: a
+compartment's `A` and `B`, a chromatin state, an id. It is how a called compartment lane arrives
+coloured (§18.7).
+
 A categorical column is drawn in `CATEGORY_PALETTE` — §8.12's palette, for §8.12's reason: one swatch
 cannot describe six biotypes. Values are handed colours **commonest first**, so the palette's most
 distinct colours cover the most features; past twelve the tail becomes one `other` bucket, because a
@@ -4028,6 +4125,21 @@ and a colour that meant `protein_coding` before a pan and `lncRNA` after it is a
 without saying so. A row carrying no value for the chosen column is the neutral again — a GTF where
 half the genes have a biotype is a file saying two things, and colouring the silent half as if they
 were some category would be inventing the fact.
+
+**The name column is a colouring too**, offered as *name* wherever some feature of the set has one —
+a BED4 or wider, a bigBed, a task's segments — because a BED's fourth column is as often a *class* as
+a name: `A` and `B` on a compartment call, the fifteen states of a segmentation. Its colours come
+from `render/nameColours.ts`, the one name→colour mapping a 3D model coloured by the same set reads
+(§25.5), so the lane and the model agree name for name. Names are ranked by the **base pairs** they
+cover over the whole set, and the first twenty-three take a colour each — `CATEGORY_PALETTE` without
+its grey, which on a model is the colour of *nothing here*, then Paul Tol's muted and light sets —
+and the rest are one `other` bucket that the key names with a count, `other (7 more names)`.
+Twenty-four rather than twelve, because the sets this is for are segmentations and a key that folded
+three chromatin states into `other` would fail exactly the file it was asked of. A set whose names
+are exactly **`A` and `B`** takes the compartments' own red and blue instead, the convention every
+compartment figure uses. The key lists the names in natural order (`state2` before `state10`), and
+each chip is a **colour picker**: the colour is kept on the set's row (`FeatureStyle.nameColours`),
+stored with the session, and is the colour that name has on every model coloured by the set.
 
 Both keys live in the **card**, under the control that decides them, for §8.13's reason and one more:
 a feature lane can be sixteen pixels tall beside a map, which is not a legend's worth of room at any
@@ -4441,6 +4553,10 @@ measurements, not one. There is one lane per loaded file, so the reader draws th
 code** and says, under the lane's label, which codes were in the file and how many rows each had:
 §8.7's bargain for a truncated bigBed made again. Averaging them would produce a number that is in
 no file and is the methylation level of nothing.
+The codes are named from SAMtags §1.7's table — the one a BAM's `MM` tag is read by (§8.13) — so
+the two lanes never name one code two ways: `m` 5mC, `h` 5hmC, `a` 6mA, `e` 5fU, `g` 5hmU, `b` 5caU,
+`o` 8oxoG, ChEBI `21839` 4mC; a code the table does not hold is written as the file wrote it, a
+bare number as `ChEBI:` and the number.
 
 Strands are **not** collapsed and do not need to be: a row is one base, and the two cytosines of a
 CpG are at consecutive positions on opposite strands — two calls at two coordinates, side by side in
@@ -4448,6 +4564,11 @@ one lane with nothing overlapping. A file written with `--combine-strands` has a
 choice. A row whose depth is zero is dropped rather than drawn as `0 %`, which would put a floor of
 confident zeroes under every uncovered base in the genome, and a file of nothing else is refused,
 having no measurement to draw.
+
+The same picture can be made from the **reads**, where the file is a BAM carrying `MM`/`ML` tags
+rather than the pileup of one: its depth row's *% modified* (§8.13) is this lane's percentage counted
+from the reads in view, one code at a time, at a threshold the reader sets. It answers the question
+before `modkit pileup` has been run, and over a window rather than a genome.
 
 A **`bigMethyl`** is this in a bigBed, and is the format that most needs its schema asked: its first
 nine columns *are* a valid BED9, so §8.7 produces a lane that looks entirely correct — one box per
@@ -6714,8 +6835,9 @@ limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, batch
 it.
 
 **It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
-one list whose order is the lanes' order: a task's profile, its called interval set (an overlay, with
-the overlay's shape, radius and opacity), and a comparison of two loaded tracks (§7.5). What only a
+one list whose order is the lanes' order: a task's profile, its called interval set — as two rows, the
+overlay with the overlay's shape, radius and opacity and the lane with a feature lane's colouring and
+rows (§18.7) — and a comparison of two loaded tracks (§7.5). What only a
 synthetic row has rides in the places a loaded row keeps the matching facts:
 
 - **a `*` after its name** — the mark a resolution the file does not store wears (`3 kb*`, §3.4),
@@ -6872,8 +6994,40 @@ Three specific gates, each stated because each is a place the naive implementati
 Five output kinds, and a task may produce several: a **profile** (one value per bin → a synthetic
 track), a **matrix** (a pileup, a saddle, a correlation heatmap → drawn with the app's existing
 rasteriser and colormaps), a **curve** (with an optional band), a **table** (through the existing
-virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as a new row
-on the Annotations panel so a called boundary becomes an overlay on the map immediately).
+virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as rows of the
+Tracks card so a called boundary is on the map, and beside it as a lane, the moment the run finishes).
+
+**A called set is drawn on both surfaces, and each is a switch.** The map answers *is this pixel a
+feature* and a lane answers *what is on the sequence here*, and a called set — peaks, boundaries,
+domains, A/B segments, borders, origins, sites, flagged contigs — is asked both. It used to arrive as an
+overlay alone, which beside a map left a peak set with no way to be read against the coverage it was
+called on: the one check a peak caller's output is owed is box against bump. So every interval output
+arrives as **two rows**, linked as a BAM's depth and pile are (§8.13, `partner`): the **overlay**, on the
+map it was called from, and a **lane** of segments — a row of the computed kind with `kind: 'segments'`,
+drawn, coloured, searched and exported by exactly the code a loaded BED is (§8.16), and not by a second
+renderer (`analysis/surfaces.ts`). Each row's settings and the drawer's line for the output carry the
+pair of switches **on the map** and **as a lane**; each is one row's eye, so the switch, the eye and a
+session's memory of a hidden row (§8.6) are one setting, and a set run again keeps what the reader
+switched off. The two rows share a name, so the line under it says which is which — *Diamond
+insulation · 412 boundaries · on the map* over one and *… · as a lane* over the other. Rules that are
+contract:
+
+- **The lane goes directly under the row it is read against**, on that row's edges and in the slot after
+  it in the list whose order is the stacks' order: a peak set under the bigWig it was called on, the
+  A/B segments under E1, boundaries and then the domains between them under the insulation track. A
+  task names the row (`IntervalsOutput.lane.under`); unnamed, it is the run's last profile, and with none
+  the computed tracks' edge (§18.5). Only on arrival — a lane the reader has moved stays where they put it.
+- **A loop set's lane is its anchors**: both ends of every pair, each place once, under the name of the
+  first pair to reach it and the best score among them. It **starts off**, because a loop is a pixel of
+  the map and its anchors along one axis are a reading rather than the picture; the switch is there.
+- **With no map there is no overlay.** On the 1D browser demo the set is a lane alone, and in the 1D
+  browser beside a map the overlay row is not drawn as a second lane: there the lane *is* its picture,
+  and a reader who switched the lane off has switched the set off there. On a `.metacool`, which has no
+  stacks for a lane of base pairs (§8.5), the set is the overlay alone, as before.
+- **A segment carries a name**, in the BED's fourth column: `A` or `B`, `peak_12`, `domain_3`,
+  `boundary_40`, `border_7` — numbered in genomic order. The lane can be coloured by it (§8.16), and a
+  compartment lane is from the start, since two kinds of segment are what it is drawn to show; a set of
+  ids is not, since a colour per row says nothing.
 
 Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
 them a true vector figure rather than a photograph of a chart.
@@ -10608,7 +10762,26 @@ model's colouring, and a **double-click shows it alone** (a second brings all ba
 held in the model's style by the mark's id and hides the colouring only — the mark stays drawn
 wherever it was put, since a key that removed it would be a second ×. With no marks yet the key
 says where they are made. This colouring used to have no key at all, so a model coloured by six
-marks was six colours nobody could name. The reader's own
+marks was six colours nobody could name.
+
+**A feature set's names are a colouring of their own.** Every interval set whose features carry a
+name — a BED4 or wider, a bigBed, a task's segments — is offered twice in the picker: *· features*,
+the lane's own ink where a bead overlaps a feature, and right under it **· names**, the names as
+categories — a compartment call's `A` and `B`, a segmentation's states. Each bead takes the name
+that overlaps it by the **most base pairs**, summed per name, so a compartment called as two
+touching intervals is still one compartment; a tie goes to the name the file gives first, and a bead
+no named feature overlaps keeps the neutral grey. This is not E1's ramp: a name is a level, not a
+value, so the colour-scale picker is not offered. The colours are the set's (§8.16): `A` red and `B`
+blue where those are the only names, the categorical palette by base pairs covered otherwise, and
+past twenty-three names one `other` bucket that the key says the size of. **The key lists the names
+some bead is under** — a legend naming a colour nothing on the model is drawn in is a legend for
+another model — and its swatches are pickers, as a sequence's and a mark's are. What a swatch writes
+is the **set's** colour for that name, kept on the set's row with the session, for the reason a
+mark's colour is the mark's: `A` is a fact about the call, so `A` picked green here is green on the
+next model coloured by the same call and on its lane coloured by name.
+
+The reader's own
+
 **arrowhead marks** are offered under *loops as chords* as *manual annotations*, beside the loaded loop
 sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
 set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
@@ -10727,7 +10900,7 @@ two words say which one each colouring is. After them, **haplotype** where there
 any column the file carries, and from the session **a track's values** at each bead — read
 through the same sample cache the lanes use at one bucket per bead and on the lane's own limits, so
 a bead coloured by a bigWig agrees with the lane at every value — and **a feature set's** colour
-where a bead overlaps one. The file's **score column** was a colouring and is not now: a g3d carries
+where a bead overlaps one, or its **names** as categories (above). The file's **score column** was a colouring and is not now: a g3d carries
 none worth a ramp, so the row was a column of nothing, and a session stored coloured by it opens by
 sequence. Any other colouring the list no longer has stays named in the picker rather than silently
 becoming the first option. Two rules carried from the modules reused: fit the
@@ -11446,10 +11619,22 @@ What is on it:
   only moved: each cut into the
   pieces of the edited assembly it falls in, placed where its piece went, turned with it, its other
   side the matching share of its extent along the reference, and what was set aside not drawn — an
-  edit moves the lines and makes none. A square of up to 220 pixels over the map's upper triangle,
-  which the lower one mirrors; folded to a button when it is in the way and remembered folded, and
-  nothing found until it is unfolded; the streak under the pointer named in the readout, both loci,
-  its way round and its anchors, and a press frames it on the map.
+  edit moves the lines and makes none. A square over the map's upper triangle, which the lower one
+  mirrors — by itself a third of the map up to 220 pixels — folded to a button when it is in the way
+  and remembered folded, and nothing found until it is unfolded; the streak under the pointer named in
+  the readout, both loci, its way round and its anchors, and a press frames it on the map. **Zoomed
+  and moved as the dot plot's own view is** (§28.2), by the same gestures: the wheel zooms about the
+  pointer, a drag or a sideways scroll moves it, a double click — or the button beside the picker,
+  shown once it is zoomed — shows both whole, and the lines stay lines, sharp at any zoom. **Sized by
+  a grip** at its lower-left corner, the one across from where it hangs: dragged left and down it
+  grows, never under 120 pixels nor so large that it and its picker and caption leave the map, and
+  kept with the file as the fold is; a double click on the grip gives it its own size back. **One
+  highlight in two places**, as the rail's labels and marks are: a name hovered on a pieces bar, or a
+  sequence's row on the sequences card, lights that sequence's lines in the plot — a piece hovered,
+  that piece's — the others dimmed, and its span along x washed and marked over the plot's top edge;
+  and a line hovered in the plot lights on the map the piece it lies along — the contig, where nothing
+  is edited yet — dashed on the diagonal, bracketed on both bars with the rest of each veiled, and its
+  sequence's name in the accent. *Built.*
 - **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
   dragged, so a track moves with the stretch under the hand; the selection is lit across them.
   *Built.*

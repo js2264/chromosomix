@@ -30,8 +30,8 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import { hasTrackControls, isIntervalSet, readsAlignments, searchesByName } from '../annotations/types'
-import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
+import { hasTrackControls, isIntervalSet, readsAlignments, readsOf, searchesByName } from '../annotations/types'
+import type { AnnotationEntry, ColourBy, ContigOverlap } from '../annotations/types'
 import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
@@ -40,6 +40,7 @@ import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
 import { mapsOrLead, overlayMapsField, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
+import { surfaceToggles } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
@@ -61,11 +62,14 @@ import {
   fillFeatureLegend,
   fillLegend,
   flipButton,
+  framesField,
   scaleField,
   heightField,
   layoutField,
   limitsField,
   mapqField,
+  modField,
+  modFractionField,
   modeField,
   radiusField,
   shapeField,
@@ -1134,7 +1138,9 @@ export class AnnotationCard {
     // …and the depth's own arcs, the sashimi plot (§8.23): drawn over the
     // curve, so the depth row has them and the pile does not — its reads draw
     // their gaps themselves.
-    if (entry.kind === 'alignments') out.push(sashimiField(this.props.store, entry))
+    if (entry.kind === 'alignments') {
+      out.push(sashimiField(this.props.store, entry), modFractionField(this.props.store, entry))
+    }
     // …and how the pile is drawn, which only the pile has. A colouring and a
     // pairing mean nothing to a depth curve, so they are not offered on the row
     // that draws one.
@@ -1144,16 +1150,26 @@ export class AnnotationCard {
       // defers its own rebuild while a control holds focus, and the lane does
       // not.
       const key = colourLegend(entry)
+      // …and, under a colouring by base modification, which one and how sure
+      // (§8.13). In a slot filled from the picker for the key's reason: the
+      // card's own rebuild waits for the select to lose focus.
+      const mods = el('div', { class: 'ann-mods' })
+      const fillMods = (by: ColourBy): void => {
+        mods.replaceChildren(...(by === 'basemod' ? [modField(this.props.store, entry)] : []))
+      }
+      fillMods(readsOf(entry.style).colourBy)
       out.push(
         el(
           'div',
           { class: 'ann-inline' },
-          colourByField(this.props.store, entry, (by) =>
-            fillLegend(key, entry.style.colour, by),
-          ),
+          colourByField(this.props.store, entry, (by) => {
+            fillLegend(key, entry.style.colour, by)
+            fillMods(by)
+          }),
           layoutField(this.props.store, entry),
         ),
         key,
+        mods,
         splitsToggle(this.props.store, entry),
       )
     }
@@ -1164,7 +1180,7 @@ export class AnnotationCard {
     // are drawn on the map as borders or boxes on the diagonal and there is no
     // lane to colour: a control that silently does nothing is worse than an
     // absent one.
-    if (entry.card === 'linear' && isIntervalSet(entry.kind)) {
+    if (isLaneRow(entry) && isIntervalSet(entry.kind)) {
       // …with one exception, and it is the same rule as the two above rather
       // than a special case: a control that silently does nothing is worse than
       // an absent one. A barChart's ink is its categories' and is not a choice
@@ -1172,7 +1188,7 @@ export class AnnotationCard {
       // picker nor the arrowheads have anything to change. The **key** is what
       // is left, and it is the one of the three this lane needs most: it is
       // where the bars get their names.
-      const key = featureLegend(entry)
+      const key = featureLegend(entry, this.props.store)
       if (entry.kind === 'ideogram') {
         // A karyotype's ink is its stains' and its glyph is one shape rather
         // than boxes on rows (§8.22), so the picker, the arrowheads and the row
@@ -1188,7 +1204,7 @@ export class AnnotationCard {
         // packed into rows.
         out.push(
           this.limits(entry),
-          featureColourField(this.props.store, entry, (by) => fillFeatureLegend(key, entry, by)),
+          featureColourField(this.props.store, entry, (by) => fillFeatureLegend(key, entry, by, this.props.store)),
           key,
         )
       } else if (entry.kind === 'barchart') {
@@ -1209,7 +1225,7 @@ export class AnnotationCard {
             'div',
             { class: 'ann-inline' },
             featureColourField(this.props.store, entry, (by) =>
-              fillFeatureLegend(key, entry, by),
+              fillFeatureLegend(key, entry, by, this.props.store),
             ),
             arrowsToggle(this.props.store, entry),
           ),
@@ -1222,7 +1238,15 @@ export class AnnotationCard {
     // between 0.3 and 0.5 is where a genome's variation actually lives. No
     // group, though — GC shares no units with anything else on the stack, so
     // resolving it together with a coverage track would flatten both.
-    if (entry.kind === 'sequence') out.push(this.limits(entry))
+    //
+    // And its reading frames, with the code they are read in (§8.8): six rows
+    // under the residues, drawn wherever the residues are.
+    if (entry.kind === 'sequence') {
+      out.push(this.limits(entry), framesField(this.props.store, entry))
+    }
+    // A called set's two surfaces (§18.7), on whichever of its two rows is open.
+    const surfaces = surfaceToggles(this.props.store, entry)
+    if (surfaces !== null) out.push(surfaces)
     if (entry.card === 'overlay') {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))

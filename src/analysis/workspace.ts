@@ -51,6 +51,8 @@ import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import { groupNameOn, syntheticEntry, syntheticId, type SyntheticFormat } from '../ui/synthetic'
 import type { SourceSpec } from '../worker/protocol'
 import { gridAt } from './context'
+import { adoptCalledSet } from './surfaces'
+import { surfaceToggles } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
@@ -295,6 +297,16 @@ export class AnalysisWorkspace {
       // therefore whether a profile can be **drawn**, not whether a list exists
       // to put it in.
       hasLanes: () => this.laneable(),
+      surfaces: (output) => {
+        const store = this.host.store()
+        if (store === null) return null
+        for (const [id, held] of this.intervals) {
+          if (held.output !== output) continue
+          const entry = store.byId(id)
+          if (entry !== undefined) return surfaceToggles(store, entry)
+        }
+        return null
+      },
       // The grid is passed rather than left to be looked up, because the two
       // callers of `writeProfile` do not agree about which one is right: the
       // drawer only ever holds what this workspace has just computed, so the
@@ -455,7 +467,9 @@ export class AnalysisWorkspace {
     // the file this split was written for (§8.12), and every file, a metacool
     // included, has both now (§8.5); the two are still two questions.
     if (store !== null && !this.laneable()) {
-      for (const output of intervals) this.adoptIntervals(task, result, output, store, on)
+      for (const output of intervals) {
+        this.adoptIntervals(task, result, output, store, on, { lanes: false, under: null })
+      }
       for (const output of profiles) {
         this.profiles.set(syntheticId(output.id), {
           output,
@@ -497,8 +511,6 @@ export class AnalysisWorkspace {
       this.drawer.refresh()
       return
     }
-
-    for (const output of intervals) this.adoptIntervals(task, result, output, store, on)
 
     for (const output of profiles) {
       const source = {
@@ -551,11 +563,33 @@ export class AnalysisWorkspace {
         revision: previous + 1,
       })
     }
+
+    // **After the profiles**, because a called set's lane is placed under the
+    // profile it was called from (§18.7), which has to be a row by then. With
+    // no row named, each set goes under the run's last profile and the next
+    // under it, so boundaries and the domains between them stack in the order
+    // the task returned them.
+    let under: string | null =
+      profiles.length === 0 ? null : syntheticId(profiles[profiles.length - 1].id, map)
+    for (const output of intervals) {
+      const named = output.lane?.under
+      const lane = this.adoptIntervals(task, result, output, store, on, {
+        lanes: true,
+        under:
+          named === undefined
+            ? under
+            : 'output' in named
+              ? syntheticId(named.output, map)
+              : named.entry,
+      })
+      if (named === undefined && lane !== null) under = lane
+    }
+    if (intervals.length > 0) this.drawer.fillSurfaces()
     this.host.changed()
   }
 
   /**
-   * A called interval set, as an ordinary overlay row.
+   * A called interval set, as an ordinary overlay row and an ordinary lane.
    *
    * Boundaries from insulation, domains from CID: a set of coordinates the file
    * did not come with, and the honest place for it is beside the BED somebody
@@ -574,7 +608,8 @@ export class AnalysisWorkspace {
     output: IntervalsOutput,
     store: AnnotationStore,
     on: RunTarget,
-  ): void {
+    surfaces: { lanes: boolean; under: string | null },
+  ): string | null {
     const map = on.map
     const source: ComputedSource = {
       kind: 'computed',
@@ -592,7 +627,6 @@ export class AnalysisWorkspace {
     // carries it away — and never an overlay: it is unplaced, as every
     // structure row is, and `placeOnTarget` below has nothing to place.
     const structure = output.entryKind === 'structure'
-    const kind = structure ? 'structure' : output.payload.kind === 'pairs' ? 'pairs' : 'segments'
     // Scoped to the map, exactly as a profile's id is and for the same reason:
     // a batch over five maps called five sets of boundaries, and one id meant
     // each `begin` replaced the row before it while `placeOnTarget` moved the
@@ -602,45 +636,66 @@ export class AnalysisWorkspace {
       map === LEAD_MAP
         ? `analysis:${task.id}:${output.id}`
         : `analysis:${map}:${task.id}:${output.id}`
-    // **A model accumulates; everything else replaces.**
-    //
-    // Running insulation a second time with a wider window means the reader
-    // wants the *new* boundaries, and a panel that grows a row per run is a
-    // panel nobody can read after four of them — so a called interval set
-    // lands on the id of its task and its output, and the row before it goes.
-    //
-    // A **reconstruction is not that**. Two models of one map, from two
-    // methods or two exponents or the same settings twice, are the comparison
-    // the whole of §25.3 is built for: `compare with`, `in the frame of`,
-    // turning them together, a cell each. A second run that destroyed the
-    // first left a reader with nothing to compare and no way back — the model
-    // is not stored anywhere else, and *the same settings* is exactly the run
-    // somebody makes to check a solver's seed. So a structure takes the first
-    // free id in the series and keeps every model that has been made.
-    const id = structure ? freshId(store, base) : base
+    const label = map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`
+    const held = { output, provenance: result.provenance, task: task.id }
+
+    // **Every other called set is drawn on both surfaces** (§18.7): an overlay
+    // on the map it was called from, and a lane of segments beside it — two
+    // rows, linked, each switched on its own (`analysis/surfaces.ts`). Running
+    // insulation a second time with a wider window means the reader wants the
+    // *new* boundaries, so both land on the id of their task and output and
+    // replace what was there; a panel that grew a row per run is a panel nobody
+    // can read after four of them. A file with no map — the 1D browser — has
+    // nothing to overlay, and gets the lane alone; a file whose lanes cannot be
+    // drawn (a metacool, §8.5) gets the overlay alone, as it always did.
+    if (!structure) {
+      const ids = adoptCalledSet(store, {
+        id: base,
+        label,
+        source,
+        payload: output.payload,
+        summary: countedAs(output),
+        colour: store.byId(base)?.style.colour ?? store.nextColour(),
+        map,
+        overlay: !surfaces.lanes || (this.host.context()?.hasMap ?? true),
+        lane: surfaces.lanes,
+        laneShown: output.lane?.hidden !== true,
+        under: surfaces.under,
+      })
+      if (ids.overlay !== null) this.intervals.set(ids.overlay, held)
+      if (ids.lane !== null) this.intervals.set(ids.lane, held)
+      return ids.lane
+    }
+
+    // **A model accumulates.** Two models of one map, from two methods or two
+    // exponents or the same settings twice, are the comparison the whole of
+    // §25.3 is built for: `compare with`, `in the frame of`, turning them
+    // together, a cell each. A second run that destroyed the first left a
+    // reader with nothing to compare and no way back — the model is not stored
+    // anywhere else, and *the same settings* is exactly the run somebody makes
+    // to check a solver's seed. So a structure takes the first free id in the
+    // series and keeps every model that has been made.
+    const id = freshId(store, base)
     const run = id === base ? 1 : Number(id.slice(base.length + 1))
     const colour = store.nextColour()
-    if (!structure && store.byId(id) !== undefined) store.remove(id)
-    const label = map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`
     store.begin({
-      card: structure ? 'structure' : 'overlay',
-      kind,
+      card: 'structure',
+      kind: 'structure',
       id,
       // Two models of one map under one name are two rows a reader cannot
       // tell apart in the picker, in `compare with`, or on the card.
       label: run > 1 ? `${label} (${run})` : label,
       source,
       placement: emptyPlacement(),
-      style: defaultStyle(kind, colour),
+      style: defaultStyle('structure', colour),
     })
-    if (!structure) this.placeOnTarget(store, id, emptyPlacement(), map)
     store.update(id, {
       status: 'ready',
       payload: output.payload,
-      summary:
-        structure && output.payload.kind === 'features' ? g3dSummary(output.payload.data) : countedAs(output),
+      summary: output.payload.kind === 'features' ? g3dSummary(output.payload.data) : countedAs(output),
     })
-    this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
+    this.intervals.set(id, held)
+    return null
   }
 
   // -------------------------------------------------------------------------
@@ -733,6 +788,9 @@ export class AnalysisWorkspace {
         placement: entry.placement,
         style: entry.style,
         visible: entry.visible,
+        // A called set's two rows (§18.7) cross together and stay linked, or
+        // the switches on either would have nothing to switch.
+        ...(entry.partner === undefined ? {} : { partner: entry.partner }),
       })
       // Held here whether or not it can be a lane, because these values are
       // what the exports are written from — and registered only where there is

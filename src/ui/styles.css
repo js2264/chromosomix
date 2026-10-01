@@ -2851,6 +2851,30 @@ p {
   flex: none;
 }
 
+/* …and a name's chip is a colour picker of the same size (§8.16), the swatch
+   the 3D key draws for the same name. */
+.ann-key-swatch {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.ann-key-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.ann-key-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.ann-key-swatch::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
 /* A numeric colouring's key: the ramp itself, with its two ends written on it.
 
    Chips are the wrong shape for a hundred thousand p-values — there are no
@@ -10384,6 +10408,12 @@ span.deck-name {
   max-width: 75%;
 }
 
+/* …and three to a row from seventeen levels (a set’s names, §25.5, run to twenty-four):
+   twelve rows of two stood over half the model they were the key to. */
+.structure-key:has(> .structure-key-level:nth-child(18)) {
+  grid-template-columns: repeat(3, auto);
+}
+
 /* …except the marks (§25.5): each is a locus or two, `▭ IV:1,100,000-1,150,000`,
    which two to a row cuts in half. One column, scrolling past its height as the
    key always did — a reader with forty marks is reading a list anyway. */
@@ -13600,6 +13630,34 @@ span.deck-name {
 }
 .edit-dotplot-canvas.is-on-streak {
   cursor: pointer;
+}
+.edit-dotplot-canvas.is-dragging {
+  cursor: grabbing;
+}
+/* Its size, by a grip at the lower-left corner: the plot hangs from its
+   upper-right one, so the corner that moves is the one across from it. */
+.edit-dotplot:not(.is-folded) {
+  padding-bottom: 12px;
+}
+.edit-dotplot-grip {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+  touch-action: none;
+  border-bottom-left-radius: var(--radius);
+  background:
+    linear-gradient(45deg, transparent 0 16%, var(--text-faint) 16% 24%, transparent 24% 38%, var(--text-faint) 38% 46%, transparent 46%) no-repeat;
+  opacity: 0.7;
+}
+.edit-dotplot-grip:hover,
+.edit-dotplot.is-sizing .edit-dotplot-grip {
+  opacity: 1;
+}
+.edit-dotplot.is-sizing {
+  user-select: none;
 }
 .edit-dotplot-caption {
   max-width: 100%;

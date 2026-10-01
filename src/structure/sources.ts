@@ -20,6 +20,7 @@ import type { ManualMark } from '../annotations/manual'
 import type { FeatureSet, Limits, PairSet, TrackSampleSet } from '../annotations/types'
 import { featureRange } from '../annotations/featureset'
 import { LocusAxis, type LocusSegment } from '../render/locus'
+import { OTHER_NAME, nameLevels, namePalette, type NameOverrides } from '../render/nameColours'
 import { transformValue } from '../render/scale'
 import type { ColorScale } from '../types'
 import { sampleValueAt } from '../ui/AnnotationLanes'
@@ -122,6 +123,82 @@ export function featureSource(
     colours[i] = colourOf === undefined ? colour : colourOf(lo)
   }
   return { label, colours }
+}
+
+/**
+ * Which name of a feature set each bead is under (§25.5): the name that
+ * overlaps the bead by the most base pairs, summed per name — a tie goes to
+ * the name met first in file order — and `''` for a bead no named feature
+ * overlaps.
+ *
+ * Summed per name rather than per feature because the question is *which
+ * compartment is this bead in*, and a compartment called as two touching
+ * intervals is still one compartment.
+ */
+export function beadNames(structure: Structure, features: FeatureSet): string[] {
+  const set = structure.set
+  const n = set.length
+  const out = new Array<string>(n).fill('')
+  const byName = new Map<string, number>()
+  features.contigs.forEach((name, index) => byName.set(name, index))
+  const cover = new Map<string, number>()
+  for (let i = 0; i < n; i++) {
+    const contig = byName.get(set.contigs[set.contig[i]])
+    if (contig === undefined) continue
+    const lo = set.start[i]
+    const hi = Math.max(set.end[i], lo + 1)
+    const [from, to] = featureRange(features, contig, lo, hi)
+    if (to <= from) continue
+    cover.clear()
+    let best = ''
+    let most = 0
+    for (let f = from; f < to; f++) {
+      const name = features.name[f] ?? ''
+      if (name === '') continue
+      // `featureRange` answers every feature that *could* reach the bead; the
+      // ones that end before it are not over it.
+      const overlap = Math.min(hi, features.end[f]) - Math.max(lo, features.start[f])
+      if (overlap <= 0) continue
+      const total = (cover.get(name) ?? 0) + overlap
+      cover.set(name, total)
+      if (total > most) {
+        most = total
+        best = name
+      }
+    }
+    out[i] = best
+  }
+  return out
+}
+
+/**
+ * A feature set's **names** as categories on the model (§25.5): each bead the
+ * colour of the name over it ({@link beadNames}), from the one name→colour
+ * mapping the set's lane uses (`render/nameColours.ts`), the reader's own
+ * colours over the default. The key lists only the names some bead is
+ * actually under — a legend naming a colour nothing is drawn in is a legend
+ * for a model that is not there — each with its override key, so a swatch
+ * picked on it knows what to write.
+ */
+export function nameSource(
+  structure: Structure,
+  features: FeatureSet,
+  label: string,
+  overrides: NameOverrides = {},
+): ColourSource {
+  const palette = namePalette(nameLevels(features), overrides)
+  const own = new Set(palette.levels.map((level) => level.name).filter((name) => name !== OTHER_NAME))
+  const names = beadNames(structure, features)
+  const colours = new Array<string | null>(names.length).fill(null)
+  const used = new Set<string>()
+  for (let i = 0; i < names.length; i++) {
+    if (names[i] === '') continue
+    colours[i] = palette.colourOf(names[i])
+    // A name without a colour of its own is in the `other` bucket.
+    used.add(own.has(names[i]) ? names[i] : OTHER_NAME)
+  }
+  const levels = palette.levels.filter((level) => used.has(level.name))
+  return { label, colours, levels }
 }
 
 /**

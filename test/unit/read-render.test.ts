@@ -30,6 +30,8 @@ import {
   readRungFor,
   rowsAcross,
   rowsFor,
+  MOD_INK,
+  modsNear,
   type PileLayout,
   type ReadPaint,
 } from '@/render/alignments'
@@ -410,6 +412,58 @@ describe('a mismatch', () => {
     // comes to. Drawing anything then would be an agreement nobody checked.
     const calls = drawn(withDiff(120, 2), { diffs: false })
     expect(calls.filter((call) => call.op === 'fillRect')).toHaveLength(1)
+  })
+})
+
+describe('a base-modification call', () => {
+  /** A read with three calls: a sure 5mC, a sure unmodified C, and a 5hmC. */
+  function withMods(): ReadPile {
+    const pile = pileOf([{ start: 100, ops: [[0, 50]] }])
+    return {
+      ...pile,
+      diffAt: Int32Array.of(0, 1),
+      diffPos: Int32Array.of(110),
+      diffBase: Uint8Array.of(3),
+      mods: {
+        at: Int32Array.of(0, 4),
+        pos: Int32Array.of(105, 120, 120, 130),
+        code: Uint8Array.of(0, 0, 1, 0),
+        prob: Uint8Array.of(250, 5, 200, 140),
+        codes: ['m', 'h'],
+        counts: [3, 1],
+      },
+    }
+  }
+  const modPaint = (threshold: number): Partial<ReadPaint> => ({ diffs: true, mods: { code: 'm', threshold } })
+
+  it('is a column at its base, red when modified and blue when not, of the chosen code only', () => {
+    const fills = drawn(withMods(), modPaint(0.5)).filter((call) => call.op === 'fillRect')
+    // The read, then the three `m` calls — never the `h` one, nor the mismatch.
+    expect(fills).toHaveLength(4)
+    expect(fills.slice(1).map((call) => call.fill)).toEqual([MOD_INK.modified, MOD_INK.unmodified, MOD_INK.modified])
+    // One base wide is a pixel here, so it is widened to be seen, around its centre.
+    expect(fills[1].args[0]).toBeCloseTo(104.5)
+    expect(fills[1].args[2]).toBeCloseTo(2)
+  })
+
+  it('is as opaque as the caller was sure', () => {
+    const fills = drawn(withMods(), modPaint(0.5)).filter((call) => call.op === 'fillRect')
+    expect(fills[1].alpha).toBeGreaterThan(0.9)
+    expect(fills[3].alpha).toBeLessThan(0.4)
+  })
+
+  it('is left out between the threshold and its complement', () => {
+    const fills = drawn(withMods(), modPaint(0.8)).filter((call) => call.op === 'fillRect')
+    expect(fills).toHaveLength(3)
+  })
+
+  it('is found by the readout within reach of the pointer, every code at that base', () => {
+    const pile = withMods()
+    expect(modsNear(pile, 0, 120.6, 1).map((call) => call.code)).toEqual(['m', 'h'])
+    expect(modsNear(pile, 0, 115, 1)).toEqual([])
+    // With the drawn code named, that code decides the base and leads the list.
+    expect(modsNear(pile, 0, 120.6, 1, 'h').map((call) => call.code)).toEqual(['h', 'm'])
+    expect(modsNear(pile, 0, 106, 2, 'h')).toEqual([])
   })
 })
 

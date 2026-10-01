@@ -51,6 +51,7 @@ import {
   STRUCTURE_COLOUR_DISTANCE,
   STRUCTURE_COLOUR_FEATURES,
   STRUCTURE_COLOUR_MARKS,
+  STRUCTURE_COLOUR_NAMES,
   STRUCTURE_COLOUR_TRACK,
   hasTrackControls,
   isIntervalSet,
@@ -65,16 +66,18 @@ import {
   loopChords,
   marksSource,
   midpointsOf,
+  nameSource,
   structureAxis,
   trackSource,
 } from '../structure/sources'
+import { hasNames } from '../render/nameColours'
 import { rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
 import type { ColourSource } from '../structure/colour'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { alignTo, displacements, placeStructure, type Alignment } from '../structure/align'
 import { settingsField } from '../ui/laneSettings'
 import { withKey, type Command } from '../ui/commands'
-import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
+import { featureFields, featuresOf, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
 import type { LocusWindow } from '../render/locus'
 import { colormapCss } from '../render/colormaps'
 import { recall, remember } from '../state/UiMemory'
@@ -91,7 +94,7 @@ import {
   viewFrame,
   type Camera,
 } from '../structure/camera'
-import { resolveColours, type BeadColours, type StructureKey } from '../structure/colour'
+import { resolveColours, type BeadColours, type StructureKey, type StructureLevel } from '../structure/colour'
 import {
   CELL_FRAME_WIDTH,
   drawCellFrame,
@@ -2419,6 +2422,17 @@ export class StructurePanel implements DeckCell {
       )
       return featureSource(structure, payload.data, entry.label, entry.style.colour, colouring.colourOf)
     }
+    if (by.startsWith(STRUCTURE_COLOUR_NAMES)) {
+      const id = by.slice(STRUCTURE_COLOUR_NAMES.length)
+      const entry = store?.entries.find((row) => row.id === id)
+      const payload = entry?.payload
+      if (entry === undefined || payload === undefined || payload.kind !== 'features') {
+        return { label: 'a feature set no longer in the list' }
+      }
+      // The set's own colours, kept on its row: the lane coloured by name
+      // reads the same ones (§8.16, §25.5).
+      return nameSource(structure, payload.data, entry.label, featuresOf(entry.style, entry.kind).nameColours ?? {})
+    }
     if (by === STRUCTURE_COLOUR_MARKS) {
       return marksSource(structure, this.props.manual?.()?.marks ?? [], new Set(this.style().marksHidden))
     }
@@ -2547,6 +2561,11 @@ export class StructurePanel implements DeckCell {
       for (const level of key.levels.slice(0, 48)) this.keyEl.append(this.sequenceChip(structure, style, level))
       return
     }
+    if (style.colourBy.startsWith(STRUCTURE_COLOUR_NAMES)) {
+      const id = style.colourBy.slice(STRUCTURE_COLOUR_NAMES.length)
+      for (const level of key.levels) this.keyEl.append(this.nameChip(id, level))
+      return
+    }
     for (const level of key.levels.slice(0, 24)) {
       const chip = el(
         'button',
@@ -2621,6 +2640,39 @@ export class StructurePanel implements DeckCell {
       { class: `structure-key-level structure-key-seq${ghosted.has(name) ? ' is-off' : ''}` },
       swatch,
       button,
+    )
+  }
+
+  /**
+   * A name's row on the key of *colour by names* (§25.5): its swatch is a
+   * colour picker, as a sequence's and a mark's are, and what it writes is the
+   * **set's** colour for that name — on the feature row, where the lane
+   * coloured by name reads it too — so `A` picked red here is red on the next
+   * model coloured by the same call, and on its lane.
+   */
+  private nameChip(id: string, level: StructureLevel): HTMLElement {
+    const name = level.name ?? level.label
+    const swatch = el('input', {
+      class: 'structure-key-swatch',
+      type: 'color',
+      value: level.colour,
+      title: `Colour for ${level.label}, on every model coloured by these names and on the lane`,
+    })
+    swatch.addEventListener('click', (event) => event.stopPropagation())
+    swatch.addEventListener('input', () => {
+      const store = this.props.store()
+      const entry = store?.entries.find((row) => row.id === id)
+      if (store === undefined || entry === undefined) return
+      const features = featuresOf(entry.style, entry.kind)
+      store.restyle(id, {
+        features: { ...features, nameColours: { ...(features.nameColours ?? {}), [name]: swatch.value } },
+      })
+    })
+    return el(
+      'label',
+      { class: 'structure-key-level structure-key-seq', title: `Click the swatch to change ${level.label}’s colour` },
+      swatch,
+      el('span', { text: level.label }),
     )
   }
 
@@ -3098,7 +3150,18 @@ export class StructurePanel implements DeckCell {
       (held) => held.kind !== 'structure' && isIntervalSet(held.kind) && held.status === 'ready',
     )
     for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} · track` })
-    for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} · features` })
+    for (const held of featureSets) {
+      colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} · features` })
+      // …and a set whose features carry names, by those names (§25.5): `A`
+      // and `B` on a compartment call. Any interval set with a name column — a
+      // BED4+, a bigBed, a task's segments — rather than a list of kinds that
+      // would miss the next one; right under its own `· features`, so the two
+      // readings of one set are read together.
+      const payload = held.payload
+      if (payload?.kind === 'features' && hasNames(payload.data)) {
+        colourings.push({ value: `${STRUCTURE_COLOUR_NAMES}${held.id}`, text: `${held.label} · names` })
+      }
+    }
     // `displacement`, not `displacement from the compared model`: the row above
     // this one is `compare with` and it names the model, and the longer text did
     // not fit the column even as a full-width block — it read `displacement from

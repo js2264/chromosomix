@@ -147,3 +147,78 @@ export function throughEdit(found: FoundStreaks, assembly: EditedAssembly): Edit
   }
   return { x: { names, lengths }, x0, x1, y0, y1, strand, anchors }
 }
+
+/** A stretch of one edited sequence, half-open, in bases: what is lit on either side of the link. */
+export interface EditedStretch {
+  sequence: string
+  from: number
+  to: number
+}
+
+/**
+ * A stretch of the edited assembly as its span along the corner plot's x axis,
+ * in bases — what is marked along the plot when it is hovered on the map;
+ * `null` where the axis has no such sequence.
+ */
+export function spanAlong(axis: DotplotAxis, stretch: EditedStretch): [number, number] | null {
+  let start = 0
+  for (let i = 0; i < axis.names.length; i++) {
+    if (axis.names[i] === stretch.sequence) {
+      const length = axis.lengths[i]
+      const from = Math.max(0, Math.min(length, stretch.from))
+      const to = Math.max(0, Math.min(length, stretch.to))
+      return to > from ? [start + from, start + to] : null
+    }
+    start += axis.lengths[i]
+  }
+  return null
+}
+
+/** The lines with any of their extent along x inside a span: those lit for a stretch hovered on the map. */
+export function linesOver(lines: DotplotLines, span: readonly [number, number]): number[] {
+  const out: number[] = []
+  for (let i = 0; i < lines.x0.length; i++) if (lines.x1[i] > span[0] && lines.x0[i] < span[1]) out.push(i)
+  return out
+}
+
+/**
+ * The stretch of the edited assembly a line lies along — what is lit on the
+ * map when it is hovered in the plot; `null` for no line. A line never crosses
+ * from one sequence to the next: it was cut where its piece ends.
+ */
+export function stretchOfLine(lines: EditedLines, i: number): EditedStretch | null {
+  if (!(i >= 0 && i < lines.x0.length)) return null
+  let start = 0
+  for (let k = 0; k < lines.x.names.length; k++) {
+    const end = start + lines.x.lengths[k]
+    if (lines.x0[i] < end) return { sequence: lines.x.names[k], from: lines.x0[i] - start, to: Math.min(end, lines.x1[i]) - start }
+    start = end
+  }
+  return null
+}
+
+/** The corner plot's side, in CSS pixels: the least it is ever drawn at, and the most it takes by itself. */
+export const LEAST_SIDE = 120
+export const FIRST_SIDE = 220
+
+/**
+ * The corner plot's side over a map of `mapSize` pixels: the side the reader
+ * gave it with its grip, or by itself a third of the map up to
+ * {@link FIRST_SIDE}; never less than {@link LEAST_SIDE}, nor so large that
+ * the plot and its `chrome` — the picker over it and the caption under it —
+ * leave the map.
+ */
+export function cornerSide(mapSize: number, chosen: number | null, chrome: number): number {
+  const most = Math.max(LEAST_SIDE, Math.floor(mapSize - 16 - chrome))
+  const side = chosen ?? Math.min(FIRST_SIDE, mapSize * 0.32)
+  return Math.round(Math.max(LEAST_SIDE, Math.min(most, side)))
+}
+
+/**
+ * The side a grip on the plot's lower-left corner gives it, moved `(dx, dy)`
+ * from a press at side `start`: the plot hangs from its upper-right corner, so
+ * left and down grow it, and a hand along the diagonal moves the corner with it.
+ */
+export function grippedSide(start: number, dx: number, dy: number): number {
+  return start + (dy - dx) / 2
+}

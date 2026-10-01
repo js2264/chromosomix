@@ -68,6 +68,9 @@ export type BarEdge = 'top' | 'left'
  * @param mark A unit to mark with a caret — where a dragged stretch would go.
  * @param ticks The points suggestions name, each a tick across the pieces —
  *   the axes' share of a breakpoint's diamond (§27.3) — the lit ones stronger.
+ * @param linked A stretch lit from the corner dot plot, in units — the piece
+ *   a hovered line lies along (§27.3): the rest of the bar veiled, its span
+ *   bracketed and its sequence's name in the accent.
  */
 export function drawBar(
   ctx: CanvasRenderingContext2D,
@@ -79,6 +82,7 @@ export function drawBar(
   lit: readonly [number, number] | null,
   mark: number | null,
   ticks: ReadonlyArray<{ unit: number; lit: boolean }> = [],
+  linked: readonly [number, number] | null = null,
 ): void {
   const across = BAR_THICKNESS
   // Along and across, to x and y: the top bar reads left to right, the left
@@ -126,6 +130,17 @@ export function drawBar(
     }
   }
 
+  // A stretch lit from the dot plot: everything else veiled, so that it stands
+  // out in its own colours rather than washed in another.
+  const linkedPx = linked === null ? null : ([Math.max(0, toPixel(linked[0])), Math.min(length, toPixel(linked[1]))] as const)
+  if (linkedPx !== null) {
+    ctx.fillStyle = ink.background
+    ctx.globalAlpha = 0.65
+    if (linkedPx[0] > 0) rect(0, Math.min(length, linkedPx[0]), PIECES_FROM, across - 2)
+    if (linkedPx[1] < length) rect(Math.max(0, linkedPx[1]), length, PIECES_FROM, across - 2)
+    ctx.globalAlpha = 1
+  }
+
   // The sequences: a tick at each edge and the name where it fits.
   ctx.font = ink.font
   ctx.textBaseline = 'middle'
@@ -142,7 +157,7 @@ export function drawBar(
     if (name !== sequence.name) name = `${name.slice(0, -1)}…`
     if (ctx.measureText(name).width > room) continue
     const centre = (Math.max(a0, 0) + Math.min(a1, length)) / 2
-    ctx.fillStyle = ink.text
+    ctx.fillStyle = linked !== null && linked[0] < sequence.to && linked[1] > sequence.from ? ink.accent : ink.text
     if (edge === 'top') {
       ctx.textAlign = 'center'
       ctx.fillText(name, centre, NAMES / 2 + 1)
@@ -170,6 +185,16 @@ export function drawBar(
       rect(a0, Math.min(a1, a0 + 2), PIECES_FROM - 2, across)
       rect(Math.max(a0, a1 - 2), a1, PIECES_FROM - 2, across)
     }
+  }
+
+  // The stretch lit from the dot plot, bracketed: a rule along its inner edge, and its two ends.
+  if (linkedPx !== null && linkedPx[1] > linkedPx[0] - 1) {
+    const a0 = linkedPx[0]
+    const a1 = Math.max(a0 + 2, linkedPx[1])
+    ctx.fillStyle = ink.accent
+    rect(a0, a1, across - 2, across)
+    rect(a0, Math.min(a1, a0 + 1.5), PIECES_FROM - 1, across)
+    rect(Math.max(a0, a1 - 1.5), a1, PIECES_FROM - 1, across)
   }
 
   // The points suggestions name.
@@ -219,6 +244,8 @@ export interface OverlayFrame {
   square: readonly [number, number] | null
   /** A box off it: rows and columns, in units. */
   box: { rows: readonly [number, number]; cols: readonly [number, number] } | null
+  /** A stretch lit from the corner dot plot (§27.3), on the diagonal, in units. */
+  linked?: readonly [number, number] | null
   /** The pointer, snapped: a column and a row, in units, and whether each snapped. */
   cross: { x: number; y: number; snappedX: boolean; snappedY: boolean } | null
   /** What else is drawn over the picture and under the selection: the suggestions (`marks.ts`). */
@@ -288,6 +315,23 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
     ctx.strokeStyle = ink.accent
     ctx.lineWidth = 2
     ctx.strokeRect(x0 + 1, y0 + 1, Math.max(0, x1 - x0 - 2), Math.max(0, y1 - y0 - 2))
+    ctx.lineWidth = 1
+  }
+  // The stretch the dot plot's hovered line lies along: dashed, so that it is
+  // not taken for the selection, which is drawn whole over it.
+  if (frame.linked !== undefined && frame.linked !== null) {
+    const [a, b] = frame.linked
+    const [x0, y0, x1, y1] = [toX(a), toY(a), toX(b), toY(b)]
+    ctx.strokeStyle = ink.background
+    ctx.lineWidth = 4
+    ctx.globalAlpha = 0.6
+    ctx.strokeRect(x0 + 1, y0 + 1, Math.max(0, x1 - x0 - 2), Math.max(0, y1 - y0 - 2))
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = ink.accent
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 3])
+    ctx.strokeRect(x0 + 1, y0 + 1, Math.max(0, x1 - x0 - 2), Math.max(0, y1 - y0 - 2))
+    ctx.setLineDash([])
     ctx.lineWidth = 1
   }
   if (frame.square !== null) {

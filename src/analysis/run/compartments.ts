@@ -869,6 +869,9 @@ export const runCompartments: TaskRunner = async (job) => {
       // Segments and not compartments: there are two compartments and several
       // hundred stretches of them, and the number worth reporting is the second.
       noun: { one: 'segment', many: 'segments' },
+      // Under the eigenvector whose sign each segment is, so A reads against
+      // the stretch of positive E1 it was cut from.
+      lane: { under: { output: 'compartment-e1' } },
     },
   )
 

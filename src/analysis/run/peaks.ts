@@ -299,6 +299,7 @@ export const runPeaks: TrackTaskRunner = async (job) => {
 
   const build = new FeatureBuilder()
   let clamped = 0
+  let named = 0
   for (const k of called) {
     const i = tested[k]
     const [from, to] = peakBounds(starts[i], ends[i], modes[i], halfWidth, lengths[contig[i]])
@@ -309,6 +310,9 @@ export const runPeaks: TrackTaskRunner = async (job) => {
     )
     if (global !== null) detail.push(`IDR ${significant(global[k])}`)
     build.add(contig[i], from, to, {
+      // An id in the name column, in genomic order, as a peak caller's BED
+      // carries one — what a reader cites a peak by and what a click shows.
+      name: `peak_${++named}`,
       // What a peak's strength *is* in each mode: its IDR where there was a
       // test, as yapc's BEDs carry it, and its curvature where there was not.
       score: global !== null ? scaledIdr(global[k]) : scores[0][i],
@@ -345,6 +349,9 @@ export const runPeaks: TrackTaskRunner = async (job) => {
           : `Peaks · ${nameOf(signal)} + ${nameOf(replicate)} · IDR ≤ ${threshold}`,
       payload: { kind: 'features', data: build.finish() },
       noun: { one: 'peak', many: 'peaks' },
+      // Its lane directly under the coverage it was called on, which is where a
+      // peak is checked: box against bump (§18.7).
+      lane: { under: { entry: signal } },
     } satisfies IntervalsOutput)
   }
   const figure = curvatureFigure(entries.map(nameOf), scores, tested, passes, replicate !== null, n, flats)

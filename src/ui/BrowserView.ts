@@ -43,7 +43,9 @@ import {
   readsOf,
   scaleOf,
   searchesByName,
+  translationOf,
 } from '../annotations/types'
+import { READING_FRAMES, codonAt, frameName } from '../annotations/codons'
 import { ReadCache } from '../annotations/reads'
 import {
   packPile,
@@ -51,6 +53,8 @@ import {
   rowsAcross,
   type PileLayout,
   drawReads,
+  MOD_INK,
+  modsNear,
   pileDetail,
   READ_ROW,
   READ_ROW_GAP,
@@ -121,6 +125,7 @@ import {
   layoutFeatures,
 } from '../render/features'
 import {
+  laneBand,
   laneBands,
   GRIP_ROOM,
   GROUP_BAR,
@@ -132,6 +137,7 @@ import {
   gripBox,
   groupRuns,
   laneRect,
+  laneText,
   snapTo,
   withinGrip,
   type LaneFrame,
@@ -156,6 +162,16 @@ import { setHoverPlace } from './hoverLocus'
 import { Scale } from '../render/scale'
 import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
 import {
+  FRAME_ROW,
+  TICKS_MAX_BASES_PER_PIXEL,
+  drawFrames,
+  frameAtAcross,
+  frameRows,
+  framesRungFor,
+  framesThickness,
+  type FramesRung,
+} from '../render/frames'
+import {
   ceilingFactor,
   drawTrack,
   drawTrackScaling,
@@ -179,6 +195,8 @@ import { LaneEditor } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import { openReadDialog } from './ReadDialog'
+import { noteModCodes } from './modCodes'
+import { modLabel, modName, modStateOf } from '../annotations/bam/basemods'
 import { FLAG } from '../annotations/bam/format'
 import {
   NAME_COLUMN_DEFAULT,
@@ -285,6 +303,11 @@ const NAME_FONT = '600 12px system-ui, sans-serif'
  * above them.
  */
 const BASE_FONT = '600 11px system-ui, sans-serif'
+/**
+ * The amino acids in a reading frame's codons, and the frames' names (§8.8):
+ * a size under the residues', since a row is twelve pixels and not a lane.
+ */
+const FRAME_FONT = '600 9.5px system-ui, sans-serif'
 /** Milliseconds within which a second click is a double click. */
 const DOUBLE_CLICK_MS = 250
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
@@ -388,7 +411,13 @@ interface Lane {
    * The value tracks drawn in this lane — and, for a BAM's depth, the introns
    * its reads skipped in the same window, for the arcs drawn over it (§8.23).
    */
-  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile; junctions?: FeatureSet | null }>
+  profiles: Array<{
+    entry: AnnotationEntry
+    profile: PixelProfile
+    junctions?: FeatureSet | null
+    /** A BAM's depth drawn as a fraction modified: the code it is of (§8.13). */
+    modCode?: string
+  }>
   /**
    * Residues to draw, for a FASTA zoomed in far enough to show them.
    *
@@ -397,6 +426,25 @@ interface Lane {
    * from the frame itself (`basesAreDrawable`).
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
+  /**
+   * A sequence lane's six reading frames, where its settings ask for them (§8.8).
+   *
+   * Drawn in a band of the lane's own, under the residues: `sequence` is the
+   * strip the residues or the GC line are drawn in — the height the reader set —
+   * and `band` the strip under it, which the lane is that much taller for. One
+   * lane rather than a second one in the stack, so the frames move, close and
+   * hide with the sequence they are a reading of, and a drag on the lane's
+   * border still sets the residues' height and nothing else.
+   */
+  translation: {
+    sequence: LaneFrame
+    band: LaneFrame
+    /** One row's thickness, at the reader's text size. */
+    row: number
+    code: number
+    rung: FramesRung
+    regions: BaseRegion[]
+  } | null
   /**
    * The read this lane is waiting on, where it is waiting on one: a window of
    * samples or of letters still on its way from the worker, with how far it
@@ -542,7 +590,7 @@ export class BrowserView {
    */
   private readonly piled = new Map<
     string,
-    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[] }
+    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[]; entry: AnnotationEntry }
   >()
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
@@ -1716,15 +1764,31 @@ export class BrowserView {
    * comparable by construction.
    */
   private layout(): Lane[] {
-    return this.stack().map((slot) => ({
-      entry: slot.host,
-      overlaid: slot.overlaid,
-      frame: this.frameAt(slot.acrossFrom, slot.thickness),
-      profiles: [],
-      residues: [],
-      reads: [],
-      pending: null,
-    }))
+    return this.stack().map((slot) => {
+      const frame = this.frameAt(slot.acrossFrom, slot.thickness)
+      const room = this.framesRoom(slot.host)
+      const translation =
+        room > 0 && slot.thickness > room
+          ? {
+              sequence: laneBand(frame, 0, slot.thickness - room),
+              band: laneBand(frame, slot.thickness - room, room),
+              row: scaleLength(FRAME_ROW),
+              code: translationOf(slot.host.style).code,
+              rung: 'none' as FramesRung,
+              regions: [],
+            }
+          : null
+      return {
+        entry: slot.host,
+        overlaid: slot.overlaid,
+        frame,
+        profiles: [],
+        residues: [],
+        translation,
+        reads: [],
+        pending: null,
+      }
+    })
   }
 
   /**
@@ -1744,17 +1808,33 @@ export class BrowserView {
     // deck's structure cell (§25), and a chain of 5 kb beads drawn as boxes
     // along an axis is one solid bar saying nothing.
     const held = this.props.map === undefined ? this.props.store.entries : this.props.store.entriesOn(this.props.map)
+    // A called set is two rows, an overlay and a lane (§18.7), and here the lane
+    // *is* its picture: the overlay row drawn as a second lane would put every
+    // peak on the screen twice, and would keep drawing it after the reader had
+    // switched the lane off.
     const entries = held.filter(
-      (entry) => entry.visible && entry.status === 'ready' && entry.kind !== 'structure',
+      (entry) =>
+        entry.visible &&
+        entry.status === 'ready' &&
+        entry.kind !== 'structure' &&
+        !(entry.card === 'overlay' && entry.source.kind === 'computed' && entry.partner !== undefined),
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,
       modeOf: (group) => this.props.groups.modeOf(group),
-      sizeOf: (entry) => entry.style.size,
+      // A sequence with its frames on is that much taller, so the height the
+      // reader set stays the height of the residues (§8.8).
+      sizeOf: (entry) => entry.style.size + this.framesRoom(entry),
       gap: LANE_GAP,
       from: this.rulerHeight + LANE_GAP,
       minimum: LANE_MIN_SIZE,
     })
+  }
+
+  /** The band a sequence lane's reading frames add under it, or nought (§8.8). */
+  private framesRoom(entry: AnnotationEntry): number {
+    if (entry.kind !== 'sequence' || !translationOf(entry.style).frames) return 0
+    return framesThickness(scaleLength(FRAME_ROW))
   }
 
   private frameAt(acrossFrom: number, thickness: number): LaneFrame {
@@ -2300,9 +2380,14 @@ export class BrowserView {
     // measure the second of these, and three expressions of one split is how
     // they came to disagree (§8.4).
     const [, pile] = pileBands(lane.frame, this.nameBand())
-    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
+    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed, entry })
 
-    const colours = readColoursFor(row.window, style.colour)
+    // Coloured by base modification, the reads are a plain grey and the calls
+    // on them carry the colour (§8.13) — of the code chosen, or of the one the
+    // window holds most modified calls of.
+    const mods = reads.colourBy === 'basemod' ? windowMods(row.window, reads.modCode) : null
+    if (mods !== null) noteModCodes(entry.id, mods.codes)
+    const colours = mods !== null ? [MOD_INK.read] : readColoursFor(row.window, style.colour)
     for (let i = 0; i < row.window.piles.length; i++) {
       const placed = row.placed[i]
       if (placed === undefined) continue
@@ -2315,13 +2400,21 @@ export class BrowserView {
         opacity: style.opacity,
         font: scaleFont(LANE_FONT),
         guideColour: palette.labelColor,
+        ...(mods === null ? {} : { mods: { code: mods.code, threshold: reads.modThreshold } }),
       }, row.rung)
     }
 
     if (!this.text) return null
     return {
       entries: [entry],
-      detail: { kind: 'text', text: pileDetail(row.window, row.placed) },
+      detail: {
+        kind: 'text',
+        text: pileDetail(
+          row.window,
+          row.placed,
+          mods === null ? undefined : { label: modName(mods.code), calls: mods.calls },
+        ),
+      },
       at: 'near',
     }
   }
@@ -2334,7 +2427,10 @@ export class BrowserView {
     /** The track alone, its name and range left off — only for {@link laneImage}. */
     bare = false,
   ): void {
-    const { entry, frame } = lane
+    const { entry } = lane
+    // The strip the track itself is drawn in: the whole lane, or — under a
+    // sequence's reading frames — the part above them (§8.8).
+    const frame = lane.translation?.sequence ?? lane.frame
     // What to write on the lane, decided by the branch that drew it and written
     // *after* the clip is released: with a name column the label sits outside
     // the lane's own rectangle, and a clip to the data would take it away.
@@ -2345,8 +2441,8 @@ export class BrowserView {
     } | null = null
     // The bands a stack of heatmaps was divided into, kept for the label: one
     // name per row, in the row it names (§18.11).
-    let labelBands: LaneFrame[] | null = null
-    clipLane(ctx, frame)
+    let labelBands: LaneFrame[] | null = lane.translation === null ? null : [frame]
+    clipLane(ctx, lane.frame)
     if (lane.reads.length > 0) {
       label = this.paintPile(ctx, lane, palette)
     } else if (lane.residues.length > 0) {
@@ -2380,7 +2476,7 @@ export class BrowserView {
             lane.profiles.map(() => ({ fill: true as const })),
           )
         : null
-      labelBands = bands
+      labelBands = bands ?? labelBands
       // **Ribbons tile, they do not overlay** — the same rule, from the same
       // module, read here for the same reason the heatmap one is.
       const nested = nestsAsRibbons(lane.profiles.map(({ entry: member }) => member))
@@ -2454,7 +2550,7 @@ export class BrowserView {
           // the label belongs to this frame's picture and not to the file — and
           // the spelling is `laneLabelOf`'s, so the lane, the hover card and the
           // status line say one thing (§8.8). They said three.
-          entries: lane.profiles.map((row) => ({ ...row.entry, label: laneLabelOf(row.entry) })),
+          entries: lane.profiles.map((row) => ({ ...row.entry, label: laneLabelOf(row.entry, row.modCode) })),
           // A note wins the detail line. It is only ever set where the lane
           // drew *nothing* (§8.13) — a window of alignments too deep to read at
           // this width — and a pair of limits under an empty lane would be
@@ -2528,7 +2624,7 @@ export class BrowserView {
       const fixed = hasAMovableAxis(entry.kind) ? barLimitsOf(entry.style.limits) : undefined
       const axis = fixed ?? glyphExtentOf(entry.kind, set, layout) ?? undefined
       const axisLimits = dragged === null || axis === undefined ? fixed : scaledTo(axis, dragged)
-      const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
+      const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour, features.nameColours)
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
@@ -2570,10 +2666,80 @@ export class BrowserView {
         }
       }
     }
+    if (lane.translation !== null) this.paintFrames(ctx, lane.translation, entry, palette)
     ctx.restore()
     if (label !== null && !bare) {
       this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
     }
+    if (lane.translation !== null && !bare) this.labelFrames(ctx, lane.translation, palette)
+  }
+
+  /**
+   * A sequence lane's six reading frames, in the band under its residues (§8.8).
+   *
+   * The codons are `render/frames.ts`'s; what is here is this view's text: the
+   * sentence the band says when it is too far out to draw anything, inside the
+   * lane's clip, and — by {@link labelFrames}, after it — the frames' names.
+   */
+  private paintFrames(
+    ctx: CanvasRenderingContext2D,
+    translation: NonNullable<Lane['translation']>,
+    entry: AnnotationEntry,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): void {
+    const { band, row, rung } = translation
+    drawFrames(ctx, band, this.trackAxis, translation.regions, {
+      code: translation.code,
+      rung,
+      row,
+      font: scaleFont(FRAME_FONT),
+      opacity: entry.style.opacity,
+      ink: palette.labelColor,
+      inkOnColour: '#ffffff',
+    })
+    if (!this.text || rung !== 'none') return
+    ctx.save()
+    ctx.font = scaleFont(LANE_FONT)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = palette.labelColor
+    laneText(
+      ctx,
+      band,
+      `reading frames at ${TICKS_MAX_BASES_PER_PIXEL} bp per pixel or closer — zoom in`,
+      (band.alongFrom + band.alongTo) / 2,
+      band.thickness / 2,
+      { halo: palette.labelHaloColor },
+    )
+    ctx.restore()
+  }
+
+  /**
+   * The six frames' names: in the name column where there is one, right-aligned
+   * against the data as the lane's own name is; over the data where there is
+   * not, haloed, at the start of each row, where the reader's eye enters it.
+   * Outside the lane's clip, since the column is.
+   */
+  private labelFrames(
+    ctx: CanvasRenderingContext2D,
+    translation: NonNullable<Lane['translation']>,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): void {
+    if (!this.text || translation.rung === 'none') return
+    const inColumn = this.nameColumn > 0
+    const along = inColumn ? this.gutter - GUTTER_PAD - GRIP_ROOM : translation.band.alongFrom + 3
+    const rows = frameRows(translation.band, translation.row)
+    ctx.save()
+    ctx.font = scaleFont(FRAME_FONT)
+    ctx.textAlign = inColumn ? 'right' : 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = palette.labelColor
+    for (const [at, frame] of READING_FRAMES.entries()) {
+      laneText(ctx, rows[at], frameName(frame), along, rows[at].thickness / 2, {
+        halo: palette.labelHaloColor,
+      })
+    }
+    ctx.restore()
   }
 
   /**
@@ -2824,6 +2990,24 @@ export class BrowserView {
 
   /** Resolve every lane's samples and profiles for this frame. */
   private fill(lane: Lane): void {
+    // The reading frames first, from the same cache and under the same key as
+    // the residues: they want the same bases, from further out — up to
+    // `TICKS_MAX_BASES_PER_PIXEL` — and a window fetched for the ticks is the
+    // window the letters are drawn from once the reader has zoomed in to them.
+    const translation = lane.translation
+    if (translation !== null) {
+      translation.rung = framesRungFor(translation.band, translation.row)
+      if (translation.rung !== 'none') {
+        translation.regions =
+          this.bases.basesFor({
+            entry: lane.entry.id,
+            scope: 'browser',
+            axis: this.trackAxis,
+            domain: lane.frame.domain,
+          }) ?? []
+        lane.pending = this.bases.pendingOf(lane.entry.id, 'browser') ?? lane.pending
+      }
+    }
     const members = [lane.entry, ...lane.overlaid]
     for (const member of members) {
       // A FASTA is the one lane whose *picture* changes with the zoom rather
@@ -2899,10 +3083,13 @@ export class BrowserView {
           ? { reads: readsOf(member.style), reference: this.referenceKey() }
           : {}),
       })
+      // The codes a fraction-modified depth met, for the card's picker.
+      if (samples?.mods !== undefined) noteModCodes(member.id, samples.mods.codes)
       lane.profiles.push({
         entry: member,
         profile: profileOf(lane.frame, this.trackAxis, samples, scaleOf(member.style)),
         ...(member.kind === 'alignments' ? { junctions: junctionsOfSamples(samples) } : {}),
+        ...(samples?.mods === undefined ? {} : { modCode: samples.mods.code }),
       })
       lane.pending = this.cache.pendingOf(member.id, 'browser') ?? lane.pending
     }
@@ -4017,7 +4204,7 @@ export class BrowserView {
   private readAtPoint(
     x: number,
     y: number,
-  ): { pile: ReadPile; index: number; source: string } | null {
+  ): { pile: ReadPile; index: number; source: string; entry: AnnotationEntry } | null {
     for (const lane of this.lanes) {
       const band = this.piled.get(lane.entry.id)
       if (band === undefined) continue
@@ -4028,7 +4215,7 @@ export class BrowserView {
         const placed = band.placed[i]
         if (placed === undefined) continue
         const at = readAt(band.frame, this.trackAxis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
-        if (at !== null) return { pile, index: at, source: lane.entry.label }
+        if (at !== null) return { pile, index: at, source: lane.entry.label, entry: band.entry }
       }
     }
     return null
@@ -4159,7 +4346,7 @@ export class BrowserView {
       (lane) => y >= lane.frame.acrossFrom && y <= lane.frame.acrossFrom + lane.frame.thickness,
     )
     for (const lane of this.lanes) {
-      for (const { entry, profile } of lane.profiles) {
+      for (const { entry, profile, modCode } of lane.profiles) {
         const slot = Math.round(x) - profile.from
         const value = slot >= 0 && slot < profile.mean.length ? profile.mean[slot] : Number.NaN
         const text = Number.isNaN(value) ? '—' : fmt.num(value)
@@ -4178,13 +4365,13 @@ export class BrowserView {
               // bare `sequence: 0.412`, which is a value between nought and one
               // under a word that does not say what was measured — the exact
               // argument the lane label's suffix was added for (§8.8).
-              text: `${laneLabelOf(entry)}:`,
+              text: `${laneLabelOf(entry, modCode)}:`,
               style: { color: entry.style.colour },
             }),
             el('span', { class: 'cell-tip-val', text }),
           ),
         )
-        parts.push(`${laneLabelOf(entry)} ${text}`)
+        parts.push(`${laneLabelOf(entry, modCode)} ${text}`)
       }
       // …and the base under the pointer, where a lane is showing them. The one
       // readout in this view that is a letter rather than a number, and the
@@ -4210,6 +4397,35 @@ export class BrowserView {
         )
         parts.push(`${entry.label} ${letter}`)
       }
+      // …and, over a row of the reading frames, the codon under the pointer
+      // and what it reads as in the lane's code (§8.8). Only for the row the
+      // pointer is on: six codons at once is a table, not a readout.
+      const translation = lane.translation
+      if (translation !== null && translation.rung !== 'none' && inside === lane && inFile !== null) {
+        const shown = frameAtAcross(y - translation.band.acrossFrom, translation.row)
+        const read = shown === null ? null : inFile.reversed ? (-shown as typeof shown) : shown
+        const codon =
+          shown === null || read === null
+            ? null
+            : codonAt(translation.regions, inFile.contig, inFile.bp, read, translation.code)
+        if (shown !== null && codon !== null) {
+          const text = `${codon.codon} → ${codon.aa === '*' ? 'stop' : codon.aa}`
+          rows.push(
+            el(
+              'div',
+              { class: 'cell-tip-row is-here' },
+              el('span', { class: 'cell-tip-chip', style: { background: lane.entry.style.colour } }),
+              el('span', {
+                class: 'cell-tip-key',
+                text: `frame ${frameName(shown)}:`,
+                style: { color: lane.entry.style.colour },
+              }),
+              el('span', { class: 'cell-tip-val', text }),
+            ),
+          )
+          parts.push(`frame ${frameName(shown)} ${text}`)
+        }
+      }
     }
     const read = this.readAtPoint(x, y)
     if (read !== null) {
@@ -4222,6 +4438,38 @@ export class BrowserView {
           text: `${name === '' ? 'read' : name}   ${formatLocus({ contig: pile.contig, start: pile.refStart[index], end: pile.refEnd[index] })} (${strand})`,
         })),
       )
+      // The modification call under the pointer, where the pile is coloured
+      // by them (§8.13): its code, how sure the caller was and where — within
+      // a few pixels, since a call is one base wide.
+      const band = this.piled.get(read.entry.id)
+      const reads = band === undefined ? null : readsOf(band.entry.style)
+      if (reads !== null && reads.colourBy === 'basemod' && inFile !== null && band !== undefined) {
+        const perPixel = (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels)
+        const chosen = windowMods(band.window, reads.modCode)
+        const calls =
+          chosen === null
+            ? []
+            : modsNear(pile, index, inFile.bp, Math.max(0.5, 3 * perPixel * this.axisBpPerUnit(pile.contig)), chosen.code)
+        for (const call of calls) {
+          const state = modStateOf(call.byte, reads.modThreshold)
+          const verdict = state === 1 ? 'modified' : state === 0 ? 'unmodified' : 'below the threshold'
+          const drawn = chosen !== null && call.code === chosen.code
+          rows.push(
+            el('div', { class: `cell-tip-row${drawn ? ' is-here' : ''}` },
+              el('span', {
+                class: 'cell-tip-chip',
+                style: { background: state === 1 ? MOD_INK.modified : state === 0 ? MOD_INK.unmodified : MOD_INK.read },
+              }),
+              el('span', {
+                class: 'cell-tip-key',
+                // One base, 1-based, as every position a reader reads is.
+                text: `${modLabel(call.code)}  p = ${call.prob.toFixed(3)}  ${pile.contig}:${fmt.int(call.pos + 1)} · ${verdict}`,
+              }),
+            ),
+          )
+          parts.push(`${modName(call.code)} p=${call.prob.toFixed(3)}`)
+        }
+      }
       rows.push(
         el('div', { class: 'cell-tip-row' }, el('span', {
           class: 'hint',
@@ -4595,3 +4843,29 @@ const CAPTION_FONT_PDF = '10px Helvetica, sans-serif'
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220
+
+/**
+ * The base-modification code a window's pile is drawn for, and the codes in it.
+ *
+ * `asked` where the reader chose one; otherwise the code with the most modified calls
+ * across every pile of the window — each pile numbers its own codes, so they
+ * are summed by name. `null` for a window fetched under another colouring,
+ * which carries no calls at all.
+ */
+function windowMods(
+  window: ReadWindow,
+  asked: string,
+): { code: string; codes: string[]; calls: number } | null {
+  const totals = new Map<string, number>()
+  let carried = false
+  for (const pile of window.piles) {
+    const mods = pile.mods
+    if (mods === undefined) continue
+    carried = true
+    mods.codes.forEach((code, at) => totals.set(code, (totals.get(code) ?? 0) + mods.counts[at]))
+  }
+  if (!carried) return null
+  const codes = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code)
+  const code = asked !== '' ? asked : (codes[0] ?? '')
+  return { code, codes, calls: totals.get(code) ?? 0 }
+}

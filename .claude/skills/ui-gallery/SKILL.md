@@ -40,6 +40,7 @@ node scripts/ui-compartments.mjs gallery     # the Compartments table under cool
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed: ia1 … ia6
 node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
+node scripts/ui-task-segments.mjs gallery-segments  # every called set on the map and as a lane: peaks under ATAC, insulation's boundaries and domains, A/B segments by name, the two switches, a reload, and the 1D browser's lane alone: s01 … s14
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
@@ -63,6 +64,10 @@ node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sas
 node scripts/ui-vector-pdf.mjs gallery      # the Export card with PDF (vector) and no resolution, then the map's, the deck's and the model's PDFs kept whole, each rendered with poppler and its images counted: v01 … v05, v-map.pdf, v-deck.pdf, v-model.pdf, *-page.png
 node scripts/ui-loci.mjs gallery             # every locus a reader sees or types, 1-based: bookmarks, marks, the map's menu, 4C's anchor, its lane and the console's line, FRiP per feature, a genome view's box: lo01 … lo10
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
+node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
+node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
+node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
+node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -354,3 +359,22 @@ note or a squashed plot is a bug the tests did not see, and this is where it sho
   The click road opens the browser's own file picker, which the page cannot answer.
 - The cell's own hover speaks in the status bar and on the maps, not in its corner readout.
 - Vite serves `.gz` with `Content-Encoding: gzip` unless `vite.config.ts`'s dev plugin strips it.
+`scripts/ui-orfs.mjs` drives a **sequence lane's reading frames** (§8.8) on the 1D browser demo,
+with the General and Aesthetics columns folded so the browser is wide enough for each rung to land
+where it would on a laptop: the FASTA row's settings before and after *reading frames* is pressed,
+UTP5's start codon on chromosome IV at 120 bp — every codon with its amino acid, the gene's `M` in
+`+1` — and the readout over it (found by the start's green, which must say *frame +1: ATG → M*),
+1 kb of bare codons, 20 kb of start and stop ticks, and the whole chromosome, where the band says to
+zoom in. Then one window in the standard code and in table 4, printing where its `TGA`s are so the
+reds that turn to `W` can be checked against them, a reload that must bring the frames and table 4
+back, and the dark theme (the whole page, then the ticks). Run it after any change to
+`render/frames.ts`, `annotations/codons.ts`, or how the browser lays out a sequence lane.
+`scripts/ui-basemods.mjs` drives **base modifications from `MM`/`ML`** (§8.13) on the yeast demo's
+chromosome IV, from a session with its sequence and genes that it writes to `demo/yeast/` and removes,
+with the simulated nanopore BAM `scripts/make-basemods-demo.mjs` wrote dropped on it beside its index.
+It colours the pile by base modification and shoots the card with its key and the modification picker,
+the reads by 5mC across UTP5 — the two nearly bare promoters are the blue bands — and closer, a hover
+on the first strong red call (found by its colour) and the card its read opens, 5hmC and 6mA picked,
+the depth row turned into *% modified* with its card and drawn as points up close, a 0.9 threshold,
+and the dark theme. It prints the rows, the picker's options, the hovers and the read card. Run it
+after any change to `annotations/bam/basemods.ts`, the pile's colourings or the depth's road.

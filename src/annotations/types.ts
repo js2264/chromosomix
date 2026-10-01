@@ -34,8 +34,10 @@
  * screen even when the file format is.
  */
 import { DEFAULT_DIVERGING_COLORMAP } from '../render/colormaps'
+import { DEFAULT_GENETIC_CODE, isGeneticCode } from './codons'
 import type { TrackOp } from './derived'
 import type { FeatureStyle } from './fields'
+import { modName } from './bam/basemods'
 import type { DetectedFormat } from './worker/protocol'
 
 /**
@@ -304,8 +306,19 @@ export function hasFeatureRows(kind: AnnotationKind): boolean {
  * the card lists the *files* that are loaded, and the file is a sequence. The
  * `· GC` belongs to the picture drawn from it.
  */
-export function laneLabelOf(entry: { kind: AnnotationKind; label: string }): string {
-  return entry.kind === 'sequence' ? `${entry.label} · GC` : entry.label
+export function laneLabelOf(
+  entry: { kind: AnnotationKind; label: string; style?: AnnotationStyle },
+  /** The modification an alignment lane's percentage is of, once the worker has said. */
+  modCode?: string,
+): string {
+  if (entry.kind === 'sequence') return `${entry.label} · GC`
+  // A BAM's depth drawn as a fraction modified is a different quantity on the
+  // same row, and a 0–100 axis under the file's bare name reads as depth.
+  if (entry.kind === 'alignments' && entry.style?.reads?.modFraction === true) {
+    const code = modCode ?? entry.style.reads.modCode
+    return `${entry.label} · % ${code === '' ? 'modified' : modName(code)}`
+  }
+  return entry.label
 }
 
 /**
@@ -838,6 +851,13 @@ export interface TrackSampleSet {
    * concrete fix. Absent means the answer is simply the answer.
    */
   note?: string
+  /**
+   * An alignment lane drawn as a fraction modified (§8.13): the modification
+   * the values are the percentage of — the one asked for, or the one the
+   * window held most modified calls of — and every code the window's reads carried, so
+   * the lane can name what it draws and the settings card can offer the rest.
+   */
+  mods?: { code: string; codes: string[] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1038,6 +1058,14 @@ export interface AnnotationStyle {
    * existing kind, no `defaultStyle` arm and no stored row changes shape.
    */
   structure?: StructureStyle
+  /**
+   * The six reading frames under a sequence lane, and the code they are read
+   * with (§8.8).
+   *
+   * Optional for the reason the three above are; {@link translationOf} is the
+   * one reader.
+   */
+  translation?: TranslationStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
@@ -1106,6 +1134,42 @@ export interface AnnotationStyle {
    * because only one member of the pair is flipped.
    */
   flip: boolean
+}
+
+/**
+ * The reading frames a sequence lane can draw under its residues (§8.8).
+ *
+ * Off by default: six rows of codons are a question about a gene, and a lane
+ * that answered it unasked would spend eighty pixels of every genome's stack on
+ * it. The code is NCBI's number (`annotations/codons.ts`) and is remembered with
+ * the switch off, so turning the frames back on in a Mycoplasma genome does not
+ * quietly go back to reading `TGA` as a stop.
+ */
+export interface TranslationStyle {
+  frames: boolean
+  code: number
+}
+
+/** A lane's frames setting, whether or not its style carries one. */
+export function translationOf(style: AnnotationStyle): TranslationStyle {
+  return style.translation ?? { frames: false, code: DEFAULT_GENETIC_CODE }
+}
+
+/**
+ * Read a stored frames setting back: untrusted, like every stored style, so a
+ * table NCBI does not publish is read as the standard one rather than handed to
+ * a lane that would index an alphabet it does not have.
+ */
+export function translationStyleOf(value: unknown): TranslationStyle {
+  if (typeof value !== 'object' || value === null) {
+    return { frames: false, code: DEFAULT_GENETIC_CODE }
+  }
+  const row = value as Record<string, unknown>
+  const code = row['code']
+  return {
+    frames: row['frames'] === true,
+    code: isGeneticCode(code) ? code : DEFAULT_GENETIC_CODE,
+  }
 }
 
 /**
@@ -1275,6 +1339,12 @@ export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 export const STRUCTURE_COLOUR_TRACK = 'track:'
 /** `features:<row id>` — a feature set's colour where a bead overlaps one. */
 export const STRUCTURE_COLOUR_FEATURES = 'features:'
+/**
+ * `names:<row id>` — a feature set's **names** as categories (§25.5): each bead
+ * the colour of the name over it, `A` and `B` on a compartment call. The
+ * colours are the set's own (`render/nameColours.ts`), kept on its row.
+ */
+export const STRUCTURE_COLOUR_NAMES = 'names:'
 
 /**
  * Everything the structure cell's own menu controls.
@@ -1913,6 +1983,40 @@ export interface ReadPile {
   groups: string[]
   /** Read names, kept only where a reader could ask for one. `[]` otherwise. */
   names: string[]
+  /**
+   * The base-modification calls of the window's reads, from their `MM`/`ML`
+   * tags (§8.13), flattened as the ops are: calls `mods.at[i] … mods.at[i + 1]`.
+   *
+   * Present only on a pile fetched to be coloured by base modification — the
+   * tags are read and the sequence unpacked for nothing otherwise — and then
+   * present even where no read carried a tag, with empty columns, so "this
+   * file has no modification calls here" is a pile that says so.
+   */
+  mods?: PileMods
+}
+
+/** See {@link ReadPile.mods}. */
+export interface PileMods {
+  at: Int32Array
+  /** Reference position of each call, 0-based. */
+  pos: Int32Array
+  /** Index into {@link codes}. */
+  code: Uint8Array
+  /** The `ML` byte: the probability is `(p + 0.5) / 256`. */
+  prob: Uint8Array
+  /**
+   * The codes the window's calls use (`m`, `h`, `a`, a ChEBI number …), the
+   * one with most calls of *modified* first — see {@link counts}.
+   */
+  codes: string[]
+  /**
+   * Calls of each code at `p ≥ ½`, parallel to {@link codes}: what an unset
+   * choice of code is ranked by. Not all calls, because a `.` group makes an
+   * implicit unmodified call at every base it steps over — a file with `A+a.`
+   * has a call on every adenine — and ranking by those would choose 6mA over
+   * 5mC on a file that is mostly about 5mC.
+   */
+  counts: number[]
 }
 
 /**
@@ -1928,7 +2032,7 @@ export interface ReadPile {
  * *and* is written into a stored session: a type in either position cannot live
  * in a module that imports this one.
  */
-export type ColourBy = 'strand' | 'mapq' | 'pair' | 'mate' | 'insert' | 'none'
+export type ColourBy = 'strand' | 'mapq' | 'pair' | 'mate' | 'insert' | 'basemod' | 'none'
 
 /**
  * The controls an alignment lane has that no other kind does (§8.13).
@@ -1998,6 +2102,28 @@ export interface ReadStyle {
    * the arcs.
    */
   sashimiFloor: number
+  /**
+   * Which base modification the pile's calls and the depth's fraction are of
+   * (§8.13): a code as `MM` writes it — `m`, `h`, `a`, a ChEBI number — or
+   * `''` for whichever the window holds most modified calls of.
+   *
+   * Written through to the other row, like the filters, because the pile's
+   * marks and the depth's percentage beside them are one measurement and
+   * reading them as two would be two different modifications under one name.
+   */
+  modCode: string
+  /**
+   * The probability a call must reach to count as modified, and whose
+   * complement it must fall to to count as unmodified; between the two a call
+   * is neither drawn nor counted. `0.5` — every call counts — to `1`.
+   */
+  modThreshold: number
+  /**
+   * Draw the depth row as the **percentage of calls modified** rather than as
+   * depth: a bedMethyl's picture, made from the reads (§8.13, §8.20). The depth
+   * row's alone.
+   */
+  modFraction: boolean
 }
 
 /** What an alignment lane starts with. */
@@ -2010,6 +2136,9 @@ export function defaultReadStyle(): ReadStyle {
     splits: false,
     sashimi: true,
     sashimiFloor: 2,
+    modCode: '',
+    modThreshold: 0.5,
+    modFraction: false,
   }
 }
 
@@ -2067,11 +2196,22 @@ export function readStyleOf(value: unknown): ReadStyle {
       typeof row['sashimiFloor'] === 'number' && Number.isFinite(row['sashimiFloor'])
         ? Math.max(1, Math.min(1_000_000, Math.round(row['sashimiFloor'] as number)))
         : fallback.sashimiFloor,
+    // A code as `MM` spells one — letters or a ChEBI number — and nothing else:
+    // it is drawn into a label and a select, and it arrives from a share link.
+    modCode:
+      typeof row['modCode'] === 'string' && /^([A-Za-z]|\d{1,8})$/.test(row['modCode'])
+        ? row['modCode']
+        : fallback.modCode,
+    modThreshold:
+      typeof row['modThreshold'] === 'number' && Number.isFinite(row['modThreshold'])
+        ? Math.max(0.5, Math.min(1, row['modThreshold'] as number))
+        : fallback.modThreshold,
+    modFraction: row['modFraction'] === true,
   }
 }
 
 /** Every colouring, in the order they are offered. */
-export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'none']
+export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'basemod', 'none']
 
 /**
  * How the two ends of a template are laid out. See {@link ReadStyle.layout}.
@@ -2123,7 +2263,12 @@ export function joinsPairs(style: ReadStyle): boolean {
  * the line by a pixel.
  */
 export function readFilterKey(style: ReadStyle): string {
-  return `${style.minMapq}|${style.hideDuplicates ? 'd' : ''}`
+  // …and, when the depth row is drawn as a fraction modified, which
+  // modification and at what threshold: then the row *is* that count, and
+  // changing either is a different answer from the worker. Off, neither is in
+  // the key, so a reader trying codes on the pile costs the depth nothing.
+  const mods = style.modFraction ? `|m:${style.modCode}:${style.modThreshold}` : ''
+  return `${style.minMapq}|${style.hideDuplicates ? 'd' : ''}${mods}`
 }
 
 /** Where a lane's disagreements came from, or why there are none. */

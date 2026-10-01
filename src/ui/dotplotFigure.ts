@@ -50,6 +50,20 @@ export interface DotplotPicture {
   lines: DotplotLines
 }
 
+/**
+ * What a hover elsewhere lights in the plot — the reference editor's map
+ * naming a stretch of the edit (§27.3): its lines drawn over the others, which
+ * are dimmed, and its span along x marked, in the accent.
+ */
+export interface DotplotFocus {
+  lines: readonly number[]
+  span: readonly [number, number] | null
+  accent: string
+}
+
+/** How far the lines a focus leaves out are dimmed. */
+const DIMMED = 0.2
+
 /** Room around the plot for names and labels; a corner plot has none. */
 function marginsOf(compact: boolean): { left: number; right: number; top: number; bottom: number } {
   return compact ? { left: 4, right: 4, top: 4, bottom: 4 } : { left: 86, right: 12, top: 10, bottom: 46 }
@@ -79,7 +93,8 @@ function fitted(ctx: CanvasRenderingContext2D, text: string, room: number): stri
  * The dot plot in a box: the plot's frame, a rule at every edge between two
  * sequences — no two closer than three pixels — each sequence's name where it
  * fits, the two axes' labels, and every streak in the window as a line, the
- * same way round red and the other blue, the lit one drawn over a halo.
+ * same way round red and the other blue, the lit one drawn over a halo; and,
+ * given a focus, its span along x marked and its lines lit, the others dimmed.
  *
  * @returns The plot's rectangle and the window it drew, for a caller that maps
  *   pointers onto it.
@@ -92,6 +107,7 @@ export function drawDotplot(
   view: DotplotView | null,
   lit = -1,
   compact = false,
+  focus: DotplotFocus | null = null,
 ): { rect: PlotRect; view: DotplotView } {
   const rect = plotRectOf(box, compact)
   const xOffsets = offsetsOf(picture.x)
@@ -159,7 +175,23 @@ export function drawDotplot(
     ctx.stroke()
   }
   ctx.lineCap = 'round'
+  // A focus's span, washed across the plot under the lines.
+  const span = focus?.span ?? null
+  const spanPx = span === null ? null : [Math.max(rect.x, at(span[0], 0).px), Math.min(rect.x + rect.width, at(span[1], 0).px)]
+  if (focus !== null && spanPx !== null && spanPx[1] > spanPx[0] - 1) {
+    ctx.fillStyle = focus.accent
+    ctx.globalAlpha = 0.12
+    ctx.fillRect(spanPx[0], rect.y, Math.max(1, spanPx[1] - spanPx[0]), rect.height)
+    ctx.globalAlpha = 1
+  }
+  ctx.globalAlpha = focus === null ? 1 : DIMMED
   for (let i = 0; i < lines.x0.length; i++) draw(i, lines.strand[i] === -1 ? OTHER_WAY : SAME_WAY, width)
+  ctx.globalAlpha = 1
+  if (focus !== null) {
+    const shown = focus.lines.filter((i) => i !== lit && i >= 0 && i < lines.x0.length)
+    for (const i of shown) draw(i, theme.background, width + 3)
+    for (const i of shown) draw(i, lines.strand[i] === -1 ? OTHER_WAY : SAME_WAY, width + 0.8)
+  }
   if (lit >= 0 && lit < lines.x0.length) {
     draw(lit, theme.background, width + 5)
     draw(lit, lines.strand[lit] === -1 ? OTHER_WAY : SAME_WAY, width + 2)
@@ -169,6 +201,17 @@ export function drawDotplot(
   ctx.strokeStyle = theme.grid
   ctx.lineWidth = 1
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1)
+
+  // A focus's span along x: a bar over the plot's top edge, as a pieces bar lights a stretch, and its two ends.
+  if (focus !== null && spanPx !== null && spanPx[1] > spanPx[0] - 1) {
+    const [a, b] = spanPx
+    ctx.fillStyle = focus.accent
+    ctx.fillRect(a, rect.y - 3, Math.max(2, b - a), 3)
+    ctx.globalAlpha = 0.7
+    ctx.fillRect(a, rect.y, 1, rect.height)
+    ctx.fillRect(Math.max(a, b - 1), rect.y, 1, rect.height)
+    ctx.globalAlpha = 1
+  }
 
   if (!compact) {
     // Each sequence's name where it fits: along x under the plot, along y to its left.
@@ -220,6 +263,92 @@ export function describeStreak(picture: DotplotPicture, i: number, anchors?: Arr
   const way = lines.strand[i] === -1 ? 'the other way round' : 'the same way round'
   const count = anchors === undefined ? '' : ` · ${Number(anchors[i]).toLocaleString('en-US')} anchors`
   return `${xs} × ${ys} · ${way}${count}`
+}
+
+/** What a hand does over a dot plot's canvas, in the canvas's own CSS pixels. */
+export interface DotplotHands {
+  /** Zoom by `factor` — above one, in — about `(x, y)`. */
+  zoom(factor: number, x: number, y: number): void
+  /** Move the picture by `(dx, dy)` pixels, following the hand. */
+  pan(dx: number, dy: number): void
+  /** Show both sets whole. */
+  whole(): void
+  /** The pointer over the plot, not dragging — and after a wheel, where it is. */
+  point(x: number, y: number): void
+  /** A press that did not travel. */
+  press(x: number, y: number): void
+  /** The pointer gone from the canvas, not dragging. */
+  leave(): void
+}
+
+/**
+ * The dot plot's gestures on a canvas (§28.2), for the view of its own and the
+ * reference editor's corner plot (§27.3) alike: the wheel zooms about the
+ * pointer, a drag or a sideways scroll moves the picture — as over a map
+ * (§7.2) — and a double click shows the whole.
+ */
+export function handDotplot(canvas: HTMLCanvasElement, hands: DotplotHands): void {
+  const local = (event: MouseEvent): { x: number; y: number } => {
+    const box = canvas.getBoundingClientRect()
+    return { x: event.clientX - box.left, y: event.clientY - box.top }
+  }
+  let press: { x: number; y: number; moved: boolean; pointer: number } | null = null
+  canvas.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return
+    const { x, y } = local(event)
+    press = { x, y, moved: false, pointer: event.pointerId }
+    canvas.setPointerCapture?.(event.pointerId)
+    canvas.focus({ preventScroll: true })
+  })
+  canvas.addEventListener('pointermove', (event) => {
+    const { x, y } = local(event)
+    if (press !== null) {
+      if (!press.moved && Math.hypot(x - press.x, y - press.y) < 3) return
+      press.moved = true
+      canvas.classList.add('is-dragging')
+      hands.pan(x - press.x, y - press.y)
+      press.x = x
+      press.y = y
+      return
+    }
+    hands.point(x, y)
+  })
+  const release = (event: PointerEvent): void => {
+    if (press === null) return
+    const clicked = !press.moved
+    if (canvas.hasPointerCapture?.(press.pointer) === true) canvas.releasePointerCapture(press.pointer)
+    press = null
+    canvas.classList.remove('is-dragging')
+    if (!clicked) return
+    const { x, y } = local(event)
+    hands.press(x, y)
+  }
+  canvas.addEventListener('pointerup', release)
+  canvas.addEventListener('pointercancel', release)
+  canvas.addEventListener('pointerleave', () => {
+    if (press === null) hands.leave()
+  })
+  canvas.addEventListener('dblclick', (event) => {
+    event.preventDefault()
+    hands.whole()
+  })
+  canvas.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault()
+      const { x, y } = local(event)
+      // As over a map (§7.2): up and down zoom, sideways slides along the diagonal, ⌘ up and down slide.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        hands.pan(-event.deltaX, -event.deltaX)
+      } else if (event.metaKey && !event.ctrlKey) {
+        hands.pan(0, -event.deltaY)
+      } else {
+        hands.zoom(Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.002)), x, y)
+      }
+      hands.point(x, y)
+    },
+    { passive: false },
+  )
 }
 
 /** The dot plot's streaks as a view of their own: zoomed, moved, and read under the pointer. */
@@ -285,10 +414,6 @@ export function dotplotFigure(streaks: DotplotStreaks): PlotFigure {
   const schedule = (): void => {
     if (frame === 0) frame = requestAnimationFrame(redraw)
   }
-  const local = (event: MouseEvent): { x: number; y: number } => {
-    const box = canvas.getBoundingClientRect()
-    return { x: event.clientX - box.left, y: event.clientY - box.top }
-  }
   const shownView = (): DotplotView | null => laid?.view ?? null
   const reset = (): void => {
     view = null
@@ -336,72 +461,28 @@ export function dotplotFigure(streaks: DotplotStreaks): PlotFigure {
     say(`${xs === null ? '—' : formatPosition(xs.name, xs.at)} × ${ys === null ? '—' : formatPosition(ys.name, ys.at)} · ${fmt.bp(scale)} a pixel`)
   }
 
-  let press: { x: number; y: number; moved: boolean; pointer: number } | null = null
-  canvas.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return
-    const { x, y } = local(event)
-    press = { x, y, moved: false, pointer: event.pointerId }
-    canvas.setPointerCapture?.(event.pointerId)
-    canvas.focus({ preventScroll: true })
-  })
-  canvas.addEventListener('pointermove', (event) => {
-    const { x, y } = local(event)
-    if (press !== null) {
-      if (!press.moved && Math.hypot(x - press.x, y - press.y) < 3) return
-      press.moved = true
-      canvas.classList.add('is-dragging')
-      panBy(x - press.x, y - press.y)
-      press.x = x
-      press.y = y
-      return
-    }
-    readAt(x, y)
-  })
-  const release = (event: PointerEvent): void => {
-    if (press === null) return
-    const clicked = !press.moved
-    if (canvas.hasPointerCapture?.(press.pointer) === true) canvas.releasePointerCapture(press.pointer)
-    press = null
-    canvas.classList.remove('is-dragging')
-    if (!clicked) return
-    // A press on a streak keeps it named; anywhere else lets it go.
-    const { x, y } = local(event)
-    pinned = -1
-    readAt(x, y)
-    pinned = lit
-    schedule()
-  }
-  canvas.addEventListener('pointerup', release)
-  canvas.addEventListener('pointercancel', release)
-  canvas.addEventListener('pointerleave', () => {
-    if (press !== null) return
-    lit = -1
-    canvas.classList.remove('is-on-streak')
-    if (pinned < 0) say(idle())
-    schedule()
-  })
-  canvas.addEventListener('dblclick', (event) => {
-    event.preventDefault()
-    pinned = -1
-    reset()
-  })
-  canvas.addEventListener(
-    'wheel',
-    (event) => {
-      event.preventDefault()
-      const { x, y } = local(event)
-      // As over a map (§7.2): up and down zoom, sideways slides along the diagonal, ⌘ up and down slide.
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        panBy(-event.deltaX, -event.deltaX)
-      } else if (event.metaKey && !event.ctrlKey) {
-        panBy(0, -event.deltaY)
-      } else {
-        zoomBy(Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.002)), x, y)
-      }
-      readAt(x, y)
+  handDotplot(canvas, {
+    zoom: (factor, x, y) => zoomBy(factor, x, y),
+    pan: panBy,
+    whole: () => {
+      pinned = -1
+      reset()
     },
-    { passive: false },
-  )
+    point: readAt,
+    press: (x, y) => {
+      // A press on a streak keeps it named; anywhere else lets it go.
+      pinned = -1
+      readAt(x, y)
+      pinned = lit
+      schedule()
+    },
+    leave: () => {
+      lit = -1
+      canvas.classList.remove('is-on-streak')
+      if (pinned < 0) say(idle())
+      schedule()
+    },
+  })
   canvas.addEventListener('keydown', (event) => {
     const step = 40
     const keys: Record<string, () => void> = {

@@ -136,7 +136,7 @@ try {
   await allReady(5)
   await sleep(2500)
   console.log('rows:', (await rowsSay()).join('\n      '))
-  await fold('Hide the Annotations panel')
+  await fold('Fold the Annotations panel')
   await sleep(800)
   await shot('ij01-rpl10-sashimi')
   await lanesShot('ij02-rpl10-lanes')
@@ -223,7 +223,7 @@ try {
     await row.locator('.ann-more').click()
     await sleep(400)
   }
-  await fold('Hide the Annotations panel')
+  await fold('Fold the Annotations panel')
   await goTo('chrX:41,196,001-41,212,000')
   await lanesShot('ij09-ddx3x-novel-junction')
   // The novel acceptor is three bases past the annotated one, so at the gene's
@@ -274,7 +274,7 @@ try {
     await allReady(6)
     await sleep(2000)
     console.log('rows after the drop:', (await rowsSay()).join('\n      '))
-    await fold('Hide the Annotations panel')
+    await fold('Fold the Annotations panel')
     await sleep(800)
     await lanesShot('ij13-regtools-bed-dropped', 760)
   }

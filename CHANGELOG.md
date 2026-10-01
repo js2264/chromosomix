@@ -14,6 +14,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Base modifications from a BAM's `MM`/`ML` tags (§8.13, §8.20).** A pile lane's *colour by* offers
+  *base modification*: the reads are drawn grey and each 5mC, 5hmC, 6mA or other call sits at its own
+  base, red where modified and blue where not, as opaque as the caller was sure — for the code chosen
+  from the ones the file's reads carry, at a probability threshold the reader sets. A hover on a call
+  names its code, probability and base, and a read's card counts its calls. The depth row can draw the
+  **percentage modified** instead, base by base, from the same reads under the same filters: a
+  bedMethyl made in the browser. Reverse-strand reads are counted on their sequence as read, `.` and
+  `?` modes are told apart, two codes on one base, ChEBI codes and the `N` wildcard are read, and
+  calls in soft clips and insertions are dropped. A simulated nanopore BAM over yeast chrIV is in
+  `demo/yeast/` to try it on.
+
+- **Every called set is drawn on the map and as a lane (§18.7, §8.1, §8.16).** Peaks, insulation's
+  boundaries and domains, the DI's borders and domains, A/B compartments, Pattern detection's borders,
+  origins, sites, flagged contigs and MAGs used to arrive as an overlay on the map only — beside a map a
+  peak set could not be read against the coverage it was called on. Each now arrives as two rows of the
+  Tracks card, linked: the overlay, and a lane of segments placed directly under the row it is read
+  against — the peaks under their bigWig, the A/B segments under E1, the boundaries under the
+  insulation track. Each row's settings and the drawer carry **on the map** and **as a lane**, which are
+  the two rows' eyes and are remembered as they are (§8.6). A loop set's lane is its anchors, and starts
+  off; with no map — the 1D browser — the lane comes alone. Segments carry a name — `A`/`B`,
+  `peak_12`, `domain_3`, `boundary_40` — into the BED, and a lane can be coloured by its **name**
+  column, which a compartment lane is from the start.
+
+- **The stage's corner dot plot zooms, grows, and answers the map — a dev feature (§27.3).** The wheel
+  zooms it about the pointer, a drag moves it and a double click shows it whole, as the dot plot's own
+  view does, the lines sharp at any zoom; a grip at its lower-left corner sizes it, kept on the map
+  and remembered with the file. Hovering a contig's name on a pieces bar, or its row on the sequences
+  card, lights its lines in the plot and dims the rest; hovering a line in the plot lights its contig
+  on the map — dashed on the diagonal, bracketed on both bars, its name in the accent.
+
+- **A FASTA's six reading frames, in any of NCBI's genetic codes (§8.8).** *Reading frames* in a
+  sequence row's settings draws six rows under its residues — `+1`, `+2`, `+3` over `−1`, `−2`, `−3`,
+  anchored to the sequence's first base so they do not move with the window — each codon a shaded box
+  with its amino acid in it, starts green and stops red; further out the starts and stops alone as
+  ticks, to 24 bases a pixel. The code beside it offers every NCBI translation table, so a
+  Mycoplasma's frames can be read in table 4, where `TGA` is tryptophan and not a stop. A hover over
+  a row names the codon and what it codes for; both settings are remembered with the row.
+
+- **A 3D model coloured by a BED's names, A red and B blue (§25.5, §8.16).** Every feature set with a
+  name column — a BED4 or wider, a bigBed, a task's segments — is offered under the model's *colour by*
+  as *· names*: each bead takes the name that overlaps it most, so a compartment call colours the
+  model A and B, and a bead under no feature stays grey. The key lists each name with a swatch that
+  is a colour picker; the colour is kept on the set's row with the session, so it is that name's
+  colour on every model coloured by the set and on the set's own lane, which can now be coloured by
+  *name* too. Exactly `A` and `B` start red and blue, anything else on the categorical palette by
+  base pairs covered; past twenty-three names the rest are one `other` the key counts.
+
 - **Every map drawn to one number of contacts (§6.5).** A box labelled *contacts* ends the
   breadcrumb, showing the map's own total in grey — the `sum` of `cooler info`, 179,175,551 for the
   yeast micro-C. A total typed into it — `10M`, `23,000,000`, `2.5e7` — draws every map of the tab
@@ -1848,6 +1895,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A bedMethyl lane names `e`, `g` and `b` as the SAM spec does (§8.20).** They were called 4mC,
+  8oxoG and 4hmC; SAMtags §1.7 has them as 5fU, 5hmU and 5caU (8oxoG is `o`, and 4mC is ChEBI
+  21839, with no letter). The lane now reads its names from the table a BAM's `MM` tag is read by, so
+  the two never name one code two ways.
 
 - **The 1D ruler keeps its end labels whole (§5.8).** Each tick label was centred on its tick, so
   one on a window's first or last base hung half off the strip: a deck's tracks cell over

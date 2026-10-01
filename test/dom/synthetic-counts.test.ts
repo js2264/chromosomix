@@ -188,11 +188,13 @@ describe('the count on a called set', () => {
     const { workspace, store } = bench()
     finish(workspace, loops(1204))
     const notes = notesOn(workspace, store)
-    expect(notes).toContain('Pattern detection · 1,204 pairs')
+    // On both of the set's rows, each saying which surface it is (§18.7).
+    expect(notes).toContain('Pattern detection · 1,204 pairs · on the map')
+    expect(notes).toContain('Pattern detection · 1,204 pairs · as a lane')
     // Above the framing, because the count is about the answer and the framing
     // is about the question.
-    expect(notes.indexOf('Pattern detection · 1,204 pairs')).toBeLessThan(
-      notes.indexOf(framing().label),
+    expect(notes.indexOf('Pattern detection · 1,204 pairs · on the map')).toBeLessThan(
+      notes.lastIndexOf(framing().label),
     )
     workspace.destroy()
   })
@@ -252,9 +254,19 @@ describe('the count on a called set', () => {
  * set. This is the same line, in the other place rows are listed.
  */
 describe('the controls a called set is given', () => {
-  const labelsOn = (workspace: AnalysisWorkspace, store: AnnotationStore): string[] => {
+  /**
+   * The labels on one row. A called set is two rows since §18.7 — the overlay
+   * these tests are about, and its lane, which is a lane and has a location —
+   * so the overlay's are read from its own row.
+   */
+  const labelsOn = (
+    workspace: AnalysisWorkspace,
+    store: AnnotationStore,
+    id: string,
+  ): string[] => {
     const mounted = tracksCardOver(store, workspace)
-    const labels = Array.from(mounted.el.querySelectorAll('.field-label')).map(
+    const row = mounted.el.querySelector(`.ann-row[data-id="${id}"]`)
+    const labels = Array.from(row?.querySelectorAll('.field-label') ?? []).map(
       (node) => node.textContent ?? '',
     )
     mounted.destroy()
@@ -264,7 +276,7 @@ describe('the controls a called set is given', () => {
   it('are the marks’ own, not four edges that cannot move it', () => {
     const { workspace, store } = bench()
     finish(workspace, loops(12))
-    const labels = labelsOn(workspace, store)
+    const labels = labelsOn(workspace, store, 'analysis:chromosight:chromosight-patterns')
     expect(labels).not.toContain('location')
     expect(labels).toContain('opacity')
     // A pair is a circle, so its size is the control; a segment is a box or a
@@ -277,11 +289,18 @@ describe('the controls a called set is given', () => {
   it('are the shape and the opacity for a set of intervals', () => {
     const { workspace, store } = bench()
     finish(workspace, boundaries(88))
-    const labels = labelsOn(workspace, store)
+    const labels = labelsOn(workspace, store, 'analysis:chromosight:insulation-boundaries')
     expect(labels).not.toContain('location')
     expect(labels).toContain('shape')
     expect(labels).toContain('opacity')
     expect(labels).not.toContain('radius')
+    // Both rows carry the two switches; the lane's are a lane's controls.
+    expect(labels).toContain('drawn')
+    const lane = labelsOn(workspace, store, 'analysis:chromosight:insulation-boundaries:lane')
+    expect(lane).toContain('location')
+    expect(lane).toContain('colour by')
+    expect(lane).toContain('drawn')
+    expect(lane).not.toContain('shape')
     workspace.destroy()
   })
 

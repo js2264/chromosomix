@@ -181,7 +181,7 @@ export function tagBytes(
     | { tag: string; type: 'Z'; value: string }
     | { tag: string; type: 'i'; value: number }
     | { tag: string; type: 'A'; value: string }
-    | { tag: string; type: 'B'; subtype: 'I'; value: number[] }
+    | { tag: string; type: 'B'; subtype: 'I' | 'C'; value: number[] }
   >,
 ): Uint8Array {
   const parts: Uint8Array[] = []
@@ -194,6 +194,13 @@ export function tagBytes(
     } else if (entry.type === 'i') {
       const buf = new Uint8Array(4)
       new DataView(buf.buffer).setInt32(0, entry.value, true)
+      parts.push(head, buf)
+    } else if (entry.subtype === 'C') {
+      // `B:C`, one byte each: what an `ML` tag is.
+      const buf = new Uint8Array(5 + entry.value.length)
+      buf[0] = 'C'.charCodeAt(0)
+      new DataView(buf.buffer).setInt32(1, entry.value.length, true)
+      buf.set(entry.value, 5)
       parts.push(head, buf)
     } else {
       const buf = new Uint8Array(5 + entry.value.length * 4)

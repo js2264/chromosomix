@@ -10,7 +10,18 @@ import { describe, expect, it } from 'vitest'
 
 import type { DotplotStreaks } from '@/analysis/types'
 import type { AnnotationEntry } from '@/annotations/types'
-import { foundFrom, pickSets, sequenceSets, throughEdit, type FoundStreaks } from '@/edit/dotplotLines'
+import {
+  cornerSide,
+  foundFrom,
+  grippedSide,
+  linesOver,
+  pickSets,
+  sequenceSets,
+  spanAlong,
+  stretchOfLine,
+  throughEdit,
+  type FoundStreaks,
+} from '@/edit/dotplotLines'
 import { EditedAssembly, emptyEdit, withStep, type EditStep } from '@/genome/edit'
 
 const ORIGINAL = { names: ['I', 'II'], lengths: [5000, 3000] }
@@ -118,5 +129,54 @@ describe('the streaks through an edit', () => {
     // I_e2, from 2.5 kb of I, now at its start: the last three quarters along y.
     expect([lines.x0[1], lines.x1[1], lines.y0[1], lines.y1[1]]).toEqual([2000, 2500, 1500, 2000])
     expect(lines.anchors).toEqual([200, 200, 300])
+  })
+})
+
+describe('the link between the map and the corner plot', () => {
+  // II first, then I split at 2 kb: II, I_e1, I_e2 along x.
+  const lines = throughEdit(FOUND, assemblyAfter({ op: 'reorder', names: ['II', 'I'] }, { op: 'split', sequence: 'I', at: 2000 }))
+
+  it('marks a stretch of the edit at its span along x, kept to its sequence, and nowhere for a sequence the axis lacks', () => {
+    expect(lines.x.names).toEqual(['II', 'I_e1', 'I_e2'])
+    expect(spanAlong(lines.x, { sequence: 'I_e1', from: 0, to: 2000 })).toEqual([3000, 5000])
+    expect(spanAlong(lines.x, { sequence: 'I_e2', from: 500, to: 99_999 })).toEqual([5500, 8000])
+    expect(spanAlong(lines.x, { sequence: 'IV', from: 0, to: 10 })).toBeNull()
+    expect(spanAlong(lines.x, { sequence: 'II', from: 10, to: 10 })).toBeNull()
+  })
+
+  it('lights the lines with any of their extent in that span, and none outside it', () => {
+    // I's streak, cut in two — 1-2 kb at the end of I_e1, 2-3 kb at the start of I_e2 — then II's.
+    expect(linesOver(lines, [3000, 5000])).toEqual([0])
+    expect(linesOver(lines, [4500, 5500])).toEqual([0, 1])
+    expect(linesOver(lines, [0, 3000])).toEqual([2])
+    expect(linesOver(lines, [6000, 8000])).toEqual([])
+  })
+
+  it('names the stretch of the edit a line lies along, and nothing for no line', () => {
+    expect(stretchOfLine(lines, 0)).toEqual({ sequence: 'I_e1', from: 1000, to: 2000 })
+    expect(stretchOfLine(lines, 1)).toEqual({ sequence: 'I_e2', from: 0, to: 1000 })
+    expect(stretchOfLine(lines, 2)).toEqual({ sequence: 'II', from: 0, to: 3000 })
+    expect(stretchOfLine(lines, -1)).toBeNull()
+    expect(stretchOfLine(lines, 3)).toBeNull()
+  })
+})
+
+describe('the corner plot’s size', () => {
+  it('is a third of the map by itself, up to 220 pixels, and never under 120', () => {
+    expect(cornerSide(600, null, 60)).toBe(192)
+    expect(cornerSide(1200, null, 60)).toBe(220)
+    expect(cornerSide(200, null, 60)).toBe(120)
+  })
+
+  it('is what the grip gave it, kept on the map with its picker and its caption', () => {
+    expect(cornerSide(600, 400, 60)).toBe(400)
+    expect(cornerSide(600, 900, 60)).toBe(524)
+    expect(cornerSide(600, 40, 60)).toBe(120)
+  })
+
+  it('grows with the grip moved left and down, the corner following a hand along the diagonal', () => {
+    expect(grippedSide(200, -30, 30)).toBe(230)
+    expect(grippedSide(200, 30, -30)).toBe(170)
+    expect(grippedSide(200, -40, 0)).toBe(220)
   })
 })

@@ -60,6 +60,22 @@ export interface ColourSource {
   range?: { min: number; max: number }
   /** The ramp, where `values` are given. */
   colormap?: string
+  /**
+   * The categories `colours` are drawn from, where they are categories — a
+   * feature set's names (§25.5). Without them a colour per bead has no key.
+   */
+  levels?: StructureLevel[]
+}
+
+/**
+ * One row of a levels key. `name` is what a swatch picked on it is written
+ * under, where the row can be recoloured — a feature set's name, or `''` for
+ * its `other` bucket.
+ */
+export interface StructureLevel {
+  label: string
+  colour: string
+  name?: string
 }
 
 /**
@@ -96,7 +112,7 @@ export interface BeadColours {
 
 /** The legend for a colouring, in the shapes the corner key can draw. */
 export type StructureKey =
-  | { kind: 'levels'; title: string; levels: Array<{ label: string; colour: string }> }
+  | { kind: 'levels'; title: string; levels: StructureLevel[] }
   | { kind: 'ramp'; title: string; colormap: string; min: number; max: number }
   | { kind: 'none'; title: string }
 
@@ -240,7 +256,11 @@ function bySource(structure: Structure, source: ColourSource, ramp: string | nul
   const css = new Array<string>(n).fill(UNSET_COLOUR)
   if (source.colours !== undefined) {
     for (let i = 0; i < n; i++) css[i] = source.colours[i] ?? UNSET_COLOUR
-    return { rgb: rgbOf(css), css, key: { kind: 'none', title: source.label } }
+    const key: StructureKey =
+      source.levels === undefined
+        ? { kind: 'none', title: source.label }
+        : { kind: 'levels', title: source.label, levels: source.levels }
+    return { rgb: rgbOf(css), css, key }
   }
   const values = source.values ?? new Float32Array(n).fill(Number.NaN)
   // The reader's choice first, then the source's own — a track's lane scale,

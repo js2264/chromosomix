@@ -25,6 +25,7 @@
  * that is drawn in is `render/featureInk.ts`.
  */
 
+import { hasNames, nameOverridesOf } from '../render/nameColours'
 import { DETAIL_SEP, type AnnotationKind, type FeatureSet } from './types'
 
 /**
@@ -34,7 +35,7 @@ import { DETAIL_SEP, type AnnotationKind, type FeatureSet } from './types'
  * they are columns of the set and of the VCF detail respectively — and each has
  * an ink rule of its own that predates this module (§8.14).
  */
-export type FeatureFieldKind = 'lane' | 'strand' | 'base' | 'number' | 'category'
+export type FeatureFieldKind = 'lane' | 'strand' | 'base' | 'number' | 'category' | 'name'
 
 /** One offered colouring. */
 export interface FeatureField {
@@ -55,6 +56,14 @@ export const FIELD_STRAND = 'strand'
 
 /** The set's own score column. */
 export const FIELD_SCORE = 'score'
+
+/**
+ * The set's own name column, read as categories (§8.16): a compartment call's
+ * `A` and `B`, a segmentation's states. Offered only where some feature has a
+ * name, and coloured from `render/nameColours.ts` — the mapping a model
+ * coloured by the same set uses (§25.5).
+ */
+export const FIELD_NAME = 'name'
 
 /** A called variant's `REF>ALT`, which is §8.14's rule and a VCF lane's default. */
 export const FIELD_BASE = 'base'
@@ -138,6 +147,15 @@ export function featureFields(
     hint: 'The set’s own score column — a BED’s column 5, a peak’s signal. Drawn as a ramp between the smallest and largest in the file.',
   })
   if (set === undefined) return out
+  // Not on a structure: a bead's name is its locus, which is no category.
+  if (kind !== 'structure' && hasNames(set)) {
+    out.push({
+      key: FIELD_NAME,
+      label: 'name',
+      kind: 'name',
+      hint: 'The name column as categories — A and B on a compartment call, the states of a segmentation. A colour per name, the same one a 3D model coloured by this set uses; click a swatch in the key to change it.',
+    })
+  }
   const seen = new Set(out.map((field) => field.key))
   for (const [key, numeric] of scanKeys(set)) {
     if (seen.has(key)) continue
@@ -176,6 +194,7 @@ export function fieldText(set: FeatureSet, index: number, key: string): string {
     const score = set.score[index]
     return Number.isFinite(score) ? String(score) : ''
   }
+  if (key === FIELD_NAME) return set.name[index] ?? ''
   const detail = set.detail[index] ?? ''
   if (detail === '') return ''
   // `startsWith(key + ' ')` rather than a split-and-compare: the parts are
@@ -444,6 +463,16 @@ export interface FeatureStyle {
    */
   bars: BarScale
   /**
+   * The reader's own colours for the set's **names**, by name (§8.16, §25.5),
+   * over `render/nameColours.ts`'s default; `''` is the `other` bucket.
+   *
+   * On the set's row rather than on whatever is coloured by it, for the reason
+   * a manual mark's colour is the mark's: `A` is a fact about this call, so a
+   * colour picked for it on one model is its colour on the next, and on the
+   * lane coloured by name.
+   */
+  nameColours?: Record<string, string>
+  /**
    * How the lane spends its height on rows (§8.16) — the three every genome
    * browser offers, under the names they are known by.
    *
@@ -493,6 +522,7 @@ export function defaultFeatureStyle(kind: AnnotationKind): FeatureStyle {
     // row of shapes, and a reader who wants the shapes can ask for them.
     bars: 'file',
     display: 'expanded',
+    nameColours: {},
   }
 }
 
@@ -539,5 +569,6 @@ export function featureStyleOf(value: unknown, kind: AnnotationKind): FeatureSty
     bars: row['bars'] === 'feature' ? 'feature' : 'file',
     // The same again: a stored string is kept only if it is one of the three.
     display: FEATURE_DISPLAYS.find((one) => one === row['display']) ?? fallback.display,
+    nameColours: nameOverridesOf(row['nameColours']),
   }
 }

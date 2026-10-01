@@ -33,6 +33,7 @@ import {
   TRACK_SCALES,
   readsOf,
   scaleOf,
+  translationOf,
   type AnnotationEntry,
   type ColourBy,
   type FeatureSet,
@@ -40,10 +41,14 @@ import {
   type ReadStyle,
   type TrackMode,
   type TrackScale,
+  type TranslationStyle,
 } from '../annotations/types'
+import { GENETIC_CODES } from '../annotations/codons'
 import { groupsFor } from '../annotations/bam/reads'
 import { COLORMAP_NAMES } from '../render/colormaps'
-import { readPalette } from '../render/alignments'
+import { MOD_INK, readPalette } from '../render/alignments'
+import { modLabel } from '../annotations/bam/basemods'
+import { modCodesOf, onModCodes } from './modCodes'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
 
@@ -428,6 +433,9 @@ const COLOUR_HINTS: Record<ColourBy, string> = {
   insert: 'Template length: pairs further apart than a normal library are picked out.',
   mate: 'Where the mate went — the same sequence, a different one, or nowhere.',
   mapq: 'Mapping quality, banded, so an ambiguous pile-up is visible as one.',
+  basemod:
+    'Modified bases from the reads’ MM/ML tags, each at its own position: red where the call is ' +
+    'modified, blue where it is not, fainter the less sure the caller was.',
   none: 'One colour, when the point is the shape of the pile rather than the reads in it.',
 }
 
@@ -473,8 +481,12 @@ function patchReads(
  * pairing describe a pile and mean nothing to a depth curve, and `splits` is
  * deliberately one-sided — see {@link splitsToggle}. Those three are not
  * offered on the depth row at all, so this list is the whole of the link.
+ *
+ * …and which base modification, at what threshold (§8.13): not about which
+ * reads count but about what is *measured* on them, and the pile's marks and
+ * the depth's percentage are one measurement read on two rows.
  */
-const LINKED = ['minMapq', 'hideDuplicates'] as const satisfies ReadonlyArray<keyof ReadStyle>
+const LINKED = ['minMapq', 'hideDuplicates', 'modCode', 'modThreshold'] as const satisfies ReadonlyArray<keyof ReadStyle>
 
 /** The same, for reading a control's current value back. */
 function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
@@ -505,7 +517,7 @@ export function colourByField(
   const reads = readsOf(entry.style)
   const select = el('select', { class: 'select' })
   for (const by of COLOUR_BY) {
-    select.appendChild(el('option', { value: by, text: by, title: COLOUR_HINTS[by] }))
+    select.appendChild(el('option', { value: by, text: COLOUR_NAMES[by] ?? by, title: COLOUR_HINTS[by] }))
   }
   select.value = reads.colourBy
   select.title = COLOUR_HINTS[reads.colourBy]
@@ -528,6 +540,9 @@ export function colourByField(
   })
   return field
 }
+
+/** What a colouring is called in the picker, where its value is not a word. */
+const COLOUR_NAMES: Partial<Record<ColourBy, string>> = { basemod: 'base modification' }
 
 /**
  * The key: which colour is which category.
@@ -552,6 +567,25 @@ export function colourLegend(entry: AnnotationEntry, by?: ColourBy): HTMLElement
 
 /** Redraw a key in place, for {@link colourByField}'s change handler. */
 export function fillLegend(host: HTMLElement, colour: string, by: ColourBy): void {
+  // The calls carry the colour under this one, not the reads, so the key is
+  // theirs — from the same two inks the lane paints them with.
+  if (by === 'basemod') {
+    host.replaceChildren(
+      ...([
+        ['modified', MOD_INK.modified],
+        ['unmodified', MOD_INK.unmodified],
+        ['fainter: less sure', MOD_INK.read],
+      ] as const).map(([name, ink]) =>
+        el(
+          'span',
+          { class: 'ann-key-item' },
+          el('span', { class: 'ann-key-chip', style: { background: ink } }),
+          el('span', { text: name }),
+        ),
+      ),
+    )
+    return
+  }
   const groups = groupsFor(by)
   // One category is not a key, it is a restatement of the lane's own colour.
   if (groups.length <= 1) {
@@ -738,6 +772,127 @@ export function sashimiField(store: AnnotationStore, entry: AnnotationEntry): HT
       el('span', { class: 'field-label', text: 'reads' }),
     ),
   )
+}
+
+/**
+ * Which base modification, and how sure a call must be (§8.13).
+ *
+ * On both of a BAM's rows and written through between them: the pile's marks
+ * and the depth's percentage are one measurement, and a 5mC pile beside a
+ * 5hmC fraction under one file's name would be two modifications read as one.
+ *
+ * The codes offered are the ones this file's reads have been seen to carry
+ * (`ui/modCodes.ts`), behind *most modified in view* — which is
+ * what an unset choice resolves to and the right first answer on a file with
+ * one modification, the common case. A code chosen and then panned away from
+ * stays offered, so the select never loses the value it shows.
+ */
+export function modField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', {
+    class: 'select',
+    title: 'Which modification the calls are drawn for, and the fraction is of.',
+  })
+  const codesHere = (): string[] => {
+    const live = store.byId(entry.id) ?? entry
+    const own = modCodesOf(live.id)
+    const partner = live.partner === undefined ? [] : modCodesOf(live.partner)
+    return [...new Set([...own, ...partner])]
+  }
+  const fill = (): void => {
+    const chosen = liveReads(store, entry).modCode
+    const codes = codesHere()
+    if (chosen !== '' && !codes.includes(chosen)) codes.push(chosen)
+    select.replaceChildren(
+      el('option', { value: '', text: 'most modified in view' }),
+      ...codes.map((code) => el('option', { value: code, text: modLabel(code) })),
+    )
+    select.value = chosen
+  }
+  fill()
+  const stop = onModCodes((id) => {
+    // A card rebuilt is a new select; the old one's listener goes with it.
+    if (!select.isConnected) {
+      stop()
+      return
+    }
+    const live = store.byId(entry.id) ?? entry
+    if (id !== live.id && id !== live.partner) return
+    // Not while it is open or focused: re-filling a select under the reader's
+    // hand closes it.
+    if (document.activeElement === select) return
+    fill()
+  })
+  select.addEventListener('change', () => patchReads(store, entry, { modCode: select.value }))
+
+  const box = el('input', {
+    class: 'input input-num ann-size',
+    type: 'number',
+    value: String(reads.modThreshold),
+    title:
+      'How sure a call must be. At or above this it is modified; at or below one minus it, ' +
+      'unmodified; between, it is neither drawn nor counted. 0.5 counts every call.',
+  })
+  box.min = '0.5'
+  box.max = '1'
+  box.step = '0.05'
+  box.addEventListener('change', () => {
+    const raw = box.value.trim()
+    const typed = raw === '' ? Number.NaN : Number(raw)
+    if (!Number.isFinite(typed)) {
+      box.value = String(liveReads(store, entry).modThreshold)
+      return
+    }
+    const clamped = Math.max(0.5, Math.min(1, typed))
+    box.value = String(clamped)
+    patchReads(store, entry, { modThreshold: clamped })
+  })
+  return el(
+    'div',
+    { class: 'ann-inline' },
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'modification' }),
+      select,
+    ),
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'p ≥' }),
+      box,
+    ),
+  )
+}
+
+/**
+ * Draw a BAM's depth row as the percentage of calls modified instead (§8.13,
+ * §8.20): a bedMethyl's picture, made from the reads under the same filters
+ * as the depth. The depth row's alone, like its arcs — it is about what that
+ * row draws — and it brings the modification picker with it, since the
+ * percentage is of one code.
+ */
+export function modFractionField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).modFraction
+  const chip = button(
+    '% modified',
+    () => patchReads(store, entry, { modFraction: !liveReads(store, entry).modFraction }),
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Draw this row as the percentage of the reads’ modification calls that are modified, at ' +
+        'each base — what a bedMethyl from modkit would show — instead of depth. From the MM/ML ' +
+        'tags; nothing is drawn for a file without them.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  const block = el(
+    'div',
+    { class: 'field field-block' },
+    el('span', { class: 'field-label', text: 'base modifications' }),
+    el('div', { class: 'ann-chips' }, chip),
+  )
+  return on ? el('div', { class: 'ann-mods' }, block, modField(store, entry)) : block
 }
 
 /**
@@ -1009,9 +1164,9 @@ export function barScaleToggle(store: AnnotationStore, entry: AnnotationEntry): 
  * of chips, because a hundred thousand p-values have no categories to name and
  * the only two numbers worth printing are the ones the ramp runs between.
  */
-export function featureLegend(entry: AnnotationEntry): HTMLElement {
+export function featureLegend(entry: AnnotationEntry, store?: AnnotationStore): HTMLElement {
   const host = el('div', { class: 'ann-key' })
-  fillFeatureLegend(host, entry)
+  fillFeatureLegend(host, entry, undefined, store)
   return host
 }
 
@@ -1020,6 +1175,12 @@ export function fillFeatureLegend(
   host: HTMLElement,
   entry: AnnotationEntry,
   by?: string,
+  /**
+   * Where given, a name's chip is a colour picker (§8.16): the colour is
+   * written to the row's `nameColours`, the one mapping a model coloured by
+   * this set's names reads too (§25.5).
+   */
+  store?: AnnotationStore,
 ): void {
   const style = featuresOf(entry.style, entry.kind)
   const { key } = featureColouring(
@@ -1027,6 +1188,7 @@ export function fillFeatureLegend(
     entry.kind,
     by ?? style.colourBy,
     entry.style.colour,
+    style.nameColours,
   )
   if (key.ramp !== null) {
     host.replaceChildren(
@@ -1039,19 +1201,99 @@ export function fillFeatureLegend(
     )
     return
   }
-  // One chip is not a key, it is a restatement of the lane's own colour.
-  if (key.levels.length <= 1) {
+  // One chip is not a key, it is a restatement of the lane's own colour —
+  // except a name's, which is a control.
+  if (key.levels.length === 0 || (key.levels.length === 1 && key.field.kind !== 'name')) {
     host.replaceChildren()
     return
   }
   host.replaceChildren(
-    ...key.levels.map((level) =>
-      el(
-        'span',
-        { class: 'ann-key-item' },
-        el('span', { class: 'ann-key-chip', style: { background: level.colour } }),
-        el('span', { text: level.label }),
-      ),
+    ...key.levels.map((level) => {
+      const name = level.name
+      if (store === undefined || name === undefined) {
+        return el(
+          'span',
+          { class: 'ann-key-item' },
+          el('span', { class: 'ann-key-chip', style: { background: level.colour } }),
+          el('span', { text: level.label }),
+        )
+      }
+      const swatch = el('input', {
+        class: 'ann-key-swatch',
+        type: 'color',
+        value: level.colour,
+        title: `Colour for ${level.label}, on this lane and on a model coloured by these names`,
+      })
+      swatch.addEventListener('input', () => {
+        const live = store.byId(entry.id) ?? entry
+        const held = featuresOf(live.style, live.kind).nameColours ?? {}
+        patchFeatures(store, live, { nameColours: { ...held, [name]: swatch.value } })
+      })
+      return el('label', { class: 'ann-key-item' }, swatch, el('span', { text: level.label }))
+    }),
+  )
+}
+
+/**
+ * A sequence lane's six reading frames, and the genetic code they are read in
+ * (§8.8).
+ *
+ * A chip for the frames, for the reason the alignment lane's switches are chips:
+ * it is a state the lane is in and has no picture anyone would recognise. The
+ * code beside it is a select of NCBI's tables by number and name — the number
+ * is what a GenBank file's `transl_table` says, so it is what a reader will be
+ * looking for — and stays live with the frames off, since the code is a fact
+ * about the genome and not about whether its frames are on screen.
+ *
+ * Drawn wherever the lane draws residues: the 1D browser and a deck's tracks
+ * cells. Beside a map the lane is GC content and has no codons to show.
+ */
+export function framesField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const live = (): TranslationStyle =>
+    translationOf(store.entries.find((each) => each.id === entry.id)?.style ?? entry.style)
+  const on = translationOf(entry.style).frames
+  const select = el('select', {
+    class: 'select',
+    title:
+      'The genetic code the frames are read in — NCBI’s translation tables. 4 for Mycoplasma and ' +
+      'Spiroplasma, where TGA is tryptophan; 11 for bacteria, archaea and plastids; 2 for a ' +
+      'vertebrate mitochondrion.',
+  })
+  for (const code of GENETIC_CODES) {
+    select.appendChild(el('option', { value: String(code.id), text: `${code.id} · ${code.name}` }))
+  }
+  select.value = String(translationOf(entry.style).code)
+  select.addEventListener('change', () => {
+    store.restyle(entry.id, { translation: { ...live(), code: Number(select.value) } })
+  })
+  const chip = button(
+    'reading frames',
+    () => {
+      const next = !live().frames
+      store.restyle(entry.id, { translation: { ...live(), frames: next } })
+      // Here as well as on the card's rebuild, which waits while a control
+      // holds focus — and this one does, having just been pressed.
+      chip.classList.toggle('is-on', next)
+      chip.setAttribute('aria-pressed', String(next))
+    },
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Six rows under the sequence: the codons of frames +1, +2, +3 and of −1, −2, −3 on the ' +
+        'other strand, each with its amino acid where it fits, starts in green and stops in red. ' +
+        'Further out, the starts and stops alone. In the 1D browser and a deck’s tracks cells.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  return el(
+    'div',
+    { class: 'ann-inline' },
+    el('div', { class: 'ann-chips' }, chip),
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'code' }),
+      select,
     ),
   )
 }

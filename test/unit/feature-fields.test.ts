@@ -217,6 +217,7 @@ describe('a stored choice, read back', () => {
       arrows: false,
       bars: 'file',
       display: 'expanded',
+      nameColours: {},
     })
     // Untrusted input: a session outlives the build that wrote it.
     expect(featureStyleOf({ colourBy: 42 }, 'segments').colourBy).toBe('strand')
@@ -225,6 +226,7 @@ describe('a stored choice, read back', () => {
       arrows: true,
       bars: 'file',
       display: 'expanded',
+      nameColours: {},
     })
     // Absent means on, so a row written before the switch existed comes back
     // pointing rather than blank.

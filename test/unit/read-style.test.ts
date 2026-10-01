@@ -49,6 +49,11 @@ describe('the default', () => {
       // A sashimi plot's arcs over the depth, from two reads up (§8.23).
       sashimi: true,
       sashimiFloor: 2,
+      // Base modifications: whichever code is most called, every call
+      // counted, and the depth drawn as depth (§8.13).
+      modCode: '',
+      modThreshold: 0.5,
+      modFraction: false,
     })
   })
 
@@ -77,6 +82,9 @@ describe('reading a stored style back', () => {
       splits: true,
       sashimi: false,
       sashimiFloor: 5,
+      modCode: 'h',
+      modThreshold: 0.8,
+      modFraction: true,
     }
     expect(readStyleOf(stored)).toEqual(stored)
   })
@@ -205,6 +213,9 @@ describe('surviving a stored session', () => {
       splits: true,
       sashimi: false,
       sashimiFloor: 4,
+      modCode: '21839',
+      modThreshold: 0.66,
+      modFraction: true,
     }
     expect(roundTrip(set)).toEqual(set)
   })
@@ -222,6 +233,9 @@ describe('surviving a stored session', () => {
       splits: false,
       sashimi: true,
       sashimiFloor: 2,
+      modCode: '',
+      modThreshold: 0.5,
+      modFraction: false,
     })
   })
 
