@@ -11,12 +11,13 @@
  * picker tab's status bar, which has no read and no validation to offer; a
  * variant lane's right-click menu with the point switch its card has; a
  * `.hic`'s normalisation on the File card; the single map closed into the 1D
- * browser with the Manual annotations card there; and an embed's landing page
- * and palette, which offer no folder, no stores and no column it does not
- * mount.
+ * browser with the Manual annotations card there; what Pattern detection, APA
+ * under chromosight's normalisation and Compartments say they will read; the
+ * palette's Annotations row live on a metacool; and an embed's landing page and
+ * palette, which offer no folder, no stores and no column it does not mount.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-fixes.mjs [out-dir]     # fx01 … fx13
+ *   node scripts/ui-fixes.mjs [out-dir]     # fx01 … fx17
  */
 
 import { gallery, sleep } from './gallery-lib.mjs'
@@ -204,6 +205,58 @@ if (await closer.count()) {
 }
 await save(closing, 'fx09-closed-into-browser')
 await closing.context().close()
+
+// ---- three tasks' forms: what each says it will read ------------------------
+const tasks = await fresh(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await tasks.waitForSelector('.heatmap-canvas', { timeout: 120000 })
+await sleep(5000)
+await tasks.click('button[title^="Show the Analysis panel"]').catch(() => {})
+await sleep(800)
+const form = async (title, name, setUp = async () => {}) => {
+  await tasks.keyboard.press('Escape')
+  await sleep(500)
+  await tasks.locator('.analysis-row-title', { hasText: title }).first().click()
+  await sleep(1200)
+  await setUp()
+  await sleep(600)
+  console.log(`${title}, its price:`, (await tasks.locator('.analysis-cost').first().textContent())?.trim())
+  await save(tasks, name)
+}
+// Pattern detection prices the band along each diagonal, not the square.
+await form('Pattern detection', 'fx14-pattern-detection-price')
+// Compartments' hint names both readings of its sequences.
+await form('Compartments', 'fx15-compartments-hint', async () => {
+  const formText = (await tasks.locator('.analysis-form').first().textContent())?.replace(/\s+/g, ' ') ?? ''
+  console.log('Compartments, the sequences hint:', /One correlation per sequence[^.]*\./.exec(formText)?.[0] ?? 'not found')
+})
+// APA under chromosight's normalisation, over the demo's loops: a band, in words.
+await form('Aggregate peak analysis', 'fx16-apa-chromosight-price', async () => {
+  const field = tasks.locator('.analysis-form .field').filter({ has: tasks.locator('.field-label', { hasText: /^normalisation$/i }) }).first()
+  const select = field.locator('select').first()
+  if (await select.count()) await select.selectOption('chromosight')
+  else await field.locator('button', { hasText: /chromosight/i }).first().click().catch(() => {})
+})
+console.log('clip box tooltip:', await tasks.locator('.clip-box').first().getAttribute('title').catch(() => null))
+await tasks.context().close()
+
+// ---- the palette's Annotations row on a metacool --------------------------------
+const metacool = await fresh(`${g.base}/`)
+await metacool.evaluate(() => localStorage.setItem('metacooler-viewer:dev-features', 'on'))
+await metacool.goto(`${g.base}/?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.metacooler.json`)
+await metacool.waitForSelector('.view-genomes .tr', { timeout: 120000 }).catch(() => console.log('no genomes table'))
+await sleep(2500)
+await metacool.keyboard.press('Control+p')
+await sleep(600)
+await metacool.keyboard.type('annotations panel')
+await sleep(600)
+console.log(
+  'metacool palette, Annotations panel:',
+  await metacool.$$eval('.palette-row', (rows) =>
+    rows.filter((row) => /Annotations panel/.test(row.textContent ?? '')).map((row) => `${row.classList.contains('disabled') ? 'greyed' : 'live'} — ${row.querySelector('.palette-hint')?.textContent ?? ''}`),
+  ),
+)
+await save(metacool, 'fx17-metacool-annotations-row')
+await metacool.context().close()
 
 // ---- the stores, named once ---------------------------------------------------
 await page.goto(`${g.base}/`)
