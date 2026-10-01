@@ -60,6 +60,9 @@ node scripts/ui-edit-reassembly.mjs gallery  # the stage on the chrXVI–mycoide
 node scripts/ui-edit-live-dotplot.mjs gallery  # the stage's corner dot plot against the theoretical genome (data/), a streak hovered, redrawn through auto: l01 … l03
 node scripts/ui-dotplot.mjs gallery          # the dot plot task (§28, dev) on the same assembly against its theory (data/): the form, the signed density, a streak hovered and zoomed, the streaks: d01 … d06, d04b, d04c, and the PNG export under files/
 node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sashimi arcs and two samples' STAR junctions at RPL10, FLNA's reverse arcs, chrX whole, the junction and band cards, the Tracks card's rows, colour by annotated at DDX3X, a band typed, the karyotype, a regtools BED dropped, the dark theme, the yeast karyotype on a map's edges and EFB1's arc: ij01 … ij17
+node scripts/ui-vector-pdf.mjs gallery      # the Export card with PDF (vector) and no resolution, then the map's, the deck's and the model's PDFs kept whole, each rendered with poppler and its images counted: v01 … v05, v-map.pdf, v-deck.pdf, v-model.pdf, *-page.png
+node scripts/ui-loci.mjs gallery             # every locus a reader sees or types, 1-based: bookmarks, marks, the map's menu, 4C's anchor, its lane and the console's line, FRiP per feature, a genome view's box: lo01 … lo10
+node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, an embed's landing page and palette: fx01 … fx13
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -320,6 +323,18 @@ column's File card before and after the star moves to Hi-C, and a Tracks card ro
 HTML5 drag, not dispatched events, since a cell that refuses `dragover` never gets a drop — onto a
 `+` and onto an empty cell. **4C** fills the anchor, runs the task with *exclude anchor region*
 off and on, and shoots the left-hand lane each time.
+
+The last three were written for the audit that made the PDFs drawings and every coordinate
+1-based, and each prints what it found as well as shooting it. **Vector PDF** keeps each PDF whole
+through the stand-in save dialog (`ui-saves.mjs`'s, which keeps the bytes of any file rather than
+of a PNG), renders its first page with `pdftoppm` and counts its images with `pdfimages -list`: a
+map's PDF holds one image, the cells, and the model's holds none — a figure that went back to being
+a screenshot in a page is a count in the log. **Loci** types and reads back every box a locus goes
+through and prints each card's rows; the genome view is opened in a context of its own, because
+the app restores the tab the page above it had. **Fixes** reads the pointer's readout under a
+sideways scroll on a block of two stretches of one sequence — both coordinates must move by one
+distance and the separation must not — and drops a VCF on the Tracks card's own zone: the first
+`.ann-drop` in the column is the Contact maps card's, which takes any file for a map.
 
 ## What it drives
 
