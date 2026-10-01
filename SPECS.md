@@ -1217,6 +1217,16 @@ one genome thin out by one rule. And where the surface around the strip already 
 Chromosomes table's bar says `16 sequences · 12.11 Mb` over it — the ruler draws its boundary marks
 and no caption of its own: two captions for one strip say the strip is two things.
 
+**A label at either end of the ruler is kept inside it.** The mark stays on its tick; the label is
+nudged back in, two pixels clear of the end, as the heatmap's own axis nudges its labels and a
+feature's name is nudged inside its lane (§8.16). A tick on a window's first or last base sits on
+the ruler's edge, and a label centred on it was half outside the strip: a deck's tracks cell over
+`IV:1,000,001-1,400,000` read `Mb` and `1.4` for `1.0 Mb` and `1.4 Mb`, and the browser over a whole
+sequence `bp` for `0 bp` — a cut number is a different number. Nudged in, an end label can reach its
+neighbour at the larger text sizes; then the inner of the two is left out, never written over, since
+the two ends say where the window starts and stops. A label too wide for the ruler at all is left
+out too (`placeTickLabels`).
+
 **The plot is the whole column, not the stack.** The canvas reaches the foot of the column rather
 than the foot of the last lane, so pointing anywhere under the tracks names a coordinate, draws the
 crosshair and reads every track at it — the axis does not stop where the tracks do, and a view with

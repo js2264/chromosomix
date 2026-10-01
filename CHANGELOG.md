@@ -1845,6 +1845,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The 1D ruler keeps its end labels whole (§5.8).** Each tick label was centred on its tick, so
+  one on a window's first or last base hung half off the strip: a deck's tracks cell over
+  `IV:1,000,001-1,400,000` read `Mb` and `1.4`, and the browser over a whole sequence `bp`. The label
+  is nudged back inside, as the heatmap's axis already nudged its own, and where that brings it
+  against its neighbour the inner one is left out rather than written over.
+
 - **The last lane on each edge of a map keeps its whole name (§8.8).** A name is written at the
   reader's text size across a lane of the height they gave it, and at the default size the 14-pixel
   peak lanes the yeast demo opens with are five pixels too thin for it: past the last lane that was
