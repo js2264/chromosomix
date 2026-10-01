@@ -845,7 +845,8 @@ the regions at least 75 bp wide, which is the one line applied here to its table
 | narrowest region | `--minWidth 75` | `main()`'s `concave_end − concave_start >= 75` |
 | output | `--perPeak true`: every region | the candidate table |
 
-The app's peak **table** counts from 1, as its tables do; its BED counts from 0, as yapc does.
+The app's peak table and its BED both count from 0, as yapc does — the table's header says so,
+`Start (0-based)` — so the three are compared base for base.
 
 ```{python}
 YP = WORK / 'yapc'
@@ -874,9 +875,9 @@ reference('yapc', 'Peak calling (yapc)', 'yapc 0.1', [YAPC_PYTHON, script('yapc_
 ref_all = pd.read_csv(YP / 'yapc-candidates.tsv', sep='\t')
 ref_peaks = ref_all[(ref_all['concave_end'] - ref_all['concave_start']) >= 75]
 listing = table(one(YP / 'app', '*.peaks-list.tsv'))
-bed = pd.read_csv(one(YP / 'app', '*.bed'), sep='\t', header=None, names=['chrom', 'start', 'end', 'name', 'score', 'strand'])
-app_peaks = (listing.assign(start=listing['start'] - 1, summit=listing['summit'] - 1)
-             .rename(columns={'sequence': 'chrom'})[['chrom', 'start', 'end', 'summit']]
+bed = pd.read_csv(one(YP / 'app', '*.bed'), sep='\t', header=None, comment='#',
+                  names=['chrom', 'start', 'end', 'name', 'score', 'strand'])
+app_peaks = (listing.rename(columns={'sequence': 'chrom'})[['chrom', 'start', 'end', 'summit']]
              .merge(bed[['chrom', 'start', 'end', 'score']], on=['chrom', 'start', 'end'], how='left'))
 m = app_peaks.merge(ref_peaks, left_on=['chrom', 'start', 'end'], right_on=['chrom', 'concave_start', 'concave_end'],
                     how='outer', indicator=True, suffixes=('_app', '_yapc'))

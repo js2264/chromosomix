@@ -415,7 +415,9 @@ def analyse(card):
     print(f'  origin {origin:,} ({rule})')
 
     phase = [] if fasta is None else ['--sequence', fasta, '--phaseSequence', fasta]
-    common = ['--sequences', chrom, '--contacts', 'cis', '--ignoreDiags', 2, '--components', 3,
+    # Cis contacts, compartments' default, and left to it: on the command line `--contacts` is the
+    # number of contacts the map is drawn to (§6.5), which refuses `cis`.
+    common = ['--sequences', chrom, '--ignoreDiags', 2, '--components', 3,
               '--minR', 0.1, '--saddle=false', '--method', METHOD, *phase, *frame, *arms]
     if fasta is not None:
         step(d / 'composition', 'composition', at, '--sequence', fasta, *frame)
@@ -490,6 +492,10 @@ of the run, the one the figure is about drawn heavier.
 
 ```{python}
 PALETTE = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
+#: The column of the components table E1's share is read from: its share of the correlation matrix's
+#: variance, or under cooltools' method of the contacts — its eigenvalue squared over the matrix's
+#: sum of squares.
+SHARE = 'explained' if METHOD == 'correlation' else 'contacts'
 
 
 def smoothed(y, k=5):
@@ -557,8 +563,8 @@ def figure(r, everyone):
     ax.set_xticks(ticks, labels, fontsize=8)
     ax.set_xlim(0, n)
     top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
-    whole = 'of variance' if METHOD == 'correlation' else 'of the matrix'
-    ax.set_title(f"f  tracks, same frame · E1 (arms) {fmt(num(top.get('explained')), '.0%')} {whole}",
+    whole = 'of variance' if METHOD == 'correlation' else 'of contacts'
+    ax.set_title(f"f  tracks, same frame · E1 (arms) {fmt(num(top.get(SHARE)), '.0%')} {whole}",
                  fontsize=11)
 
     # g and k: the inter-arm alignment of every species of the run.
@@ -572,7 +578,7 @@ def figure(r, everyone):
         ax.plot(distance, smoothed(values), color=colour, lw=2.2 if mine else 1.0,
                 alpha=1 if mine else 0.7, label=species, zorder=3 if mine else 2)
         t = other['interarm']
-        rows.append([species, fmt(num(t['score']), '.2f'),
+        rows.append([species, fmt(num(t['enrichment']), '.2f'),
                      f"{fmt(num(t['reach']) / 1e6, '.2f')} / {fmt(num(t['armLength']) / 1e6, '.2f')}"])
     ax.axhline(0, color='0.6', lw=0.6)
     ax.set_xlabel('distance from the origin (Mb)')
@@ -581,7 +587,7 @@ def figure(r, everyone):
     ax.set_title(f'g  inter-arm alignment ({kb}, band ±{BAND} bins)', fontsize=11)
     ax = fig.add_subplot(gs[2, 2])
     ax.axis('off')
-    tb = ax.table(cellText=rows, colLabels=['inter-arm', 'score (log2)', 'reach / arm (Mb)'],
+    tb = ax.table(cellText=rows, colLabels=['inter-arm', 'enrichment (×)', 'reach / arm (Mb)'],
                   loc='center', cellLoc='center')
     tb.auto_set_font_size(False)
     tb.set_fontsize(9)
@@ -670,10 +676,10 @@ for species, r in results.items():
 ## The numbers behind the figures
 
 ```{python}
-header = ['species', 'chromosome', 'Mb', 'circle', 'origin', 'inter-arm', 'reach/arm',
+header = ['species', 'chromosome', 'Mb', 'circle', 'origin', 'inter-arm ×', 'reach/arm',
           'E1 var' if METHOD == 'correlation' else 'E1 share', 'r(E1, GC)',
           'GC A', 'GC B', 'ρ radial']
-widths = [18, 12, 5, 6, 10, 9, 9, 8, 9, 5, 5, 8]
+widths = [18, 12, 5, 6, 10, 11, 9, 8, 9, 5, 5, 8]
 print('  '.join(f'{h:>{w}}' for h, w in zip(header, widths)))
 for species, r in results.items():
     e1, gc, radial = r['e1_arms'], r['gc'], r['radial']
@@ -683,8 +689,8 @@ for species, r in results.items():
     top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
     t = r['interarm']
     cells = [species, r['chrom'], f"{r['length'] / 1e6:.2f}", 'yes' if r['circular'] else 'no', f"{r['origin']:,}",
-             fmt(num(t['score']), '.2f'), fmt(num(t['reach']) / num(t['armLength']), '.0%'),
-             fmt(num(top.get('explained')), '.0%'),
+             fmt(num(t['enrichment']), '.2f'), fmt(num(t['reach']) / num(t['armLength']), '.0%'),
+             fmt(num(top.get(SHARE)), '.0%'),
              fmt(np.corrcoef(e1[both], gc[both])[0, 1] if both.sum() > 2 else np.nan, '.2f'),
              fmt(np.nanmean(a), '.1f'), fmt(np.nanmean(b), '.1f'), fmt(stats.spearmanr(e1[ok], radial[ok])[0], '.2f')]
     print('  '.join(f'{str(c)[:w]:>{w}}' for c, w in zip(cells, widths)))
@@ -697,9 +703,11 @@ round a circle; its Spearman |ρ| with E1 is how far an eigenvector follows the 
 than compartments; before detrending, the largest |r| of E1, E2 or E3 with GC content says whether any of
 the leading components carries the compartments at all. **GC content of A against B** is *Signal by group*'s — its group means and its
 Mann–Whitney test, as the app reports them. **The secondary diagonal** is read as the inter-arm task reads it — the cells within
-`BAND` bins of a bin's mirror across the origin, on opposite arms and more than `2·BAND + 2` bins
-from the main diagonal — as its mean log2 O/E by distance (which is the task's score, recomputed
-here) and along both arms: what the detrending leaves of it. **A** is where E1 (arms) is positive once GC content has signed it, **B** where it is
+`BAND` bins of a bin's mirror across the origin, on opposite arms and no closer than `2·BAND + 2`
+bins to the main diagonal, averaged at each distance from the origin and taken in log2 out to the
+task's reach — over O/E by distance, which is the task's enrichment recomputed here
+(`inter-arm log2`), and along both arms: what the detrending leaves of it, the task's enrichment
+after detrend. **A** is where E1 (arms) is positive once GC content has signed it, **B** where it is
 negative; the P values are two-sided. The seconds are the `metacooler-run` commands this render ran —
 0 where every step was kept from an earlier one, so set `REDO = True` to time a whole chain. The same
 table is written to `figures/numbers.tsv`.
@@ -726,10 +734,22 @@ def secondary_diagonal(r, band=BAND):
     return mirror & apart & (np.sign(u[:, None]) != np.sign(u[None, :]))
 
 
-def log2_mean(m, mask):
-    values = m[mask]
-    values = values[np.isfinite(values) & (values > 0)]
-    return np.log2(values).mean() if values.size else np.nan
+def out_to_reach(m, r):
+    # The inter-arm task's enrichment, in log2 (interArmProfile and interArmSummary of
+    # src/analysis/arms.ts): the mean ratio at each distance from the origin, (|uᵢ| + |uⱼ|) / 2
+    # rounded to a bin, and the mean of its log2 from the origin out to the task's reach — over the
+    # whole arm where nothing reaches.
+    n, o = r['n'], r['o']
+    i = np.arange(n)
+    a = np.abs(((i - o + n // 2) % n) - n // 2 if r['circular'] else i - o)
+    d = np.minimum(a.max(), (a[:, None] + a[None, :] + 1) // 2)
+    cells = secondary_diagonal(r) & np.isfinite(m)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        profile = (np.bincount(d[cells], weights=m[cells], minlength=a.max() + 1)
+                   / np.bincount(d[cells], minlength=a.max() + 1))
+        logs = np.log2(np.where(profile > 0, profile, np.nan))
+    reach = num(r['interarm']['reach']) / RES
+    return np.nanmean(logs[:int(reach) + 1] if np.isfinite(reach) else logs)
 
 
 def quoted(r):
@@ -737,19 +757,19 @@ def quoted(r):
     d = distance_from_origin(r)
     t = r['interarm']
     top = next((row for row in r['components'] if row.get('component') == 'E1'), {})
-    anti = secondary_diagonal(r)
     out = {
         'species': r['card']['species'], 'chromosome': r['chrom'],
-        'inter-arm log2': num(t['score']), 'inter-arm fold': 2 ** num(t['score']),
+        'inter-arm log2': np.log2(num(t['enrichment'])), 'inter-arm fold': num(t['enrichment']),
+        'inter-arm fold, detrended': num(t['detrended']),
         'reach Mb': num(t['reach']) / 1e6, 'arm Mb': num(t['armLength']) / 1e6,
-        'anti-diagonal log2, distance': log2_mean(r['oe_distance'], anti),
-        'anti-diagonal log2, arms': log2_mean(r['oe_arms'], anti),
+        'anti-diagonal log2, distance': out_to_reach(r['oe_distance'], r),
+        'anti-diagonal log2, arms': out_to_reach(r['oe_arms'], r),
         # |ρ|: an eigenvector's sign is GC content's to set, and arbitrary where it cannot.
         'E1 distance ~ ori |rho|': abs(stats.spearmanr(e1d, d, nan_policy='omit')[0]),
         'E1 arms ~ ori |rho|': abs(stats.spearmanr(e1, d, nan_policy='omit')[0]),
         'E1 distance share': num(next((row for row in r['components_distance']
-                                       if row.get('component') == 'E1'), {}).get('explained')),
-        'E1 arms share': num(top.get('explained')),
+                                       if row.get('component') == 'E1'), {}).get(SHARE)),
+        'E1 arms share': num(top.get(SHARE)),
         # The detrended E1 by the other method: how much the compartments depend on the choice.
         '|r| E1 arms, other method': abs(pearson(e1, r['e1_arms_other'])),
     }

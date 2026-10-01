@@ -1896,6 +1896,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Both notebooks render again against this `metacooler-run` (§18.8, §18.10, §23.1).** The DBZ
+  figures read the inter-arm table's log2 `score`, which has since become its *enrichment*, a fold,
+  with *enrichment after detrend* beside it, and E1's share from a column cooltools' method now
+  writes as *of contacts*; and they handed compartments `--contacts cis`, which a shell reads as the
+  number of contacts to draw the map to, and refuses. Their check on the secondary diagonal is the
+  task's reading again — each distance's mean, in log2, from the origin out to the reach — and lands
+  on the table's two folds to the three decimals they are written to. The validation notebook took
+  one from the peak list's starts and summits, which are written 0-based now as yapc writes them,
+  and read the BED's `#` line as a peak; yapc's 18,029 regions are again the app's, base for base.
+
 - **A bedMethyl lane names `e`, `g` and `b` as the SAM spec does (§8.20).** They were called 4mC,
   8oxoG and 4hmC; SAMtags §1.7 has them as 5fU, 5hmU and 5caU (8oxoG is `o`, and 4mC is ChEBI
   21839, with no letter). The lane now reads its names from the table a BAM's `MM` tag is read by, so
