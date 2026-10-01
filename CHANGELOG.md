@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Base modifications from a BAM's `MM`/`ML` tags (§8.13, §8.20).** A pile lane's *colour by* offers
+  *base modification*: the reads are drawn grey and each 5mC, 5hmC, 6mA or other call sits at its own
+  base, red where modified and blue where not, as opaque as the caller was sure — for the code chosen
+  from the ones the file's reads carry, at a probability threshold the reader sets. A hover on a call
+  names its code, probability and base, and a read's card counts its calls. The depth row can draw the
+  **percentage modified** instead, base by base, from the same reads under the same filters: a
+  bedMethyl made in the browser. Reverse-strand reads are counted on their sequence as read, `.` and
+  `?` modes are told apart, two codes on one base, ChEBI codes and the `N` wildcard are read, and
+  calls in soft clips and insertions are dropped. A simulated nanopore BAM over yeast chrIV is in
+  `demo/yeast/` to try it on.
+
 - **Every called set is drawn on the map and as a lane (§18.7, §8.1, §8.16).** Peaks, insulation's
   boundaries and domains, the DI's borders and domains, A/B compartments, Pattern detection's borders,
   origins, sites, flagged contigs and MAGs used to arrive as an overlay on the map only — beside a map a

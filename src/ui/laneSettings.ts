@@ -46,7 +46,9 @@ import {
 import { GENETIC_CODES } from '../annotations/codons'
 import { groupsFor } from '../annotations/bam/reads'
 import { COLORMAP_NAMES } from '../render/colormaps'
-import { readPalette } from '../render/alignments'
+import { MOD_INK, readPalette } from '../render/alignments'
+import { modLabel } from '../annotations/bam/basemods'
+import { modCodesOf, onModCodes } from './modCodes'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
 
@@ -431,6 +433,9 @@ const COLOUR_HINTS: Record<ColourBy, string> = {
   insert: 'Template length: pairs further apart than a normal library are picked out.',
   mate: 'Where the mate went — the same sequence, a different one, or nowhere.',
   mapq: 'Mapping quality, banded, so an ambiguous pile-up is visible as one.',
+  basemod:
+    'Modified bases from the reads’ MM/ML tags, each at its own position: red where the call is ' +
+    'modified, blue where it is not, fainter the less sure the caller was.',
   none: 'One colour, when the point is the shape of the pile rather than the reads in it.',
 }
 
@@ -476,8 +481,12 @@ function patchReads(
  * pairing describe a pile and mean nothing to a depth curve, and `splits` is
  * deliberately one-sided — see {@link splitsToggle}. Those three are not
  * offered on the depth row at all, so this list is the whole of the link.
+ *
+ * …and which base modification, at what threshold (§8.13): not about which
+ * reads count but about what is *measured* on them, and the pile's marks and
+ * the depth's percentage are one measurement read on two rows.
  */
-const LINKED = ['minMapq', 'hideDuplicates'] as const satisfies ReadonlyArray<keyof ReadStyle>
+const LINKED = ['minMapq', 'hideDuplicates', 'modCode', 'modThreshold'] as const satisfies ReadonlyArray<keyof ReadStyle>
 
 /** The same, for reading a control's current value back. */
 function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
@@ -508,7 +517,7 @@ export function colourByField(
   const reads = readsOf(entry.style)
   const select = el('select', { class: 'select' })
   for (const by of COLOUR_BY) {
-    select.appendChild(el('option', { value: by, text: by, title: COLOUR_HINTS[by] }))
+    select.appendChild(el('option', { value: by, text: COLOUR_NAMES[by] ?? by, title: COLOUR_HINTS[by] }))
   }
   select.value = reads.colourBy
   select.title = COLOUR_HINTS[reads.colourBy]
@@ -531,6 +540,9 @@ export function colourByField(
   })
   return field
 }
+
+/** What a colouring is called in the picker, where its value is not a word. */
+const COLOUR_NAMES: Partial<Record<ColourBy, string>> = { basemod: 'base modification' }
 
 /**
  * The key: which colour is which category.
@@ -555,6 +567,25 @@ export function colourLegend(entry: AnnotationEntry, by?: ColourBy): HTMLElement
 
 /** Redraw a key in place, for {@link colourByField}'s change handler. */
 export function fillLegend(host: HTMLElement, colour: string, by: ColourBy): void {
+  // The calls carry the colour under this one, not the reads, so the key is
+  // theirs — from the same two inks the lane paints them with.
+  if (by === 'basemod') {
+    host.replaceChildren(
+      ...([
+        ['modified', MOD_INK.modified],
+        ['unmodified', MOD_INK.unmodified],
+        ['fainter: less sure', MOD_INK.read],
+      ] as const).map(([name, ink]) =>
+        el(
+          'span',
+          { class: 'ann-key-item' },
+          el('span', { class: 'ann-key-chip', style: { background: ink } }),
+          el('span', { text: name }),
+        ),
+      ),
+    )
+    return
+  }
   const groups = groupsFor(by)
   // One category is not a key, it is a restatement of the lane's own colour.
   if (groups.length <= 1) {
@@ -741,6 +772,127 @@ export function sashimiField(store: AnnotationStore, entry: AnnotationEntry): HT
       el('span', { class: 'field-label', text: 'reads' }),
     ),
   )
+}
+
+/**
+ * Which base modification, and how sure a call must be (§8.13).
+ *
+ * On both of a BAM's rows and written through between them: the pile's marks
+ * and the depth's percentage are one measurement, and a 5mC pile beside a
+ * 5hmC fraction under one file's name would be two modifications read as one.
+ *
+ * The codes offered are the ones this file's reads have been seen to carry
+ * (`ui/modCodes.ts`), behind *most modified in view* — which is
+ * what an unset choice resolves to and the right first answer on a file with
+ * one modification, the common case. A code chosen and then panned away from
+ * stays offered, so the select never loses the value it shows.
+ */
+export function modField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', {
+    class: 'select',
+    title: 'Which modification the calls are drawn for, and the fraction is of.',
+  })
+  const codesHere = (): string[] => {
+    const live = store.byId(entry.id) ?? entry
+    const own = modCodesOf(live.id)
+    const partner = live.partner === undefined ? [] : modCodesOf(live.partner)
+    return [...new Set([...own, ...partner])]
+  }
+  const fill = (): void => {
+    const chosen = liveReads(store, entry).modCode
+    const codes = codesHere()
+    if (chosen !== '' && !codes.includes(chosen)) codes.push(chosen)
+    select.replaceChildren(
+      el('option', { value: '', text: 'most modified in view' }),
+      ...codes.map((code) => el('option', { value: code, text: modLabel(code) })),
+    )
+    select.value = chosen
+  }
+  fill()
+  const stop = onModCodes((id) => {
+    // A card rebuilt is a new select; the old one's listener goes with it.
+    if (!select.isConnected) {
+      stop()
+      return
+    }
+    const live = store.byId(entry.id) ?? entry
+    if (id !== live.id && id !== live.partner) return
+    // Not while it is open or focused: re-filling a select under the reader's
+    // hand closes it.
+    if (document.activeElement === select) return
+    fill()
+  })
+  select.addEventListener('change', () => patchReads(store, entry, { modCode: select.value }))
+
+  const box = el('input', {
+    class: 'input input-num ann-size',
+    type: 'number',
+    value: String(reads.modThreshold),
+    title:
+      'How sure a call must be. At or above this it is modified; at or below one minus it, ' +
+      'unmodified; between, it is neither drawn nor counted. 0.5 counts every call.',
+  })
+  box.min = '0.5'
+  box.max = '1'
+  box.step = '0.05'
+  box.addEventListener('change', () => {
+    const raw = box.value.trim()
+    const typed = raw === '' ? Number.NaN : Number(raw)
+    if (!Number.isFinite(typed)) {
+      box.value = String(liveReads(store, entry).modThreshold)
+      return
+    }
+    const clamped = Math.max(0.5, Math.min(1, typed))
+    box.value = String(clamped)
+    patchReads(store, entry, { modThreshold: clamped })
+  })
+  return el(
+    'div',
+    { class: 'ann-inline' },
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'modification' }),
+      select,
+    ),
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'p ≥' }),
+      box,
+    ),
+  )
+}
+
+/**
+ * Draw a BAM's depth row as the percentage of calls modified instead (§8.13,
+ * §8.20): a bedMethyl's picture, made from the reads under the same filters
+ * as the depth. The depth row's alone, like its arcs — it is about what that
+ * row draws — and it brings the modification picker with it, since the
+ * percentage is of one code.
+ */
+export function modFractionField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).modFraction
+  const chip = button(
+    '% modified',
+    () => patchReads(store, entry, { modFraction: !liveReads(store, entry).modFraction }),
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Draw this row as the percentage of the reads’ modification calls that are modified, at ' +
+        'each base — what a bedMethyl from modkit would show — instead of depth. From the MM/ML ' +
+        'tags; nothing is drawn for a file without them.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  const block = el(
+    'div',
+    { class: 'field field-block' },
+    el('span', { class: 'field-label', text: 'base modifications' }),
+    el('div', { class: 'ann-chips' }, chip),
+  )
+  return on ? el('div', { class: 'ann-mods' }, block, modField(store, entry)) : block
 }
 
 /**

@@ -67,6 +67,7 @@ node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circ
 node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
 node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
+node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -368,3 +369,12 @@ zoom in. Then one window in the standard code and in table 4, printing where its
 reds that turn to `W` can be checked against them, a reload that must bring the frames and table 4
 back, and the dark theme (the whole page, then the ticks). Run it after any change to
 `render/frames.ts`, `annotations/codons.ts`, or how the browser lays out a sequence lane.
+`scripts/ui-basemods.mjs` drives **base modifications from `MM`/`ML`** (§8.13) on the yeast demo's
+chromosome IV, from a session with its sequence and genes that it writes to `demo/yeast/` and removes,
+with the simulated nanopore BAM `scripts/make-basemods-demo.mjs` wrote dropped on it beside its index.
+It colours the pile by base modification and shoots the card with its key and the modification picker,
+the reads by 5mC across UTP5 — the two nearly bare promoters are the blue bands — and closer, a hover
+on the first strong red call (found by its colour) and the card its read opens, 5hmC and 6mA picked,
+the depth row turned into *% modified* with its card and drawn as points up close, a 0.9 threshold,
+and the dark theme. It prints the rows, the picker's options, the hovers and the read card. Run it
+after any change to `annotations/bam/basemods.ts`, the pile's colourings or the depth's road.

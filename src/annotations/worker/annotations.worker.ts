@@ -29,7 +29,7 @@ import { g3dBinaryNote, isG3dBinary, readG3dHeader, readG3dModel, type G3dHeader
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
 import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
-import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
+import { coverageOf, DEFAULT_FILTER, type ModTally, type PileFilter } from '../bam/pile'
 import { pileOf } from '../bam/reads'
 import {
   IntervalTrack,
@@ -3060,10 +3060,18 @@ async function alignmentSamples(
   const out: TrackSamples[] = []
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
+  // The row drawn as a fraction modified (§8.13): the calls are tallied on the
+  // depth's own pass, and every region's tally is kept until the end, because
+  // an unset code is resolved over the whole answer — two regions of one view
+  // naming two different modifications would be one lane drawing two things.
+  const fraction = style?.modFraction === true
+  const tallies: ModTally[] = []
   for (const plan of plans) {
     const span = plan.region.end - plan.region.start
     const bins = Math.max(1, Math.min(4096, Math.round(span / Math.max(1, basesPerPixel))))
     const depth = new Float64Array(bins)
+    const tally: ModTally = new Map()
+    tallies.push(tally)
     // Residues for this window, if some FASTA in this worker happens to hold
     // them — the same free source the pile's mismatches use. Only below
     // `VARIANT_BELOW`: finding the disagreements is a walk over every aligned
@@ -3095,6 +3103,7 @@ async function alignmentSamples(
         filterOf(style),
         reference,
         introns,
+        fraction ? { tally, threshold: style.modThreshold } : undefined,
       )
       // Summed across spans rather than concatenated: a read overlapping the
       // window may live in any of them, and the bins are the same bins.
@@ -3135,6 +3144,8 @@ async function alignmentSamples(
     })
   }
 
+  if (fraction) return asModFraction(basesPerPixel, out, tallies, style.modCode)
+
   return {
     basesPerPixel,
     regions: out,
@@ -3152,6 +3163,59 @@ async function alignmentSamples(
     // one to `resolveLimits` is how a lane ends up rescaled to nothing the
     // moment a reader pans across an empty contig.
     extent: min <= max && max > 0 ? { min: 0, max } : null,
+  }
+}
+
+/**
+ * The depth's answer turned into the percentage of calls modified, per bin.
+ *
+ * A bin with no call in it is `NaN` — a gap, not a zero: a stretch with no
+ * cytosine in it has no methylation level, and drawing one at the baseline
+ * would say it was unmethylated. The axis is fixed at 0–100, which is what a
+ * bedMethyl lane's percentages are read against; the arcs and the mismatch
+ * share are dropped, both being drawn against a depth this row no longer shows.
+ */
+function asModFraction(
+  basesPerPixel: number,
+  regions: TrackSamples[],
+  tallies: ModTally[],
+  asked: string,
+): TrackSampleSet {
+  // Ranked by modified calls and then by all of them, as the pile ranks its
+  // codes (`bam/reads.ts`): a `.` group's implicit calls on every base it
+  // steps over must not make the commonest base the default modification.
+  const totals = new Map<string, [number, number]>()
+  for (const tally of tallies) {
+    for (const [code, row] of tally) {
+      const held = totals.get(code) ?? [0, 0]
+      held[0] += row.modified.reduce((sum, one) => sum + one, 0)
+      held[1] += row.calls.reduce((sum, one) => sum + one, 0)
+      totals.set(code, held)
+    }
+  }
+  const codes = [...totals.entries()]
+    .sort((a, b) => b[1][0] - a[1][0] || b[1][1] - a[1][1])
+    .map(([code]) => code)
+  const code = asked !== '' ? asked : (codes[0] ?? '')
+  let any = false
+  const out = regions.map((region, at) => {
+    const row = tallies[at].get(code)
+    const values = new Float32Array(region.values.length).fill(Number.NaN)
+    if (row !== undefined) {
+      for (let i = 0; i < values.length; i++) {
+        if (row.calls[i] <= 0) continue
+        values[i] = (100 * row.modified[i]) / row.calls[i]
+        any = true
+      }
+    }
+    return { ...region, values, variant: null, junctions: undefined }
+  })
+  return {
+    basesPerPixel,
+    regions: out,
+    extent: any ? { min: 0, max: 100 } : null,
+    mods: { code, codes },
+    ...(codes.length === 0 ? { note: 'no MM/ML modification calls here' } : {}),
   }
 }
 

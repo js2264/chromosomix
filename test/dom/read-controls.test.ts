@@ -31,8 +31,11 @@ import {
   duplicatesToggle,
   heightField,
   mapqField,
+  modField,
+  modFractionField,
   splitsToggle,
 } from '@/ui/laneSettings'
+import { noteModCodes } from '@/ui/modCodes'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 /** Two controls in one container, since the two switches are now two functions. */
@@ -119,6 +122,7 @@ describe('colour by', () => {
       'insert',
       'mate',
       'mapq',
+      'basemod',
       'none',
     ])
     expect(select.value).toBe('strand')
@@ -329,6 +333,56 @@ describe('the two rows a BAM imports as', () => {
       colourBy: 'strand',
       splits: false,
     })
+  })
+
+  it('carries the modification and its threshold across, and keeps % modified to the depth', () => {
+    // The pile's marks and the depth's percentage are one measurement (§8.13):
+    // two codes under one file's name would read as one.
+    const bam = makePair()
+    noteModCodes('bam-pile', ['m', 'h'])
+    const field = modField(bam.store, bam.pile)
+    document.body.append(field)
+    const select = field.querySelector('select') as HTMLSelectElement
+    expect([...select.options].map((option) => option.value)).toEqual(['', 'm', 'h'])
+    select.value = 'h'
+    select.dispatchEvent(new Event('change'))
+    const box = field.querySelector('input') as HTMLInputElement
+    box.value = '0.8'
+    box.dispatchEvent(new Event('change'))
+    for (const id of ['bam-depth', 'bam-pile']) {
+      expect(readsOf(bam.store.byId(id)!.style)).toMatchObject({ modCode: 'h', modThreshold: 0.8 })
+    }
+
+    const chip = modFractionField(bam.store, bam.depth).querySelector('button') as HTMLButtonElement
+    document.body.append(chip)
+    chip.click()
+    expect(readsOf(bam.store.byId('bam-depth')!.style).modFraction).toBe(true)
+    expect(readsOf(bam.store.byId('bam-pile')!.style).modFraction).toBe(false)
+  })
+
+  it('offers the codes either row has met, and grows as the reads show more', () => {
+    const bam = makePair()
+    const field = modField(bam.store, bam.depth)
+    document.body.append(field)
+    const select = field.querySelector('select') as HTMLSelectElement
+    // The registry is the session's, and these rows' ids are every test's.
+    const before = [...select.options].map((option) => option.textContent)
+    expect(before[0]).toBe('most modified in view')
+    expect(before).not.toContain('4mC (21839)')
+    // Met on the *pile*, offered on the depth: the two rows are one file.
+    noteModCodes('bam-pile', ['21839'])
+    expect([...select.options].map((option) => option.textContent)).toEqual([...before, '4mC (21839)'])
+  })
+
+  it('clamps a threshold typed out of range', () => {
+    const bam = makePair()
+    const field = modField(bam.store, bam.pile)
+    document.body.append(field)
+    const box = field.querySelector('input') as HTMLInputElement
+    box.value = '0.2'
+    box.dispatchEvent(new Event('change'))
+    expect(box.value).toBe('0.5')
+    expect(readsOf(bam.store.byId('bam-pile')!.style).modThreshold).toBe(0.5)
   })
 
   it('writes only its own row once the other has been closed', () => {

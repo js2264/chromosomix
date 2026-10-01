@@ -32,7 +32,7 @@
  */
 
 import { BASE_CODE } from '../fasta'
-import type { ColourBy, ReadPile } from '../types'
+import type { ColourBy, PileMods, ReadPile } from '../types'
 import {
   consumesQuery,
   consumesReference,
@@ -44,6 +44,7 @@ import {
   type RecordCursor,
 } from './format'
 import type { PileFilter } from './pile'
+import { recordModCalls, type PlacedCall } from './basemods'
 
 /** What a caller wants out of a window. */
 export interface PileOptions {
@@ -214,6 +215,8 @@ interface Held {
   diffBase: number[]
   fromMd: boolean
   fromCigar: boolean
+  /** Its base-modification calls, where the pile is coloured by them; `null` otherwise. */
+  mods: PlacedCall[] | null
 }
 
 function read(
@@ -272,6 +275,9 @@ function read(
     diffBase: diffs.base,
     fromMd: diffs.fromMd,
     fromCigar: diffs.fromCigar,
+    // Only when asked: the tag walk is cheap but unpacking SEQ for every read
+    // of a window is not, and nothing else here needs the bases.
+    mods: options.colourBy === 'basemod' ? recordModCalls(bytes, cursor, ops) : null,
   }
 }
 
@@ -523,6 +529,10 @@ export function groupsFor(by: ColourBy): string[] {
       return ['unpaired', 'mate unmapped', 'same sequence', 'another sequence']
     case 'insert':
       return ['unpaired', 'ordinary insert', `insert > ${LARGE_INSERT}`]
+    case 'basemod':
+      // One category: the reads are drawn plain and the calls on them carry
+      // the colour (§8.13), so the key is the calls' and not the reads'.
+      return ['reads']
     default:
       return ['reads']
   }
@@ -604,12 +614,60 @@ function pack(
   }
   pile.opAt[length] = ops
   pile.diffAt[length] = diffs
+  if (options.colourBy === 'basemod') pile.mods = packMods(held)
 
   for (let i = 0; i < length; i++) pile.group[i] = categoryOf(held[i], options.colourBy, refId)
 
   nameMates(pile, refId, contig, options)
   joinMates(pile, held)
   return pile
+}
+
+/**
+ * Flatten every read's modification calls into the pile's {@link PileMods}.
+ *
+ * Codes are numbered by how many modified calls each has in the window, most first,
+ * so `codes[0]` is what an unset choice of modification resolves to — the
+ * same answer the lane, its key and its readout then all give.
+ */
+function packMods(held: Held[]): PileMods {
+  // [modified calls, all calls] per code: ranked by the first and then the
+  // second, so a code with no modified call anywhere still has a place.
+  const tally = new Map<string, [number, number]>()
+  let total = 0
+  for (const one of held) {
+    for (const call of one.mods ?? []) {
+      const counted = tally.get(call.code) ?? [0, 0]
+      if (call.prob >= 128) counted[0]++
+      counted[1]++
+      tally.set(call.code, counted)
+      total++
+    }
+  }
+  const ranked = [...tally.entries()].sort(
+    (a, b) => b[1][0] - a[1][0] || b[1][1] - a[1][1] || (a[0] < b[0] ? -1 : 1),
+  )
+  const index = new Map(ranked.map(([code], at) => [code, at]))
+  const out: PileMods = {
+    at: new Int32Array(held.length + 1),
+    pos: new Int32Array(total),
+    code: new Uint8Array(total),
+    prob: new Uint8Array(total),
+    codes: ranked.map(([code]) => code),
+    counts: ranked.map(([, [modified]]) => modified),
+  }
+  let at = 0
+  for (let i = 0; i < held.length; i++) {
+    out.at[i] = at
+    for (const call of held[i].mods ?? []) {
+      out.pos[at] = call.pos
+      out.code[at] = index.get(call.code) ?? 0
+      out.prob[at] = call.prob
+      at++
+    }
+  }
+  out.at[held.length] = at
+  return out
 }
 
 /**

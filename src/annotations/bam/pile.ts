@@ -46,6 +46,14 @@ import {
   type RecordCursor,
 } from './format'
 import { BASE_CODE } from '../fasta'
+import { modStateOf, recordModCalls } from './basemods'
+
+/**
+ * Base-modification calls per bin, per code: what a depth row drawn as a
+ * fraction modified is made of (§8.13). `calls` counts the calls that cleared
+ * the threshold either way; `modified` the ones that cleared it upwards.
+ */
+export type ModTally = Map<string, { calls: Float64Array; modified: Float64Array }>
 
 /** Which records a pass counts. */
 export interface PileFilter {
@@ -113,6 +121,13 @@ export function coverageOf(
    * `start:end:strand`; absent counts nothing.
    */
   introns?: Map<string, number>,
+  /**
+   * Where to tally the counted reads' modification calls, and the threshold a
+   * call must clear (§8.13): the same pass and the same filter as the depth,
+   * so a percentage is never made from reads the depth left out. Each call
+   * lands in the bin its reference position is in. Absent reads no tag.
+   */
+  mods?: { tally: ModTally; threshold: number },
 ): CoverageResult {
   const span = end - start
   if (bins <= 0 || span <= 0) {
@@ -158,6 +173,21 @@ export function coverageOf(
         const key = `${from}:${to}:${strand}`
         introns.set(key, (introns.get(key) ?? 0) + 1)
       })
+    }
+    if (mods !== undefined) {
+      for (const call of recordModCalls(bytes, cursor)) {
+        if (call.pos < start || call.pos >= end) continue
+        const state = modStateOf(call.prob, mods.threshold)
+        if (state < 0) continue
+        let row = mods.tally.get(call.code)
+        if (row === undefined) {
+          row = { calls: new Float64Array(bins), modified: new Float64Array(bins) }
+          mods.tally.set(call.code, row)
+        }
+        const bin = Math.min(bins - 1, Math.floor((call.pos - start) / binWidth))
+        row.calls[bin]++
+        if (state === 1) row.modified[bin]++
+      }
     }
     if (reference === undefined || varPartial === null || varWhole === null) return
     eachMismatch(bytes, cursor, reference, (at) => {

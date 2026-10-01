@@ -3324,7 +3324,7 @@ A `.bam` opens as a lane, and it is the first kind here that arrives with a rule
 to it (§1). Everything below is that rule and what follows from it.
 
 **What is built is the reader, the depth track and the pile of reads**, with their controls, the
-per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
+per-read card, mates and split reads drawn, and base modifications from the reads' `MM`/`ML` tags. What is deliberately absent is listed at the end of
 this section, each with its own reason.
 
 **A BAM is read by region and nothing else**: there is no zoom level in the file, no summary layer,
@@ -3389,7 +3389,8 @@ needed no case for either.
 What has to be paid for that is one link. The two rows point at each other, and everything that is
 about *which reads count* — the mapping-quality floor and the duplicate switch — is written through
 to both: a floor applied to the pile and not to the depth beside it is two pictures of two different
-files under one name, and nothing on screen would say so. How the pile is *drawn* — the colouring,
+files under one name, and nothing on screen would say so. The modification code and its threshold
+are written through for the same reason (below). How the pile is *drawn* — the colouring,
 the pair layout, the split-read switch — is the pile's alone, because none of it means anything to a
 curve; and the arcs drawn over the depth, with their floor, are the depth's alone (§8.23). Closing one
 row clears the other's link, so a write-through cannot chase a row that has gone.
@@ -3599,6 +3600,56 @@ sixteen bits of every offset, deliberately and for a reason that holds there —
 whole `FeatureSet` and draws the visible part (§8.4). A contig's worth of BAM cannot work that way,
 so `annotations/bam/index.ts` keeps bin-level chunks, both halves of every offset, the linear index
 and the forecast.
+
+**Base modifications are read from the reads' own `MM` and `ML` tags** (SAMtags §1.7) — what a
+nanopore or PacBio basecaller writes beside every read, and the file `modkit pileup` turns into the
+bedMethyl of §8.20. `MM` lists groups of a canonical base, a strand, one or more codes (`m` 5mC, `h`
+5hmC, `a` 6mA, letters run together as `mh`, or one ChEBI number; `N` for any base) and skip counts
+over that base; `ML` carries one byte per call, in the groups' order and position by position inside
+a group with two codes, read as the probability `(p + 0.5) / 256`. Both draft spellings, `Mm` and
+`Ml`, are read too, because the first basecallers to write the tags wrote those and the files are
+still about. Three readings are the ones a decoder gets wrong without anything erroring, and each is
+pinned by a test: the skips are counted on the read **as it was sequenced** — the reverse complement
+of SEQ for a reverse-strand alignment, so a reverse read's 5mC calls land on the CpG's G — and the
+`MM` letter is matched there whatever the strand sign says (htslib's reading of `G-m`); the **mode**
+decides what an unlisted base means — under `.`, or no mode, every base a group steps over and every
+base after its last skip is an unmodified call, and under `?` it is nothing — so a fraction computed
+without the difference reports a 5 % site as 100 % on any file written with `?`; and a call is placed
+on the reference through the CIGAR, so one in a soft clip or an insertion has no column and is
+dropped, and a deletion moves on past bases the read does not have. A record whose tags do not fit
+its own sequence — skips running off the end, an `ML` shorter than the calls, an `MN` that is not the
+length of SEQ because the tags outlived a hard clip — yields no calls at all, since a partial reading
+of it would be calls on the wrong bases.
+
+**On the pile, *colour by → base modification*** draws the reads plain grey and each call of one code
+at its base: red where the call is modified, blue where it is not, as opaque as the caller was sure —
+a sixth at a call that only just cleared the threshold, whole at a certain one — and at least two
+pixels wide, so the calls are visible at the zoom where reads first are. Which code is a select under
+the colouring, listing the codes this file's reads have been seen to carry and, first, *most modified
+in view*: the code with most calls at `p ≥ ½` in the window. Ranked by those rather than by all
+calls, because a `.` group makes an implicit call on every base it steps over — a file with `A+a.`
+has a call on every adenine — and ranking by those would choose 6mA on a file that is about 5mC. The
+**threshold** is two-sided, as modkit's is: modified at or above it, unmodified at or below one minus
+it, and between the two a call is neither drawn nor counted; `0.5`, the default, counts every call.
+The mismatch marks are not drawn under this colouring, because they are coloured by base and a red
+`T` a column from a red 5mC would be one ink making two claims. The pile is fetched with the calls
+only under this colouring — the tag walk is cheap, unpacking every read's sequence is not — so
+choosing it refetches like any colouring, and choosing a code or a threshold does not. A hover on a
+call says its code, its probability, its base and which side of the threshold it fell, with every
+other code's call at that base under it; the read's card counts its calls per code.
+
+**On the depth row, *% modified*** draws the row as the percentage of calls of that code that are
+modified, at each base or bin — a bedMethyl's picture made from the reads, on the depth's own pass and
+under the depth's own filters, so the percentage never stands on reads the pile beside it left out. A
+bin with no call is a gap rather than a zero, the axis is 0–100, the arcs and the mismatch share are
+not drawn over it, and the row's name says what it is the percentage of. The code and the threshold
+are **written through** between the two rows, like the filters: the pile's marks and the percentage
+beside them are one measurement, and two codes under one file's name would read as one. That puts
+them in the depth's cache key while the row draws the percentage, and only then — so trying codes on
+the pile with the switch off costs the depth nothing. It is a switch on the row rather than a third
+row because a BAM's rows are made once, at import (above), and this is a different reading of the
+same count the depth row already makes; a reader who wants the depth and the percentage at once has
+one row too few for that, which is a limit.
 
 **Not built, and each for its own reason.** No **mate fetching**: a mate lives at `PNEXT`, which is
 off-screen by definition for anything but a short insert, so following them is one uncoalescable
@@ -4509,6 +4560,11 @@ one lane with nothing overlapping. A file written with `--combine-strands` has a
 choice. A row whose depth is zero is dropped rather than drawn as `0 %`, which would put a floor of
 confident zeroes under every uncovered base in the genome, and a file of nothing else is refused,
 having no measurement to draw.
+
+The same picture can be made from the **reads**, where the file is a BAM carrying `MM`/`ML` tags
+rather than the pileup of one: its depth row's *% modified* (§8.13) is this lane's percentage counted
+from the reads in view, one code at a time, at a threshold the reader sets. It answers the question
+before `modkit pileup` has been run, and over a window rather than a genome.
 
 A **`bigMethyl`** is this in a bigBed, and is the format that most needs its schema asked: its first
 nine columns *are* a valid BED9, so §8.7 produces a lane that looks entirely correct — one box per

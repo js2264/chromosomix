@@ -53,6 +53,8 @@ import {
   rowsAcross,
   type PileLayout,
   drawReads,
+  MOD_INK,
+  modsNear,
   pileDetail,
   READ_ROW,
   READ_ROW_GAP,
@@ -193,6 +195,8 @@ import { LaneEditor } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import { openReadDialog } from './ReadDialog'
+import { noteModCodes } from './modCodes'
+import { modLabel, modName, modStateOf } from '../annotations/bam/basemods'
 import { FLAG } from '../annotations/bam/format'
 import {
   NAME_COLUMN_DEFAULT,
@@ -407,7 +411,13 @@ interface Lane {
    * The value tracks drawn in this lane — and, for a BAM's depth, the introns
    * its reads skipped in the same window, for the arcs drawn over it (§8.23).
    */
-  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile; junctions?: FeatureSet | null }>
+  profiles: Array<{
+    entry: AnnotationEntry
+    profile: PixelProfile
+    junctions?: FeatureSet | null
+    /** A BAM's depth drawn as a fraction modified: the code it is of (§8.13). */
+    modCode?: string
+  }>
   /**
    * Residues to draw, for a FASTA zoomed in far enough to show them.
    *
@@ -580,7 +590,7 @@ export class BrowserView {
    */
   private readonly piled = new Map<
     string,
-    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[] }
+    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[]; entry: AnnotationEntry }
   >()
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
@@ -2370,9 +2380,14 @@ export class BrowserView {
     // measure the second of these, and three expressions of one split is how
     // they came to disagree (§8.4).
     const [, pile] = pileBands(lane.frame, this.nameBand())
-    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
+    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed, entry })
 
-    const colours = readColoursFor(row.window, style.colour)
+    // Coloured by base modification, the reads are a plain grey and the calls
+    // on them carry the colour (§8.13) — of the code chosen, or of the one the
+    // window holds most modified calls of.
+    const mods = reads.colourBy === 'basemod' ? windowMods(row.window, reads.modCode) : null
+    if (mods !== null) noteModCodes(entry.id, mods.codes)
+    const colours = mods !== null ? [MOD_INK.read] : readColoursFor(row.window, style.colour)
     for (let i = 0; i < row.window.piles.length; i++) {
       const placed = row.placed[i]
       if (placed === undefined) continue
@@ -2385,13 +2400,21 @@ export class BrowserView {
         opacity: style.opacity,
         font: scaleFont(LANE_FONT),
         guideColour: palette.labelColor,
+        ...(mods === null ? {} : { mods: { code: mods.code, threshold: reads.modThreshold } }),
       }, row.rung)
     }
 
     if (!this.text) return null
     return {
       entries: [entry],
-      detail: { kind: 'text', text: pileDetail(row.window, row.placed) },
+      detail: {
+        kind: 'text',
+        text: pileDetail(
+          row.window,
+          row.placed,
+          mods === null ? undefined : { label: modName(mods.code), calls: mods.calls },
+        ),
+      },
       at: 'near',
     }
   }
@@ -2527,7 +2550,7 @@ export class BrowserView {
           // the label belongs to this frame's picture and not to the file — and
           // the spelling is `laneLabelOf`'s, so the lane, the hover card and the
           // status line say one thing (§8.8). They said three.
-          entries: lane.profiles.map((row) => ({ ...row.entry, label: laneLabelOf(row.entry) })),
+          entries: lane.profiles.map((row) => ({ ...row.entry, label: laneLabelOf(row.entry, row.modCode) })),
           // A note wins the detail line. It is only ever set where the lane
           // drew *nothing* (§8.13) — a window of alignments too deep to read at
           // this width — and a pair of limits under an empty lane would be
@@ -3060,10 +3083,13 @@ export class BrowserView {
           ? { reads: readsOf(member.style), reference: this.referenceKey() }
           : {}),
       })
+      // The codes a fraction-modified depth met, for the card's picker.
+      if (samples?.mods !== undefined) noteModCodes(member.id, samples.mods.codes)
       lane.profiles.push({
         entry: member,
         profile: profileOf(lane.frame, this.trackAxis, samples, scaleOf(member.style)),
         ...(member.kind === 'alignments' ? { junctions: junctionsOfSamples(samples) } : {}),
+        ...(samples?.mods === undefined ? {} : { modCode: samples.mods.code }),
       })
       lane.pending = this.cache.pendingOf(member.id, 'browser') ?? lane.pending
     }
@@ -4178,7 +4204,7 @@ export class BrowserView {
   private readAtPoint(
     x: number,
     y: number,
-  ): { pile: ReadPile; index: number; source: string } | null {
+  ): { pile: ReadPile; index: number; source: string; entry: AnnotationEntry } | null {
     for (const lane of this.lanes) {
       const band = this.piled.get(lane.entry.id)
       if (band === undefined) continue
@@ -4189,7 +4215,7 @@ export class BrowserView {
         const placed = band.placed[i]
         if (placed === undefined) continue
         const at = readAt(band.frame, this.trackAxis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
-        if (at !== null) return { pile, index: at, source: lane.entry.label }
+        if (at !== null) return { pile, index: at, source: lane.entry.label, entry: band.entry }
       }
     }
     return null
@@ -4320,7 +4346,7 @@ export class BrowserView {
       (lane) => y >= lane.frame.acrossFrom && y <= lane.frame.acrossFrom + lane.frame.thickness,
     )
     for (const lane of this.lanes) {
-      for (const { entry, profile } of lane.profiles) {
+      for (const { entry, profile, modCode } of lane.profiles) {
         const slot = Math.round(x) - profile.from
         const value = slot >= 0 && slot < profile.mean.length ? profile.mean[slot] : Number.NaN
         const text = Number.isNaN(value) ? '—' : fmt.num(value)
@@ -4339,13 +4365,13 @@ export class BrowserView {
               // bare `sequence: 0.412`, which is a value between nought and one
               // under a word that does not say what was measured — the exact
               // argument the lane label's suffix was added for (§8.8).
-              text: `${laneLabelOf(entry)}:`,
+              text: `${laneLabelOf(entry, modCode)}:`,
               style: { color: entry.style.colour },
             }),
             el('span', { class: 'cell-tip-val', text }),
           ),
         )
-        parts.push(`${laneLabelOf(entry)} ${text}`)
+        parts.push(`${laneLabelOf(entry, modCode)} ${text}`)
       }
       // …and the base under the pointer, where a lane is showing them. The one
       // readout in this view that is a letter rather than a number, and the
@@ -4412,6 +4438,38 @@ export class BrowserView {
           text: `${name === '' ? 'read' : name}   ${formatLocus({ contig: pile.contig, start: pile.refStart[index], end: pile.refEnd[index] })} (${strand})`,
         })),
       )
+      // The modification call under the pointer, where the pile is coloured
+      // by them (§8.13): its code, how sure the caller was and where — within
+      // a few pixels, since a call is one base wide.
+      const band = this.piled.get(read.entry.id)
+      const reads = band === undefined ? null : readsOf(band.entry.style)
+      if (reads !== null && reads.colourBy === 'basemod' && inFile !== null && band !== undefined) {
+        const perPixel = (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels)
+        const chosen = windowMods(band.window, reads.modCode)
+        const calls =
+          chosen === null
+            ? []
+            : modsNear(pile, index, inFile.bp, Math.max(0.5, 3 * perPixel * this.axisBpPerUnit(pile.contig)), chosen.code)
+        for (const call of calls) {
+          const state = modStateOf(call.byte, reads.modThreshold)
+          const verdict = state === 1 ? 'modified' : state === 0 ? 'unmodified' : 'below the threshold'
+          const drawn = chosen !== null && call.code === chosen.code
+          rows.push(
+            el('div', { class: `cell-tip-row${drawn ? ' is-here' : ''}` },
+              el('span', {
+                class: 'cell-tip-chip',
+                style: { background: state === 1 ? MOD_INK.modified : state === 0 ? MOD_INK.unmodified : MOD_INK.read },
+              }),
+              el('span', {
+                class: 'cell-tip-key',
+                // One base, 1-based, as every position a reader reads is.
+                text: `${modLabel(call.code)}  p = ${call.prob.toFixed(3)}  ${pile.contig}:${fmt.int(call.pos + 1)} · ${verdict}`,
+              }),
+            ),
+          )
+          parts.push(`${modName(call.code)} p=${call.prob.toFixed(3)}`)
+        }
+      }
       rows.push(
         el('div', { class: 'cell-tip-row' }, el('span', {
           class: 'hint',
@@ -4785,3 +4843,29 @@ const CAPTION_FONT_PDF = '10px Helvetica, sans-serif'
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220
+
+/**
+ * The base-modification code a window's pile is drawn for, and the codes in it.
+ *
+ * `asked` where the reader chose one; otherwise the code with the most modified calls
+ * across every pile of the window — each pile numbers its own codes, so they
+ * are summed by name. `null` for a window fetched under another colouring,
+ * which carries no calls at all.
+ */
+function windowMods(
+  window: ReadWindow,
+  asked: string,
+): { code: string; codes: string[]; calls: number } | null {
+  const totals = new Map<string, number>()
+  let carried = false
+  for (const pile of window.piles) {
+    const mods = pile.mods
+    if (mods === undefined) continue
+    carried = true
+    mods.codes.forEach((code, at) => totals.set(code, (totals.get(code) ?? 0) + mods.counts[at]))
+  }
+  if (!carried) return null
+  const codes = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code)
+  const code = asked !== '' ? asked : (codes[0] ?? '')
+  return { code, codes, calls: totals.get(code) ?? 0 }
+}

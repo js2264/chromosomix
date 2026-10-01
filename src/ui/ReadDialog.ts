@@ -20,6 +20,7 @@
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { CIGAR_OPS, FLAG } from '../annotations/bam/format'
 import type { ReadPile } from '../annotations/types'
+import { modLabel } from '../annotations/bam/basemods'
 import { Modal } from './Modal'
 import { el, fmt } from './dom'
 import { icon } from './icons'
@@ -121,6 +122,24 @@ function diffCount(pile: ReadPile, at: number): number {
   return pile.diffAt[at + 1] - pile.diffAt[at]
 }
 
+/** `5mC (m) 41 calls, 30 modified · 5hmC (h) 41 calls, 2 modified`, or `''`. */
+function modSummary(pile: ReadPile, at: number): string {
+  const mods = pile.mods
+  if (mods === undefined) return ''
+  const calls = new Map<number, [number, number]>()
+  for (let k = mods.at[at]; k < mods.at[at + 1]; k++) {
+    const held = calls.get(mods.code[k]) ?? [0, 0]
+    held[0]++
+    if (mods.prob[k] >= 128) held[1]++
+    calls.set(mods.code[k], held)
+  }
+  if (calls.size === 0) return 'none in its MM/ML tags'
+  return [...calls.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([code, [n, modified]]) => `${modLabel(mods.codes[code] ?? '')} ${fmt.int(n)} calls, ${fmt.int(modified)} modified`)
+    .join(' · ')
+}
+
 /** Open the card. Returns the modal so the caller can hold and dismiss it. */
 export function openReadDialog(props: ReadDialogProps): Modal {
   const { pile, index: at } = props
@@ -170,6 +189,13 @@ export function openReadDialog(props: ReadDialogProps): Modal {
 
       const diffs = diffCount(pile, at)
       if (diffs > 0) rows.push(row('mismatches', String(diffs)))
+
+      // The read's modification calls, by code, where the pile carries them
+      // (§8.13): how many bases each was called on and how many of those
+      // cleared one half — the threshold-free count, since the card is about
+      // the record and the lane's threshold is a reading of it.
+      const mods = modSummary(pile, at)
+      if (mods !== '') rows.push(row('modifications', mods))
 
       // Which category this read was coloured as. Worth a row: the colouring is
       // a control the reader set, and a card that showed the read without

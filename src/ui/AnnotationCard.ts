@@ -30,8 +30,8 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import { hasTrackControls, isIntervalSet, readsAlignments, searchesByName } from '../annotations/types'
-import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
+import { hasTrackControls, isIntervalSet, readsAlignments, readsOf, searchesByName } from '../annotations/types'
+import type { AnnotationEntry, ColourBy, ContigOverlap } from '../annotations/types'
 import { OVERLAY_DRAG_TYPE, TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
@@ -68,6 +68,8 @@ import {
   layoutField,
   limitsField,
   mapqField,
+  modField,
+  modFractionField,
   modeField,
   radiusField,
   shapeField,
@@ -1136,7 +1138,9 @@ export class AnnotationCard {
     // …and the depth's own arcs, the sashimi plot (§8.23): drawn over the
     // curve, so the depth row has them and the pile does not — its reads draw
     // their gaps themselves.
-    if (entry.kind === 'alignments') out.push(sashimiField(this.props.store, entry))
+    if (entry.kind === 'alignments') {
+      out.push(sashimiField(this.props.store, entry), modFractionField(this.props.store, entry))
+    }
     // …and how the pile is drawn, which only the pile has. A colouring and a
     // pairing mean nothing to a depth curve, so they are not offered on the row
     // that draws one.
@@ -1146,16 +1150,26 @@ export class AnnotationCard {
       // defers its own rebuild while a control holds focus, and the lane does
       // not.
       const key = colourLegend(entry)
+      // …and, under a colouring by base modification, which one and how sure
+      // (§8.13). In a slot filled from the picker for the key's reason: the
+      // card's own rebuild waits for the select to lose focus.
+      const mods = el('div', { class: 'ann-mods' })
+      const fillMods = (by: ColourBy): void => {
+        mods.replaceChildren(...(by === 'basemod' ? [modField(this.props.store, entry)] : []))
+      }
+      fillMods(readsOf(entry.style).colourBy)
       out.push(
         el(
           'div',
           { class: 'ann-inline' },
-          colourByField(this.props.store, entry, (by) =>
-            fillLegend(key, entry.style.colour, by),
-          ),
+          colourByField(this.props.store, entry, (by) => {
+            fillLegend(key, entry.style.colour, by)
+            fillMods(by)
+          }),
           layoutField(this.props.store, entry),
         ),
         key,
+        mods,
         splitsToggle(this.props.store, entry),
       )
     }

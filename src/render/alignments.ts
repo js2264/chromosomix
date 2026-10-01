@@ -58,6 +58,7 @@ import { basePixels } from './sequence'
 import { rotateHue } from './hue'
 import type { PairLayout, ReadPile } from '../annotations/types'
 import { FLAG } from '../annotations/bam/format'
+import { modStateOf, probabilityOf } from '../annotations/bam/basemods'
 
 /** The one flag bit this module draws differently; see {@link drawOne}. */
 const SUPPLEMENTARY = FLAG.SUPPLEMENTARY
@@ -164,7 +165,33 @@ export interface ReadPaint {
   font: string
   /** Ink for the marks that are not a category: gaps, clips, outlines. */
   guideColour: string
+  /**
+   * Draw each read's base-modification calls of this code over it (§8.13),
+   * where the pile carries them: modified at or above `threshold`, unmodified
+   * at or below its complement, each as sure as its probability says.
+   * Absent draws none, and the mismatch marks are drawn instead.
+   */
+  mods?: { code: string; threshold: number }
 }
+
+/**
+ * The inks of a pile coloured by base modification (§8.13).
+ *
+ * Red and blue because that is the pair every reader of these pictures has
+ * learnt from IGV and from modkit's own plots, and because neither is a read
+ * category here — under this colouring the reads are drawn in `read`, a grey
+ * light enough that a blue call on it is still blue. The mismatch marks are
+ * not drawn under it: they are coloured by base, and a red `T` and a red 5mC
+ * a column apart would be one ink making two claims.
+ */
+export const MOD_INK = {
+  modified: '#d7191c',
+  unmodified: '#2c7bb6',
+  read: '#c8c8c8',
+} as const
+
+/** The narrowest a call is drawn, in pixels, so one is visible at the zoom reads first appear. */
+const MOD_MIN_PIXELS = 2
 
 // ---------------------------------------------------------------------------
 // Packing the pile into rows, for the window that is on screen
@@ -349,6 +376,8 @@ export function drawReads(
   ctx.globalAlpha = paint.opacity
   const step = paint.rowHeight + paint.rowGap
   const rowsDrawn = rowsAcross(frame.thickness, paint.rowHeight, paint.rowGap)
+  // The code's number in *this* pile's table — each pile numbers its own.
+  const modIndex = paint.mods === undefined ? -1 : (pile.mods?.codes.indexOf(paint.mods.code) ?? -1)
 
   // Pair lines first, so a read is never drawn under the thread joining it to
   // its mate — the line is context and the reads are the subject.
@@ -377,7 +406,9 @@ export function drawReads(
 
     drawOne(ctx, frame, pile, i, at, across, paint, colour)
 
-    if (paint.diffs && rung !== 'none') {
+    if (paint.mods !== undefined) {
+      if (modIndex >= 0) drawMods(ctx, frame, pile, i, at, across, paint, modIndex, paint.mods.threshold)
+    } else if (paint.diffs && rung !== 'none') {
       drawDiffs(ctx, frame, pile, i, at, across, paint, perBase, rung)
     }
   }
@@ -567,6 +598,95 @@ function drawDiffs(
     ctx.fillText(BASE_LETTERS[base] ?? 'N', laneX(frame, mid, centre), laneY(frame, mid, centre))
     ctx.restore()
   }
+}
+
+/**
+ * One read's modification calls of one code: a column per call, red or blue,
+ * as opaque as the caller was sure.
+ *
+ * Alpha runs from a sixth at a call that only just cleared the threshold to
+ * whole at a certain one — so a stretch of confident calls reads as solid
+ * colour and a stretch of coin-flips as a wash, which is the difference a
+ * reader is looking for between a methylated island and a noisy model.
+ */
+function drawMods(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  pile: ReadPile,
+  i: number,
+  at: (base: number) => number,
+  across: number,
+  paint: ReadPaint,
+  code: number,
+  threshold: number,
+): void {
+  const mods = pile.mods
+  if (mods === undefined) return
+  const from = mods.at[i]
+  const to = mods.at[i + 1]
+  for (let k = from; k < to; k++) {
+    if (mods.code[k] !== code) continue
+    const state = modStateOf(mods.prob[k], threshold)
+    if (state < 0) continue
+    const p = probabilityOf(mods.prob[k])
+    const sure = state === 1 ? p : 1 - p
+    ctx.globalAlpha = paint.opacity * (1 / 6 + (5 / 6) * Math.max(0, (sure - 0.5) * 2))
+    let x0 = at(mods.pos[k])
+    let x1 = at(mods.pos[k] + 1)
+    if (Math.abs(x1 - x0) < MOD_MIN_PIXELS) {
+      const mid = (x0 + x1) / 2
+      x0 = mid - MOD_MIN_PIXELS / 2
+      x1 = mid + MOD_MIN_PIXELS / 2
+    }
+    fill(ctx, frame, x0, x1, across, paint.rowHeight, state === 1 ? MOD_INK.modified : MOD_INK.unmodified)
+  }
+  ctx.globalAlpha = paint.opacity
+}
+
+/**
+ * The modification calls a read makes at the base nearest a reference position.
+ *
+ * The readout's question, answered from the pile the lane drew. The nearest
+ * call **of the code drawn** within `reach` bases of `pos` decides the base —
+ * so a pointer a pixel off a one-base column still lands on it, and does not
+ * land instead on an invisible implicit call of another code a base closer —
+ * and then every code's call at that base is returned, the drawn one first,
+ * so a cytosine carrying both a 5mC and a 5hmC call names both.
+ */
+export function modsNear(
+  pile: ReadPile,
+  i: number,
+  pos: number,
+  reach: number,
+  code?: string,
+): Array<{ pos: number; code: string; prob: number; byte: number }> {
+  const mods = pile.mods
+  if (mods === undefined) return []
+  const drawn = code === undefined ? -1 : mods.codes.indexOf(code)
+  if (code !== undefined && drawn < 0) return []
+  let best = -1
+  let distance = Number.POSITIVE_INFINITY
+  for (let k = mods.at[i]; k < mods.at[i + 1]; k++) {
+    if (drawn >= 0 && mods.code[k] !== drawn) continue
+    const off = Math.abs(mods.pos[k] + 0.5 - pos)
+    if (off <= reach && off < distance) {
+      distance = off
+      best = mods.pos[k]
+    }
+  }
+  if (best < 0) return []
+  const out: Array<{ pos: number; code: string; prob: number; byte: number }> = []
+  for (let k = mods.at[i]; k < mods.at[i + 1]; k++) {
+    if (mods.pos[k] !== best) continue
+    out.push({
+      pos: mods.pos[k],
+      code: mods.codes[mods.code[k]] ?? '',
+      prob: probabilityOf(mods.prob[k]),
+      byte: mods.prob[k],
+    })
+  }
+  if (code !== undefined) out.sort((a, b) => Number(b.code === code) - Number(a.code === code))
+  return out
 }
 
 /** The thread joining the two ends of one template. */
@@ -789,6 +909,8 @@ export function pileDetail(
     note?: string
   },
   placed: readonly PileLayout[] = [],
+  /** Under a colouring by base modification, the code drawn and its name. */
+  mods?: { label: string; calls: number },
 ): string {
   if (window.note !== undefined) return window.note
   // What is on the screen, not what came back. The reply covers three
@@ -812,6 +934,12 @@ export function pileDetail(
         : window.capped
           ? `${here.toLocaleString()} reads, thinned`
           : `${here.toLocaleString()} reads`
+  // What the colours are of, in place of where the mismatches came from: they
+  // are not drawn under this colouring, and "no MM/ML tags here" is the one
+  // thing a reader of a plain grey pile needs told.
+  if (mods !== undefined) {
+    return `${reads} · ${mods.calls === 0 ? 'no MM/ML calls here' : mods.label}`
+  }
   const diffs =
     window.diffs === 'none'
       ? 'no reference to compare'
