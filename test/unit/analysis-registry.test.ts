@@ -353,8 +353,21 @@ describe('every descriptor', () => {
     expect(hintOf('fourc', 'anchor')).toBeUndefined()
     // Compartments keeps one, and it is the reason the rule is about *facts*
     // rather than about length: ticking several sequences there gives **one**
-    // eigenvector over all of them, which no arrangement of tick boxes says.
-    expect(hintOf('compartments', 'sequences')).toMatch(/One correlation over all of them/)
+    // eigenvector over all of them under two of the three *contacts* settings,
+    // and one per sequence under the default — which no arrangement of tick
+    // boxes says. It used to name the first answer alone, under the setting
+    // that never gives it.
+    const hint = hintOf('compartments', 'sequences')
+    expect(hint).toMatch(/One correlation per sequence under “cis only”/)
+    expect(hint).toMatch(/one over all of them under “cis and trans” or “trans only”/)
+    // By the labels the *contacts* control actually carries, so a renamed
+    // option cannot leave the hint naming one the form does not show.
+    const contacts = TASKS.find((task) => task.id === 'compartments')?.params.find(
+      (spec) => spec.key === 'contacts',
+    )
+    const labels = contacts?.kind === 'choice' ? contacts.options.map((option) => option.label) : []
+    expect(labels).toHaveLength(3)
+    for (const label of labels) expect(hint).toContain(`“${label}”`)
   })
 })
 

@@ -720,7 +720,7 @@ function hostNote(url: string): string {
     ` As of September 2026 UCSC's servers — ${host} among them — do not send that header, so no ` +
     'browser-only viewer can read a hub hosted there. Pasting the text gets past it for the hub ' +
     'itself, but its bigDataUrls are on the same hosts and will not open either; downloading the ' +
-    'hub and opening it from a mounted folder is the way that works.'
+    'hub and opening it from a connected folder is the way that works.'
   )
 }
 

@@ -476,6 +476,19 @@ describe('fetching a store', () => {
     expect(!result.ok && result.message).toContain('cross-origin')
   })
 
+  it('sends a reader stuck behind UCSC to a connected folder, in the app’s own word', async () => {
+    // The measured note a `*.ucsc.edu` host gets on top of the CORS sentence
+    // (§24.10). A folder is *connected* on every screen that offers one
+    // (§26.4); this sentence alone still sent the reader to a *mounted* one,
+    // the word the landing page gave up.
+    const dead = (() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch
+    const result = await fetchStore('https://genome.ucsc.edu/hubs/demo/hub.txt', { fetchImpl: dead })
+    const message = result.ok ? '' : result.message
+    expect(message).toContain('genome.ucsc.edu among them')
+    expect(message).toContain('opening it from a connected folder')
+    expect(message).not.toMatch(/mount/i)
+  })
+
   // The integration point that makes a track hub first class (§24.10): every
   // road a store URL travels — `?store=`, the Connect box, a remembered tile, a
   // shared link — goes through this one function, so a hub recognised *here*

@@ -2612,6 +2612,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   items came back, a counter of nothing and a check that failed when pressed. A tab hands the bar
   its reader only while a file is open in it.
 
+- **Pattern detection's price, and the chromosight pileup's, say a band is read (§18.6, §18.8).**
+  Both lines priced *one dense square* per sequence — mouse chr1 at 5 kb was one read and 6,114 MB —
+  after both runs had moved to reading each sequence along its diagonal. Pattern detection's line
+  counts the strips that read the band and the widest band held at a time, 376 requests and 65 MB
+  there; the pileup's band reaches as far as its loop set does, which is not known until the run
+  reads the set, so its line says so in words and names no figure rather than the square's.
+
+- **Compartments' *sequences* hint is true under every *contacts* setting (§18.8).** It said *one
+  correlation over all of them, cis and trans*, which is what *cis and trans* and *trans only* do —
+  and the default, *cis only*, is one correlation per sequence. It names both, by the options' own
+  labels.
+
+- **A UCSC hub that cannot be read sends the reader to a *connected* folder (§24.10, §26.4).** The
+  sentence a `*.ucsc.edu` host adds to the CORS failure ended *opening it from a mounted folder*,
+  the one place left using the word every other screen gave up for *connected* (§24.2).
+
 - **The palette's door survives a half-width window.** Below 60 rem the search bar was hidden
   outright, which left `⌘P` — and every command with no button of its own — with nothing on screen
   to name it. It keeps its badge and loses its sentence.

@@ -6838,7 +6838,10 @@ Three specific gates, each stated because each is a place the naive implementati
    not a surprise. On a local file it is not a question at all: a read is a `slice()`. The chromosight
    normalisation is the one exception to *a block per feature*, and not to the resolution: its
    distance law belongs to a whole sequence, so it reads each sequence the anchors sit on along its
-   diagonal, as far as the loop set reaches, at the native bin size (§18.8).
+   diagonal, as far as the loop set reaches, at the native bin size (§18.8). How far that is belongs
+   to the set, which is not read until the run, so its line beside **Run** says so in words and
+   names no figure — it priced the square around every sequence, which on a mammalian chromosome is
+   about a hundred times the band.
 
 ### 18.7 What comes out
 
@@ -7178,7 +7181,9 @@ what `analysis/chromosight.ts` had already banded every one of its own objects t
 therefore a bound on the **band** — the scan distance times the sequence — and no longer on the
 chromosome: the whole mouse genome scans at 5 kb, and what is still refused is a deep scan on a fine
 grid, named as the two settings that fix it. **A sequence a gate does skip is named**, which the old
-one promised and did not do.
+one promised and did not do. Its price beside **Run** is the band's as well — the strips that read
+it and the widest band held at a time — where it went on pricing one dense square a sequence after
+the square was gone.
 **It calls the domains between those boundaries too, and by default**: the span from each call to the
 next, as a second overlay beside the points. That is not a second algorithm — it is the eight lines of
 pairing that every reader was writing by hand — and it is on by default because a boundary set is half
@@ -10115,7 +10120,7 @@ whole of GenArk out of reach of every browser-only viewer — this one, igv.js, 
 server. The failure message says so for a `*.ucsc.edu` host rather than sending a reader to check a
 URL that is perfectly correct, and says the part that would otherwise be found out one row at a
 time: pasting such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the
-same hosts and will not open. Downloading the hub and opening it from a mounted folder is the road
+same hosts and will not open. Downloading the hub and opening it from a connected folder is the road
 that works, and it is the reader's own machine doing the fetching, which is the only place this
 project is willing to move that work to. What this does **not** do is proxy the fetch — routing a
 reader's traffic through a third party to work around somebody else's header is exactly what C1
