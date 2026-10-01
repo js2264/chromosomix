@@ -4553,6 +4553,10 @@ measurements, not one. There is one lane per loaded file, so the reader draws th
 code** and says, under the lane's label, which codes were in the file and how many rows each had:
 §8.7's bargain for a truncated bigBed made again. Averaging them would produce a number that is in
 no file and is the methylation level of nothing.
+The codes are named from SAMtags §1.7's table — the one a BAM's `MM` tag is read by (§8.13) — so
+the two lanes never name one code two ways: `m` 5mC, `h` 5hmC, `a` 6mA, `e` 5fU, `g` 5hmU, `b` 5caU,
+`o` 8oxoG, ChEBI `21839` 4mC; a code the table does not hold is written as the file wrote it, a
+bare number as `ChEBI:` and the number.
 
 Strands are **not** collapsed and do not need to be: a row is one base, and the two cytosines of a
 CpG are at consecutive positions on opposite strands — two calls at two coordinates, side by side in

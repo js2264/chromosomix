@@ -146,6 +146,14 @@ describe('bedMethyl', () => {
     expect(summary).toContain('not drawn: 5hmC (2)')
   })
 
+  it('names its codes as SAMtags §1.7 does, the table a BAM’s MM tag is read by', () => {
+    const result = parseBedMethyl(
+      [methylRow(1000, 'e', 9, 50), methylRow(1001, 'g', 8, 50), methylRow(1002, 'b', 7, 50), methylRow(1003, '21839', 6, 50)].join('\n'),
+    )
+    const labels = Object.fromEntries(result.codes.map((code) => [code.code, code.label]))
+    expect(labels).toEqual({ e: '5fU', g: '5hmU', b: '5caU', '21839': '4mC' })
+  })
+
   it('becomes a track, with every affordance a bigWig lane has', () => {
     expect(cardFor('bedmethyl')).toBe('linear')
     expect(kindFor('linear', 'bedmethyl')).toBe('track')

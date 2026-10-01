@@ -62,6 +62,7 @@
 
 import { ContigBuilder, finishSet, type SignalSet } from './signal'
 import { isInteger } from './parse'
+import { modName } from './bam/basemods'
 
 /** The fewest columns a `bedMethyl` can have: BED9, coverage, percentage. */
 const BEDMETHYL_COLUMNS = 11
@@ -76,30 +77,10 @@ const ENOUGH_ROWS = 4
 /** A name that says the format outright. */
 const BEDMETHYL_NAME = /\.(bedmethyl|bigmethyl|bed ?methyl)(\.gz)?$/i
 
-/**
- * The single-modification codes, as `modkit` and the SAM tags spell them.
- *
- * Not a gate — a ChEBI number is legal in that column and so is an ENCODE
- * context word like `CG` — but it is what makes the summary line readable, so a
- * lane says *5mC* rather than *m*.
- */
-const MOD_NAMES: Record<string, string> = {
-  m: '5mC',
-  h: '5hmC',
-  f: '5fC',
-  c: '5caC',
-  C: 'C (ambiguous)',
-  a: '6mA',
-  g: '8oxoG',
-  e: '4mC',
-  b: '4hmC',
-  T: 'T (ambiguous)',
-}
-
 /** One modification code's share of the file. */
 export interface ModCount {
   code: string
-  /** `5mC` where the code is one this knows, the code itself otherwise. */
+  /** `5mC` where SAMtags §1.7 names the code (`bam/basemods.ts`), the code itself otherwise. */
   label: string
   rows: number
 }
@@ -197,7 +178,7 @@ export function parseBedMethyl(text: string): BedMethylResult {
   })
 
   const codes: ModCount[] = [...tally.entries()]
-    .map(([code, rows]) => ({ code, label: MOD_NAMES[code] ?? code, rows }))
+    .map(([code, rows]) => ({ code, label: modName(code), rows }))
     .sort((a, b) => b.rows - a.rows || a.code.localeCompare(b.code))
   if (codes.length === 0) {
     throw new Error('This looks like a bedMethyl but holds no usable rows.')

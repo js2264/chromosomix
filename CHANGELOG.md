@@ -1896,6 +1896,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A bedMethyl lane names `e`, `g` and `b` as the SAM spec does (§8.20).** They were called 4mC,
+  8oxoG and 4hmC; SAMtags §1.7 has them as 5fU, 5hmU and 5caU (8oxoG is `o`, and 4mC is ChEBI
+  21839, with no letter). The lane now reads its names from the table a BAM's `MM` tag is read by, so
+  the two never name one code two ways.
+
 - **The 1D ruler keeps its end labels whole (§5.8).** Each tick label was centred on its tick, so
   one on a window's first or last base hung half off the strip: a deck's tracks cell over
   `IV:1,000,001-1,400,000` read `Mb` and `1.4`, and the browser over a whole sequence `bp`. The label
