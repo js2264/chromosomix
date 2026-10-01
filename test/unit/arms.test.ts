@@ -163,11 +163,11 @@ describe('the secondary diagonal', () => {
 
   it('reads the reach where a sloping edge ends, not half-way down it', () => {
     // Four times as close out to 10 bins, falling evenly in log2 to nothing at
-    // 30: half-way down is 20, and the alignment runs on to 28 before it is
-    // within a tenth of its peak of none.
+    // 30: half-way down is 20, and the alignment runs on to 26 before it is
+    // within a fifth of its peak of none.
     const byDistance = new Float64Array(40).fill(1)
     for (let d = 2; d <= 30; d++) byDistance[d] = 2 ** (d <= 10 ? 2 : (2 * (30 - d)) / 20)
-    expect(interArmSummary(byDistance).reach).toBe(28)
+    expect(interArmSummary(byDistance).reach).toBe(26)
   })
 
   it('scores the stretch the enrichment reaches, not the whole arm', () => {

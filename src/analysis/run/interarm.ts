@@ -244,7 +244,7 @@ export const runInterArm: TaskRunner = async (job) => {
           label: 'reach',
           kind: 'number',
           hint:
-            'How far from the origin, in bp, the enrichment holds before it falls nine-tenths of the way ' +
+            'How far from the origin, in bp, the enrichment holds before it falls four-fifths of the way ' +
             'from its peak back to 1, on a log scale — where the alignment ends.',
         },
         { key: 'armLength', label: 'arm', kind: 'number', hint: 'Length of the longer arm, in bp.' },

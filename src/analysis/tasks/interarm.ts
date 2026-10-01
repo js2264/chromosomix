@@ -18,7 +18,7 @@
  * literature draws; a **track** along the chromosome, how much each locus
  * touches its mirror image; and a **table**, one row per sequence, for a
  * comparison across maps — how far from the origin the enrichment holds before
- * falling nine-tenths of the way back from its peak, and how strong it is from
+ * falling four-fifths of the way back from its peak, and how strong it is from
  * the origin out to there, as a fold over expected.
  *
  * Beside the enrichment, the **enrichment after detrend**: the same cells over
@@ -108,7 +108,9 @@ export const INTERARM_TASK: AnalysisTask = {
   // half, so it reads where the alignment ends rather than the middle of its fall.
   // 5: one row per sequence; the control is its enrichment after detrend, a
   // column, and the peak and the expected column are gone.
-  version: 5,
+  // 6: the reach runs until the enrichment is a fifth of its peak, where it was a
+  // tenth.
+  version: 6,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>
