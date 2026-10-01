@@ -902,13 +902,6 @@ export class AnalysisWorkspace {
   }
 
   /**
-   * Tell the annotations worker about a vector, so `sample` can answer for it.
-   *
-   * This single call is what makes the lane a lane. Until it lands the row is on
-   * the card and the renderer has nothing to draw; after it, nothing downstream
-   * can tell the track from a bigWig (§18.5).
-   */
-  /**
    * Whether a per-bin result can be drawn as a lane on this file.
    *
    * Both halves are needed and they are different questions. The **store** is
@@ -922,6 +915,13 @@ export class AnalysisWorkspace {
     return this.host.store() !== null && this.host.annotations() !== null
   }
 
+  /**
+   * Tell the annotations worker about a vector, so `sample` can answer for it.
+   *
+   * This single call is what makes the lane a lane. Until it lands the row is on
+   * the card and the renderer has nothing to draw; after it, nothing downstream
+   * can tell the track from a bigWig (§18.5).
+   */
   private register(entryId: string, output: ProfileOutput, grid: BinVectorContig[]): void {
     const client = this.host.annotations()
     if (client === null) return

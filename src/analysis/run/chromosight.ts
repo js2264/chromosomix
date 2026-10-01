@@ -1,8 +1,10 @@
 /**
  * Pattern detection, run.
  *
- * `cmd_detect`'s shape, over one sequence at a time: read the square, detrend
- * it, correlate the template across the scan band, take the maximum of each
+ * `cmd_detect`'s shape, over one sequence at a time: read the band along its
+ * diagonal as deep as the scan reaches (`bandFor`, in tiles — never the square,
+ * which put a cap on the sequence length), detrend it, correlate the template
+ * across the scan band, take the maximum of each
  * focus, cut a window around it, then — once, over everything found on every
  * sequence — suppress the smears, drop what is too near the diagonal, and
  * correct the p-values for having asked the question a few hundred thousand

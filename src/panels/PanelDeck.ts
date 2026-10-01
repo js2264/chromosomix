@@ -549,12 +549,6 @@ interface Slot {
  */
 const DECK_EXPORT_DPI = 300
 
-/**
- * What a reader is told when the deck will not open another cell.
- *
- * In the deck's own bar and on the `+` edges rather than on an error screen: a
- * refusal to open a *sixty-fifth* map is not a reason to take the others away.
- */
 /** A map offered to a deck whose lead is the browser (§25.3). */
 const NO_MAP_LEAD =
   'This deck is of tracks and a structure beside the browser. A map opens as a session of its ' +
@@ -571,7 +565,12 @@ const NO_MAP_LEAD =
  */
 const ADD_STRUCTURE = 'Open a cell drawing a 3D structure beside the maps; each model gets its own'
 
-
+/**
+ * What a reader is told when the deck will not open another cell.
+ *
+ * In the deck's own bar and on the `+` edges rather than on an error screen: a
+ * refusal to open a *sixty-fifth* map is not a reason to take the others away.
+ */
 const NO_ROOM =
   `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
   'many are useful: every panel is a worker and, for a whole-file view, a block held in memory, ' +

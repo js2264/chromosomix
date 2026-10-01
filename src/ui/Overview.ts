@@ -447,13 +447,16 @@ export class Overview {
             `which is past the ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)} this page starts on a click.`,
         }),
       )
+      // The command as code rather than in backticks, which a hint does not
+      // carry (§26.4): a reader copies it into a terminal as it stands.
       this.gate.appendChild(
-        el('p', {
-          class: 'hint',
-          text:
-            'Cheaper routes: open a local copy of the file, or publish a genome edge list next ' +
-            'to it with `metacooler network --level genome --header` and reference it from the catalog.',
-        }),
+        el(
+          'p',
+          { class: 'hint' },
+          'Cheaper routes: open a local copy of the file, or publish a genome edge list next to it with ',
+          el('code', { text: 'metacooler network --level genome --header' }),
+          ' and reference it from the catalog.',
+        ),
       )
       this.gate.appendChild(
         button(`download and scan anyway (${fmt.bytes(sourceBytes)})`, () => void this.scan(), {

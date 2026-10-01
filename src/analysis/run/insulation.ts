@@ -1,8 +1,10 @@
 /**
  * Diamond insulation, run.
  *
- * One dense square per sequence, one pass per scale, and a bin vector assembled
- * over the whole assembly so the result is a lane rather than a picture (§18.5).
+ * One band per sequence — read in tiles, each with the halo its diamonds
+ * reach, or in one piece along a circle so the cell across its origin is in it
+ * (§8.15) — one pass per scale, and a bin vector assembled over the whole
+ * assembly so the result is a lane rather than a picture (§18.5).
  * The kernels are in `analysis/insulation.ts`; what is here is the plan, the
  * reads, and the two conversions that turn contig-local answers into
  * genome-wide objects.

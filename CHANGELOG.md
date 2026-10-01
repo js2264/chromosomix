@@ -2628,6 +2628,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sentence a `*.ucsc.edu` host adds to the CORS failure ended *opening it from a mounted folder*,
   the one place left using the word every other screen gave up for *connected* (§24.2).
 
+- **The palette's *Annotations panel* row is live on a metacool (§8.5, §26.6).** It stayed greyed
+  there with *Absent on a metacool, which carries no annotations* — a sentence from the release the
+  cards were gated off a file with a genome layer — beside a column that came up on a metacool with
+  every other file's cards. The row is under the column's own gate now, whether the session put any
+  cards in it.
+
+- **Two more lines say what the screen shows.** The whole-metagenome view's remote-scan gate set
+  its `metacooler network` command in backticks, which a hint does not carry (§26.4); it is set as
+  code. The clip boxes' tooltip read their units off *the colourbar*, a word the app does not use
+  for the key in the map's corner.
+
 - **The palette's door survives a half-width window.** Below 60 rem the search bar was hidden
   outright, which left `⌘P` — and every command with no button of its own — with nothing on screen
   to name it. It keeps its badge and loses its sentence.

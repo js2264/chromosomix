@@ -366,6 +366,14 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a figure can be redrawn into a raster or onto a page.
+ *
+ * A table is DOM and a plot is a canvas, so only one of the two has a `draw` to
+ * hand a different context to. Asked of the figure rather than of the output
+ * kind that produced it, so the day a third figure kind appears the compiler
+ * asks the question at the one place that has to answer it.
+ */
 function asDrawable(figure: { el: HTMLElement; destroy(): void }): PlotFigure | null {
   return 'draw' in figure ? (figure as PlotFigure) : null
 }

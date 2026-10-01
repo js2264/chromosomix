@@ -9,7 +9,7 @@
  *
  * It carried a two-handled slider over the block's value extent for a while.
  * The boxes outlived it: a clip is two numbers a reader arrives at by reading
- * the colourbar, and picking them off a 200-pixel track meant a range of about
+ * the key, and picking them off a 200-pixel track meant a range of about
  * four significant figures per pixel and no way to type the one you wanted
  * without going through the box anyway.
  *
@@ -123,7 +123,7 @@ export class ClipRange {
       // screen. The box is sized by its column here, so it declares one digit.
       attrs: { step: 'any', size: '1', 'aria-label': `${which} clip value` },
       title:
-        'In transformed units — the same ones the colourbar is built from. ' +
+        'In transformed units — the same ones the key in the map’s corner prints. ' +
         'The low bound must stay below the high one.',
     })
     node.addEventListener('change', () => this.fromBox(which, node))

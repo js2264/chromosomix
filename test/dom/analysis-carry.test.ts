@@ -357,7 +357,7 @@ describe('what a workspace hands on', () => {
     at1k.workspace.destroy()
   })
 
-  it('is empty on a file that carries no annotations at all (§8.5)', () => {
+  it('is empty on a host with no annotation store', () => {
     const store = new AnnotationStore(`carry-none-${Math.random()}`)
     store.clear()
     const host: AnalysisWorkspaceHost = {

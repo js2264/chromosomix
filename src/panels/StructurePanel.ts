@@ -931,12 +931,6 @@ export class StructurePanel implements DeckCell {
 
   /** The row the reader asked for, or `null` for whichever is first. */
   private chosen: string | null = null
-  /**
-   * How the choice was made. A row *picked* this session and then removed
-   * leaves the cell empty rather than quietly showing another model; a row
-   * *remembered* from an earlier session that is gone falls back to the first,
-   * since the reader has not chosen anything yet today.
-   */
 
   /**
    * Draw this row: the Structures card's eye, or its row dropped on this cell.

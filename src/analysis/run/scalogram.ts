@@ -12,7 +12,7 @@
  *
  * ## Why the bands are emitted innermost-first
  *
- * A ribbon fills down to the member below it in the lane (§8.17), so the order
+ * A ribbon fills down to the member below it in the lane (§18.12), so the order
  * the outputs are produced in is the order the bands nest in. Ascending
  * quantile: the tenth centile first, with only the lane's floor beneath it, then
  * each band resting on the one before. Emitting them the other way round would

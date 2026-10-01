@@ -2010,7 +2010,6 @@ export class App implements SessionHost {
     // has to count it, or half the View menu goes dead the moment a bigWig is
     // dropped instead of a cooler.
     const file = session?.hasFile === true || session?.isBrowsing === true
-    const isMetacool = session?.isMetacool === true
     const overlays = getPlotOptions()
     const list: Command[] = [
       {
@@ -2226,23 +2225,18 @@ export class App implements SessionHost {
       {
         id: 'fold-annotations',
         group: 'View',
-        // The hint is computed from the state, because it is the *reason* and
-        // the reason has three branches. As a constant it said "A metacool
-        // carries no annotations, so it has no panel to fold" — on a landing
-        // page with no file at all, where the metacool is not the reader's, and
-        // beside an enabled command on a `.cool` whose Annotations column is on
-        // screen while the sentence says it has none.
+        // The hint is computed from the state, because it is the *reason*. It
+        // had a third branch, "Absent on a metacool, which carries no
+        // annotations", from the release the cards were gated off a file with a
+        // genome layer; the gate went (§8.5), the column came up on a metacool
+        // with the rest, and the row stayed greyed beside it.
         title: 'Annotations panel',
-        hint: !file
-          ? 'Open a file first.'
-          : isMetacool
-            ? 'Absent on a metacool, which carries no annotations.'
-            : 'The tracks, structures, marks and bookmarks on this file.',
+        hint: file ? 'The tracks, structures, marks and bookmarks on this file.' : 'Open a file first.',
         keys: ANNOTATION_PANEL.keys,
-        // The same gate the button is under: it is `hidden` on a file with a
-        // genome layer, and a shortcut that folds an invisible column is a key
-        // that appears to do nothing.
-        enabled: file && !isMetacool,
+        // The same gate the button is under — the column's own availability,
+        // which is whether the session put any cards in it — so a shortcut never
+        // folds an invisible column, a key that appears to do nothing.
+        enabled: session?.panels.annotations === true,
         state: chipOf(!this.annotationsPanel.isCollapsed),
         run: () => this.annotationsPanel.toggle.click(),
       },
