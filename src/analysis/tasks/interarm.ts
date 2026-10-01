@@ -16,15 +16,16 @@
  * ratio within `band` bins of the secondary diagonal (`analysis/arms.ts`), and
  * given three ways: a **curve** against distance from the origin, the figure the
  * literature draws; a **track** along the chromosome, how much each locus
- * touches its mirror image; and a **table** of two numbers per sequence for a
+ * touches its mirror image; and a **table**, one row per sequence, for a
  * comparison across maps — how far from the origin the enrichment holds before
- * falling nine-tenths of the way back from its peak, and how strong it is from the origin out
- * to there, as a fold over expected.
+ * falling nine-tenths of the way back from its peak, and how strong it is from
+ * the origin out to there, as a fold over expected.
  *
- * Each sequence has a **second row** of the same numbers over the O/E along both
- * arms — the expectation the map's arms and Compartments divide by, which takes
- * the secondary diagonal into itself. It is a control on that detrending rather
- * than a second measure: where the detrending works, its enrichment is near 1.
+ * Beside the enrichment, the **enrichment after detrend**: the same cells over
+ * the O/E along both arms — the expectation the map's arms and Compartments
+ * divide by, which takes the secondary diagonal into itself — over the same
+ * stretch. It is a control on that detrending rather than a second measure:
+ * where the detrending works, it is near 1.
  *
  * The arms are read from each sequence's origin — the Origin and terminus task
  * fills it in, a reader types it, and it is the first base until either has —
@@ -56,11 +57,11 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'window along the arms',
     unit: 'bins',
     hint:
-      'For the detrended row: each cell is compared within this far along the arms, as the map’s ' +
-      'arms and Compartments do; 0 is the whole chromosome.',
+      'For the enrichment after detrend: each cell is compared within this far along the arms, as ' +
+      'the map’s arms and Compartments do; 0 is the whole chromosome.',
     // The key, the label and the default are Compartments' own, and the map's
-    // arms control opens at the same window (`DEFAULT_ARM_WINDOW`): the row is a
-    // control on the detrending they apply, so it is theirs unless changed.
+    // arms control opens at the same window (`DEFAULT_ARM_WINDOW`): the column is
+    // a control on the detrending they apply, so it is theirs unless changed.
     default: 50,
     min: 0,
     integer: true,
@@ -105,7 +106,9 @@ export const INTERARM_TASK: AnalysisTask = {
   // expected rather than log2.
   // 4: the reach runs until the enrichment is a tenth of its peak, where it was
   // half, so it reads where the alignment ends rather than the middle of its fall.
-  version: 4,
+  // 5: one row per sequence; the control is its enrichment after detrend, a
+  // column, and the peak and the expected column are gone.
+  version: 5,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>

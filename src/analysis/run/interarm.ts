@@ -8,9 +8,9 @@
  * shapes the answer is given in.
  *
  * And the control: the same square over the decay along both arms, the
- * expectation that takes the secondary diagonal in, summarised the same way as
- * a second row of the table — what is left of the alignment once the map's arms
- * or Compartments have divided it out.
+ * expectation that takes the secondary diagonal in, read over the same stretch
+ * as a column beside the enrichment — what is left of the alignment once the
+ * map's arms or Compartments have divided it out.
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
@@ -83,26 +83,6 @@ function observedOverArms(values: Float32Array, n: number, frame: ArmFrame, wind
   return out
 }
 
-/**
- * What a row says of a summary, on the table's linear scale: the enrichment and
- * the peak as folds over expected — two to the `log2` means the summary is
- * read in, so enrichment and depletion still weigh alike in the averaging — and
- * the reach in base pairs. The curve and the track stay on `log2`.
- */
-function rowNumbers(
-  summary: { score: number; reach: number; peak: number },
-  binsize: number,
-): { enrichment: number; peak: number; reach: number } {
-  return {
-    enrichment: 2 ** summary.score,
-    peak: 2 ** summary.peak,
-    reach: Number.isFinite(summary.reach) ? summary.reach * binsize : Number.NaN,
-  }
-}
-
-/** The rows' names for what each cell was divided by — Compartments' words for the same two. */
-const BY_DECAY = 'distance decay'
-const BY_ARMS = 'decay along both arms'
 
 export const runInterArm: TaskRunner = async (job) => {
   const { ids, missing } = tickedContigIds(job.mc, tickedSequences(job.params, 'sequences'))
@@ -164,9 +144,8 @@ export const runInterArm: TaskRunner = async (job) => {
     series.push({ name, x, y })
 
     // The control: the same cells over the decay along both arms, which has the
-    // secondary diagonal in it — so what the first row measured should be gone.
-    // Its enrichment is read over the measurement's stretch, so the two rows
-    // average the same distances; its peak and reach are its own.
+    // secondary diagonal in it — so what the enrichment measured should be gone.
+    // Read over the measurement's stretch, so the two average the same distances.
     await job.breathe()
     job.throwIfCancelled()
     const detrended = interArmSummary(
@@ -174,14 +153,19 @@ export const runInterArm: TaskRunner = async (job) => {
       summary.reach,
     )
 
-    const shared = {
+    // Folds over expected on the table's linear scale — two to the `log2` means
+    // the summaries are read in, so enrichment and depletion still weigh alike in
+    // the averaging — and the reach in base pairs. The curve and the track stay
+    // on `log2`.
+    rows.push({
       sequence: name,
       topology: circular ? 'circular' : 'linear',
       origin: (declared ?? 0) + 1,
+      enrichment: 2 ** summary.score,
+      detrended: 2 ** detrended.score,
+      reach: Number.isFinite(summary.reach) ? summary.reach * binsize : Number.NaN,
       armLength: (circular ? Math.floor(n / 2) : Math.max(origin, n - 1 - origin)) * binsize,
-    }
-    rows.push({ ...shared, expected: BY_DECAY, ...rowNumbers(summary, binsize) })
-    rows.push({ ...shared, expected: BY_ARMS, ...rowNumbers(detrended, binsize) })
+    })
     if (!circular) {
       job.note(
         `${name} was read as linear, so an origin near either end leaves it one arm. A bacterial ` +
@@ -196,16 +180,14 @@ export const runInterArm: TaskRunner = async (job) => {
       'of the secondary diagonal, over each sequence’s own distance decay.',
   )
   job.note(
-    'Each sequence’s second row is the same cells over the decay along both arms' +
+    'Enrichment after detrend is the same cells over the decay along both arms' +
       (armWindow === 0
         ? ', over the whole of it'
         : `, within ${armWindow.toLocaleString()} ${armWindow === 1 ? 'bin' : 'bins'} ` +
           `(${(armWindow * binsize).toLocaleString()} bp) of each cell along them`) +
       ' — the expectation the map’s arms and Compartments divide by, which takes the secondary ' +
-      'diagonal in. Its enrichment, read over the first row’s stretch, is near 1 where that works: it is a ' +
-      'control on the detrending, not a second measure of the alignment. Its peak and reach are its ' +
-      'own, and a peak at the terminus — where the two diagonals cross and that expectation is at its ' +
-      'weakest — is the model’s edge rather than alignment left over.',
+      'diagonal in — read over the same stretch as the enrichment. It is near 1 where that works: ' +
+      'it is a control on the detrending, not a second measure of the alignment.',
   )
 
   const outputs: TaskOutput[] = [
@@ -237,15 +219,6 @@ export const runInterArm: TaskRunner = async (job) => {
         { key: 'topology', label: 'read as', kind: 'text' },
         { key: 'origin', label: 'origin', kind: 'number', hint: 'The origin the arms were read from, 1-based.' },
         {
-          key: 'expected',
-          label: 'expected',
-          kind: 'text',
-          hint:
-            'What each cell was divided by: the distance decay, which leaves the secondary diagonal ' +
-            'standing out — the measurement — or the decay along both arms, which takes it in, as the ' +
-            'map’s arms and Compartments do — the control on that detrending.',
-        },
-        {
           key: 'enrichment',
           label: 'enrichment',
           kind: 'number',
@@ -254,14 +227,17 @@ export const runInterArm: TaskRunner = async (job) => {
             'How many times as often mirror images touch as expected, from the origin out to the reach — ' +
             'how strong the alignment is where it holds — or over the whole arm where nothing reaches: 1 ' +
             'is no alignment, 2 twice as often. Two to the mean log2, so enrichment and depletion weigh ' +
-            'alike. The detrended row is read over the first row’s stretch; 1 there is none left over.',
+            'alike.',
         },
         {
-          key: 'peak',
-          label: 'peak',
+          key: 'detrended',
+          label: 'enrichment after detrend',
           kind: 'number',
           digits: 3,
-          hint: 'Its highest enrichment, as a fold over expected, averaged over 2% of the arm.',
+          hint:
+            'The same cells over the decay along both arms, as the map’s arms and Compartments divide ' +
+            'by, read over the same stretch as the enrichment: 1 is no alignment left over — a control ' +
+            'on that detrending.',
         },
         {
           key: 'reach',

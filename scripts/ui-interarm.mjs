@@ -1,19 +1,21 @@
 /**
- * Inter-arm alignment's control row, in headless Chromium (§18.8).
+ * Inter-arm alignment's table, in headless Chromium (§18.8).
  *
- * The task gives each sequence two rows of the same numbers: over its own
- * distance decay, which is the measurement, and over the decay along both arms —
- * the map's arms and Compartments' expectation — which is a control on that
- * detrending. Shot on the *E. coli* demo at 5 kb, whose arms are not aligned —
- * the form with the control's window, the notes, the table — and on
- * *P. aeruginosa* PAK from the DNA Bacterial Zoo at 8 kb, whose arms are, so the
- * control has an alignment to take away. Each table and its notes are printed as
- * well as shot.
+ * The task gives each sequence one row: its enrichment over its own distance
+ * decay, which is the measurement, and beside it the enrichment after detrend,
+ * over the decay along both arms — the map's arms and Compartments'
+ * expectation — which is a control on that detrending. Shot on the *E. coli*
+ * demo at 5 kb, whose arms are not aligned — the form with the control's
+ * window, the notes, the table — on *P. aeruginosa* PAK from the DNA Bacterial
+ * Zoo at 8 kb, whose arms are, so the control has an alignment to take away, and
+ * on *B. subtilis* 45 minutes after ParB is induced, at 10 kb, whose alignment
+ * has run to the terminus. Each table and its notes are printed as well as shot.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-interarm.mjs [out-dir]
  *
- * The zoo is read over the network. Behind a proxy (`HTTPS_PROXY`) the browser
+ * The zoo and the *B. subtilis* demo are read over the network
+ * (`GALLERY_DATA`, `GALLERY_SUBTILIS` point elsewhere). Behind a proxy (`HTTPS_PROXY`) the browser
  * is sent through it, the dev server excepted.
  */
 
@@ -36,6 +38,9 @@ const { chromium } = playwright()
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
 const ZOO = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
+const SUBTILIS =
+  process.env.GALLERY_SUBTILIS ??
+  'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/subtilis/Bsubtilis_induction_45min%5Emapped_PY79%5ELW6QCG.mcool'
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
@@ -145,6 +150,18 @@ try {
   await shot('ia4-pak-result')
   await toTable()
   await shot('ia5-pak-table')
+
+  // B. subtilis, 45 minutes into ParB induction: the alignment has spread from
+  // parS to the terminus, and the reach is the whole arm.
+  page = await fresh()
+  await openWithOrigin(`${SUBTILIS}::/resolutions/10000`, 'NC_022898.1', '1')
+  await until('reads as circular', 60000)
+  await openInterArm()
+  await run()
+  console.log('B. subtilis notes:\n' + (await notes()))
+  console.log('B. subtilis table:\n' + (await table()))
+  await toTable()
+  await shot('ia6-subtilis-table')
 } finally {
   console.log(errors.length ? `page errors:\n${errors.join('\n')}` : 'no page errors')
   await browser.close()

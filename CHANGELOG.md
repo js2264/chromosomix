@@ -101,17 +101,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Inter-arm alignment, a 2D task (§18.8).** How strongly a chromosome's two arms touch, as the
   secondary diagonal's enrichment over the distance decay: a curve against distance from the origin,
-  a track along the chromosome, and a table of each sequence's enrichment, peak and reach — folds
-  over expected, the enrichment read from the origin out to the reach: 3.0× on *P. aeruginosa* PAK,
+  a track along the chromosome, and a table of each sequence's enrichment, enrichment after detrend
+  and reach, one row per sequence — folds over expected, the enrichment read from the origin out to
+  the reach: 3.0× on *P. aeruginosa* PAK,
   1.2× on *E. coli*, whose arms are not aligned. The reach runs until the enrichment is a tenth of
   its peak on `log2`, where the alignment ends, rather than half of it, which sat in the middle of
   the fall: a time course of ParB induced in *B. subtilis* reads 1.1 Mb at 15 minutes and the whole
   2 Mb arm at 45, where half the peak read 600 kb and 1.5 Mb (task version 4).
 
-  Each sequence has a second, control row of the same numbers over the decay along both arms — the
-  expectation the map's arms and Compartments divide by — near 1× where that detrending works
-  (0.94–0.97× on PAK); an *expected* column says which row is which, and *window along the arms*
-  (`--armWindow` in a shell; 50 bins) sets the control's.
+  The enrichment after detrend is the same cells over the decay along both arms — the expectation
+  the map's arms and Compartments divide by — read over the same stretch: a control, near 1× where
+  that detrending works (0.94–0.97× on PAK). *window along the arms* (`--armWindow` in a shell;
+  50 bins) sets it.
 
 - **Compartments along both arms, and a table of their components (§18.8).** An *expected* choice,
   *decay along both arms*; phasing by **a track** as well as by a gene model or GC content; and a

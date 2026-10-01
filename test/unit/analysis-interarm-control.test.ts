@@ -1,16 +1,16 @@
 /**
- * Inter-arm alignment's control row (§18.8).
+ * Inter-arm alignment's control column (§18.8).
  *
- * Beside the four numbers read over each sequence's distance decay, the task
- * gives the same four over the decay along both arms — the expectation the
- * map's arms and Compartments divide by, which takes the secondary diagonal into
- * itself. On a circle whose arms are held together, what has to hold:
+ * Beside the enrichment read over each sequence's distance decay, the task
+ * gives the enrichment after detrend: the same cells over the decay along both
+ * arms — the expectation the map's arms and Compartments divide by, which takes
+ * the secondary diagonal into itself. On a circle whose arms are held together,
+ * what has to hold:
  *
- * - two rows per sequence, the measurement first, each saying what it divided
- *   by, and agreeing on what is the sequence's rather than the reading's;
+ * - one row per sequence, the control in the column after the enrichment;
  * - the measurement is what it always was, whatever the control's window;
  * - along both arms, with a window that can follow the arms, the enrichment the
- *   measurement found is gone — which is what the row is there to show.
+ *   measurement found is gone — which is what the column is there to show.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -91,20 +91,17 @@ async function run(params: Params) {
   const outputs: TaskOutput[] = await runInterArm(context)
   const table = outputs.find((output): output is TableOutput => output.kind === 'table')!
   const curve = outputs.find((output): output is CurveOutput => output.kind === 'curve')!
-  return { table, curve, measured: table.rows[0], control: table.rows[1], notes }
+  return { table, curve, measured: table.rows[0], notes }
 }
 
-describe('inter-arm alignment’s control row', () => {
-  it('gives each sequence the measurement and then its control, agreeing on the sequence', async () => {
-    const { table, measured, control } = await run({})
-    expect(table.rows).toHaveLength(2)
-    expect(measured.expected).toBe('distance decay')
-    expect(control.expected).toBe('decay along both arms')
-    for (const key of ['sequence', 'topology', 'origin', 'armLength']) expect(control[key]).toBe(measured[key])
-    // Said beside the numbers, so a reader of the table knows which row is which.
+describe('inter-arm alignment’s control column', () => {
+  it('gives each sequence one row, the control right after the enrichment', async () => {
+    const { table } = await run({})
+    expect(table.rows).toHaveLength(1)
     const keys = table.columns.map((column) => column.key)
-    expect(keys.indexOf('expected')).toBeLessThan(keys.indexOf('enrichment'))
-    expect(keys).not.toContain('score')
+    expect(keys.indexOf('detrended')).toBe(keys.indexOf('enrichment') + 1)
+    expect(table.columns[keys.indexOf('detrended')].label).toBe('enrichment after detrend')
+    for (const gone of ['expected', 'peak', 'score']) expect(keys).not.toContain(gone)
   })
 
   it('gives the enrichment as a fold: two to the curve’s mean from the origin out to the reach', async () => {
@@ -122,30 +119,28 @@ describe('inter-arm alignment’s control row', () => {
     expect(Number(measured.enrichment)).toBeCloseTo(2 ** (total / counted), 9)
     // Enriched, on a scale where 1 is as expected.
     expect(Number(measured.enrichment)).toBeGreaterThan(1)
-    expect(Number(measured.peak)).toBeGreaterThan(1)
   })
 
   it('leaves the measurement as it was, whatever the control’s window', async () => {
     const wide = await run({ armWindow: 0 })
     const narrow = await run({ armWindow: 5 })
-    for (const key of ['enrichment', 'peak', 'reach']) expect(narrow.measured[key]).toBe(wide.measured[key])
+    for (const key of ['enrichment', 'reach']) expect(narrow.measured[key]).toBe(wide.measured[key])
     // The arms are held together, so the enrichment is there to find.
     expect(Number(wide.measured.enrichment)).toBeGreaterThan(Math.SQRT2)
     expect(Number(wide.measured.reach)).toBeGreaterThan(0)
     // The window is the control's, and it moves it.
-    expect(narrow.control.enrichment).not.toBe(wide.control.enrichment)
+    expect(narrow.measured.detrended).not.toBe(wide.measured.detrended)
   })
 
   it('divides the secondary diagonal out along both arms, leaving little of it', async () => {
     // A window that follows the position along the arms, as the map's does: the
     // whole sequence's (`0`) is one mean per distance along the arms, and keeps
     // the decay from the origin out to the terminus that this circle is built on.
-    const { measured, control, notes } = await run({ armWindow: 5 })
+    const { measured, notes } = await run({ armWindow: 5 })
     // On the log scale the folds are read on, so that a depletion counts as
     // far from 1 as the enrichment it mirrors.
     const log = (value: unknown) => Math.log2(Number(value))
-    expect(Math.abs(log(control.enrichment))).toBeLessThan(0.1 * log(measured.enrichment))
-    expect(log(control.peak)).toBeLessThan(0.2 * log(measured.peak))
-    expect(notes.join(' ')).toMatch(/second row is the same cells over the decay along both arms, within 5 bins/)
+    expect(Math.abs(log(measured.detrended))).toBeLessThan(0.1 * log(measured.enrichment))
+    expect(notes.join(' ')).toMatch(/after detrend is the same cells over the decay along both arms, within 5 bins/)
   })
 })
