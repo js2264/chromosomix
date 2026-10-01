@@ -11518,10 +11518,22 @@ What is on it:
   only moved: each cut into the
   pieces of the edited assembly it falls in, placed where its piece went, turned with it, its other
   side the matching share of its extent along the reference, and what was set aside not drawn — an
-  edit moves the lines and makes none. A square of up to 220 pixels over the map's upper triangle,
-  which the lower one mirrors; folded to a button when it is in the way and remembered folded, and
-  nothing found until it is unfolded; the streak under the pointer named in the readout, both loci,
-  its way round and its anchors, and a press frames it on the map.
+  edit moves the lines and makes none. A square over the map's upper triangle, which the lower one
+  mirrors — by itself a third of the map up to 220 pixels — folded to a button when it is in the way
+  and remembered folded, and nothing found until it is unfolded; the streak under the pointer named in
+  the readout, both loci, its way round and its anchors, and a press frames it on the map. **Zoomed
+  and moved as the dot plot's own view is** (§28.2), by the same gestures: the wheel zooms about the
+  pointer, a drag or a sideways scroll moves it, a double click — or the button beside the picker,
+  shown once it is zoomed — shows both whole, and the lines stay lines, sharp at any zoom. **Sized by
+  a grip** at its lower-left corner, the one across from where it hangs: dragged left and down it
+  grows, never under 120 pixels nor so large that it and its picker and caption leave the map, and
+  kept with the file as the fold is; a double click on the grip gives it its own size back. **One
+  highlight in two places**, as the rail's labels and marks are: a name hovered on a pieces bar, or a
+  sequence's row on the sequences card, lights that sequence's lines in the plot — a piece hovered,
+  that piece's — the others dimmed, and its span along x washed and marked over the plot's top edge;
+  and a line hovered in the plot lights on the map the piece it lies along — the contig, where nothing
+  is edited yet — dashed on the diagonal, bracketed on both bars with the rest of each veiled, and its
+  sequence's name in the accent. *Built.*
 - **The lanes** placed on the map, drawn through the lens, and through the preview while a stretch is
   dragged, so a track moves with the stretch under the hand; the selection is lit across them.
   *Built.*

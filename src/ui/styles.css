@@ -13631,6 +13631,34 @@ span.deck-name {
 .edit-dotplot-canvas.is-on-streak {
   cursor: pointer;
 }
+.edit-dotplot-canvas.is-dragging {
+  cursor: grabbing;
+}
+/* Its size, by a grip at the lower-left corner: the plot hangs from its
+   upper-right one, so the corner that moves is the one across from it. */
+.edit-dotplot:not(.is-folded) {
+  padding-bottom: 12px;
+}
+.edit-dotplot-grip {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+  touch-action: none;
+  border-bottom-left-radius: var(--radius);
+  background:
+    linear-gradient(45deg, transparent 0 16%, var(--text-faint) 16% 24%, transparent 24% 38%, var(--text-faint) 38% 46%, transparent 46%) no-repeat;
+  opacity: 0.7;
+}
+.edit-dotplot-grip:hover,
+.edit-dotplot.is-sizing .edit-dotplot-grip {
+  opacity: 1;
+}
+.edit-dotplot.is-sizing {
+  user-select: none;
+}
 .edit-dotplot-caption {
   max-width: 100%;
   color: var(--text-dim);

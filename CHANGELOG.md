@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The stage's corner dot plot zooms, grows, and answers the map — a dev feature (§27.3).** The wheel
+  zooms it about the pointer, a drag moves it and a double click shows it whole, as the dot plot's own
+  view does, the lines sharp at any zoom; a grip at its lower-left corner sizes it, kept on the map
+  and remembered with the file. Hovering a contig's name on a pieces bar, or its row on the sequences
+  card, lights its lines in the plot and dims the rest; hovering a line in the plot lights its contig
+  on the map — dashed on the diagonal, bracketed on both bars, its name in the accent.
+
 - **A FASTA's six reading frames, in any of NCBI's genetic codes (§8.8).** *Reading frames* in a
   sequence row's settings draws six rows under its residues — `+1`, `+2`, `+3` over `−1`, `−2`, `−3`,
   anchored to the sequence's first base so they do not move with the window — each codon a shaded box

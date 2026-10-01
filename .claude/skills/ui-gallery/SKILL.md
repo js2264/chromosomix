@@ -65,6 +65,7 @@ node scripts/ui-loci.mjs gallery             # every locus a reader sees or type
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
 node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
 node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
+node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
