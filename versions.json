@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 88,
-      "commit": "d0f290a",
+      "commit": "c8e2f72",
       "title": "Reading frames, BAM base modifications, called sets as lanes, 3D by BED names, a live corner dot plot",
       "branch": "js/jolly-mayer-rvygni",
-      "date": "2026-10-01T16:04:08Z"
+      "date": "2026-10-01T16:23:22Z"
     }
   ]
 }
