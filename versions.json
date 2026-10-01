@@ -1,6 +1,13 @@
 {
-  "latest": "b5b951a",
+  "latest": "9654594",
   "versions": [
+    {
+      "commit": "9654594",
+      "version": "0.13.0",
+      "date": "2026-10-01T18:38:16+02:00",
+      "subject": "Reading frames, BAM base modifications, called sets as lanes, 3D by BED names, a live corner dot plot (#88)",
+      "tag": ""
+    },
     {
       "commit": "b5b951a",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "2b4f0af",
-      "version": "0.12.0",
-      "date": "2026-09-20T21:48:11+02:00",
-      "subject": "Resolutions the file does not store, zoom both ways from the bar, and an APA that pools its anchors (#67)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -205,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 88,
-      "commit": "c8e2f72",
-      "title": "Reading frames, BAM base modifications, called sets as lanes, 3D by BED names, a live corner dot plot",
-      "branch": "js/jolly-mayer-rvygni",
-      "date": "2026-10-01T16:23:22Z"
-    }
-  ]
+  "pulls": []
 }
