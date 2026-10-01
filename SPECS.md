@@ -2815,6 +2815,20 @@ which is a wrong coordinate stated as a fact. And a lane whose signal lives wher
 line would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the
 name on one line rather than under it.
 
+**The last lane on an edge is given the room its name needs.** The block is written at the reader's
+text size and the lane is the height the reader gave it, and the two need not agree: at the default
+text size a name sits eleven pixels into its lane on a plate sixteen tall, so a lane under nineteen
+pixels — the 14-pixel peak lanes the yeast demo opens with, any lane dragged short — cannot hold the
+block, and it runs a few pixels past the lane. Between two lanes that is the
+gap before the next. Past the last lane it was the edge of the stack's canvas, which cut the chip and
+the descenders off the name on screen and in every figure saved from the map, the PNG and the PDF
+alike. So the stack leaves room past its last lane for whatever its block reaches beyond it
+(`labelReach`, `AnnotationLanes.thicknessOf`), and a loop's or a box's anchors are drawn past that
+room rather than into the name; the lane keeps its height and the writing its size. A stack whose
+last lane holds its block is the size it was, and so is one with *track text* off, which writes no
+names to make room for. On screen the room comes out of the map's share of its cell, as a lane's own
+height does.
+
 **Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
 base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
 A lane tooltip that said `IV:1.18 Mb` over 1 kb bins was ten bins coarser than the picture beside it

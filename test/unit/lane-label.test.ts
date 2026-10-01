@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { NAME_CUT, drawLaneLabel, fitName, labelEndFor, type LaneLabelStyle } from '@/render/laneLabel'
+import { NAME_CUT, drawLaneLabel, fitName, labelEndFor, labelReach, type LaneLabelStyle } from '@/render/laneLabel'
 import type { LaneFrame } from '@/render/lane'
 
 /** Every glyph this ruler knows is this wide. */
@@ -420,5 +420,128 @@ describe('the range beside a name', () => {
   it('still tucks it under the name where the lane has the room', () => {
     const tall = label(frameOf('bottom', 60))
     expect(tall.limits[0].box[1]).toBeGreaterThan(tall.names[0].box[1])
+  })
+})
+
+/**
+ * How far across a lane its label block reaches — the room the last lane of a
+ * stack is given past its far edge, so the canvas and every figure saved from it
+ * do not cut its name off (§8.8).
+ *
+ * The bound is asked before anything is drawn, so what is pinned is that it is
+ * never short of what the block then draws: every rectangle (the plate, the
+ * chip with its stroke, a progress bar) and every line of text with the plate's
+ * half height round it, over thin and thick lanes, both ends, both edges and
+ * every kind of detail line.
+ */
+describe('how far a label block reaches across its lane', () => {
+  /** A context that remembers how far across the lane anything was put. */
+  function reachOf(frame: LaneFrame, overrides: Partial<Parameters<typeof drawLaneLabel>[2]> = {}): number {
+    let reach = 0
+    let lineWidth = 1
+    const outer = (low: number, span: number): number => low + span - frame.acrossFrom
+    const across = (rect: [number, number, number, number]): number =>
+      frame.orientation === 'bottom' ? outer(rect[1], rect[3]) : outer(rect[0], rect[2])
+    const noop = (): void => {}
+    const ctx = {
+      save: noop,
+      restore: noop,
+      fillRect: (...rect: [number, number, number, number]) => {
+        reach = Math.max(reach, across(rect))
+      },
+      strokeRect: (...rect: [number, number, number, number]) => {
+        reach = Math.max(reach, across(rect) + lineWidth / 2)
+      },
+      fillText: noop,
+      strokeText: noop,
+      // Text is placed by a translate to its anchor, then drawn at the origin.
+      translate: (x: number, y: number) => {
+        const at = (frame.orientation === 'bottom' ? y : x) - frame.acrossFrom
+        reach = Math.max(reach, at + STYLE.hitHeight / 2)
+      },
+      rotate: noop,
+      measureText: (text: string) => ({ width: text.length * CHAR }) as TextMetrics,
+      font: '',
+      fillStyle: '',
+      strokeStyle: '',
+      get lineWidth() {
+        return lineWidth
+      },
+      set lineWidth(width: number) {
+        lineWidth = width
+      },
+      lineJoin: 'round',
+      textAlign: 'left',
+      textBaseline: 'middle',
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D
+    drawLaneLabel(ctx, frame, {
+      names: [{ id: 'a', text: 'peaks', colour: '#f00' }],
+      detail: { kind: 'limits', min: 0, max: 100 },
+      labelAt: 'near',
+      column: null,
+      style: STYLE,
+      palette: PALETTE,
+      ...overrides,
+    })
+    return reach
+  }
+
+  it('is the lane itself where the block fits inside it', () => {
+    expect(labelReach(60, STYLE)).toBe(60)
+    expect(labelReach(24, STYLE)).toBe(24)
+  })
+
+  it('runs past a lane too thin for its name, by what the name and its plate need', () => {
+    // One line at nameTop, its plate half a hit height either side: 8 + 6.
+    expect(labelReach(12, STYLE)).toBe(14)
+    // And what is drawn on such a lane does reach past it — which is the defect.
+    expect(reachOf(frameOf('bottom', 12))).toBeGreaterThan(12)
+  })
+
+  it('counts the range under the name on a lane just tall enough to stack it', () => {
+    // nameTop + detailDrop + 6 is 25: the range's line sits at 19, its plate to 25.
+    expect(labelReach(25, STYLE)).toBe(25)
+    expect(labelReach(24, STYLE)).toBe(24)
+    // Wider writing on the same lane stacks it a little past the lane's edge.
+    const wide = { ...STYLE, hitHeight: 16 }
+    expect(labelReach(25, wide)).toBe(8 + 11 + 8)
+  })
+
+  it('is never short of what the block draws, on any lane, at either end, on either edge', () => {
+    const details: Array<Parameters<typeof drawLaneLabel>[2]['detail']> = [
+      { kind: 'limits', min: 0, max: 100 },
+      { kind: 'text', text: '12 features in view' },
+      { kind: 'progress', text: 'fetching…', done: 1, total: 4 },
+      null,
+    ]
+    for (const orientation of ['bottom', 'right'] as const) {
+      for (let thickness = 12; thickness <= 64; thickness += 1) {
+        for (const labelAt of ['near', 'far'] as const) {
+          for (const detail of details) {
+            for (const detailBeside of [false, true]) {
+              const frame = frameOf(orientation, thickness)
+              const drawn = reachOf(frame, { labelAt, detail, detailBeside })
+              const bound = labelReach(thickness, STYLE)
+              expect(drawn, `${orientation} ${thickness} ${labelAt} ${detail?.kind ?? 'none'} ${detailBeside}`).toBeLessThanOrEqual(bound + 1e-9)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('holds for a lane carrying two names in one line', () => {
+    // At these sizes fourteen pixels hold the block exactly; twelve do not.
+    const frame = frameOf('right', 12)
+    const drawn = reachOf(frame, {
+      names: [
+        { id: 'a', text: 'forward', colour: '#f00' },
+        { id: 'b', text: 'reverse', colour: '#00f' },
+      ],
+    })
+    expect(drawn).toBeGreaterThan(12)
+    expect(drawn).toBeLessThanOrEqual(labelReach(12, STYLE))
+    expect(reachOf(frameOf('right', 14))).toBeLessThanOrEqual(14)
   })
 })

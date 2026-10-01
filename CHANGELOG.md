@@ -1845,6 +1845,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The last lane on each edge of a map keeps its whole name (§8.8).** A name is written at the
+  reader's text size across a lane of the height they gave it, and at the default size the 14-pixel
+  peak lanes the yeast demo opens with are five pixels too thin for it: past the last lane that was
+  the edge of the canvas, which cut the chip and the descenders off *Pol II peaks* and *ATAC peaks*
+  on screen and in every PNG and PDF saved from the map. The stack now leaves room past its last
+  lane for whatever the name reaches beyond it, and draws a loop's anchors past that room rather
+  than into the name; a stack whose last lane holds its name, or that writes none, is unchanged.
+
 - **A window inside one chromosome of a `.hic` reads its own blocks, not the chromosome's (§3.6).** An
   off-diagonal rectangle — a corner, two loci a chromosome apart — unioned its two axes into one span,
   so it read the whole square between them: six bins by six at a chromosome's corner was every block

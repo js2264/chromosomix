@@ -68,6 +68,7 @@ import {
 import {
   drawLaneLabel,
   labelEndFor,
+  labelReach,
   positionLabel,
   type LaneLabelSpec,
   type LaneLabelStyle,
@@ -802,7 +803,36 @@ export class AnnotationLanes {
     const slots = this.plan(this.drawnOn(edge, true))
     if (slots.length === 0) return 0
     const last = slots[slots.length - 1]
-    return last.acrossFrom + last.thickness + this.anchorBand()
+    return last.acrossFrom + last.thickness + this.overhangOf(last) + this.anchorBand()
+  }
+
+  /**
+   * How far the label written on a lane runs past the lane's far edge.
+   *
+   * Asked of the **last** lane of a stack, whose far edge is the edge of the
+   * canvas and of every figure drawn from it: a name written across a lane too
+   * thin for it — the 14-pixel peak lanes the yeast demo opens with, at the
+   * default text size — had its chip and its descenders cut off there, on screen
+   * and in the PNG and the PDF alike (`render/laneLabel.ts` → `labelReach`). So
+   * the stack leaves that much room past its last lane, and nothing else moves:
+   * the lane keeps the height the reader gave it, the writing the size they
+   * chose. A lane further in runs into the gap before the next one, which is
+   * what the gap is for.
+   *
+   * Nothing where the lanes carry no names, the *track text* option off: the
+   * room is the label's, and a stack with no labels is the size it was. A lane
+   * of stacked heatmaps names each row inside the row (§18.11), so the block that
+   * can reach past it is its last row's.
+   */
+  private overhangOf(lane: {
+    entry: AnnotationEntry
+    overlaid: readonly AnnotationEntry[]
+    thickness: number
+  }): number {
+    if (!getPlotOptions().text) return 0
+    const members = [lane.entry, ...lane.overlaid]
+    const row = stacksAsHeatmaps(members) ? lane.thickness / members.length : lane.thickness
+    return Math.ceil(labelReach(row, laneLabelStyle()) - row)
   }
 
   /**
@@ -1634,6 +1664,11 @@ export class AnnotationLanes {
     // tracks are drawn in.
     const last = lanes[lanes.length - 1]
     if (last !== undefined && !bare) {
+      // Past the room the last lane's own name takes ({@link overhangOf}), so
+      // a triangle by the axis's start is not drawn into that name.
+      const past =
+        last.frame.thickness +
+        this.overhangOf({ entry: last.entry, overlaid: last.overlaid, thickness: last.frame.thickness })
       for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
@@ -1642,7 +1677,7 @@ export class AnnotationLanes {
             // names two places twice; drawing a triangle again only darkens it.
             if (drawn.has(unit)) continue
             drawn.add(unit)
-            anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+            anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour, past)
           }
         }
       }
@@ -2077,10 +2112,12 @@ function anchorMark(
   frame: LaneFrame,
   along: number,
   colour: string,
+  /** Where the last lane ends across, its name included — see `overhangOf`. */
+  past: number,
 ): void {
   if (along < frame.alongFrom || along > frame.alongTo) return
   // The band begins where the last lane ends, a couple of pixels clear of it.
-  const tip = frame.thickness + ANCHOR_GAP
+  const tip = past + ANCHOR_GAP
   const base = tip + ANCHOR_LENGTH
   const half = ANCHOR_HALF
   ctx.save()
