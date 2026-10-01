@@ -55,7 +55,7 @@ function seed(store: AnnotationStore, id: string, source: Parameters<AnnotationS
   })
 }
 
-function make(options: { onShow?: (entry: AnnotationEntry) => void; onHide?: (entry: AnnotationEntry) => void; shown?: (id: string) => boolean; onRecompute?: (entry: AnnotationEntry) => void } = {}) {
+function make(options: { onShow?: (entry: AnnotationEntry) => void; onHide?: (entry: AnnotationEntry) => void; shown?: (id: string) => boolean; onRecompute?: (entry: AnnotationEntry) => void; createdAt?: (entry: AnnotationEntry) => string | undefined } = {}) {
   const store = new AnnotationStore(`structures-${Math.random()}.cool`, { persist: false })
   const added: string[] = []
   const loader = {
@@ -158,6 +158,53 @@ describe('the Structures card', () => {
     const bed3d = card.el.querySelector<HTMLButtonElement>('.structure-bed3d')
     expect(bed3d?.disabled).toBe(true)
     expect(card.el.querySelector('.ann-row')?.textContent).toMatch(/reading…/)
+  })
+
+  /**
+   * **A computed model's bed3d says when it was made**, as the drawer's button
+   * and `metacooler-run` write it (§25.7): the `#` line named the model and its
+   * framing and left the date off, so the one file that leaves a tab without
+   * the drawer was the one with no date on it. The run is the workspace's, so
+   * the card asks it; a model loaded from a file was not made here and gets no
+   * date at all rather than the moment it was saved.
+   */
+  it('dates the bed3d of a computed model, and of nothing else', async () => {
+    const written: Blob[] = []
+    const scope = window as unknown as { showSaveFilePicker?: unknown }
+    scope.showSaveFilePicker = () =>
+      Promise.resolve({
+        name: 'model.bed3d',
+        createWritable: () =>
+          Promise.resolve({
+            write: (blob: Blob) => {
+              written.push(blob)
+              return Promise.resolve()
+            },
+            close: () => Promise.resolve(),
+          }),
+      })
+    try {
+      const { store, card } = make({
+        createdAt: (entry) => (entry.source.kind === 'computed' ? '2026-08-08T14:52:33' : undefined),
+      })
+      seed(store, 'analysis:reconstruct3d:reconstructed-model', COMPUTED)
+      seed(store, 'model.g3d', { kind: 'detached', name: 'model.g3d' })
+      const headers: string[] = []
+      for (const button of all<HTMLButtonElement>(card.el, '.structure-bed3d')) {
+        button.click()
+        for (let turn = 0; turn < 20 && written.length === headers.length; turn++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        headers.push((await written[headers.length].text()).split('\n')[0])
+      }
+      expect(headers[0]).toBe(
+        '# metacooler analysis:reconstruct3d:reconstructed-model from chr1:1–30,000 at 5 kb on ' +
+          '2026-08-08T14:52:33 · bed3d: chrom start end x y z',
+      )
+      expect(headers[1]).toBe('# metacooler model.g3d · bed3d: chrom start end x y z')
+    } finally {
+      delete scope.showSaveFilePicker
+    }
   })
 
   it('offers a detached computed row its recipe again', () => {

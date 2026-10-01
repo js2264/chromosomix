@@ -1870,6 +1870,64 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   circles and the origins now, including the one made over the tracks, and a cached result is reused
   only under the same declarations.
 
+- **The inter-MAG network's *per bin pair* weighs an edge by the two MAGs' sizes (§18.8).** It fell
+  through to the raw contacts, so choosing it changed nothing in the ranked table; it is now the
+  contacts over the product of the two MAGs' bin counts. *Per coverage* is computed as it was — the
+  contacts over the geometric mean of the two MAGs' intra-MAG contacts — and its hint, which said
+  the product of their totals, now says that.
+
+- **Cis and trans per sequence and Reproducibility refuse a run with nothing ticked (§18.2).** Both
+  read an empty list as every sequence, so pressing **none** ran the whole file — the one thing
+  nothing ticked must not become — and the note the cis/trans runner promised for it was never
+  reached. The estimate refuses in the words every other task uses; a run that arrives with an empty
+  list anyway says so before it reads a pixel or mounts a second map, and a ticked name the file has
+  not got is named rather than dropped.
+
+- **Roadmap's tile names WashU when the hub is not there (§24.2, §24.10).** A 404 or a page of HTML
+  from VizHub was read as a shipped store not published yet, and the sentence sent a maintainer to
+  run the Stores workflow, which has never written that file. It now says the hub is WashU's,
+  published on its VizHub, the way the DNA Bacterial Zoo says what publishes it.
+
+- **A share link carries the names of maps read from `gs://` (§16.10).** The map names kept their
+  own copy of the test for which files a recipient can open, written before `gs:` joined it, so a
+  link sent the map, its lanes and its companions and stripped the name the reader had given each.
+  Every field of a link keyed on a file now asks the one test.
+
+- **A bedMethyl opens clipped to 0–100 (§8.20).** It opened on the autoscale like any other track —
+  a methylation lane drawn over whatever 12–94 % the window held — and the 0–100 the file reports
+  only filled the limits boxes once the reader had left auto. A bedMethyl loaded now opens on 0–100
+  under either name it arrives by; a restored one keeps the axis its reader gave it.
+
+- **Opening a soft-masked `.2bit` no longer reads its mask blocks (§8.21).** Each record's header was
+  fetched through to the end of its mask arrays, which the reader then steps over and never reads —
+  chr1's eight megabytes of offsets on hg38, and tens of megabytes across the genome, on open. A
+  header is read as far as the mask count and no further: one 8 KB read, or for a sequence whose
+  gaps outrun it, a second just long enough for them.
+
+- **A folder offers a `.barChart`, a `.bigBarChart` and a cytoBand named in the plural (§8.17, §8.22,
+  §20.5).** The name router did not know the first two and matched only `cytoBand` and
+  `cytoBandIdeo`, so the Files column drew all three dimmed — the yeast demo's own
+  `Yeast_cytobands.txt` among them — while the loader read every one.
+
+- **The IGV store publishes each genome's cytoBand (§24.3).** IGV names a genome's karyotype beside
+  its sequence, and the generator dropped it as an ideogram this viewer does not draw, which stopped
+  being true with §8.22. It is now a row filed under `cytoband` — the two IGV names `.bed` included
+  — the first track on its genome's shelf, and an ideogram lane in its session. The generator's own
+  description lists its five front ends, `dnazoo` among them, and no longer says the refgene tracks
+  are skipped.
+
+- **A model's bed3d from the Structures card says when it was made (§25.7).** The card's button wrote
+  the model's name and framing and left the date off, where the drawer's button and `metacooler-run`
+  write the run's. It now asks the analysis workspace, which holds the run; a model loaded from a
+  file was not made here and still carries no date.
+
+- **`metacooler-run` reads a genePred, an interact, a longrange, a GTF and a VCF as the app does
+  (§8.18, §8.19, §23.1).** `--features` asked four of the loader's sniffers and read everything else
+  as a BED: a genePred, a GTF and a VCF came out as no features at all, an interact as one box over
+  both anchors or a bedpe of the wrong columns, a longrange as a BED4 whose names were its arcs. It
+  now runs the loader's own sniffers and parsers in its order, and `--pairs` reads an interact or a
+  longrange as well as a bedpe.
+
 - **A plain Run on a map binned from a `.pairs` is no longer refused (§3.7, §18.3).** The analysis
   worker opens the map for itself, and a contact list opened without the grid the reader chose is
   refused with *choose a bin size* — which is what every task pressed on such a map said, P(s)

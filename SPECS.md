@@ -4142,6 +4142,8 @@ format has answered the question. The sniffer is asked **before** the BED one, w
 signal sniffers, for the reason all three are: `sniffFormat`'s last line is `return 'bed'`, so a
 format it has not been taught is not refused but silently parsed as a BED — and a barChart read as a
 BED is a lane of boxes whose ninth column, the whole of what the file is about, was never mentioned.
+The two names route by themselves as well: a `.barChart` or a `.bigBarChart` in a folder is offered
+on the genome door (§20.5), where the listing used to draw it dimmed.
 
 **Two pictures, and where the line is.** With room, a feature is `expCount` bars on a common
 baseline, each the height of its value against the ceiling. Below one pixel per bar it is a single
@@ -4295,6 +4297,10 @@ two interactions over the same anchors with different scores are two interaction
 agrees about its score by construction, so exactly the duplicates the convention creates are dropped
 and nothing else.
 
+The CLI reads both the same way, under `--features` or `--pairs`, so a pileup run from the command
+line is over the loops the browser draws. It read them as a BED or a bedpe — the failures above,
+where nothing on screen would have shown them.
+
 ### 8.19 The genePred family
 
 `genePred`, `genePredExt` and `refFlat`: how the gene models of half the assemblies in circulation
@@ -4336,6 +4342,10 @@ the BED it holds" already draws its exons in the right places. What its `autoSql
 *kind* — a gene model rather than a peak set — which decides the glyph, the search box and the line
 under the label. The rows still go through `parseBed`, because they are a BED12 and there is no
 second parser to keep in step.
+
+The CLI reads all three text forms the same way, so a task run from the command line gets the
+transcripts and their exons too. Read as a BED there, a gene table was no rows at all: its second
+column is the sequence, where a BED's is a start.
 
 ### 8.20 bedMethyl and bigMethyl
 
@@ -4409,7 +4419,9 @@ the lowercase in a RepeatMasked FASTA — and hg38's chr1 has on the order of a 
 megabytes of offsets, for a distinction this viewer discards twice: `render/sequence.ts` upper-cases
 every residue before drawing it, and `gcBins` counts a lowercase `c` as a `C`. Reading eight
 megabytes a chromosome to compute something nothing looks at is the cost §8.8 exists to refuse. The
-count is still read, because the packed DNA begins after them.
+count is still read, because the packed DNA begins after them — and a record's header is fetched as
+far as that count and no further: one read of 8 KB, or where its gaps outrun that, a second just
+long enough for them.
 
 **A long `.2bit` is refused by name rather than misread.** Version 1 is the variant with 64-bit
 offsets for files past 4 GB; nothing this viewer is likely to meet is one, and a reader guessing at
@@ -4452,7 +4464,8 @@ fourth, and is read as well. It is asked before `sniffFormat`, for §8.17's reas
 last line is `return 'bed'`, and a cytoBand read as a BED is a lane of grey boxes whose one column
 anybody opened the file for was never read. The file's *name* decides nothing about its contents;
 it only routes a bare link to the door it opens from (`cytoBand.txt.gz` opens a browser, like a
-`chrom.sizes`).
+`chrom.sizes`) — in the plural as well, which is what a file named for its bands is called, the
+yeast demo's `Yeast_cytobands.txt` among them.
 
 **The stain is kept twice.** In the detail, as `stain gpos50`, so the card and the tooltip say it the
 way the file does; and in the **score**, as the darkness it names: `gneg` 0, `gposN` N, a bare `gpos`
@@ -5823,7 +5836,9 @@ Three things about where the name lives:
   workspace is gathered from one key, so a name filed under a companion's own key would be a name
   the saved session did not contain. It travels in the workspace, in the durable record and in a
   share link, beside the tab's own name — the link carrying only the names of maps a recipient can
-  open, since a local map's is keyed on a filename off the sender's own disk.
+  open, since a local map's is keyed on a filename off the sender's own disk. *Can open* is one test
+  for every field of a link keyed on a file, the lanes' and the session's own included: an
+  `https:`, `s3:` or `gs:` address (§24.5).
 - **Keyed by the file, never by the rung**, so a name survives a change of resolution the way every
   other per-file fact does (§5.5). One consequence, which the deck's saved looks already had: one
   file open twice in a session has one name.
@@ -7450,7 +7465,11 @@ run with nothing ticked, and — for the directionality index and the HiC score,
 a whole window or line — refuses one whose ticked sequences are all too short for it rather than
 reading them and reporting a column of gaps, where insulation scores even a sequence shorter than its
 window, from partial diamonds. **Unanswered** is every sequence, which is what a job that never met
-a form means — a stored session, or a `metacooler-run` line with no `--sequences`.
+a form means — a stored session, or a `metacooler-run` line with no `--sequences`. *Cis and trans
+per sequence* and *Reproducibility* take the same list and refuse an empty one in the same words,
+though the first reads the whole pixel table whatever is ticked and the list only narrows what it
+reports: both used to answer *none* with every sequence, which is the whole-file run nothing ticked
+must not become (§18.2). A run that arrives with an empty list anyway says so and reads nothing.
 
 **Over the sequence.** *Find a motif* allows **mismatches**, up to four and never the whole motif,
 because a binding site is a consensus and a genome carries variants of it: its sites carry how many
@@ -7724,7 +7743,12 @@ spectrally in two, flagged when the cross-block contacts are too few for it to b
 *Inter-MAG network*: the genome × genome matrix as a ranked edge table, written in the column order
 `metacooler network --level genome` uses so the two are interchangeable downstream, and built from
 *MAG contact QC*'s own matrix — its *inter-MAG matrix*, on by default — which runs first at its
-defaults and is reused where it already has.
+defaults and is reused where it already has. An edge is ranked by its *edge weight*: by default
+*per coverage*, the contacts over the geometric mean of the two MAGs' intra-MAG contacts, so a
+deeply sequenced pair and a shallow one rank on one scale; *per bin pair*, the contacts over the
+product of the two MAGs' bin counts, since a large MAG touches more of everything for no reason but
+its size; or the *raw contacts*. A MAG with nothing to divide by gives its edges no weight rather
+than an infinite one.
 
 `__unbinned__` appears in none of them as a row, exactly as §7.4 requires — and its contacts are
 dropped from every metagenome accumulation rather than counted as inter-MAG, because counting them
@@ -8644,7 +8668,9 @@ asked. An index is one of them, and its tooltip says it is picked up with the fi
 file picked from a folder on this machine brings its index from beside it (`browse/folder.ts`'s
 `PickedFile.index`), so a `.bam` whose `.bai` is one row down opens with it. The one thing a local
 listing does leave out is a name beginning with a dot — `.DS_Store`, `.git` — which is somebody's
-tooling rather than a file.
+tooling rather than a file. The route is the name's (`browse/route.ts`), so every name a format of
+§8 is published under has to be in it: a `.barChart`, a `.bigBarChart` and a cytoBand in the plural
+were drawn dimmed while the loader read all three.
 
 ### 20.6 What a connected folder is, in privacy terms
 
@@ -8935,7 +8961,11 @@ with **no contact map**, since `metacooler-run` opened its first argument as one
 refusal under it, which is a record with holes in it exactly where the reader is least likely to
 look. So the shell gained what it was said not to have, each as the code the worker already runs:
 `src/cli/tracks.ts` opens a bigWig, a bedGraph, a wig or a FASTA under `--tracks` and answers `sample`
-in the worker's own shape; `--against` names the maps `hicrep` compares with, mounted through the
+in the worker's own shape; a file under `--features` or `--pairs` is read by the loader's own
+sniffers and parsers, in its order — a BED or a peak file, a GTF, a genePred, a VCF, a cytoBand, a
+barChart, junctions, a model, a bedpe, an interact or a longrange — so it reaches a task as the
+browser draws it, where everything past the first few was read as a BED and came out empty or
+wrong; `--against` names the maps `hicrep` compares with, mounted through the
 same `peer`; a track task with no positional runs over the assembly the tracks declare, framed exactly
 as the session frames it; a FASTA named for compartment phasing becomes the per-bin GC vector the
 session would have shipped; and a `.pairs` named for its orientation curves is read from disk. There
@@ -9441,8 +9471,9 @@ A shipped store that answers `404` — or a page of HTML, which is what a dev se
 with a fallback page answers for a file it has not got — is not an error but a state, because the
 generated stores are written by a workflow (§24.3) and a fresh fork has not run it. The front says
 so, as *Nothing has been published for … yet* rather than as *… is not generated yet*, since half
-the stores' names are plural, and says what runs it: the Stores workflow, or for the DNA Bacterial
-Zoo, which is not the workflow's, what publishes it instead (§24.3). A store at an address the
+the stores' names are plural, and says what runs it: the Stores workflow, or for the two that are
+not the workflow's, what publishes them instead — the lab's bucket for the DNA Bacterial Zoo
+(§24.3), WashU's VizHub for Roadmap (§24.10). A store at an address the
 reader typed keeps that address in its sentence, because there the address is what they can act
 on. Whatever the reason a store could not be read, the sentence is not drawn under controls for a
 catalogue that is not there: no search box, no facets, no *clear filters*, no list and matrix pair,
@@ -9503,8 +9534,12 @@ The five front ends:
   and whether the file opens with no credentials. A file that does not answer gets no row. IGV's
   `refgene` tracks — 29 of its 63 — used to be dropped here too, being UCSC `genePred` tables this
   viewer had no parser for; §8.19 reads them and they are published, which is most of IGV's gene
-  models arriving at once. What is still dropped is six genomes whose sequences are **not
-  public** — `igv-genepattern-org`
+  models arriving at once. So is each genome's karyotype, which IGV names beside the sequence
+  (`cytobandURL`, on 30 of the 41) rather than among the tracks, and which was dropped as an
+  ideogram this viewer did not draw: §8.22 draws it, so it is a row filed under `cytoband` whatever
+  the file is called — two are `.bed` — the first track on its genome's shelf, and an ideogram lane
+  in its session. An alias file and a `chrom.sizes` are not rows, since they annotate nothing. What
+  is still dropped is six genomes whose sequences are **not public** — `igv-genepattern-org`
   answers `403 AccessDenied` anonymously, taking out IGV's own `hg38` and `hg19`, and one object on
   `igv.broadinstitute.org` takes out `rn6`. A genome whose sequence will not open is dropped whole,
   since its tracks annotate coordinates nothing can read; GRCh38 remains on the shelf through IGV's
@@ -9948,7 +9983,10 @@ front of its own. A URL, the grouping every hub has, and the same `fetchStore` e
 already went through, which is what §24.10 claimed and this is the proof of. Its rows are read on
 the gesture that opens it and not before, like every store's (§24.2), so the tile costs no request;
 if WashU will not allow a cross-origin GET the front says so in the ordinary way, which is the same
-sentence any hub gets and the reason there is nothing special to write here for it.
+sentence any hub gets and the reason there is nothing special to write here for it. What is written
+is whose it is: a 404 or a page of HTML is a shipped store *not published yet* (§24.2), and the
+sentence names WashU's VizHub as what publishes it (`StoreRef.publishedBy`) rather than sending a
+maintainer to the Stores workflow, which has never written it and could not put it back.
 
 **Its own tile.** A hub gets a door beside the store one on the landing page, and the argument is the
 portals': a hub is not a rarer kind of store file, it is the format an enormous amount of published
@@ -10773,7 +10811,10 @@ The right-click *Copy this* is the model alone, and carries no frame (§7.2).
 **A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
 button of its row, from the drawer's result and from the export road a computed row shares with
-called intervals. It is the file §25.2 reads, so it reads straight back here and in `g3dtools`.
+called intervals. *When it was made* is the run's, on all three roads alike: the row's button asks
+the analysis workspace, which holds the run, and a model loaded from a file, which was not made
+here, is written with no date. It is the file §25.2 reads, so it reads straight back here and in
+`g3dtools`.
 
 **That road includes the shell.** `metacooler-run reconstruct3d --out` writes the bed3d beside the
 TSV every output carries (§18.7), through this same writer — because the batch is where a model

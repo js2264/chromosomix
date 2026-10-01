@@ -218,19 +218,52 @@ export const runMagNetwork: TaskRunner = async (job) => {
   const own = new Float64Array(m)
   for (let r = 0; r < m; r++) own[r] = matrix.values[r * m + r]
 
+  // *Per bin pair* needs each MAG's size, which the matrix does not carry. It
+  // is the file's, so it is read again here: `layoutOf` is a pure function of
+  // the file and is what the QC pass compacted its matrix to, row for row, so
+  // the two orders agree by construction — and a matrix that does not match
+  // the layout is refused rather than divided by another MAG's bins.
+  let bins: Float64Array | null = null
+  if (mode === 'bins') {
+    const layout = layoutOf(job)
+    if (layout.genomes.length !== m) {
+      throw new Error(
+        `The MAG QC step's matrix has ${m.toLocaleString()} MAGs and this file has ` +
+          `${layout.genomes.length.toLocaleString()}, so its rows cannot be matched to their bin ` +
+          'counts. Run MAG contact QC again.',
+      )
+    }
+    bins = Float64Array.from(layout.genomes, (genome) => genome.bins)
+  }
+
+  /**
+   * One edge's weight, by the option the reader chose.
+   *
+   * *Per coverage* — the default — divides by the geometric mean of the two
+   * MAGs' intra-MAG contacts, the matrix's own diagonal, so that a pair of
+   * deeply sequenced MAGs and a pair of shallow ones are ranked on one scale.
+   * *Per bin pair* divides by the product of their bin counts, which is how
+   * many cells the contacts are spread over: a large MAG touches more of
+   * everything for no reason but its size. A MAG with nothing to divide by has
+   * no weight rather than an infinite one.
+   */
+  const weightOf = (r: number, c: number, raw: number): number => {
+    if (mode === 'coverage') {
+      return own[r] > 0 && own[c] > 0 ? raw / Math.sqrt(own[r] * own[c]) : Number.NaN
+    }
+    if (mode === 'bins' && bins !== null) {
+      const cells = bins[r] * bins[c]
+      return cells > 0 ? raw / cells : Number.NaN
+    }
+    return raw
+  }
+
   const edges: Array<{ a: string; b: string; weight: number; raw: number }> = []
   for (let r = 0; r < m; r++) {
     for (let c = r + 1; c < m; c++) {
       const raw = matrix.values[r * m + c]
       if (!Number.isFinite(raw) || raw <= 0) continue
-      const weight =
-        mode === 'raw'
-          ? raw
-          : mode === 'coverage'
-            ? own[r] > 0 && own[c] > 0
-              ? raw / Math.sqrt(own[r] * own[c])
-              : Number.NaN
-            : raw
+      const weight = weightOf(r, c, raw)
       if (!Number.isFinite(weight) || weight < minWeight) continue
       edges.push({
         a: names === null ? `MAG ${r}` : names[r],

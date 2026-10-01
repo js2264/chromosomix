@@ -50,7 +50,10 @@ import {
   dnaByteRange,
   looksLikeTwoBit,
   openTwoBit,
+  RECORD_GUESS,
   readTwoBitHeader,
+  readTwoBitIndex,
+  recordHeaderBytes,
   unpackDna,
 } from '@/annotations/twobit'
 import { parseFasta } from '@/annotations/fasta'
@@ -364,6 +367,101 @@ describe('.2bit', () => {
     expect(routeOf('https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.2bit')).toBe(
       'genome',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …and a soft-masked one, opened without its mask blocks
+// ---------------------------------------------------------------------------
+
+/**
+ * §8.21: the mask blocks are stepped over by arithmetic and **never fetched**.
+ *
+ * The fixture above has two of them, which a header read covers whether or not
+ * the reader wanted them — so it proved the arithmetic and not the economy. The
+ * reader *did* fetch them: it asked for each record's header through to the
+ * word after its masks, and on a soft-masked hg38 that is chr1's eight
+ * megabytes of offsets and tens of megabytes across the genome, on open. These
+ * files carry enough mask blocks that fetching them is a read of its own, and a
+ * reader that counts what is asked of it.
+ */
+describe('a soft-masked .2bit', () => {
+  /** Every read the opener makes, and the bytes behind it. */
+  function counted(file: Uint8Array): {
+    read: (length: number, position: number) => Promise<Uint8Array>
+    reads: Array<{ length: number; position: number }>
+  } {
+    const reads: Array<{ length: number; position: number }> = []
+    return {
+      reads,
+      read: async (length, position) => {
+        reads.push({ length, position })
+        return file.subarray(position, Math.min(file.length, position + length))
+      },
+    }
+  }
+
+  const decoder = new TextDecoder()
+  const bases = 'ACGTTGCA'.repeat(25_000)
+  /** 50,000 blocks: 400 KB of offsets, against 50 KB of packed DNA. */
+  const masks = Array.from({ length: 50_000 }, (_, i): [number, number] => [i * 4, i * 4 + 2])
+
+  it('reads each record’s header in one small read, and none of its mask blocks', async () => {
+    const file = buildTwoBit([
+      { name: 'chr1', bases, masks },
+      { name: 'chr2', bases: CHR2, masks: [[0, 8]] },
+    ])
+    const { read, reads } = counted(file)
+    const opened = await openTwoBit(read)
+    // The first read is the index's, from the top of the file; the rest are the
+    // records' headers, one each, at the offset the index gives and no longer
+    // than the guess.
+    const headers = reads.slice(1)
+    const offsets = readTwoBitIndex(file, readTwoBitHeader(file)).entries.map((entry) => entry.offset)
+    expect(headers.map((one) => one.position)).toEqual(offsets)
+    for (const one of headers) expect(one.length).toBe(RECORD_GUESS)
+    // Everything asked for, index included, is less than chr1's masks alone.
+    expect(reads.reduce((sum, one) => sum + one.length, 0)).toBeLessThan(400_000)
+    // …and stepping over them by arithmetic still lands on the packed DNA.
+    for (const [name, want] of [
+      ['chr1', bases],
+      ['chr2', CHR2],
+    ] as const) {
+      const record = opened.records.get(name)!
+      const range = dnaByteRange(record, 0, record.length)
+      const got = unpackDna(file.subarray(range.from, range.to), range.firstBase, record, 0, record.length)
+      expect(decoder.decode(got), name).toBe(want)
+    }
+  })
+
+  it('reads a gappy record in two, the second just long enough for the gaps and the count', async () => {
+    // 2,000 gaps are 16 KB of starts and sizes, past the first guess: so the
+    // header is read twice — once to learn the count, once for the list and the
+    // mask count behind it — and still never as far as the masks themselves.
+    const gaps = Array.from({ length: 2_000 }, (_, i): [number, number] => [i * 100, i * 100 + 10])
+    const file = buildTwoBit([{ name: 'chr1', bases, gaps, masks }])
+    const { read, reads } = counted(file)
+    const opened = await openTwoBit(read)
+    const headers = reads.slice(1)
+    expect(headers.map((one) => one.length)).toEqual([RECORD_GUESS, 8 + 2_000 * 8 + 4])
+    expect(new Set(headers.map((one) => one.position)).size).toBe(1)
+    const record = opened.records.get('chr1')!
+    expect(record.nStarts.length).toBe(2_000)
+    // The tenth gap, painted over the packed bits rather than trusted.
+    const range = dnaByteRange(record, 900, 920)
+    const got = unpackDna(file.subarray(range.from, range.to), range.firstBase, record, 900, 920)
+    expect(decoder.decode(got)).toBe(`${'N'.repeat(10)}${bases.slice(910, 920)}`)
+  })
+
+  it('asks for nothing past the mask-block count', () => {
+    // A header read as far as the count — and not one byte of the blocks — is
+    // whole: what is behind the count is stepped over, not read.
+    const file = buildTwoBit([{ name: 'chr1', bases: CHR1, gaps: [[16, 24]], masks }])
+    const header = readTwoBitHeader(file)
+    const [entry] = readTwoBitIndex(file, header).entries
+    const countEnds = entry.offset + 8 + 1 * 8 + 4
+    expect(recordHeaderBytes(file.subarray(entry.offset, countEnds), 0, true)).toBeNull()
+    expect(recordHeaderBytes(file.subarray(entry.offset, countEnds - 1), 0, true)).toBe(8 + 8 + 4)
   })
 })
 

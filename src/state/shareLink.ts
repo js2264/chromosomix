@@ -39,7 +39,7 @@
 
 import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
-import { sharedMapNames } from '../ui/mapNames'
+import type { MapNames } from '../ui/mapNames'
 
 /**
  * The fragment key a shared session travels under.
@@ -132,11 +132,13 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  * The one question every redaction in this file turns on, named once rather
  * than spelled as a regex at each site: a `https:`, `http:`, `s3:` or `gs:`
  * address means the same thing in anybody's browser, and everything else is a
- * bare filename off the sender's own disk. `ui/mapNames.ts`'s `sharedMapNames`
- * asks it of a map's key; {@link forSharing} asks it of a lane's;
- * {@link shortenable} asks it of the session's own file. Three copies of one
- * predicate is three places for it to drift, and drift here is a private name
- * leaving the machine.
+ * bare filename off the sender's own disk. {@link sharedMapNames} asks it of a
+ * map's key; {@link forSharing} asks it of a lane's; {@link shortenable} asks it
+ * of the session's own file. Three copies of one predicate is three places for
+ * it to drift. Drift one way is a private name leaving the machine; the other
+ * way is what happened — the map names kept a copy of their own that predated
+ * `gs:`, so a link dropped the reader's name for every map read over `gs://`
+ * and the recipient saw file names where the sender had written words.
  *
  * `gs:` joins the list because `sources/rewrite.ts` gave it a destination
  * (SPECS §24.5): a Google Cloud Storage object now resolves to a URL that opens
@@ -146,6 +148,30 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  */
 function openableElsewhere(uri: string): boolean {
   return /^(https?|s3|gs):\/\//i.test(uri)
+}
+
+/**
+ * The names a **link** may carry: the ones for files a recipient could open.
+ *
+ * A key is a file's address, and for a local file that address is a bare
+ * filename off somebody's own disk. {@link forSharing} already strips the two
+ * other fields that carry one — the local second file and a deck's local
+ * companions — for a reason that applies here word for word: it is a private
+ * name, and posting it to a stranger is what that function exists to prevent.
+ *
+ * The test is {@link openableElsewhere}, the one the session's own URI is
+ * asked, so what travels is exactly what a recipient can address. Here beside
+ * it rather than in `ui/mapNames.ts` with the record it reads, because that is
+ * where it kept a copy of the test which drifted. Dropping a name costs a label
+ * and nothing else, which is the rule that decides every one of these: a
+ * private name is stripped where the structure survives without it.
+ */
+function sharedMapNames(names: MapNames): MapNames {
+  const out: MapNames = {}
+  for (const [path, name] of Object.entries(names)) {
+    if (openableElsewhere(path)) out[path] = name
+  }
+  return out
 }
 
 /**

@@ -38,6 +38,7 @@
  * reporting a low coefficient that reads as a biological result.
  */
 
+import { tickedContigs } from '../context'
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
@@ -143,6 +144,18 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         `This one is at ${context.binsize.toLocaleString()} bp and ` +
         `${peers === 1 ? 'the other is' : 'the others are'} not. Open them at the same ` +
         'resolution — an .mcool descends to any rung it carries.',
+    }
+  }
+  // Nothing ticked is nothing to compare over, and refused in the sentence
+  // every task that takes the list refuses it in (§18.2) rather than widened
+  // into every sequence of every map on the deck.
+  if (tickedContigs(context, params, 'sequences').length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
     }
   }
 

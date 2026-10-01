@@ -121,28 +121,6 @@ export function resolveMapNames(names: MapNames, resolve: (uri: string) => strin
 }
 
 /**
- * The names a **link** may carry: the ones for files a recipient could open.
- *
- * A key is a file's address, and for a local file that address is a bare
- * filename off somebody's own disk. `state/shareLink.ts` already strips the two
- * other fields that carry one — the local second file and a deck's local
- * companions — for a reason that applies here word for word: it is a private
- * name, and posting it to a stranger is what that function exists to prevent.
- *
- * The test is the one `canShare` applies to the session's own URI, so what
- * travels is exactly what a recipient can address. Dropping a name costs a
- * label and nothing else, which is the rule that decides every one of these:
- * a private name is stripped where the structure survives without it.
- */
-export function sharedMapNames(names: MapNames): MapNames {
-  const out: MapNames = {}
-  for (const [path, name] of Object.entries(names)) {
-    if (/^(https?|s3):\/\//i.test(path)) out[path] = name
-  }
-  return out
-}
-
-/**
  * What to *call* this map: the reader's name where there is one, and the file's
  * where there is not.
  *

@@ -16,7 +16,14 @@
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { binContigMap } from '../coverage'
 import { SequenceContactAccumulator, transExpectation } from '../cistrans'
-import { boolParam, contigIdsFor, listParam, numParam, strParam, type TaskRunner } from '../job'
+import {
+  boolParam,
+  contigIdsFor,
+  numParam,
+  strParam,
+  tickedSequences,
+  type TaskRunner,
+} from '../job'
 import { MATRIX_SEQUENCE_LIMIT } from '../tasks/cistrans'
 import type {
   CurveOutput,
@@ -25,7 +32,7 @@ import type {
   TableOutput,
   TaskOutput,
 } from '../types'
-import { validBins } from './blocks'
+import { missingSequencesNote, validBins } from './blocks'
 
 export const runCisTrans: TaskRunner = async (job) => {
   const mc = job.mc
@@ -39,6 +46,18 @@ export const runCisTrans: TaskRunner = async (job) => {
   }
   const contigOf = binContigMap(contigs, mc.nBins)
   const accumulator = new SequenceContactAccumulator(mc.nContigs)
+
+  // Unanswered is every sequence and an empty list is nothing (§18.2): a run
+  // that never met a form — a stored session, a `metacooler-run` line with no
+  // `--sequences` — is the whole file, and a reader who pressed **none** is
+  // told so rather than handed a whole-file answer. The estimate refuses that
+  // run before it is sent; this is what one that arrives anyway hears, and it
+  // hears it before the pass over the pixel table rather than after it.
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to report.')
+    return []
+  }
 
   const block = job.inputs.block
   const wholeFileBlock =
@@ -111,30 +130,21 @@ export const runCisTrans: TaskRunner = async (job) => {
     )
   }
 
-  // Empty is every sequence, which is what the form resolves an unanswered
-  // picker to (§18.8's *a whole-sequence picker is left empty rather than seeded
-  // from the framing*). A reader who pressed **None** gets the note rather than a
-  // silent whole-file answer.
-  const names = listParam(job.params, 'sequences')
+  // Which rows are reported: every sequence where the run was never asked, and
+  // the ticked ones this file has where it was — the pass above read the whole
+  // file either way. A ticked name this file has not got is named and left out
+  // (§5.9), and a list of nothing but those is said as that, not as nothing
+  // ticked.
   let shown: number[]
-  if (names.length === 0) {
+  if (ticked === null) {
     shown = contigs.map((_contig, cid) => cid)
   } else {
-    const found = contigIdsFor(mc, names)
-    if (found.missing.length > 0 && found.missing.length < names.length) {
-      job.note(
-        `${found.missing.length.toLocaleString()} ticked sequence` +
-          `${found.missing.length === 1 ? ' is' : 's are'} not in this file and ` +
-          `${found.missing.length === 1 ? 'is' : 'are'} left out: ` +
-          `${found.missing.slice(0, 6).join(', ')}${found.missing.length > 6 ? ', …' : ''}.`,
-      )
-    }
+    const found = contigIdsFor(mc, ticked)
+    const said = missingSequencesNote(mc, found.missing, found.ids.length)
+    if (said !== null) job.note(said)
     shown = found.ids
   }
-  if (shown.length === 0) {
-    job.note('No sequence is ticked, so there is nothing to report.')
-    return []
-  }
+  if (shown.length === 0) return []
 
   const rows = shown.map((cid) => {
     const cis = accumulator.cis[cid]

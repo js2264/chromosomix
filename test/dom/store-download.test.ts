@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STORE_KIND, STORE_VERSION, parseStore, type StoreFile } from '@/state/store'
 import { StoreDrawer } from '@/ui/StoreDrawer'
 import { storeFailure } from '@/ui/stores/PortalView'
+import { frontById } from '@/ui/stores/registry'
 import type { StoreHost } from '@/ui/stores/host'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -201,6 +202,30 @@ describe('a store that did not answer with a store', () => {
     expect(text).toContain('Actions → Stores → Run workflow')
     expect(text).not.toContain('workspace')
     expect(text).not.toContain('dev server')
+  })
+
+  /**
+   * Roadmap is a shipped store the workflow has never written: WashU's own hub,
+   * read where WashU serves it. Not being there is the same state for it as for
+   * any shipped store, and the sentence names who publishes it rather than a
+   * workflow that could not put it back — the arrangement the DNA Bacterial Zoo
+   * already had.
+   */
+  it('names WashU, and no workflow, when Roadmap’s hub is not there', () => {
+    const roadmap = frontById('roadmap')?.rows
+    expect(roadmap).toBeDefined()
+    if (roadmap === undefined) return
+    for (const result of [
+      { ok: false as const, reason: 'missing' as const, message: '' },
+      { ok: false as const, reason: 'refused' as const, refusal: { reason: 'not-json' as const }, message: '' },
+    ]) {
+      const text = storeFailure(result, roadmap)
+      expect(text).toBe(
+        'Nothing has been published for Roadmap (UCSC hub) yet; it is WashU’s hub, published on ' +
+          'its VizHub at vizhub.wustl.edu.',
+      )
+      expect(text).not.toContain('Run workflow')
+    }
   })
 
   /**

@@ -99,7 +99,9 @@ export const MAG_NETWORK_TASK: AnalysisTask = {
         {
           value: 'coverage',
           label: 'per coverage',
-          hint: 'Divided by the product of the two MAGs’ own totals — the usual normalisation.',
+          hint:
+            'Divided by the geometric mean of the two MAGs’ intra-MAG contacts, so a deep pair ' +
+            'and a shallow one rank on one scale.',
         },
       ],
     },

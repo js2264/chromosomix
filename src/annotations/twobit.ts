@@ -187,29 +187,37 @@ export function readTwoBitIndex(bytes: Uint8Array, header: TwoBitHeader, from = 
 /**
  * How many bytes of a record header are needed, given what has been read so far.
  *
- * `null` once the whole header is in hand. Otherwise the smallest number of
- * bytes that would answer the next question — which is two steps at most: the
- * N-block count is at a fixed place, and once it is known the mask-block count's
- * place is known too. The caller therefore reads at most twice per sequence and
- * usually once, because {@link RECORD_GUESS} is chosen to cover the common case.
+ * `null` once every field the record is read for is in hand: the size, the gap
+ * list, and the **mask-block count** — the count and not the blocks, which
+ * {@link readTwoBitRecord} steps over by arithmetic. Otherwise the smallest
+ * number of bytes that would answer the next question — which is two steps at
+ * most: the N-block count is at a fixed place, and once it is known the
+ * mask-block count's place is known too. The caller therefore reads at most
+ * twice per sequence and usually once, because {@link RECORD_GUESS} is chosen
+ * to cover the common case.
+ *
+ * It used to ask for the mask blocks as well — through to the reserved word
+ * behind them — which undid the economy the module header describes: the
+ * arithmetic stepped over arrays that had just been fetched, and on a
+ * soft-masked hg38 opening the genome was the tens of megabytes of offsets this
+ * reader exists never to read.
  */
 export function recordHeaderBytes(bytes: Uint8Array, at: number, littleEndian: boolean): number | null {
   if (at + 8 > bytes.length) return 8
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const nBlockCount = view.getUint32(at + 4, littleEndian)
   const afterN = at + 8 + nBlockCount * 8
-  if (afterN + 4 > bytes.length) return afterN + 4 - at
-  const maskBlockCount = view.getUint32(afterN, littleEndian)
-  const afterMask = afterN + 4 + maskBlockCount * 8 + 4
-  return afterMask > bytes.length ? afterMask - at : null
+  return afterN + 4 > bytes.length ? afterN + 4 - at : null
 }
 
 /**
- * One sequence's record header, read out of a buffer that holds all of it.
+ * One sequence's record header, read out of a buffer that holds it as far as
+ * the mask-block count — which is where {@link recordHeaderBytes} stops asking.
  *
- * The mask blocks are stepped over rather than decoded; see the module header
- * for why. `reserved` is read and ignored — the format says it is zero and
- * nothing is gained by refusing a file whose writer put something there.
+ * The mask blocks are stepped over rather than decoded, and need not be in
+ * `bytes` at all; see the module header for why. Nor does `reserved`, which
+ * would only be read to be ignored — the format says it is zero, and nothing is
+ * gained by refusing a file whose writer put something there.
  */
 export function readTwoBitRecord(
   name: string,

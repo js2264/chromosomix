@@ -958,6 +958,21 @@ export class AnalysisWorkspace {
     this.show(task)
   }
 
+  /**
+   * When the run behind a computed row was made, or `undefined` for a row this
+   * workspace holds no run for — every loaded one, and a computed one restored
+   * from a reload, whose numbers did not come back either.
+   *
+   * For the Structures card, which writes a model's bed3d itself and whose `#`
+   * line said what the model was and what it was made from but not when (§25.7)
+   * — where the drawer's button and `metacooler-run` both say all three. The
+   * date is the run's provenance, which lives here beside the numbers and never
+   * on the store (§18.5), so the card asks.
+   */
+  createdAt(id: string): string | undefined {
+    return this.intervals.get(id)?.provenance.createdAt
+  }
+
   // -------------------------------------------------------------------------
   // Exports
   // -------------------------------------------------------------------------

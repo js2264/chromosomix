@@ -25,7 +25,13 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import type { AnalysisContext, AnalysisFraming, ProfileOutput, Provenance } from '@/analysis/types'
+import type {
+  AnalysisContext,
+  AnalysisFraming,
+  IntervalsOutput,
+  ProfileOutput,
+  Provenance,
+} from '@/analysis/types'
 import type { BedGraphContig } from '@/analysis/write/bedgraph'
 import {
   AnalysisWorkspace,
@@ -263,6 +269,41 @@ describe('a computed track across a change of resolution', () => {
     const drawn = at5k.store.overlays()
     expect(drawn).toHaveLength(1)
     expect(drawn[0].payload?.kind === 'features' && drawn[0].payload.data.length).toBe(1)
+    at5k.workspace.destroy()
+  })
+
+  /**
+   * …and the run behind it, which is the one thing the row does not carry: a
+   * model's bed3d written from the Structures card is dated from it (§25.7), so
+   * the date has to cross the change of resolution with the numbers.
+   */
+  it('knows when a carried interval set was made, and nothing of a row it did not make', () => {
+    const builder = new FeatureBuilder()
+    builder.add('chrIV', 120_000, 121_000, { score: 0.83 })
+    const payload = { kind: 'features' as const, data: builder.finish() }
+    const entry = {
+      id: 'analysis:insulation:insulation-boundaries',
+      card: 'overlay' as const,
+      kind: 'segments' as const,
+      label: 'Insulation boundaries',
+      source: computedSource(1000),
+      status: 'ready' as const,
+      visible: true,
+      placement: emptyPlacement(),
+      style: defaultStyle('segments', '#d55e00'),
+      payload,
+    }
+    const output: IntervalsOutput = {
+      kind: 'intervals',
+      id: 'insulation-boundaries',
+      label: 'Insulation boundaries',
+      payload,
+    }
+    const at5k = bench('f.mcool::resolutions/5000', 5000, [
+      { entry, intervals: { output, provenance: provenance(1000), task: 'insulation' } },
+    ])
+    expect(at5k.workspace.createdAt(entry.id)).toBe('2026-08-10T00:00:00Z')
+    expect(at5k.workspace.createdAt('a-dropped-model.g3d')).toBeUndefined()
     at5k.workspace.destroy()
   })
 

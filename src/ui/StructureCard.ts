@@ -57,6 +57,14 @@ export interface StructureCardOptions {
   shown?(id: string): boolean
   /** A detached computed row's way back: the task, with its recipe, in the drawer. */
   onRecompute?(entry: AnnotationEntry): void
+  /**
+   * When a computed row's run was made — the date its bed3d's `#` line carries,
+   * as the drawer's button and `metacooler-run` write it (§25.7). The analysis
+   * workspace holds the run and the row does not, so the card asks. Absent, or
+   * `undefined` for a row, and the line names no date: a model loaded from a
+   * file was not made here.
+   */
+  createdAt?(entry: AnnotationEntry): string | undefined
 }
 
 export class StructureCard {
@@ -256,9 +264,11 @@ export class StructureCard {
     const payload = entry.payload
     if (payload === undefined || payload.kind !== 'features') return
     const stamp = fileStamp(new Date())
+    const created = this.options.createdAt?.(entry)
     const text = writeBed3d(payload.data, {
       label: entry.label,
       ...(entry.source.kind === 'computed' ? { file: entry.source.framing } : {}),
+      ...(created === undefined ? {} : { created }),
     })
     void downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.bed3d`)
   }

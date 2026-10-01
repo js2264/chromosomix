@@ -23,13 +23,20 @@
  * worker that goes on living.
  */
 
-import { contigIdFor, listParam, numParam, boolParam, type JobContext, type TaskRunner } from '../job'
+import {
+  contigIdFor,
+  numParam,
+  boolParam,
+  tickedSequences,
+  type JobContext,
+  type TaskRunner,
+} from '../job'
 import { emptyStrata, smoothTileInto, stratumAdjusted, type Strata } from '../hicrep'
 import { strataOf } from '../tasks/hicrep'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import type { MetaCooler } from '../../metacooler/MetaCooler'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
-import { forEachDiagonalTile, usableBlock, type Span } from './blocks'
+import { forEachDiagonalTile, missingSequencesNote, usableBlock, type Span } from './blocks'
 
 /** One map in the comparison, with the name the figure calls it. */
 interface Compared {
@@ -54,6 +61,16 @@ export const runHicrep: TaskRunner = async (job) => {
       'Reproducibility reads a second file, and this venue cannot open one. Run it in the app, ' +
         'or with `metacooler-run hicrep <file> --against <other>`.',
     )
+  }
+  // Unanswered is every sequence and an empty list is nothing (§18.2): a reader
+  // who pressed **none** is told so rather than handed every sequence of every
+  // map. The estimate refuses that run before it is sent; one that arrives
+  // anyway — a stored session, a hand-written line — hears it before a second
+  // file is mounted for it.
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to compare over.')
+    return []
   }
 
   const balance = boolParam(job.params, 'balance', false)
@@ -102,20 +119,26 @@ async function compare(
 ): Promise<TaskOutput[]> {
   const { balance, value, h, maxK } = options
 
-  const wanted = listParam(job.params, 'sequences')
+  // Every sequence where the run was never asked, and the ticked ones this
+  // file has where it was; an empty list has already been turned away in
+  // `runHicrep`. A ticked name this file has not got is named and left out
+  // (§5.9) rather than dropped in silence — and a list of nothing but those is
+  // said as that, not as nothing ticked.
+  const wanted = tickedSequences(job.params, 'sequences')
   const chosen: number[] = []
-  if (wanted.length === 0) {
+  const absent: string[] = []
+  if (wanted === null) {
     for (let cid = 0; cid < job.mc.nContigs; cid++) chosen.push(cid)
   } else {
     for (const name of wanted) {
       const cid = contigIdFor(job.mc, name)
       if (cid >= 0) chosen.push(cid)
+      else absent.push(name)
     }
   }
-  if (chosen.length === 0) {
-    job.note('No sequence is ticked, so there is nothing to compare over.')
-    return []
-  }
+  const said = missingSequencesNote(job.mc, absent, chosen.length)
+  if (said !== null) job.note(said)
+  if (chosen.length === 0) return []
 
   const n = maps.length
   // Pooled across sequences by the same weights the strata are pooled by, which

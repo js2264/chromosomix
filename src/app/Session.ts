@@ -4514,6 +4514,10 @@ export class Session {
           }
         : {}),
       onRecompute: (entry) => this.analysis?.recompute(entry),
+      // Read through `this.analysis` at the press, as `onRecompute` is: a
+      // change of resolution replaces the workspace under the same card, and
+      // carries its runs across to the new one.
+      createdAt: (entry) => this.analysis?.createdAt(entry.id),
     })
     this.structureCard = card
     return card.el

@@ -36,6 +36,7 @@
 import { DEFAULT_DIVERGING_COLORMAP } from '../render/colormaps'
 import type { TrackOp } from './derived'
 import type { FeatureStyle } from './fields'
+import type { DetectedFormat } from './worker/protocol'
 
 /**
  * `metadata` and `classes` are the two the file itself supplies (§8.12). A
@@ -1194,6 +1195,23 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     // …and the same for a model, whose accessor is {@link structureOf}.
     ...(isStructure(kind) ? { structure: defaultStructureStyle() } : {}),
   }
+}
+
+/**
+ * The value axis a file of this format opens on, where the format has one of
+ * its own — `undefined` for every format whose kind's default is right for it.
+ *
+ * One has, and it is the one whose values have a scale before a byte of them is
+ * read: a bedMethyl's are percentages, so its lane opens clipped to **0–100**
+ * where every other track opens on the autoscale (§8.20). A methylation lane
+ * autoscaled to 12–94 % says nothing about how methylated anything is, and the
+ * autoscale every track has is one press away. The kind cannot say this — a
+ * bedMethyl is a `track` exactly as a bigWig is, which is the point of it being
+ * one — so {@link defaultStyle} cannot either: only the bytes can, and the
+ * loader asks this when a freshly imported row lands.
+ */
+export function openingLimits(format: DetectedFormat): Limits | undefined {
+  return format === 'bedmethyl' ? { auto: false, min: 0, max: 100 } : undefined
 }
 
 // ---------------------------------------------------------------------------
