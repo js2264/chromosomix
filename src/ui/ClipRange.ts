@@ -13,10 +13,11 @@
  * four significant figures per pixel and no way to type the one you wanted
  * without going through the box anyway.
  *
- * Units are **transformed** units, the same ones `vmax` has always been in and
- * the ones the URL hash carries. A reader thinks in counts, so the caption under
- * the boxes prints the untransformed pair — and the colourbar, which is labelled
- * in counts throughout, remains the authority.
+ * Units are **transformed** units, the same ones `vmax` has always been in, the
+ * ones the URL hash carries, and the ones the key in the map's corner prints
+ * and takes typed — its title names the transform, `Balanced (log10)`. A reader
+ * thinks in counts, so the caption under the boxes prints the untransformed
+ * pair, in the units the readout under the pointer uses.
  *
  * Both of those numbers are on screen at once — `-4.182` in a box, `0.000066`
  * in the caption — so both say what they are: the caller puts the transform in

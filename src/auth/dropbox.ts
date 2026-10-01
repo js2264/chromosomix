@@ -118,7 +118,7 @@ export const DROPBOX_SIGN_IN_AVAILABLE = !IS_STANDALONE
 
 /** What the Dropbox section and the folder backend both draw themselves from. */
 export interface DropboxState {
-  /** An app key is stored, so signing in is a thing that could work. */
+  /** This site was built with an app key, so signing in is a thing that could work. */
   configured: boolean
   /** A token is held **and** has not expired. */
   signedIn: boolean
@@ -187,9 +187,9 @@ function expire(): boolean {
 /**
  * What this page can say about Dropbox right now.
  *
- * Recomputed on every call rather than cached, because two of the three answers
- * change without anybody touching this module: the app key can be edited in
- * another tab, and the token expires on its own.
+ * Recomputed on every call rather than cached, because the answer changes
+ * without anybody touching this module: the token expires on its own. The app
+ * key does not — it is the one the site was built with.
  */
 export function dropboxState(): DropboxState {
   // Announced from a *getter*, for the reason `googleState` documents: the
@@ -201,7 +201,7 @@ export function dropboxState(): DropboxState {
   return { configured: readAppKey() !== null, signedIn: token !== null, expiresAt }
 }
 
-/** Hear about a sign-in, a sign-out, an expiry or an edited app key. */
+/** Hear about a sign-in, a sign-out or an expiry. */
 export function subscribeDropbox(listener: () => void): () => void {
   listeners.add(listener)
   return () => {

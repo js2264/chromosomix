@@ -48,8 +48,10 @@ export const BOOST_ALPHA = 0.2
  * The most bins one sequence may have and be boosted.
  *
  * Floyd–Warshall is cubic in them: yeast's chromosome IV at 1 kb is 1,532 bins
- * and about four seconds; 3,000 is about thirty. Past that the wait is a refusal
- * better said than suffered — a coarser resolution is a fraction of the bins.
+ * and about a second and a half in the WebAssembly kernel (§6.5), so 3,000 is
+ * about eleven — and four and thirty where there is no SIMD and the JavaScript
+ * loop runs it. Past that the wait is a refusal better said than suffered — a
+ * coarser resolution is a fraction of the bins.
  */
 export const BOOST_MAX_BINS = 3000
 

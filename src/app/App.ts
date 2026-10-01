@@ -1,5 +1,5 @@
 /**
- * The window: header, tab strip, three columns, status bar, address bar.
+ * The window: header, tab strip, five columns, status bar, address bar.
  *
  * Everything here is shared by every open session and owned by none of them. A
  * {@link Session} holds a file and the views of it; this holds the furniture

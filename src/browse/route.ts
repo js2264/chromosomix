@@ -22,7 +22,7 @@
  *
  * `unknown` is therefore "this app has no route for that name", not "this file is
  * broken". A row saying so is more use than a row that is absent: a reader
- * looking at a directory wants to see the directory, and a `.bam` sitting there
+ * looking at a directory wants to see the directory, and a `.cram` sitting there
  * unhighlighted answers *why is nothing happening when I click it* before it is
  * asked.
  */

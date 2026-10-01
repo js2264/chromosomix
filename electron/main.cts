@@ -190,12 +190,14 @@ async function handleAppRequest(request: Request): Promise<Response> {
  *
  * The `HEAD` is the problem. `RemoteRangeSource.open()` probes with one, it
  * carries no `Range`, so it is answered compressed — and the reader then refuses
- * the whole file with `remote-compressed` rather than trusting a
+ * to read the file in ranges, with `remote-compressed`, rather than trusting a
  * `content-length` that describes the gzip stream. That refusal is correct and
- * stays. This simply means the desktop build stops provoking it: the same file,
- * on the same host, opens here and is refused on the website. GitHub Pages is
- * exactly such a host, which is the case `RemoteRangeSource` documents as having
- * no client-side fix at all.
+ * stays, and the website answers it by downloading the whole file instead, up
+ * to 128 MiB encoded, refusing past that (`worker/sources.ts`). This simply
+ * means the desktop build stops provoking it: the same file, on the same host,
+ * is read here in ranges like any other. GitHub Pages is exactly such a host,
+ * which is the case `RemoteRangeSource` documents as having no client-side fix
+ * for ranges at all.
  *
  * Only http(s), and only the request headers: this states a preference on an
  * outgoing request and can change nothing else. In particular it is **not** an

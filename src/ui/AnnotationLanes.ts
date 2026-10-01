@@ -441,11 +441,11 @@ export class AnnotationLanes {
   /** The category runs each lane was painted from, for the readout. */
   private readonly metaRuns = new Map<string, { frame: LaneFrame; runs: CategoryRun[] }>()
   /**
-   * The sample cache, or `null` on a file with no annotation worker.
+   * The sample cache, or `null` on a panel handed no annotation worker.
    *
-   * A file with a genome layer carries no annotations at all (§8.5), so its
-   * stacks stay empty and nothing there ever samples — and building a cache
-   * would spawn a thread to answer no questions.
+   * Every file has one, a `.metacool` included (§8.5); a panel without one
+   * keeps its stacks empty and nothing there ever samples — and building a
+   * cache would spawn a thread to answer no questions.
    */
   private readonly cache: SampleCache | null
   /** Feature layouts from the last draw, for hit testing without a re-layout. */

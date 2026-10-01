@@ -22,10 +22,11 @@
  * ## Shards
  *
  * ENCODE's rows are twelve files chosen by assembly and kind of file, and the
- * choice is two radio groups at the top of the rail, held in the view under
- * the keys `group` and `category`. Changing one fetches the shard it names;
- * everything else about the view survives the fetch, so a reader who ticked
- * *ChIP-seq* on GRCh38 and switches to hg19 keeps *ChIP-seq* ticked.
+ * choice is two groups of checkboxes at the top of the rail, held in the view
+ * under the keys `group` and `category`. Every ticked pair is a shard read, and
+ * the rows on screen are their union; everything else about the view survives
+ * the fetch, so a reader who ticked *ChIP-seq* on GRCh38 and ticks hg19 as well
+ * keeps *ChIP-seq* ticked.
  */
 
 import { button, el } from '../dom'

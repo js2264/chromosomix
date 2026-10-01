@@ -205,7 +205,11 @@ export interface StructurePanelProps {
   onClose(): void
   /** A double-click on a bead: take the maps there. */
   onGoTo(range: { contig: string; start: number; end: number }): void
-  /** A g3d dropped on the cell, or named by URL, replaces the model. */
+  /**
+   * A file dropped on the cell, or a URL out of the Files column: the
+   * session's to route, as a drop anywhere else is. A g3d opens a cell of its
+   * own (§25.3) and leaves this cell's model where it is.
+   */
   onDrop(file: File): void
   onDropUrl(url: string): void
   /** The grip before the name was taken hold of, or let go. */
@@ -935,10 +939,10 @@ export class StructurePanel implements DeckCell {
    */
 
   /**
-   * Draw this row: the Structures card's *show in the deck*, and the picker.
+   * Draw this row: the Structures card's eye, or its row dropped on this cell.
    *
-   * Remembered per file, so the model the reader chose is the one a reload
-   * draws; a row that is gone by then falls back to the first (`sync`).
+   * Remembered per file and seat, so the model the reader chose is the one a
+   * reload draws; a row that is gone by then falls back to the first (`sync`).
    */
   showModel(id: string): void {
     this.chosen = id
@@ -953,11 +957,14 @@ export class StructurePanel implements DeckCell {
   /**
    * Find the structure row and build its scene, if it has arrived.
    *
-   * The row the reader chose — from the Structures card or the cell's own
-   * picker, remembered per file — or the first `structure` row of the store
-   * where none was chosen or the chosen one is gone: one structure cell per
-   * deck draws one model at a time (§25). A row still loading, or one that
-   * refused, is a sentence in the cell rather than a picture.
+   * The row the reader chose — by the Structures card's eye or its row dropped
+   * here, remembered per file and seat — or, where none was chosen or the
+   * remembered one is gone, the first `structure` row no sibling cell is
+   * drawing, and the first of all where every one is drawn: each cell draws
+   * one model, and a model can have a cell of its own (§25.3). The row this
+   * cell is drawing, removed from the card, empties it instead (below). A row
+   * still loading, or one that refused, is a sentence in the cell rather than
+   * a picture.
    */
   private sync(): void {
     const store = this.props.store()
@@ -2068,7 +2075,10 @@ export class StructurePanel implements DeckCell {
     canvas.tabIndex = 0
   }
 
-  /** A dropped g3d replaces the model; a dragged map is the grid's business. */
+  /**
+   * A dragged Structures row is drawn here; a dropped file goes to the session,
+   * where a g3d opens a cell of its own; a dragged map is the grid's business.
+   */
   private watchDrops(): void {
     // A **row of the Structures card**, dragged onto this cell: draw that model
     // here (§25.3). The same gesture an empty cell takes, and it has to be

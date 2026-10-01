@@ -298,8 +298,8 @@ describe('a structure cell in the deck', () => {
     // A `3d` repeated in a link used to be dropped on the way in, on the
     // reasoning that both cells would draw the one model the session has. Two
     // cells of one model are two *views* of it — each has its own camera, its
-    // own mirror and its own planted axes — so the link keeps what it was
-    // given.
+    // own height and its own turn; the mirrors and the planted axes are the
+    // model's — so the link keeps what it was given.
     const { deck } = make(fakeStore([structureEntry()]))
     deck.apply(state('3d|3d'))
     expect(structureCells(deck)).toHaveLength(2)
@@ -934,7 +934,7 @@ describe('a tracks cell in the deck', () => {
 })
 
 // ---------------------------------------------------------------------------
-// A lead that is not a map (§25 stage D)
+// A lead that is not a map (§25.3)
 // ---------------------------------------------------------------------------
 
 describe('the deck beside the browser', () => {

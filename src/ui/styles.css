@@ -6289,8 +6289,7 @@ canvas.is-frozen {
 /* --- the landing page's places -----------------------------------------
    One button per place a window can connect to, each a door to the Connect
    dialog's pane for it (`ui/connectFronts.ts`). Named for that dialog's own
-   tiles — `.connect-provider` is the tile, this is the button — and not for
-   `.pick-place`, which is a *connected* place in the file picker. The same
+   tiles — `.connect-provider` is the tile, this is the button. The same
    button the dialog's sign-ins are, because it is the same gesture met one
    screen earlier. */
 
@@ -7340,33 +7339,6 @@ canvas.is-frozen {
 }
 
 .custom-keep:empty {
-  display: none;
-}
-
-/* --- picking from a connected place ---------------------------------------- */
-
-.pick-body {
-  gap: 0.5rem;
-}
-
-.pick-places {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.pick-place {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.pick-place.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.pick-note:empty {
   display: none;
 }
 
@@ -8490,9 +8462,10 @@ body.is-carrying-card * {
 /* --- annotations (spec §8) --------------------------------------------- */
 
 /* The three cards go straight into the Annotations column's body, which already
-   stacks and spaces them; there is no host of their own. On a `.metacool` the
-   column is `setAvailable(false)` and leaves the layout entirely — §8.5's "not
-   rendered", rather than a disabled card nobody can enable. */
+   stacks and spaces them; there is no host of their own. With no file open the
+   column is `setAvailable(false)` and leaves the layout entirely, rather than
+   standing empty beside the dropzone; every file has it, a `.metacool`
+   included (§8.5). */
 .annotation-card {
   display: flex;
   flex-direction: column;

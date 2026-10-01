@@ -7,7 +7,7 @@
  * the two tables read once at open, and the annotation stores — and it swapped
  * the view underneath them. All of that is still here, unchanged in substance;
  * what left is the window furniture, which is now {@link App}'s, because a
- * header, three columns and one address bar are shared by every session and a
+ * header, five columns and one address bar are shared by every session and a
  * file is not.
  *
  * The split is what makes tabs possible, and it is the whole of what makes them
@@ -17,7 +17,7 @@
  * did either would work perfectly until the second tab was opened.
  *
  * Routing is a switch over `ViewState.view`; there is no route table and no
- * router library, because the whole navigable surface is eight view kinds and
+ * router library, because the whole navigable surface is ten view kinds and
  * one URL hash (spec §5.5).
  */
 
@@ -3743,7 +3743,7 @@ export class Session {
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
-      // The deck's cells follow this view when it is their lead (§25 stage D);
+      // The deck's cells follow this view when it is their lead (§25.3);
       // by every road the window moves, a link included, which is why it is
       // not the locus report above.
       onWindowChange: () => this.deck?.leadMoved(),
@@ -4011,12 +4011,12 @@ export class Session {
       if (wasEmpty && label !== undefined && this.name === null) this.rename(label)
       return
     }
-    // Everything else is a track on what is here, and the two tabs with nowhere
-    // to put one answer exactly as they answer a dropped file: an empty one is
-    // filled, and a metacool — which has no annotation machinery at all (§8.5) —
-    // does nothing, because there is no coordinate system for a track to be
-    // drawn against. This must not open it instead: the promise of the button
-    // this arrives from is that it will not throw the open file away.
+    // Everything else is a track on what is here, and a tab with nowhere to put
+    // one yet answers exactly as it answers a dropped file: an empty one is
+    // filled, and one whose file has not finished building its annotation
+    // stores does nothing. Every file gets those stores, a metacool included
+    // (§8.5). This must not open it instead: the promise of the button this
+    // arrives from is that it will not throw the open file away.
     if (this.annotations === null) {
       if (wasEmpty) {
         await this.open(uri, source, undefined, undefined, undefined, label)
@@ -4103,8 +4103,9 @@ export class Session {
       return
     }
     const held = this.annotations
-    // A metacool carries no annotations (§8.5) and has no assembly to replace,
-    // so there is nothing a dropped track could join.
+    // No stores yet — nothing open, or a file still building them — so there is
+    // nothing a dropped track could join. Every file gets them, a metacool
+    // included (§8.5).
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
     // The loader raises {@link considerLengths} for every file it is handed, so
@@ -4127,14 +4128,15 @@ export class Session {
   }
 
   /**
-   * A structure file arrived: put the cell that draws it beside the map (§25).
+   * A structure file arrived: open a cell for it beside the map (§25.3).
    *
    * By the file's *name*, because this runs the moment the file is handed to
-   * the loader and before anything has read it; a structure under another
-   * name lands in the Tracks card as a row and the reader opens its cell from
-   * the deck's own bar. One cell per deck, which `PanelDeck.add` keeps, so a
-   * second g3d replaces the picture rather than adding a cell. Nothing where
-   * there is no map to put it beside yet (§25 stage D).
+   * the loader and before anything has read it, so the cell is on screen while
+   * the file is read; a structure this test misses gets its cell when its row
+   * arrives, from {@link watchStructureRows}. A cell **per model**: a new cell
+   * draws the model no other cell is drawing, so a second g3d opens beside the
+   * first rather than taking its picture. Nothing where this view cannot hold a
+   * deck ({@link deckIsPossible}).
    */
   private openStructureCell(name: string): void {
     if (!isStructureName(name)) return
@@ -4349,8 +4351,8 @@ export class Session {
    * Whether the map on screen can be put down without being unloaded.
    *
    * Three conditions, and each is a way the browser would come up empty rather
-   * than a preference. A metacool has no annotation machinery at all (§8.5), so
-   * there is no 1D browser to fall back to; a file whose contigs have not been
+   * than a preference. A file whose annotation stores are not built yet has
+   * nothing for a 1D browser to draw from; a file whose contigs have not been
    * read yet has no assembly to build; and a session that is already browsing
    * has nothing to put down.
    */
@@ -4499,8 +4501,8 @@ export class Session {
    * into the deck's cell and the way out as a bed3d.
    *
    * Under the Tracks card at each of the three places one is mounted, so a
-   * model is found where a track is. *Show in the deck* opens the cell where
-   * there is none, which is the same road a dropped g3d takes.
+   * model is found where a track is. A row's eye opens a cell of its own for
+   * it, which is the same road a dropped g3d takes.
    */
   private structureCardFor(store: AnnotationStore, loader: AnnotationLoader): HTMLElement {
     this.structureCard?.destroy()
@@ -4746,7 +4748,7 @@ export class Session {
    *
    * In a deck the old meaning was a trap. Putting the map down for the browser
    * re-reads the state with no map to lead, and a deck of maps cannot stand
-   * beside a browser (§25 stage D): the companions went with it. Hiding the
+   * beside a browser (§25.3): the companions went with it. Hiding the
    * cell keeps every map where it is and the session on its file.
    */
   private toggleLeadShown(): void {
@@ -4984,12 +4986,14 @@ export class Session {
    * Build the annotation stores and cards for a newly opened file, or tear the
    * previous file's down.
    *
-   * The gate is one line and it is §8.5's: a file with a genome layer gets
-   * nothing — no cards, no worker, no listeners. The reason is not effort. A
-   * metacool's axis is contigs from thousands of independently assembled
-   * organisms, so a GTF or a bigWig keyed on contig names either coincides or
-   * misleads, and drawing a gene model across a MAG boundary would assert a
-   * coordinate system that does not exist.
+   * **Every file gets them**, a metacool included — the store, the worker, the
+   * loader and the cards (§8.5). There used to be a gate here: a file with a
+   * genome layer got nothing, on the argument that its axis is contigs from
+   * thousands of independently assembled organisms, so a track keyed on contig
+   * names either coincides or misleads. A metagenome is one co-assembly binned
+   * afterwards, so its names are one namespace, and what it needed instead was
+   * an honest report of which MAGs a track covers — the `genome` the loader is
+   * handed below. Only the Contact maps card stays off a metacool.
    */
   private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
     this.annotations?.client.destroy()
@@ -6748,7 +6752,7 @@ export class Session {
         this.refreshAesthetics()
       },
       memoryKey: () => this.memoryKey(this.file?.uri ?? this.assembly?.uri ?? ''),
-      // The browser as lead is named for its assembly (§25 stage D); a map for
+      // The browser as lead is named for its assembly (§25.3); a map for
       // its file, under whatever the reader called it.
       leadName: () =>
         this.store.state?.view === 'browser'
@@ -6927,8 +6931,8 @@ export class Session {
           const held = this.annotations
           const file = this.file
           if (held === null) return undefined
-          // Beside a browser the axis is the browser's own assembly (§25
-          // stage D); beside a map, the map's sequences, kept per file.
+          // Beside a browser the axis is the browser's own assembly (§25.3);
+          // beside a map, the map's sequences, kept per file.
           let assembly: Assembly | null
           if (this.store.state?.view === 'browser' || file === null) assembly = this.assembly
           else {
@@ -7011,7 +7015,7 @@ export class Session {
   private get deckIsPossible(): boolean {
     if (this.file?.info.hasGenomes === true) return false
     const view = this.store.state?.view
-    // The browser names a place too (§25 stage D): a deck beside it holds
+    // The browser names a place too (§25.3): a deck beside it holds
     // tracks and a structure, drawn against the assembly its axis is. What may
     // *not* join it is a map — {@link mapsAllowed} — since a map beside a
     // browser has no lead to follow.
@@ -7019,7 +7023,7 @@ export class Session {
     return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
   }
 
-  /** Whether a map may join the deck: only beside a map (§25 stage D). */
+  /** Whether a map may join the deck: only beside a map (§25.3). */
   private get mapsAllowed(): boolean {
     return this.file !== null && this.store.state?.view !== 'browser'
   }

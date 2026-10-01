@@ -19,9 +19,12 @@
  *
  * `h5wasm` and `@gmod/bbi` are marked external and resolved from `node_modules`
  * at run time, because both ship a `.wasm` or a native-adjacent asset that a
- * single-file bundle cannot carry. That is also why the CLI is run from a clone
- * rather than published as a standalone binary — the same decision, and the same
- * reason, as `package.json`'s `private`.
+ * single-file bundle cannot carry; `generic-filehandle2`, which `@gmod/bbi`
+ * reads through, goes with them. That is also why the three are `dependencies`
+ * rather than dev ones in `package.json`: the package is published with this
+ * bundle under `bin` and `dist-cli/` in its `files`, so `npx metacooler-run`
+ * works with no clone, and npm has to have installed them by the time the
+ * command runs (SPECS §22.2).
  */
 
 import { builtinModules } from 'node:module'

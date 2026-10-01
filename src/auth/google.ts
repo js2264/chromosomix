@@ -120,7 +120,7 @@ export const GOOGLE_SIGN_IN_AVAILABLE = TARGET === 'web'
 
 /** What the account section and the error view draw themselves from. */
 export interface GoogleState {
-  /** A client id is stored, so signing in is a thing that could work. */
+  /** This site was built with a client id, so signing in is a thing that could work. */
   configured: boolean
   /** A token is held **and** has not expired. */
   signedIn: boolean
@@ -207,9 +207,9 @@ function expire(): boolean {
 /**
  * What this page can say about Google right now.
  *
- * Recomputed on every call rather than cached, because two of the three answers
- * change without anybody touching this module: the client id can be edited in
- * another tab, and the token expires on its own.
+ * Recomputed on every call rather than cached, because the answer changes
+ * without anybody touching this module: the token expires on its own. The
+ * client id does not — it is the one the site was built with.
  */
 export function googleState(): GoogleState {
   // Announced from a *getter*, which is worth one sentence: the listeners this
@@ -225,7 +225,7 @@ export function googleState(): GoogleState {
   }
 }
 
-/** Hear about a sign-in, a sign-out, an expiry or an edited client id. */
+/** Hear about a sign-in, a sign-out or an expiry. */
 export function subscribeGoogle(listener: () => void): () => void {
   listeners.add(listener)
   return () => {

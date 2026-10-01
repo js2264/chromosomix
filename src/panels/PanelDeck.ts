@@ -482,7 +482,7 @@ export interface PanelDeckProps {
    */
   tracks?: TracksCellProps
   /**
-   * Whether a **map** may join this deck (§25 stage D). Absent is yes. `false`
+   * Whether a **map** may join this deck (§25.3). Absent is yes. `false`
    * for a deck whose lead is the 1D browser: its cells are tracks and a
    * structure, and a map dropped on it is refused in the bar rather than
    * opened beside a lead it cannot follow.
@@ -491,7 +491,7 @@ export interface PanelDeckProps {
 }
 
 /**
- * A lead that is not a map (§25 stage D): the session's browser, re-parented
+ * A lead that is not a map (§25.3): the session's browser, re-parented
  * into cell 0 like a map's view, answering the two things the cells need of a
  * lead — where it is looking, as loci, and to be taken somewhere.
  */
@@ -555,19 +555,19 @@ const DECK_EXPORT_DPI = 300
  * In the deck's own bar and on the `+` edges rather than on an error screen: a
  * refusal to open a *sixty-fifth* map is not a reason to take the others away.
  */
-/** A map offered to a deck whose lead is the browser (§25 stage D). */
+/** A map offered to a deck whose lead is the browser (§25.3). */
 const NO_MAP_LEAD =
   'This deck is of tracks and a structure beside the browser. A map opens as a session of its ' +
   'own — drop it on the tab strip, or open it first and put the tracks beside it.'
 
 /**
- * What the structure button promises, and what it says once it cannot.
+ * What the structure button promises.
  *
- * A deck holds one structure cell (§16.11), so the button is greyed rather than
- * hidden once there is one — a road a reader has found and pressed should not
- * vanish, and §18.1's rule for a greyed control is that it carries the reason
- * in its own tooltip. Left with the opening sentence on it, it was a promise it
- * could no longer keep.
+ * One more structure cell at every press (§16.11), drawing the first model no
+ * other cell is drawing (§25.3). While a deck held one structure cell the
+ * button was greyed once there was one, with the reason in this tooltip; a
+ * deck holds as many as the reader asks for now, so the button is always live
+ * and this sentence always true.
  */
 const ADD_STRUCTURE = 'Open a cell drawing a 3D structure beside the maps; each model gets its own'
 
@@ -650,9 +650,8 @@ export class PanelDeck {
   private readonly addRow: HTMLElement
   private readonly urlInput: HTMLInputElement
   /**
-   * The one cell that is not a file (§25). Greyed rather than hidden while
-   * the deck has one, since a deck holds one structure cell and a button that
-   * did nothing would read as a bug.
+   * The one cell that is not a file (§25), one more at every press — see
+   * {@link ADD_STRUCTURE}.
    */
   private readonly structureButton: HTMLButtonElement
   /** A refusal about the deck as a whole, rather than about one panel. */
@@ -664,7 +663,7 @@ export class PanelDeck {
   private slots: Slot[] = []
   private readonly lock = new ViewportLock()
   private lead: MatrixPanel | null = null
-  /** The lead when it is not a map — the browser (§25 stage D); else `null`. */
+  /** The lead when it is not a map — the browser (§25.3); else `null`. */
   private leadAxis: LeadAxis | null = null
   private readonly unsubscribeHover: () => void
   /** Takes the deck's places off offer to a carried lane (`ui/laneCarry.ts`). */
@@ -887,8 +886,8 @@ export class PanelDeck {
       // one-shot copy of it from four different rows was four doors to one room.
       //
       // The one cell that is not a file: the session's 3D model, in a cell of
-      // its own (§25). Greyed rather than hidden where the deck has one, with
-      // the reason on it — see {@link ADD_STRUCTURE}.
+      // its own (§25). A press opens one more, however many the deck holds —
+      // see {@link ADD_STRUCTURE}.
       this.structureButton,
       // **Both lead with the verb**, like every other button in the row. They
       // read `3D structure` and `tracks`, which in a row opened by a button
@@ -1790,7 +1789,7 @@ export class PanelDeck {
       locked: held?.locked !== false,
     }
     if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
-      // A map named beside a lead that is not one (§25 stage D): held as the
+      // A map named beside a lead that is not one (§25.3): held as the
       // cell it would have been, under its name, rather than opened beside a
       // browser it could not follow — and rather than dropped from the link,
       // which would lose the reader's arrangement for opening it in the
@@ -3796,7 +3795,7 @@ export class PanelDeck {
       addMap,
       ...showLead,
       // Only where a map can be: a deck beside the 1D browser holds tracks and
-      // structures (§25 stage D), and a press to match maps' scales there was
+      // structures (§25.3), and a press to match maps' scales there was
       // a button with nothing to act on.
       ...(cellsOnly ? [] : [share, resolutions]),
       columns,
@@ -3986,7 +3985,7 @@ export class PanelDeck {
 
   /**
    * The lead the session mounted when it is **not a map** — its browser
-   * (§25 stage D). `null` when the lead is a map, or nothing.
+   * (§25.3). `null` when the lead is a map, or nothing.
    *
    * The map road is {@link setLead}; the two are exclusive, and the session
    * calls the one for the view it mounted. The cells are told where the new
@@ -4247,7 +4246,7 @@ export class PanelDeck {
     return this.shownOrder().map((cell) => {
       try {
         if (cell !== LEAD_CELL) return cell.panel?.map?.deckFigure(now) ?? cell.cell?.figure(now) ?? null
-        // The browser as lead draws its own cell (§25 stage D) — it was a gap
+        // The browser as lead draws its own cell (§25.3) — it was a gap
         // in the figure where the tracks stood on screen.
         if (this.lead === null) return leadAxis?.figure?.(now) ?? null
         return this.lead.deckFigure(now)

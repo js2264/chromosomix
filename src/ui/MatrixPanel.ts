@@ -536,10 +536,10 @@ export interface MatrixPanelOptions {
   /**
    * Draw annotations beside and on the matrix (spec §8).
    *
-   * Absent on every view of a `.metacool`, which is not a decision this panel
-   * makes: the shell only supplies it for a file with no genome layer (§8.5).
-   * With it absent the panel is byte for byte the panel it was before
-   * annotations existed — no lanes, no listeners, no worker.
+   * Supplied on every file, a `.metacool` included (§8.5), once the session has
+   * built its annotations, and absent before then — which is not a decision
+   * this panel makes. With it absent the panel is byte for byte the panel it
+   * was before annotations existed — no lanes, no listeners, no worker.
    */
   annotations?: AnnotationContext
   /**
@@ -1179,9 +1179,9 @@ export class MatrixPanel {
   /**
    * The store the lanes are drawn from.
    *
-   * The session's, where the file has one. Where it has not — a file with a
-   * genome layer carries no annotations at all (§8.5) — an empty one that
-   * nothing persists, so that everything downstream of a store can be built
+   * The session's, where it has handed one over — every file has one, a
+   * `.metacool` included (§8.5). Where it has not, an empty one that nothing
+   * persists, so that everything downstream of a store can be built
    * unconditionally rather than behind four `null` checks. It stays empty: no
    * worker, no loader, no cards, and nothing that could load a file.
    */
@@ -1475,8 +1475,8 @@ export class MatrixPanel {
   /**
    * The lane stacks — all four of them, on every file.
    *
-   * Built unconditionally, including on a file that carries no annotations
-   * (§8.5), where they stay empty. The gate decides what can be *put* in the
+   * Built unconditionally, including on a panel handed no annotations, where
+   * they stay empty. What the panel was given decides what can be *put* in the
    * stacks, not whether the stacks exist: keeping them means the drop zones,
    * the edge-to-edge drag and the loop marks are one code path rather than one
    * with a hole in it.
@@ -1736,7 +1736,7 @@ export class MatrixPanel {
     // the constructor is still building the cards below. Only the canvases are
     // made here; where they are mounted and what listens to them comes later.
     //
-    // Where the file has no annotation machinery there is still a store, empty
+    // Where the panel was handed no annotations there is still a store, empty
     // and persisting nothing, so the lane machinery below has one object to be
     // built against rather than a `null` to be checked at every use.
     this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
@@ -1850,9 +1850,10 @@ export class MatrixPanel {
         this.manualVmax = clip?.vmax
         this.rescale()
       },
-      // The boxes are in transformed units; the caption says what those are in
-      // the units the colourbar and the tooltip use — and in the word for them
-      // the key and the readout under the pointer already use.
+      // The boxes are in transformed units, as the key in the map's corner is;
+      // the caption says what those are in the units the readout under the
+      // pointer uses — and in the word for them the key and the readout
+      // already use.
       format: (value) => formatCount(inverseTransform(value, this.transform)),
       unit: () => (this.comparisonLabel() !== null ? '' : this.scoreWord()),
     })
@@ -1885,10 +1886,10 @@ export class MatrixPanel {
             'Auto is 0 to the 99th percentile of the values in view.',
         },
         // The transform in the label, because the boxes are in transformed
-        // units while the caption under them is in the units the colourbar is
-        // labelled in: `-4.182` and `0.000066` are the same bound written two
-        // ways, and with neither of them named a reader typing a clip could not
-        // tell which to type.
+        // units while the caption under them is in the units the readout under
+        // the pointer uses: `-4.182` and `0.000066` are the same bound written
+        // two ways, and with neither of them named a reader typing a clip could
+        // not tell which to type.
         this.clipLabel,
         this.clip.el,
       ),

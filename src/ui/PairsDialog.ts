@@ -10,7 +10,7 @@
  * grid is a choice, and there is no map to show until somebody makes it.
  *
  * So the shape is: refuse the open, ask, open again. That is the same two-step
- * an `.mcool` addressed at its root already takes (§3.4) — the difference is
+ * an `.mcool` addressed at its root already takes (§9) — the difference is
  * only that a collection's answer is in the file and this one is not.
  *
  * ## What the dialog is responsible for

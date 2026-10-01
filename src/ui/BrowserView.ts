@@ -365,7 +365,7 @@ export interface BrowserViewProps {
   sampleWidth?(): number
   /**
    * The window moved, by any road — a pan, the box, a link, the deck. What the
-   * deck listens to when this view is its lead (§25 stage D), because a link
+   * deck listens to when this view is its lead (§25.3), because a link
    * moving the view does not report a locus and the cells still have to
    * follow. Nothing is passed: the listener asks {@link framedWindows}.
    */
@@ -1085,7 +1085,7 @@ export class BrowserView {
   /**
    * Route this view's export to the deck it leads, or back to itself — the
    * map's own hook (`MatrixPanel.setDeckExport`), for the browser as a lead
-   * (§25 stage D). With a model beside the tracks, the Export card and the
+   * (§25.3). With a model beside the tracks, the Export card and the
    * keys are asked for the arrangement; with the tracks hidden and the model
    * alone on screen (§16.9), for the one picture there is — never for the
    * tracks the reader took off it.

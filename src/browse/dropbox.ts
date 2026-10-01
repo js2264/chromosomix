@@ -6,8 +6,9 @@
  * simply *whatever the app was granted* — the whole account, or the app’s own
  * folder inside it, depending on how the lab registered the app (§24.7,
  * `docs/hosting.md`). There is nothing to choose and therefore nothing to store,
- * so the backend answers one folder whenever an app key exists and none when it
- * does not, and `auth/dropbox.ts` holds the only stored thing there is.
+ * so the backend answers one folder while this tab is signed in and none when it
+ * is not, and `auth/dropbox.ts` holds the one thing there is to hold — the
+ * token, in memory; the app key is the site's, built into the page.
  *
  * ## Paths are Dropbox’s own, with one adjustment at the boundary
  *
@@ -90,9 +91,10 @@ export function dropboxFolder(): ConnectedFolder {
     label: 'Dropbox',
     kind: 'dropbox',
     root: '/',
-    // The app key is a line in `localStorage`, so the folder is still here after
-    // a reload — the *sign-in* is not, which is a different question and the one
-    // `usable` below answers.
+    // Not a snapshot, so the row carries no *this visit*: what it lists is the
+    // account itself, asked again on every listing. Whether the row is there at
+    // all is the sign-in's question — a reload ends one, and the registration
+    // below takes the row away with it — and `usable` below answers it.
     durable: true,
 
     async list(path: string): Promise<FolderListing> {

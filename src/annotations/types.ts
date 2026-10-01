@@ -115,9 +115,11 @@ export type AnnotationKind =
  * `synthetic` is the interesting one (§18.5). An analysis that produces one
  * value per bin has produced a track, and a track belongs on the map rather than
  * in the drawer it was computed in. Its rows are `kind: 'track'` and are
- * indistinguishable from a loaded bigWig from the renderer down — what makes
- * them their own *card* is only that they are grouped under one heading and
- * carry an export row the loaded tracks have no use for.
+ * indistinguishable from a loaded bigWig from the renderer down — and on
+ * screen too: they are rows of the Tracks card, in the one list with the loaded
+ * ones, and the card they were grouped under is gone. The field outlived it,
+ * and says what only a synthetic row has: a `*` after its name, what made it,
+ * its exports and its framing, and Recompute where it came back detached.
  *
  * There was a fourth, `viewpoint`, for the virtual 4C lane that shift-drag used
  * to create: a reading of the picture rather than a file, belonging to no card,
@@ -577,8 +579,8 @@ export interface FeatureSet {
    * The categories a barChart draws, or absent on every other format (§8.17).
    *
    * Optional on the set rather than a `FeatureSet` of its own, for §8.14's
-   * reason restated: `payload.kind === 'features'` is tested at a dozen sites
-   * across the browser, the map lanes, the search box, the export and the
+   * reason restated: `payload.kind === 'features'` is tested at about two dozen
+   * sites across the browser, the map lanes, the search box, the export and the
    * analysis inputs, and a second feature shape does not *break* any of them —
    * it makes every one of them skip the lane, silently, to be found one call
    * site at a time. A barChart row is an interval with a name, a score and a
@@ -590,7 +592,7 @@ export interface FeatureSet {
    * The point in space each bead sits at, or absent on every other format (§25).
    *
    * Optional on the set rather than a `FeatureSet` of its own, for exactly the
-   * reason {@link bars} is: a second feature shape breaks none of the dozen
+   * reason {@link bars} is: a second feature shape breaks none of the two dozen
    * sites that test `payload.kind === 'features'` and makes every one of them
    * skip the lane, silently. A bead is an interval with a name, a score and a
    * strand like every other row here; what it has besides is a place, and a
@@ -887,7 +889,7 @@ export function normalisePlacement(placement: Partial<Placement> | undefined): P
  * `ribbon` is the fifth and the only one that is not a statement about *this*
  * track alone: it fills the band between its own curve and the curve of the
  * track below it in the same lane, so a set of them draws as one nested shape.
- * That is the scalogram's picture (§8.17) and it is not expressible as four
+ * That is the scalogram's picture (§18.12) and it is not expressible as four
  * areas — four filled areas in one lane paint over each other in the order they
  * were drawn, and the reader sees the topmost one and four edges. See
  * {@link nestsAsRibbons}.
@@ -1387,15 +1389,15 @@ export interface StructureStyle {
    */
   colormap: string
   /**
-   * A yellow bead on every **telomere** — the two ends of each linear sequence
-   * (§25.5).
+   * A yellow bead on every **telomere** — the two ends of each chain (§25.5).
    *
    * Drawn through the same channel the reader's own marks are, so a telomere
    * stands out of the fibre at the same size whatever the model is drawn as and
    * whatever it is coloured by, and so the vector export carries them without a
-   * second road. What counts as one is `telomereBeads`, and it is careful:
-   * a sequence the reader declared circular has none, and the far end of a
-   * sequence is only claimed where the session knows its true length.
+   * second road. What counts as one is `telomereBeads`: the first and last
+   * placed bead of every chain, with nothing asked of the session. It used to
+   * spare a sequence ticked circular and claim a far end only against a known
+   * length, which on a whole yeast genome marked five of thirty-two ends.
    */
   telomeres: boolean
   /**
@@ -1976,8 +1978,7 @@ export interface ReadStyle {
    *
    * So it reaches what is *drawn* and never what is *counted*: `readFilterKey`
    * deliberately does not mention it, so the depth row beside the pile never
-   * sees it, and `pileOf` takes two filters so the base counts made alongside
-   * the pile do not see it either.
+   * sees it. The pile itself takes the one filter, the drawing one.
    */
   splits: boolean
   /**

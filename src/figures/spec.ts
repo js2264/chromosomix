@@ -21,10 +21,11 @@
  *   a scatter, a histogram and a box plot are all this; which of them it *looks*
  *   like is a mark, and a mark is a style.
  * - **matrix** — a small dense grid. It carries the {@link MatrixOutput} itself
- *   rather than a decomposition of it, because a matrix is still drawn by
- *   `ui/analysisPlots.ts` and always will be: it is a raster, the app already
- *   has the rasteriser the contact maps use, and a chart library redrawing it
- *   would be a second answer to a question that has one.
+ *   rather than a decomposition of it, because both of the things that draw one
+ *   read it whole: the chart, as a heatmap of one hoverable cell each, for a
+ *   matrix of up to `MATRIX_CHART_CELLS` (`matrixOption.ts`) — a saddle, a
+ *   pileup, a cis/trans square — and `ui/analysisPlots.ts`'s painter, a
+ *   raster, for anything larger and for a picture read like a map.
  * - **table** — rows and columns, which is a picture too once you can sort it,
  *   filter it and plot a column against another.
  */

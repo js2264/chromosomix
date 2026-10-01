@@ -4148,7 +4148,7 @@ is the same thing written as a bigBed, and the two optional trailing columns (`_
 
 **It is a `FeatureSet`**, and that is §8.14's decision restated under more pressure. A vector per
 row is the strongest case there has ever been for a payload of its own, and it is refused for the
-reason a VCF's was: `payload.kind === 'features'` is tested at a dozen sites across the browser, the
+reason a VCF's was: `payload.kind === 'features'` is tested at two dozen sites across the browser, the
 map lanes, the search box, the export and the analysis inputs, and a second feature shape breaks
 none of them — it makes every one of them *skip* the lane, in silence, to be discovered one call
 site at a time. So the vector is one optional field on the set (`FeatureSet.bars`), one flat
@@ -8711,8 +8711,8 @@ always meant.
 **The Files column is the only door onto a connected place.** Its folder view lists every place the
 window is connected to — a directory on this machine included — and a row hands back the file with
 the credential the listing used; a row dragged out of it is resolved at the drop, through the folder
-it names (`ui/fileDrag.ts`). `ui/pickFromFolders.ts`, the same view in a dialog, is opened by nothing
-since the *from a connected place…* buttons below were taken away.
+it names (`ui/fileDrag.ts`). The same view in a dialog was opened by the *from a connected place…*
+buttons below and by nothing else, and went with them.
 
 **The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps,
 Structures, an empty cell of a deck — used to carry a box to paste a URL into, folded away behind

@@ -76,7 +76,7 @@ function writeLast(id: string): void {
  * providers' own marks (`scripts/build-icons.mjs`). The one fact about a folder
  * that changes what its rows cost to open and whether they are private, so it
  * is a mark rather than a word — on the row here, and on the tiles of the
- * dialogs that connect and pick from them.
+ * dialog that connects them (`ui/connectFronts.ts`).
  */
 export function folderMark(kind: ConnectedFolder['kind']): IconName {
   return kind === 'local'

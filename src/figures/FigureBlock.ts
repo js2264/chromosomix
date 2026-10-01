@@ -105,8 +105,8 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     const fill = dialog !== null
     if (built.kind === 'matrix' && built.output.streaks !== undefined) {
       // A dot plot on screen is a view of its own (§28.2): its streaks drawn
-      // as lines at any zoom and read under the pointer. Its cells stay what an
-      // export draws.
+      // as lines at any zoom and read under the pointer. An export draws the
+      // same lines, the window on screen; the cells stay in the TSV.
       const figure = dotplotFigure(built.output.streaks)
       figure.setFill?.(fill)
       return figure

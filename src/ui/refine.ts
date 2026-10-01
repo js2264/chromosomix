@@ -630,8 +630,9 @@ const REFINE_KEY = 'metacooler-viewer:refine'
  * different grid from the one they were reading. That is a good trade when it is
  * asked for and a surprising one when it is not — and §2's promise, that pan and
  * zoom perform no I/O, is the promise the app has always made. So the default is
- * the behaviour that keeps it, and the feature is one press away on the map's own
- * controls, beside the two other switches that change what picture this is.
+ * the behaviour that keeps it, and the feature is one command away: the
+ * palette's *Refine on zoom*, a palette command only because it is one
+ * preference across a whole deck rather than a switch on one map (§2).
  */
 export const REFINE_DEFAULT = false
 

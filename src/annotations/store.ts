@@ -139,11 +139,11 @@ export class AnnotationStore {
 
   /**
    * @param uri  What the rows are remembered under (§8.6).
-   * @param options.persist `false` for a store nothing should outlive: a file
-   *   with a genome layer carries no annotations at all (§8.5) and yet still
-   *   has a 4C lane, which needs somewhere to be a lane *in*. Writing an empty
-   *   list under a key nobody reads is not harmful, but it is a lie about what
-   *   the session holds, and this is cheaper than one.
+   * @param options.persist `false` for a store nothing should outlive: the
+   *   empty one a map panel builds for itself when it is handed no annotations
+   *   (`ui/MatrixPanel.ts`), so its lanes have somewhere to be lanes *in*.
+   *   Writing an empty list under a key nobody reads is not harmful, but it is
+   *   a lie about what the session holds, and this is cheaper than one.
    */
   constructor(
     private readonly uri: string,
@@ -485,9 +485,10 @@ export class AnnotationStore {
   /**
    * The rows that are loaded, visible, and drawn on `edge`.
    *
-   * Every card but the overlay one, which is the difference from "the Tracks
-   * card's rows": the 4C profile has a card of its own precisely because it is
-   * not a loaded file, and it is a lane in every other respect (§8.1).
+   * Every card's rows but the overlays, which are drawn on the matrix rather
+   * than beside it — so not "the Tracks card's rows": that card lists the
+   * overlays too (§8.1), and a Metadata card's column (§8.12) is a lane here
+   * like any track.
    */
   drawnOn(edge: LaneEdge): AnnotationEntry[] {
     return this.drawnOnMap(LEAD_MAP, edge)
@@ -590,7 +591,7 @@ export class AnnotationStore {
     return this.items.find((entry) => entry.id === id)
   }
 
-  /** `true` when a gene model is already loaded — §8.1 allows exactly one. */
+  /** `true` when a gene model is loaded: a question, not a gate — §8.1 takes any number. */
   hasGtf(): boolean {
     return this.items.some((entry) => entry.kind === 'gtf')
   }

@@ -11,7 +11,7 @@
  * `w`, `2w`, `4w`, and the alternative — a free-text list of widths — needs a
  * text control this form does not have and a parser with its own failure modes,
  * to express something a base and a count express exactly. So the base is
- * settable in base pairs, the count is settable, and the ladder doubles. Where a
+ * settable in bins (below), the count is settable, and the ladder doubles. Where a
  * genuinely irregular set of widths is wanted, running the task twice is the
  * honest way to get it and leaves two provenance lines rather than one.
  */

@@ -131,10 +131,10 @@ export interface RunnerHost {
    * The annotations worker, for tasks whose venue is the other one (§18.3).
    *
    * Optional, and a task routed there without one fails by name rather than
-   * running somewhere it cannot read its own inputs. A `.metacool` has no
-   * annotations at all (§8.5), and no task that needs them is offered on it —
-   * so in practice the two conditions coincide, which is precisely why the
-   * failure has to be loud if they ever stop coinciding.
+   * running somewhere it cannot read its own inputs. Every file has one, a
+   * `.metacool` included (§8.5), so `null` is a session whose annotation stores
+   * are not built yet — rare, and exactly why the failure has to be loud: a
+   * task that ran anyway would read nothing and report it as a result.
    */
   annotations?(): AnnotationClient | null
   /** The assembly, so a task in the other venue can clamp a window (§18.3). */
@@ -298,7 +298,8 @@ export function resultKey(map: MapId, taskId: string): string {
 }
 
 /**
- * How many runs of one task on one map are kept, the current one included.
+ * How many earlier runs of one task on one map are kept beside the current one:
+ * the latest and the eight before it.
  *
  * Eight, which is a parameter sweep and not an archive. Each held result is its
  * own typed arrays — a pileup, a saddle, a per-bin profile — so this is a memory

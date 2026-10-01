@@ -25,8 +25,9 @@
  *
  * - **Local files:** an explicit click, a progress indicator, and a cancel that
  *   actually stops the scan (the worker checks between pixel chunks).
- * - **Remote files:** refused above a byte threshold, because a full scan over
- *   HTTP means downloading the file. Offered instantly when a sidecar edge list
+ * - **Remote files:** warned above a byte threshold, because a full scan over
+ *   HTTP means downloading the file — a sentence with the size in it and a
+ *   button that goes through anyway. Offered instantly when a sidecar edge list
  *   is advertised — `metacooler network --level genome` emits a
  *   `node1/node2/value` TSV that is a few KB for a few hundred MAGs, so one
  *   `fetch` replaces the scan entirely.
@@ -48,9 +49,10 @@ import { SearchBox, locusPlaceholder } from './SearchBox'
 import { typedLocusToRegion } from '../genome/assembly'
 
 /**
- * Above this, a remote full scan is refused outright. A scan reads every pixel,
- * so the honest description of "compute the overview remotely" is "download the
- * file"; past a few tens of megabytes that is not something to start on a click.
+ * Above this, a remote full scan is not started on a click: the gate says what
+ * it would download and asks again. A scan reads every pixel, so the honest
+ * description of "compute the overview remotely" is "download the file"; past a
+ * few tens of megabytes that is worth a second press, not a refusal.
  */
 export const REMOTE_SCAN_BYTE_LIMIT = 64 * 1024 * 1024
 

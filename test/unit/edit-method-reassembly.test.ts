@@ -176,7 +176,7 @@ describe.skipIf(!present)('the chrXVI–mycoides reassembly', () => {
       expect(all).toContain('33+ 56+')
       // contig_5 and contig_4, the second myco stretch's last kilobases, turned
       // and at its end — contig_4's telomere outermost — where the theoretical
-      // genome puts contig_5 between contig_59 and contig_6: the map and the
+      // genome puts contig_5 between contig_61 and contig_6: the map and the
       // telomere against it.
       const fused = all.find((line) => line.startsWith('39+ 34+'))
       expect(fused?.replace(/49[+-]/, '49')).toBe('39+ 34+ 61- 6+ 59- 45- 53- 50- 49 46+ 54- 5- 4-')

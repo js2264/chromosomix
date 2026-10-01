@@ -967,9 +967,9 @@ export interface MatrixOutput {
   large?: boolean
   /**
    * A dot plot's streaks as the lines they are (§28.2): where present, the
-   * figure on screen draws these rather than the cells — at any zoom, sharp,
-   * the one under the pointer named on both axes — and the cells stay what an
-   * export draws.
+   * figure draws these rather than the cells — on screen at any zoom, sharp,
+   * the one under the pointer named on both axes, and in a PNG or a PDF as the
+   * window on screen — and the cells stay the output's, in its TSV.
    */
   streaks?: DotplotStreaks
   /**

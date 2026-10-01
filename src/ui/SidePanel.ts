@@ -567,9 +567,10 @@ export class SidePanel {
    * Whether there is anything for this panel to show.
    *
    * The picker has no file, so General and Annotations leave the layout rather
-   * than standing as empty columns beside the dropzone; a `.metacool` carries no
-   * annotations at all (§8.5); and a table view offers no aesthetics. In every
-   * case the column and its button go together.
+   * than standing as empty columns beside the dropzone; and a table view offers
+   * no aesthetics. Every file has annotations, a `.metacool` included (§8.5), so
+   * that column goes only with the file. In every case the column and its
+   * button go together.
    */
   setAvailable(available: boolean): void {
     if (available === this.available) return

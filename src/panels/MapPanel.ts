@@ -232,8 +232,8 @@ export interface MapPanelProps {
    */
   derive(): DerivePresentation | undefined
   /**
-   * This panel's own lanes (`annotations/placement.ts`), or `undefined` where
-   * the session carries no annotations at all (§8.5).
+   * This panel's own lanes (`annotations/placement.ts`), or `undefined` while
+   * the session has no annotation stores — a file still building them.
    *
    * A thunk so it is never stale, like the two beside it. The store is the
    * session's one store — the tracks are a single list however many maps are on
@@ -1823,10 +1823,12 @@ export class MapPanel {
   /**
    * Put a block on screen, building the map the first time.
    *
-   * The panel is built with **no** annotations, no compare and no level toggle.
-   * Not an oversight: each of those is a control over something the deck shares,
-   * and offering five copies of a shared control is five ways for a reader to
-   * put the deck out of step with itself.
+   * The panel is built with the session's annotations — the one store, read
+   * through this map's id, so the tracks placed on it are drawn here — and with
+   * **no** compare and no level toggle. Not an oversight: each of those two is
+   * a control over something the deck shares, and offering five copies of a
+   * shared control is five ways for a reader to put the deck out of step with
+   * itself. The tracks' own cards stay the session's too (see below).
    *
    * The **score** used to be on that list and is not any more. The argument for
    * keeping it off was right about the default and wrong about the choice: the
@@ -1861,9 +1863,9 @@ export class MapPanel {
     // already in hand — `setData` runs below — so this costs a construction and
     // no read.
     const context = this.props.annotations()
-    // `?? null` on both sides: a file with a genome layer carries no annotations
-    // at all (§8.5), so the context is `undefined` for the life of the panel —
-    // and `undefined !== null` would rebuild the map on every block it read.
+    // `?? null` on both sides: the context is `undefined` while the session has
+    // no stores yet, and `undefined !== null` would rebuild the map on every
+    // block it read until it had.
     const store = context?.store ?? null
     if (this.panel !== null && store !== this.laneStore) {
       this.panel.destroy()

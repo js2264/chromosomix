@@ -47,16 +47,15 @@
  * bigWig is. What this drawer shows for one is a sentence saying where it went,
  * because a drawer that appeared to produce nothing would be a bug report.
  *
- * **…and a picture when there is not.** A `.metacool` carries no annotations at
- * all (§8.5), so it has nowhere for a profile's lane to be drawn and nowhere
- * for it to be a row — and there the sentence was a bug report of its own,
- * pointing a reader at a card that is not on screen while the numbers went
- * nowhere. Coverage and marginals, diamond insulation and MAG purity are all
- * offered on a metagenome and all produce per-bin vectors, so on that file this
- * drawer draws the profile itself ({@link profileFigure}) and carries the
+ * **…and a picture when there is not.** A session with no annotations worker
+ * has nowhere for a profile's lane to be drawn and nowhere for it to be a row —
+ * a `.metacool` was that file until every file got one (§8.5) — and there the
+ * sentence would be a bug report of its own, pointing a reader at a card that
+ * is not on screen while the numbers went nowhere. So where there is no lane
+ * this drawer draws the profile itself ({@link profileFigure}) and carries the
  * exports the card would have carried: bigWig, bedGraph and TSV beside the PNG
  * and the vector PDF every other figure here has. §18.7's *every one of them
- * exports* holds on both layouts, which is what it claims.
+ * exports* holds with a lane or without one, which is what it claims.
  *
  * Every figure here draws through a `CanvasRenderingContext2D` and nothing else,
  * which is the whole reason the PDF export below is four lines: the same `draw`
@@ -168,12 +167,13 @@ export interface AnalysisDrawerOptions {
   /** The close button was pressed. The owner clears its own idea of what is open. */
   onClose(): void
   /**
-   * Whether this file has an Annotations panel for a lane or an overlay to
-   * become a row on.
+   * Whether this session has an annotations worker and a store for a lane or
+   * an overlay to become a row on.
    *
-   * `false` on a `.metacool` (§8.5) and that is the whole of what it means: the
-   * outputs that are not pictures have nowhere to go, so this drawer draws and
-   * exports them itself rather than describing a card that is not on screen.
+   * Every file has both, a `.metacool` included (§8.5), so `false` is a session
+   * still building them, and that is the whole of what it means: the outputs
+   * that are not pictures have nowhere to go, so this drawer draws and exports
+   * them itself rather than describing a card that is not on screen.
    */
   hasLanes(): boolean
   /**

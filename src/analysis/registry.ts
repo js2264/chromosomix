@@ -173,10 +173,10 @@ function shown(task: AnalysisTask): boolean {
 }
 
 /**
- * The three headings of §18.8's catalogue.
+ * The four headings of §18.8's catalogue, one per card.
  *
- * Written out rather than derived from the group name, because *metagenome* is
- * a word and "On the map" is a phrase, and a heading generated from an
+ * Written out rather than derived from the group name, because `2d` is an
+ * identifier and "2D tasks" is a heading, and a heading generated from an
  * identifier is a heading nobody chose.
  */
 export const TASK_GROUP_LABELS: Record<TaskGroup, string> = {

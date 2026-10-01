@@ -88,8 +88,9 @@ export async function chooseDirectory(): Promise<FileSystemDirectoryHandle | nul
   } catch {
     // `AbortError` for a cancelled dialog, `SecurityError` for one called
     // without activation or from an opaque origin — which is what the standalone
-    // `file://` build is. None is worth a message here: the caller offers the
-    // fallback, which works in all three cases.
+    // `file://` build is. All three answer `null`, and the caller takes `null`
+    // for a cancel: `connectDirectory` does not go on to the snapshot picker,
+    // so where this picker refuses, nothing opens and nothing is said.
     return null
   }
 }

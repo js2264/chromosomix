@@ -162,10 +162,12 @@ export function parseMaps(value: string | undefined): PanelRef[] {
     // used to be one per deck, and then one per model, on the reasoning that
     // two cells of one row are one picture drawn twice — which is only true
     // while the two are the same picture. They are not: each cell has its own
-    // camera, its own mirror and its own planted axes (§25.3), so two cells of
-    // one model are two views of it, which is the usual way anybody looks at a
-    // fold. Which model each seat draws is this session's own memory, beside
-    // the local companions and for the same reason (`deck:models`).
+    // camera, its own height and its own turn (§25.3), so two cells of one
+    // model are two views of it, which is the usual way anybody looks at a
+    // fold. The mirrors and the planted axes are the model's, kept on its row,
+    // so both views share them. Which model each seat draws is this session's
+    // own memory, beside the local companions and for the same reason
+    // (`deck:models`).
     refs.push(
       trimmed === VACANT
         ? { kind: 'vacant' }

@@ -26,17 +26,9 @@
  * IGV has it too — and the padded fetch window is what keeps it rare, since the
  * rate is recomputed per *fetch* rather than per frame.
  *
- * ## What the consensus needs, which is nothing
- *
- * Base counts are accumulated from the reads themselves, so the consensus band
- * and its logo need no reference genome at all. That is what makes them work
- * over a MAG or an assembly nobody has published — and it is the sharpest
- * difference between the consensus band and mismatch highlighting, which cannot
- * be computed without something to disagree *with* (§8.13).
- *
- * Counts come from the **full** stream, before thinning, for the reason §8.13
- * gives about coverage: a pile thinned to fit and a consensus computed from
- * what survived would under-report exactly where the data is deepest.
+ * What it counts is reads — how many the window held and how many were kept —
+ * and not bases: the base counts that fed a consensus band are gone with the
+ * band (§8.13), and the depth beside a pile is a row of its own.
  */
 
 import { BASE_CODE } from '../fasta'
