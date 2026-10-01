@@ -16,6 +16,8 @@ npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
+node scripts/ui-tour.mjs tour                # the furniture: the landing page in both themes, every dialog, the drawers, the five columns, the deck, the 1D browser, a metagenome's tables, an error page, the embed, a laptop and a narrow window: 01-landing … 73-narrow-landing
+node scripts/ui-audit.mjs                    # no pictures: measures the tour's surfaces for clipped text, overlaps, ragged right edges, captions under the contrast floor and §26.4 punctuation, and prints the findings
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
 node scripts/ui-structure-look.mjs gallery   # the structure cell's gestures: g-ghost-*, r*, t1 … t6
 node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells: s1 … s8, s8a, s8b
@@ -28,6 +30,7 @@ node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from ori
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
 node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
+node scripts/ui-diagonal-slide.mjs gallery  # a sideways scroll over the map zoomed onto its diagonal, sliding along it: w01, w02
 node scripts/ui-lane-carry.mjs gallery       # a lane's grip carried to another map, a +, a tracks cell, an empty cell; a model's row on a +: lc1 … lc14
 node scripts/ui-track-location.mjs gallery   # the location marks, a left lane growing away, Space, the File card and the star, card rows on a + and an empty cell: tl1 … tl13
 node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor region, and the profile with and without the anchor: fc1 … fc4
@@ -45,6 +48,17 @@ node scripts/ui-stranded.mjs gallery         # P(s)'s four orientations on the l
 node scripts/ui-turned-marks.mjs gallery     # the reader's lines on a turned map: a V on the band, straight on down the lanes, re-cut by a zoom, an arm from off the side; then a hovered bead's echo, the same V dashed: tm01 … tm06
 node scripts/ui-dev-features.mjs gallery     # the dev features switch (§29): the lab store, About and a .metacool refused with it off, the switch pressed, the same three on, and off again: d01 … d08
 node scripts/ui-edit.mjs gallery             # the stage that edits the reference (§27, dev): the heading's word, the whole genome, a snap, a stretch selected and turned, the bow-tie zoomed, a drag with the map rearranged, a box, the set-aside menu, an undo, the heading edited, dark, and dev off: e01 … e14
+node scripts/ui-edit-bar.mjs gallery         # the pieces bars as handles (§27.3, §27.4): a piece's readout, a sequence dragged onto another's end with ⇧, the join, a piece turned by a double click: b01 … b04
+node scripts/ui-edit-order.mjs gallery       # the stage's sidebar cards, a whole sequence pressed, ↑ moving it, a grip dragged down the list, a piece let go between two sequences, review: o01 … o07
+node scripts/ui-edit-putback.mjs gallery     # 300 kb of IV set aside as debris, then put back from its row: p01, p02
+node scripts/ui-edit-share.mjs gallery       # an edit sent in a link and opened in a browser with nothing kept: s01 … s03
+node scripts/ui-edit-export.mjs gallery      # the export card (§27.8): each text file written, the sequence, the map and the genes lifted, an AGP read back: x01 … x07
+node scripts/ui-edit-metagenome.mjs gallery  # the stage on one genome of the mock community (§27.10): the picker, its contigs, auto, a contig sent and one brought in, its AGP: g01 … g08, g03b, g04b … g04d, g06b
+node scripts/ui-edit-refine.mjs gallery      # suggestions placed finer than a 2,048-cell picture, at 1 kb, then taken in auto (needs `npx vite-node scripts/make-scrambled-demo.ts` first): f01 … f03
+node scripts/ui-edit-closer.mjs gallery      # the stage closer than its picture's cell, read again from a finer rung (data/, see data/README.md): c01 … c03
+node scripts/ui-edit-reassembly.mjs gallery  # the stage on the chrXVI–mycoides long-read assembly (§27.11, data/): the method's offer, the sequence's ends, auto, review, the AGP: r01 … r07, r02b, r06b
+node scripts/ui-edit-live-dotplot.mjs gallery  # the stage's corner dot plot against the theoretical genome (data/), a streak hovered, redrawn through auto: l01 … l03
+node scripts/ui-dotplot.mjs gallery          # the dot plot task (§28, dev) on the same assembly against its theory (data/): the form, the signed density, a streak hovered and zoomed, the streaks: d01 … d06, d04b, d04c, and the PNG export under files/
 node scripts/ui-ideogram-junctions.mjs gallery  # the hg19 ideogram, a BAM's sashimi arcs and two samples' STAR junctions at RPL10, FLNA's reverse arcs, chrX whole, the junction and band cards, the Tracks card's rows, colour by annotated at DDX3X, a band typed, the karyotype, a regtools BED dropped, the dark theme, the yeast karyotype on a map's edges and EFB1's arc: ij01 … ij17
 ```
 
