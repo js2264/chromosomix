@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 87,
+      "commit": "34266f1",
+      "title": "Inter-arm alignment: one row per sequence, reach to alignment edge",
+      "branch": "js/awesome-bardeen-1hubcy",
+      "date": "2026-10-01T15:54:10Z"
+    }
+  ]
 }
