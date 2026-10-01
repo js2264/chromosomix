@@ -45,6 +45,7 @@ import { button, el, fmt, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, blockSummary, type AnnotationContext, type FigureSubject} from './MatrixPanel'
 import { SearchBox, locusPlaceholder } from './SearchBox'
+import { typedLocusToRegion } from '../genome/assembly'
 
 /**
  * Above this, a remote full scan is refused outright. A scan reads every pixel,
@@ -259,7 +260,9 @@ export class Overview {
       onSubmit: (text) => {
         if (text === '') return
         if (this.props.genomeNames.includes(text)) this.props.onOpenGenome(text)
-        else this.props.onOpenContig(text)
+        // A contig with coordinates is read 1-based, as every other locus box
+        // reads one (§26.1); it went to the region reader as typed, 0-based.
+        else this.props.onOpenContig(typedLocusToRegion(text))
       },
     })
 

@@ -37,7 +37,7 @@ import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/type
 import { editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
-import { abortError, idParam, listParam } from './job'
+import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
 import {
   defaultParams,
@@ -1237,7 +1237,10 @@ export class AnalysisRunner {
     const payload = {
       kind: 'run' as const,
       task: step.task.id,
-      params: step.params,
+      // Every locus in cooler's grammar, which is what the runners read; the
+      // reader's own form stays in `step.params` and is what the result records
+      // (below, and `runnerParams`).
+      params: runnerParams(step.task.params, step.params),
       framing: job.framing,
       inputs: await this.inputsFor(step, job, upstream),
     }
@@ -1295,7 +1298,18 @@ export class AnalysisRunner {
               'computed from the block after it is read and cannot be asked of the file. These ' +
               'numbers are the underlying counts.',
           ]
-    return { ...raw, notes, provenance: { ...raw.provenance, taskVersion: step.task.version } }
+    // **The parameters as the reader wrote them**, over the ones the worker was
+    // handed. The worker records what arrived, and what arrived had every locus
+    // in the machine form (`runnerParams`) — but a provenance is the record of
+    // what was *asked for*: it fills the form again (`rememberParams`), it is
+    // the `# param` line above every export and the command the console writes,
+    // and a replay reads it back as typed. `IV:1000000-1400000` in any of those
+    // is a locus a reader would read one base early (§26.1).
+    return {
+      ...raw,
+      notes,
+      provenance: { ...raw.provenance, params: step.params, taskVersion: step.task.version },
+    }
   }
 
   private ensureClient(): AnalysisClient {

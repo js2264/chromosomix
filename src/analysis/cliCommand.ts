@@ -75,6 +75,7 @@ import type {
 import type { AnnotationEntry } from '../annotations/types'
 import type { Extent } from '../types'
 import { paramDerived } from './types'
+import { formatLocus } from '../genome/assembly'
 
 /** The command the drawer copies. */
 export interface CliCommand {
@@ -457,13 +458,18 @@ interface WindowText {
  * Four answers, and the fourth is why this is not two lines. The whole file
  * needs no flag. A whole sequence is named rather than spelled out, because
  * `chrIV` is what a reader recognises and what `parse_metacooler_range` resolves
- * without arithmetic. A stretch inside one sequence is `name:start-end`, in the
- * 0-based half-open numbers cooler's own parser reads the digits as
- * (`metacooler/range.ts` is explicit that no 1-based conversion happens
- * anywhere). And a view across several sequences is **none of those** — a
- * metagenome pane holding forty contigs is not a locus — so the command runs
- * over the whole file and says so, rather than naming the first contig and
- * quietly answering a smaller question.
+ * without arithmetic. A stretch inside one sequence is the **display form** of
+ * §26.1, `chrIV:100,001-200,000` — 1-based and inclusive, grouped — through
+ * `formatLocus`, because that is what the shell now reads (`cli/main.ts` takes
+ * it back through `typedLocusToRegion`) and what the breadcrumb above the map
+ * said. It was cooler's 0-based numbers, `chrIV:100000-200000`, which the shell
+ * then read as written: right in the shell, and the one locus in the console a
+ * base away from the same window everywhere else on the screen. `quote` leaves
+ * it bare, since a comma, a colon and a hyphen are nothing to a shell. And a
+ * view across several sequences is **none of those** — a metagenome pane
+ * holding forty contigs is not a locus — so the command runs over the whole
+ * file and says so, rather than naming the first contig and quietly answering a
+ * smaller question.
  *
  * Rows and columns are both consulted: an off-diagonal block is a pair of
  * different windows and `--window` is one, so that too is a run over the whole
@@ -510,7 +516,7 @@ function windowFor(
   }
   const start = (rows[0] - contig.startBin) * context.binsize
   const end = Math.min(contig.length, (rows[1] - contig.startBin) * context.binsize)
-  return { locus: `${contig.name}:${start}-${end}`, note: null }
+  return { locus: formatLocus({ contig: contig.name, start, end }), note: null }
 }
 
 /** The one contig an extent lies inside, or `null` when it lies across several. */

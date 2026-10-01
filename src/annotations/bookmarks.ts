@@ -25,6 +25,7 @@
  */
 
 import { recall, remember } from '../state/UiMemory'
+import { typedPosition } from '../genome/assembly'
 import { forEachRow, readHeader } from './parse'
 
 /**
@@ -179,18 +180,55 @@ export interface Region {
 }
 
 /**
- * `chrI:100,000-200,000` → a region, or `null`.
+ * `chrI:100000-200000` → a region, or `null`: the region string a link carries,
+ * read back.
  *
- * The same tolerances `parsePoint` has, and for the same reason: the string a
- * reader pastes in here came out of this app's own readout or breadcrumb, both
- * of which write separators, and one of which writes `1.53 Mb`. A bare contig is
- * refused — its length is not known here, and a bookmark of "all of chromosome
- * IV" is what the region view's own box is for.
+ * The digits as written, 0-based and half-open — {@link formatRegion}'s
+ * inverse, and what the view reads a bookmark's `focus` with. What a *reader*
+ * types is {@link parseTypedRegion}, which takes the same spellings and reads
+ * them as the display form of §26.1.
+ *
+ * The same tolerances `parsePoint` has, and for the same reason: the string
+ * pasted in here came out of this app's own readout or breadcrumb, both of which
+ * write separators, and one of which writes `1.53 Mb`. A bare contig is refused
+ * — its length is not known here, and a bookmark of "all of chromosome IV" is
+ * what the region view's own box is for.
  *
  * A single position (`chrI:150000`) is a region of zero length, which is what a
  * loop anchor is.
  */
 export function parseRegion(text: string): Region | null {
+  const read = readRegion(text)
+  if (read === null) return null
+  return { contig: read.contig, start: read.start, end: read.end }
+}
+
+/**
+ * What a reader typed into the Bookmarks card, as a place — read the way every
+ * locus box in this application reads one (§26.1).
+ *
+ * **1-based and inclusive**, the display form and every spelling of it: the
+ * card prints `II:120,001-180,000` for the window a map was framed on, and that
+ * string typed back must save that same window. It used to be read as written,
+ * 0-based, under rows printed 0-based too — so the card agreed with itself and
+ * with nothing else on the screen: a locus copied off the breadcrumb, out of
+ * IGV or out of a paper landed a base to the right of the place it names.
+ *
+ * {@link parseRegion}'s tolerances — separators, `kb` and `Mb`, `..`, a colon in
+ * a name, the ends either way round — and then the conversion, which is
+ * `genome/assembly.ts`'s and nobody else's: the first base loses one and the
+ * last stays. One position is a place of no width *at that base*, as a loop
+ * anchor is.
+ */
+export function parseTypedRegion(text: string): Region | null {
+  const read = readRegion(text)
+  if (read === null) return null
+  const start = typedPosition(read.start)
+  return { contig: read.contig, start, end: read.point ? start : read.end }
+}
+
+/** A region string's name and numbers as written, ordered; `point` where there was one. */
+function readRegion(text: string): (Region & { point: boolean }) | null {
   const trimmed = text.trim()
   const at = trimmed.lastIndexOf(':')
   if (at <= 0) return null
@@ -203,9 +241,10 @@ export function parseRegion(text: string): Region | null {
   const parts = body.includes('..') ? body.split('..') : splitRange(body)
   if (parts === null) return null
   const start = readBp(parts[0])
-  const end = parts[1] === undefined ? start : readBp(parts[1])
+  const second = parts[1]
+  const end = second === undefined ? start : readBp(second)
   if (start === null || end === null) return null
-  return { contig, start: Math.min(start, end), end: Math.max(start, end) }
+  return { contig, start: Math.min(start, end), end: Math.max(start, end), point: second === undefined }
 }
 
 function splitRange(body: string): [string, string?] | null {

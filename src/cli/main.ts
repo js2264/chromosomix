@@ -83,7 +83,7 @@ import { chosenEntries } from '../analysis/runner'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
-import { abortError } from '../analysis/job'
+import { abortError, runnerParams } from '../analysis/job'
 import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
 import {
   gcTrack,
@@ -124,6 +124,7 @@ import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annot
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
+import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
@@ -734,10 +735,17 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         )
       }
     }
+    // The window as a reader writes one — 1-based and inclusive, digits grouped
+    // or not, `IV:1,000,001-1,400,000` — which is what the console writes and
+    // what every locus box in the app reads (§26.1), and in cooler's grammar
+    // from here on. It used to be read in that grammar as typed, so the digits
+    // a reader copied off the app's own breadcrumb named a window starting one
+    // base later at a shell than on the screen they came from.
+    const region = options.window === undefined ? undefined : typedLocusToRegion(options.window)
     const extent =
-      options.window === undefined
+      region === undefined
         ? ([0, mc.nBins] as [number, number])
-        : mc.extent(options.window)
+        : mc.extent(region)
     const balance = options.balance ?? mc.hasWeights
     const params = withDerived(task, options.params, balance)
     const framing: AnalysisFraming = {
@@ -751,7 +759,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       normalise: null,
       level: 'bin',
       label:
-        `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
+        `${region === undefined ? 'whole file' : regionLabel(region)} at ${mc.binsize} bp` +
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
         `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
@@ -817,7 +825,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       upstream: Record<string, TaskResult>,
     ): Promise<JobContext> => ({
       mc,
-      params: stepParams,
+      // Every locus in cooler's grammar, as the analysis worker is handed it
+      // (`runnerParams`); the provenance below keeps the one that was typed.
+      params: runnerParams(step.params, stepParams),
       framing,
       inputs: {
         ...baseInputs,
@@ -1066,7 +1076,7 @@ async function runTracksOnly(
   const started = Date.now()
   let lastPercent = -1
   const job: TrackJobContext = {
-    params,
+    params: runnerParams(task.params, params),
     framing,
     inputs: { ...options.inputs, contigLengths: lengths },
     cancelled: () => false,
@@ -1596,7 +1606,9 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       Run one task over one or more files.
 
       --out <dir>          where to write (default: .)
-      --window <chr:a-b>   a window rather than the whole file
+      --window <chr:a-b>   a window rather than the whole file, 1-based and
+                           inclusive as the app, IGV and samtools write it,
+                           digits grouped or not: chrIV:1,000,001-1,400,000
       --no-balance         read the raw counts. A map is read balanced wherever
                            the file carries weights, as the app reads it
       --features <file>    a feature or loop file a task needs, read as the app
@@ -1631,11 +1643,13 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
-      --<param> <value>    any parameter the task takes; see \`tasks\`. A task
-                           that reads tracks (metaplot, trackcorr, frip,
-                           groupsignal) takes them as --tracks <file.bw>,
-                           repeated or comma-separated: a bigWig, a bedGraph, a
-                           wig, or a FASTA read as GC content
+      --<param> <value>    any parameter the task takes; see \`tasks\`. A locus
+                           (fourc's --anchor, the 3D tasks' --region and
+                           --locus) is read as --window is. A task that reads
+                           tracks (metaplot, trackcorr, frip, groupsignal)
+                           takes them as --tracks <file.bw>, repeated or
+                           comma-separated: a bigWig, a bedGraph, a wig, or a
+                           FASTA read as GC content
 
   metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip,
@@ -1652,7 +1666,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over. The workspace is what the
-      app's Save button produces: every open tab in one file.
+      app's Save button produces: every open tab in one file. A locus it
+      recorded is read as --window is, as the app's form showed it.
       --tab <n>            which tab to replay, 1-based. Default: the one that
                            was in front when the workspace was saved.
       --track <file.bw>    the file behind a track the workspace recorded by

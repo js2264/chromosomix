@@ -67,7 +67,7 @@ import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from
 import { axisThroughEdit, originalOf } from '../edit/axis'
 import { stretchInFile } from '../edit/places'
 import type { EditedAssembly } from '../genome/edit'
-import { formatLocus, formatPosition } from '../genome/assembly'
+import { baseLabel, formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
   drawDiagonalFeatures,
@@ -9462,9 +9462,9 @@ function positionIn(
 ): string | null {
   if (group === undefined || level !== 'bin') return null
   // The bin's first base, 1-based, as {@link formatPosition} writes it — the
-  // contig is on the line above, so the number goes on its own rather than
-  // through that helper.
-  return fmt.pos(bpWithin(group, offset, blockStart, binsize) + 1)
+  // contig is on the line above, so the number goes on its own, through the
+  // helper that writes it without the name.
+  return baseLabel(bpWithin(group, offset, blockStart, binsize))
 }
 
 /**
@@ -9877,9 +9877,11 @@ export function framedPhrase(
 export function spanText(axis: SelectedAxis): { start: string; end: string; span: string } {
   if (axis.range === undefined) return { start: axis.label, end: axis.label, span: '' }
   const [start, end] = axis.range
+  // The first base and the last, each through the one helper that writes a
+  // base (§26.1): the last of a half-open range is the one before its end.
   return {
-    start: `${axis.label}:${fmt.int(Math.round(start) + 1)}`,
-    end: `${axis.label}:${fmt.int(Math.round(end))}`,
+    start: formatPosition(axis.label, Math.round(start)),
+    end: formatPosition(axis.label, Math.round(end) - 1),
     span: fmt.bp(end - start),
   }
 }

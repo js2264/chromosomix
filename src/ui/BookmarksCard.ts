@@ -31,12 +31,13 @@
 
 import {
   mintBookmarkId,
-  parseRegion,
+  parseTypedRegion,
   regionsFromBed,
   type Bookmark,
   type BookmarkStore,
 } from '../annotations/bookmarks'
-import { button, el, fmt } from './dom'
+import { formatLocus, formatPosition } from '../genome/assembly'
+import { button, el } from './dom'
 import { resolutionLabel } from '../units'
 import { cardTitle, icon, iconButton, setFolded, startFolded } from './icons'
 
@@ -73,6 +74,11 @@ export class BookmarksCard {
     class: 'input',
     type: 'text',
     placeholder: 'II:120,000-180,000',
+    // The sentence every other locus box carries (§26.1), because this one is
+    // read as they are now — and was the one box that was not.
+    title:
+      'A window, or one position. Coordinates are 1-based and inclusive, as IGV and samtools ' +
+      'write them.',
   })
   private readonly here: HTMLButtonElement
   private readonly note = el('p', { class: 'ann-note hidden' })
@@ -146,7 +152,9 @@ export class BookmarksCard {
   }
 
   private saveTyped(): void {
-    const region = parseRegion(this.typed.value)
+    // The typed form, 1-based and inclusive, as the rows below are printed and
+    // every other locus box reads (§26.1).
+    const region = parseTypedRegion(this.typed.value)
     if (region === null) {
       this.typed.classList.add('is-bad')
       return
@@ -363,12 +371,16 @@ export class BookmarksCard {
  * always. Named rows are what a BED of genes or loops produces and the name is
  * what the reader is looking for — but the coordinates are what makes two rows
  * called `peak_1` and `peak_1` tell themselves apart, so they are never dropped.
+ *
+ * The coordinates are §26.1's display form, through the two helpers that write
+ * it: a window as `II:120,001-180,000`, and a place of no width as the one base
+ * it stands at. They were the stored numbers printed as they are kept, 0-based,
+ * so a bookmark of the window on screen read a base earlier than the breadcrumb
+ * that window had just been saved from.
  */
 function whereOf(mark: Bookmark): HTMLElement[] {
   const coords =
-    mark.end > mark.start
-      ? `${mark.contig}:${fmt.int(mark.start)}-${fmt.int(mark.end)}`
-      : `${mark.contig}:${fmt.int(mark.start)}`
+    mark.end > mark.start ? formatLocus(mark) : formatPosition(mark.contig, mark.start)
   if (mark.label === '') return [el('span', { class: 'bookmark-coords', text: coords })]
   return [
     el('span', { class: 'bookmark-name', text: mark.label }),

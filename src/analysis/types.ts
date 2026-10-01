@@ -361,6 +361,13 @@ export function isAddress(value: string): boolean {
 /**
  * A locus, in the syntax the views' own boxes take. Defaults to the framing.
  *
+ * **The typed form of §26.1** — 1-based and inclusive, digits grouped or not —
+ * wherever the value lives: in the form, in a result's provenance, in a
+ * workspace, on a `metacooler-run` line. It becomes cooler's 0-based half-open
+ * grammar in one place, `analysis/job.ts`'s `runnerParams`, as a job is handed
+ * to its runner, so no runner reads it any other way and no record holds the
+ * machine form.
+ *
  * **A locus and nothing else.** This kind used to have a `sequences` flag that
  * turned the box into a dropdown of the file's own sequence names, whose first
  * option read *every sequence* — so five tasks asked *which sequences do I run

@@ -17,8 +17,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { cliCommandFor } from '@/analysis/cliCommand'
+import { taskById } from '@/analysis/registry'
+import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
 import { writeBigWig } from '@/analysis/write/bigwig'
 import { main, readFeatureText, readPairText, recordedTasks, stemOf } from '@/cli/main'
+import { typedLocusToRegion } from '@/genome/assembly'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
 let directory = ''
@@ -253,10 +257,11 @@ describe('running a task', () => {
   it('narrows to a window, and says so in the framing', async () => {
     reset()
     expect(
-      await main(['expected', sample, '--out', out, '--quiet', '--window', 'chrI:0-50000']),
+      await main(['expected', sample, '--out', out, '--quiet', '--window', 'chrI:1-50000']),
     ).toBe(0)
     const text = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
-    expect(text).toMatch(/^# framing: chrI:0-50000 at 1000 bp/m)
+    // In the display form of §26.1, as the app's own framing line writes it.
+    expect(text).toMatch(/^# framing: chrI:1-50,000 at 1000 bp/m)
   })
 
   it('binds --sequences as a list, not as a string the runners ignore', async () => {
@@ -1104,6 +1109,134 @@ describe('the framing flags', () => {
       await main(['interarm', sample, '--origin', 'chrII:900000000', '--out', out, '--quiet']),
     ).toBe(1)
     expect(complained()).toMatch(/is past its end/)
+  })
+})
+
+/**
+ * Every locus a command line names is read as the app's boxes read one (§26.1):
+ * 1-based and inclusive, digits grouped or not. It was cooler's grammar, read as
+ * written, so the digits a reader copied off the app named a window one base
+ * along at a shell — and the console wrote its windows in that grammar to match,
+ * a base away from every other locus on the screen.
+ */
+describe('a locus on the command line (§26.1)', () => {
+  /** The fixture's assembly, as the session's context would describe it. */
+  const context: AnalysisContext = {
+    uri: 'sample.hic',
+    layout: 'cool',
+    hasMap: true,
+    hasGenomes: false,
+    hasWeights: false,
+    scoreColumns: [],
+    binsize: 1000,
+    nBins: 180,
+    contigs: [
+      { name: 'chrI', length: 120_000, startBin: 0, bins: 120, genome: -1 },
+      { name: 'chrII', length: 60_000, startBin: 120, bins: 60, genome: -1 },
+    ],
+    genomes: null,
+    entries: [],
+    framing: null,
+    blockLoaded: false,
+    blockBytes: 0,
+  }
+
+  it('reads --window 1-based and inclusive, digits grouped or not', async () => {
+    for (const window of ['chrI:10,001-50,000', 'chrI:10001-50000', 'chrI:10,001–50,000']) {
+      reset()
+      const where = join(directory, 'window-typed')
+      expect(await main(['expected', sample, '--out', where, '--quiet', '--window', window])).toBe(0)
+      const text = await readFile(join(where, 'sample.expected.ps.tsv'), 'utf8')
+      expect(text).toMatch(/^# framing: chrI:10,001-50,000 at 1000 bp/m)
+    }
+  })
+
+  it('takes the window the console writes for a framing, as the bins that framing was', async () => {
+    // A view of chrI's bins 10–50 at 1 kb, written as the console writes it…
+    const command = cliCommandFor({
+      task: taskById('expected') as AnalysisTask,
+      provenance: {
+        task: 'expected',
+        taskVersion: 1,
+        params: {},
+        framing: {
+          uri: sample,
+          rows: [10, 50],
+          cols: [10, 50],
+          binsize: 1000,
+          binsPerCell: 1,
+          balance: false,
+          value: 'count',
+          normalise: null,
+          level: 'bin',
+          label: 'chrI:10,001-50,000 · 1 kb bins · count',
+        },
+        app: 'test',
+        createdAt: '2026-10-01T00:00:00Z',
+      },
+      context,
+    }).text
+    const words = command.split('\n').pop()?.split(' ') ?? []
+    const window = words[words.indexOf('--window') + 1]
+    expect(window).toBe('chrI:10,001-50,000')
+    // …is those bins to the shell, and the framing it records says so.
+    expect(typedLocusToRegion(window)).toBe('chrI:10000-50000')
+    reset()
+    const where = join(directory, 'window-console')
+    expect(await main(['expected', sample, '--out', where, '--quiet', '--window', window])).toBe(0)
+    const text = await readFile(join(where, 'sample.expected.ps.tsv'), 'utf8')
+    expect(text).toMatch(/^# framing: chrI:10,001-50,000 at 1000 bp/m)
+  })
+
+  it('reads a task’s locus flag 1-based, and records it as it was typed', async () => {
+    // The 4C anchor's bins name the profile, so the reading is in the file name:
+    // base 1,000 is the last of bin 0, and base 1,001 the first of bin 1.
+    reset()
+    const where = join(directory, 'anchor-typed')
+    expect(await main(['fourc', sample, '--anchor', 'chrI:1,000-1,000', '--out', where, '--quiet'])).toBe(0)
+    expect(await main(['fourc', sample, '--anchor', 'chrI:1,001-2,000', '--out', where, '--quiet'])).toBe(0)
+    const names = await readdir(where)
+    expect(names).toContain('sample.fourc.fourc-0-1.tsv')
+    expect(names).toContain('sample.fourc.fourc-1-2.tsv')
+    const text = await readFile(join(where, 'sample.fourc.fourc-1-2.tsv'), 'utf8')
+    expect(text).toMatch(/^# param anchor: chrI:1,001-2,000$/m)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('replays a recorded locus with the same reading', async () => {
+    reset()
+    const path = join(directory, 'anchored.metacooler.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: 1,
+        createdAt: '2026-10-01T00:00:00.000Z',
+        active: 0,
+        tabs: [
+          {
+            version: 1,
+            createdAt: '2026-10-01T00:00:00.000Z',
+            state: { uri: 'sample.hic', view: 'contigs' },
+            tracks: [],
+            manual: [],
+            bookmarks: [],
+            // As the form holds it: the display form, grouped.
+            analysis: { fourc: { anchor: 'chrI:1,001-2,000', normalise: 'none', cis: true } },
+          },
+        ],
+      }),
+    )
+    const where = join(directory, 'anchor-replayed')
+    expect(await main(['replay', path, '--over', sample, '--out', where, '--quiet'])).toBe(0)
+    const text = await readFile(join(where, 'sample.fourc.fourc-1-2.tsv'), 'utf8')
+    expect(text).toMatch(/^# param anchor: chrI:1,001-2,000$/m)
+  })
+
+  it('says loci are 1-based in its own help', async () => {
+    reset()
+    expect(await main([])).toBe(0)
+    expect(said()).toMatch(/--window <chr:a-b>\s+a window rather than the whole file, 1-based and\s+inclusive/)
   })
 })
 

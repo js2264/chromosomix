@@ -1386,8 +1386,9 @@ describe('the key of colour by manual annotations (§25.5)', () => {
     await new Promise((r) => setTimeout(r, 60))
     expect(cell.querySelector('.structure-key-title')?.textContent).toBe('manual annotations')
     const names = all<HTMLButtonElement>(cell, '.structure-key-mark .structure-key-name')
-    // Named as the Manual annotations card names them.
-    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,000', '▭ chr1:10,000-20,000'])
+    // Named as the Manual annotations card names them: 1-based, as a reader
+    // reads every coordinate (§26.1).
+    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,001', '▭ chr1:10,001-20,000'])
     names[0].click()
     await new Promise((r) => setTimeout(r, 260))
     expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])

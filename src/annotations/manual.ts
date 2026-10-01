@@ -10,7 +10,7 @@
  */
 
 import { recall, remember } from '../state/UiMemory'
-import { fmt } from '../units'
+import { formatLocus, formatPosition, typedPosition } from '../genome/assembly'
 
 /** A genomic point, as the pointing mark kinds are anchored by. */
 export interface ManualPoint {
@@ -315,16 +315,29 @@ function splitContig(text: string): { contig: string; rest: string } | null {
   return contig === '' ? null : { contig, rest: trimmed.slice(at + 1) }
 }
 
-/** `I:120000` or `I:120,000` → a point, or `null`. */
+/**
+ * `I:120,001` or `I:120001` → a point, or `null`.
+ *
+ * **1-based**, as the row above the box prints the mark and as every locus box
+ * in this application reads one (§26.1): the mark keeps the 0-based base it
+ * names, which is what a line is drawn at and what its BED row is written from,
+ * and the one subtraction is `typedPosition`'s. It was read as written — beside
+ * rows printed the same way, so the card agreed with itself and a coordinate
+ * copied off the map's readout landed one base to the right.
+ */
 export function parsePoint(text: string): ManualPoint | null {
   const split = splitContig(text)
   if (split === null) return null
-  const bp = parseBases(split.rest)
-  return bp === null ? null : { contig: split.contig, bp }
+  const base = parseBases(split.rest)
+  return base === null ? null : { contig: split.contig, bp: typedPosition(base) }
 }
 
 /**
- * `I:120000-180000` → a span, or `null`.
+ * `I:120,001-180,000` → a span, or `null`.
+ *
+ * 1-based and inclusive, as {@link parsePoint} and for its reason: the first
+ * base loses one and the last stays, which is the whole of the conversion to
+ * the half-open span the mark keeps.
  *
  * The **en dash** is taken as well as the hyphen, because this app writes one:
  * the readout says `120,000–180,000` and a reader pasting back what the page
@@ -336,24 +349,43 @@ export function parseSpan(text: string): ManualSpan | null {
   if (split === null) return null
   const parts = split.rest.split(/[-–—]/)
   if (parts.length !== 2) return null
-  const from = parseBases(parts[0])
-  const to = parseBases(parts[1])
-  return from === null || to === null ? null : orderedSpan(split.contig, from, to)
-}
-
-/** A point, written the way {@link parsePoint} reads it back. */
-export function formatPoint(point: ManualPoint): string {
-  return `${point.contig}:${Math.round(point.bp)}`
-}
-
-/** A span, written the way {@link parseSpan} reads it back. */
-export function formatSpan(span: ManualSpan): string {
-  return `${span.contig}:${Math.round(span.from)}-${Math.round(span.to)}`
+  const first = parseBases(parts[0])
+  const last = parseBases(parts[1])
+  if (first === null || last === null) return null
+  return orderedSpan(split.contig, typedPosition(Math.min(first, last)), Math.max(first, last))
 }
 
 /**
- * A mark, as the reader reads it — grouped digits, which is what every other
- * coordinate on screen wears (§26.1).
+ * A point, written the way {@link parsePoint} reads it back: the copy form of
+ * §26.1, 1-based and ungrouped, which is what *Copy coordinates* puts on the
+ * clipboard for a terminal or a spreadsheet.
+ */
+export function formatPoint(point: ManualPoint): string {
+  return `${point.contig}:${Math.round(point.bp) + 1}`
+}
+
+/** A span, written the way {@link parseSpan} reads it back — the copy form, as {@link formatPoint}. */
+export function formatSpan(span: ManualSpan): string {
+  const [from, to] = shownSpan(span)
+  return `${span.contig}:${from + 1}-${to}`
+}
+
+/**
+ * A span's two ends as a reader is shown them: never empty.
+ *
+ * A box drawn inside one bin can have no width, and §26.1 has no way to write
+ * one — `I:101-100` reads back as two bases the other way round. So it is shown
+ * as the one base it is written to a BEDPE as (`annotations/export.ts`), which
+ * is also what typing it back makes of it.
+ */
+function shownSpan(span: ManualSpan): [number, number] {
+  const from = Math.round(span.from)
+  return [from, Math.max(from + 1, Math.round(span.to))]
+}
+
+/**
+ * A mark, as the reader reads it — 1-based, with grouped digits, which is what
+ * every other coordinate on screen wears (§26.1).
  *
  * `formatPoint` and `formatSpan` write the ungrouped form their own boxes take
  * back, and that is what a *copy* wants (§26.1's last rule) — but this row is
@@ -377,12 +409,21 @@ export function describeMark(mark: ManualMark): string {
   return a === b ? `◤ ${a}` : `◤ ${a} × ${b}`
 }
 
-/** A point as a reader reads it: `IV:1,200,000`. Its box reads it back (§26.1). */
+/**
+ * A point as a reader reads it: `IV:1,200,001`, the base it names. Its box reads
+ * it back (§26.1).
+ *
+ * Through `formatPosition`, the one writer of a base. It printed the number as
+ * it is kept, 0-based and grouped by the reader's locale — one base before the
+ * same position anywhere else on the screen, and with full stops in a German
+ * browser.
+ */
 export function pointLabel(point: ManualPoint): string {
-  return `${point.contig}:${fmt.pos(point.bp)}`
+  return formatPosition(point.contig, Math.round(point.bp))
 }
 
-/** A span as a reader reads it: `IV:1,100,000-1,150,000`. */
+/** A span as a reader reads it: `IV:1,100,001-1,150,000`, through `formatLocus`. */
 export function spanLabel(span: ManualSpan): string {
-  return `${span.contig}:${fmt.pos(span.from)}-${fmt.pos(span.to)}`
+  const [start, end] = shownSpan(span)
+  return formatLocus({ contig: span.contig, start, end })
 }

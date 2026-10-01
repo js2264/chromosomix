@@ -29,7 +29,7 @@
  * row draws beside a map cannot disagree about where a bead is.
  */
 
-import { formatLocus } from '../genome/assembly'
+import { baseLabel, formatLocus } from '../genome/assembly'
 import type { AnnotationEntry, StructureStyle, TrackSampleSet } from '../annotations/types'
 import { STRUCTURE_COLOUR_DISPLACEMENT } from '../annotations/types'
 export { STRUCTURE_COLOUR_DISPLACEMENT }
@@ -1718,7 +1718,8 @@ export class StructurePanel implements DeckCell {
     const [name, pos] = this.tipEl.children as unknown as [HTMLElement, HTMLElement]
     name.textContent =
       structure !== null && structure.haplotypes.length > 1 ? `${at.contig} · ${at.haplotype}` : at.contig
-    pos.textContent = `${fmt.int(at.start + 1)}-${fmt.int(at.end)}`
+    // The bead's first base to its last, under the line that names the sequence (§26.1).
+    pos.textContent = `${baseLabel(at.start)}-${baseLabel(at.end - 1)}`
     this.tipEl.classList.remove('hidden')
     // Measured after it is shown, so a card that just grew is placed at its
     // new size rather than at the one it had while it was empty.

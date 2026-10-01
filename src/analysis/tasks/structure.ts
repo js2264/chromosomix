@@ -28,6 +28,7 @@ import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 import { fmt, resolutionLabel } from '../../units'
 import { splitRegionList } from '../../metacooler/range'
+import { typedLocusToRegion } from '../../genome/assembly'
 
 /**
  * What both structure tasks say when no model is loaded.
@@ -340,8 +341,9 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   // Each comma-separated part as the bins it names: a bare sequence is all of
   // it, `IV:1,000,001-1,400,000` is the bins of that stretch. Pricing a locus
   // as its whole sequence is what this used to do, and it reported 1,532 beads
-  // for a run that made 400.
-  const parts = splitRegionList(region)
+  // for a run that made 400. Read 1-based, as the box is and as the runner is
+  // handed it (`runnerParams`), so the price is of the bins that will be read.
+  const parts = splitRegionList(region).map(typedLocusToRegion)
   const named = parts.flatMap((part) => {
     const [name, range] = [part.split(':')[0].trim(), part.split(':')[1]]
     const contig = context.contigs.find((held) => held.name === name)

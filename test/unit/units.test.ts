@@ -8,7 +8,7 @@
  * beside it.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { axisNumber, durationText, runClock } from '../../src/units'
 
@@ -22,6 +22,30 @@ describe('durationText', () => {
   it('says so rather than guessing when there is no duration', () => {
     expect(durationText(Number.NaN)).toBe('—')
     expect(durationText(-1)).toBe('—')
+  })
+})
+
+describe('fmt.pos', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  // **Grouped as en-US, whatever the locale** (§26.1): a coordinate is copied
+  // between this app, IGV and a terminal, and is written one way in all three.
+  // A count is the locale's to group, and stays so.
+  it('groups a coordinate with commas in a browser that groups with full stops', async () => {
+    const Real = Intl.NumberFormat
+    // A German browser: every formatter asked for "the locale's" gets de-DE.
+    const German = function (locale?: string | string[], options?: Intl.NumberFormatOptions) {
+      return new Real(locale ?? 'de-DE', options)
+    } as unknown as typeof Intl.NumberFormat
+    vi.stubGlobal('Intl', { ...Intl, NumberFormat: German })
+    vi.resetModules()
+    const { fmt } = await import('../../src/units')
+    expect(fmt.int(1_224_000)).toBe('1.224.000')
+    expect(fmt.pos(1_224_000)).toBe('1,224,000')
+    expect(fmt.pos(1_224_000.4)).toBe('1,224,000')
   })
 })
 

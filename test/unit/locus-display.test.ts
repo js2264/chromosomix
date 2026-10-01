@@ -19,18 +19,45 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  baseLabel,
   formatLocus,
   formatPosition,
   regionLabel,
   typedLocusToRegion,
+  typedPosition,
   windowLabel,
 } from '../../src/genome/assembly'
 import { parseRegionString, splitRegionList } from '../../src/metacooler/range'
+import { runnerParams } from '../../src/analysis/job'
+import { FOURC_TASK } from '../../src/analysis/tasks/fourc'
+import { RECONSTRUCT_TASK, SPATIAL_TRACKS_TASK } from '../../src/analysis/tasks/structure'
 
 describe('formatPosition', () => {
   it('adds the one and groups the digits, like the window beside it', () => {
     expect(formatPosition('IV', 1_162_000)).toBe('IV:1,162,001')
     expect(formatPosition('chr1', 0)).toBe('chr1:1')
+  })
+})
+
+describe('baseLabel', () => {
+  it('is formatPosition without the name, for a card that has already said it', () => {
+    expect(baseLabel(1_162_000)).toBe('1,162,001')
+    expect(baseLabel(0)).toBe('1')
+    expect(formatPosition('IV', 1_162_000)).toBe(`IV:${baseLabel(1_162_000)}`)
+  })
+})
+
+describe('typedPosition', () => {
+  it('reads a typed base 1-based, and never lands before the first', () => {
+    expect(typedPosition(1_162_001)).toBe(1_162_000)
+    expect(typedPosition(1)).toBe(0)
+    expect(typedPosition(0)).toBe(0)
+  })
+
+  it('is the inverse of the base a reader is shown', () => {
+    for (const bp0 of [0, 1, 999, 1_162_000]) {
+      expect(typedPosition(Number(baseLabel(bp0).replace(/,/g, '')))).toBe(bp0)
+    }
   })
 })
 
@@ -132,6 +159,37 @@ describe('the round trip', () => {
 
   it('agrees with formatLocus, which is where the display form was first written', () => {
     expect(regionLabel('IV:1000000-1400000')).toBe(formatLocus({ contig: 'IV', start: 1_000_000, end: 1_400_000 }))
+  })
+})
+
+describe('a locus parameter, on its way to a runner (§18.2)', () => {
+  // The form, a result's provenance, a workspace and a `metacooler-run` line all
+  // hold the typed form; `runnerParams` is the one place it becomes cooler's
+  // grammar. So the round trip for an analysis box is: the display form the box
+  // is seeded or picked with, read as typed, handed over as the machine form —
+  // and shown again as the same display form.
+  it('hands the runner the machine form of what the box shows', () => {
+    for (const region of ['IV:1000000-1400000', 'chr1:0-1000', 'II:230000-1043000']) {
+      const shown = regionLabel(region)
+      const handed = runnerParams(FOURC_TASK.params, { anchor: shown })
+      expect(handed.anchor).toBe(region)
+      expect(regionLabel(handed.anchor as string)).toBe(shown)
+    }
+  })
+
+  it('reads a list one part at a time, and keeps the list a list', () => {
+    const handed = runnerParams(RECONSTRUCT_TASK.params, { region: 'IV:1,000,001-1,400,000, V' })
+    expect(handed.region).toBe('IV:1000000-1400000, V')
+    expect(splitRegionList(handed.region as string)).toEqual(['IV:1000000-1400000', 'V'])
+  })
+
+  it('passes a name through, and every other parameter untouched', () => {
+    const params = { structure: 's1', locus: 'chrII', window: 5 }
+    const handed = runnerParams(SPATIAL_TRACKS_TASK.params, params)
+    expect(handed).toEqual(params)
+    // Nothing to convert is nothing copied: the same record goes to the worker.
+    expect(handed).toBe(params)
+    expect(runnerParams(FOURC_TASK.params, { anchor: '' })).toEqual({ anchor: '' })
   })
 })
 

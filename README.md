@@ -458,14 +458,19 @@ metacooler-run tasks
 ```
 
 Every task writes its results where `--out` points. A map is read balanced wherever the file
-carries balancing weights, as the app reads it; `--no-balance` reads the raw counts. Files are
-read from disk: the reader's range requests are synchronous, which a browser worker has and Node
-does not, so a remote file is fetched first.
+carries balancing weights, as the app reads it; `--no-balance` reads the raw counts. A locus —
+`--window`, or a task's own, such as 4C's `--anchor` — is written as the app writes one: 1-based
+and inclusive, digits grouped or not. Files are read from disk: the reader's range requests are
+synchronous, which a browser worker has and Node does not, so a remote file is fetched first.
 
 ```bash
 metacooler-run insulation *.mcool --sequences II --out results/
 metacooler-run chromosight sample.cool --pattern borders --out results/
 metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight
+
+# A 4C profile from an anchor, written as the breadcrumb or IGV writes a locus:
+# 1-based and inclusive, so the window you copied is the window that is read.
+metacooler-run fourc sample.cool --anchor IV:1,200,001-1,210,000 --out results/
 
 # The domain pileup: a set of TADs — the span from one insulation boundary to
 # the next — every one of them stretched to the same width, with half a domain

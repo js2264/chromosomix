@@ -389,7 +389,23 @@ export function formatLocus(range: LocusRange): string {
  * same way the window beside them does.
  */
 export function formatPosition(contig: string, bp0: number): string {
-  return `${contig}:${(bp0 + 1).toLocaleString('en-US')}`
+  return `${contig}:${baseLabel(bp0)}`
+}
+
+/**
+ * A single base without the sequence it is on: `1,162,001`.
+ *
+ * {@link formatPosition} minus the name, on {@link windowLabel}'s terms and for
+ * its reason: a surface that has already said the sequence one line up — the
+ * map's tooltip, whose first line is the contig and whose second is where in it
+ * — would otherwise print the name twice in one card. That tooltip used to add
+ * the one itself and group the digits by the reader's locale, so in a German
+ * browser it read `1.162.001` while every other coordinate on the screen was
+ * grouped with commas; the one and the grouping are this file's to write,
+ * wherever the name goes.
+ */
+export function baseLabel(bp0: number): string {
+  return (bp0 + 1).toLocaleString('en-US')
 }
 
 /**
@@ -453,8 +469,25 @@ export function typedLocusToRegion(text: string): string {
   if (parsed === null) return typed
   const [contig, start, end] = parsed
   if (start === null) return typed
-  const from = Math.max(0, start - 1)
+  const from = typedPosition(start)
   return end === null ? `${contig}:${from}-` : `${contig}:${from}-${end}`
+}
+
+/**
+ * A base a reader typed, 1-based as they write it, as the 0-based coordinate
+ * everything here speaks: `1,162,001` is `1162000`.
+ *
+ * The start of {@link typedLocusToRegion}'s conversion, for the boxes whose
+ * grammar is not a region string — a bookmark typed as a single position, a
+ * hand-drawn mark whose sequence may carry a colon of its own — and which read
+ * the numbers themselves. They used to take them as written, 0-based, which
+ * made them the boxes in the app where a locus pasted from IGV or a paper
+ * landed one base to the right of the place it names; the one subtraction is
+ * written here so that no box writes it again. Never below the first base, as a
+ * locus box never is.
+ */
+export function typedPosition(base: number): number {
+  return Math.max(0, base - 1)
 }
 
 /**

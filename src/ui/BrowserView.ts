@@ -76,6 +76,7 @@ import {
   assemblyAxis,
   findContig,
   formatLocus,
+  formatPosition,
   lengthsAreExact,
   parseLocus,
   rangeToUnits,
@@ -2140,7 +2141,7 @@ export class BrowserView {
   ): void {
     const at = (x: number): string | null => {
       const locus = this.axis.unitToLocus(this.atUnit(x))
-      return locus === null ? null : `${locus.contig}:${fmt.int(Math.round(locus.bp) + 1)}`
+      return locus === null ? null : formatPosition(locus.contig, Math.round(locus.bp))
     }
     const start = at(anchor)
     const end = at(moving)

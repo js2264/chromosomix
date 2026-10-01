@@ -178,7 +178,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
   'bad-range': {
     title: 'That range does not parse',
     advice: [
-      'Coordinates use cooler syntax: contig, or contig:start-end with optional thousands separators and k/M/G units.',
+      // How every box reads what is typed (§26.1): cooler's grammar, and not
+      // cooler's base — the advice said *cooler syntax*, which is 0-based.
+      'A locus is a contig, or contig:start-end, 1-based and inclusive as IGV and samtools write it, with optional thousands separators and k/M/G units.',
       'The end must not be before the start, and neither may fall outside the contig.',
     ],
   },

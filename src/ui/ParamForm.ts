@@ -55,8 +55,8 @@ import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { button, dragHasFiles, el, fmt } from './dom'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { dragHasFileRow, readFileDrag } from './fileDrag'
-import { typedLocusToRegion } from '../genome/assembly'
-import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
+import { formatLocus } from '../genome/assembly'
+import { armPick, disarmPick, isArmed, lastPick, subscribePick } from './mapPick'
 import { iconButton } from './icons'
 
 /**
@@ -544,24 +544,22 @@ function framingRegion(context: AnalysisContext, many = false): string {
   if (to > contig.startBin + contig.bins) return contig.name
   const start = (from - contig.startBin) * framing.binsize
   const end = Math.min(contig.length, (to - contig.startBin) * framing.binsize)
-  // 1-based and inclusive, which is how every genome browser writes a locus and
-  // what `types.ts`'s `locus` field already documents the boxes as accepting.
-  const first = Math.max(1, Math.round(start) + 1)
-  const last = Math.round(end)
-  // **Grouped, but only where the comma is not already taken.** §26.1 wants the
-  // separators — an analysis form opened with `IV:1000001-1400000` under a line
-  // reading `IV:1,000,001-1,400,000 · 1 kb bins`, two spellings of one window in
-  // the one place a reader is about to edit the number — and `parseHumanized`
-  // strips them before it does anything else, so a grouped seed parses as the
-  // bare one did.
+  // The display form of §26.1 — 1-based and inclusive, grouped — through
+  // `formatLocus`, which is the form this box is read in: the run's own
+  // boundary takes it back to cooler's grammar (`analysis/job.ts`'s
+  // `runnerParams`), so the seed means the bins on screen, not a base past them.
   //
-  // A box that takes **several** sequences is comma-separated, which is where
-  // this first went wrong: `split(',')` read the seed as `IV:1`, `000`, `001-1`
-  // and `400`, and the reconstruction came back *Expected HYPHEN token missing*
-  // for a locus copied out of the line above its own box. The list is split by
+  // **Grouped, though the comma is taken.** §26.1 wants the separators — an
+  // analysis form opened with `IV:1000001-1400000` under a line reading
+  // `IV:1,000,001-1,400,000 · 1 kb bins` was two spellings of one window in the
+  // one place a reader is about to edit the number. A box that takes
+  // **several** sequences is comma-separated, which is where this first went
+  // wrong: `split(',')` read the seed as `IV:1`, `000`, `001-1` and `400`, and
+  // the reconstruction came back *Expected HYPHEN token missing* for a locus
+  // copied out of the line above its own box. The list is split by
   // `splitRegionList` now, which knows a thousands comma from a separator, so
   // every one of these boxes reads the way the rest of the application writes.
-  return `${contig.name}:${fmt.pos(first)}-${fmt.pos(last)}`
+  return formatLocus({ contig: contig.name, start: Math.max(0, Math.round(start)), end: Math.round(end) })
 }
 
 /**
@@ -1466,11 +1464,16 @@ export class ParamForm {
       type: 'text',
       attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
+      // The sentence every other locus box carries (§26.1), because this box is
+      // now read as they are. It used to say *as metacooler show --range takes
+      // it*, which was true and was the one place a reader had to know which of
+      // two bases a box was in.
       title: devFeature('metacool')
-        ? 'A contig, or a contig and a span, as metacooler show --range takes it. On a metagenome ' +
-          'a genome name is one too, and means the whole of it.'
+        ? 'A contig, or a contig and a span. Coordinates are 1-based and inclusive, as IGV and ' +
+          'samtools write them. On a metagenome a genome name is one too, and means the whole of it.'
         : // A genome name is the multi-genome format's, a dev feature (§29).
-          'A sequence, or a sequence and a span.',
+          'A sequence, or a sequence and a span. Coordinates are 1-based and inclusive, as IGV and ' +
+          'samtools write them.',
     })
     const note = el('p', { class: 'hint param-map-note hidden' })
 
@@ -1537,17 +1540,15 @@ export class ParamForm {
           // correction the reader had just typed over it.
           if (at !== null && at !== seen) {
             seen = at
-            // **Through `typedLocusToRegion`, so the pick lands on the bins that
-            // were dragged.** `mapPick.locusText` writes the *paste* form —
-            // 1-based inclusive, which is what §8.9 pins for the clipboard and
-            // what a reader wants in a terminal — and the runners read this
-            // parameter with cooler's grammar, 0-based half-open. So a picked
-            // anchor arrived a base past the stretch the reader had just framed
-            // on the map, and nothing on the screen said so. Converted here
-            // rather than in `locusText`, which the clipboard still wants
-            // unchanged, and rather than in the runners, whose reading of a
-            // *typed* value is a separate question (see the box's own title).
-            this.commit(spec.key, typedLocusToRegion(locusText(at)))
+            // **The display form, which is what the box is read in** (§26.1):
+            // `IV:1,000,001-1,400,000` for the bins that were dragged, as the
+            // seed above writes the framing and as a reader would type it, and
+            // the run's own boundary (`runnerParams`) takes it back to exactly
+            // those bins. It wrote the machine form while the runners read this
+            // box as cooler does — right for them, and the one locus on the form
+            // a base off from every other box in the app. A whole unit is its
+            // name, which has no base to be off by.
+            this.commit(spec.key, at.whole === true ? at.contig : formatLocus(at))
           }
           sync()
         }),

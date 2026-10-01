@@ -33,6 +33,7 @@
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseMetacoolerRange } from '../../metacooler/range'
+import { regionLabel } from '../../genome/assembly'
 import { ExpectedAccumulator, expectedAt } from '../expected'
 import { boolParam, strParam, type JobContext, type TaskRunner } from '../job'
 import type { ProfileOutput, TaskOutput } from '../types'
@@ -124,8 +125,12 @@ export const runFourC: TaskRunner = async (job) => {
     // The suffix marks a *choice*, so a metagenome — where every 4C is over the
     // whole file — does not carry it. There it would name the only thing the
     // task does, on every track, which is a label that distinguishes nothing.
+    // The anchor as the reader reads it, `IV:1,000,001-1,010,000` (§26.1), and
+    // not as this runner is handed it: what reaches a runner is cooler's
+    // grammar (`runnerParams`), and a lane's name is read beside every other
+    // locus on the screen.
     label:
-      `4C · ${text}${cis || whole ? '' : ' (with trans)'}` +
+      `4C · ${regionLabel(text)}${cis || whole ? '' : ' (with trans)'}` +
       `${overExpected ? ' · O/E' : ''}${overCoverage ? ' · per coverage' : ''}` +
       `${excluded ? ' · anchor excluded' : ''}`,
     values,

@@ -135,7 +135,9 @@ describe('model versus map', () => {
 
 describe('spatial tracks', () => {
   it('makes the radial, compaction and distance tracks on the map’s bins', async () => {
-    const outputs = await runSpatialTracks(job({ structure: 's1', locus: 'I:1-10,000', window: 1 }))
+    // As a runner is handed it (`runnerParams`): the form's `I:1-10,000`, in
+    // cooler's grammar.
+    const outputs = await runSpatialTracks(job({ structure: 's1', locus: 'I:0-10000', window: 1 }))
     const profiles = outputs.filter((o): o is ProfileOutput => o.kind === 'profile')
     expect(profiles.map((p) => p.id)).toEqual(['structure-radial--1', 'structure-compaction--1', 'structure-distance--1'])
     const radial = profiles[0]
@@ -157,7 +159,7 @@ describe('spatial tracks', () => {
 
   it('leaves the distance track out, and says so, for a locus the model has no bead at', async () => {
     const notes: string[] = []
-    const outputs = await runSpatialTracks(job({ structure: 's1', locus: 'II:1-100' }, notes))
+    const outputs = await runSpatialTracks(job({ structure: 's1', locus: 'II:0-100' }, notes))
     expect(outputs.map((o) => o.id)).toEqual(['structure-radial--1', 'structure-compaction--1'])
     expect(notes[0]).toMatch(/No bead of the model lies at II:1-100/)
   })
@@ -212,6 +214,11 @@ describe('model from the map', () => {
     // …and a locus is the bins of *that stretch*, not of the whole sequence.
     const locus = RECONSTRUCT_TASK.estimate(context, { region: `I:0-${400 * BINSIZE}` })
     expect(locus.note).toMatch(/^400 beads/)
+    // Read as the box is, 1-based and inclusive (§26.1): the display form of
+    // bins 400–800 is those 400 bins, and one base earlier reaches into a 401st,
+    // which is what the runner will be handed.
+    expect(RECONSTRUCT_TASK.estimate(context, { region: 'I:4,000,001-8,000,000' }).note).toMatch(/^400 beads/)
+    expect(RECONSTRUCT_TASK.estimate(context, { region: 'I:4,000,000-8,000,000' }).note).toMatch(/^401 beads/)
   })
 
   it('makes a ShRec3D row from the block, one bead per cell, that orders the pairs as the map does', async () => {
@@ -494,6 +501,8 @@ describe('model from the map, over several sequences', () => {
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
     expect(model.payload.data.length).toBe(6)
     expect(Array.from(model.payload.data.start)).toEqual([0, 10000, 20000, 70000, 80000, 90000])
+    // Named as a reader reads the two stretches, each of them (§26.1).
+    expect(model.label).toBe('3D model · I:1-30,000, II:70,001-100,000')
   })
 
   it('names the sequence the file lacks, among several', async () => {

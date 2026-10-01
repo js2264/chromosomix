@@ -805,6 +805,14 @@ show reads the window again (§2), which for a MAG never happens: its block is a
 bins. Level toggle between bin and contig aggregation, both computed locally from the loaded data —
 in the General column's Contigs card (§5.8), which also lists this genome's contigs.
 
+**Its locus box is every other locus box** (§26.1, §26.6): `locusPlaceholder`'s offer —
+`contig:1,000-20,000, or a sequence` — a `go` beside it, a tooltip saying coordinates are 1-based and
+inclusive, and what is typed read back through `typedLocusToRegion` before it opens a contig or a
+window of one in the region view. It was the last box to word its offer itself (`contig, or
+contig:start-end`), to have no `go`, and to hand what was typed to the region reader as written,
+which takes the digits 0-based — so a window copied off a breadcrumb, out of IGV or out of a paper
+opened one base to the right of the place it names, from this box and from no other.
+
 ### 5.3 Genome-pair view
 
 The rectangular off-diagonal block between two genomes — the phage–host, plasmid–host and HGT view,
@@ -2503,7 +2511,9 @@ resolution and no clipboard, since a BED is not a picture, and its two options a
 marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
 *loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
-**A mark is moved where it is listed.** Its row reads as the mark's place, grouped (§26.1), and a
+**A mark is moved where it is listed.** Its row reads as the mark's place in the display form,
+1-based and grouped (§26.1) — `formatPosition` for a line's or an arrowhead's base, `formatLocus` for
+a rectangle's sides, and a side of no width as the one base its BEDPE row is written as — and a
 press on it turns that text into the boxes the adding forms use — one for a line, with its axis
 select beside it; rows and columns for an arrowhead or a rectangle, the second left empty meaning the
 same place on both — taking what those forms take. Enter, or a click away, moves the mark **in place**:
@@ -2511,6 +2521,16 @@ its id, its colour and its position in the list are kept, so everything that nam
 3D key, a chord — follows. Escape leaves it where it was, and a box that does not read stays open with
 a red edge rather than dropping what was typed. It used to be removed and drawn again, which lost its
 colour and sent it to the end of the list.
+
+**Every box on the card reads what it is typed 1-based**, as every locus box does (§26.1): a base is
+`typedPosition` of the number written, a side is its first base less one to its last, so Enter on a
+row's own text leaves the mark where it was and a coordinate copied off the map's readout lands on
+the base it names. What is kept is the 0-based base a mark names — what a line is drawn at and its
+BED row written from — so no file changes. The forms and the rows both used to be the stored
+numbers as written: the card agreed with itself, and a locus pasted from anywhere else landed one
+base to the right. The map's *Copy coordinates* puts a cell's two bases on the clipboard in the copy
+form, 1-based and ungrouped, under menu rows that already named them 1-based; it copied the stored
+numbers.
 
 **They come back in by the same card.** An *Import* section above *Export* holds the Tracks card's
 load zone, worded *Load marks*: click it to choose files, or drop one anywhere on the card — the zone
@@ -3090,6 +3110,19 @@ takes typed coordinates, which is for a place from a paper or a colleague. And t
 read as the first three columns and the name, so a narrowPeak, a BEDPE's first mate and a headed
 table from R all import without a format question. An import claims no bin size, since a list of
 intervals does not state one.
+
+**A place is read and printed as every locus box reads and prints one** (§26.1). The box takes the
+typed form — 1-based and inclusive, every spelling of it (separators, `kb` and `Mb`, `..`, an en
+dash, a colon in a sequence's name, the ends either way round), and a single position as a place of
+no width at that base — through `parseTypedRegion`, whose one subtraction is `typedPosition`'s. A row
+prints the display form: a window through `formatLocus`, `II:120,001-180,000`, and a place of no
+width as the base it stands at, through `formatPosition`. So a row's own text typed back is the
+place it already holds, and the card says it is already bookmarked. Both used to be the stored
+numbers as written, 0-based: the card agreed with itself and with nothing else on the screen — a
+bookmark of the window on screen read a base earlier than the breadcrumb it was saved under, and a
+locus copied off that breadcrumb, out of IGV or out of a paper was saved a base to the right of the
+place it names. What is **kept** is unchanged and stays 0-based and half-open: it is what the BED
+import reads, what a workspace carries and what the `focus` of a link is written from (§5.5).
 
 Kept in per-file session memory beside the marks (§8.6), which is what makes them survive a change of
 resolution, a switch of view, a deck opening and closing, and a reload; and carried in an exported
@@ -6450,22 +6483,43 @@ because the answer is still *the map's*; the run is handed the number itself, an
 command line and a replay carry that number. A `metacooler-run` line with no such flag gets the same
 rule from the map it names, or 10 kb with none.
 
-**A locus parameter is in cooler's grammar** — 0-based half-open — because that is the one
-form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
-CLI button prints, and what a reader pastes from `metacooler show --range`. This is the one box in the
-app whose value is not read as the display form of §26.1. It is grouped all the same: the framing it
-opens on is written as §26.1 writes a window, `IV:1,000,001-1,400,000`, since the parser drops the
-separators, `splitRegionList` tells a thousands comma from the comma between two sequences of a list,
-and a window whose ends are bin edges names the same bins read either way. Its title never claims to
-be "the same thing the locus boxes take": with the dev features on (§29) it says which grammar it is
-in — *as metacooler show --range takes it* — and without them only *A sequence, or a sequence and a
-span.*
+**A locus parameter is in the typed form of §26.1** — 1-based and inclusive, digits grouped or not,
+`IV:1,000,001-1,400,000` — wherever it is held: in the form, in a result's provenance and the
+`# param` line above every export, in a workspace, in the line the console writes and on a
+`metacooler-run` command line, whether it was typed, seeded from the framing, picked off the map or
+recorded in a run. It is read as every other locus box in the application reads one, by the same
+reader a few centimetres away, and its title says so in their words — *Coordinates are 1-based and
+inclusive, as IGV and samtools write them*, after *A sequence, or a sequence and a span* (and, with
+the dev features on, §29, that a genome's name means the whole of it). The seed is the framing written
+by `formatLocus`; a box that takes several is seeded with names, and its list is split by
+`splitRegionList`, which tells the thousands comma in `1,000,001` from the comma between two
+sequences.
 
-**A locus picked off the map is converted on the way in.** `ui/mapPick.ts` writes the *paste* form —
-1-based inclusive, which §8.9 pins for the clipboard because that is what samtools and bedtools take —
-so the form shifts it by a base before it becomes a parameter. Without that, a drag framing bins
-230–1042 reached the runner naming bin 231 onwards: one bin past the stretch the reader had just
-pointed at, with nothing on screen saying so, and a 4C profile is read off its anchor.
+**It becomes cooler's grammar in one place**, `runnerParams` in `analysis/job.ts`, as a job is handed
+to its runner — `AnalysisRunner.runStep` for the two workers, `cli/main.ts` for the shell — through
+`typedLocusToRegion`, a box that takes several one part at a time. So the runners keep reading the
+machine form, nothing a reader can see or keep ever holds it, and no runner converts anything. The
+worker records what it was handed, and the runner puts the reader's parameters back over them before
+the result goes anywhere: a provenance refills the form (`rememberParams`), heads every export, is
+what the console writes and is what a replay reads, and `IV:1000000-1400000` in any of those is a
+locus a reader reads a base early. What a runner names with the locus it was handed — the 4C lane,
+`4C · IV:1,000,001-1,010,000`; the structure tasks' model, table and distance lane — is `regionLabel`
+of it, and the reconstruction's estimate reads the box as the runner will, so its price is of the
+bins that run reads.
+
+This was the one box in the app read as cooler's grammar, because a run's record was kept in it. So
+its own seed — the framing, written as §26.1 writes a window — and every locus pasted in from the
+breadcrumb, from IGV or from a paper named a window a base later than it said, and a locus picked off
+the map had to be shifted by a base on its way in to make up for it: the one locus on the form a base
+away from every other box in the app. A window whose ends are bin edges named the same bins read
+either way, which is why the seed was right as often as it was. A run recorded before the change
+whose locus was **picked** — the machine form — is now read 1-based like any other, and starts one
+base earlier: on a bin edge, one bin earlier.
+
+**A locus picked off the map is written in the display form**, `formatLocus` of the stretch that was
+dragged — the form the seed beside it is in, and the form a reader would type — so a drag framing bins
+230–1042 is handed to the runner as exactly those bins. `ui/mapPick.ts`'s own `locusText` is the
+*paste* form, 1-based inclusive and ungrouped, which §8.9 pins for the clipboard.
 
 **Which sequences to run on is one question and it has one shape: a column of tick boxes.** There
 were two — a column of tick boxes on four tasks, and on five others a dropdown whose first option
@@ -9018,6 +9072,16 @@ extent, which decides only whether the block on screen can be reused, so `--wind
 the record's label and the numbers are the same either way. An imported `.pairs` writes the
 `--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
 
+**Every locus on the line is the display form**, because the shell reads every locus as a reader's
+box does (§26.1). `--window` is the framing through `formatLocus` — `--window chrIV:100,001-200,000`,
+the window the breadcrumb named — and the shell takes it back through `typedLocusToRegion` to the
+bins the framing was; a whole sequence or a genome is its name. A locus parameter — 4C's `--anchor`,
+the structure tasks' `--region` and `--locus` — is written as its record holds it, the typed form the
+form held (§18.2), grouped digits and all. `quote` leaves both bare, since a comma, a colon and a
+hyphen are nothing to a shell, and quotes a list of loci, which has a space in it. The window was
+cooler's 0-based numbers, `chrIV:100000-200000`, which the shell read as written: right in the shell,
+and the one locus in the console a base away from the same window everywhere else on the screen.
+
 ### 23.2 What else is on it, and what is not
 
 A day is not only its runs, so three more things are recorded — each at the one place every road to
@@ -10882,27 +10946,47 @@ confused:
 
 | Form | Grammar | Where it lives |
 |---|---|---|
-| **Machine** | cooler's: 0-based, half-open, ungrouped — `IV:1000000-1400000` | The session state, a `#`-hash link, `metacooler show --range`, every worker message, every file on disk |
-| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips |
-| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box |
+| **Machine** | cooler's: 0-based, half-open, ungrouped — `IV:1000000-1400000` | The session state, a map's `region` and `focus` in a `#`-hash link, `metacooler show --range`, every worker message, what a runner is handed, every file format that is 0-based by definition (BED, bedGraph, BEDPE) |
+| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips, the lines the console and `metacooler-run` write |
+| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box — a locus box, an analysis parameter (§18.2), a bookmark, a mark — or on a `metacooler-run` command line |
 
 One hash key is the exception: the 1D browser's `locus` is written in the display form — it is the
 browser's own box, carried in the address bar — and read back through the parser a typed locus goes
-through (`parseLocus`, §5.5). A map's `region` stays in the machine form.
+through (`parseLocus`, §5.5). **A map's `region` stays in the machine form**, and so does the `focus`
+a bookmark puts beside it (§8.10), deliberately and not for want of converting them. A link is a
+promise already made, to whoever it was sent to: one from last month has to open the window it opened
+then, and the hash is never typed — the box above the map shows its display form and reads the typed
+form back. Rewriting the key would move every link ever shared a base to the left, invisibly, which is
+the failure this section exists to prevent.
 
 The machine form cannot change: it is what a shared link has to keep meaning and what the reference
 implementation takes. The display form cannot change either, because it is what IGV, UCSC, samtools,
 Ensembl and every paper print, and a viewer that showed a locus a base off from the one a reader's
 `bedtools` output names would be wrong in the way that is hardest to notice and worst to find.
 
+**A command line is a box, and so is an analysis parameter.** Everything a reader types is read the
+same way, wherever they type it: `metacooler-run --window`, every locus a task takes on the command
+line (`--anchor`, `--region`, `--locus`), a locus a workspace recorded that `replay` runs again, and
+the analysis form's own locus boxes are the typed form, 1-based and inclusive with digits grouped or
+not; `--origin` already was. They are turned into the machine form at one boundary each — the shell's
+window where it is opened (`cli/main.ts`), and every parameter where a job is handed to its runner
+(`runnerParams`, §18.2) — so the runners and the worker messages keep the machine form, and what is
+recorded and printed keeps the reader's. The console writes the display form for the same reason
+(§23.1), so a line copied out of it names the window the breadcrumb did. A script written
+for the old reading, `--window IV:1000000-1400000`, now starts one base earlier — at the base that
+`IV:1,000,000` names — and on a bin edge, one bin earlier.
+
 **The law is the round trip.** A locus box shows the display form and accepts the typed form, so
 pressing Enter on a value the box is already showing must not move the view by a base.
 `typedLocusToRegion(regionLabel(r)) === r` for every region with coordinates, and
 `test/unit/locus-display.test.ts` holds it. The helpers in `genome/assembly.ts` are the only
 place any of this is written: `formatLocus` for a window, `formatPosition` for a single base or bin
-start, `regionLabel` for a state string, `windowLabel` for the one crumb that hangs under the name it
-would otherwise repeat, `typedLocusToRegion` for what was typed. A view that formats a coordinate
-itself is a view that will drift.
+start, `baseLabel` for a base under a line that already names its sequence (the map's tooltip),
+`regionLabel` for a state string, `windowLabel` for the one crumb that hangs under the name it
+would otherwise repeat, `typedLocusToRegion` for what was typed, and `typedPosition` for a typed base
+in a box that reads its own numbers (a bookmark's single position, a hand-drawn mark). `fmt.pos`,
+for a number that is printed as given, groups as en-US too, whatever the reader's locale. A view that
+formats a coordinate itself is a view that will drift.
 
 The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
 and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name, a band's
@@ -10931,7 +11015,9 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
 - **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local and
   twenty-four hour in every locale — `20:49:46` — since the hour cycle is a fact about what the
   number is for, and only the separators are the locale's.
-- A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.
+- A coordinate printed in full takes `fmt.pos` — or `formatPosition` where it is a base, which adds
+  the one (§26.1) — and both group as en-US whatever the locale; a count takes `fmt.int`, grouped as
+  the reader's locale groups; a fraction takes `fmt.pct`.
 - **A record card says which columns are the format's and which the file's.** On a metagenome the two
   sets overlap: `/genomes` guarantees `length`, `n_contigs` and `n_bins`, and a creator who joined a
   MAG-QC table in brings `Length`, `Contigs` and sixteen more — so the card listed every number

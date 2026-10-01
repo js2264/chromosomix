@@ -1424,6 +1424,46 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   coordinates were *0-based and half-open, as in cooler*; the region in a link is unchanged, so a
   shared view still means what it meant.
 
+- **A locus on the command line is 1-based and inclusive, as every box in the app reads one (§26.1,
+  §23.1).** `metacooler-run --window`, every locus a task takes (`--anchor`, `--region`, `--locus`)
+  and a locus a workspace recorded that `replay` runs again are read as the display form and every
+  spelling of it, digits grouped or not — `--window IV:1,000,001-1,400,000` — and the console and
+  *copy CLI command* write `--window` that way, so a line copied out of the console names the window
+  the breadcrumb did. They were read as cooler reads them, 0-based and as written, and the console
+  wrote its windows in that grammar to match: right in a shell, and a base away from every other
+  locus on the screen. **This changes what an existing script means.** A script's
+  `--window IV:1000000-1400000`, written for the old reading, now starts one base earlier, at the
+  base `IV:1,000,000` names — on a bin edge, one bin earlier; add one to its start to keep the old
+  window, and the same goes for a locus flag. The framing line a run records prints its window in the
+  display form, `--help` says how loci are read, and `--origin` was 1-based already.
+
+- **Bookmarks, the genome view's locus box and the analysis form's locus boxes read and print
+  coordinates 1-based (§8.10, §5.2, §18.2).** The Bookmarks card printed a saved place 0-based and
+  read what was typed the same way, so a bookmark of the window on screen read a base earlier than
+  the breadcrumb it was saved under, and a locus pasted from IGV was saved a base to the right; it
+  prints the display form now, reads the typed one, and a row's own text typed back is the place it
+  holds. The genome view's box worded its offer itself, had no `go`, and handed what was typed to the
+  region reader as written; it is every other locus box now. The analysis form's boxes — 4C's anchor,
+  *Spatial tracks*' *distance to*, the two model tasks' sequences — were the one place in the app a
+  locus was read as cooler's grammar, so their own seed from the framing and anything pasted into
+  them named a window a base later than it said, and a pick off the map had to be shifted by a base
+  to make up for it. They hold the typed form wherever a run is kept — the form, its provenance, the
+  console's command, a workspace — and become cooler's grammar only where a job is handed to its
+  runner; a pick is written `IV:1,000,001-1,010,000`, and a 4C lane and a model are named that way. A
+  run saved before this whose anchor was picked off the map starts one base (on a bin edge, one bin)
+  earlier when it is run again.
+
+- **Every other coordinate a reader reads or types is 1-based and grouped as en-US too (§8.1,
+  §26.1).** The Manual annotations card's rows and boxes printed and read a mark's stored number,
+  0-based, and the map's *Copy coordinates* put it on the clipboard that way under menu rows that
+  named the same cell 1-based; the whole-metagenome view's box read a contig's coordinates as
+  written; and an APA's *Per anchor* table named an unnamed anchor by its 0-based start. The map's
+  tooltip, a dragged box's ends, a read's mate, a gene's exons, a bead's tooltip in the 3D cell, the
+  Chromosomes table's origin column and `fmt.pos` now group a coordinate with commas in every
+  locale, where a German browser showed `1.162.001` beside a breadcrumb grouped with commas, and
+  refused an origin typed the way its own box had just written one. A range that does not parse
+  says how a locus is read, rather than calling it *cooler syntax*.
+
 - **Every export asks where to save, in a dialog opened in Downloads (§26.6).** Figures, decks,
   structures, bigWigs, bedGraphs, tables, marks, the console's script, a workspace and an `.mcool`
   used to land straight in the browser's downloads folder under the app's name; the platform's *Save
