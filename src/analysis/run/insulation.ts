@@ -407,12 +407,14 @@ function boundaryOutput(
   calls: ReadonlyArray<{ unit: Unit; boundaries: Boundary[]; window: number }>,
 ): TaskOutput {
   const builder = new FeatureBuilder()
+  let named = 0
   for (const { unit, boundaries } of calls) {
     for (const boundary of boundaries) {
       const start = boundary.bin * job.mc.binsize
       builder.add(unit.name, start, Math.min(unit.length, start + job.mc.binsize), {
         score: boundary.prominence,
-        name: '',
+        // An id, in genomic order: what a BED of the set is cited by.
+        name: `boundary_${++named}`,
         detail: `insulation ${boundary.score.toFixed(3)} · prominence ${boundary.prominence.toFixed(3)}`,
       })
     }
@@ -460,10 +462,11 @@ function domainOutput(
         // The weaker edge, so the overlay can be filtered on it and a reader
         // ranking the set in APA is ranking on how well *both* sides are held.
         score: domain.strength,
-        // No name, because a domain has none. Compartments write `A` or `B`
-        // into the box because there are two kinds; here every box is the same
-        // kind and a label per domain would be ink saying nothing.
-        name: '',
+        // An id rather than a kind. Compartments write `A` or `B` because there
+        // are two kinds; every domain is the same kind, so what its name column
+        // carries is which one it is — what a BED of the set is cited by and
+        // what a click on the lane shows. The lane is not coloured by it.
+        name: `domain_${count}`,
         detail: `${domain.to - domain.from} bins · weaker boundary prominence ${domain.strength.toFixed(3)}`,
       })
     }

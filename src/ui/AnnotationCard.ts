@@ -40,6 +40,7 @@ import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
 import { mapsOrLead, overlayMapsField, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
+import { surfaceToggles } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
@@ -1165,7 +1166,7 @@ export class AnnotationCard {
     // are drawn on the map as borders or boxes on the diagonal and there is no
     // lane to colour: a control that silently does nothing is worse than an
     // absent one.
-    if (entry.card === 'linear' && isIntervalSet(entry.kind)) {
+    if (isLaneRow(entry) && isIntervalSet(entry.kind)) {
       // …with one exception, and it is the same rule as the two above rather
       // than a special case: a control that silently does nothing is worse than
       // an absent one. A barChart's ink is its categories' and is not a choice
@@ -1229,6 +1230,9 @@ export class AnnotationCard {
     if (entry.kind === 'sequence') {
       out.push(this.limits(entry), framesField(this.props.store, entry))
     }
+    // A called set's two surfaces (§18.7), on whichever of its two rows is open.
+    const surfaces = surfaceToggles(this.props.store, entry)
+    if (surfaces !== null) out.push(surfaces)
     if (entry.card === 'overlay') {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))

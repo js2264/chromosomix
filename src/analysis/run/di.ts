@@ -257,6 +257,7 @@ function borderOutput(
   calls: ReadonlyArray<{ unit: Unit; borders: Boundary[] }>,
 ): IntervalsOutput {
   const builder = new FeatureBuilder()
+  let named = 0
   for (const { unit, borders } of calls) {
     for (const border of borders) {
       const start = border.bin * job.mc.binsize
@@ -267,7 +268,8 @@ function borderOutput(
       const at = Number.isFinite(border.score) ? `DI ${border.score.toFixed(1)}` : 'DI not scored'
       builder.add(unit.name, start, Math.min(unit.length, start + job.mc.binsize), {
         score: border.prominence,
-        name: '',
+        // An id, in genomic order: what a BED of the set is cited by.
+        name: `border_${++named}`,
         detail: `${at} · prominence ${border.prominence.toFixed(1)} bins`,
       })
     }
@@ -306,7 +308,8 @@ function domainOutput(
         // The weaker of the two edges, so a reader ranking the set is ranking on
         // how well *both* sides of each domain are held.
         score: domain.strength,
-        name: '',
+        // An id: what a BED of the set is cited by (see insulation's domains).
+        name: `domain_${count}`,
         detail: `${domain.to - domain.from} bins · weaker border prominence ${domain.strength.toFixed(1)} bins`,
       })
     }

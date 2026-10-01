@@ -514,6 +514,9 @@ function pairOutput(calls: Call[], label: string, binsize: number): TaskOutput {
     // for, and *pairs* is the half a reader needs that the label does not give
     // — it is why the button beside it writes BEDPE.
     noun: { one: 'pair', many: 'pairs' },
+    // A loop is a pixel of the map; its anchors as a lane are a reading a
+    // reader may ask for and not the picture a loop is, so the lane starts off.
+    lane: { hidden: true },
   }
 }
 

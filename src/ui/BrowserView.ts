@@ -1798,8 +1798,16 @@ export class BrowserView {
     // deck's structure cell (§25), and a chain of 5 kb beads drawn as boxes
     // along an axis is one solid bar saying nothing.
     const held = this.props.map === undefined ? this.props.store.entries : this.props.store.entriesOn(this.props.map)
+    // A called set is two rows, an overlay and a lane (§18.7), and here the lane
+    // *is* its picture: the overlay row drawn as a second lane would put every
+    // peak on the screen twice, and would keep drawing it after the reader had
+    // switched the lane off.
     const entries = held.filter(
-      (entry) => entry.visible && entry.status === 'ready' && entry.kind !== 'structure',
+      (entry) =>
+        entry.visible &&
+        entry.status === 'ready' &&
+        entry.kind !== 'structure' &&
+        !(entry.card === 'overlay' && entry.source.kind === 'computed' && entry.partner !== undefined),
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,

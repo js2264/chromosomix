@@ -189,6 +189,8 @@ export const runDotplot: TrackTaskRunner = async (job) => {
     label: 'Streaks, as pairs',
     payload: { kind: 'pairs', data: pairs.finish() },
     noun: { one: 'streak', many: 'streaks' },
+    // Off to start with, as a loop set's is: a streak is a stretch of the map.
+    lane: { hidden: true },
   }
   return [matrix, table, intervals]
 }

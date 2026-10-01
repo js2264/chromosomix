@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every called set is drawn on the map and as a lane (§18.7, §8.1, §8.16).** Peaks, insulation's
+  boundaries and domains, the DI's borders and domains, A/B compartments, Pattern detection's borders,
+  origins, sites, flagged contigs and MAGs used to arrive as an overlay on the map only — beside a map a
+  peak set could not be read against the coverage it was called on. Each now arrives as two rows of the
+  Tracks card, linked: the overlay, and a lane of segments placed directly under the row it is read
+  against — the peaks under their bigWig, the A/B segments under E1, the boundaries under the
+  insulation track. Each row's settings and the drawer carry **on the map** and **as a lane**, which are
+  the two rows' eyes and are remembered as they are (§8.6). A loop set's lane is its anchors, and starts
+  off; with no map — the 1D browser — the lane comes alone. Segments carry a name — `A`/`B`,
+  `peak_12`, `domain_3`, `boundary_40` — into the BED, and a lane can be coloured by its **name**
+  column, which a compartment lane is from the start.
+
 - **The stage's corner dot plot zooms, grows, and answers the map — a dev feature (§27.3).** The wheel
   zooms it about the pointer, a drag moves it and a double click shows it whole, as the dot plot's own
   view does, the lines sharp at any zoom; a grip at its lower-left corner sizes it, kept on the map

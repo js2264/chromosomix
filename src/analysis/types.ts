@@ -1149,6 +1149,22 @@ export interface IntervalsOutput {
    * `boundarys` anywhere.
    */
   noun?: { one: string; many: string }
+  /**
+   * Where the set's **lane** goes, beside the overlay (§18.7).
+   *
+   * Every called set is drawn on both surfaces — on the map it was called from
+   * and as a lane of segments beside it — and a lane is read against the lane
+   * it came from: a peak set under the coverage it was called on, the A/B
+   * segments under the eigenvector that made them. `under` names that row, as
+   * one of this run's own profiles (`output`) or as a loaded row (`entry`);
+   * absent, the lane goes under the last profile the run produced, or on the
+   * computed tracks' edge where it produced none (`analysis/surfaces.ts`).
+   *
+   * `hidden` starts the lane switched off, which is right for a set of pairs:
+   * a loop's anchors as boxes along one axis is a reading a reader may want and
+   * not the picture a loop is.
+   */
+  lane?: { under?: { output: string } | { entry: string }; hidden?: boolean }
 }
 
 export type TaskOutput =

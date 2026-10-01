@@ -31,6 +31,7 @@
  */
 
 import { taskById } from '../analysis/registry'
+import { surfaceWord } from '../analysis/surfaces'
 import { TRACK_OP_LABELS } from '../annotations/derived'
 import type { ProfileOutput } from '../analysis/types'
 import type { AnnotationEntry, ComputedSource, LaneEdge } from '../annotations/types'
@@ -91,8 +92,10 @@ export function syntheticMark(entry: AnnotationEntry): HTMLElement {
 export function syntheticNote(entry: AnnotationEntry): string | null {
   const made = madeBy(entry)
   const counted = entry.summary !== undefined && entry.summary !== '' ? entry.summary : null
-  if (made === null) return counted
-  return counted === null ? made : `${made} · ${counted}`
+  // …and, on a called set's two rows, which of the two this one is (§18.7).
+  const surface = surfaceWord(entry)
+  const said = [made, counted, surface].filter((part): part is string => part !== null)
+  return said.length === 0 ? null : said.join(' · ')
 }
 
 /**

@@ -2484,6 +2484,9 @@ set a task called (§18.5) marks on-diagonal borders or elements; a BED the read
 These answer a different question from a lane — not "what is on the sequence here" but "this pixel
 is a feature" — so every one is an outline, a rule or a glyph beside what it points at: an overlay
 must not hide the pixel it is about.
+A set a task *called* is the one thing wanted in both roles, since a peak set is checked against its
+coverage and a boundary against its map: it arrives as both, an overlay row and a lane row linked to
+it, each with its switch (§18.7).
 
 An overlay is **placed per map**, as a track is, and a map draws only the overlays placed on it. It
 used to be drawn on every map of a deck: a loop set called on one of six maps was circled on all
@@ -4054,6 +4057,11 @@ one place that needs it: discovery is a **strided sample** of at most twenty tho
 per set, and a row's value is read from its own string once per *placement*, which the layout has
 already bounded by the pixels on screen. A key with its number on the wrong side (`4 exons`) is not
 a column and is not offered; a part with no key at all (a VCF's leading `A>G`) is not either.
+
+The set's own **name** column is offered beside them where any sampled row writes one — a BED's
+fourth column, read from the column rather than from the detail string — as a category: a
+compartment's `A` and `B`, a chromatin state, an id. It is how a called compartment lane arrives
+coloured (§18.7).
 
 A categorical column is drawn in `CATEGORY_PALETTE` — §8.12's palette, for §8.12's reason: one swatch
 cannot describe six biotypes. Values are handed colours **commonest first**, so the palette's most
@@ -6767,8 +6775,9 @@ limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, batch
 it.
 
 **It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
-one list whose order is the lanes' order: a task's profile, its called interval set (an overlay, with
-the overlay's shape, radius and opacity), and a comparison of two loaded tracks (§7.5). What only a
+one list whose order is the lanes' order: a task's profile, its called interval set — as two rows, the
+overlay with the overlay's shape, radius and opacity and the lane with a feature lane's colouring and
+rows (§18.7) — and a comparison of two loaded tracks (§7.5). What only a
 synthetic row has rides in the places a loaded row keeps the matching facts:
 
 - **a `*` after its name** — the mark a resolution the file does not store wears (`3 kb*`, §3.4),
@@ -6925,8 +6934,40 @@ Three specific gates, each stated because each is a place the naive implementati
 Five output kinds, and a task may produce several: a **profile** (one value per bin → a synthetic
 track), a **matrix** (a pileup, a saddle, a correlation heatmap → drawn with the app's existing
 rasteriser and colormaps), a **curve** (with an optional band), a **table** (through the existing
-virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as a new row
-on the Annotations panel so a called boundary becomes an overlay on the map immediately).
+virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as rows of the
+Tracks card so a called boundary is on the map, and beside it as a lane, the moment the run finishes).
+
+**A called set is drawn on both surfaces, and each is a switch.** The map answers *is this pixel a
+feature* and a lane answers *what is on the sequence here*, and a called set — peaks, boundaries,
+domains, A/B segments, borders, origins, sites, flagged contigs — is asked both. It used to arrive as an
+overlay alone, which beside a map left a peak set with no way to be read against the coverage it was
+called on: the one check a peak caller's output is owed is box against bump. So every interval output
+arrives as **two rows**, linked as a BAM's depth and pile are (§8.13, `partner`): the **overlay**, on the
+map it was called from, and a **lane** of segments — a row of the computed kind with `kind: 'segments'`,
+drawn, coloured, searched and exported by exactly the code a loaded BED is (§8.16), and not by a second
+renderer (`analysis/surfaces.ts`). Each row's settings and the drawer's line for the output carry the
+pair of switches **on the map** and **as a lane**; each is one row's eye, so the switch, the eye and a
+session's memory of a hidden row (§8.6) are one setting, and a set run again keeps what the reader
+switched off. The two rows share a name, so the line under it says which is which — *Diamond
+insulation · 412 boundaries · on the map* over one and *… · as a lane* over the other. Rules that are
+contract:
+
+- **The lane goes directly under the row it is read against**, on that row's edges and in the slot after
+  it in the list whose order is the stacks' order: a peak set under the bigWig it was called on, the
+  A/B segments under E1, boundaries and then the domains between them under the insulation track. A
+  task names the row (`IntervalsOutput.lane.under`); unnamed, it is the run's last profile, and with none
+  the computed tracks' edge (§18.5). Only on arrival — a lane the reader has moved stays where they put it.
+- **A loop set's lane is its anchors**: both ends of every pair, each place once, under the name of the
+  first pair to reach it and the best score among them. It **starts off**, because a loop is a pixel of
+  the map and its anchors along one axis are a reading rather than the picture; the switch is there.
+- **With no map there is no overlay.** On the 1D browser demo the set is a lane alone, and in the 1D
+  browser beside a map the overlay row is not drawn as a second lane: there the lane *is* its picture,
+  and a reader who switched the lane off has switched the set off there. On a `.metacool`, which has no
+  stacks for a lane of base pairs (§8.5), the set is the overlay alone, as before.
+- **A segment carries a name**, in the BED's fourth column: `A` or `B`, `peak_12`, `domain_3`,
+  `boundary_40`, `border_7` — numbered in genomic order. The lane can be coloured by it (§8.16), and a
+  compartment lane is from the start, since two kinds of segment are what it is drawn to show; a set of
+  ids is not, since a colour per row says nothing.
 
 Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
 them a true vector figure rather than a photograph of a chart.

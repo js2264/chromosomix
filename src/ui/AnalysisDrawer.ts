@@ -189,6 +189,11 @@ export interface AnalysisDrawerOptions {
     provenance: Provenance,
     format: 'bigwig' | 'bedgraph',
   ): Promise<void>
+  /**
+   * The *on the map* and *as a lane* switches of a called set (§18.7), or
+   * `null` where the set did not become the two rows they switch.
+   */
+  surfaces?(output: IntervalsOutput): HTMLElement | null
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +494,8 @@ export class AnalysisDrawer {
   private form: ParamForm | null = null
   private params: Params = {}
   private figures: Array<{ destroy(): void }> = []
+  /** The called sets' switch slots on screen; see {@link fillSurfaces}. */
+  private surfaceSlots: Array<{ slot: HTMLElement; output: IntervalsOutput }> = []
   /** The result the output blocks were built from, compared by identity. */
   private drawn: TaskResult | null = null
   /**
@@ -1538,10 +1545,14 @@ export class AnalysisDrawer {
         : where === 'structure'
           ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
             'structure cell (add one from the deck’s bar if none is open).'
+          : where === 'overlay' && this.options.context()?.hasMap === false
+            ? many
+              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as lanes, marked *.`
+              : 'Added to the Tracks card in the Annotations panel as a lane, marked *.'
           : where === 'overlay'
             ? many
-              ? `${fmt.int(outputs.length)} overlays added to the Annotations panel, drawn on the map they were called from.`
-              : 'Added to the Annotations panel as an overlay, drawn on the map it was called from.'
+              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel, each drawn on the map it was called from and as a lane.`
+              : 'Added to the Tracks card in the Annotations panel, drawn on the map it was called from and as a lane.'
             : 'This file carries no annotation layer, so there is no overlay to draw these on. ' +
               'Take them as a BED, which this app reads back on any file that has one.'
     return el(
@@ -1556,8 +1567,32 @@ export class AnalysisDrawer {
           ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
           this.tsvButton(output, provenance),
         ),
-      ),
+      ).flatMap((row, i) => {
+        const output = outputs[i]
+        if (output.kind !== 'intervals' || output.entryKind === 'structure') return [row]
+        const slot = el('div', { class: 'analysis-surfaces' })
+        this.surfaceSlots.push({ slot, output })
+        this.fillSurface(slot, output)
+        return [row, slot]
+      }),
     )
+  }
+
+  /**
+   * Put the *on the map* / *as a lane* switches into every called set's slot.
+   *
+   * Public because the rows they switch are made by the workspace *after* the
+   * runner has told this drawer the run is done, so a slot drawn with the
+   * result is empty until the workspace says the rows are there.
+   */
+  fillSurfaces(): void {
+    this.surfaceSlots = this.surfaceSlots.filter(({ slot }) => slot.isConnected)
+    for (const { slot, output } of this.surfaceSlots) this.fillSurface(slot, output)
+  }
+
+  private fillSurface(slot: HTMLElement, output: IntervalsOutput): void {
+    const toggles = this.options.surfaces?.(output) ?? null
+    slot.replaceChildren(...(toggles === null ? [] : [toggles]))
   }
 
   // -------------------------------------------------------------------------

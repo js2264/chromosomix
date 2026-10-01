@@ -194,6 +194,7 @@ export function fieldText(set: FeatureSet, index: number, key: string): string {
     const score = set.score[index]
     return Number.isFinite(score) ? String(score) : ''
   }
+  if (key === FIELD_NAME) return set.name[index] ?? ''
   const detail = set.detail[index] ?? ''
   if (detail === '') return ''
   // `startsWith(key + ' ')` rather than a split-and-compare: the parts are
