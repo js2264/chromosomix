@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 86,
+      "commit": "3f32ee2",
+      "title": "Vector PDF export and 3D model support improvements",
+      "branch": "ccr-3c1017af-arztnr",
+      "date": "2026-10-01T14:05:49Z"
+    }
+  ]
 }
