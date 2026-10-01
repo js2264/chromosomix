@@ -36,6 +36,7 @@ import type {
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { CHROMOSIGHT_PRESETS, type ChromosightPreset } from '../chromosightPresets'
+import { bandTiles } from '../tiles'
 import { BALANCE_PARAM } from './shared'
 
 /**
@@ -69,6 +70,18 @@ export const MAX_SCAN_CELLS = 96_000_000
  */
 export function scanCellsFor(n: number, maxDistBins: number, largestKernel: number): number {
   return (Math.min(maxDistBins, n) + largestKernel + 1) * n
+}
+
+/**
+ * How far from the diagonal the run reads a sequence of `n` bins: the `hi` it
+ * hands `bandFor`, and so the depth the estimate counts that walk's strips at.
+ *
+ * {@link scanCellsFor}'s band less its main diagonal, stopped at the sequence's
+ * own last bin as `bandFor` stops it — a band cannot reach past the end of what
+ * it is a band of.
+ */
+function readReach(n: number, maxDistBins: number, largestKernel: number): number {
+  return Math.min(Math.min(maxDistBins, n) + largestKernel, Math.max(0, n - 1))
 }
 
 /** The preset a parameter set names, falling back to loops. */
@@ -314,14 +327,22 @@ export function bandShapeOf(
   }
 }
 
-/** The sequences a run will scan, after the ticks and the size gate. */
-function chosen(context: AnalysisContext, params: Params): { scanned: number; bins: number; skipped: number } {
+/**
+ * The sequences a run will scan, after the ticks and the size gate — and what
+ * reading them costs: the strips `bandFor` walks them in, one read each, and the
+ * cells of the widest one's band, which is the most held at a time.
+ */
+function chosen(
+  context: AnalysisContext,
+  params: Params,
+): { scanned: number; bins: number; strips: number; cells: number; skipped: number } {
   const ticked = Array.isArray(params.sequences)
     ? new Set(params.sequences.filter((name): name is string => typeof name === 'string'))
     : null
   const { maxDistBins, largestKernel } = bandShapeOf(params, context.binsize)
   let scanned = 0
   let widest = 0
+  let strips = 0
   let skipped = 0
   for (const contig of context.contigs) {
     if (ticked !== null && !ticked.has(contig.name)) continue
@@ -331,13 +352,15 @@ function chosen(context: AnalysisContext, params: Params): { scanned: number; bi
     }
     scanned++
     widest = Math.max(widest, contig.bins)
+    strips += bandTiles(contig.bins, readReach(contig.bins, maxDistBins, largestKernel))
   }
-  return { scanned, bins: widest, skipped }
+  const cells = widest === 0 ? 0 : (readReach(widest, maxDistBins, largestKernel) + 1) * widest
+  return { scanned, bins: widest, strips, cells, skipped }
 }
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const preset = presetFor(params)
-  const { scanned, bins, skipped } = chosen(context, params)
+  const { scanned, bins, strips, cells, skipped } = chosen(context, params)
   if (scanned === 0) {
     return {
       class: 'free',
@@ -364,19 +387,26 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       : 1
   const passes = preset.sizes.length * iterations
   // Multiply-accumulates, not bytes, because this is the number that decides
-  // whether the run is worth starting: the read is one square per sequence and
-  // is over in a moment, and then every pixel of the band is correlated against
+  // whether the run is worth starting: the read is one band per sequence and is
+  // over in a moment, and then every pixel of the band is correlated against
   // `size²` template cells. Stating the bytes alone would price the cheap half.
   const operations = scanned * bins * band * size * size * passes
 
+  // The band and not the square, in the words and in the numbers: the runner
+  // reads each sequence out to the scan distance and the widest template, in
+  // `bandFor`'s strips, and holds that band as `Float32`. This line used to price
+  // the square around it — one read and `n²` cells a sequence, 6 GB for mouse
+  // chr1 at 5 kb, where the band is 65 MB in ninety-odd reads.
   return {
     class: 'scan',
-    requests: scanned * (params.balance === true ? 5 : 4),
-    bytes: bins * bins * 4,
+    requests: strips * (params.balance === true ? 5 : 4),
+    bytes: cells * 4,
     note:
-      `${scanned.toLocaleString()} ${scanned === 1 ? 'sequence' : 'sequences'}, one dense square ` +
-      `each — up to ${((bins * bins * 4) / 1e6).toFixed(0)} MB at a time — then a ` +
-      `${size}×${size} template correlated across ${band.toLocaleString()} diagonals of every ` +
+      `${scanned.toLocaleString()} ${scanned === 1 ? 'sequence' : 'sequences'}, ` +
+      `${scanned === 1 ? '' : 'each '}read as a band along its diagonal — ` +
+      `up to ${((cells * 4) / 1e6).toFixed(0)} MB at a time — then a ` +
+      `${size}×${size} template correlated across ${band.toLocaleString()} ` +
+      `${band === 1 ? 'diagonal' : 'diagonals'} of every ` +
       `bin: about ${formatOperations(operations)} multiply-accumulates` +
       `${passes > 1 ? ` over ${passes} passes` : ''}. ` +
       `${skipped > 0 ? `${skipped.toLocaleString()} sequence${skipped === 1 ? '' : 's'} past the size limit will be skipped.` : ''}`,

@@ -298,8 +298,8 @@ describe('a structure cell in the deck', () => {
     // A `3d` repeated in a link used to be dropped on the way in, on the
     // reasoning that both cells would draw the one model the session has. Two
     // cells of one model are two *views* of it — each has its own camera, its
-    // own mirror and its own planted axes — so the link keeps what it was
-    // given.
+    // own height and its own turn; the mirrors and the planted axes are the
+    // model's — so the link keeps what it was given.
     const { deck } = make(fakeStore([structureEntry()]))
     deck.apply(state('3d|3d'))
     expect(structureCells(deck)).toHaveLength(2)
@@ -505,6 +505,29 @@ describe('what the cell says', () => {
     expect(store.restyled.at(-1)?.patch.structure?.mirrorY).toBe(false)
     y?.click()
     expect(store.restyled.at(-1)?.patch.structure?.mirrorY).toBe(true)
+  })
+
+  it('saves its PDF as a drawing, with no resolution beside it (§25.7)', () => {
+    // A tube was a raster in the PDF, at the row's resolution; nothing is now,
+    // so the format says `vector` as the map's and the browser's do, and the
+    // resolution goes while it is chosen.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const row = settingsRow(deck, 'export')
+    const format = row?.querySelector<HTMLSelectElement>('.select-format')
+    const dpi = row?.querySelector<HTMLSelectElement>('.select-dpi')
+    const copy = row?.querySelectorAll<HTMLButtonElement>('.export-acts button')[1]
+    if (format === null || format === undefined || dpi === null || dpi === undefined || copy === undefined) {
+      throw new Error('no export row')
+    }
+    expect([...format.options].map((option) => option.textContent)).toEqual(['PNG', 'PDF (vector)'])
+    expect(format.title).not.toMatch(/raster/)
+    expect(dpi.hidden).toBe(false)
+    format.value = 'pdf'
+    format.dispatchEvent(new Event('change'))
+    expect(dpi.hidden).toBe(true)
+    // The copy is a PNG whatever the format, and says at what.
+    expect(copy.title).toMatch(/PNG at 300 dpi/)
   })
 
   it('replants the axes along the view, moving neither the model nor the centre', () => {
@@ -911,7 +934,7 @@ describe('a tracks cell in the deck', () => {
 })
 
 // ---------------------------------------------------------------------------
-// A lead that is not a map (§25 stage D)
+// A lead that is not a map (§25.3)
 // ---------------------------------------------------------------------------
 
 describe('the deck beside the browser', () => {
@@ -1363,8 +1386,9 @@ describe('the key of colour by manual annotations (§25.5)', () => {
     await new Promise((r) => setTimeout(r, 60))
     expect(cell.querySelector('.structure-key-title')?.textContent).toBe('manual annotations')
     const names = all<HTMLButtonElement>(cell, '.structure-key-mark .structure-key-name')
-    // Named as the Manual annotations card names them.
-    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,000', '▭ chr1:10,000-20,000'])
+    // Named as the Manual annotations card names them: 1-based, as a reader
+    // reads every coordinate (§26.1).
+    expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,001', '▭ chr1:10,001-20,000'])
     names[0].click()
     await new Promise((r) => setTimeout(r, 260))
     expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])

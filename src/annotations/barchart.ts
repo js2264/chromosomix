@@ -11,8 +11,8 @@
  *
  * It is nonetheless a {@link FeatureSet} — §8.14's decision, restated for the
  * same reason and with the same force. `payload.kind === 'features'` is tested
- * at a dozen sites across the browser, the map lanes, the search box, the
- * export and the analysis inputs; a second payload shape breaks none of them
+ * at about two dozen sites across the browser, the map lanes, the search box,
+ * the export and the analysis inputs; a second payload shape breaks none of them
  * and makes every one of them *skip* the lane, silently, to be discovered one
  * call site at a time. So the vector rides on the set as one optional field
  * (`FeatureSet.bars`) and everything else about a barChart — the packing, the

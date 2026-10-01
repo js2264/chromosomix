@@ -51,6 +51,7 @@ import { ORITER_TASK } from '@/analysis/tasks/oriter'
 import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
 import { ParamForm, resolveEntryDefaults } from '@/ui/ParamForm'
 import type { HeldFile } from '@/analysis/runner'
+import { runnerParams } from '@/analysis/job'
 import { pickLocus, resetPick } from '@/ui/mapPick'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -1024,6 +1025,25 @@ describe('a box that takes several sequences (§25.6)', () => {
     view.destroy()
   })
 
+  it('hands the runner the bins on screen and not a base past them (§26.1)', () => {
+    // The round trip through the run's own boundary: rows 240–300 are II's bins
+    // 10–70 at 1 kb, seeded 1-based, and given to the runner as exactly those.
+    const view = form(FOURC_TASK, framed([240, 300]))
+    expect(runnerParams(FOURC_TASK.params, view.value).anchor).toBe('II:10000-70000')
+    view.destroy()
+    const several = form(RECONSTRUCT_TASK, framed([240, 300]))
+    expect(runnerParams(RECONSTRUCT_TASK.params, several.value).region).toBe('II:10000-70000')
+    several.destroy()
+  })
+
+  it('says how it reads its coordinates, as every other locus box does', () => {
+    const view = form(FOURC_TASK, framed([240, 300]))
+    const box = view.el.querySelector<HTMLInputElement>('.param-region')
+    expect(box?.title).toMatch(/Coordinates are 1-based and inclusive/)
+    expect(box?.title).not.toMatch(/show --range/)
+    view.destroy()
+  })
+
   it('is seeded with every sequence on screen when the map spans several', () => {
     const view = form(RECONSTRUCT_TASK, framed([0, 1043]))
     expect(view.value.region).toBe('I, II')
@@ -1053,25 +1073,23 @@ describe('a box that takes several sequences (§25.6)', () => {
 describe('an anchor picked off the map', () => {
   // THE DIALECT, and it is a wrong *answer* rather than a wrong label.
   //
-  // `mapPick.locusText` writes the paste form — 1-based inclusive, which §8.9
-  // pins for the clipboard because that is what samtools and bedtools take — and
-  // the runners read this parameter with cooler's grammar, 0-based half-open. So
-  // a drag that framed bins 230–1042 arrived at the runner naming bin 231
-  // onwards, one bin past the stretch the reader had just pointed at, and
-  // nothing on the screen said so. A 4C profile is read off its anchor, so the
-  // shift moved the peak.
+  // The box is read as every locus box is, 1-based and inclusive (§26.1), and
+  // the run's boundary (`runnerParams`) hands the runner cooler's grammar. So a
+  // pick is written in the display form — the form the seed beside it is in —
+  // and lands on exactly the bins that were dragged. Written in any other, it
+  // is a base off one way or the other, and a 4C profile is read off its anchor.
   afterEach(() => {
     resetPick()
   })
 
-  it('names the bins that were dragged, in the grammar the runner reads', () => {
+  it('names the bins that were dragged, in the form the box is read in', () => {
     const { view, latest } = watchedForm(FOURC_TASK)
     document.body.appendChild(view.el)
-    // Bins 230 to 1042 of a 1 kb file — chromosome II, whole.
+    // Bins 230 to 1042 of a 1 kb file.
     pickLocus({ contig: 'II', start: 230_000, end: 1_043_000 })
-    // Not `II:230001-1043000`, which is the same stretch written for a terminal
-    // and one base along when read as cooler reads it.
-    expect(latest().anchor).toBe('II:230000-1043000')
+    expect(latest().anchor).toBe('II:230,001-1,043,000')
+    // …which the runner is handed as those bins and no others.
+    expect(runnerParams(FOURC_TASK.params, latest()).anchor).toBe('II:230000-1043000')
   })
 
   it('leaves a whole sequence as its bare name, which has no coordinate to shift', () => {

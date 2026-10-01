@@ -83,7 +83,7 @@ import { chosenEntries } from '../analysis/runner'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
-import { abortError } from '../analysis/job'
+import { abortError, runnerParams } from '../analysis/job'
 import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
 import {
   gcTrack,
@@ -109,16 +109,22 @@ import {
   decodeAnnotationText,
   parseBed,
   parseBedpe,
+  parseGtf,
   sniffFormat,
 } from '../annotations/parse'
 import { parseBarChart, sniffBarChart } from '../annotations/barchart'
 import { parseCytoBand, sniffCytoBand } from '../annotations/cytoband'
+import { parseGenePred, sniffGenePred } from '../annotations/genepred'
+import { parseInteract, sniffInteract } from '../annotations/interact'
 import { parseJunctions, sniffJunctions } from '../annotations/junctions'
+import { parseLongRange, sniffLongRange } from '../annotations/longrange'
+import { parseVcf, sniffVcf } from '../annotations/vcf'
 import { formatIntervals } from '../annotations/export'
 import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
-import type { StoredEntry } from '../annotations/types'
+import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
+import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
@@ -729,10 +735,17 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         )
       }
     }
+    // The window as a reader writes one — 1-based and inclusive, digits grouped
+    // or not, `IV:1,000,001-1,400,000` — which is what the console writes and
+    // what every locus box in the app reads (§26.1), and in cooler's grammar
+    // from here on. It used to be read in that grammar as typed, so the digits
+    // a reader copied off the app's own breadcrumb named a window starting one
+    // base later at a shell than on the screen they came from.
+    const region = options.window === undefined ? undefined : typedLocusToRegion(options.window)
     const extent =
-      options.window === undefined
+      region === undefined
         ? ([0, mc.nBins] as [number, number])
-        : mc.extent(options.window)
+        : mc.extent(region)
     const balance = options.balance ?? mc.hasWeights
     const params = withDerived(task, options.params, balance)
     const framing: AnalysisFraming = {
@@ -746,7 +759,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       normalise: null,
       level: 'bin',
       label:
-        `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
+        `${region === undefined ? 'whole file' : regionLabel(region)} at ${mc.binsize} bp` +
         `${balance ? ', balanced' : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
         `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
@@ -812,7 +825,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       upstream: Record<string, TaskResult>,
     ): Promise<JobContext> => ({
       mc,
-      params: stepParams,
+      // Every locus in cooler's grammar, as the analysis worker is handed it
+      // (`runnerParams`); the provenance below keeps the one that was typed.
+      params: runnerParams(step.params, stepParams),
       framing,
       inputs: {
         ...baseInputs,
@@ -1061,7 +1076,7 @@ async function runTracksOnly(
   const started = Date.now()
   let lastPercent = -1
   const job: TrackJobContext = {
-    params,
+    params: runnerParams(task.params, params),
     framing,
     inputs: { ...options.inputs, contigLengths: lengths },
     cancelled: () => false,
@@ -1317,6 +1332,75 @@ async function writeOutputs(
 // ---------------------------------------------------------------------------
 
 /**
+ * One file named with `--features`, read as the app's loader reads it (§8).
+ *
+ * The worker's text road, in its order and through its parsers, as far as that
+ * road ends in a feature set or a pair set — so a file the browser draws as a
+ * gene model, a loop set or a karyotype reaches a task run from a shell as the
+ * same thing. Every format here is asked before `sniffFormat` for the worker's
+ * reason (§8.17): that function's last line is `return 'bed'`, so a format it
+ * has not been taught is never refused, only read as a BED, and here that was
+ * quiet. A genePred, a GTF and a VCF came out as nothing, each having a word
+ * where a BED has its start or its end; an interact as one box spanning both
+ * its anchors, or as a bedpe of the wrong columns; and a longrange as a BED4
+ * whose names were its arcs.
+ */
+export function readFeatureText(
+  text: string,
+  path: string,
+): { features: FeatureSet } | { pairs: PairSet } {
+  // Called variants (§8.14), first as in the worker: eight columns or more,
+  // with a variant's ID where a BED has its end, so nothing below can take one
+  // and it can take nothing below.
+  if (sniffVcf(text)) return { features: parseVcf(text) }
+  // Asked before `sniffFormat` for the reason the worker asks it there
+  // (§8.17): the BED sniffer never answers "not one of mine", so a barChart
+  // read here as a BED would reach a task as intervals with no chart on them
+  // — which is fine for a metaplot and silently wrong for anything that reads
+  // the vector.
+  if (sniffBarChart(text, path)) return { features: parseBarChart(text, path) }
+  // A karyotype's bands, scored by how dark each stains (§8.22): read as a
+  // BED they kept their spans and lost the one column a task splitting light
+  // from dark bands would read.
+  if (sniffCytoBand(text)) return { features: parseCytoBand(text) }
+  // Introns, whatever shape the aligner wrote them in (§8.23). A STAR table
+  // read as a BED is intervals one base too wide with no count on them.
+  if (sniffJunctions(text, path) !== null) return { features: parseJunctions(text, path) }
+  // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set whose
+  // rows carry coordinates, which is what the structure tasks read (§25). Read
+  // as a BED it kept its intervals and lost the model, and Spatial tracks said
+  // the row it had just been handed was not a structure.
+  if (sniffBed3d(text, path)) return { features: parseBed3d(text, path) }
+  if (sniffG3d(text, path)) return { features: parseG3d(text, path) }
+  // UCSC's two interaction formats and its gene-model tables (§8.18, §8.19),
+  // in the worker's order, which matters nowhere since none can take another's
+  // file. An interact and a longrange are loop sets — a `PairSet`, as a bedpe
+  // is — and a genePred is transcripts with their exons, as a GTF's are.
+  if (sniffInteract(text, path)) return { pairs: parseInteract(text) }
+  if (sniffLongRange(text, path)) return { pairs: parseLongRange(text) }
+  if (sniffGenePred(text, path)) return { features: parseGenePred(text) }
+  const format = sniffFormat(text, path)
+  if (format === 'bedpe') return { pairs: parseBedpe(text) }
+  if (format === 'gtf') return { features: parseGtf(text) }
+  return { features: parseBed(text, path) }
+}
+
+/**
+ * One file named with `--pairs`: a loop table in whichever of the three paired
+ * formats it is written (§8.18).
+ *
+ * A bedpe unless its bytes say interact or longrange. The flag has already said
+ * what the file is for, so a bedpe the BED sniffer would not recognise — an
+ * Ensembl genome's, whose second contig is called `1` — is still read as one,
+ * as it always was here.
+ */
+export function readPairText(text: string, path: string): PairSet {
+  if (sniffInteract(text, path)) return parseInteract(text)
+  if (sniffLongRange(text, path)) return parseLongRange(text)
+  return parseBedpe(text)
+}
+
+/**
  * Feature and pair sets named on the command line.
  *
  * Parsed by the app's own parsers, so a loop table the browser accepts is a loop
@@ -1334,40 +1418,15 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
   for (const path of all(args, 'features')) {
     const text = await decodeAnnotationText(new Uint8Array(await readFile(path)))
     const id = basename(path)
-    // Asked before `sniffFormat` for the reason the worker asks it there
-    // (§8.17): the BED sniffer never answers "not one of mine", so a barChart
-    // read here as a BED would reach a task as intervals with no chart on them
-    // — which is fine for a metaplot and silently wrong for anything that reads
-    // the vector.
-    if (sniffBarChart(text, path)) {
-      inputs.features = { ...inputs.features, [id]: parseBarChart(text, path) }
-    } else if (sniffCytoBand(text)) {
-      // A karyotype's bands, scored by how dark each stains (§8.22): read as a
-      // BED they kept their spans and lost the one column a task splitting
-      // light from dark bands would read.
-      inputs.features = { ...inputs.features, [id]: parseCytoBand(text) }
-    } else if (sniffJunctions(text, path) !== null) {
-      // Introns, whatever shape the aligner wrote them in (§8.23). A STAR table
-      // read as a BED is intervals one base too wide with no count on them.
-      inputs.features = { ...inputs.features, [id]: parseJunctions(text, path) }
-    } else if (sniffBed3d(text, path) || sniffG3d(text, path)) {
-      // A model — the bed3d `reconstruct3d` writes, or a text g3d — is a set
-      // whose rows carry coordinates, which is what the structure tasks read
-      // (§25). Read as a BED it kept its intervals and lost the model, and
-      // Spatial tracks said the row it had just been handed was not a structure.
-      const model = sniffBed3d(text, path) ? parseBed3d(text, path) : parseG3d(text, path)
-      inputs.features = { ...inputs.features, [id]: model }
-    } else if (sniffFormat(text, path) === 'bedpe') {
-      inputs.pairs = { ...inputs.pairs, [id]: parseBedpe(text) }
-    } else {
-      inputs.features = { ...inputs.features, [id]: parseBed(text, path) }
-    }
+    const read = readFeatureText(text, path)
+    if ('pairs' in read) inputs.pairs = { ...inputs.pairs, [id]: read.pairs }
+    else inputs.features = { ...inputs.features, [id]: read.features }
     labels[id] = id
   }
   for (const path of all(args, 'pairs')) {
     const text = await decodeAnnotationText(new Uint8Array(await readFile(path)))
     const id = basename(path)
-    inputs.pairs = { ...inputs.pairs, [id]: parseBedpe(text) }
+    inputs.pairs = { ...inputs.pairs, [id]: readPairText(text, path) }
     labels[id] = id
   }
   if (Object.keys(labels).length > 0) inputs.labels = labels
@@ -1547,16 +1606,21 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       Run one task over one or more files.
 
       --out <dir>          where to write (default: .)
-      --window <chr:a-b>   a window rather than the whole file
+      --window <chr:a-b>   a window rather than the whole file, 1-based and
+                           inclusive as the app, IGV and samtools write it,
+                           digits grouped or not: chrIV:1,000,001-1,400,000
       --no-balance         read the raw counts. A map is read balanced wherever
                            the file carries weights, as the app reads it
-      --features <file>    a BED/narrowPeak/loop table a task needs
+      --features <file>    a feature or loop file a task needs, read as the app
+                           reads it: BED, narrowPeak, GTF, genePred, VCF,
+                           cytoBand, barChart, junctions, bedpe, interact,
+                           longrange
       --sequence <ref.fa>  a reference, for a task that reads residues (motif)
                            or phases by GC content (compartments). Gzipped or not
-      --pairs <file>       a BEDPE, for an off-diagonal pileup. Note this is a
-                           *feature* table and not a contact list — a .pairs
-                           file to bin is a positional argument, and takes
-                           --bin-size below
+      --pairs <file>       a BEDPE, interact or longrange, for an off-diagonal
+                           pileup. Note this is a *feature* table and not a
+                           contact list — a .pairs file to bin is a positional
+                           argument, and takes --bin-size below
       --against <file>     another contact map, for a task that compares two
                            (hicrep). Repeat it for a third
       --value <column>     the score column to read, for a file that carries
@@ -1579,11 +1643,13 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
-      --<param> <value>    any parameter the task takes; see \`tasks\`. A task
-                           that reads tracks (metaplot, trackcorr, frip,
-                           groupsignal) takes them as --tracks <file.bw>,
-                           repeated or comma-separated: a bigWig, a bedGraph, a
-                           wig, or a FASTA read as GC content
+      --<param> <value>    any parameter the task takes; see \`tasks\`. A locus
+                           (fourc's --anchor, the 3D tasks' --region and
+                           --locus) is read as --window is. A task that reads
+                           tracks (metaplot, trackcorr, frip, groupsignal)
+                           takes them as --tracks <file.bw>, repeated or
+                           comma-separated: a bigWig, a bedGraph, a wig, or a
+                           FASTA read as GC content
 
   metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip,
@@ -1600,7 +1666,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over. The workspace is what the
-      app's Save button produces: every open tab in one file.
+      app's Save button produces: every open tab in one file. A locus it
+      recorded is read as --window is, as the app's form showed it.
       --tab <n>            which tab to replay, 1-based. Default: the one that
                            was in front when the workspace was saved.
       --track <file.bw>    the file behind a track the workspace recorded by

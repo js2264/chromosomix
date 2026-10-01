@@ -67,7 +67,7 @@ import {
 } from '../../structure/versusMap'
 import { blockCovers, spanOfContig, squareFor, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
-import { regionLabel, typedLocusToRegion } from '../../genome/assembly'
+import { regionLabel } from '../../genome/assembly'
 
 /**
  * SMACOF steps pastis-NB takes before the likelihood starts.
@@ -370,22 +370,23 @@ export const runSpatialTracks: TaskRunner = async (job) => {
 /**
  * A locus as a reader's own coordinates, for a name that will be read.
  *
- * The parameter holds what was typed or picked — 1-based inclusive, ungrouped,
- * `IV:1000001-1400000` — and naming a structure row and three lanes with it put
- * the one string on the Structures card that had no separators directly under a
- * framing line that did: `3D model · IV:1000001-1400000` over
- * `IV:1,000,000-1,400,000 · 1.0 kb bins`, two spellings of one window. Through
- * the round trip §26.1 defines, so the display form comes out of the same two
- * helpers every locus box uses; a bare sequence or genome name has no
- * coordinates and comes back as itself.
+ * What a runner is handed is cooler's grammar — `IV:1000000-1400000`, which
+ * `runnerParams` made of what was typed or picked — and naming a structure row
+ * and three lanes with it put the one string on the Structures card that had no
+ * separators directly under a framing line that did, a base away from it. So
+ * the name is §26.1's display form, `IV:1,000,001-1,400,000`, through the
+ * helper every locus box uses; a box that takes several names each part, in
+ * the order given; a bare sequence or genome name has no coordinates and comes
+ * back as itself.
  */
-function locusName(typed: string): string {
-  return regionLabel(typedLocusToRegion(typed))
+function locusName(machine: string): string {
+  return splitRegionList(machine).map(regionLabel).join(', ')
 }
 
 /**
- * The model's point at a typed locus: the centroid of every bead the locus
- * covers, which is what the tracks below call its centre.
+ * The model's point at a locus — 0-based and half-open, as a runner is handed
+ * one (`runnerParams`) — the centroid of every bead the locus covers, which is
+ * what the tracks below call its centre.
  */
 function anchorPoint(
   set: FeatureSet,

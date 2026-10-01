@@ -43,9 +43,19 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['drag', 'Pan'],
   ['{opt} + drag', 'Select a square and open it as a region'],
   ['{shift} + {opt} + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
+  // The map's own gesture in one dimension (§8.9), and the reason the row above
+  // says *pinned*: Shift is the on-diagonal modifier throughout, and a table
+  // that listed it only beside Option said Shift alone did nothing.
+  ['{shift} + drag', 'Zoom to the stretch it spans, on the diagonal, and copy its locus'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
-  ['two fingers sideways', 'Slide the map left and right'],
+  // Along the diagonal, rows and columns together — `setDiagonalSlide` — where
+  // the picture has one to follow (§7.2). It said *left and right*, which is
+  // what a sideways scroll did before it followed the diagonal.
+  [
+    'two fingers sideways',
+    'Slide along the diagonal — the columns alone on a turned map or between two sequences',
+  ],
   ['{meta} + wheel', 'Slide the map up and down, and sideways with it'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
@@ -54,15 +64,21 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // The lanes are part of this picture, and their gestures are the browser's
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.
-  ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
+  // `MatrixPanel`'s lane handlers: the border a resize grabs is the lane's far
+  // one, away from the map, and a drag across the lane is its ceiling.
+  ['drag a lane’s far edge', 'Make that track thicker or thinner'],
+  ['drag across a lane', 'Raise or lower that track’s ceiling'],
   [
     'drag a lane’s grip',
-    'Reorder it; drop it on a rectangle round this map or another to move it there, or on a + or an empty cell to give it a cell of its own',
+    'Reorder it; drop it on a rectangle round this map or another to move it there, on a + or an empty cell to give it a cell of its own, or on a tracks cell to draw it there',
   ],
-  ['drag a track’s row from the panel', 'The same, for the reader looking at the list'],
+  [
+    'drag a track’s row from the panel',
+    'Reorder it, or drop it on a rectangle round any map, a + or an empty cell to draw it there',
+  ],
   ['click a lane', 'Open that track’s settings'],
   ['click a feature in a lane', 'Open its card — names, attributes, exons'],
-  ['drop a file below or right of the map', 'Load it as a track on that edge'],
+  ['drop a file on an edge of the map', 'Load it as a track on that edge'],
 ]
 
 /**

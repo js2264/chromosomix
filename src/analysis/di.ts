@@ -31,8 +31,9 @@
  * biased, upstream biased, neither — and a domain ran from the first bin of a
  * downstream-biased run to the last bin of the upstream-biased run before the
  * next one. What {@link directionBorders} does instead is integrate the index and
- * hand the curve to the diamond's own {@link callBoundaries}; the reasoning for
- * that choice, and what it costs, is at {@link integratedDirection}. The two
+ * call the curve's minima by their prominence ({@link callBoundaries}) — the
+ * reading the diamond's boundaries are made by too; the reasoning for that
+ * choice, and what it costs, is at {@link integratedDirection}. The two
  * outputs differ in one visible way worth knowing before comparing a domain set
  * against a published one: the HMM leaves *gaps* — stretches it calls
  * unorganised and puts in no domain — and borders-between-borders tile, so every
@@ -180,11 +181,14 @@ export function directionalityIndex(
  * Summing the index turns the shape into a topography. The curve climbs through
  * every downstream-biased block and falls through every upstream-biased one, so
  * **each border is a local minimum** and a stutter is a shallow dimple on the
- * flank of the real trough — which is exactly the distinction
- * {@link callBoundaries} already draws, for the diamond, with tests. So the
- * borders of this task are called by the same kernel as the boundaries of that
- * one, the two sets mean the same kind of thing, and there is one implementation
- * of *what a called edge is* rather than two that drift.
+ * flank of the real trough — which is exactly the distinction a prominence
+ * draws. {@link callBoundaries} scores each minimum by how far the curve must
+ * climb on both sides before it falls lower, the same topographic prominence
+ * cooltools' `find_boundaries` reads off the diamond's track
+ * (`insulationBoundaries`, which is what the diamond is called by now).
+ * So a border of this task and a boundary of that one mean the same kind of
+ * thing, though they are no longer called by one kernel: the diamond's follow
+ * cooltools' own rule to the pixel, mask and all.
  *
  * ## Why it is standardised first
  *

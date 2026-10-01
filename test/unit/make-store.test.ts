@@ -58,9 +58,11 @@
  *   `footprints` dump and a row with no object URL at all. The first three are
  *   each skipped for their own reason and the fourth is the `s3_uri` fallback.
  * - IGV's `hg38` publishes one track and it is a `refgene`, which this viewer
- *   has no reader for: the genome is a row and its session has a sequence and
- *   nothing else, which is the honest answer rather than a track that fails
- *   when it is clicked.
+ *   once had no reader for and now reads (SPECS §8.19): it is a row. Three of
+ *   the genomes name a `cytobandURL` beside their sequence rather than among
+ *   their tracks, which is a karyotype this viewer once did not draw and now
+ *   does (§8.22): each is a row, a track on its genome's shelf and an
+ *   ideogram lane in its session — `hs1`'s under a name ending `.bed`.
  *
  * The bucket pages are the `ListObjectsV2` XML, in two parts with a
  * continuation token between them, and several of their objects carry the
@@ -687,6 +689,40 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
   })
 })
 
+describe.skipIf(!havePython)('the generator’s copy of the router', () => {
+  /**
+   * `route_of` is `browse/route.ts` copied across a language boundary, and a
+   * name one has and the other has not is a row the viewer dims or a file a
+   * catalogue leaves out. These are the names published as a name rather than
+   * an extension, or taught to the router late — the ones a copy misses.
+   */
+  it('gives a door to the barChart and cytoBand names the viewer routes', () => {
+    const names = [
+      'gtex.barChart',
+      'gtex.bigBarChart',
+      'cytoBand.txt.gz',
+      'cytoBandIdeo.txt',
+      'Yeast_cytobands.txt',
+      'hg38.refGene.txt.gz',
+      'calls.bedMethyl',
+      'cytobands.pdf',
+    ]
+    const run = spawnSync(
+      'python3',
+      [
+        '-c',
+        'import json, sys; sys.path.insert(0, sys.argv[1]); import make_store; ' +
+          'print(json.dumps([make_store.route_of(n) for n in json.load(sys.stdin)]))',
+        join(REPO, 'scripts'),
+      ],
+      { input: JSON.stringify(names), encoding: 'utf8' },
+    )
+    expect(run.status, run.stderr).toBe(0)
+    const routes = JSON.parse(run.stdout) as Array<string | null>
+    expect(routes).toEqual(['genome', 'genome', 'genome', 'genome', 'genome', 'genome', 'genome', null])
+  })
+})
+
 describe.skipIf(!havePython)('the IGV front end', () => {
   let store: RawHub
 
@@ -713,7 +749,29 @@ describe.skipIf(!havePython)('the IGV front end', () => {
     // wants the FASTA. The session below is the third answer.
     const roles = (store.entries ?? []).map((entry) => (entry.fields as Record<string, string>).role)
     expect(roles.filter((role) => role === 'sequence')).toHaveLength(6)
-    expect(roles.filter((role) => role === 'annotation')).toHaveLength(10)
+    // Ten of IGV's own tracks, and the three genomes' karyotypes.
+    expect(roles.filter((role) => role === 'annotation')).toHaveLength(13)
+  })
+
+  it('publishes each genome’s cytoBand as a track, now that ideograms are drawn', () => {
+    // IGV names a genome's karyotype beside its sequence, as `cytobandURL`,
+    // rather than among its tracks — and the generator dropped it, as "an
+    // ideogram this viewer does not draw", for as long as that was true. §8.22
+    // draws one, so it is a row like any other track of the genome's.
+    const karyotypes = (store.entries ?? []).filter(
+      (entry) => (entry.fields as Record<string, string>).format === 'cytoband',
+    )
+    expect(
+      karyotypes.map((entry) => (entry.fields as Record<string, string>).assembly).sort(),
+    ).toEqual(['hg38', 'hs1', 'mm9'])
+    for (const entry of karyotypes) {
+      expect(entry.kind).toBe('genome')
+      expect(String(entry.label)).toContain('Cytobands')
+    }
+    // The format is IGV's word for the file and not its name's: T2T's is a
+    // `.bed`, and filed under `bed` it would be a peak set on the Format facet.
+    const t2t = karyotypes.find((entry) => (entry.fields as Record<string, string>).assembly === 'hs1')
+    expect(String(t2t?.uri)).toMatch(/cytoBandMapped\.bed$/)
   })
 
   it('publishes a refgene track, now that genePred is read', () => {
@@ -730,14 +788,16 @@ describe.skipIf(!havePython)('the IGV front end', () => {
       (entry) => (entry.fields as Record<string, string>).format === 'genepred',
     )
     expect(genes).toBeDefined()
-    // hg38 publishes exactly one track and it is that refgene, so the genome
-    // row now carries it on its shelf where it used to carry nothing.
+    // hg38 lists exactly one track and it is that refgene, so the genome row
+    // now carries it on its shelf where it used to carry nothing — after its
+    // karyotype, which IGV names beside the sequence rather than as a track.
     const hg38 = (store.entries ?? []).find(
       (entry) =>
         (entry.fields as Record<string, string>).assembly === 'hg38' &&
         (entry.fields as Record<string, string>).role === 'sequence',
     )
     expect((hg38?.tracks as Array<{ label: string }>).map((track) => track.label)).toEqual([
+      'Cytobands',
       'Refseq Genes',
     ])
   })
@@ -749,8 +809,10 @@ describe.skipIf(!havePython)('the IGV front end', () => {
         (entry.fields as Record<string, string>).role === 'sequence',
     )
     // Offered from the Tracks card once the genome is open, which is the same
-    // offer the demo annotations are (§24.1).
+    // offer the demo annotations are (§24.1). The karyotype first, as IGV draws
+    // its ideogram above everything, then IGV's tracks in IGV's order.
     expect((hs1?.tracks as Array<{ label: string }>).map((track) => track.label)).toEqual([
+      'Cytobands',
       'CAT/Liftoff Genes',
       'Augustus',
       'Genes',
@@ -885,7 +947,8 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
   it('writes each lane in full, because the reader fills nothing in', () => {
     // `readTab` hands `tracks` through as `StoredEntry[]` without defaulting
     // anything, so a field left out here is a field the lane draws without.
-    const track = session('igv-hs1.metacooler.json').tabs?.[0]?.tracks?.[1]
+    // The third lane: after the sequence and the karyotype, IGV's first track.
+    const track = session('igv-hs1.metacooler.json').tabs?.[0]?.tracks?.[2]
     expect(track).toMatchObject({
       card: 'linear',
       kind: 'segments',
@@ -918,9 +981,22 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     expect(String((track?.source as Record<string, unknown>).url)).not.toContain('#')
   })
 
-  it('writes a session for a genome with no drawable track, holding just its sequence', () => {
-    const hg38 = session('igv-hg38.metacooler.json')
-    expect((hg38.tabs?.[0]?.tracks ?? []).map((track) => track.kind)).toEqual(['sequence'])
+  it('places a genome’s karyotype as an ideogram, whatever its file is called', () => {
+    // hg38's is UCSC's `cytoBandIdeo.txt.gz`; T2T's is a `.bed`, which read by
+    // its name alone would be placed as a lane of peaks. The format IGV gives
+    // it travels with the track, so both open as the lane they are (§8.22).
+    for (const name of ['igv-hg38.metacooler.json', 'igv-hs1.metacooler.json']) {
+      const tracks = session(name).tabs?.[0]?.tracks ?? []
+      expect(tracks.map((track) => track.kind).slice(0, 2), name).toEqual(['sequence', 'ideogram'])
+      expect(tracks[1], name).toMatchObject({
+        card: 'linear',
+        label: 'Cytobands',
+        style: { size: 40 },
+      })
+    }
+    // And a genome IGV gives no karyotype has none placed.
+    const pombe = session('igv-asm294v2.metacooler.json').tabs?.[0]?.tracks ?? []
+    expect(pombe.map((track) => track.kind)).not.toContain('ideogram')
   })
 
   it('carries the sequence’s .fai as the lane’s source.index, so the browser opens on it', () => {

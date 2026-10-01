@@ -363,6 +363,14 @@ describe('where the session’s own cell stands (§16.9)', () => {
     // Never past the backstop, whatever a hand-edited record says.
     expect(readDeckLead({ at: 10_000 })?.at).toBe(MAX_PANELS - 1)
   })
+
+  it('reads an open chain, and nothing else, as one', () => {
+    // `false` is the one value written: a first map driving the deck is what
+    // every deck does untouched.
+    expect(readDeckLead({ at: 0, hidden: false, locked: false })).toEqual({ at: 0, hidden: false, locked: false })
+    expect(readDeckLead({ at: 0, hidden: false, locked: true })).toEqual({ at: 0, hidden: false })
+    expect(readDeckLead({ at: 0, locked: 'no' })).toEqual({ at: 0, hidden: false })
+  })
 })
 
 describe('columnsFor', () => {

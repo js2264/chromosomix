@@ -21,13 +21,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { bandFor, cisMarginal, forEachDiagonalTile } from '@/analysis/run/blocks'
+import { runChromosight } from '@/analysis/run/chromosight'
 import { detectableFromCounts, detectableFromMarginal } from '@/analysis/chromosight'
+import { APA_TASK } from '@/analysis/tasks/apa'
 import {
   CHROMOSIGHT_TASK,
   MAX_SCAN_CELLS,
   distanceBins,
   scanCellsFor,
 } from '@/analysis/tasks/chromosight'
+import { bandTiles } from '@/analysis/tiles'
 import type { JobContext } from '@/analysis/job'
 import type { AnalysisContext, AnalysisFraming, Params } from '@/analysis/types'
 import type { BlockInput } from '@/analysis/worker/protocol'
@@ -430,5 +433,100 @@ describe('the scan gate', () => {
       maxDist: 400,
     })
     expect(estimate.refusal).toBeUndefined()
+  })
+
+  /**
+   * **The price is the band's, as the gate is.** The line beside Run said *one
+   * dense square each* long after the runner stopped reading one: mouse chr1 at
+   * 5 kb was priced at one read and 6.1 GB, for a run that reads a 65 MB band in
+   * ninety-odd strips. It is the number a reader decides on, so it counts what
+   * `bandFor` asks the file for and what it holds.
+   */
+  it('prices a sequence as the band it reads, in strips, and not as its square', () => {
+    const chr1 = Math.ceil(195_471_971 / 5000)
+    const estimate = CHROMOSIGHT_TASK.estimate(mouse(5000), { ...loops, sequences: ['chr1'] })
+    // 400 diagonals of scan and a 17-bin template: 418 of 39,095 bins, as Float32.
+    expect(estimate.bytes).toBe(scanCellsFor(chr1, 400, 17) * 4)
+    expect(estimate.bytes).toBeLessThan((chr1 * chr1 * 4) / 50)
+    // One read per strip, four requests each, unbalanced — not one per sequence.
+    expect(estimate.requests).toBe(bandTiles(chr1, 417) * 4)
+    expect(bandTiles(chr1, 417)).toBeGreaterThan(50)
+    expect(estimate.note).toMatch(/read as a band along its diagonal/)
+    expect(estimate.note).not.toMatch(/square/)
+    expect(estimate.note).toContain('up to 65 MB at a time')
+  })
+
+  it('counts the reads the runner makes', async () => {
+    // One sequence long enough for several strips: a 600-bin contig scanned
+    // ten diagonals out with the loops template is a band 27 deep, which
+    // `bandFor` reads 256 rows at a time.
+    const bins = 600
+    const reads: Read[] = []
+    const mc = {
+      nBins: bins,
+      nContigs: 1,
+      binsize: BINSIZE,
+      hasGenomes: false,
+      contigGenomeIds: new Int32Array(1),
+      chromnames: ['I'],
+      chromsizes: new Map([['I', bins * BINSIZE]]),
+      contigExtent: () => [0, bins] as [number, number],
+      matrix: async (query: Read) => {
+        reads.push({ rows: [...query.rows], cols: [...query.cols] })
+        const nrows = query.rows[1] - query.rows[0]
+        const ncols = query.cols[1] - query.cols[0]
+        const values = new Float32Array(nrows * ncols)
+        for (let r = 0; r < nrows; r++) {
+          for (let c = 0; c < ncols; c++) {
+            values[r * ncols + c] = 100 / (1 + Math.abs(query.cols[0] + c - (query.rows[0] + r)))
+          }
+        }
+        return {
+          values,
+          nrows,
+          ncols,
+          rowExtent: [...query.rows] as [number, number],
+          colExtent: [...query.cols] as [number, number],
+        }
+      },
+      // No weights and no pixels to count: which bins are detectable is not
+      // what this test is about, and the reads happen either way.
+      scanPixels: async () => {},
+    }
+    const params: Params = { pattern: 'loops', thresholds: 'custom', maxDist: 10 }
+    await runChromosight({ ...job([], params), mc: mc as never })
+    const context = {
+      hasMap: true,
+      hasGenomes: false,
+      blockLoaded: false,
+      binsize: BINSIZE,
+      contigs: [{ name: 'I', bins }],
+      entries: [],
+      framing: null,
+    } as unknown as AnalysisContext
+    expect(reads.length).toBeGreaterThan(1)
+    expect(CHROMOSIGHT_TASK.estimate(context, params).requests).toBe(reads.length * 4)
+  })
+
+  it('says the chromosight pileup reads a band too, and quotes no square for it', () => {
+    // How deep that band is depends on the set's furthest pair, which the
+    // estimate does not hold — it carries the entries, not their contents — so
+    // the line says what is read and leaves the count to the run, rather than
+    // pricing the square around every sequence as it did.
+    const context = {
+      ...mouse(5000),
+      entries: [{ id: 'loops', kind: 'pairs', status: 'ready', summary: '1,204 pairs' }],
+    } as unknown as AnalysisContext
+    const estimate = APA_TASK.estimate(context, {
+      anchors: 'pairs',
+      pairs: 'loops',
+      norm: 'chromosight',
+    })
+    expect(estimate.refusal).toBeUndefined()
+    expect(estimate.note).toMatch(/read as a band along its diagonal as far as the set reaches/)
+    expect(estimate.note).not.toMatch(/square/)
+    expect(estimate.note).toContain('1,204 anchors')
+    expect(estimate.bytes).toBeNull()
+    expect(estimate.requests).toBeNull()
   })
 })

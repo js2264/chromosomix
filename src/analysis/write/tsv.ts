@@ -374,7 +374,12 @@ function matrixToTsv(output: MatrixOutput): string[] {
 function tableToTsv(output: TableOutput): string[] {
   const lines = [
     `# output: ${cell(output.label)}`,
-    `# columns: ${output.columns.map((column) => cell(column.label)).join(', ')}`,
+    // A start is written as it is held, 0-based, which is how a BED-shaped
+    // table is read back (§8.3) — and said to be, since the table it came from
+    // printed it 1-based (`TableColumn.coordinate`).
+    `# columns: ${output.columns
+      .map((column) => `${cell(column.label)}${column.coordinate === 'start' ? ' (0-based)' : ''}`)
+      .join(', ')}`,
     row(output.columns.map((column) => cell(column.key))),
   ]
   for (const record of output.rows) {

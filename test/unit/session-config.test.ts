@@ -347,6 +347,21 @@ describe('the round trip', () => {
     expect(recall('s5|lead.bed3d', 'deck:lead')).toEqual({ at: 1, hidden: true })
   })
 
+  it('carries a first map moving on its own, as it carries a companion’s chain (§16.3)', () => {
+    const key = 'deck|unchained.cool'
+    remember(key, 'deck:lead', { at: 0, hidden: false, locked: false })
+    const config = buildConfig({
+      state: { ...STATE, maps: 'b.cool' },
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    const read = roundTrip(config)
+    expect(read?.deck).toEqual({ lead: { at: 0, hidden: false, locked: false } })
+    applyConfig(read as NonNullable<typeof read>, 's6|unchained.cool')
+    expect(recall('s6|unchained.cool', 'deck:lead')).toEqual({ at: 0, hidden: false, locked: false })
+  })
+
   it('says nothing of a lead nobody moved, and drops one that is no place', () => {
     const key = 'deck|untouched.cool'
     remember(key, 'deck:lead', { at: 0, hidden: false })

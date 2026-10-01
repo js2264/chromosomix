@@ -227,8 +227,8 @@ export const runFrip: TrackTaskRunner = async (job) => {
       columns: [
         { key: 'track', label: 'Track', kind: 'text' },
         { key: 'contig', label: 'Sequence', kind: 'text' },
-        { key: 'start', label: 'Start', kind: 'number', digits: 0 },
-        { key: 'end', label: 'End', kind: 'number', digits: 0 },
+        { key: 'start', label: 'Start', kind: 'number', coordinate: 'start' },
+        { key: 'end', label: 'End', kind: 'number', coordinate: 'end' },
         { key: 'name', label: 'Name', kind: 'text' },
         { key: 'signal', label: 'Signal', kind: 'number', digits: 2 },
         { key: 'mean', label: 'Mean', kind: 'number', digits: 4 },

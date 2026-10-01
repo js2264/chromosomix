@@ -14,7 +14,7 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import { typedLocusToRegion, type Assembly } from '../genome/assembly'
+import { baseLabel, typedLocusToRegion, type Assembly } from '../genome/assembly'
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
@@ -235,11 +235,17 @@ export class ContigsTable {
         label: 'circular',
         kind: 'string',
         width: '5.5rem',
+        // What a tick changes, and no more than it changes (§8.15). The map
+        // does not slide round a circle: `ori` is the way across the origin,
+        // and so is a window typed across it. Nor is every cis task circular:
+        // the ones that are are named, and so are the two that read a line.
         title:
           `Tick a ${noun} that joins its own ends — a plasmid, a mitochondrion, a bacterial ` +
-          'chromosome. The map then slides past its end and back on at its beginning, a window ' +
-          'may be typed across the junction, and every cis analysis measures separation the short ' +
-          'way round. Nothing in a .cool can say this, so it is the reader who does.',
+          'chromosome. The map then offers ori, which frames the whole circle with the origin in ' +
+          'the middle; a window may be typed across the junction; and P(s), insulation, the ' +
+          'directionality index, the HiC score, the scalogram, compartments and the tasks read ' +
+          'from the origin measure separation the short way round — chromosight and the O/E map ' +
+          'do not. Nothing in a .cool can say this, so it is the reader who does.',
         // A value as well as a box, so the column sorts and the search box
         // reaches it: on a draft assembly the three declared sequences are three
         // rows in a hundred thousand.
@@ -286,14 +292,19 @@ export class ContigsTable {
           'Where replication starts, 1-based — what the map’s arms are read from. The first base ' +
           'unless the Origin and terminus task, a workspace or you have set another.',
         value: (row) => (origins.get(names[row])?.at ?? 0) + 1,
-        format: (value) => (typeof value === 'number' ? fmt.int(value) : ''),
+        // A coordinate, so grouped as every coordinate is (§26.1) rather than as
+        // the reader's locale groups a count — and the box below starts from the
+        // same text, which `parseOrigin` reads back. Grouped by the locale, a
+        // German browser wrote `1.204.000` into the box, and a digit changed in
+        // it was refused as *not a position*.
+        format: (value) => (typeof value === 'number' ? fmt.pos(value) : ''),
         ...(set === undefined
           ? {}
           : {
               edit: {
                 text: (row: number) => {
                   const held = origins.get(names[row])
-                  return held === undefined ? '' : fmt.int(held.at + 1)
+                  return held === undefined ? '' : baseLabel(held.at)
                 },
                 placeholder: () => '1',
                 commit: (row: number, text: string) => {

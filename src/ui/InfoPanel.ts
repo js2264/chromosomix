@@ -355,6 +355,22 @@ export class InfoPanel {
       ['storage mode', String(info.info['storage-mode'] ?? '—')],
       ['assembly', String(info.info['assembly'] ?? '—')],
       ['format', `${String(info.info['format'] ?? '—')} v${String(info.info['format-version'] ?? '?')}`],
+      // **Which of a `.hic`'s vectors the balanced map is drawn with** (§3.6).
+      // The reader chooses the file's best — SCALE, then KR and its kin, then
+      // the coverage ones — and the choice was made silently: a reader of
+      // somebody else's file could not tell a KR picture from a VC one. Named
+      // here, beside the format it belongs to, and named as missing where the
+      // rung open has none, since *balanced* is then not on offer.
+      ...(info.info['format'] === 'HIC'
+        ? ([
+            [
+              'normalisation',
+              typeof info.info['hic-normalisation'] === 'string'
+                ? info.info['hic-normalisation']
+                : 'none at this resolution',
+            ],
+          ] as Array<[string, string]>)
+        : []),
       // A cooler has no genome layer, and a row reading "genomes 0" invites the
       // question of where they went. It is the contigs — cooler's chroms — that
       // this file is made of.

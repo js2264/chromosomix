@@ -9,7 +9,7 @@
  * that holds both FASTAs:
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-dotplot.mjs [out-dir]     # d01 … d07, and the PNG export under files/
+ *   node scripts/ui-dotplot.mjs [out-dir]     # d01 … d06 with d04b and d04c, and the PNG export under files/
  */
 
 import { mkdirSync } from 'node:fs'

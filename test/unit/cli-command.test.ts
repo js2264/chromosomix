@@ -27,6 +27,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { cliCommandFor, quote } from '@/analysis/cliCommand'
+import { typedLocusToRegion } from '@/genome/assembly'
+import { parseRegionString } from '@/metacooler/range'
 import { TASKS, taskById } from '@/analysis/registry'
 import type {
   AnalysisContext,
@@ -328,9 +330,40 @@ describe('the window', () => {
         }).text,
       ),
     )
-    // 0-based half-open, from the contig's own first base — cooler's parser
-    // reads the digits as written and applies no 1-based conversion.
-    expect(flags.get('window')).toBe('chrXVI:100000-200000')
+    // The display form of §26.1 — 1-based and inclusive, grouped — as the
+    // breadcrumb wrote the same window, and as the shell reads `--window` now.
+    // A comma, a colon and a hyphen are nothing to a shell, so it goes bare.
+    expect(flags.get('window')).toBe('chrXVI:100,001-200,000')
+  })
+
+  // THE LAW (§26.1), across the console: the window a command names is read by
+  // the shell exactly as the app's framing was — the same bins, not a base on.
+  it('names a window the shell reads back as the bins of the framing it came from', () => {
+    for (const rows of [
+      [1632, 1732],
+      [1532, 1533],
+      [0, 1],
+      [1000, 1532],
+    ] as Array<[number, number]>) {
+      const window = flagsOf(
+        commandOf(
+          cliCommandFor({
+            task: detect,
+            provenance: provenance('chromosight', {}, { rows, cols: rows }),
+            context: context(),
+          }).text,
+        ),
+      ).get('window')
+      expect(typeof window).toBe('string')
+      // As `cli/main.ts` takes it, and the bins cooler's extent gives that.
+      const [name, start, end] = parseRegionString(typedLocusToRegion(window as string))
+      const contig = CONTIGS.find((one) => one.name === name)!
+      const extent = [
+        contig.startBin + Math.floor((start ?? 0) / 1000),
+        contig.startBin + Math.ceil((end ?? contig.length) / 1000),
+      ]
+      expect(extent).toEqual(rows)
+    }
   })
 
   it('says so, and runs over the whole file, when the view crosses sequences', () => {
@@ -378,6 +411,35 @@ describe('the window', () => {
       )
       expect(flags.get('window')).toBe(String(value))
     }
+  })
+})
+
+describe('a locus parameter', () => {
+  // The record holds what the reader typed or picked — the typed form, 1-based
+  // and grouped (§26.1) — and the shell reads a locus flag the same way, so the
+  // command writes the record as it stands.
+  it('is written as the form held it, 1-based and grouped, and bare', () => {
+    const fourc = taskById('fourc') as AnalysisTask
+    const command = commandOf(
+      cliCommandFor({
+        task: fourc,
+        provenance: provenance('fourc', { anchor: 'chrIV:1,000,001-1,010,000' }),
+        context: context(),
+      }).text,
+    )
+    expect(flagsOf(command).get('anchor')).toBe('chrIV:1,000,001-1,010,000')
+  })
+
+  it('quotes a list of them, which has a space in it', () => {
+    const reconstruct = taskById('reconstruct3d') as AnalysisTask
+    const command = commandOf(
+      cliCommandFor({
+        task: reconstruct,
+        provenance: provenance('reconstruct3d', { region: 'chrIV:1,000,001-1,010,000, chrXVI' }),
+        context: context(),
+      }).text,
+    )
+    expect(command).toContain("--region 'chrIV:1,000,001-1,010,000, chrXVI'")
   })
 })
 

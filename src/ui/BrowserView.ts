@@ -28,6 +28,7 @@ import {
   planStack,
   resolveGroupExtents,
   type GroupSettings,
+  type StackSlot,
 } from '../annotations/groups'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
@@ -75,6 +76,7 @@ import {
   assemblyAxis,
   findContig,
   formatLocus,
+  formatPosition,
   lengthsAreExact,
   parseLocus,
   rangeToUnits,
@@ -194,6 +196,7 @@ import {
 } from './trackControls'
 import {
   EXPORT_DPI_CHOICES,
+  EXPORT_FORMATS,
   canvasToPng,
   captionStamp,
   copyPicture,
@@ -205,9 +208,11 @@ import {
   largestDpiThatFits,
   readPageBackground,
   scaleForDpi,
+  type ExportFormat,
 } from './export'
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
+import type { CellFigure } from '../panels/deckFigure'
 import { KEYS, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
@@ -360,7 +365,7 @@ export interface BrowserViewProps {
   sampleWidth?(): number
   /**
    * The window moved, by any road — a pan, the box, a link, the deck. What the
-   * deck listens to when this view is its lead (§25 stage D), because a link
+   * deck listens to when this view is its lead (§25.3), because a link
    * moving the view does not report a locus and the cells still have to
    * follow. Nothing is passed: the listener asks {@link framedWindows}.
    */
@@ -670,7 +675,7 @@ export class BrowserView {
   /** The canvas width the last frame was drawn at, which the export saves. */
   private canvasWidth = 0
   private exportDpi = 300
-  private exportFormat: BrowserExportFormat = 'pdf'
+  private exportFormat: ExportFormat = 'pdf'
   /** Where this view's export goes while it leads a deck; see {@link setDeckExport}. */
   private deckExport: DeckExport | null = null
   private clickTimer: number | null = null
@@ -1080,7 +1085,7 @@ export class BrowserView {
   /**
    * Route this view's export to the deck it leads, or back to itself — the
    * map's own hook (`MatrixPanel.setDeckExport`), for the browser as a lead
-   * (§25 stage D). With a model beside the tracks, the Export card and the
+   * (§25.3). With a model beside the tracks, the Export card and the
    * keys are asked for the arrangement; with the tracks hidden and the model
    * alone on screen (§16.9), for the one picture there is — never for the
    * tracks the reader took off it.
@@ -1208,13 +1213,29 @@ export class BrowserView {
   }
 
   /**
-   * The plot as a canvas at an export dpi, for the deck's figure (§16.11, §25).
-   *
-   * What {@link rasterFigure} draws before its caption, on the deck's terms:
-   * the deck composes cells and writes no caption per cell. `null` where the
-   * page cannot open a canvas, which is a browser that cannot export at all.
+   * The tracks as one cell of the deck's figure (§16.5, §25.3): what
+   * {@link rasterFigure} and {@link vectorFigure} draw before their caption,
+   * on the deck's terms — the deck composes cells and writes no caption per
+   * cell. Pixels at a dpi for its PNG, paths and text for its PDF, from one
+   * size measured once.
    */
-  exportCanvas(dpi: number): HTMLCanvasElement | null {
+  deckFigure(): CellFigure {
+    const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
+    const height = this.heightOf(this.lanes)
+    return {
+      width,
+      height,
+      raster: (dpi) => this.exportCanvas(dpi),
+      vector: (ctx) => this.paintPage(ctx, width, height),
+    }
+  }
+
+  /**
+   * The plot as a canvas at an export dpi, for the deck's PNG. `null` where
+   * the page cannot open a canvas, which is a browser that cannot export at
+   * all.
+   */
+  private exportCanvas(dpi: number): HTMLCanvasElement | null {
     const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
     const height = this.heightOf(this.lanes)
     const scale = scaleForDpi(dpi)
@@ -1695,6 +1716,27 @@ export class BrowserView {
    * comparable by construction.
    */
   private layout(): Lane[] {
+    return this.stack().map((slot) => ({
+      entry: slot.host,
+      overlaid: slot.overlaid,
+      frame: this.frameAt(slot.acrossFrom, slot.thickness),
+      profiles: [],
+      residues: [],
+      reads: [],
+      pending: null,
+    }))
+  }
+
+  /**
+   * {@link layout}'s slots as the store has them now, before a frame is cut
+   * for any of them.
+   *
+   * Apart for the one reader that cannot wait for a draw: the track-height box
+   * is told of a change when the store makes it, a frame before the repaint
+   * that brings `this.lanes` up to date, so the lanes the last draw laid out
+   * would answer it with the heights from before the change.
+   */
+  private stack(): Array<StackSlot<AnnotationEntry>> {
     // Both *file* cards, because in one dimension there is no "on the map" to
     // be an overlay of: a BED is boxes and a BEDPE is arcs, and each takes a
     // lane of its own like everything else here.
@@ -1712,15 +1754,7 @@ export class BrowserView {
       gap: LANE_GAP,
       from: this.rulerHeight + LANE_GAP,
       minimum: LANE_MIN_SIZE,
-    }).map((slot) => ({
-      entry: slot.host,
-      overlaid: slot.overlaid,
-      frame: this.frameAt(slot.acrossFrom, slot.thickness),
-      profiles: [],
-      residues: [],
-      reads: [],
-      pending: null,
-    }))
+    })
   }
 
   private frameAt(acrossFrom: number, thickness: number): LaneFrame {
@@ -2107,7 +2141,7 @@ export class BrowserView {
   ): void {
     const at = (x: number): string | null => {
       const locus = this.axis.unitToLocus(this.atUnit(x))
-      return locus === null ? null : `${locus.contig}:${fmt.int(Math.round(locus.bp) + 1)}`
+      return locus === null ? null : formatPosition(locus.contig, Math.round(locus.bp))
     }
     const start = at(anchor)
     const end = at(moving)
@@ -2972,10 +3006,10 @@ export class BrowserView {
           syncDpi()
         },
       },
-      formats: BROWSER_EXPORT_FORMATS,
+      formats: EXPORT_FORMATS,
       format: this.exportFormat,
       onFormat: (format) => {
-        this.exportFormat = format as BrowserExportFormat
+        this.exportFormat = format as ExportFormat
         syncDpi()
       },
       onSave: () => void this.savePlot(),
@@ -3092,7 +3126,14 @@ export class BrowserView {
             this.optionToggle('gutter'),
           ),
         ),
-        trackHeightField((px) => this.setTrackHeight(px)),
+        // Told what the lanes are, as the box beside a map is. Built without
+        // them it showed the last number it had applied, which stretch,
+        // shrink, a group's levelling and a dragged border all leave behind —
+        // `90` here over a stack the same box beside the map called 46.
+        trackHeightField((px) => this.setTrackHeight(px), {
+          lanes: () => this.stack().map((slot) => ({ members: [slot.host, ...slot.overlaid] })),
+          subscribe: (onChange) => this.props.store.subscribe(onChange),
+        }),
         el(
           'div',
           { class: 'field field-block' },
@@ -3192,12 +3233,7 @@ export class BrowserView {
   ): Promise<Blob> {
     const page = new VectorPage(width, height + this.captionHeight)
     const ctx = page.ctx
-    // The page under the drawing. The raster path composites this underneath at
-    // the end; here it has to be the first thing painted, since a PDF is drawn
-    // in order and has no `destination-over`.
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, width, height + this.captionHeight)
-    this.paint(ctx, width, height, false)
+    this.paintPage(ctx, width, height, height + this.captionHeight)
     if (this.captionHeight > 0) {
       ctx.font = scaleFont(CAPTION_FONT_PDF)
       ctx.textAlign = 'left'
@@ -3207,6 +3243,20 @@ export class BrowserView {
       ctx.fillText(caption, 2, height + this.captionHeight - 5)
     }
     return page.toBlob({ title: this.props.assembly.name })
+  }
+
+  /**
+   * The plot onto a vector page, from the context's origin: the paper under
+   * it, then the drawing — the PDF's, and the deck's cell of it. `paper` is
+   * how tall the paper is, which a caption under the plot makes taller.
+   *
+   * The paper goes first: the raster path composites it underneath at the
+   * end, and a PDF is drawn in order and has no `destination-over`.
+   */
+  private paintPage(ctx: CanvasRenderingContext2D, width: number, height: number, paper = height): void {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, width, paper)
+    this.paint(ctx, width, height, false)
   }
 
   /** The same figure as pixels, redrawn at the requested resolution. */
@@ -4542,20 +4592,6 @@ const CAPTION_HEIGHT = 16
  */
 const CAPTION_FONT = '10px system-ui, sans-serif'
 const CAPTION_FONT_PDF = '10px Helvetica, sans-serif'
-
-/**
- * What this view saves as.
- *
- * Not `EXPORT_FORMATS`, which is the heatmap's list: there the PDF is a page
- * carrying one lossless image, because a contact map *is* a raster and pretending
- * otherwise would mean writing down a million rectangles. Here nothing is, so
- * the PDF is the drawing itself and says so on the button.
- */
-const BROWSER_EXPORT_FORMATS = [
-  { value: 'pdf', label: 'PDF (vector)' },
-  { value: 'png', label: 'PNG' },
-] as const
-type BrowserExportFormat = (typeof BROWSER_EXPORT_FORMATS)[number]['value']
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220

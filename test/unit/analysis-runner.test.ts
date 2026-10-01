@@ -836,6 +836,29 @@ describe('the version stamp', () => {
   })
 })
 
+describe('a locus parameter (§18.2, §26.1)', () => {
+  // The one boundary: the runners read cooler's grammar, and everything that
+  // holds a run — the form it refills, the console, a replay — holds the typed
+  // form the reader wrote. A provenance in the machine form would put
+  // `chrI:10000-20000` back in a box that said `chrI:10,001-20,000`.
+  const anchored = task('fourc', { params: [{ kind: 'region', key: 'anchor', label: 'anchor' }] })
+
+  it('reaches the worker in the machine form, and is recorded in the form it was typed', async () => {
+    const { runner, fake, finished } = harness()
+    runner.run(anchored, { anchor: 'chrI:10,001-20,000' })
+    await settle()
+    const sent = fake.seen.find((message) => message.kind === 'run') as { params: Params } | undefined
+    expect(sent?.params.anchor).toBe('chrI:10000-20000')
+    // The worker records what it was handed, as `analysis.worker.ts` does…
+    fake.finish(sent?.params)
+    await settle()
+    // …and the result carries what the reader wrote.
+    expect(runner.resultOf('fourc')?.provenance.params.anchor).toBe('chrI:10,001-20,000')
+    expect(finished[0]?.result.provenance.params.anchor).toBe('chrI:10,001-20,000')
+    runner.destroy()
+  })
+})
+
 describe('composites', () => {
   it('runs each requirement first and hands the results down as upstream', async () => {
     const { runner, fake, catalogue } = harness()

@@ -32,65 +32,106 @@ import {
   formatRegion,
   mintBookmarkId,
   parseRegion,
+  parseTypedRegion,
   regionsFromBed,
   type Bookmark,
 } from '@/annotations/bookmarks'
+import { formatLocus, formatPosition } from '@/genome/assembly'
 
 beforeEach(() => {
   window.sessionStorage.clear()
 })
 
 describe('reading a place a reader typed', () => {
+  // 1-based and inclusive, the display form of §26.1 and every spelling of it:
+  // the first base loses one and the last stays, so what is kept is the
+  // 0-based half-open interval BED and the link are written in.
   it('takes the plain form', () => {
-    expect(parseRegion('II:120000-180000')).toEqual({ contig: 'II', start: 120000, end: 180000 })
+    expect(parseTypedRegion('II:120001-180000')).toEqual({ contig: 'II', start: 120000, end: 180000 })
   })
 
   it('takes the separators this app’s own readout writes', () => {
-    // `fmt.int` prints `1,531,933`, and the breadcrumb prints ranges with them.
-    expect(parseRegion('NC_000913.3:1,500,000-1,508,000')).toEqual({
+    // `formatLocus` prints `1,500,001-1,508,000`, and the breadcrumb prints
+    // ranges with them.
+    expect(parseTypedRegion('NC_000913.3:1,500,001-1,508,000')).toEqual({
       contig: 'NC_000913.3',
       start: 1500000,
       end: 1508000,
     })
-    expect(parseRegion(' chr7 : 1 200 000 - 1 260 000 ')).toEqual({
+    expect(parseTypedRegion(' chr7 : 1 200 001 - 1 260 000 ')).toEqual({
       contig: 'chr7',
       start: 1200000,
       end: 1260000,
     })
   })
 
-  it('takes the units the tooltip writes', () => {
-    expect(parseRegion('IV:1.2Mb-1.26Mb')).toEqual({ contig: 'IV', start: 1200000, end: 1260000 })
-    expect(parseRegion('IV:400kb-460kb')).toEqual({ contig: 'IV', start: 400000, end: 460000 })
+  it('takes the units the tooltip writes, as the bases they name', () => {
+    expect(parseTypedRegion('IV:1.2Mb-1.26Mb')).toEqual({ contig: 'IV', start: 1199999, end: 1260000 })
+    expect(parseTypedRegion('IV:400kb-460kb')).toEqual({ contig: 'IV', start: 399999, end: 460000 })
   })
 
   it('takes the `..` an IGV or Ensembl URL uses', () => {
-    expect(parseRegion('7:1200000..1260000')).toEqual({ contig: '7', start: 1200000, end: 1260000 })
+    expect(parseTypedRegion('7:1200001..1260000')).toEqual({ contig: '7', start: 1200000, end: 1260000 })
   })
 
-  it('reads one position as a place of no width, which is what a loop anchor is', () => {
-    expect(parseRegion('II:150000')).toEqual({ contig: 'II', start: 150000, end: 150000 })
+  it('reads one position as a place of no width at that base, which is what a loop anchor is', () => {
+    expect(parseTypedRegion('II:150,001')).toEqual({ contig: 'II', start: 150000, end: 150000 })
+    // …which is not the one-base window the same number twice names.
+    expect(parseTypedRegion('II:150,001-150,001')).toEqual({ contig: 'II', start: 150000, end: 150001 })
   })
 
   it('puts a backwards range the right way round rather than refusing it', () => {
-    expect(parseRegion('II:180000-120000')).toEqual({ contig: 'II', start: 120000, end: 180000 })
+    expect(parseTypedRegion('II:180000-120001')).toEqual({ contig: 'II', start: 120000, end: 180000 })
+  })
+
+  it('never lands before the first base', () => {
+    expect(parseTypedRegion('II:0-1000')).toEqual({ contig: 'II', start: 0, end: 1000 })
+    expect(parseTypedRegion('II:1-1000')).toEqual({ contig: 'II', start: 0, end: 1000 })
   })
 
   it('keeps a contig name that contains a colon', () => {
     // Split on the *last* colon: `NODE_1:len=5000` is a real assembler name.
-    expect(parseRegion('NODE_1:len=5000:100-200')?.contig).toBe('NODE_1:len=5000')
+    expect(parseTypedRegion('NODE_1:len=5000:101-200')).toEqual({
+      contig: 'NODE_1:len=5000',
+      start: 100,
+      end: 200,
+    })
   })
 
   it('refuses what is not a place', () => {
     // A bare contig has no length here, and "all of chromosome IV" is what the
     // region box is for.
-    expect(parseRegion('II')).toBeNull()
-    expect(parseRegion('')).toBeNull()
-    expect(parseRegion(':100-200')).toBeNull()
-    expect(parseRegion('II:')).toBeNull()
-    expect(parseRegion('II:abc-def')).toBeNull()
+    expect(parseTypedRegion('II')).toBeNull()
+    expect(parseTypedRegion('')).toBeNull()
+    expect(parseTypedRegion(':100-200')).toBeNull()
+    expect(parseTypedRegion('II:')).toBeNull()
+    expect(parseTypedRegion('II:abc-def')).toBeNull()
     // A negative coordinate is a mistake, not a range read from the last dash.
-    expect(parseRegion('II:-100')).toBeNull()
+    expect(parseTypedRegion('II:-100')).toBeNull()
+  })
+
+  // THE LAW (§26.1), for the card: a row prints a place with `formatLocus` or
+  // `formatPosition`, and that text typed back is the same place — whether the
+  // place came from the map, from a BED or from the box itself.
+  it('reads back exactly the place a row prints: display, typed, kept, display', () => {
+    for (const place of [
+      { contig: 'II', start: 120000, end: 180000 },
+      { contig: 'chr1', start: 0, end: 1000 },
+      { contig: 'NODE_1:len=5000', start: 12, end: 13 },
+    ]) {
+      expect(parseTypedRegion(formatLocus(place))).toEqual(place)
+    }
+    const point = { contig: 'II', start: 150000, end: 150000 }
+    expect(parseTypedRegion(formatPosition(point.contig, point.start))).toEqual(point)
+  })
+})
+
+describe('reading the region a link carries', () => {
+  // `parseRegion` is the other direction of `formatRegion`: the machine form a
+  // bookmark's `focus` is written into the hash in, read back as written.
+  it('takes the digits as written, 0-based and half-open', () => {
+    expect(parseRegion('II:120000-180000')).toEqual({ contig: 'II', start: 120000, end: 180000 })
+    expect(parseRegion('II:150000')).toEqual({ contig: 'II', start: 150000, end: 150000 })
   })
 
   it('writes a form it reads back, with nothing a URL has to escape', () => {

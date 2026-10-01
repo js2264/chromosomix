@@ -86,7 +86,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'This is a resolution ladder, not a single map',
     advice: [
       'An .mcool holds one complete cooler per resolution and is not itself a cooler, so it cannot be opened at its root.',
-      'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and the finest one opens.',
+      // The landing rung, not the finest (§9): a third of the way up the ladder,
+      // whose reads are not the largest the file has.
+      'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and it opens a third of the way up from the finest.',
     ],
   },
   'pairs-binning-needed': {
@@ -176,7 +178,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
   'bad-range': {
     title: 'That range does not parse',
     advice: [
-      'Coordinates use cooler syntax: contig, or contig:start-end with optional thousands separators and k/M/G units.',
+      // How every box reads what is typed (§26.1): cooler's grammar, and not
+      // cooler's base — the advice said *cooler syntax*, which is 0-based.
+      'A locus is a contig, or contig:start-end, 1-based and inclusive as IGV and samtools write it, with optional thousands separators and k/M/G units.',
       'The end must not be before the start, and neither may fall outside the contig.',
     ],
   },

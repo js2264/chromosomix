@@ -627,19 +627,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
   // The chromosight normalisation is priced differently because it *reads*
   // differently: the distance law it detrends by is a property of a whole
-  // sequence, so it takes one square per sequence the anchors sit on rather than
-  // one small block per anchor. That is usually far fewer requests and far more
-  // bytes, and saying "k windows" here would price the wrong run.
+  // sequence, so it reads each sequence the anchors sit on along its diagonal,
+  // as far as the set reaches and a template beyond, rather than one small
+  // block per anchor — and saying "k windows" here would price the wrong run.
+  //
+  // In words and not in numbers. How deep that band is depends on the set's
+  // furthest pair, and the estimate carries the entries rather than their
+  // contents, so the requests and the bytes are not known until the run reads
+  // the set. This line used to price the square around every sequence instead,
+  // which is what the runner read before it read a band — on a mammalian
+  // chromosome a hundred times what it reads now, which is not a price.
   if (isChromosight(params)) {
-    const widest = context.contigs.reduce((most, contig) => Math.max(most, contig.bins), 0)
     return {
       class: 'scan',
-      requests: Math.max(1, context.contigs.length) * (params.balance === true ? 5 : 4),
-      bytes: widest * widest * 4,
+      requests: null,
+      bytes: null,
       note:
-        'One dense square per sequence the anchors sit on — up to ' +
-        `${((widest * widest * 4) / 1e6).toFixed(0)} MB at a time — detrended by its own distance ` +
-        'law, then a window cut at each anchor and scored against the template. ' +
+        'Each sequence the anchors sit on, read as a band along its diagonal as far as the set ' +
+        'reaches, detrended by its own distance law, then a window cut at each anchor and scored ' +
+        'against the template. ' +
         `${anchors === null ? '' : `${anchors.toLocaleString()} anchors.`}`,
     }
   }

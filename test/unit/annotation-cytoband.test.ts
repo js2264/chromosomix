@@ -28,7 +28,7 @@ import { cardFor, kindFor } from '@/annotations/loader'
 import { sniffBarChart } from '@/annotations/barchart'
 import { sniffJunctions } from '@/annotations/junctions'
 import { sniffSignal } from '@/annotations/signal'
-import { routeOf } from '@/browse/route'
+import { routeOf, unroutableNote } from '@/browse/route'
 
 /** chr1's first bands and centromere, as UCSC's hg19 file writes them. */
 const HG19 = [
@@ -159,6 +159,17 @@ describe('where a cytoBand goes', () => {
   it('opens a browser under the names UCSC publishes it by', () => {
     expect(routeOf('https://example.org/hg38/cytoBandIdeo.txt.gz')).toBe('genome')
     expect(routeOf('cytoBand.txt')).toBe('genome')
+  })
+
+  it('opens one named in the plural too, as the yeast demo’s is', () => {
+    // The demo's own karyotype was a row the Files column dimmed, in a folder
+    // whose every other file it offered: the pattern knew UCSC's two table
+    // names and not a file named for its bands.
+    expect(routeOf('demo/yeast/Yeast_cytobands.txt')).toBe('genome')
+    expect(unroutableNote('Yeast_cytobands.txt')).toBeNull()
+    expect(routeOf('https://example.org/sample.cytobands.txt.gz')).toBe('genome')
+    // …and nothing that merely mentions bands in passing.
+    expect(routeOf('cytobands.pdf')).toBe('unknown')
   })
 })
 

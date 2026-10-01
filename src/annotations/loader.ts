@@ -12,7 +12,7 @@ import type { NamedSequence } from '../genome/naming'
 import { isStructureName } from './g3d'
 
 import type { AnnotationStore } from './store'
-import { defaultStyle } from './types'
+import { defaultStyle, openingLimits } from './types'
 import type {
   AnnotationCard,
   AnnotationEntry,
@@ -79,8 +79,9 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   }
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
-  // UCSC publishes both as a bare `.txt.gz`, so the name is the tell (§8.22).
-  if (/cytoband(ideo)?(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'ideogram' }
+  // UCSC publishes both as a bare `.txt.gz`, so the name is the tell (§8.22) —
+  // in the plural too, as `browse/route.ts` reads it: `Yeast_cytobands.txt`.
+  if (/cytoband(s|ideo)?(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'ideogram' }
   // STAR's table, a junctions BED, leafcutter's `.junc` (§8.23).
   if (/(sj\.out\.tab|junctions?\.bed|\.junc)(\.gz)?$/i.test(name)) {
     return { card: 'linear', kind: 'junctions' }
@@ -685,14 +686,21 @@ export class AnnotationLoader {
       // an axis that means nothing and changes as you pan. The colour is kept,
       // because it is the store's and the row is already wearing it.
       const held = this.store.byId(id)
-      const restyle =
+      let style =
         guessed && held !== undefined && held.kind !== kind
-          ? { style: defaultStyle(kind, held.style.colour) }
-          : {}
+          ? defaultStyle(kind, held.style.colour)
+          : undefined
+      // …and one format's value axis is wrong for its kind as well, whatever
+      // its name made of the placeholder: a bedMethyl is a track like any other
+      // and still opens clipped to 0–100, the scale a percentage is read
+      // against, where every other track opens on the autoscale (§8.20). Only
+      // the axis: the rest of the placeholder's style is the kind's own.
+      const limits = guessed ? openingLimits(result.format) : undefined
+      if (limits !== undefined && held !== undefined) style = { ...(style ?? held.style), limits }
       this.store.update(id, {
         card,
         kind,
-        ...restyle,
+        ...(style === undefined ? {} : { style }),
         status: 'ready',
         progress: undefined,
         // A BAM's two rows come back from the same file with the same sentence

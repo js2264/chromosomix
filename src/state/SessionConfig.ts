@@ -259,6 +259,8 @@ export interface SessionConfig {
    * (§16.9), read back through the deck's own reader (`readDeckLead`): a figure
    * of a model with the tracks it was opened from taken off the screen is an
    * arrangement too, and one the importing window would otherwise put back.
+   * It carries the first map's chain where it was open (§16.3), as `looks`
+   * carries each companion's.
    */
   deck: { starred?: string; columns?: number; locals?: DeckLocal[]; looks?: DeckLook[]; lead?: DeckLead }
   /**
@@ -359,10 +361,12 @@ function deckOf(
   lead?: DeckLead | null,
 ): SessionConfig['deck'] {
   return {
-    // Only a lead somebody moved or hid: one first and on screen is what every
-    // deck does untouched, and saying so would tell an importing tab to undo
-    // whatever its own reader had done with theirs.
-    ...(lead !== null && lead !== undefined && (lead.at !== 0 || lead.hidden) ? { lead } : {}),
+    // Only a lead somebody moved, hid or unchained: one first, on screen and
+    // driving is what every deck does untouched, and saying so would tell an
+    // importing tab to undo whatever its own reader had done with theirs.
+    ...(lead !== null && lead !== undefined && (lead.at !== 0 || lead.hidden || lead.locked === false)
+      ? { lead }
+      : {}),
     ...(Array.isArray(locals) && locals.length > 0 ? { locals } : {}),
     // An empty list is no list: a deck nobody has recoloured writes nothing
     // rather than an empty array, so `applyConfig` can tell "this session says

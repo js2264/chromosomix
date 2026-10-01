@@ -77,7 +77,7 @@ export type DeckHolds = 'maps' | 'cells'
  * Worded from **what the deck this edge would grow can hold**, because one
  * wording could not be true of both. It said *drop a cooler on one* wherever it
  * appeared, and beside the 1D browser that invites the one act such a deck
- * refuses (§25 stage D): its cells are a structure and stacks of tracks, and a
+ * refuses (§25.3): its cells are a structure and stacks of tracks, and a
  * map there opens as a session of its own. The frame the session puts round a
  * view before there is a deck does not know which it will be, so it names
  * neither kind and says the half that is true either way.
@@ -214,7 +214,7 @@ export class DeckFrame {
   }
 
   /**
-   * What the cells these edges would open can hold (§25 stage D).
+   * What the cells these edges would open can hold (§25.3).
    *
    * Told on every paint of the deck's bar, which is every render: a session
    * moves between a map lead and the browser with the deck intact, and the edge

@@ -17,6 +17,7 @@ import {
   mismatch,
   redone,
   undone,
+  wholeOriginal,
   withStep,
   type EditStep,
   type ReferenceEdit,
@@ -203,6 +204,18 @@ describe('a join, a split and a stretch set aside', () => {
     // A name of the file's own is refused for any stretch but that sequence whole.
     expect(edited({ op: 'rename', sequence: 'II', name: 'III' }).sequences.map((sequence) => sequence.name)).toEqual(['I', 'II', 'III'])
     expect(edited({ op: 'join', a: 'I', aEnd: 'end', b: 'II', bEnd: 'start', gap: 0 }, { op: 'rename', sequence: 'I_e1', name: 'II' }).sequences[0].name).toBe('I_e1')
+    // …and taken by that sequence whole, renamed and given it back.
+    expect(edited({ op: 'rename', sequence: 'I', name: 'chrI' }, { op: 'rename', sequence: 'chrI', name: 'I' }).sequences[0].name).toBe('I')
+  })
+
+  it('says which original a sequence is whole, which is the one name of the file’s it may have', () => {
+    // What the stage's rename box asks before it refuses a name (§27.3).
+    const original = emptyEdit(ORIGINAL).original
+    const whole = (assembly: EditedAssembly, at: number): string | null => wholeOriginal(assembly.sequences[at], original)
+    expect(whole(edited({ op: 'rename', sequence: 'I', name: 'chrI' }), 0)).toBe('I')
+    // Turned, or a stretch, it is no original whole.
+    expect(whole(edited({ op: 'invert', sequence: 'II', from: 0, to: 600 }), 1)).toBeNull()
+    expect(whole(edited({ op: 'split', sequence: 'I', at: 400 }), 0)).toBeNull()
   })
 
   it('rotates a circle to start at its origin', () => {

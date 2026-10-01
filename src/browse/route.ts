@@ -22,7 +22,7 @@
  *
  * `unknown` is therefore "this app has no route for that name", not "this file is
  * broken". A row saying so is more use than a row that is absent: a reader
- * looking at a directory wants to see the directory, and a `.bam` sitting there
+ * looking at a directory wants to see the directory, and a `.cram` sitting there
  * unhighlighted answers *why is nothing happening when I click it* before it is
  * asked.
  */
@@ -83,16 +83,19 @@ export function routeOf(uri: string): FileRoute {
   ) {
     return 'genome'
   }
-  // The UCSC names (§8.18–§8.21). On the genome door with every other
+  // The UCSC names (§8.17–§8.21). On the genome door with every other
   // annotation, and `.2bit` among them because it is a sequence — the same door
-  // a FASTA goes through, and the one an assembly hub's genome arrives at.
+  // a FASTA goes through, and the one an assembly hub's genome arrives at. A
+  // `.barChart` and a `.bigBarChart` are here too: the loader has read both by
+  // their bytes since §8.17, and a folder listing that dimmed them was the
+  // router disagreeing with the loader about a name it had never been taught.
   //
   // `refFlat.txt` and `refGene.txt` are here without a dot-extension of their
   // own, because that is how they are published: IGV's genome table names 29 of
   // them, and a router that insisted on a suffix would go on greying out
   // exactly the gene models this release exists to open.
   if (
-    /\.(interact|biginteract|longrange|longtabix|genepred|genepredext|refflat|bedmethyl|bigmethyl|2bit)(\.txt)?(\.gz)?$/i.test(
+    /\.(interact|biginteract|longrange|longtabix|genepred|genepredext|refflat|bedmethyl|bigmethyl|barchart|bigbarchart|2bit)(\.txt)?(\.gz)?$/i.test(
       name,
     ) ||
     /(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.gz)?$/i.test(name)
@@ -109,8 +112,10 @@ export function routeOf(uri: string): FileRoute {
   // extension of its own (§8.22, §8.23): UCSC's `cytoBand.txt.gz`, STAR's
   // `SJ.out.tab`, a `junctions.bed` (which the list above takes already) and
   // leafcutter's `.junc`. A cytoBand declares a genome, so it is the door a
-  // browser opens from.
-  if (/cytoband(ideo)?(\.txt)?(\.gz)?$/i.test(name)) return 'genome'
+  // browser opens from — under the plural as well, which is what a file named
+  // for its bands rather than for UCSC's table is called, the demo's own
+  // `Yeast_cytobands.txt` among them.
+  if (/cytoband(s|ideo)?(\.txt)?(\.gz)?$/i.test(name)) return 'genome'
   if (/(sj\.out\.tab|\.junc)(\.gz)?$/i.test(name)) return 'genome'
   return 'unknown'
 }

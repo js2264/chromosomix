@@ -39,6 +39,7 @@
  * argues both at length).
  */
 
+import { tickedContigs } from '../context'
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
@@ -125,6 +126,19 @@ const PARAMS: readonly ParamSpec[] = [
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
+  // Nothing ticked is nothing to read, and refused in the sentence every task
+  // that takes the list refuses it in (§18.2). That the pass below reads the
+  // whole file whatever is ticked does not make an empty list a question: it
+  // was a whole-file answer to a reader who had pressed **none**.
+  if (tickedContigs(context, params, 'sequences').length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
   const framing = context.framing
   const whole =
     framing !== null &&

@@ -1,5 +1,5 @@
 /**
- * The window: header, tab strip, three columns, status bar, address bar.
+ * The window: header, tab strip, five columns, status bar, address bar.
  *
  * Everything here is shared by every open session and owned by none of them. A
  * {@link Session} holds a file and the views of it; this holds the furniture
@@ -24,7 +24,7 @@ import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
 import { LoadBox } from '../ui/LoadBox'
-import type { ProviderId } from '../ui/connectFronts'
+import { CONNECT_FOLDER_TITLE, CONNECT_PLACES, type ProviderId } from '../ui/connectFronts'
 import { Modal } from '../ui/Modal'
 import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
@@ -104,6 +104,7 @@ import {
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
 import { embedded, mounting } from '../embed'
+import { IS_STANDALONE } from '../version'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
@@ -135,10 +136,10 @@ const ADD_FILE_HINT =
  * a Dropbox are browsed identically, which is true of the code rather than a
  * slogan (`browse/folder.ts`). "Kept in the Files panel" carries the lasting
  * half — what a reader gets is not a file but a column they can keep working
- * out of — in the one line a hint is allowed (§26.4).
+ * out of — in the one line a hint is allowed (§26.4). The kinds are the build's
+ * (`CONNECT_PLACES`): the standalone has the first and none of the others (§19).
  */
-const CONNECT_HINT =
-  'A folder here, a bucket, a Google Drive folder or a Dropbox, kept in the Files panel.'
+const CONNECT_HINT = `${CONNECT_PLACES}, kept in the Files panel.`
 
 /**
  * How many sessions may be open at once.
@@ -266,7 +267,8 @@ export class App implements SessionHost {
    * drawer, on the Files column's argument: a store is not a fact about the
    * file in front, and a catalogue somebody was half way through narrowing
    * should survive a switch of tab. `null` in an embed, which has no header to
-   * open it from and no business fetching a catalogue into somebody's figure.
+   * open it from and no business fetching a catalogue into somebody's figure,
+   * and in the single file, which has no network to read one over (§19).
    */
   private readonly storeDrawer: StoreDrawer | null
   private readonly theme: ThemeToggle
@@ -399,7 +401,15 @@ export class App implements SessionHost {
           // window's height moves and no box a `ResizeObserver` watches does.
           onLayout: relayout,
         })
-    this.storeDrawer = this.embed
+    // Built in neither of the two mounts that have no use for it. An embed has
+    // no header to put its button in (§21.2). The single file has no network
+    // (§19), and a store is a list of addresses: every catalogue but the lab's
+    // is a fetch that fails before a byte moves, and every figure on the lab's
+    // is a file on a bucket. A drawer there is the URL box that build leaves
+    // out, one door over — so it is absent rather than offered, and so is
+    // everything that opens it: the header's button, the key, the palette's
+    // row and a `?store=` link.
+    this.storeDrawer = this.embed || IS_STANDALONE
       ? null
       : new StoreDrawer({
           host: {
@@ -962,7 +972,9 @@ export class App implements SessionHost {
     // whatever the window shows, so a link naming both a config and a store
     // gets both — the figure in the tab and the catalogue beside it. A link is
     // a gesture, which is what licenses the fetch: nothing here runs unless
-    // somebody clicked a URL naming this store.
+    // somebody clicked a URL naming this store. A window with no drawer — an
+    // embed, the single file — has nothing for the link to open, and fetches
+    // nothing for it either.
     const shelf = mounting().store
     if (shelf !== null) this.storeDrawer?.openLink(shelf, mounting().storeView)
     // Only when session storage had nothing, which is exactly "the browser was
@@ -1998,7 +2010,6 @@ export class App implements SessionHost {
     // has to count it, or half the View menu goes dead the moment a bigWig is
     // dropped instead of a cooler.
     const file = session?.hasFile === true || session?.isBrowsing === true
-    const isMetacool = session?.isMetacool === true
     const overlays = getPlotOptions()
     const list: Command[] = [
       {
@@ -2021,20 +2032,38 @@ export class App implements SessionHost {
         // *Connect*, because that is what happens to a folder everywhere else in
         // the app (§24.2): a file is opened, a place is connected, and this row
         // was the last one that said "open" about a folder.
-        title: 'Connect a local or remote folder',
+        // The same name the landing page and the Files column give the door,
+        // which has no remote half in the standalone build (§19).
+        title: CONNECT_FOLDER_TITLE,
         hint: CONNECT_HINT,
+        // Greyed in an embed, which mounts no Files column for a folder to go
+        // into (§21.2): the landing page there offers no place to connect, and
+        // the palette must not be the one door left to a column nobody sees.
+        enabled: !this.embed,
         run: () => this.openConnectDialog(),
       },
-      {
-        id: 'open-store',
-        group: 'File',
-        title: 'Stores',
-        hint: 'The lab’s data, IGV’s genomes, 4DN, ENCODE, as a drawer down the left.',
-        keys: KEYS.stores,
-        enabled: this.storeDrawer !== null,
-        ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),
-        run: () => this.storeDrawer?.toggle.click(),
-      },
+      // Absent from the single file rather than greyed (§19). Greying is for a
+      // command another state of this window could make work — the palette
+      // keeps its shape for that (§26.6) — and that build has no state in which
+      // a store opens: there is no drawer, so the key goes with the row. An
+      // embed keeps the row greyed, as it keeps the console's: the web build's
+      // own command, in a frame with no room for its panel (§21.2).
+      ...(IS_STANDALONE
+        ? []
+        : [
+            {
+              id: 'open-store',
+              group: 'File',
+              title: 'Stores',
+              // Not a list of them, which named four of the seven that ship: the
+              // drawer's tiles are the list, read off the registry (§24.2).
+              hint: 'Every data store this viewer ships with, and any you connected, as a drawer down the left.',
+              keys: KEYS.stores,
+              enabled: this.storeDrawer !== null,
+              ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),
+              run: () => this.storeDrawer?.toggle.click(),
+            },
+          ]),
       {
         id: 'open-file',
         group: 'File',
@@ -2168,7 +2197,7 @@ export class App implements SessionHost {
         title: 'General panel',
         hint: 'A reference card about the open file: what it is, its genome, its metadata.',
         keys: GENERAL_PANEL.keys,
-        enabled: file,
+        enabled: file && !this.embed,
         state: chipOf(!this.generalPanel.isCollapsed),
         run: () => this.generalPanel.toggle.click(),
       },
@@ -2189,30 +2218,25 @@ export class App implements SessionHost {
             ? 'The folders you have connected, and what is in them.'
             : 'Connect a folder first — there is no Files column until you have one.',
         keys: FILES_PANEL.keys,
-        enabled: connectedFolders().length > 0,
+        enabled: connectedFolders().length > 0 && !this.embed,
         state: chipOf(!this.filesPanel.isCollapsed),
         run: () => this.filesPanel.toggle.click(),
       },
       {
         id: 'fold-annotations',
         group: 'View',
-        // The hint is computed from the state, because it is the *reason* and
-        // the reason has three branches. As a constant it said "A metacool
-        // carries no annotations, so it has no panel to fold" — on a landing
-        // page with no file at all, where the metacool is not the reader's, and
-        // beside an enabled command on a `.cool` whose Annotations column is on
-        // screen while the sentence says it has none.
+        // The hint is computed from the state, because it is the *reason*. It
+        // had a third branch, "Absent on a metacool, which carries no
+        // annotations", from the release the cards were gated off a file with a
+        // genome layer; the gate went (§8.5), the column came up on a metacool
+        // with the rest, and the row stayed greyed beside it.
         title: 'Annotations panel',
-        hint: !file
-          ? 'Open a file first.'
-          : isMetacool
-            ? 'Absent on a metacool, which carries no annotations.'
-            : 'The tracks, structures, marks and bookmarks on this file.',
+        hint: file ? 'The tracks, structures, marks and bookmarks on this file.' : 'Open a file first.',
         keys: ANNOTATION_PANEL.keys,
-        // The same gate the button is under: it is `hidden` on a file with a
-        // genome layer, and a shortcut that folds an invisible column is a key
-        // that appears to do nothing.
-        enabled: file && !isMetacool,
+        // The same gate the button is under — the column's own availability,
+        // which is whether the session put any cards in it — so a shortcut never
+        // folds an invisible column, a key that appears to do nothing.
+        enabled: session?.panels.annotations === true,
         state: chipOf(!this.annotationsPanel.isCollapsed),
         run: () => this.annotationsPanel.toggle.click(),
       },
@@ -2232,7 +2256,7 @@ export class App implements SessionHost {
         title: 'Analysis panel',
         hint: 'What can be computed from this file, as against what is drawn on it.',
         keys: ANALYSIS_PANEL.keys,
-        enabled: file,
+        enabled: file && !this.embed,
         state: chipOf(!this.analysisPanel.isCollapsed),
         run: () => this.analysisPanel.toggle.click(),
       },

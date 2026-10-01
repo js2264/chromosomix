@@ -8,7 +8,9 @@
  * share: a window against the end of a chromosome cannot be centred, a window
  * one press from the whole sequence has to become the whole sequence rather than
  * a coordinate pair that spells it, a window already at the file's own bin size
- * has nowhere finer to go, and on a circle there are no ends to be stopped by.
+ * has nowhere finer to go, and on a circle a press stops at the ends as it does
+ * on a line — the way across the origin is `ori` or a window typed across it
+ * (§8.15), and the one window measured the long way round is one already there.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -69,18 +71,33 @@ describe('reaching the whole sequence', () => {
 
 describe('on a sequence the reader has declared circular (§8.15)', () => {
 
-  it('wraps past the origin instead of sliding the window sideways', () => {
-    // Centred 20 kb in with a 60 kb window: the left edge is 10 kb *before* the
-    // origin, which on a circle is 10 kb before the end.
+  it('stops at the origin as a line stops at its start, rather than wrapping past it', () => {
+    // Centred 20 kb in with a 60 kb window: the left edge would be 10 kb before
+    // the origin. It used to wrap there — `chr:2990000-50000`, the picture split
+    // at the junction — which made the zoom steps a third way across the origin
+    // beside `ori` and a typed window, and the one a reader took by accident.
     expect(zoomedRegion({ contig: 'chr', start: 10_000, end: 30_000, length: CHR }, OUT, CIRCLE)).toBe(
-      'chr:2990000-50000',
+      'chr:0-60000',
     )
   })
 
-  it('wraps at the far end too', () => {
+  it('stops at the far end too', () => {
     expect(
       zoomedRegion({ contig: 'chr', start: 2_970_000, end: 2_990_000, length: CHR }, OUT, CIRCLE),
-    ).toBe('chr:2950000-10000')
+    ).toBe('chr:2940000-3000000')
+  })
+
+  it('zooms a circle exactly as it zooms a line, wherever the window does not cross the origin', () => {
+    for (const [start, end] of [
+      [10_000, 30_000],
+      [2_970_000, 2_990_000],
+      [1_000_000, 1_100_000],
+    ]) {
+      for (const factor of [10, 3, 1 / 3, 1 / 10]) {
+        const framed = { contig: 'chr', start, end, length: CHR }
+        expect(zoomedRegion(framed, factor, CIRCLE)).toBe(zoomedRegion(framed, factor))
+      }
+    }
   })
 
   it('still names the whole sequence once a press would cover a lap', () => {

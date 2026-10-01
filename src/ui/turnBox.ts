@@ -27,7 +27,7 @@
  *
  * Two nulls is the state a fresh reader is in and the state a double-click on
  * either handle puts them back into — the default is a *rule* (the panel's own
- * width, and a third of it) rather than a number, so it cannot be stored as one:
+ * width, and a quarter of it) rather than a number, so it cannot be stored as one:
  * a width of 574 remembered from a wide window is not what "whatever there is
  * room for" means in a narrow one.
  */

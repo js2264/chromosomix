@@ -2,10 +2,12 @@
  * Segments and gene models: the lanes that draw *things on the sequence* rather
  * than a value over it.
  *
- * Two renderers over one layout, because the hard part is shared. Features
- * overlap, and a lane 16 pixels thick has room for two rows of them, so the
- * layout is a greedy row packing — the same thing every genome browser does, and
- * for the same reason: a peak drawn on top of another peak is one peak.
+ * One renderer over one layout: `drawModels` draws a segment and a gene model
+ * alike, each by its own structure rather than by the lane's kind (§8.16), and
+ * the hard part is the layout they share. Features overlap, and a lane 16
+ * pixels thick has room for two rows of them, so the layout is a greedy row
+ * packing — the same thing every genome browser does, and for the same reason:
+ * a peak drawn on top of another peak is one peak.
  *
  * Where the file carries strands and the lane has the rows for it, that packing
  * runs **once per strand** into a band of its own — unstranded, then forward,

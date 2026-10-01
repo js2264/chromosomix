@@ -25,6 +25,8 @@ const DECIMAL = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 })
 const SIGNIFICANT = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 3 })
 /** One formatter per decimal count, built on demand — see {@link fmt.fixed}. */
 const FIXED = new Map<number, Intl.NumberFormat>()
+/** A coordinate's grouping, which is §26.1's and not the locale's — see {@link fmt.pos}. */
+const POSITION = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 
 export const fmt = {
   /** `4573673` → `4,573,673`. */
@@ -79,10 +81,18 @@ export const fmt = {
    * For the readout under the pointer, where {@link bp}'s `1.22 Mb` names a
    * ten-kilobase neighbourhood of a cell that is one kilobase wide: a reader
    * comparing two cells three bins apart was shown the same string for both.
+   *
+   * **Grouped as en-US, whatever the reader's locale**, as `formatLocus` groups
+   * a window (§26.1). A coordinate is a string a reader copies between this app,
+   * IGV and a terminal, and it is written one way in all three; grouped by the
+   * locale it read `1.224.000` in a German browser, beside a breadcrumb and a
+   * locus box grouped with commas. The number is printed as given — the one a
+   * 0-based coordinate needs is `genome/assembly.ts`'s to add, not this
+   * formatter's.
    */
   pos(value: number): string {
     if (!Number.isFinite(value)) return '—'
-    return INTEGER.format(Math.round(value))
+    return POSITION.format(Math.round(value))
   },
   /**
    * A measured span with a unit — `400.0 kb`, `1.22 Mb`, `47 bp`.

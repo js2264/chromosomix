@@ -1770,8 +1770,11 @@ function loadGenePred(text: string, mapContigs: NamedSequence[]): LoadResult {
  * The extent is seeded to the file's own, which for a percentage is the one
  * case where the honest starting clip is *not* the data's range: a lane
  * autoscaled to 12–94 % says nothing about how methylated anything is. So the
- * clip offered is 0–100, the scale a percentage is read against, and a reader
- * who wants the data's own range has the autoscale button that every track has.
+ * extent is 0–100, the scale a percentage is read against, and the lane opens
+ * clipped to it — the loader asks `openingLimits` of the format when the row
+ * lands, since an extent alone only fills the limits boxes once a reader has
+ * left the autoscale. A reader who wants the data's own range has the autoscale
+ * button that every track has.
  */
 function loadBedMethyl(entry: string, text: string, mapContigs: NamedSequence[]): LoadResult {
   const result: BedMethylResult = parseBedMethyl(text)

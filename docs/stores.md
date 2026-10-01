@@ -171,9 +171,13 @@ knowing about:
   Format facet finds `refGene`, `ncbiRefSeq`, `refFlat` and `knownGene` together. `.2bit` came off
   the same list for the same reason (§8.21).
 
-  What is still dropped is three files that are not annotations of a genome: a cytoband table (an
-  ideogram this viewer does not draw), an alias file (a map between spellings, which §5.9 does from
-  the files themselves) and a `chrom.sizes` (which declares a genome rather than annotating one).
+  A genome's cytoband table is published too. IGV names it beside the sequence (`cytobandURL`)
+  rather than among the tracks, and it was dropped as an ideogram this viewer did not draw; SPECS
+  §8.22 draws one, so each is a row with `format: cytoband` — even the two IGV names `.bed` — the
+  first track on its genome's shelf, and an ideogram lane in its session. What is still dropped is
+  two files that are not annotations of a genome: an alias file (a map between spellings, which
+  §5.9 does from the files themselves) and a `chrom.sizes` (which declares a genome rather than
+  annotating one).
 - **Six genomes whose sequence is not public.** As of 2026-09-11, `igv-genepattern-org` answers
   `403 AccessDenied` to an anonymous ranged GET, which takes out IGV's `hg38`, `hg19`,
   `GCF_016699485.2`, `NC_016856.1` and `GCA_000182895.1`; so does one object on

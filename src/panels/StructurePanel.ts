@@ -29,7 +29,7 @@
  * row draws beside a map cannot disagree about where a bead is.
  */
 
-import { formatLocus } from '../genome/assembly'
+import { baseLabel, formatLocus } from '../genome/assembly'
 import type { AnnotationEntry, StructureStyle, TrackSampleSet } from '../annotations/types'
 import { STRUCTURE_COLOUR_DISPLACEMENT } from '../annotations/types'
 export { STRUCTURE_COLOUR_DISPLACEMENT }
@@ -94,7 +94,6 @@ import {
 import { resolveColours, type BeadColours, type StructureKey } from '../structure/colour'
 import {
   CELL_FRAME_WIDTH,
-  PAPER_PALETTE,
   drawCellFrame,
   drawStructure,
   type StructureView,
@@ -144,6 +143,7 @@ import { openMenu } from '../ui/Menu'
 import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
+import type { CellFigure } from './deckFigure'
 
 export interface StructurePanelProps {
   /** The deck's id for this cell — what its hover is published as. */
@@ -205,7 +205,11 @@ export interface StructurePanelProps {
   onClose(): void
   /** A double-click on a bead: take the maps there. */
   onGoTo(range: { contig: string; start: number; end: number }): void
-  /** A g3d dropped on the cell, or named by URL, replaces the model. */
+  /**
+   * A file dropped on the cell, or a URL out of the Files column: the
+   * session's to route, as a drop anywhere else is. A g3d opens a cell of its
+   * own (§25.3) and leaves this cell's model where it is.
+   */
   onDrop(file: File): void
   onDropUrl(url: string): void
   /** The grip before the name was taken hold of, or let go. */
@@ -280,15 +284,18 @@ export const MANUAL_CHORDS = 'manual'
 /**
  * What the model saves as, in the order the row offers it.
  *
- * PNG leads here and PDF leads beside a map, and the difference is what each
- * picture *is*: a contact map is a raster whatever the file it goes into, while
- * a model is beads and sticks, so the PDF is a drawing — except of a tube,
- * which is a lit surface no path can be. The label says nothing about that:
- * `PDF` is what the file is, and the caveat is one clause of the row's title.
+ * PNG leads here and PDF leads beside a map: a model's PNG is the picture the
+ * GPU lit, which is what goes into a slide, and its PDF is a drawing of the
+ * same picture — beads, sticks and a tube alike are paths
+ * (`structure/painter.ts`). It reads `PDF (vector)`, as the map's and the 1D
+ * browser's do (§7.2): three cards writing one kind of file should call it by
+ * one name, and the name is what tells a reader opening it in Illustrator
+ * that there are paths to restyle. It used to read `PDF` with a caveat in the
+ * row's title, because a tube was a raster in it; nothing is now.
  */
 const STRUCTURE_EXPORT_FORMATS = [
   { value: 'png', label: 'PNG' },
-  { value: 'pdf', label: 'PDF' },
+  { value: 'pdf', label: 'PDF (vector)' },
 ] as const
 
 /**
@@ -782,7 +789,37 @@ export class StructurePanel implements DeckCell {
     return input
   }
 
-  exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
+  /**
+   * The model as one cell of the deck's figure (§16.5): the GPU's picture for
+   * the PNG, at the figure's resolution, and the painter's paths for the PDF,
+   * each framed by the cell's edge. `null` with no model to draw.
+   */
+  figure(now: Date): CellFigure | null {
+    const view = this.view()
+    if (view === null) return null
+    const box = { width: Math.max(1, this.wrap.clientWidth), height: Math.max(1, this.wrap.clientHeight) }
+    return {
+      ...box,
+      raster: (dpi) => this.exportCanvas(dpi, now),
+      vector: (ctx) => this.drawVector(ctx, box, view),
+    }
+  }
+
+  /**
+   * The model as paths, framed by the cell's edge — the card's PDF and the
+   * deck's cell of it alike, so the two cannot be different drawings.
+   *
+   * In the cell's own colours, which are the ones the GPU's picture is lit in:
+   * the paper, the ink of its lines and its names. A fixed palette of its own
+   * made the PDF of a model a shade different from its PNG.
+   */
+  private drawVector(ctx: CanvasRenderingContext2D, box: { width: number; height: number }, view: StructureView): void {
+    drawStructure(ctx, box, view, this.palette())
+    drawCellFrame(ctx, box, readCanvasPalette(this.el).plotBorderColor, CELL_FRAME_WIDTH)
+  }
+
+  /** The model as the GPU draws it, framed, at a dpi: the PNG, the clipboard and the deck's PNG. */
+  private exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
     if (this.structure === null || this.renderer === null) return null
     const scale = scaleForDpi(dpi)
     const width = Math.max(1, this.wrap.clientWidth)
@@ -894,18 +931,12 @@ export class StructurePanel implements DeckCell {
 
   /** The row the reader asked for, or `null` for whichever is first. */
   private chosen: string | null = null
-  /**
-   * How the choice was made. A row *picked* this session and then removed
-   * leaves the cell empty rather than quietly showing another model; a row
-   * *remembered* from an earlier session that is gone falls back to the first,
-   * since the reader has not chosen anything yet today.
-   */
 
   /**
-   * Draw this row: the Structures card's *show in the deck*, and the picker.
+   * Draw this row: the Structures card's eye, or its row dropped on this cell.
    *
-   * Remembered per file, so the model the reader chose is the one a reload
-   * draws; a row that is gone by then falls back to the first (`sync`).
+   * Remembered per file and seat, so the model the reader chose is the one a
+   * reload draws; a row that is gone by then falls back to the first (`sync`).
    */
   showModel(id: string): void {
     this.chosen = id
@@ -920,11 +951,14 @@ export class StructurePanel implements DeckCell {
   /**
    * Find the structure row and build its scene, if it has arrived.
    *
-   * The row the reader chose — from the Structures card or the cell's own
-   * picker, remembered per file — or the first `structure` row of the store
-   * where none was chosen or the chosen one is gone: one structure cell per
-   * deck draws one model at a time (§25). A row still loading, or one that
-   * refused, is a sentence in the cell rather than a picture.
+   * The row the reader chose — by the Structures card's eye or its row dropped
+   * here, remembered per file and seat — or, where none was chosen or the
+   * remembered one is gone, the first `structure` row no sibling cell is
+   * drawing, and the first of all where every one is drawn: each cell draws
+   * one model, and a model can have a cell of its own (§25.3). The row this
+   * cell is drawing, removed from the card, empties it instead (below). A row
+   * still loading, or one that refused, is a sentence in the cell rather than
+   * a picture.
    */
   private sync(): void {
     const store = this.props.store()
@@ -1685,7 +1719,8 @@ export class StructurePanel implements DeckCell {
     const [name, pos] = this.tipEl.children as unknown as [HTMLElement, HTMLElement]
     name.textContent =
       structure !== null && structure.haplotypes.length > 1 ? `${at.contig} · ${at.haplotype}` : at.contig
-    pos.textContent = `${fmt.int(at.start + 1)}-${fmt.int(at.end)}`
+    // The bead's first base to its last, under the line that names the sequence (§26.1).
+    pos.textContent = `${baseLabel(at.start)}-${baseLabel(at.end - 1)}`
     this.tipEl.classList.remove('hidden')
     // Measured after it is shown, so a card that just grew is placed at its
     // new size rather than at the one it had while it was empty.
@@ -2034,7 +2069,10 @@ export class StructurePanel implements DeckCell {
     canvas.tabIndex = 0
   }
 
-  /** A dropped g3d replaces the model; a dragged map is the grid's business. */
+  /**
+   * A dragged Structures row is drawn here; a dropped file goes to the session,
+   * where a g3d opens a cell of its own; a dragged map is the grid's business.
+   */
   private watchDrops(): void {
     // A **row of the Structures card**, dragged onto this cell: draw that model
     // here (§25.3). The same gesture an empty cell takes, and it has to be
@@ -2220,8 +2258,23 @@ export class StructurePanel implements DeckCell {
           : this.measures,
       marks: this.markedBeads(structure, style),
       ruler: style.ruler ? this.rulerOf(structure) : NO_TICKS,
+      bookmarks: style.labels ? this.bookmarkBeads(structure) : NO_TICKS,
       overlay: this.overlayOf(structure, style),
     }
+  }
+
+  /**
+   * The reader's bookmarks as beads (§25.5): the bead in the middle of each,
+   * and its name — what the cell writes over its canvas and the figure writes
+   * on the model (`drawStructureLabels`).
+   */
+  private bookmarkBeads(structure: Structure): ReadonlyArray<{ bead: number; label: string }> {
+    const out: Array<{ bead: number; label: string }> = []
+    for (const mark of this.props.bookmarks?.()?.marks ?? []) {
+      const bead = beadsAt(structure, mark.contig, (mark.start + mark.end) / 2)[0]
+      if (bead !== undefined) out.push({ bead, label: mark.label })
+    }
+    return out.length === 0 ? NO_TICKS : out
   }
 
   /**
@@ -3291,21 +3344,38 @@ export class StructurePanel implements DeckCell {
         value: this.exportDpi,
         onChange: (dpi) => {
           this.exportDpi = dpi
+          syncDpi()
         },
       },
       formats: STRUCTURE_EXPORT_FORMATS,
       format: this.exportFormat,
       formatTitle:
-        'PNG is the picture as the GPU drew it. PDF is a drawing — beads and sticks as paths, ' +
-        'a tube as a raster at the resolution beside it, since a lit surface is not a path.',
+        'PNG is the picture as the GPU lit it, at the resolution beside it. PDF is a drawing of the ' +
+        'same picture — beads, sticks and a tube as paths, the names as text — at no resolution at all.',
       onFormat: (format) => {
         this.exportFormat = format === 'pdf' ? 'pdf' : 'png'
+        syncDpi()
       },
-      onSave: (format, dpi) => void (format === 'pdf' ? this.savePdf(dpi) : this.savePng(dpi)),
+      onSave: (format, dpi) => void (format === 'pdf' ? this.savePdf() : this.savePng(dpi)),
       onCopy: (dpi) => void this.copyModel(dpi),
-      saveTitle: 'Save the model, at the resolution and in the format chosen beside this',
+      saveTitle: 'Save the model, in the format chosen beside this',
       copyTitle: 'Copy the model as a PNG, ready to paste',
     })
+    // A vector page has no resolution, so the resolution *goes* while PDF is
+    // chosen, as it does on the map's and the browser's Export cards (§7.2) —
+    // and the copy, which takes a PNG whatever the format beside it says,
+    // names the resolution it will use, since it can no longer be seen.
+    const syncDpi = (): void => {
+      const { dpi, copy } = exportRowEl.parts
+      if (dpi !== null) dpi.hidden = this.exportFormat === 'pdf'
+      if (copy !== null) {
+        copy.title =
+          this.exportFormat === 'pdf'
+            ? `Copy the model as a PNG at ${this.exportDpi} dpi, ready to paste`
+            : 'Copy the model as a PNG, ready to paste'
+      }
+    }
+    syncDpi()
     if (alone) {
       rows.push(
         el(
@@ -3384,15 +3454,17 @@ export class StructurePanel implements DeckCell {
   }
 
   /**
-   * The vector figure, where the representation is paths; the raster otherwise.
+   * The vector figure, whatever the model is drawn as.
    *
-   * Beads and sticks go through `structure/painter.ts`, projected through the
-   * same camera the screen was — the picture on paper is the picture on screen
-   * in the representation that is paths. A tube is a lit surface no `arc` can
-   * be, and exports as the raster the GPU drew, on the page the way a deck
-   * does.
+   * Beads, sticks and the tube go through `structure/painter.ts`, projected
+   * through the same camera the screen was — the picture on paper is the
+   * picture on screen, as paths. The tube used to leave as the raster the GPU
+   * drew, on the argument that a lit surface is not a path; it was the default
+   * representation, so most models left as a picture of pixels in the one file
+   * meant to be a drawing. Nothing here is a raster now, so there is no
+   * resolution to ask for.
    */
-  private async savePdf(dpi: number): Promise<void> {
+  private async savePdf(): Promise<void> {
     const view = this.view()
     if (view === null) {
       this.exportNote.textContent = 'nothing to save: no model is drawn'
@@ -3403,25 +3475,9 @@ export class StructurePanel implements DeckCell {
     if (target === null) return
     this.exportNote.textContent = `saving ${target.name}…`
     try {
-      const width = Math.max(1, this.wrap.clientWidth)
-      const height = Math.max(1, this.wrap.clientHeight)
-      const page = new VectorPage(width, height)
-      if (view.style.tube) {
-        // At the row's resolution, not a fixed 300: the reader chose a number
-        // beside this button and the one part of this page that is a raster is
-        // the one part that could have ignored it.
-        const raster = this.exportCanvas(dpi, now)
-        if (raster === null) {
-          this.exportNote.textContent = 'nothing to save: no model is drawn'
-          return
-        }
-        page.ctx.drawImage(raster, 0, 0, width, height)
-      } else {
-        drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
-        // The raster above carries its frame from `exportCanvas`; paths get
-        // theirs as a path.
-        drawCellFrame(page.ctx, { width, height }, readCanvasPalette(this.el).plotBorderColor, CELL_FRAME_WIDTH)
-      }
+      const box = { width: Math.max(1, this.wrap.clientWidth), height: Math.max(1, this.wrap.clientHeight) }
+      const page = new VectorPage(box.width, box.height)
+      this.drawVector(page.ctx, box, view)
       const blob = await page.toBlob({ title: 'structure', created: now })
       await target.write(blob)
       this.exportNote.textContent = `${target.name} · ${fmt.bytes(blob.size)}`

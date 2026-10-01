@@ -361,6 +361,13 @@ export function isAddress(value: string): boolean {
 /**
  * A locus, in the syntax the views' own boxes take. Defaults to the framing.
  *
+ * **The typed form of §26.1** — 1-based and inclusive, digits grouped or not —
+ * wherever the value lives: in the form, in a result's provenance, in a
+ * workspace, on a `metacooler-run` line. It becomes cooler's 0-based half-open
+ * grammar in one place, `analysis/job.ts`'s `runnerParams`, as a job is handed
+ * to its runner, so no runner reads it any other way and no record holds the
+ * machine form.
+ *
  * **A locus and nothing else.** This kind used to have a `sequences` flag that
  * turned the box into a dropdown of the file's own sequence names, whose first
  * option read *every sequence* — so five tasks asked *which sequences do I run
@@ -960,9 +967,9 @@ export interface MatrixOutput {
   large?: boolean
   /**
    * A dot plot's streaks as the lines they are (§28.2): where present, the
-   * figure on screen draws these rather than the cells — at any zoom, sharp,
-   * the one under the pointer named on both axes — and the cells stay what an
-   * export draws.
+   * figure draws these rather than the cells — on screen at any zoom, sharp,
+   * the one under the pointer named on both axes, and in a PNG or a PDF as the
+   * window on screen — and the cells stay the output's, in its TSV.
    */
   streaks?: DotplotStreaks
   /**
@@ -1071,6 +1078,20 @@ export interface TableColumn {
    * orders of magnitude below its digits and whose smallness is the point.
    */
   scientific?: boolean
+  /**
+   * A coordinate on a sequence, printed as every coordinate on the screen is
+   * (§26.1, §18.7): grouped as en-US whatever the reader's locale, and a
+   * **start** — a feature's, a bin's, a summit's base — one more than it is
+   * held, 1-based.
+   *
+   * Held the way the file it is saved to holds it: a table whose first columns
+   * are a sequence, a start and an end is BED-shaped, and this app's own reader
+   * takes such a TSV 0-based (§8.3), so a start written 1-based would come back
+   * a base to the right when the table is dropped on a map. An end is the same
+   * number either way, half-open or inclusive, so only its grouping is the
+   * screen's. The TSV's `# columns` line marks a start `(0-based)`.
+   */
+  coordinate?: 'start' | 'end'
   hint?: string
 }
 

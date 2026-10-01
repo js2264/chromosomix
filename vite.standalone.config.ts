@@ -35,9 +35,10 @@
  *
  * ## What it costs
  *
- * About seven megabytes of HTML, four fifths of it h5wasm, parsed on every open
- * with no HTTP cache behind it. That is the price of the format and it is not
- * reducible without dropping HDF5.
+ * About fourteen megabytes of HTML — the app, its four workers and h5wasm, all
+ * inlined — parsed on every open with no HTTP cache behind it. That is the
+ * price of the format: one file carries everything a page would otherwise
+ * fetch, h5wasm's four megabytes of compiled HDF5 among it.
  */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

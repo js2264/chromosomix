@@ -240,7 +240,9 @@ export class TabStrip {
         // and one who presses Enter on the file's own name has said "call it
         // what it is called", which is no name at all.
         placeholder: tab.label,
-        'aria-label': 'Session name',
+        // The reader's word, which a screen reader speaks too (§5.6): *session*
+        // is the code's, and the strip never shows it.
+        'aria-label': 'Tab name',
         spellcheck: 'false',
       },
     })

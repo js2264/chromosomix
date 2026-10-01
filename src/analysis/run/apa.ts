@@ -35,6 +35,7 @@
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
 import { DETAIL_SEP } from '../../annotations/types'
+import { formatPosition } from '../../genome/assembly'
 import { contextOf, type NameContext } from '../../genome/naming'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
@@ -674,7 +675,11 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
     out.push({
       pair: { row, col, separation: col - row },
       bounds: a.bounds,
-      label: set.name[i] === '' ? `${set.contigs[set.contig1[i]]}:${set.start1[i]}` : set.name[i],
+      // An anchor the file gave no name is named by its first base as a reader
+      // reads one (§26.1), here and in the two places below. It was the stored
+      // start, 0-based, in the *Per anchor* table of a drawer whose every other
+      // coordinate is 1-based.
+      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig1[i]], set.start1[i]) : set.name[i],
       rank: set.score[i],
       span: col - row,
       rows: { from: row, to: row + 1 },
@@ -718,7 +723,7 @@ function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
     out.push({
       pair: { row: at.bin, col: at.bin, separation: 0 },
       bounds: at.bounds,
-      label: set.name[i] === '' ? `${set.contigs[set.contig[i]]}:${set.start[i]}` : set.name[i],
+      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
       rank: set.score[i],
       // The feature's **own bins**, not `round(length / binsize)`. The two differ
       // by one wherever an interval straddles a bin edge, and the difference is
@@ -1161,7 +1166,7 @@ function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
       bin: at.bin,
       bounds: at.bounds,
       body: at.body,
-      label: set.name[i] === '' ? `${set.contigs[set.contig[i]]}:${set.start[i]}` : set.name[i],
+      label: set.name[i] === '' ? formatPosition(set.contigs[set.contig[i]], set.start[i]) : set.name[i],
     })
   }
   // By this file's own sequence name and then by position, because the set's

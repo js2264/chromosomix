@@ -22,10 +22,11 @@
  * ## Shards
  *
  * ENCODE's rows are twelve files chosen by assembly and kind of file, and the
- * choice is two radio groups at the top of the rail, held in the view under
- * the keys `group` and `category`. Changing one fetches the shard it names;
- * everything else about the view survives the fetch, so a reader who ticked
- * *ChIP-seq* on GRCh38 and switches to hg19 keeps *ChIP-seq* ticked.
+ * choice is two groups of checkboxes at the top of the rail, held in the view
+ * under the keys `group` and `category`. Every ticked pair is a shard read, and
+ * the rows on screen are their union; everything else about the view survives
+ * the fetch, so a reader who ticked *ChIP-seq* on GRCh38 and ticks hg19 as well
+ * keeps *ChIP-seq* ticked.
  */
 
 import { button, el } from '../dom'
@@ -417,7 +418,11 @@ export class PortalView {
     // file cannot be asked about is not shown — and the banner is the one thing
     // on the pane a reader can act on.
     this.toolbar.classList.toggle('hidden', status.kind === 'error')
-    this.rail.el.classList.toggle('hidden', status.kind === 'error')
+    // …**except the shard choice**, which is the other thing a reader can act
+    // on. Where every ticked shard failed the rail holds nothing but the two
+    // groups that chose them, and they are the way to a shard that was written:
+    // hidden with the toolbar, they left a red line and no control on the page.
+    this.rail.el.classList.toggle('hidden', status.kind === 'error' && this.props.front.shards === undefined)
   }
 
   private paintRail(): void {

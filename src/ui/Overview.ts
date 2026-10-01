@@ -25,8 +25,9 @@
  *
  * - **Local files:** an explicit click, a progress indicator, and a cancel that
  *   actually stops the scan (the worker checks between pixel chunks).
- * - **Remote files:** refused above a byte threshold, because a full scan over
- *   HTTP means downloading the file. Offered instantly when a sidecar edge list
+ * - **Remote files:** warned above a byte threshold, because a full scan over
+ *   HTTP means downloading the file — a sentence with the size in it and a
+ *   button that goes through anyway. Offered instantly when a sidecar edge list
  *   is advertised — `metacooler network --level genome` emits a
  *   `node1/node2/value` TSV that is a few KB for a few hundred MAGs, so one
  *   `fetch` replaces the scan entirely.
@@ -45,11 +46,13 @@ import { button, el, fmt, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, blockSummary, type AnnotationContext, type FigureSubject} from './MatrixPanel'
 import { SearchBox, locusPlaceholder } from './SearchBox'
+import { typedLocusToRegion } from '../genome/assembly'
 
 /**
- * Above this, a remote full scan is refused outright. A scan reads every pixel,
- * so the honest description of "compute the overview remotely" is "download the
- * file"; past a few tens of megabytes that is not something to start on a click.
+ * Above this, a remote full scan is not started on a click: the gate says what
+ * it would download and asks again. A scan reads every pixel, so the honest
+ * description of "compute the overview remotely" is "download the file"; past a
+ * few tens of megabytes that is worth a second press, not a refusal.
  */
 export const REMOTE_SCAN_BYTE_LIMIT = 64 * 1024 * 1024
 
@@ -259,7 +262,9 @@ export class Overview {
       onSubmit: (text) => {
         if (text === '') return
         if (this.props.genomeNames.includes(text)) this.props.onOpenGenome(text)
-        else this.props.onOpenContig(text)
+        // A contig with coordinates is read 1-based, as every other locus box
+        // reads one (§26.1); it went to the region reader as typed, 0-based.
+        else this.props.onOpenContig(typedLocusToRegion(text))
       },
     })
 
@@ -442,13 +447,16 @@ export class Overview {
             `which is past the ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)} this page starts on a click.`,
         }),
       )
+      // The command as code rather than in backticks, which a hint does not
+      // carry (§26.4): a reader copies it into a terminal as it stands.
       this.gate.appendChild(
-        el('p', {
-          class: 'hint',
-          text:
-            'Cheaper routes: open a local copy of the file, or publish a genome edge list next ' +
-            'to it with `metacooler network --level genome --header` and reference it from the catalog.',
-        }),
+        el(
+          'p',
+          { class: 'hint' },
+          'Cheaper routes: open a local copy of the file, or publish a genome edge list next to it with ',
+          el('code', { text: 'metacooler network --level genome --header' }),
+          ' and reference it from the catalog.',
+        ),
       )
       this.gate.appendChild(
         button(`download and scan anyway (${fmt.bytes(sourceBytes)})`, () => void this.scan(), {

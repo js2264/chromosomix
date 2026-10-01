@@ -291,6 +291,18 @@ describe('typing an origin', () => {
     made.destroy()
   })
 
+  // THE LAW (§26.1): the box starts from the text the column prints — grouped as
+  // a coordinate is, in every locale, not as the locale groups a count — and
+  // that text entered back is the origin it already holds.
+  it('takes back the text it shows as the origin it holds', () => {
+    const held = writable()
+    const made = view(held)
+    const box = boxesOf(made)[0]
+    expect(box.value).toBe('6,374,501')
+    expect(parseOrigin(box.value, 'chr', 6_395_872)).toEqual({ at: 6_374_500 })
+    made.destroy()
+  })
+
   it('goes back to the first base when emptied, or given 0', () => {
     const held = writable()
     const made = view(held)

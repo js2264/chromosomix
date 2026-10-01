@@ -10,12 +10,13 @@
  * there are — sit in the top-right corner of the square, as far from the
  * diagonal as two bins can be.
  *
- * What the reader is then asked for is a window that runs **past** the end, and
- * comes back on at the beginning. `chrom:2,900,000-3,100,000` on a 3 Mb circle
- * is a perfectly ordinary place to want to look, and it is two pieces of the
- * stored sequence: the last 100 kb and the first 100 kb. On both axes at once,
- * so a square window across the junction is up to **four** stored blocks, one of
- * which is that far corner.
+ * So once the reader has declared the circle, two windows run **past** the end
+ * and come back on at the beginning (§8.15): one typed across the origin —
+ * `chrom:2,900,000-100,000` on a 3 Mb circle, a perfectly ordinary place to want
+ * to look — and `ori`'s, which frames the whole circle with the origin in the
+ * middle. Each is two pieces of the stored sequence: here the last 100 kb and the
+ * first 100 kb. On both axes at once, so a square window across the junction is
+ * up to **four** stored blocks, one of which is that far corner.
  *
  * This module is the arithmetic that says which pieces, and nothing else: no
  * file, no reading, no `MetaCooler`. `worker/reader.worker.ts` does the reads and
@@ -31,11 +32,14 @@
  * - **Unwrapped** bins, which is what a wrapped request is written in and what
  *   the block that comes back reports as its extent. They run off both ends of
  *   the sequence: `[2_900, 3_100)` on a 3,000-bin circle is a real request, and
- *   so is `[-100, 100)`. This is the space the view pans in, and the reason it
- *   is the space the view pans in is that it is the only one in which panning
- *   is *monotonic* — the alternative is a window whose start suddenly jumps from
- *   2,999 to 0, and every `covers`, `pad` and `recentre` in `ui/refine.ts` would
- *   have to learn about that.
+ *   so is `[-100, 100)`. A window across the origin is the view's ceiling in
+ *   this space — a zoom inside it refines as it does anywhere, a pan stops at
+ *   its edges, and no read goes past it, since the view does not slide round
+ *   the circle — and it is this space because it is the only one in which that
+ *   window is one interval. Written in stored bins it would open at 2,900 and
+ *   close at 100, and every `covers`, `pad`, `recentre` and `clip` in
+ *   `ui/refine.ts` would have to learn about a window whose end is below its
+ *   start.
  * - **Stored** bins, which is what the file has: always inside the sequence.
  *
  * {@link wrapPieces} is the map from the first to the second.

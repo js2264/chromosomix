@@ -162,10 +162,12 @@ export function parseMaps(value: string | undefined): PanelRef[] {
     // used to be one per deck, and then one per model, on the reasoning that
     // two cells of one row are one picture drawn twice — which is only true
     // while the two are the same picture. They are not: each cell has its own
-    // camera, its own mirror and its own planted axes (§25.3), so two cells of
-    // one model are two views of it, which is the usual way anybody looks at a
-    // fold. Which model each seat draws is this session's own memory, beside
-    // the local companions and for the same reason (`deck:models`).
+    // camera, its own height and its own turn (§25.3), so two cells of one
+    // model are two views of it, which is the usual way anybody looks at a
+    // fold. The mirrors and the planted axes are the model's, kept on its row,
+    // so both views share them. Which model each seat draws is this session's
+    // own memory, beside the local companions and for the same reason
+    // (`deck:models`).
     refs.push(
       trimmed === VACANT
         ? { kind: 'vacant' }
@@ -442,8 +444,8 @@ export function swapItems<T>(items: readonly T[], a: number, b: number): T[] {
 }
 
 /**
- * Where the session's own cell stands in its deck, and whether it is on screen
- * (§16.9).
+ * Where the session's own cell stands in its deck, whether it is on screen
+ * (§16.9), and whether it is following the deck's navigation (§16.3).
  *
  * The lead is the session's view re-parented into the grid rather than a
  * companion, so it has no member in `maps` — and it used to have no place
@@ -466,6 +468,16 @@ export interface DeckLead {
    * parked behind the grid — until its eye or the deck's bar puts it back.
    */
   hidden: boolean
+  /**
+   * Whether the chain on its heading was closed.
+   *
+   * A companion's is kept with its look (`DeckLook.locked`) and the first
+   * map's is kept here, beside its place, on the same terms: `false` is the
+   * one value written, since a first map the reader took off the deck is one
+   * they deliberately set moving on its own, and a reload that chained it
+   * again would carry every other map with it on its first pan.
+   */
+  locked?: boolean
 }
 
 /**
@@ -481,7 +493,11 @@ export function readDeckLead(value: unknown): DeckLead | null {
   const row = value as Record<string, unknown>
   const at = row['at']
   if (typeof at !== 'number' || !Number.isInteger(at) || at < 0) return null
-  return { at: Math.min(at, MAX_PANELS - 1), hidden: row['hidden'] === true }
+  return {
+    at: Math.min(at, MAX_PANELS - 1),
+    hidden: row['hidden'] === true,
+    ...(row['locked'] === false ? { locked: false } : {}),
+  }
 }
 
 /**

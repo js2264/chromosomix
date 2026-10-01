@@ -64,6 +64,28 @@ export interface ProviderFront {
 }
 
 /**
+ * What the door to a folder is called, wherever it is drawn (§20): the landing
+ * page's heading, the Files column's button, the palette's command. A button
+ * label is lowercase and a heading or a command begins with a capital
+ * (§26.4), so the one name is kept in both shapes.
+ *
+ * *Local or remote* only where there is a remote half. The standalone build
+ * reaches this machine and nothing else (§19), and its landing page already said
+ * *Connect a folder* while the Files column and the palette went on offering
+ * the other half under the same name.
+ */
+export const CONNECT_FOLDER = IS_STANDALONE ? 'connect a folder' : 'connect a local or remote folder'
+/** {@link CONNECT_FOLDER} as a heading or a command's title. */
+export const CONNECT_FOLDER_TITLE = IS_STANDALONE ? 'Connect a folder' : 'Connect a local or remote folder'
+/**
+ * What that door reaches, for the line under it: the places {@link providerFronts}
+ * offers in this build, as a phrase that begins a sentence.
+ */
+export const CONNECT_PLACES = IS_STANDALONE
+  ? 'A folder on this machine'
+  : 'A folder on this machine, a bucket, a Google Drive folder or a Dropbox'
+
+/**
  * What *this machine*'s button says, wherever it is drawn.
  *
  * See the header: a browser with no picker gives a snapshot of the file list

@@ -30,11 +30,12 @@
  */
 
 import type { Region, TrackSampleSet } from '../annotations/types'
-import type { Contig } from '../genome/assembly'
+import { typedLocusToRegion, type Contig } from '../genome/assembly'
 import type { NameContext } from '../genome/naming'
 import type { MetaCooler } from '../metacooler/MetaCooler'
+import { splitRegionList } from '../metacooler/range'
 import type { ByteSource } from '../types'
-import type { AnalysisFraming, Params, ParamValue, TaskOutput } from './types'
+import type { AnalysisFraming, ParamSpec, Params, ParamValue, TaskOutput } from './types'
 import type { PeerMap, TaskInputs } from './worker/protocol'
 import type { SourceSpec } from '../worker/protocol'
 
@@ -194,6 +195,47 @@ export function tickedSequences(params: Params, key: string): string[] | null {
     return value.filter((name): name is string => typeof name === 'string')
   }
   return typeof value === 'string' && value.trim() !== '' ? [value.trim()] : null
+}
+
+/**
+ * A task's parameters as its runner reads them: **every locus in the machine
+ * form** (§18.2, §26.1).
+ *
+ * A locus a reader types into the form, picks off the map, finds recorded in a
+ * workspace or writes on a command line is the *typed* form — 1-based and
+ * inclusive, digits grouped or not, `IV:1,000,001-1,400,000` — because that is
+ * how every other locus box in the application is read, by the same reader, a
+ * few centimetres away. The runners were written against cooler's grammar,
+ * 0-based and half-open, which is what `parseMetacoolerRange` and
+ * `parseRegionString` take and what bins are cut by. This is the one place the
+ * first becomes the second: called where a job is handed to its runner —
+ * `AnalysisRunner.runStep` for the two workers, `cli/main.ts` for the shell —
+ * and nowhere else, so the form, a result's provenance, the console's command
+ * and a replay all hold what the reader wrote, and no runner converts anything.
+ *
+ * Each `kind: 'region'` parameter goes through `typedLocusToRegion`; a box that
+ * takes several (`many`) goes one part at a time, split by `splitRegionList` —
+ * which knows the comma in `1,000,001` from the comma between two sequences —
+ * and joined again with `, `, so that no part can start with three digits a
+ * later split would take for a thousands group. A bare name has no coordinate
+ * and passes through, as does anything the tokenizer refuses, so the runner's
+ * refusal is still about what was written.
+ */
+export function runnerParams(specs: readonly ParamSpec[], params: Params): Params {
+  let out: Record<string, ParamValue> | null = null
+  for (const spec of specs) {
+    if (spec.kind !== 'region') continue
+    const typed = params[spec.key]
+    if (typeof typed !== 'string' || typed.trim() === '') continue
+    const machine =
+      spec.many === true
+        ? splitRegionList(typed).map(typedLocusToRegion).join(', ')
+        : typedLocusToRegion(typed)
+    if (machine === typed) continue
+    out ??= { ...params }
+    out[spec.key] = machine
+  }
+  return out ?? params
 }
 
 /** An optional entry choice: the id, or `null` where nothing was picked. */

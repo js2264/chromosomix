@@ -76,6 +76,11 @@ function fakeMc(): MetaCooler {
     binsize: 1000,
     chromnames: NAMES,
     contigExtent: (cid: number) => EXTENT[cid],
+    // Enough of the name lookup for a ticked list to be resolved: the four
+    // names as they are spelled, and no other spelling of any of them.
+    hasContig: (name: string) => NAMES.includes(name),
+    contigId: (name: string) => NAMES.indexOf(name),
+    names: { find: () => null },
     scanPixels: async (options: {
       onChunk(chunk: {
         bin1: Int32Array
@@ -333,5 +338,75 @@ describe('the TSV under the bars', () => {
     expect(text).toContain('# param bars: both')
     expect(text).toContain('cistrans v1')
     expect(text).toContain('# output: Cis and trans fraction per sequence')
+  })
+})
+
+/**
+ * Which sequences the rows are of (§18.2): every one where the run was never
+ * asked, the ticked ones where it was — and none at all, said rather than read,
+ * where the reader pressed **none**. That last used to come back as every
+ * sequence, which is the one thing nothing ticked must not become.
+ */
+describe('the sequences a run reports', () => {
+  async function report(
+    params: Params,
+  ): Promise<{ rows: string[]; notes: string[]; scans: number; outputs: number }> {
+    const notes: string[] = []
+    let scans = 0
+    const mc = fakeMc() as unknown as { scanPixels(options: unknown): Promise<void> }
+    const read = mc.scanPixels.bind(mc)
+    mc.scanPixels = async (options) => {
+      scans++
+      await read(options)
+    }
+    const outputs = await runCisTrans({
+      mc,
+      params,
+      framing: FRAMING,
+      inputs: {},
+      cancelled: () => false,
+      throwIfCancelled: () => {},
+      progress: () => {},
+      note: (text: string) => notes.push(text),
+      toBp: (bins: number) => bins * 1000,
+      toBins: (bp: number) => Math.max(1, Math.round(bp / 1000)),
+    } as unknown as JobContext)
+    const table = outputs.find((output): output is TableOutput => output.kind === 'table')
+    return {
+      rows: (table?.rows ?? []).map((row) => String(row['sequence'])),
+      notes,
+      scans,
+      outputs: outputs.length,
+    }
+  }
+
+  it('reads every sequence when it was never asked', async () => {
+    const { rows } = await report({})
+    expect(rows).toEqual(NAMES)
+  })
+
+  it('reports the ticked ones and only those', async () => {
+    const { rows, notes } = await report({ sequences: ['B', 'D'] })
+    expect(rows).toEqual(['B', 'D'])
+    expect(notes).toEqual([])
+  })
+
+  it('answers nothing ticked with nothing, and does not read the file for it', async () => {
+    const { outputs, notes, scans } = await report({ sequences: [] })
+    expect(outputs).toBe(0)
+    expect(notes).toEqual(['No sequence is ticked, so there is nothing to report.'])
+    expect(scans).toBe(0)
+  })
+
+  it('names a ticked sequence this file has not got, and says so when none is left', async () => {
+    const some = await report({ sequences: ['B', 'chrX'] })
+    expect(some.rows).toEqual(['B'])
+    expect(some.notes).toEqual(['1 ticked sequence is not in this file and is left out: chrX.'])
+    // Every name missing is a fact about the pair of files, not a reader who
+    // pressed none — so it is not said as one.
+    const none = await report({ sequences: ['chrX'] })
+    expect(none.outputs).toBe(0)
+    expect(none.notes).toHaveLength(1)
+    expect(none.notes[0]).toMatch(/^This file has no sequence called chrX/)
   })
 })

@@ -544,7 +544,7 @@ export function drawLaneLabel(
   // …and beside them whatever the room, where the caller says the second line
   // would land on the signal — see {@link LaneLabelSpec.detailBeside}.
   const stacked =
-    frame.thickness >= style.nameTop + block + style.detailDrop + 6 &&
+    frame.thickness >= style.nameTop + block + style.detailDrop + STACK_AIR &&
     !(column === null && spec.detailBeside === true)
   const label = block + (stacked ? style.detailDrop : 0)
   // In the column, centred on the lane — because there the label is beside its
@@ -830,6 +830,48 @@ export function drawLaneLabel(
   ctx.restore()
   return out
 }
+
+/**
+ * How far across a lane its label block can reach, from the lane's near edge.
+ *
+ * The lane's own thickness wherever the block fits inside it, and more where it
+ * does not — which is two choices a reader makes separately meeting: how tall
+ * the lane is (its border, *track height*) and how large the writing is
+ * (`ui/textScale.ts`). At the default text size a name sits eleven pixels into
+ * its lane on a plate sixteen tall, so the block wants nineteen; the 14-pixel
+ * peak lanes the yeast demo opens with, and any lane dragged short, hold
+ * neither the plate nor the chip, and the block runs a few pixels past the
+ * lane's far edge. Between two lanes that is the gap. Past the last lane of a
+ * stack it was the canvas's edge, which cut the chip and the descenders off the
+ * name on screen and in every figure saved from it — `AnnotationLanes.
+ * thicknessOf` leaves this much room there now.
+ *
+ * The plate is what reaches furthest, half a hit height either side of its line
+ * — further than the chip, or the glyphs with their halos — and it is measured
+ * for the block {@link drawLaneLabel} writes over the data: one line of names,
+ * or, on a lane tall enough to stack the range under them, that line and the
+ * range's. A bound rather than a replay, so it can be asked before anything is
+ * drawn. A block at the far end ({@link labelEndFor}) is set back at least half
+ * a plate from that edge, or six pixels in on a lane too thin for that, and
+ * `nameTop` is past six at every text size offered, so the near-end placement
+ * is the one that reaches furthest.
+ */
+export function labelReach(thickness: number, style: LaneLabelStyle): number {
+  const line =
+    thickness >= style.nameTop + style.detailDrop + STACK_AIR
+      ? style.nameTop + style.detailDrop
+      : style.nameTop
+  return Math.max(thickness, line + style.hitHeight / 2)
+}
+
+/**
+ * The room a block stacked over the data leaves past its last line, in pixels.
+ *
+ * Under it the range goes beside the name instead of below it. Shared by
+ * {@link drawLaneLabel}, which decides the stacking, and {@link labelReach},
+ * which has to decide it the same way to say how far the block reaches.
+ */
+const STACK_AIR = 6
 
 /**
  * Which end of a lane a value track's caption belongs at.

@@ -9,18 +9,19 @@
  * rows a reader loaded and the rows a task produced, one list, each with the
  * three things a model row is for and a track row is not.
  *
- * **Show in the deck** — the structure cell draws one model at a time, and this
- * is how the reader says which; the cell's own picker says the same thing from
- * the other side. **bed3d** — the model out, as the file it would be loaded
- * from, which is how a computed one leaves the tab. **The provenance** — what
- * made it and what it was made from, for a computed row, in the two lines the
- * Synthetic card writes under its own rows, because a model whose framing is
- * invisible is a picture nobody can defend.
+ * **The eye is the model's cell** — each model is drawn in a cell of its own
+ * (§25.3), and the eye opens that cell and closes it, where a track's eye hides
+ * a lane; the row's grip, dragged onto a cell, draws the model there instead.
+ * The cell has no picker: which model a cell draws is this card's to say.
+ * **bed3d** — the model out, as the file it would be loaded from, which is how
+ * a computed one leaves the tab. **The provenance** — what made it and what it
+ * was made from, for a computed row, in two lines under it, because a model
+ * whose framing is invisible is a picture nobody can defend.
  *
  * Everything else on a row is the Tracks card's own head — the colour, the name,
- * the eye, the close — calling the same store with the same arguments, and a
- * load zone that takes the three formats and nothing else, so the sentence on
- * it can say what they are.
+ * the close — calling the same store with the same arguments, and a load zone
+ * that takes the three formats and nothing else, so the sentence on it can say
+ * what they are.
  */
 
 import { taskById } from '../analysis/registry'
@@ -57,6 +58,14 @@ export interface StructureCardOptions {
   shown?(id: string): boolean
   /** A detached computed row's way back: the task, with its recipe, in the drawer. */
   onRecompute?(entry: AnnotationEntry): void
+  /**
+   * When a computed row's run was made — the date its bed3d's `#` line carries,
+   * as the drawer's button and `metacooler-run` write it (§25.7). The analysis
+   * workspace holds the run and the row does not, so the card asks. Absent, or
+   * `undefined` for a row, and the line names no date: a model loaded from a
+   * file was not made here.
+   */
+  createdAt?(entry: AnnotationEntry): string | undefined
 }
 
 export class StructureCard {
@@ -256,9 +265,11 @@ export class StructureCard {
     const payload = entry.payload
     if (payload === undefined || payload.kind !== 'features') return
     const stamp = fileStamp(new Date())
+    const created = this.options.createdAt?.(entry)
     const text = writeBed3d(payload.data, {
       label: entry.label,
       ...(entry.source.kind === 'computed' ? { file: entry.source.framing } : {}),
+      ...(created === undefined ? {} : { created }),
     })
     void downloadBlob(new Blob([text], { type: 'text/plain' }), `${exportBaseName(entry.label)}-${stamp}.bed3d`)
   }

@@ -18,6 +18,7 @@
  * result should be set like a number in a genomes table.
  */
 
+import { baseLabel } from '../genome/assembly'
 import { el, fmt } from '../ui/dom'
 import type { TableColumn } from '../analysis/types'
 import type { TableFigureSpec } from './spec'
@@ -28,12 +29,23 @@ export interface TableView {
   destroy(): void
 }
 
-/** What a cell says. `NaN` is *no value here* — an em dash, never a zero. */
+/**
+ * What a cell says. `NaN` is *no value here* — an em dash, never a zero.
+ *
+ * A coordinate is said as the rest of the screen says one
+ * (`TableColumn.coordinate`): a start, held 0-based, as the first base it
+ * names, 1-based; a start and an end alike grouped as en-US whatever the
+ * locale. Here and only here — the drawer's table and this one both print
+ * through this, and the filter matches what is printed, so typing the base a
+ * row shows finds it.
+ */
 export function cellText(column: TableColumn, raw: string | number | undefined): string {
   if (raw === undefined) return '—'
   if (column.kind !== 'number') return String(raw)
   const value = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(value)) return '—'
+  if (column.coordinate === 'start') return baseLabel(value)
+  if (column.coordinate === 'end') return fmt.pos(value)
   if (column.digits === undefined) return fmt.int(value)
   // Too small for its digits, in a column that says it may be (a P-value).
   if (column.scientific === true && value !== 0 && Math.abs(value) < 10 ** -column.digits) {

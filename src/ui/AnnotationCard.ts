@@ -1,12 +1,12 @@
 /**
- * The two file-driven cards: **Linear annotations** and **Map overlays**
- * (spec §8.1).
+ * The **Tracks** card (spec §8.1): every file-driven row in one list, the lanes
+ * drawn beside the map and the overlays drawn on it.
  *
- * One class for both, because they differ in three things — their drop areas,
- * their per-row controls, and where their contents get drawn — and in nothing
- * else. Two classes would have been two copies of the loading, the error
- * reporting, the overlap warning, the colour picker and the remove button, kept
- * in step by hand.
+ * One card for both, because the two differ in their per-row controls and in
+ * where their contents get drawn, and in nothing else — whether a file is a
+ * lane or an overlay is a fact about its format, which the bytes decide. Two
+ * cards would be two copies of the loading, the error reporting, the overlap
+ * warning, the colour picker and the remove button, kept in step by hand.
  *
  * The rows are rebuilt from the store on every change rather than patched. The
  * list is a handful of items and the alternative — reconciling a DOM against a
@@ -824,11 +824,14 @@ export class AnnotationCard {
       'span',
       {
         class: 'ann-grip',
+        // Where a row can be let go (§16.9): a rectangle on any of the four
+        // edges of any map, a `+` of the deck, or an empty cell, the last two
+        // opening a tracks cell drawing it. It named two edges of one map.
         title:
           this.props.context === 'browser'
             ? 'Drag, or press the arrow keys, to reorder this track'
-            : 'Drag to reorder — or onto the map’s bottom or right edge to draw it there. ' +
-              'Arrow keys reorder.',
+            : 'Drag to reorder — or onto any edge of any map to draw it there, or onto a + or an ' +
+              'empty cell to give it a tracks cell of its own. Arrow keys reorder.',
         attrs: {
           draggable: 'true',
           tabindex: '0',

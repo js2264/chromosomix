@@ -17,7 +17,7 @@
  * beside a heatmap, because there is no read drawn there.
  */
 
-import { formatLocus } from '../genome/assembly'
+import { formatLocus, formatPosition } from '../genome/assembly'
 import { CIGAR_OPS, FLAG } from '../annotations/bam/format'
 import type { ReadPile } from '../annotations/types'
 import { Modal } from './Modal'
@@ -111,7 +111,7 @@ function mateText(pile: ReadPile, at: number): string {
   const position = pile.matePos[at]
   if (contig < 0 || position < 0) return 'not recorded'
   const name = pile.contigs[contig] ?? '?'
-  const where = `${name}:${fmt.int(position + 1)}`
+  const where = formatPosition(name, position)
   const strand = (pile.flags[at] & FLAG.MATE_REVERSE) !== 0 ? 'reverse' : 'forward'
   return name === pile.contig ? `${where} (${strand})` : `${where} (${strand}, other sequence)`
 }

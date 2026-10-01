@@ -35,6 +35,7 @@ import { icon, iconButton } from '../ui/icons'
 import { clampCellHeight, heightBar } from './cellHeight'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
+import type { CellFigure } from './deckFigure'
 
 /** What the session lends a tracks cell: the machinery its own browser has. */
 export interface TracksContext {
@@ -241,8 +242,8 @@ export class TracksPanel implements DeckCell {
     if (this.nameEl.value !== this.label) this.nameEl.value = this.label
   }
 
-  exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
-    return this.browser?.exportCanvas(dpi) ?? null
+  figure(_now: Date): CellFigure | null {
+    return this.browser?.deckFigure() ?? null
   }
 
   /** Another surface's pointer, as a guide on this axis at each place it names (§25.4). */

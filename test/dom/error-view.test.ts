@@ -165,6 +165,13 @@ describe('a named refusal', () => {
     const { view } = build(new ViewerError('bad-uri', 'Expected file or file::group'))
     expect(all(view.el, 'details.meta')).toHaveLength(0)
   })
+
+  it('says a ladder dropped again opens on its landing rung, not its finest (§9)', () => {
+    const { view } = build(new ViewerError('mcool-root', 'No cooler at root', { entries: ['1000', '5000'] }))
+    const advice = textsOf(view.el, '.advice li').join(' ')
+    expect(advice).toContain('a third of the way up from the finest')
+    expect(advice).not.toContain('the finest one opens')
+  })
 })
 
 describe('what it offers to do about it', () => {

@@ -18,7 +18,7 @@
  * would be the application disagreeing with itself.
  */
 
-import { formatLocus } from '../genome/assembly'
+import { baseLabel, formatLocus } from '../genome/assembly'
 import { iscnName } from '../annotations/cytoband'
 import {
   DETAIL_SEP,
@@ -162,7 +162,8 @@ function exonRows(set: FeatureSet, at: number): HTMLElement[] {
   const shown = Math.min(n, EXON_LIMIT)
   const parts: string[] = []
   for (let i = from; i < from + shown; i++) {
-    parts.push(`${fmt.int(set.exonStart[i] + 1)}-${fmt.int(set.exonEnd[i])}`)
+    // First base to last, 1-based and grouped as every coordinate is (§26.1).
+    parts.push(`${baseLabel(set.exonStart[i])}-${baseLabel(set.exonEnd[i] - 1)}`)
   }
   if (shown < n) parts.push(`… ${n - shown} more`)
   return [row('exons', String(n)), row('', parts.join(', '))]

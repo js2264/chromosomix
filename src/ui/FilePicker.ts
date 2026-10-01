@@ -41,7 +41,7 @@ import { LoadBox } from './LoadBox'
 import { appMark } from './mark'
 import { splitUri } from './labels'
 import { connectDirectory } from '../browse/connected'
-import { providerFronts, type ProviderId } from './connectFronts'
+import { CONNECT_FOLDER_TITLE, providerFronts, type ProviderId } from './connectFronts'
 import { storeFronts } from './stores/registry'
 import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
@@ -79,8 +79,10 @@ export interface FilePickerProps {
   /**
    * A store tile was pressed. The shell opens the drawer on it.
    *
-   * Absent means no stores are offered — the standalone build, which has no
-   * network to read one over (§19), and a picker in a test that wants none.
+   * Absent means no stores are offered — an embed, which builds no drawer for
+   * a tile to open (§21.2), and a picker in a test that wants none. The
+   * standalone build offers none whatever is passed, having no network to
+   * read one over (§19).
    */
   onStore?(id: string): void
   /**
@@ -91,7 +93,8 @@ export interface FilePickerProps {
    * what a reader connects is a fact about the *window* — the Files column
    * holds it and every tab sees it (§20.4) — and not about the tab they
    * happened to land on. Absent means the whole row is left out, which is what
-   * a test that wants only the load box asks for.
+   * an embed asks for — it mounts no Files column to connect a place into
+   * (§21.2) — and a test that wants only the load box.
    */
   onConnect?(provider: ProviderId): void
   /**
@@ -221,11 +224,9 @@ export class FilePicker {
       // *connect*. A file is opened; a folder is connected (§26.4).
       //
       // The standalone build reaches no remote place at all (§19), so it does
-      // not offer a heading naming two kinds and a row holding one.
-      pickerHeading(
-        IS_STANDALONE ? 'Connect a folder' : 'Connect a local or remote folder',
-        'folder-tree',
-      ),
+      // not offer a heading naming two kinds and a row holding one — and the
+      // name is the one the Files column and the palette use (`CONNECT_FOLDER`).
+      pickerHeading(CONNECT_FOLDER_TITLE, 'folder-tree'),
       el(
         'div',
         { class: 'picker-providers' },

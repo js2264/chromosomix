@@ -109,9 +109,13 @@ const PARAMS: readonly ParamSpec[] = [
      * chromosome and stays per chromosome (`ExpectedPlan`), and it does not carry
      * to the correlation: two chromosomes in the same compartment touch each
      * other **in trans**, and a square holding those trans blocks is where a
-     * genome-wide eigenvector's signal actually comes from. Ticking them all is
-     * therefore not sixteen runs stacked up — it is one answer the per-sequence
-     * runs cannot give.
+     * genome-wide eigenvector's signal actually comes from. Under *cis and
+     * trans* or *trans only*, ticking them all is therefore not sixteen runs
+     * stacked up — it is one answer the per-sequence runs cannot give. Under
+     * *cis only*, the default (see `contacts`), it is the sixteen: one
+     * correlation per sequence. The hint says which of the two the reader is
+     * about to get; it used to promise the one correlation under the setting
+     * that never makes it.
      *
      * Everything ticked is the default because it is the question most people
      * are asking, and because the alternative default — one arbitrary sequence —
@@ -120,8 +124,8 @@ const PARAMS: readonly ParamSpec[] = [
      * them and one of them.
      */
     hint:
-      'One correlation over all of them, cis and trans, where ticking one gives that chromosome ' +
-      'alone.',
+      'One correlation per sequence under “cis only”, and one over all of them under “cis and ' +
+      'trans” or “trans only”.',
   },
   {
     kind: 'choice',

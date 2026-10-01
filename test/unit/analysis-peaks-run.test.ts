@@ -32,6 +32,7 @@ import type {
   TaskOutput,
 } from '@/analysis/types'
 import type { FeatureSet, Region, TrackSampleSet } from '@/annotations/types'
+import { cellText } from '@/figures/tableFigure'
 
 const FRAMING: AnalysisFraming = {
   uri: 'tracks',
@@ -248,7 +249,7 @@ describe('one track', () => {
     expect(figure?.series.every((series) => series.mark === 'violin')).toBe(true)
   })
 
-  it('lists every peak, 1-based, only when asked', async () => {
+  it('lists every peak only when asked, held as the lane holds it and printed 1-based', async () => {
     const without = await runPeaks(bench(ONE, { signal: 'a', truncate: 3 }, LENGTHS).job)
     expect(without.some((output) => output.id === 'peaks-list')).toBe(false)
     const outputs = await runPeaks(bench(ONE, { signal: 'a', truncate: 3, perPeak: true }, LENGTHS).job)
@@ -256,9 +257,16 @@ describe('one track', () => {
     const set = setOf(peaksOf(outputs))
     expect(table?.rows.length).toBe(3)
     const first = table!.rows[0]
-    const i = Array.from(set.start).indexOf(Number(first.start) - 1)
-    expect(i, 'the table’s start is the lane’s, one-based').toBeGreaterThanOrEqual(0)
-    expect(Number(first.summit) - 1).toBe(set.cdsStart[i])
+    // Held 0-based, so the TSV saved from it is read back onto the same bases
+    // (§8.3), and flagged so the table prints it 1-based (§26.1).
+    const i = Array.from(set.start).indexOf(Number(first.start))
+    expect(i, 'the table’s start is the lane’s').toBeGreaterThanOrEqual(0)
+    expect(Number(first.summit)).toBe(set.cdsStart[i])
+    const column = (key: string) => table!.columns.find((entry) => entry.key === key)!
+    expect(column('start').coordinate).toBe('start')
+    expect(column('summit').coordinate).toBe('start')
+    expect(column('end').coordinate).toBe('end')
+    expect(cellText(column('start'), first.start)).toBe((Number(first.start) + 1).toLocaleString('en-US'))
   })
 })
 

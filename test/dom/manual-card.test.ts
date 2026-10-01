@@ -15,7 +15,7 @@
  * whole deck of maps is armed through.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ManualStore,
@@ -144,7 +144,8 @@ function mount(): Mounted {
 describe('typing a rectangle', () => {
   it('takes an interval per axis, at any ratio', () => {
     const card = mount()
-    card.type('Rectangles', ['I:120000-180000', 'IV:340000-1000000'])
+    // 1-based and inclusive, as every locus box reads one (§26.1).
+    card.type('Rectangles', ['I:120,001-180,000', 'IV:340001-1000000'])
     card.press('Rectangles', 'add')
     expect(card.store.rects).toHaveLength(1)
     expect(card.store.rects[0]).toMatchObject({
@@ -254,16 +255,31 @@ describe('the list', () => {
   // had them.
   it('writes a box as the reader reads it, which its own form takes back', () => {
     const card = mount()
-    card.type('Rectangles', ['I:120000-180000', 'IV:340000-400000'])
+    card.type('Rectangles', ['I:120001-180000', 'IV:340001-400000'])
     card.press('Rectangles', 'add')
-    card.type('Rectangles', ['I:500000-600000'])
+    card.type('Rectangles', ['I:500001-600000'])
     card.press('Rectangles', 'add')
     const rows = Array.from(document.querySelectorAll('.manual-where')).map(
       (node) => node.textContent ?? '',
     )
-    expect(rows[0]).toBe('▭ I:120,000-180,000 × IV:340,000-400,000')
+    // 1-based, as typed: the row says the bases the reader named.
+    expect(rows[0]).toBe('▭ I:120,001-180,000 × IV:340,001-400,000')
     // One extent for a box on the diagonal, which is what its form takes back.
-    expect(rows[1]).toBe('▭ I:500,000-600,000')
+    expect(rows[1]).toBe('▭ I:500,001-600,000')
+  })
+
+  it('writes a box drawn on the map 1-based, as the breadcrumb writes that window', () => {
+    // A drag hands the card cooler's numbers — the half-open stretch of whole
+    // bins — and the row is what a reader reads, so it is the display form.
+    const card = mount()
+    card.store.add({
+      id: 'm1',
+      kind: 'rect',
+      a: { contig: 'I', from: 120_000, to: 180_000 },
+      b: { contig: 'I', from: 120_000, to: 180_000 },
+      colour: '#000',
+    })
+    expect(document.querySelector('.manual-where')?.textContent).toBe('▭ I:120,001-180,000')
   })
 
   it('recolours and removes a box like any other mark', () => {
@@ -286,17 +302,17 @@ describe('editing a mark in its row (§8.1)', () => {
 
   it('moves a box in place — its colour, its id and its place in the list kept', () => {
     const card = mount()
-    card.type('Rectangles', ['I:120000-180000'])
+    card.type('Rectangles', ['I:120001-180000'])
     card.press('Rectangles', 'add')
-    card.type('Rectangles', ['I:500000-600000'])
+    card.type('Rectangles', ['I:500001-600000'])
     card.press('Rectangles', 'add')
     const first = card.store.rects[0]
     card.store.update(first.id, { colour: '#123456' })
     document.querySelector<HTMLButtonElement>('.manual-where')?.click()
     const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('.manual-edit-box'))
     // The row's own grouped form, ready to be changed.
-    expect(boxes.map((box) => box.value)).toEqual(['I:120,000-180,000', 'I:120,000-180,000'])
-    boxes[0].value = 'I:130,000-190,000'
+    expect(boxes.map((box) => box.value)).toEqual(['I:120,001-180,000', 'I:120,001-180,000'])
+    boxes[0].value = 'I:130,001-190,000'
     boxes[1].value = ''
     press('Enter')
     const moved = card.store.rects[0]
@@ -306,27 +322,53 @@ describe('editing a mark in its row (§8.1)', () => {
     expect(moved.a).toEqual({ contig: 'I', from: 130000, to: 190000 })
     expect(moved.b).toEqual({ contig: 'I', from: 130000, to: 190000 })
     expect(card.store.rects[1].a.from).toBe(500000)
-    expect(document.querySelector('.manual-where')?.textContent).toBe('▭ I:130,000-190,000')
+    expect(document.querySelector('.manual-where')?.textContent).toBe('▭ I:130,001-190,000')
+  })
+
+  // THE LAW (§26.1): Enter on what the row's boxes already show moves nothing.
+  it('leaves a mark exactly where it was when its own text is entered back', () => {
+    const card = mount()
+    card.store.add({
+      id: 'm1',
+      kind: 'rect',
+      a: { contig: 'I', from: 120_000, to: 180_000 },
+      b: { contig: 'IV', from: 340_000, to: 400_000 },
+      colour: '#000',
+    })
+    card.store.add({ id: 'm2', kind: 'line', axis: 'vertical', at: { contig: 'IV', bp: 1_162_000 }, colour: '#000' })
+    const before = card.store.marks.map((mark) => JSON.stringify(mark))
+    const reshaped = vi.spyOn(card.store, 'reshape')
+    for (let at = 0; at < 2; at++) {
+      // Asked for afresh each time: a commit repaints the list.
+      document.querySelectorAll<HTMLButtonElement>('.manual-where')[at]?.click()
+      document.querySelector<HTMLInputElement>('.manual-edit-box')?.focus()
+      press('Enter')
+    }
+    // Both rows were committed, not merely closed — and nothing moved.
+    expect(reshaped).toHaveBeenCalledTimes(2)
+    expect(card.store.marks.map((mark) => JSON.stringify(mark))).toEqual(before)
   })
 
   it('changes a line’s place and which rule it draws', () => {
     const card = mount()
-    card.type('Lines', ['IV:1,200,000'])
+    card.type('Lines', ['IV:1,200,001'])
     card.press('Lines', 'add')
     document.querySelector<HTMLButtonElement>('.manual-where')?.click()
     const axis = document.querySelector<HTMLSelectElement>('.manual-edit-axis')
     axis!.value = 'both'
     const box = document.querySelector<HTMLInputElement>('.manual-edit-box')
+    // The row's own text, 1-based, and the base it names is kept 0-based.
+    expect(box!.value).toBe('IV:1,200,001')
     box!.value = 'IV:1.25 Mb'
     box!.focus()
     press('Enter')
-    expect(card.store.lines[0].at).toEqual({ contig: 'IV', bp: 1250000 })
+    expect(card.store.lines[0].at).toEqual({ contig: 'IV', bp: 1_249_999 })
     expect(card.store.lines[0].axis).toBe('both')
   })
 
   it('keeps a box it cannot read open and red, and Escape leaves the mark where it was', () => {
     const card = mount()
-    card.type('Lines', ['IV:1,200,000'])
+    card.type('Lines', ['IV:1,200,001'])
     card.press('Lines', 'add')
     document.querySelector<HTMLButtonElement>('.manual-where')?.click()
     const box = document.querySelector<HTMLInputElement>('.manual-edit-box')

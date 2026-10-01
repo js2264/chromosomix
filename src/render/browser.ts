@@ -263,14 +263,83 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
     ctx.lineTo(at, top + 4)
   }
   ctx.stroke()
+  const labels: Array<{ text: string; at: number; width: number }> = []
   for (let bp = Math.ceil(from / step) * step; bp <= to; bp += step) {
     // The step goes with it: two decimals of a megabase is ten kilobases, so
     // without it every tick of a twenty-kilobase window on a 4.6 Mb chromosome
     // read `4.60 Mb` — a row of identical numbers under a picture zoomed in to
     // answer exactly the question they were there to answer.
-    ctx.fillText(formatBpTick(bp, step), frame.toPixel(segment.unitStart + bp), top + 5)
+    const text = formatBpTick(bp, step)
+    labels.push({ text, at: frame.toPixel(segment.unitStart + bp), width: ctx.measureText(text).width })
+  }
+  const places = placeTickLabels(labels, x, x + width)
+  for (const [index, label] of labels.entries()) {
+    const place = places[index]
+    if (place !== null) ctx.fillText(label.text, place, top + 5)
   }
 }
+
+/**
+ * Where each tick label goes along the coordinate row, or `null` for one left
+ * out — its mark is drawn either way.
+ *
+ * The mark is drawn at the position; the *label* is nudged back inside the
+ * ruler where it would hang over an end, which is the rule the heatmap's own
+ * axis keeps (`HeatmapView.drawTicks`) and for its reason. A tick on a window's
+ * first or last base sits on the ruler's edge, and a label centred there was
+ * half outside the clip: a deck's tracks cell over `IV:1,000,001-1,400,000`
+ * read `Mb` and `1.4` for `1.0 Mb` and `1.4 Mb`, and the browser over a whole
+ * sequence `bp` for `0 bp` — a cut number is a different number.
+ *
+ * Nudged in, an end label moves towards its neighbour, and the ticks here are as
+ * close as {@link TICK_MIN_GAP_PX} allows, so at the larger text sizes the two
+ * can touch. Then one of them is left out rather than one written over the
+ * other, and it is the inner one: the two ends are the labels that say where
+ * the window starts and stops. A label too wide for the ruler at all is left
+ * out too.
+ */
+export function placeTickLabels(
+  labels: ReadonlyArray<{ at: number; width: number }>,
+  from: number,
+  to: number,
+): Array<number | null> {
+  const places: Array<number | null> = labels.map(({ at, width }) => {
+    const half = width / 2 + LABEL_PAD
+    if (to - from < 2 * half) return null
+    return Math.min(Math.max(at, from + half), to - half)
+  })
+  const left = (index: number): number => (places[index] ?? 0) - labels[index].width / 2
+  const right = (index: number): number => (places[index] ?? 0) + labels[index].width / 2
+  const last = labels.length - 1
+  const kept: number[] = []
+  for (let index = 0; index < labels.length; index++) {
+    if (places[index] === null) continue
+    let fits = true
+    while (kept.length > 0) {
+      const before = kept[kept.length - 1]
+      if (left(index) >= right(before) + LABEL_GAP) break
+      // The last label against an inner one: the inner one goes, and the last
+      // is tried against whatever is now before it. Anything else that runs into
+      // the label before it is the one that goes, which keeps the first.
+      if (index === last && kept.length > 1) {
+        places[before] = null
+        kept.pop()
+        continue
+      }
+      places[index] = null
+      fits = false
+      break
+    }
+    if (fits) kept.push(index)
+  }
+  return places
+}
+
+/** The air a nudged label keeps from the ruler's end — the heatmap axis's two pixels. */
+const LABEL_PAD = 2
+
+/** The least air between two tick labels, in CSS pixels. */
+const LABEL_GAP = 6
 
 /**
  * The most ticks this ruler will draw, however wide it is.

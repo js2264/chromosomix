@@ -6,6 +6,7 @@ Run with any Python 3.9 or newer.  **Standard library only**, deliberately::
     python3 scripts/make_store.py igv    --out out/igv.json    --timestamp
     python3 scripts/make_store.py 4dn    --out out/4dn.json    --timestamp
     python3 scripts/make_store.py encode --out out/encode.json --timestamp
+    python3 scripts/make_store.py dnazoo --out out/dnazoo.json --timestamp
     python3 scripts/make_store.py bucket https://my-lab.s3.amazonaws.com/hic/ \\
         --name 'Lab Hi-C' --out store.json
     python3 scripts/make_store.py check out/4dn.json
@@ -69,9 +70,10 @@ files in ten and said nothing about it.
     ``igv.org.genomes/genomes.json`` — the reference genomes IGV ships, each a
     FASTA with an index and the annotation tracks that go with it.  One row per
     file this viewer has a route for, and one pre-configured session per genome
-    (see below).  IGV's ``refgene`` tracks are UCSC ``genePred`` tables, which
-    this viewer has no reader for; they are counted and skipped rather than
-    written as rows that cannot open.
+    (see below).  IGV's ``refgene`` tracks are UCSC ``genePred`` tables, and a
+    genome's ``cytobandURL`` is its karyotype as a cytoBand: this viewer reads
+    both (SPECS §8.19, §8.22), so both are published as tracks.  What is still
+    skipped is an alias file and a ``chrom.sizes``, which annotate nothing.
 
 ``4dn``
     Every routable object on the 4DN open-data bucket, enriched from the
@@ -88,13 +90,20 @@ files in ten and said nothing about it.
     assembly and format, which is 210 thousand rows and every dataset ENCODE
     has.
 
+``dnazoo``
+    DNA Zoo's open bucket, one directory a species, walked as ``bucket`` walks a
+    lab's, with each species' ``README.json`` read for its common name and for
+    which of its two assemblies a file belongs to.  A ``.hic`` is listed
+    whatever its size; any other file past ``--max-unindexed`` is not, nothing
+    else there having an index.  No sessions.
+
 ``bucket``
     ``ListObjectsV2`` over a prefix, one row per object this viewer has a route
     for, aimed at a lab's own bucket — no portal, no metadata beyond the file
     name and the size, which is still enough to choose from.
 
-``check``
-    Validate a store, or a generated session, against its contract.
+And ``check``, which generates nothing: it validates a store, or a generated
+session, against its contract.
 
 ## Pre-configured sessions
 
@@ -352,13 +361,13 @@ ROUTE_MAP = re.compile(
 ROUTE_GENOME = re.compile(
     r"\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?"
     r"|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig|bam"
-    # The UCSC names (SPECS §8.18–§8.21). This list and `browse/route.ts`'s must
+    # The UCSC names (SPECS §8.17–§8.21). This list and `browse/route.ts`'s must
     # agree: a generator that wrote a row the viewer has no door for publishes a
     # shelf whose file fails when it is clicked, and one that dropped a row the
     # viewer can open publishes a shorter shelf than the data deserves. The
     # second is what this half of the list was doing until now.
     r"|interact|biginteract|longrange|longtabix|genepred|genepredext|refflat"
-    r"|bedmethyl|bigmethyl|2bit)(\.txt)?(\.gz)?$",
+    r"|bedmethyl|bigmethyl|barchart|bigbarchart|2bit)(\.txt)?(\.gz)?$",
     re.I,
 )
 
@@ -368,6 +377,12 @@ ROUTE_GENOME = re.compile(
 ROUTE_GENOME_NAMED = re.compile(
     r"(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.gz)?$", re.I
 )
+
+#: A karyotype, which is published under a name rather than a suffix too
+#: (SPECS §8.22): UCSC's `cytoBand.txt.gz` and `cytoBandIdeo.txt.gz`, which is
+#: what 30 of IGV's 41 genomes name as their `cytobandURL`, and a file named for
+#: its bands in the plural. `browse/route.ts`'s pattern, copied as the rest are.
+ROUTE_CYTOBAND = re.compile(r"cytoband(s|ideo)?(\.txt)?(\.gz)?$", re.I)
 
 
 #: 4DN's assays whose alignment file is in read-pair order rather than in
@@ -429,7 +444,7 @@ def route_of(name: str) -> Optional[str]:
         return "workspace"
     if ROUTE_MAP.search(bare):
         return "map"
-    if ROUTE_GENOME.search(bare) or ROUTE_GENOME_NAMED.search(bare):
+    if ROUTE_GENOME.search(bare) or ROUTE_GENOME_NAMED.search(bare) or ROUTE_CYTOBAND.search(bare):
         return "genome"
     return None
 
@@ -452,6 +467,12 @@ FORMAT_SUFFIXES = (
     "knowngene.txt",
     ".genepred",
     ".genepredext",
+    "cytobandideo.txt.gz",
+    "cytobandideo.txt",
+    "cytobands.txt.gz",
+    "cytobands.txt",
+    "cytoband.txt.gz",
+    "cytoband.txt",
     ".biginteract",
     ".interact",
     ".longrange",
@@ -525,7 +546,7 @@ def format_of(name: str) -> str:
     bare = name.split("?")[0].split("#")[0].rsplit("/", 1)[-1].lower()
     for suffix in FORMAT_SUFFIXES:
         if bare.endswith(suffix):
-            return GENEPRED_NAMES.get(suffix, suffix.lstrip("."))
+            return GENEPRED_NAMES.get(suffix) or CYTOBAND_NAMES.get(suffix, suffix.lstrip("."))
     tail = bare.rsplit(".", 1)
     return tail[-1] if len(tail) > 1 else ""
 
@@ -550,6 +571,22 @@ GENEPRED_NAMES = {
         "knowngene.txt",
         ".genepred",
         ".genepredext",
+    )
+}
+
+#: The names a karyotype is published under, folded to the one format they
+#: are (SPECS §8.22) — for the Format facet's reason above, and because a
+#: session places a lane by its format (``TRACK_KINDS``), where ``gz`` would be
+#: no lane at all.
+CYTOBAND_NAMES = {
+    suffix: "cytoband"
+    for suffix in (
+        "cytobandideo.txt.gz",
+        "cytobandideo.txt",
+        "cytobands.txt.gz",
+        "cytobands.txt",
+        "cytoband.txt.gz",
+        "cytoband.txt",
     )
 }
 
@@ -2066,13 +2103,15 @@ def entries_dnazoo(
 #: of them was logged so that "IGV has a gene track for hg38 and this store does
 #: not" stayed a known gap rather than a surprise. Both formats are read now
 #: (SPECS §8.19, §8.21), so both come off the list and those rows are published.
+#: ``cytoband`` came off it for the same reason once §8.22 drew ideograms — and
+#: a genome's cytoBand is published as one of its tracks (``igv_cytoband``).
 #:
-#: What is left are three files that are **not annotations of a genome**: a
-#: cytoband table is an ideogram this viewer does not draw, an alias file is a
-#: map between spellings rather than data (§5.9 does that job from the files
-#: themselves), and a ``chrom.sizes`` declares a genome rather than annotating
-#: one — which is the refusal `annotations/loader.ts` states in so many words.
-IGV_UNREADABLE = ("cytoband", "alias", "chromsizes")
+#: What is left are two files that are **not annotations of a genome**: an alias
+#: file is a map between spellings rather than data (§5.9 does that job from the
+#: files themselves), and a ``chrom.sizes`` declares a genome rather than
+#: annotating one — which is the refusal `annotations/loader.ts` states in so
+#: many words.
+IGV_UNREADABLE = ("alias", "chromsizes")
 
 
 def _igv_index(url: str, index: str) -> str:
@@ -2109,6 +2148,29 @@ def _fasta_index(fasta: str, index: str) -> str:
     if index == "" or fasta.lower().endswith(".gz"):
         return ""
     return index
+
+
+def igv_cytoband(genome: dict) -> list[dict]:
+    """One IGV genome's karyotype, as the track it is here — or nothing.
+
+    IGV's table names it beside the sequence, as ``cytobandURL``, and not among
+    the genome's ``tracks``: IGV draws it as the ideogram above every panel
+    rather than as one of them. This viewer draws it as a lane of its own kind
+    (SPECS §8.22), so it is published as the first of the genome's tracks: a
+    row, a track on the genome row's shelf, and an ``ideogram`` lane in its
+    session. 30 of IGV's 41 genomes carry one.
+
+    Its format is IGV's word for it rather than its name's, since two of them
+    are named ``.bed`` — a cytoBand is five BED columns with a stain in the
+    last — and a row filed under ``bed`` would be placed in a session as a peak
+    set. The viewer reads the bytes either way; this is what the Format facet
+    and the session's lane say about it.
+    """
+    url = text(genome.get("cytobandURL"))
+    # A name with no door is no row, here as for every other track.
+    if url == "" or route_of(url) is None:
+        return []
+    return [{"label": "Cytobands", "url": url, "index": "", "format": "cytoband"}]
 
 
 def igv_tracks(genome: dict) -> list[dict]:
@@ -2190,7 +2252,11 @@ def entries_igv(genomes: list, limit: Optional[int], *, probing: bool) -> list[d
             # not what anybody picked IGV's hg38 for.
             log.info("%s: the sequence does not open anonymously — no rows.", assembly)
             continue
-        tracks = [track for track in igv_tracks(genome) if readable(track["url"]).ok]
+        # The karyotype first, as IGV draws its ideogram above everything; it
+        # is not one of IGV's `tracks`, so it is not in the skipped count above.
+        tracks = [
+            track for track in igv_cytoband(genome) + igv_tracks(genome) if readable(track["url"]).ok
+        ]
         suffix = format_of(fasta)
         entries.append(
             {
@@ -2303,6 +2369,9 @@ TRACK_KINDS = {
     "fa.gz": ("linear", "sequence"),
     "fasta.gz": ("linear", "sequence"),
     "fna.gz": ("linear", "sequence"),
+    # A karyotype is a lane of its own kind (SPECS §8.22): one outline per
+    # chromosome with its bands inside, which `format_of` folds every name of to.
+    "cytoband": ("linear", "ideogram"),
 }
 
 #: Lane thickness per kind, in CSS pixels — the numbers the published demo
@@ -2316,6 +2385,9 @@ TRACK_SIZES = {
     "variants": 34,
     "alignments": 96,
     "pairs": 34,
+    # Context rather than a measurement: room for the outline, a band's name
+    # inside it and the two lines of its label — `defaultStyle`'s own (§8.22).
+    "ideogram": 40,
     # Never drawn as a lane — a model's picture is its cell (SPECS §25.2) — so
     # this is only the size `defaultStyle` gives it, written down in full.
     "structure": 24,
@@ -2348,16 +2420,26 @@ PALETTE = (
 SESSION_TRACKS = 24
 
 
-def track_entry(index: int, label: str, url: str, sidecar: str = "") -> Optional[dict]:
+def track_entry(
+    index: int, label: str, url: str, sidecar: str = "", fmt: str = ""
+) -> Optional[dict]:
     """One ``StoredEntry`` for a session's track list, or ``None`` for a name with no lane.
 
     The shape is `src/annotations/types.ts`'s and is written in full rather than
     relying on defaults: `readTab` hands `tracks` straight through as
     `StoredEntry[]` without filling anything in, so a field left out here is a
     field the lane draws without.
+
+    The lane is the file's format, read off its name unless the caller knows
+    better (``fmt``) — which IGV does of a karyotype named ``.bed``, a lane of
+    peaks by its name and an ideogram by IGV's own word for it.
     """
     name = url.split("?")[0].split("#")[0].rsplit("/", 1)[-1]
-    pair = ("structure", "structure") if STRUCTURE_NAME.search(name) else TRACK_KINDS.get(format_of(name))
+    pair = (
+        ("structure", "structure")
+        if STRUCTURE_NAME.search(name)
+        else TRACK_KINDS.get(fmt or format_of(name))
+    )
     if pair is None:
         return None
     card, kind = pair
@@ -2423,7 +2505,11 @@ def session_document(
     placed: list[dict] = []
     for position, track in enumerate(tracks[:SESSION_TRACKS]):
         entry = track_entry(
-            position, text(track.get("label")), text(track.get("url")), text(track.get("index"))
+            position,
+            text(track.get("label")),
+            text(track.get("url")),
+            text(track.get("index")),
+            text(track.get("format")),
         )
         if entry is not None:
             placed.append(entry)
@@ -2481,16 +2567,25 @@ def sessions_igv(genomes: list, entries: list[dict], created: str) -> list[dict]
         fasta = text(genome.get("fastaURL"))
         if assembly == "" or fasta == "" or fasta not in published:
             continue
-        tracks = [track for track in igv_tracks(genome) if track["url"] in published]
+        tracks = [
+            track for track in igv_cytoband(genome) + igv_tracks(genome) if track["url"] in published
+        ]
         # The sequence first, so the lane order reads outward from the genome —
         # and by URL, so a session and the row beside it name the same bytes.
         # Its `.fai` goes with it as the lane's `source.index`, the field the
         # loader reads (§8.8); the row beside it names the same index only
-        # where the viewer would not have guessed it.
+        # where the viewer would not have guessed it. Each track's format goes
+        # with it too, which for the karyotype is IGV's word for the file rather
+        # than its name's (`igv_cytoband`).
         placed = [
             {"label": "sequence", "url": fasta, "index": _fasta_index(fasta, text(genome.get("indexURL")))}
         ] + [
-            {"label": track["label"], "url": track["url"], "index": track["index"]}
+            {
+                "label": track["label"],
+                "url": track["url"],
+                "index": track["index"],
+                "format": track["format"],
+            }
             for track in tracks
         ]
         out.append(

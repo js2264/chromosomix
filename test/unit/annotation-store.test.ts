@@ -16,7 +16,10 @@ import {
   mintMarkId,
   parsePoint,
   parseSpan,
+  pointLabel,
+  spanLabel,
   type ManualMark,
+  type ManualPoint,
 } from '../../src/annotations/manual'
 import { LEAD_MAP, resolveStyle } from '../../src/annotations/placement'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
@@ -397,18 +400,25 @@ describe('the contig overlap warning (§8.2)', () => {
 })
 
 describe('manual marks', () => {
+  // 1-based, as every locus box reads one (§26.1): the mark keeps the 0-based
+  // base the typed number names, which is what its BED row is written from.
   it('reads back a coordinate this app itself wrote', () => {
-    expect(parsePoint('I:120000')).toEqual({ contig: 'I', bp: 120_000 })
-    // `fmt.int` writes separators and `fmt.bp` writes units; refusing to read
-    // back what the page just printed would be a small cruelty.
-    expect(parsePoint('I:1,531,933')).toEqual({ contig: 'I', bp: 1_531_933 })
-    expect(parsePoint(' XIII-syn40 : 1.53 Mb ')).toEqual({ contig: 'XIII-syn40', bp: 1_530_000 })
-    expect(parsePoint('II:120 kb')).toEqual({ contig: 'II', bp: 120_000 })
+    expect(parsePoint('I:120001')).toEqual({ contig: 'I', bp: 120_000 })
+    // `formatPosition` writes separators and `fmt.bp` writes units; refusing to
+    // read back what the page just printed would be a small cruelty.
+    expect(parsePoint('I:1,531,933')).toEqual({ contig: 'I', bp: 1_531_932 })
+    expect(parsePoint(' XIII-syn40 : 1.53 Mb ')).toEqual({ contig: 'XIII-syn40', bp: 1_529_999 })
+    expect(parsePoint('II:120 kb')).toEqual({ contig: 'II', bp: 119_999 })
+  })
+
+  it('reads the first base as the first base, and never before it', () => {
+    expect(parsePoint('I:1')).toEqual({ contig: 'I', bp: 0 })
+    expect(parsePoint('I:0')).toEqual({ contig: 'I', bp: 0 })
   })
 
   // A contig may legally be named `NODE_1:2`, so the *last* colon splits.
   it('splits on the last colon, not the first', () => {
-    expect(parsePoint('NODE_1:2:5000')).toEqual({ contig: 'NODE_1:2', bp: 5000 })
+    expect(parsePoint('NODE_1:2:5001')).toEqual({ contig: 'NODE_1:2', bp: 5000 })
   })
 
   it('refuses what it cannot read', () => {
@@ -421,15 +431,18 @@ describe('manual marks', () => {
 
   it('round-trips through its own formatter', () => {
     const point = { contig: 'XIII-syn40', bp: 964_431 }
+    // The copy form: 1-based, ungrouped, for a terminal (§26.1).
+    expect(formatPoint(point)).toBe('XIII-syn40:964432')
     expect(parsePoint(formatPoint(point))).toEqual(point)
   })
 
   it('reads a box’s side as an interval, however the reader wrote it', () => {
-    expect(parseSpan('I:120000-180000')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
-    expect(parseSpan('I:120 kb - 1.53 Mb')).toEqual({ contig: 'I', from: 120_000, to: 1_530_000 })
+    // 1-based and inclusive: the first base loses one and the last stays.
+    expect(parseSpan('I:120001-180000')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
+    expect(parseSpan('I:120 kb - 1.53 Mb')).toEqual({ contig: 'I', from: 119_999, to: 1_530_000 })
     // The readout writes an en dash and separators; a reader pasting back what
     // the page showed them is doing the obvious thing.
-    expect(parseSpan('XIII-syn40:964,431–1,000,000')).toEqual({
+    expect(parseSpan('XIII-syn40:964,432–1,000,000')).toEqual({
       contig: 'XIII-syn40',
       from: 964_431,
       to: 1_000_000,
@@ -437,7 +450,7 @@ describe('manual marks', () => {
   })
 
   it('puts a box’s ends in order, since a box has no direction', () => {
-    expect(parseSpan('I:180000-120000')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
+    expect(parseSpan('I:180000-120001')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
   })
 
   it('refuses a side that is not an interval', () => {
@@ -450,7 +463,39 @@ describe('manual marks', () => {
 
   it('round-trips a span through its own formatter', () => {
     const span = { contig: 'NODE_1:2', from: 5_000, to: 40_000 }
+    expect(formatSpan(span)).toBe('NODE_1:2:5001-40000')
     expect(parseSpan(formatSpan(span))).toEqual(span)
+  })
+
+  // THE LAW (§26.1), for the Manual card's boxes: a mark's row prints the
+  // display form, its edit box holds the same string, and Enter on it must put
+  // the mark exactly where it was — on every road a mark arrives by.
+  it('reads back exactly the mark its row shows: display, typed, kept, display', () => {
+    for (const point of [
+      { contig: 'I', bp: 0 },
+      { contig: 'IV', bp: 1_162_000 },
+      { contig: 'NODE_1:2', bp: 5_000 },
+    ]) {
+      expect(parsePoint(pointLabel(point))).toEqual(point)
+      expect(pointLabel(parsePoint(pointLabel(point)) as ManualPoint)).toBe(pointLabel(point))
+    }
+    for (const span of [
+      { contig: 'I', from: 0, to: 1_000 },
+      { contig: 'IV', from: 1_100_000, to: 1_150_000 },
+      { contig: 'NODE_1:2', from: 5_000, to: 40_000 },
+    ]) {
+      expect(parseSpan(spanLabel(span))).toEqual(span)
+    }
+    expect(pointLabel({ contig: 'IV', bp: 1_162_000 })).toBe('IV:1,162,001')
+    expect(spanLabel({ contig: 'IV', from: 1_100_000, to: 1_150_000 })).toBe('IV:1,100,001-1,150,000')
+  })
+
+  it('shows a box of no width as the one base its BEDPE row is written as', () => {
+    // §26.1 has no spelling of an empty stretch: `I:101-100` would read back as
+    // two bases the other way round. So it is shown — and taken back — as the
+    // single base the export writes for it.
+    expect(spanLabel({ contig: 'I', from: 100, to: 100 })).toBe('I:101-101')
+    expect(parseSpan(spanLabel({ contig: 'I', from: 100, to: 100 }))).toEqual({ contig: 'I', from: 100, to: 101 })
   })
 
   it('keeps marks, and forgets them on request', () => {

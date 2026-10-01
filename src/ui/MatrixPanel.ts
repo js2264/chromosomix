@@ -67,7 +67,7 @@ import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from
 import { axisThroughEdit, originalOf } from '../edit/axis'
 import { stretchInFile } from '../edit/places'
 import type { EditedAssembly } from '../genome/edit'
-import { formatLocus, formatPosition } from '../genome/assembly'
+import { baseLabel, formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
   drawDiagonalFeatures,
@@ -238,6 +238,7 @@ import {
 } from './laneCarry'
 import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
 import { VectorPage } from './vector'
+import type { CellFigure } from '../panels/deckFigure'
 import { setReadout } from './readout'
 import { setHoverPlace, type HoverPlace } from './hoverLocus'
 
@@ -535,10 +536,10 @@ export interface MatrixPanelOptions {
   /**
    * Draw annotations beside and on the matrix (spec §8).
    *
-   * Absent on every view of a `.metacool`, which is not a decision this panel
-   * makes: the shell only supplies it for a file with no genome layer (§8.5).
-   * With it absent the panel is byte for byte the panel it was before
-   * annotations existed — no lanes, no listeners, no worker.
+   * Supplied on every file, a `.metacool` included (§8.5), once the session has
+   * built its annotations, and absent before then — which is not a decision
+   * this panel makes. With it absent the panel is byte for byte the panel it
+   * was before annotations existed — no lanes, no listeners, no worker.
    */
   annotations?: AnnotationContext
   /**
@@ -1178,9 +1179,9 @@ export class MatrixPanel {
   /**
    * The store the lanes are drawn from.
    *
-   * The session's, where the file has one. Where it has not — a file with a
-   * genome layer carries no annotations at all (§8.5) — an empty one that
-   * nothing persists, so that everything downstream of a store can be built
+   * The session's, where it has handed one over — every file has one, a
+   * `.metacool` included (§8.5). Where it has not, an empty one that nothing
+   * persists, so that everything downstream of a store can be built
    * unconditionally rather than behind four `null` checks. It stays empty: no
    * worker, no loader, no cards, and nothing that could load a file.
    */
@@ -1272,6 +1273,8 @@ export class MatrixPanel {
   private deckExport: DeckExport | null = null
   /** The Export card's clipboard button, re-titled when a deck takes the key. */
   private copyButton: HTMLButtonElement | null = null
+  /** The Export card's resolution, away while the format is a vector page; see {@link syncExportRow}. */
+  private dpiSelect: HTMLSelectElement | null = null
   private readonly heatmap: HeatmapView
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
@@ -1472,8 +1475,8 @@ export class MatrixPanel {
   /**
    * The lane stacks — all four of them, on every file.
    *
-   * Built unconditionally, including on a file that carries no annotations
-   * (§8.5), where they stay empty. The gate decides what can be *put* in the
+   * Built unconditionally, including on a panel handed no annotations, where
+   * they stay empty. What the panel was given decides what can be *put* in the
    * stacks, not whether the stacks exist: keeping them means the drop zones,
    * the edge-to-edge drag and the loop marks are one code path rather than one
    * with a hole in it.
@@ -1733,7 +1736,7 @@ export class MatrixPanel {
     // the constructor is still building the cards below. Only the canvases are
     // made here; where they are mounted and what listens to them comes later.
     //
-    // Where the file has no annotation machinery there is still a store, empty
+    // Where the panel was handed no annotations there is still a store, empty
     // and persisting nothing, so the lane machinery below has one object to be
     // built against rather than a `null` to be checked at every use.
     this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
@@ -1847,9 +1850,10 @@ export class MatrixPanel {
         this.manualVmax = clip?.vmax
         this.rescale()
       },
-      // The boxes are in transformed units; the caption says what those are in
-      // the units the colourbar and the tooltip use — and in the word for them
-      // the key and the readout under the pointer already use.
+      // The boxes are in transformed units, as the key in the map's corner is;
+      // the caption says what those are in the units the readout under the
+      // pointer uses — and in the word for them the key and the readout
+      // already use.
       format: (value) => formatCount(inverseTransform(value, this.transform)),
       unit: () => (this.comparisonLabel() !== null ? '' : this.scoreWord()),
     })
@@ -1882,10 +1886,10 @@ export class MatrixPanel {
             'Auto is 0 to the 99th percentile of the values in view.',
         },
         // The transform in the label, because the boxes are in transformed
-        // units while the caption under them is in the units the colourbar is
-        // labelled in: `-4.182` and `0.000066` are the same bound written two
-        // ways, and with neither of them named a reader typing a clip could not
-        // tell which to type.
+        // units while the caption under them is in the units the readout under
+        // the pointer uses: `-4.182` and `0.000066` are the same bound written
+        // two ways, and with neither of them named a reader typing a clip could
+        // not tell which to type.
         this.clipLabel,
         this.clip.el,
       ),
@@ -1955,27 +1959,28 @@ export class MatrixPanel {
         value: this.exportDpi,
         onChange: (dpi) => {
           this.exportDpi = dpi
+          this.syncExportRow()
         },
       },
       formats: EXPORT_FORMATS,
       format: this.exportFormat,
       formatTitle:
-        'PDF is a one-page document holding the figure losslessly, at the size the DPI implies; ' +
-        'PNG is the same picture as an image. A contact map is a raster either way, which is ' +
-        'what the label says: the 1D browser, where nothing is, writes a vector PDF.',
+        'PDF is a drawing: the cells as one lossless image, and every axis, label, track, key and ' +
+        'caption round them as paths and text, at no resolution at all. PNG is the whole figure as ' +
+        'pixels, at the resolution beside it.',
       onFormat: (format) => {
         this.exportFormat = format as ExportFormat
+        this.syncExportRow()
       },
       onSave: () => void this.savePlot(),
       onCopy: () => void this.copyPlot(),
-      saveTitle: withKey(
-        'Save the figure, at the resolution and in the format chosen beside this',
-        KEYS.savePlot,
-      ),
+      saveTitle: withKey('Save the figure, in the format chosen beside this', KEYS.savePlot),
       copyTitle: withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
     })
     this.exportStatus = row.note
     this.copyButton = row.parts.copy
+    this.dpiSelect = row.parts.dpi
+    this.syncExportRow()
     // Under the row it qualifies: whether the saved figure says what it is.
     row.body.append(captionField())
 
@@ -2927,16 +2932,36 @@ export class MatrixPanel {
    */
   setDeckExport(hook: DeckExport | null): void {
     this.deckExport = hook
-    // The key moves with the act. `Ctrl+C` copies the whole deck once there is
-    // one (`Session`'s map-copy), so the Export card's clipboard button — which
-    // copies *this map* — stopped being the thing the key does, while still
-    // printing it. Two buttons on screen claiming one shortcut and doing
-    // different things is worse than one of them going unlabelled.
+    this.syncExportRow()
+  }
+
+  /**
+   * The Export card's row, said again after a change of format, resolution or
+   * deck.
+   *
+   * A vector page has no resolution, so the resolution *goes* while PDF is
+   * chosen rather than sitting there greyed out — the 1D browser's card has
+   * always done this, and this one kept it on screen for a PDF it said was an
+   * image. The clipboard takes a PNG whatever the format beside it says, so
+   * while the resolution is away the copy's tooltip names the one it will use:
+   * a reader pasting into a slide is otherwise rasterised at a number they can
+   * no longer see.
+   *
+   * And the key moves with the act. `Ctrl+C` copies the whole deck once there
+   * is one (`Session`'s map-copy), so the clipboard button — which copies *this
+   * map* — stopped being the thing the key does, while still printing it. Two
+   * buttons on screen claiming one shortcut and doing different things is
+   * worse than one of them going unlabelled.
+   */
+  private syncExportRow(): void {
+    const vector = this.exportFormat === 'pdf'
+    if (this.dpiSelect !== null) this.dpiSelect.hidden = vector
     if (this.copyButton === null) return
+    const png = vector ? `as a PNG at ${this.exportDpi} dpi` : 'as a PNG'
     this.copyButton.title =
-      hook === null
-        ? withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot)
-        : 'Copy this map as a PNG, ready to paste. Ctrl+C copies the whole deck.'
+      this.deckExport === null
+        ? withKey(`Copy the figure ${png}, ready to paste`, KEYS.copyPlot)
+        : `Copy this map ${png}, ready to paste. Ctrl+C copies the whole deck.`
   }
 
   /**
@@ -3904,10 +3929,85 @@ export class MatrixPanel {
   }
 
   /**
-   * The figure as one canvas: the plot with its legend beside it, on an opaque
-   * page background, at `dpi` dots per inch.
+   * The figure's box, measured once for every drawing of it — the PNG, the PDF
+   * and the deck's cell of it — so no two of them can disagree about where
+   * anything goes.
    *
-   * Composed from the two live views rather than copied off the screen — each
+   * The lanes are part of the figure, so they are part of its box. A track
+   * exported without them is a picture of a claim with its evidence cropped
+   * off. The two that come *before* the map also move it: everything else on
+   * the page is placed against `origin` rather than against the page. No column
+   * for a legend: the key is drawn *in* the map's corner, exactly where it is
+   * on screen, so an exported figure is the same picture at a different
+   * resolution rather than a rearrangement of it.
+   *
+   * The caption is measured here because it decides how tall the figure is — a
+   * long provenance line on a narrow figure wraps rather than running off the
+   * edge — against the *drawn* frame rather than the page: the plot is inset by
+   * however much its labels need, and by whatever stack stands to its left, and
+   * a caption flush with the page's edge hangs off the left of the picture it
+   * belongs to. None at all where the Export card's *caption* is off: the figure
+   * then ends at the foot of its lowest lane.
+   */
+  private figureFrame(now: Date, measure: CanvasRenderingContext2D): FigureFrame {
+    const plot = this.heatmap.cssSize
+    const stacks = this.laneStacks()
+    const origin = { x: stacks.left, y: stacks.top }
+    const width = stacks.left + plot.width + stacks.right
+    const body = stacks.top + plot.height + stacks.bottom
+    const left = origin.x + this.heatmap.dataRect.x
+    const caption = this.figureCaption(now)
+    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, width - left)) : []
+    return { origin, width, body, height: body + captionHeightOf(lines), left, caption, lines }
+  }
+
+  /**
+   * The figure, drawn from the context's own origin at `scale` device pixels
+   * per CSS pixel: the plot, the lanes round it, the key in its corner and the
+   * caption under it. Everything but the page under it, which the two
+   * destinations lay differently — see {@link exportCanvas} and
+   * {@link drawVector}.
+   *
+   * Every part is *redrawn* at the scale rather than blown up from the screen's
+   * canvases, so a 300 dpi figure has 300 dpi track names; and every part sets
+   * an absolute transform from the origin, which is what lets a vector page
+   * place the whole figure anywhere on itself (`VectorPage.setOrigin`).
+   */
+  private paintFigure(ctx: CanvasRenderingContext2D, scale: number, frame: FigureFrame): void {
+    // The plot draws from `origin` and clears its own box as it goes, so it
+    // goes before anything that could share that box.
+    this.heatmap.renderTo(ctx, scale, frame.origin)
+    // Placed exactly as the grid places them — around the plot, on all four
+    // sides.
+    this.lanes.renderInto(ctx, this.figureGeometry(), scale, frame.origin)
+
+    this.renderKeys(ctx, scale, frame.origin)
+
+    // The caption is *below* the figure, which is where a caption goes.
+    if (frame.lines.length > 0) {
+      const palette = readCanvasPalette(this.canvas)
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'left'
+      let y = frame.body + scaleLength(CAPTION_TOP)
+      for (const line of frame.lines) {
+        const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
+        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
+        ctx.fillStyle = palette.labelColor
+        // Baseline a little above the line's foot, so the two lines read as one
+        // block rather than as two evenly spaced rows.
+        ctx.fillText(line.text, frame.left, y + height - 4)
+        y += height
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+  }
+
+  /**
+   * The figure as one canvas: the plot with its lanes, key and caption, on an
+   * opaque page background, at `dpi` dots per inch.
+   *
+   * Composed from the live views rather than copied off the screen — each
    * redraws itself into this canvas at the export scale, so the labels, the
    * hairlines and the tick marks are drawn at that resolution instead of being
    * enlarged. What is *framed* is whatever is framed on screen, pan and zoom
@@ -3915,45 +4015,20 @@ export class MatrixPanel {
    */
   exportCanvas(dpi: number, now = new Date()): HTMLCanvasElement {
     const scale = scaleForDpi(dpi)
-    const plot = this.heatmap.cssSize
-    // The lanes are part of the figure, so they are part of its box. A track
-    // exported without them is a picture of a claim with its evidence cropped
-    // off. The two that come *before* the map also move it: everything else on
-    // the page is placed against `origin` rather than against the canvas.
-    const stacks = this.laneStacks()
-    const origin = { x: stacks.left, y: stacks.top }
-    // No column for a legend any more: the key is drawn *in* the map's corner,
-    // exactly where it is on screen, so an exported figure is the same picture
-    // at a different resolution rather than a rearrangement of it.
-    const width = stacks.left + plot.width + stacks.right
-    const body = stacks.top + plot.height + stacks.bottom
-
     const out = document.createElement('canvas')
     const ctx = out.getContext('2d')
     if (ctx === null) throw new Error('Could not acquire a 2d context for the export canvas.')
 
-    // Measured before the canvas is sized, because the caption decides how tall
-    // it has to be — a long provenance line on a narrow figure wraps rather
-    // than running off the edge. Setting `width`/`height` resets the context,
-    // so nothing is drawn until after.
-    // Aligned with the *drawn* frame, not the canvas: the plot is inset by
-    // however much its labels need — and by whatever stack stands to its left —
-    // and a caption flush with the canvas edge hangs off the left of the
-    // picture it belongs to.
-    const left = origin.x + this.heatmap.dataRect.x
-    // None at all where the Export card's *caption* is off: the figure then
-    // ends at the foot of its lowest lane.
-    const lines = getExportPrefs().caption
-      ? captionLines(ctx, this.figureCaption(now), Math.max(120, width - left))
-      : []
-    const captionHeight = captionHeightOf(lines)
+    // Measured before the canvas is sized: setting `width`/`height` resets the
+    // context, so nothing is drawn until after.
+    const frame = this.figureFrame(now, ctx)
+    const { width, height } = frame
 
     // Pre-flight, because the failure mode is silent: past a browser's canvas
     // cap, setting `width`/`height` leaves a blank canvas rather than throwing,
-    // so the export lands as a white rectangle with no explanation. Asked here
-    // rather than at the top of the method because the caption is part of the
-    // height, and a figure that fits without it can fail with it.
-    const height = body + captionHeight
+    // so the export lands as a white rectangle with no explanation. Asked once
+    // the caption is measured, because the caption is part of the height, and
+    // a figure that fits without it can fail with it.
     const fits = largestDpiThatFits(width, height)
     if (fits !== null && fits < dpi) {
       throw new Error(
@@ -3966,46 +4041,50 @@ export class MatrixPanel {
     out.width = Math.max(1, Math.round(width * scale))
     out.height = Math.max(1, Math.round(height * scale))
 
-    // The plot draws from `origin` and clears as it goes, so it goes first and
-    // the background goes on underneath at the end. The caption is *below* the
-    // figure, which is where a caption goes.
-    this.heatmap.renderTo(ctx, scale, origin)
-    // Placed exactly as the grid places them — around the plot, on all four
-    // sides — and *redrawn* at the export scale rather than blown up from the
-    // screen canvases, so a 300 dpi figure has 300 dpi track names.
-    this.lanes.renderInto(ctx, this.figureGeometry(), scale, origin)
-
-    this.renderKeys(ctx, scale, origin)
-
-    if (lines.length > 0) {
-      const palette = readCanvasPalette(this.canvas)
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      ctx.textBaseline = 'alphabetic'
-      ctx.textAlign = 'left'
-      let y = body + scaleLength(CAPTION_TOP)
-      for (const line of lines) {
-        const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
-        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = palette.labelColor
-        // Baseline a little above the line's foot, so the two lines read as one
-        // block rather than as two evenly spaced rows.
-        ctx.fillText(line.text, left, y + height - 4)
-        y += height
-      }
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-    }
+    this.paintFigure(ctx, scale, frame)
 
     // Opaque, and in the theme on screen. A transparent PNG of a white-on-white
     // contact map is a blank rectangle in every viewer that composites onto
     // black, and the labels are drawn in the page's own text colour. Painted
-    // *behind* what is already there — `#ffffff` first, so an unreadable
-    // custom property leaves a white page rather than a black one.
+    // *behind* what is already there — the plot cleared its own box — and
+    // `#ffffff` first, so an unreadable custom property leaves a white page
+    // rather than a black one.
     ctx.globalCompositeOperation = 'destination-over'
     ctx.fillStyle = '#ffffff'
     ctx.fillStyle = readPageBackground()
     ctx.fillRect(0, 0, out.width, out.height)
     ctx.globalCompositeOperation = 'source-over'
     return out
+  }
+
+  /**
+   * The figure as one cell of the deck's (§16.5): the canvas above for its
+   * PNG, at the deck's resolution, and the vector drawing below for its PDF —
+   * the matrix the one image, everything round it paths and text — from one
+   * measurement of its box.
+   */
+  deckFigure(now: Date): CellFigure {
+    const measure = document.createElement('canvas').getContext('2d')
+    if (measure === null) throw new Error('Could not measure the caption.')
+    const frame = this.figureFrame(now, measure)
+    return {
+      width: frame.width,
+      height: frame.height,
+      raster: (dpi) => this.exportCanvas(dpi, now),
+      vector: (ctx) => this.drawVector(ctx, frame),
+    }
+  }
+
+  /**
+   * The figure onto a vector page, from the context's origin: the page under
+   * it first — a PDF is drawn in order and has no `destination-over` — then
+   * the figure at 1:1.
+   */
+  private drawVector(ctx: CanvasRenderingContext2D, frame: FigureFrame): void {
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, frame.width, frame.height)
+    this.paintFigure(ctx, 1, frame)
   }
 
   /**
@@ -4024,46 +4103,12 @@ export class MatrixPanel {
    * the matrix actually has, since a bin is a bin however large the page is.
    */
   private async vectorFigure(now: Date): Promise<Blob> {
-    const plot = this.heatmap.cssSize
-    const stacks = this.laneStacks()
-    const origin = { x: stacks.left, y: stacks.top }
-    const width = stacks.left + plot.width + stacks.right
-    const body = stacks.top + plot.height + stacks.bottom
-
     const measure = document.createElement('canvas').getContext('2d')
     if (measure === null) throw new Error('Could not measure the caption.')
-    const left = origin.x + this.heatmap.dataRect.x
-    const caption = this.figureCaption(now)
-    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, width - left)) : []
-    const height = body + captionHeightOf(lines)
-
-    const page = new VectorPage(width, height)
-    const ctx = page.ctx
-    // The page under the drawing, first: a PDF is drawn in order and has no
-    // `destination-over`.
-    ctx.fillStyle = readPageBackground()
-    ctx.fillRect(0, 0, width, height)
-
-    this.heatmap.renderTo(ctx, 1, origin)
-    this.lanes.renderInto(ctx, this.figureGeometry(), 1, origin)
-
-    this.renderKeys(ctx, 1, origin)
-
-    if (lines.length > 0) {
-      const palette = readCanvasPalette(this.canvas)
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.textBaseline = 'alphabetic'
-      ctx.textAlign = 'left'
-      let y = body + scaleLength(CAPTION_TOP)
-      for (const line of lines) {
-        const step = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
-        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = palette.labelColor
-        ctx.fillText(line.text, left, y + step - 4)
-        y += step
-      }
-    }
-    return page.toBlob({ title: caption.title, created: now })
+    const frame = this.figureFrame(now, measure)
+    const page = new VectorPage(frame.width, frame.height)
+    this.drawVector(page.ctx, frame)
+    return page.toBlob({ title: frame.caption.title, created: now })
   }
 
   /**
@@ -4333,8 +4378,10 @@ export class MatrixPanel {
     const now = new Date()
     // The stamp is in the name because two exports of the same view are the
     // same filename otherwise, and the second one silently becomes
-    // `figure (1).png` in a downloads folder nobody can later put in order.
-    const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}-${this.exportDpi}dpi.${format}`
+    // `figure (1).png` in a downloads folder nobody can later put in order. The
+    // resolution is in a PNG's name and not a PDF's: a vector page has none.
+    const dpi = format === 'png' ? `-${this.exportDpi}dpi` : ''
+    const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}${dpi}.${format}`
     // Where it goes first, while the press is still the reader's (`ui/export.ts`).
     const target = await chooseSaveTarget(name, format === 'png' ? 'image/png' : 'application/pdf')
     if (target === null) return
@@ -9416,9 +9463,9 @@ function positionIn(
 ): string | null {
   if (group === undefined || level !== 'bin') return null
   // The bin's first base, 1-based, as {@link formatPosition} writes it — the
-  // contig is on the line above, so the number goes on its own rather than
-  // through that helper.
-  return fmt.pos(bpWithin(group, offset, blockStart, binsize) + 1)
+  // contig is on the line above, so the number goes on its own, through the
+  // helper that writes it without the name.
+  return baseLabel(bpWithin(group, offset, blockStart, binsize))
 }
 
 /**
@@ -9486,6 +9533,24 @@ const CAPTION_TITLE_FONT = '600 11px system-ui, sans-serif'
 const CAPTION_DETAIL_FONT = '10px system-ui, sans-serif'
 
 /** One drawn caption line; `strong` is the subject, the rest is provenance. */
+/**
+ * A figure's box and what is written under it, measured once for the PNG, the
+ * PDF and the deck's cell alike — see `MatrixPanel.figureFrame`.
+ */
+interface FigureFrame {
+  /** Where the plot's own top-left goes: past the lane stacks above and to its left. */
+  origin: { x: number; y: number }
+  width: number
+  /** The plot and its lanes, without the caption. */
+  body: number
+  /** The whole figure, caption included. */
+  height: number
+  /** Where the caption's lines start: under the data, not under the page's edge. */
+  left: number
+  caption: { title: string; detail: string }
+  lines: CaptionLine[]
+}
+
 interface CaptionLine {
   text: string
   strong: boolean
@@ -9603,15 +9668,60 @@ function watchTheme(onChange: () => void): () => void {
  */
 /**
  * Whether a sideways scroll over a block slides along its diagonal (see
- * `HeatmapView.setDiagonalSlide`): where the diagonal is in the picture — its
- * rows and its columns share a stretch of bins — and the block is square, not
- * turned into a band whose diagonal already runs across the screen.
+ * `HeatmapView.setDiagonalSlide`): wherever the block is **cis** and square,
+ * not turned into a band whose diagonal already runs across the screen.
+ *
+ * Cis is two things, and both slide. The diagonal is in the picture where the
+ * rows and the columns share a stretch of bins. And a block of **two stretches
+ * of one sequence** — `chrI:1-100,000 × chrI:400,001-500,000`, what an
+ * Option-drag off the diagonal opens — has its diagonal off the picture but is
+ * read the same way, by separation: moving rows and columns together keeps
+ * every band parallel to the diagonal, one distance apart, where it is under
+ * the pointer, where a slide of the columns alone carried the reader across
+ * separations they had not asked to leave. It used to take the columns alone,
+ * as a trans block does.
+ *
+ * Trans stays as it was — two sequences, two genomes, where there is no
+ * separation to keep — and so does every picture above bin level, whose cells
+ * are whole sequences or genomes and slide along the diagonal exactly where
+ * their axes share cells.
  */
-export function slidesAlongDiagonal(data: Pick<MatrixResult, 'rowExtent' | 'colExtent'>, turned: RotatedBlock | null): boolean {
+export function slidesAlongDiagonal(
+  data: Pick<MatrixResult, 'rowExtent' | 'colExtent' | 'level' | 'rowGroups' | 'colGroups'> &
+    Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
+  turned: RotatedBlock | null,
+): boolean {
   if (turned !== null) return false
   const [r0, r1] = data.rowExtent
   const [c0, c1] = data.colExtent
-  return Math.max(r0, c0) < Math.min(r1, c1)
+  if (Math.max(r0, c0) < Math.min(r1, c1)) return true
+  return data.level === 'bin' && oneSequence(data)
+}
+
+/**
+ * Whether every run on both axes of a block is one and the same sequence.
+ *
+ * By {@link sameSequence}, the test the readout's distance already makes —
+ * `unitBin` first, the identity that tells two windows of one contig from two
+ * contigs that share a name in two MAGs — so the slide and the separation the
+ * tooltip prints cannot disagree about whether a block is cis. A run holding
+ * several small sequences is none of them.
+ */
+function oneSequence(
+  data: Pick<MatrixResult, 'rowGroups' | 'colGroups'> & Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
+): boolean {
+  const sides = [
+    ...data.rowGroups.map((group) => ({ group, genomes: data.rowGenomes })),
+    ...data.colGroups.map((group) => ({ group, genomes: data.colGenomes })),
+  ].map(({ group, genomes }): AxisSide => ({
+    group,
+    offset: group.start,
+    blockStart: 0,
+    genome: groupAt(genomes, group.start)?.label,
+  }))
+  const first = sides[0]
+  if (first === undefined || data.rowGroups.length === 0 || data.colGroups.length === 0) return false
+  return sides.every((side) => (side.group?.merged?.length ?? 1) <= 1 && sameSequence(first, side))
 }
 
 export function separatorsFor(data: MatrixResult): SeparatorSet {
@@ -9768,9 +9878,11 @@ export function framedPhrase(
 export function spanText(axis: SelectedAxis): { start: string; end: string; span: string } {
   if (axis.range === undefined) return { start: axis.label, end: axis.label, span: '' }
   const [start, end] = axis.range
+  // The first base and the last, each through the one helper that writes a
+  // base (§26.1): the last of a half-open range is the one before its end.
   return {
-    start: `${axis.label}:${fmt.int(Math.round(start) + 1)}`,
-    end: `${axis.label}:${fmt.int(Math.round(end))}`,
+    start: formatPosition(axis.label, Math.round(start)),
+    end: formatPosition(axis.label, Math.round(end) - 1),
     span: fmt.bp(end - start),
   }
 }
@@ -10094,13 +10206,15 @@ export function openLaneMenu(
         run: () => patchFeatures(store, entry, { display }),
       })),
     )
-    if (entry.kind !== 'variants') {
-      items.push({
-        label: 'Point the way each runs',
-        checked: features.arrows,
-        run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
-      })
-    }
+    // On every lane that has rows, a call set's included, as the card offers it
+    // (`laneSettings.arrowsToggle`): the switch changes nothing on a feature
+    // the file gives no strand, and the menu leaving it off one kind of lane
+    // the card kept it on was two answers to one question.
+    items.push({
+      label: 'Point the way each runs',
+      checked: features.arrows,
+      run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
+    })
   }
 
   if (hasAMovableAxis(entry.kind)) {

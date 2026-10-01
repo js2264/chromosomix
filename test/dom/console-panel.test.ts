@@ -240,6 +240,28 @@ describe('the rows', () => {
     expect(textOf(row, '.console-line')).toBe('metacooler-run apa a.cool')
   })
 
+  it('names the state on its mark in the words every surface uses (§26.7)', () => {
+    // One run that finished, and one this window was watching when it went
+    // away — stored `running`, and read back by a window that never saw it
+    // end, so it comes back interrupted (§23.5).
+    const at = Date.now()
+    window.localStorage.setItem(
+      'metacooler-viewer:actions',
+      JSON.stringify({
+        version: 1,
+        entries: [
+          { id: 'ran', at, kind: 'run', line: 'metacooler-run insulation a.cool', shell: true, status: 'ok' },
+          { id: 'gone', at: at + 1, kind: 'run', line: 'metacooler-run compartments a.cool', shell: true, status: 'running' },
+        ],
+      }),
+    )
+    resetActions()
+    const panel = mount()
+    panel.toggle.click()
+    const marks = rows(panel).map((row) => row.querySelector<HTMLElement>('.console-mark')?.title ?? '')
+    expect(marks).toEqual(['analysis run — done', 'analysis run — interrupted'])
+  })
+
   it('draws a refusal under the line it explains, and a caveat over it', () => {
     logAction({
       kind: 'run',

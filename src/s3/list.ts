@@ -173,22 +173,27 @@ export async function listPrefix(
     // misconfigured bucket refuses is the `OPTIONS`; an unsigned one is a simple
     // request that is never preflighted, so reaching here means the bucket has
     // no CORS rule for this origin at all — or there is nothing at the URL.
+    //
+    // **Plain text, every name in it bare** (§26.4). These sentences are drawn
+    // as DOM text in the Files column and the Connect dialog, where nothing
+    // renders Markdown, so backticks round a header or a permission were two
+    // stray marks either side of the one word a reader copies into a policy.
     throw new ViewerError(
       'remote-cors',
       credential === null
         ? `Could not list ${where} on ${address.bucket}. The request was unsigned and simple, so ` +
           'it was not preflighted — which leaves two causes. Either the bucket has no CORS ' +
           'configuration answering this origin (a bucket serving public downloads usually has ' +
-          'one naming `GET`, `HEAD` and `Range`, and that policy answers this request as it ' +
-          'stands), or the host is not an S3 endpoint. Files under this prefix still open by ' +
-          `URL either way. Underlying error: ${why}`
+          'one naming GET, HEAD and Range, and that policy answers this request as it stands), ' +
+          'or the host is not an S3 endpoint. Files under this prefix still open by URL either ' +
+          `way. Underlying error: ${why}`
         : `Could not list ${where} on ${address.bucket}. A signed ` +
-          'request is preflighted, so the bucket CORS policy has to name `Authorization`, ' +
-          '`x-amz-date` and `x-amz-content-sha256` in `AllowedHeaders`. A public-data policy ' +
-          'names `Range` and nothing else, which answers every unsigned read and refuses every ' +
-          'signed one — so a bucket that serves the demos perfectly still fails here. ' +
-          '`AllowedOrigins: ["*"]` is fine: the request sets `Authorization` from script and ' +
-          `sends no cookies, so it is not credentialed in the CORS sense. Underlying error: ${why}`,
+          'request is preflighted, so the bucket CORS policy has to name Authorization, ' +
+          'x-amz-date and x-amz-content-sha256 in AllowedHeaders. A public-data policy names ' +
+          'Range and nothing else, which answers every unsigned read and refuses every signed ' +
+          'one — so a bucket that serves the demos perfectly still fails here. AllowedOrigins ' +
+          '["*"] is fine: the request sets Authorization from script and sends no cookies, so ' +
+          `it is not credentialed in the CORS sense. Underlying error: ${why}`,
       { base: scope.base, prefix },
     )
   }
@@ -198,14 +203,14 @@ export async function listPrefix(
       'bad-uri',
       credential === null
         ? `${address.bucket} does not allow anonymous listing of ${where}. Browsing a public ` +
-          'prefix needs `s3:ListBucket` granted to `*` in the bucket policy, which is a ' +
-          'different grant from the `s3:GetObject` that makes the objects downloadable — most ' +
+          'prefix needs s3:ListBucket granted to everyone ("*") in the bucket policy, which is ' +
+          'a different grant from the s3:GetObject that makes the objects downloadable — most ' +
           'published buckets grant the second and not the first. Files under this prefix still ' +
           'open by URL; add a key for it if you have one, or paste the file URL directly.'
         : `The key for ${scope.label} is not allowed to list ${address.bucket}. Browsing needs ` +
-          "`s3:ListBucket` on the bucket, which is a different permission from `s3:GetObject` " +
-          'on the objects — this key may well still open files under it by URL. Add ' +
-          '`s3:ListBucket` scoped to the prefix, or paste the file URL directly.',
+          's3:ListBucket on the bucket, which is a different permission from s3:GetObject on ' +
+          'the objects — this key may well still open files under it by URL. Add s3:ListBucket ' +
+          'scoped to the prefix, or paste the file URL directly.',
       { base: scope.base, prefix, status: 403 },
     )
   }

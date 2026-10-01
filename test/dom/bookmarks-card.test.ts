@@ -153,12 +153,28 @@ function choose(input: HTMLInputElement, file: File): Promise<void> {
 describe('saving a place', () => {
   it('takes coordinates that were typed, with the resolution the map is at', () => {
     const app = mount()
-    app.type('II:900,000-960,000')
+    // 1-based and inclusive, as every locus box reads one (§26.1); kept as the
+    // 0-based half-open interval a BED is written in.
+    app.type('II:900,001-960,000')
     app.press('add')
     expect(app.store.marks).toEqual([
       { id: expect.any(String), label: '', contig: 'II', start: 900000, end: 960000, binsize: 10000 },
     ])
     expect(app.rows()).toHaveLength(1)
+  })
+
+  // THE LAW (§26.1): a row's own text, typed into the box, is the place the row
+  // already holds — so the card says so rather than saving a second place a
+  // base along from the first.
+  it('reads a row’s own text back as the place it names', () => {
+    const app = mount()
+    app.press('save this view')
+    const shown = app.card.el.querySelector('.bookmark-coords')?.textContent ?? ''
+    expect(shown).toBe('II:120,001-180,000')
+    app.type(shown)
+    app.press('add')
+    expect(app.store.marks).toHaveLength(1)
+    expect(app.note()).toMatch(/already bookmarked/)
   })
 
   it('marks a coordinate that did not parse instead of adding nothing quietly', () => {
@@ -243,7 +259,8 @@ describe('the list', () => {
     app.store.add({ id: 'b1', label: 'anchor_A', contig: 'II', start: 120000, end: 124000 })
     const row = app.card.el.querySelector('.bookmark-row')
     expect(row?.querySelector('.bookmark-name')?.textContent).toBe('anchor_A')
-    expect(row?.querySelector('.bookmark-coords')?.textContent).toBe('II:120,000-124,000')
+    // 1-based, as the breadcrumb writes the same window (§26.1).
+    expect(row?.querySelector('.bookmark-coords')?.textContent).toBe('II:120,001-124,000')
   })
 
   it('reads a nameless place as its coordinates alone', () => {
@@ -251,13 +268,14 @@ describe('the list', () => {
     app.press('save this view')
     const row = app.card.el.querySelector('.bookmark-row')
     expect(row?.querySelector('.bookmark-name')).toBeNull()
-    expect(row?.querySelector('.bookmark-coords')?.textContent).toBe('II:120,000-180,000')
+    expect(row?.querySelector('.bookmark-coords')?.textContent).toBe('II:120,001-180,000')
   })
 
   it('writes a place of no width as one coordinate, not a range of nothing', () => {
     const app = mount()
     app.store.add({ id: 'b1', label: '', contig: 'II', start: 150000, end: 150000 })
-    expect(app.card.el.querySelector('.bookmark-coords')?.textContent).toBe('II:150,000')
+    // The base it stands at, 1-based.
+    expect(app.card.el.querySelector('.bookmark-coords')?.textContent).toBe('II:150,001')
   })
 
   it('shows the grain when the bookmark has one, and nothing when it has not', () => {

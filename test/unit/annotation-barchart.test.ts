@@ -31,6 +31,7 @@ import {
   sniffBarChart,
 } from '@/annotations/barchart'
 import { formatIntervals } from '@/annotations/export'
+import { routeOf, unroutableNote } from '@/browse/route'
 import { cardFor, kindFor } from '@/annotations/loader'
 import { sniffFormat } from '@/annotations/parse'
 import { sniffVcf } from '@/annotations/vcf'
@@ -279,6 +280,17 @@ describe('a bigBarChart', () => {
     expect(set.length).toBe(3)
     expect(set.bars?.named).toBe(false)
     expect(valuesAt(set, set.name.indexOf('TFC3'))).toEqual([10.5, 3.2, 0])
+  })
+})
+
+describe('where a barChart goes by its name', () => {
+  it('is offered on the genome door, under either name', () => {
+    // The loader has read both by their bytes since §8.17, and a folder listing
+    // drew them dimmed — the router had never been taught the names.
+    for (const name of ['gtex.barChart', 'https://host/hub/gtex.bigBarChart', 'gtex.barChart.gz']) {
+      expect(routeOf(name), name).toBe('genome')
+      expect(unroutableNote(name), name).toBeNull()
+    }
   })
 })
 

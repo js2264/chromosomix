@@ -9,6 +9,7 @@
  */
 
 import type { ParsedRange, Transform } from '../types'
+import { typedLocusToRegion } from '../genome/assembly'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, titleWhenCut } from './dom'
@@ -19,7 +20,7 @@ import { MatrixPanel, axisRegion, blockSummary, poolingNote,
  type FigureSubject} from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
-import { SearchBox } from './SearchBox'
+import { SearchBox, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
 
 /** The colour-scale fields that are carried in the URL hash (§5.5). */
@@ -139,10 +140,20 @@ export class GenomeView {
     titleWhenCut(this.summary)
     this.note = el('p', { class: 'note hidden' })
     this.search = new SearchBox({
-      placeholder: 'contig, or contig:start-end',
-      title: 'Open one contig of this genome, or a range within it.',
+      // What every other locus box has (§26.1, §26.6): the shared builder's
+      // offer, a `go`, and the typed form read 1-based. This box was the last to
+      // say `contig, or contig:start-end` and to hand what was typed straight to
+      // the region reader, which takes the digits 0-based — so a window copied
+      // off a breadcrumb, out of IGV or out of a paper opened a base to the
+      // right of the place it names.
+      placeholder: locusPlaceholder({ accepts: { sequence: true } }),
+      go: true,
+      title:
+        'Open one contig of this genome, or a range within it. Coordinates are 1-based and ' +
+        'inclusive, as IGV and samtools write them.',
+      // 1-based inclusive in, the machine form out (§26.1).
       onSubmit: (text) => {
-        if (text !== '') props.onOpenRegion(text)
+        if (text !== '') props.onOpenRegion(typedLocusToRegion(text))
       },
     })
 

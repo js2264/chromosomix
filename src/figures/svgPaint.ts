@@ -26,10 +26,15 @@
  *
  * Three limits, stated rather than hidden:
  *
- * - **A gradient becomes its middle stop.** A canvas context can hold a
+ * - **A linear gradient is bands.** A canvas context can hold a
  *   `CanvasGradient`, but a {@link VectorPage} cannot — its `fillStyle` is a
- *   colour string — so a gradient fill is flattened to one representative
- *   colour. Nothing in this app's figures asks for one.
+ *   colour string — so a shape filled with one is clipped to and filled with a
+ *   hundred bands across the gradient's line, each the colour the gradient has
+ *   at its middle. That is what a chart's continuous colour bar is: it used to
+ *   be flattened to its middle stop, and every exported pileup's key was one
+ *   orange rectangle beside a picture in a hundred colours. A radial gradient,
+ *   which nothing here draws, is still its middle stop; a gradient stroke is
+ *   too.
  * - **`<image>` is skipped.** Nothing `zrender` draws for these charts is a
  *   raster; a contact map, which genuinely is one, is not drawn through here at
  *   all (`ui/analysisPlots.ts` keeps its own painter).
@@ -39,7 +44,7 @@
  *   other than `0` or `1` is refused rather than guessed at.
  */
 
-import type { VectorTarget } from '../ui/vector'
+import { pdfColour, type VectorTarget } from '../ui/vector'
 
 /** The slice of a canvas context a replay needs. A real one satisfies it. */
 export type PaintTarget = VectorTarget
@@ -57,6 +62,12 @@ export interface PaintBox {
 interface PaintState {
   /** `null` is SVG's `none`: the shape is not filled at all. */
   fill: string | null
+  /**
+   * The linear gradient a shape is filled with, where it is one; {@link fill}
+   * is then its middle stop, for the text and the strokes that cannot be
+   * banded.
+   */
+  fillGradient: LinearPaint | null
   stroke: string | null
   strokeWidth: number
   opacity: number
@@ -77,6 +88,7 @@ interface PaintState {
 
 const INITIAL: PaintState = {
   fill: '#000000',
+  fillGradient: null,
   stroke: null,
   strokeWidth: 1,
   opacity: 1,
@@ -162,12 +174,15 @@ function dashOf(text: string | null): number[] | null {
 }
 
 /** The state an element's own attributes make out of the one it inherited. */
-function descend(el: Element, parent: PaintState, paints: Map<string, string>): PaintState {
+function descend(el: Element, parent: PaintState, paints: Paints): PaintState {
   const inline = inlineStyle(el)
   const next: PaintState = { ...parent }
 
   const fill = prop(el, inline, 'fill')
-  if (fill !== null) next.fill = colourOf(fill, parent.fill, paints)
+  if (fill !== null) {
+    next.fill = colourOf(fill, parent.fill, paints)
+    next.fillGradient = gradientOf(fill, parent.fillGradient, paints)
+  }
   const stroke = prop(el, inline, 'stroke')
   if (stroke !== null) next.stroke = colourOf(stroke, parent.stroke, paints)
 
@@ -212,33 +227,63 @@ function clamp01(value: number): number {
 }
 
 /**
- * A paint value as a colour, or `null` for `none`.
- *
- * `url(#id)` is a gradient, which this target cannot hold; the table built by
- * {@link collectPaints} has already reduced each one to a single stop.
+ * A linear gradient as SVG states it: the line it runs along, in the shape's
+ * own box (`objectBoundingBox`, the default) or in the user space the shape is
+ * drawn in, and its stops in order.
  */
-function colourOf(
-  value: string,
-  inherited: string | null,
-  paints: Map<string, string>,
-): string | null {
-  const text = value.trim()
-  if (text === 'none' || text === 'transparent') return null
-  if (text === 'currentColor' || text === 'inherit') return inherited
-  const url = /^url\(\s*['"]?#([^)'"]+)['"]?\s*\)$/.exec(text)
-  if (url !== null) return paints.get(url[1]) ?? null
-  return text
+interface LinearPaint {
+  units: 'objectBoundingBox' | 'userSpaceOnUse'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  stops: Array<{ offset: number; rgb: [number, number, number]; opacity: number }>
 }
 
 /**
- * Every gradient in the document, reduced to one colour each.
- *
- * The middle stop rather than the first, because a gradient is chosen for the
- * colour it reads as overall and its ends are the extremes of that, not the
- * average of it.
+ * Every gradient in the document, by id: the colour it stands for where only
+ * one colour can be drawn — a stroke, a run of text, a radial gradient — and,
+ * for a linear one, the gradient itself, for a fill to be banded with.
  */
-function collectPaints(root: Element): Map<string, string> {
-  const paints = new Map<string, string>()
+type Paints = Map<string, { flat: string; linear: LinearPaint | null }>
+
+/** The `#id` a `url(#id)` paint names, or `null` for any other paint. */
+function urlOf(text: string): string | null {
+  return /^url\(\s*['"]?#([^)'"]+)['"]?\s*\)$/.exec(text.trim())?.[1] ?? null
+}
+
+/**
+ * A paint value as a colour, or `null` for `none`.
+ *
+ * `url(#id)` is a gradient, which a colour string cannot be; the table built
+ * by {@link collectPaints} holds the one stop that stands for each.
+ */
+function colourOf(value: string, inherited: string | null, paints: Paints): string | null {
+  const text = value.trim()
+  if (text === 'none' || text === 'transparent') return null
+  if (text === 'currentColor' || text === 'inherit') return inherited
+  const url = urlOf(text)
+  if (url !== null) return paints.get(url)?.flat ?? null
+  return text
+}
+
+/** The linear gradient a fill names, or `null` where it names anything else. */
+function gradientOf(value: string, inherited: LinearPaint | null, paints: Paints): LinearPaint | null {
+  const text = value.trim()
+  if (text === 'inherit') return inherited
+  const url = urlOf(text)
+  return url === null ? null : (paints.get(url)?.linear ?? null)
+}
+
+/**
+ * Every gradient in the document.
+ *
+ * Its single colour is the middle stop rather than the first, because a
+ * gradient is chosen for the colour it reads as overall and its ends are the
+ * extremes of that, not the average of it.
+ */
+function collectPaints(root: Element): Paints {
+  const paints: Paints = new Map()
   const gradients = root.querySelectorAll('linearGradient, radialGradient')
   for (const gradient of Array.from(gradients)) {
     const id = gradient.getAttribute('id')
@@ -246,11 +291,44 @@ function collectPaints(root: Element): Map<string, string> {
     const stops = Array.from(gradient.querySelectorAll('stop'))
     if (stops.length === 0) continue
     const middle = stops[Math.floor((stops.length - 1) / 2)]
-    const inline = inlineStyle(middle)
-    const colour = prop(middle, inline, 'stop-color') ?? '#000000'
-    paints.set(id, colour)
+    const flat = prop(middle, inlineStyle(middle), 'stop-color') ?? '#000000'
+    paints.set(id, {
+      flat,
+      linear: gradient.tagName.toLowerCase() === 'lineargradient' ? linearOf(gradient, stops) : null,
+    })
   }
   return paints
+}
+
+/**
+ * A `<linearGradient>` read whole. Offsets are fractions or percentages and
+ * never run backwards, as SVG has them; the line defaults to left to right
+ * across the shape's box.
+ */
+function linearOf(gradient: Element, stops: Element[]): LinearPaint {
+  const fraction = (text: string | null, fallback: number): number => {
+    if (text === null || text.trim() === '') return fallback
+    const value = Number.parseFloat(text)
+    if (!Number.isFinite(value)) return fallback
+    return text.trim().endsWith('%') ? value / 100 : value
+  }
+  let last = 0
+  return {
+    units: gradient.getAttribute('gradientUnits') === 'userSpaceOnUse' ? 'userSpaceOnUse' : 'objectBoundingBox',
+    x1: fraction(gradient.getAttribute('x1'), 0),
+    y1: fraction(gradient.getAttribute('y1'), 0),
+    x2: fraction(gradient.getAttribute('x2'), 1),
+    y2: fraction(gradient.getAttribute('y2'), 0),
+    stops: stops.map((stop) => {
+      const inline = inlineStyle(stop)
+      last = Math.max(last, clamp01(fraction(stop.getAttribute('offset'), 0)))
+      return {
+        offset: last,
+        rgb: pdfColour(prop(stop, inline, 'stop-color') ?? '#000000'),
+        opacity: clamp01(num(prop(stop, inline, 'stop-opacity'), 1)),
+      }
+    }),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -703,7 +781,7 @@ function walk(
   el: Element,
   ctx: PaintTarget,
   inherited: PaintState,
-  paints: Map<string, string>,
+  paints: Paints,
   clips: Map<string, Element>,
 ): void {
   for (const child of Array.from(el.children)) {
@@ -863,7 +941,204 @@ function shape(el: Element, tag: string, ctx: PaintTarget, state: PaintState): v
 
   ctx.beginPath()
   if (!outline(el, tag, ctx)) return
-  fillAndStroke(ctx, state, false)
+  const gradient = state.fill === null ? null : state.fillGradient
+  if (gradient === null) {
+    fillAndStroke(ctx, state, false)
+    return
+  }
+  // A banded fill clips to the outline, so the stroke is laid along it again
+  // afterwards — in the order `paint-order` asks for, as for any other shape.
+  const fill = (): void => paintGradient(el, tag, ctx, state, gradient)
+  const stroke = (): void => {
+    ctx.beginPath()
+    outline(el, tag, ctx)
+    fillAndStroke(ctx, { ...state, fill: null }, false)
+  }
+  if (state.strokeFirst) {
+    stroke()
+    fill()
+  } else {
+    fill()
+    stroke()
+  }
+}
+
+/** How many bands a gradient's whole line is cut into, at most, between its first stop and its last. */
+const GRADIENT_BANDS = 100
+
+/**
+ * A shape filled with a linear gradient, as bands.
+ *
+ * Each band is a strip square to the gradient's line, clipped to the shape and
+ * filled with the colour the gradient has at the strip's middle: a hundred
+ * across the line, fewer where two stops are closer than a hundredth and one
+ * where two stops are the same colour, plus the first and last stops' colours
+ * padding out to the shape's edges, which is SVG's `spreadMethod="pad"`. An
+ * opaque band runs on into the next by half its width, since two strips that
+ * merely touch leave a hairline of the page between them in every
+ * anti-aliased reader; the next one covers the overlap.
+ *
+ * In `objectBoundingBox` units the line is in fractions of the shape's own box
+ * and so are the strips — square to the line *in that box*, as SVG has it,
+ * which on a box that is not square is a parallelogram on the page.
+ */
+function paintGradient(el: Element, tag: string, ctx: PaintTarget, state: PaintState, gradient: LinearPaint): void {
+  const bounds = boundsOf(el, tag)
+  if (bounds === null || gradient.stops.length === 0) return
+  // Gradient space → the shape's user space: the box's own affine for
+  // `objectBoundingBox`, the identity for `userSpaceOnUse`.
+  const boxed = gradient.units === 'objectBoundingBox'
+  const toUser = (x: number, y: number): [number, number] =>
+    boxed ? [bounds.x + x * bounds.width, bounds.y + y * bounds.height] : [x, y]
+  const corners: Array<[number, number]> = boxed
+    ? [[0, 0], [1, 0], [1, 1], [0, 1]]
+    : [
+        [bounds.x, bounds.y],
+        [bounds.x + bounds.width, bounds.y],
+        [bounds.x + bounds.width, bounds.y + bounds.height],
+        [bounds.x, bounds.y + bounds.height],
+      ]
+  const dx = gradient.x2 - gradient.x1
+  const dy = gradient.y2 - gradient.y1
+  const length2 = dx * dx + dy * dy
+  const stops = gradient.stops
+  const first = stops[0]
+  const last = stops[stops.length - 1]
+  const alpha = state.opacity * state.fillOpacity
+  const band = (from: number, to: number, rgb: [number, number, number], opacity: number): void => {
+    // A strip of the gradient's line from `from` to `to`, wide enough across
+    // to cover every corner of the shape.
+    const along = (t: number): [number, number] => [gradient.x1 + dx * t, gradient.y1 + dy * t]
+    const nx = -dy / Math.sqrt(length2)
+    const ny = dx / Math.sqrt(length2)
+    let reach = 0
+    for (const [cx, cy] of corners) {
+      reach = Math.max(reach, Math.abs((cx - gradient.x1) * nx + (cy - gradient.y1) * ny))
+    }
+    reach += 1
+    const [ax, ay] = along(from)
+    const [bx, by] = along(to)
+    const quad = [
+      toUser(ax + nx * reach, ay + ny * reach),
+      toUser(bx + nx * reach, by + ny * reach),
+      toUser(bx - nx * reach, by - ny * reach),
+      toUser(ax - nx * reach, ay - ny * reach),
+    ]
+    ctx.globalAlpha = alpha * opacity
+    ctx.fillStyle = `rgb(${rgb.map((v) => Math.round(clamp01(v) * 255)).join(', ')})`
+    ctx.beginPath()
+    ctx.moveTo(quad[0][0], quad[0][1])
+    for (const [x, y] of quad.slice(1)) ctx.lineTo(x, y)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  ctx.save()
+  ctx.beginPath()
+  outline(el, tag, ctx)
+  ctx.clip()
+  if (!(length2 > 0)) {
+    // A line of no length paints the last stop everywhere, as SVG says.
+    band(-1, 1, last.rgb, last.opacity)
+  } else {
+    // Where the shape's corners fall on the line, so the padding reaches them.
+    let lo = 0
+    let hi = 1
+    for (const [cx, cy] of corners) {
+      const t = ((cx - gradient.x1) * dx + (cy - gradient.y1) * dy) / length2
+      lo = Math.min(lo, t)
+      hi = Math.max(hi, t)
+    }
+    type Strip = { from: number; to: number; rgb: [number, number, number]; opacity: number }
+    const strips: Strip[] = []
+    // Neighbours of one colour are one strip: a gradient of a hundred equal
+    // stops — the grey track behind a chart's colour bar — is one fill.
+    const push = (strip: Strip): void => {
+      const before = strips[strips.length - 1]
+      const same =
+        before !== undefined &&
+        before.opacity === strip.opacity &&
+        before.rgb.every((v, channel) => v === strip.rgb[channel])
+      if (same) before.to = strip.to
+      else strips.push(strip)
+    }
+    if (lo < first.offset) push({ from: lo - 0.01, to: first.offset, rgb: first.rgb, opacity: first.opacity })
+    for (let k = 0; k + 1 < stops.length; k++) {
+      const a = stops[k]
+      const b = stops[k + 1]
+      const span = b.offset - a.offset
+      if (!(span > 0)) continue
+      const same = a.opacity === b.opacity && a.rgb.every((v, channel) => v === b.rgb[channel])
+      const count = same ? 1 : Math.max(1, Math.round(span * GRADIENT_BANDS))
+      for (let i = 0; i < count; i++) {
+        const mid = (i + 0.5) / count
+        push({
+          from: a.offset + (span * i) / count,
+          to: a.offset + (span * (i + 1)) / count,
+          rgb: [0, 1, 2].map((channel) => a.rgb[channel] + (b.rgb[channel] - a.rgb[channel]) * mid) as [
+            number,
+            number,
+            number,
+          ],
+          opacity: a.opacity + (b.opacity - a.opacity) * mid,
+        })
+      }
+    }
+    if (hi > last.offset) push({ from: last.offset, to: hi + 0.01, rgb: last.rgb, opacity: last.opacity })
+    strips.forEach((strip, index) => {
+      const opaque = alpha * strip.opacity >= 1 && index + 1 < strips.length
+      band(strip.from, opaque ? strip.to + (strip.to - strip.from) / 2 : strip.to, strip.rgb, strip.opacity)
+    })
+  }
+  ctx.restore()
+  ctx.globalAlpha = 1
+}
+
+/**
+ * A shape's box in its own user space, from the same outline it is drawn
+ * with: every point the outline visits, a curve's handles included. That is
+ * the box a little generously for a curve that does not reach its handles,
+ * which on the shapes a chart fills with a gradient — rectangles and polygons
+ * — is the box exactly.
+ */
+function boundsOf(el: Element, tag: string): { x: number; y: number; width: number; height: number } | null {
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  const add = (x: number, y: number): void => {
+    x0 = Math.min(x0, x)
+    y0 = Math.min(y0, y)
+    x1 = Math.max(x1, x)
+    y1 = Math.max(y1, y)
+  }
+  const noop = (): void => {}
+  const recorder = {
+    beginPath: noop,
+    closePath: noop,
+    moveTo: add,
+    lineTo: add,
+    rect: (x: number, y: number, w: number, h: number) => {
+      add(x, y)
+      add(x + w, y + h)
+    },
+    arc: (x: number, y: number, r: number) => {
+      add(x - r, y - r)
+      add(x + r, y + r)
+    },
+    bezierCurveTo: (a: number, b: number, c: number, d: number, e: number, f: number) => {
+      add(a, b)
+      add(c, d)
+      add(e, f)
+    },
+    quadraticCurveTo: (a: number, b: number, c: number, d: number) => {
+      add(a, b)
+      add(c, d)
+    },
+  }
+  if (!outline(el, tag, recorder as unknown as PaintTarget)) return null
+  if (!(x1 > x0) || !(y1 > y0)) return null
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
 }
 
 /**

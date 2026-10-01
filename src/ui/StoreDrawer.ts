@@ -502,8 +502,12 @@ export class StoreDrawer {
 
   private paintToggle(): void {
     this.toggle.replaceChildren(icon('library'))
+    // **No list of names.** It named four — the lab's data, IGV's genomes, 4DN,
+    // ENCODE — while seven shipped, and a list kept anywhere but the registry
+    // (`ui/stores/registry.ts`) goes stale with the next store added. The
+    // drawer's own row of tiles names every one of them.
     this.toggle.title = withKey(
-      `${this.isOpen ? 'Close' : 'Open'} the stores — the lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected`,
+      `${this.isOpen ? 'Close' : 'Open'} the stores — every data store this viewer ships with, and any you connected`,
       KEYS.stores,
     )
     this.toggle.setAttribute('aria-expanded', String(this.isOpen))

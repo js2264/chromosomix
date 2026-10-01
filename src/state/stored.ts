@@ -36,6 +36,7 @@ import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readStoreRows } from './stores'
 import { storedLines as driveStoredLines } from './drives'
 import { actions, dayOf, forgetActions } from './actions'
+import { isSigned, readScopes } from '../s3/credentials'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -75,14 +76,48 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
+ * Whether the stored bucket list holds any part of a key at all.
+ *
+ * Read off the raw rows rather than off `readScopes`, which drops a row holding
+ * one or two of the three signing fields — and a dropped row's secret is still
+ * on the disk, which is the one thing the *Bucket keys* line exists to say. A
+ * list that will not parse, or a row that is not an object, is assumed to hold
+ * one: this screen errs towards the warning, never away from it.
+ */
+function holdsBucketKey(): boolean {
+  let raw: string | null = null
+  try {
+    raw = window.localStorage.getItem(`${PREFIX}buckets`)
+  } catch {
+    return false
+  }
+  if (raw === null) return false
+  let rows: unknown
+  try {
+    rows = JSON.parse(raw)
+  } catch {
+    return true
+  }
+  if (!Array.isArray(rows)) return true
+  return rows.some((row) => {
+    if (typeof row !== 'object' || row === null) return true
+    const fields = row as Record<string, unknown>
+    return ['accessKeyId', 'secretAccessKey', 'sessionToken'].some(
+      (field) => typeof fields[field] === 'string' && fields[field] !== '',
+    )
+  })
+}
+
+/**
  * What is being kept, as lines a dialog can print.
  *
- * Counts rather than contents, with three deliberate exceptions: granted files,
- * connected folders and connected stores are named, and bucket keys are called
- * what they are. Every other line describes something whose loss costs a reader
- * a preference; those describe what this browser knows about the reader's work,
- * and somebody deciding whether to press "forget everything" on a borrowed
- * machine needs to know it is there without having to press it to find out.
+ * Counts rather than contents, with deliberate exceptions: granted files,
+ * connected folders, connected stores and public buckets are named, and bucket
+ * keys are called what they are. Every other line describes something whose
+ * loss costs a reader a preference; those describe what this browser knows
+ * about the reader's work, and somebody deciding whether to press "forget
+ * everything" on a borrowed machine needs to know it is there without having
+ * to press it to find out.
  */
 export async function storedItems(): Promise<StoredItem[]> {
   const items: StoredItem[] = []
@@ -200,11 +235,26 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
   if (named.includes(`${PREFIX}buckets`)) {
-    items.push({
-      label: 'Bucket keys',
-      // Named, not counted. See the docstring above.
-      detail: 'Access keys for private buckets, stored in this browser in plain text',
-    })
+    // **Two things share the key, and each is listed as what it is**
+    // (`s3/credentials.ts`). A scope with no key is a public prefix — an address
+    // and a name, the bookmark a folder view hangs off — and is named the way
+    // the folders and the stores are; it used to be the *Bucket keys* line,
+    // which told a reader with nothing secret on the disk that a credential was
+    // there to forget. A key is still that line, and still not counted.
+    const open = readScopes().filter((scope) => !isSigned(scope))
+    if (open.length > 0) {
+      items.push({
+        label: 'Buckets you connected',
+        detail: `${open.map((scope) => scope.label).join(', ')} — public addresses, kept with no key`,
+      })
+    }
+    if (holdsBucketKey()) {
+      items.push({
+        label: 'Bucket keys',
+        // Named, not counted. See the docstring above.
+        detail: 'Access keys for private buckets, stored in this browser in plain text',
+      })
+    }
   }
   // Nothing about Google or Dropbox is on this screen, and that is the fact
   // worth stating: the site's client id, API key and app key are in the page

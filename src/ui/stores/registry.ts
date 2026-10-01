@@ -256,6 +256,11 @@ export function encodeShards(): string[] {
  * will not allow a cross-origin GET the front says so in the ordinary way —
  * which is the same sentence any hub gets, and the reason there is nothing
  * special to write here for it.
+ *
+ * What *is* written is who publishes it. A shipped store that answers 404, or a
+ * page of HTML, is read as *not published yet* (§24.2), and without
+ * `publishedBy` that sentence sends a maintainer to the Stores workflow — which
+ * has never written this file and could not put it back.
  */
 const ROADMAP: StoreFront = {
   id: 'roadmap',
@@ -274,6 +279,7 @@ const ROADMAP: StoreFront = {
     label: 'Roadmap (UCSC hub)',
     url: 'https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt',
     builtin: true,
+    publishedBy: 'it is WashU’s hub, published on its VizHub at vizhub.wustl.edu',
   },
   // A hub's own grouping, which `hubStore` writes and which is the same here as
   // it is for a hub the reader pastes: by assembly, with the genome's name on

@@ -271,21 +271,38 @@ describe('every descriptor', () => {
    * empty region string it replaces meant.
    */
   it('refuses a run with no sequence ticked, and prices an unanswered one', () => {
-    // The tasks whose *answer* is per ticked sequence: five that moved off the
-    // dropdown, and the two that were written this way. Cis/trans and
-    // reproducibility are left out on purpose and are not quietly different —
-    // there the list narrows what is *reported* out of a pass that reads the
-    // whole file either way, so an empty one is not a run over nothing.
-    const perSequence = ['expected', 'scalogram', 'insulation', 'di', 'hicscore', 'compartments']
+    // Every task that takes the list, cis/trans and reproducibility included.
+    // Those two were left out once, on the ground that the list there narrows
+    // what is *reported* out of a pass that reads the whole file either way —
+    // and so an empty one ran, and came back as every sequence: a whole-file
+    // answer to a reader who had pressed **none**, which is the one thing
+    // §18.2 says nothing ticked must not become.
+    const perSequence = [
+      'expected',
+      'scalogram',
+      'insulation',
+      'di',
+      'hicscore',
+      'compartments',
+      'cistrans',
+      'hicrep',
+    ]
+    // A second map on the same grid, without which reproducibility refuses for
+    // a reason of its own before the list is asked about.
+    const deck = context({ peers: [{ label: 'rep2', uri: 'rep2.cool', binsize: 1000 }] })
     for (const id of perSequence) {
       const task = taskById(id)
       expect(task, id).toBeDefined()
       if (task === undefined) continue
       expect(task.params.some((spec) => spec.kind === 'sequences'), id).toBe(true)
-      const none = task.estimate(context(), { ...defaultParams(task.params), sequences: [] })
-      expect(none.refusal, id).toBeDefined()
+      const none = task.estimate(deck, { ...defaultParams(task.params), sequences: [] })
+      expect(none.refusal, id).toBe(
+        id === 'compartments'
+          ? 'Tick at least one sequence. All of them is the genome-wide compartment call.'
+          : 'Tick at least one sequence.',
+      )
       expect(none.requests, id).toBe(0)
-      const all = task.estimate(context(), { ...defaultParams(task.params), sequences: null })
+      const all = task.estimate(deck, { ...defaultParams(task.params), sequences: null })
       expect(all.refusal, id).toBeUndefined()
     }
   })
@@ -336,8 +353,21 @@ describe('every descriptor', () => {
     expect(hintOf('fourc', 'anchor')).toBeUndefined()
     // Compartments keeps one, and it is the reason the rule is about *facts*
     // rather than about length: ticking several sequences there gives **one**
-    // eigenvector over all of them, which no arrangement of tick boxes says.
-    expect(hintOf('compartments', 'sequences')).toMatch(/One correlation over all of them/)
+    // eigenvector over all of them under two of the three *contacts* settings,
+    // and one per sequence under the default — which no arrangement of tick
+    // boxes says. It used to name the first answer alone, under the setting
+    // that never gives it.
+    const hint = hintOf('compartments', 'sequences')
+    expect(hint).toMatch(/One correlation per sequence under “cis only”/)
+    expect(hint).toMatch(/one over all of them under “cis and trans” or “trans only”/)
+    // By the labels the *contacts* control actually carries, so a renamed
+    // option cannot leave the hint naming one the form does not show.
+    const contacts = TASKS.find((task) => task.id === 'compartments')?.params.find(
+      (spec) => spec.key === 'contacts',
+    )
+    const labels = contacts?.kind === 'choice' ? contacts.options.map((option) => option.label) : []
+    expect(labels).toHaveLength(3)
+    for (const label of labels) expect(hint).toContain(`“${label}”`)
   })
 })
 

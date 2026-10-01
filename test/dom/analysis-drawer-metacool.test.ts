@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Where a per-bin result goes on a file that has no Annotations panel.
+ * Where a per-bin result goes on a session that has no Tracks card for it.
  *
- * §18.5 says a profile is a lane rather than a picture, and on a `.cool` that is
- * exactly right: it becomes a row on the Tracks card, marked `*`, and inherits
- * colour, limits, edges, the tooltip and the 1D browser by being the same object
- * a bigWig is. A `.metacool` carries no annotations at all (§8.5), so it has no
- * such card — and three of the tasks offered on one produce per-bin vectors:
- * coverage and marginals, diamond insulation, and MAG purity's per-contig track.
+ * §18.5 says a profile is a lane rather than a picture, and on a map with its
+ * Annotations column that is exactly right: it becomes a row on the Tracks card,
+ * marked `*`, and inherits colour, limits, edges, the tooltip and the 1D browser
+ * by being the same object a bigWig is. A host with no annotation layer has no
+ * such card — which was every `.metacool` until §8.5 gave them the cards, and is
+ * still the drawer's other branch (`hasLanes`) — and three of the tasks offered
+ * there produce per-bin vectors: coverage and marginals, diamond insulation, and
+ * MAG purity's per-contig track.
  *
  * What used to happen there was the worst of the available outcomes. The task
  * was priced, run and reported as finished, and the drawer printed a sentence

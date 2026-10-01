@@ -124,6 +124,9 @@ describe('the shipped stores, on a page', () => {
       'https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt',
     )
     expect(frontById('roadmap')?.sessions).toBeUndefined()
+    // …and so it says whose it is when it is not there, rather than sending a
+    // maintainer to a workflow that has never written it.
+    expect(frontById('roadmap')?.rows?.publishedBy).toContain('vizhub.wustl.edu')
     // The DNA Bacterial Zoo is the lab's own analyses, not a file the workflow
     // writes: it lives beside its data on the lab's bucket, one file with its
     // sessions among its rows — and says what publishes it, since it is not the

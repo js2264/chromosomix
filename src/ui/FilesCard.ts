@@ -47,6 +47,7 @@ import {
   subscribeFolders,
 } from '../browse/connected'
 import { writeFileDrag } from './fileDrag'
+import { CONNECT_FOLDER, CONNECT_PLACES } from './connectFronts'
 import type { ConnectedFolder, FolderEntry, PickedFile } from '../browse/folder'
 import { routeOf } from '../browse/route'
 import { rowVerbs } from './rowVerbs'
@@ -75,7 +76,7 @@ function writeLast(id: string): void {
  * providers' own marks (`scripts/build-icons.mjs`). The one fact about a folder
  * that changes what its rows cost to open and whether they are private, so it
  * is a mark rather than a word — on the row here, and on the tiles of the
- * dialogs that connect and pick from them.
+ * dialog that connects them (`ui/connectFronts.ts`).
  */
 export function folderMark(kind: ConnectedFolder['kind']): IconName {
   return kind === 'local'
@@ -141,9 +142,11 @@ export class FilesCard {
       el(
         'div',
         { class: 'files-actions' },
-        button('connect a local or remote folder', () => this.props.onConnect(), {
+        // The landing page's words for the same door (`CONNECT_FOLDER`): in the
+        // standalone build, which has no remote half, *connect a folder* (§19).
+        button(CONNECT_FOLDER, () => this.props.onConnect(), {
           class: 'btn btn-primary',
-          title: 'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed here.',
+          title: `${CONNECT_PLACES}, browsed here.`,
         }),
       ),
       this.lapsedEl,

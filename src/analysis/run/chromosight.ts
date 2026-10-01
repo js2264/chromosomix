@@ -1,8 +1,10 @@
 /**
  * Pattern detection, run.
  *
- * `cmd_detect`'s shape, over one sequence at a time: read the square, detrend
- * it, correlate the template across the scan band, take the maximum of each
+ * `cmd_detect`'s shape, over one sequence at a time: read the band along its
+ * diagonal as deep as the scan reaches (`bandFor`, in tiles — never the square,
+ * which put a cap on the sequence length), detrend it, correlate the template
+ * across the scan band, take the maximum of each
  * focus, cut a window around it, then — once, over everything found on every
  * sequence — suppress the smears, drop what is too near the diagonal, and
  * correct the p-values for having asked the question a few hundred thousand
@@ -597,8 +599,8 @@ function tableOf(calls: Call[], binsize: number): TableOutput {
     label: rows.length < calls.length ? `Strongest ${rows.length} of ${calls.length}` : 'Patterns',
     columns: [
       { key: 'sequence', label: 'Sequence', kind: 'text' },
-      { key: 'start1', label: 'Start 1', kind: 'number', digits: 0 },
-      { key: 'start2', label: 'Start 2', kind: 'number', digits: 0 },
+      { key: 'start1', label: 'Start 1', kind: 'number', coordinate: 'start' },
+      { key: 'start2', label: 'Start 2', kind: 'number', coordinate: 'start' },
       { key: 'separation', label: 'Separation (bp)', kind: 'number', digits: 0 },
       { key: 'score', label: 'Score', kind: 'number', digits: 4, hint: 'Pearson r with the template.' },
       { key: 'pvalue', label: 'p', kind: 'number', digits: 6 },

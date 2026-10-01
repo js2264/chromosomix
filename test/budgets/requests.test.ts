@@ -7,7 +7,7 @@
  * | Load one MAG's matrix | ≤ 5 |
  * | Genome-pair block | ≤ 5 |
  * | Pan/zoom within the block in hand | **0** |
- * | Refine, after a settled zoom | ≤ 5 |
+ * | Refine, on crossing the block's grid | ≤ 5 |
  *
  * ## The row that changed, and why it is two rows
  *
@@ -16,9 +16,10 @@
  * progressive refine precisely because this costs nothing"*. There is now a
  * progressive refine (`ui/refine.ts`), so that sentence had to be re-earned
  * rather than deleted: **a gesture still costs nothing**, and what costs a read
- * is the *settled* zoom afterwards — once, when the picture has stopped moving,
- * bounded by the same window a region load already pays for. The first row is
- * therefore unchanged and still asserted at exactly zero; the second is new.
+ * is a zoom crossing the edge of what the block in hand can show — once, with
+ * the map held still until the new grid lands (§2), bounded by the same window
+ * a region load already pays for. The first row is therefore unchanged and
+ * still asserted at exactly zero; the second is new.
  *
  * ## The substitution
  *
@@ -179,7 +180,7 @@ function budgetSuite(label: string, path: string): void {
       }
     })
 
-    it('refines a settled zoom in ≤ ' + String(BUDGET.refine) + ' requests', async () => {
+    it('refines a zoom past the block’s grid in ≤ ' + String(BUDGET.refine) + ' requests', async () => {
       const { mc, source } = await open(path)
       try {
         const genome = mc.genomeNames[mc.displayGenomes()[0]]
@@ -219,10 +220,10 @@ function budgetSuite(label: string, path: string): void {
         // This is still exactly zero, and it is the half of §12 that the refine
         // did not change: `HeatmapView` holds no reader and `MatrixPanel` holds
         // no reader client, so nothing a *gesture* does can reach a byte. What
-        // reaches a byte is the policy above the panel, once the window has
-        // settled, and it is measured by the test before this one — deliberately
-        // as a separate budget, because the property worth protecting is that
-        // the two are separable at all.
+        // reaches a byte is the policy above the panel, once a zoom crosses the
+        // grid of the block in hand, and it is measured by the test before this
+        // one — deliberately as a separate budget, because the property worth
+        // protecting is that the two are separable at all.
         for (const divisor of [1, 2, 4, 8]) {
           const span = Math.max(1, Math.floor(block.nrows / divisor))
           for (const offset of [0, block.nrows - span]) {

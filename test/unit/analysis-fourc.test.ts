@@ -180,6 +180,7 @@ function halves(profile: ProfileOutput): { cis: number[]; trans: number[] } {
   }
 }
 
+/** The anchor bin, as a runner is handed it: cooler's grammar, 0-based half-open. */
 const ANCHOR = `A:${ANCHOR_BIN * 1000}-${(ANCHOR_BIN + 1) * 1000}`
 
 describe('a 4C profile', () => {
@@ -226,7 +227,9 @@ describe('with the anchor left out', () => {
       expect(Number.isNaN(cis[bin])).toBe(true)
     }
     for (const bin of [0, ANCHOR_BIN - 2, ANCHOR_BIN + 2, BINS - 1]) expect(cis[bin]).toBe(kept[bin])
-    expect(profile.label).toBe(`4C · ${ANCHOR} · anchor excluded`)
+    // The runner is handed cooler's grammar (`runnerParams`) and names its lane
+    // the way a reader reads the anchor (§26.1).
+    expect(profile.label).toBe('4C · A:3,001-4,000 · anchor excluded')
   })
 
   it('is off unless asked for', async () => {
@@ -346,7 +349,7 @@ describe('on a metagenome', () => {
 
   it('does not say “with trans”, because there is nothing else it could be', async () => {
     const profile = await metaProfile({ anchor: ANCHOR, cis: true })
-    expect(profile.label).toBe(`4C · ${ANCHOR}`)
+    expect(profile.label).toBe('4C · A:3,001-4,000')
   })
 
   it('stays in contacts, whatever a remembered normalisation says', async () => {

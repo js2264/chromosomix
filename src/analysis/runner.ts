@@ -37,7 +37,7 @@ import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/type
 import { editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
-import { abortError, idParam, listParam } from './job'
+import { abortError, idParam, listParam, runnerParams } from './job'
 import { taskById } from './registry'
 import {
   defaultParams,
@@ -131,10 +131,10 @@ export interface RunnerHost {
    * The annotations worker, for tasks whose venue is the other one (§18.3).
    *
    * Optional, and a task routed there without one fails by name rather than
-   * running somewhere it cannot read its own inputs. A `.metacool` has no
-   * annotations at all (§8.5), and no task that needs them is offered on it —
-   * so in practice the two conditions coincide, which is precisely why the
-   * failure has to be loud if they ever stop coinciding.
+   * running somewhere it cannot read its own inputs. Every file has one, a
+   * `.metacool` included (§8.5), so `null` is a session whose annotation stores
+   * are not built yet — rare, and exactly why the failure has to be loud: a
+   * task that ran anyway would read nothing and report it as a result.
    */
   annotations?(): AnnotationClient | null
   /** The assembly, so a task in the other venue can clamp a window (§18.3). */
@@ -298,7 +298,8 @@ export function resultKey(map: MapId, taskId: string): string {
 }
 
 /**
- * How many runs of one task on one map are kept, the current one included.
+ * How many earlier runs of one task on one map are kept beside the current one:
+ * the latest and the eight before it.
  *
  * Eight, which is a parameter sweep and not an archive. Each held result is its
  * own typed arrays — a pileup, a saddle, a per-bin profile — so this is a memory
@@ -1237,7 +1238,10 @@ export class AnalysisRunner {
     const payload = {
       kind: 'run' as const,
       task: step.task.id,
-      params: step.params,
+      // Every locus in cooler's grammar, which is what the runners read; the
+      // reader's own form stays in `step.params` and is what the result records
+      // (below, and `runnerParams`).
+      params: runnerParams(step.task.params, step.params),
       framing: job.framing,
       inputs: await this.inputsFor(step, job, upstream),
     }
@@ -1295,7 +1299,18 @@ export class AnalysisRunner {
               'computed from the block after it is read and cannot be asked of the file. These ' +
               'numbers are the underlying counts.',
           ]
-    return { ...raw, notes, provenance: { ...raw.provenance, taskVersion: step.task.version } }
+    // **The parameters as the reader wrote them**, over the ones the worker was
+    // handed. The worker records what arrived, and what arrived had every locus
+    // in the machine form (`runnerParams`) — but a provenance is the record of
+    // what was *asked for*: it fills the form again (`rememberParams`), it is
+    // the `# param` line above every export and the command the console writes,
+    // and a replay reads it back as typed. `IV:1000000-1400000` in any of those
+    // is a locus a reader would read one base early (§26.1).
+    return {
+      ...raw,
+      notes,
+      provenance: { ...raw.provenance, params: step.params, taskVersion: step.task.version },
+    }
   }
 
   private ensureClient(): AnalysisClient {

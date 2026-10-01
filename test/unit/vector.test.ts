@@ -140,6 +140,44 @@ describe('VectorPage', () => {
     })
   })
 
+  // The figure's provenance, where `pdfinfo` looks for it first: a figure
+  // dropped into a manuscript keeps its name and its date when the caption is
+  // cropped off.
+  it('writes the title, the producer and the date it was made', async () => {
+    const page = new VectorPage(20, 20)
+    const created = new Date(Date.UTC(2026, 7, 3, 14, 52, 33))
+    const text = latin1(await bytesOf(await page.toBlob({ title: 'a deck', created })))
+    expect(text).toContain('/Title (a deck)')
+    expect(text).toContain('/Producer (')
+    expect(text).toContain('/CreationDate (D:20260803145233Z)')
+  })
+
+  // What the deck's figure stands on: a cell's drawing sets absolute
+  // transforms of its own, and the origin is applied inside them, so the cell
+  // lands at its place on the page as itself rather than at the page's corner.
+  it('places a sub-drawing at its origin, absolute transforms and all', async () => {
+    const page = new VectorPage(200, 100)
+    page.setOrigin(120, 30)
+    page.ctx.setTransform(2, 0, 0, 2, 0, 0)
+    page.ctx.beginPath()
+    page.ctx.moveTo(5, 5)
+    page.ctx.lineTo(10, 5)
+    page.ctx.stroke()
+    page.setOrigin(0, 0)
+    page.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    page.ctx.beginPath()
+    page.ctx.moveTo(1, 1)
+    page.ctx.lineTo(2, 1)
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    // (5, 5) at twice the size is (10, 10), then 120 across and 30 down; the
+    // page's y runs up, so 40 down a 100-pixel page is 60.
+    expect(content).toContain('130 60 m')
+    expect(content).toContain('140 60 l')
+    // Back at the page's own corner once the origin is put back.
+    expect(content).toContain('1 99 m')
+  })
+
   // CSS pixels are 1/96 inch and points are 1/72, so a 96-pixel figure is
   // 72 points wide however many marks are on it.
   it('sizes the page in points from the figure in CSS pixels', async () => {

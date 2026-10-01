@@ -90,8 +90,9 @@ export interface AnalysisWorkspaceHost {
   /**
    * Where a synthetic lane becomes a row.
    *
-   * `null` on a `.metacool`, which carries no annotations at all (§8.5) — so a
-   * task there can still produce a curve, a matrix or a table, and a *profile*
+   * `null` while the session has no annotation stores. Every file gets them, a
+   * `.metacool` included (§8.5), so that is a session still building them: a
+   * task can still produce a curve, a matrix or a table then, and a *profile*
    * has nowhere to be a lane. Said out loud in the drawer rather than silently
    * dropped; see {@link AnalysisWorkspace.adopt}.
    */
@@ -163,10 +164,9 @@ export interface AnalysisWorkspaceHost {
    *
    * Only one thing here needs them: a task that emits a *set* of profiles can
    * say how the set reads (§18.11), and "these four overlay" is a fact about the
-   * group rather than about any one of its lanes. Optional because a
-   * `.metacool`'s drawer has no group memory to write to, and because a headless
-   * caller has no picture at all — a missing hook loses the suggestion and
-   * nothing else.
+   * group rather than about any one of its lanes. Optional because a headless
+   * caller has no picture at all, and `null` from a session whose annotations
+   * are not built yet — either loses the suggestion and nothing else.
    */
   groups?(): GroupSettings | null
   /** A panel's availability changed, or a row needs repainting. */
@@ -286,14 +286,14 @@ export class AnalysisWorkspace {
       // Read live rather than captured, because a session's store arrives with
       // the file and this workspace is built when the *view* mounts.
       //
-      // **A store is not enough**, and the file that proves it is a metacool.
-      // Since §8.12 one has a store, a placement model and a card — for its own
-      // metadata columns, which are drawn from tables the main thread holds. A
-      // *profile* is drawn from values that live in the annotations worker
-      // ({@link register}), and a metacool has no such worker (§8.5), so a row
-      // there would be an empty lane under a sentence saying where to find it.
-      // The question is therefore whether a profile can be **drawn**, not
-      // whether a list exists to put it in.
+      // **A store is not enough.** A *profile* is drawn from values that live
+      // in the annotations worker ({@link register}), so a row in a store with
+      // no worker beside it would be an empty lane under a sentence saying
+      // where to find it. A metacool was that file — a store and a card for its
+      // own metadata columns (§8.12), drawn from tables the main thread holds,
+      // and no worker — until every file got one (§8.5). The question is
+      // therefore whether a profile can be **drawn**, not whether a list exists
+      // to put it in.
       hasLanes: () => this.laneable(),
       // The grid is passed rather than left to be looked up, because the two
       // callers of `writeProfile` do not agree about which one is right: the
@@ -450,9 +450,10 @@ export class AnalysisWorkspace {
     // A called interval set carries its own coordinates on the entry, so a
     // store is the whole of what it needs; a profile's values live in the
     // annotations worker, so it needs one of those as well ({@link laneable}).
-    // A metacool has the first and not the second (§8.5, §8.12), which is
-    // exactly the file this split exists for: its boundaries become overlays on
-    // the map, and its profiles stay in the drawer that drew them.
+    // A host with the first and not the second gets its boundaries as overlays
+    // on the map and its profiles in the drawer that drew them. A metacool was
+    // the file this split was written for (§8.12), and every file, a metacool
+    // included, has both now (§8.5); the two are still two questions.
     if (store !== null && !this.laneable()) {
       for (const output of intervals) this.adoptIntervals(task, result, output, store, on)
       for (const output of profiles) {
@@ -469,8 +470,9 @@ export class AnalysisWorkspace {
     }
 
     if (store === null) {
-      // §8.5: a file with a genome layer carries no annotations, so there is no
-      // card for a lane to be a row on and no overlay for called intervals. The
+      // No store — a session whose annotations are not built yet, since every
+      // file gets them, a metacool included (§8.5) — so there is no card for a
+      // lane to be a row on and no overlay for called intervals. The
       // drawer draws the profile and carries its exports there (see
       // `AnalysisDrawer.block`) — which it can only do if the values are still
       // reachable when the button is pressed, so they are held exactly as they
@@ -900,26 +902,26 @@ export class AnalysisWorkspace {
   }
 
   /**
+   * Whether a per-bin result can be drawn as a lane on this file.
+   *
+   * Both halves are needed and they are different questions. The **store** is
+   * where a row goes; the **annotations worker** is where its values go, and a
+   * lane samples them from there like a bigWig's ({@link register}). A host
+   * with the first and not the second can hold the row and cannot draw it,
+   * which is the one outcome worse than not offering the row at all — and a
+   * metacool was that file until every file got its worker (§8.5).
+   */
+  private laneable(): boolean {
+    return this.host.store() !== null && this.host.annotations() !== null
+  }
+
+  /**
    * Tell the annotations worker about a vector, so `sample` can answer for it.
    *
    * This single call is what makes the lane a lane. Until it lands the row is on
    * the card and the renderer has nothing to draw; after it, nothing downstream
    * can tell the track from a bigWig (§18.5).
    */
-  /**
-   * Whether a per-bin result can be drawn as a lane on this file.
-   *
-   * Both halves are needed and they are different questions. The **store** is
-   * where a row goes; the **annotations worker** is where its values go, and a
-   * lane samples them from there like a bigWig's ({@link register}). A file
-   * with the first and not the second — a metacool since §8.12 — can hold the
-   * row and cannot draw it, which is the one outcome worse than not offering
-   * the row at all.
-   */
-  private laneable(): boolean {
-    return this.host.store() !== null && this.host.annotations() !== null
-  }
-
   private register(entryId: string, output: ProfileOutput, grid: BinVectorContig[]): void {
     const client = this.host.annotations()
     if (client === null) return
@@ -956,6 +958,21 @@ export class AnalysisWorkspace {
     const task = TASKS.find((candidate) => candidate.id === source.task)
     if (task === undefined) return
     this.show(task)
+  }
+
+  /**
+   * When the run behind a computed row was made, or `undefined` for a row this
+   * workspace holds no run for — every loaded one, and a computed one restored
+   * from a reload, whose numbers did not come back either.
+   *
+   * For the Structures card, which writes a model's bed3d itself and whose `#`
+   * line said what the model was and what it was made from but not when (§25.7)
+   * — where the drawer's button and `metacooler-run` both say all three. The
+   * date is the run's provenance, which lives here beside the numbers and never
+   * on the store (§18.5), so the card asks.
+   */
+  createdAt(id: string): string | undefined {
+    return this.intervals.get(id)?.provenance.createdAt
   }
 
   // -------------------------------------------------------------------------
@@ -1037,13 +1054,13 @@ export class AnalysisWorkspace {
   /**
    * A per-bin vector as one of the two files a genome browser opens.
    *
-   * Public to the drawer as well as to the card, because on a `.metacool` the
-   * drawer is the only surface a profile has: there is no Annotations panel for
-   * it to be a row on (§8.5), so the row's export row does not exist and §18.7's
-   * *bigWig for a signal, bedGraph, BED, TSV, PNG and vector PDF* would be a
-   * claim this app did not keep on that layout. One implementation for both,
-   * rather than the drawer growing a second copy of the writers and a second
-   * opinion about where a bin ends.
+   * Public to the drawer as well as to the card, because where there is no lane
+   * ({@link laneable}) the drawer is the only surface a profile has: no row, so
+   * no row's export row, and §18.7's *bigWig for a signal, bedGraph, BED, TSV,
+   * PNG and vector PDF* would be a claim this app did not keep there. A
+   * `.metacool` was that file until every file got its annotations worker
+   * (§8.5). One implementation for both, rather than the drawer growing a
+   * second copy of the writers and a second opinion about where a bin ends.
    *
    * **`grid` is the assembly these values were computed over, and the caller
    * supplies it because this method cannot know it.** It used to read

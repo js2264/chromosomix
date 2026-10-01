@@ -17,12 +17,14 @@
  * the text in a group's own filter box — that last one is built once per key
  * and reused, because an input rebuilt under a caret loses the caret.
  *
- * ## Shard facets are radios
+ * ## Shard facets are ticked like the rest
  *
  * ENCODE's rows are twelve files chosen by assembly and kind of file (§24.3),
- * and the two choices are drawn here as the first two groups, as radios: they
- * read like facets, they narrow like facets, and the one way they differ —
- * choosing one *fetches* a file — is said in the group's own line.
+ * and the two choices are drawn here as the first two groups, with checkboxes
+ * as every other facet has: they read like facets, they narrow like facets —
+ * two genomes ticked is both shards read and their rows shown together — and
+ * the one way they differ, that ticking one *fetches* a file, is said where its
+ * count would be: *on request*, until it has been read.
  */
 
 import { button, el, fmt } from '../dom'

@@ -17,8 +17,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { cliCommandFor } from '@/analysis/cliCommand'
+import { taskById } from '@/analysis/registry'
+import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
 import { writeBigWig } from '@/analysis/write/bigwig'
-import { main, recordedTasks, stemOf } from '@/cli/main'
+import { main, readFeatureText, readPairText, recordedTasks, stemOf } from '@/cli/main'
+import { typedLocusToRegion } from '@/genome/assembly'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
 let directory = ''
@@ -253,10 +257,11 @@ describe('running a task', () => {
   it('narrows to a window, and says so in the framing', async () => {
     reset()
     expect(
-      await main(['expected', sample, '--out', out, '--quiet', '--window', 'chrI:0-50000']),
+      await main(['expected', sample, '--out', out, '--quiet', '--window', 'chrI:1-50000']),
     ).toBe(0)
     const text = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
-    expect(text).toMatch(/^# framing: chrI:0-50000 at 1000 bp/m)
+    // In the display form of §26.1, as the app's own framing line writes it.
+    expect(text).toMatch(/^# framing: chrI:1-50,000 at 1000 bp/m)
   })
 
   it('binds --sequences as a list, not as a string the runners ignore', async () => {
@@ -443,6 +448,21 @@ describe('the annotations venue', () => {
     // 500 shared bases over 2,500 in either. The arithmetic is `analysis/
     // overlap.ts`'s and is goldened there; what is being pinned here is that
     // the CLI reaches it at all.
+    expect(text).toMatch(/Jaccard \(bases\)\t0\.2\b/)
+  })
+
+  it('runs overlap against a genePred, read as the transcript it holds', async () => {
+    // The same span as `b.bed`, as UCSC's gene tables write one: two exons
+    // tiling chrI:1,501-2,500. Read as a BED it was no rows at all — its second
+    // column is the sequence, where a BED's is a start — and a task run from a
+    // shell over the gene models a browser draws found nothing to overlap.
+    const genes = join(directory, 'genes.genePred')
+    await writeFile(genes, 'NM_001\tchrI\t+\t1500\t2500\t1600\t2400\t2\t1500,2200,\t1800,2500,\n')
+    reset()
+    const where = join(directory, 'overlap-genepred')
+    const flags = ['--features', aBed, '--features', genes, '--a', aBed, '--b', genes]
+    expect(await main(['overlap', sample, ...flags, '--out', where, '--quiet'])).toBe(0)
+    const text = await readFile(join(where, 'sample.overlap.overlap.tsv'), 'utf8')
     expect(text).toMatch(/Jaccard \(bases\)\t0\.2\b/)
   })
 
@@ -1092,6 +1112,134 @@ describe('the framing flags', () => {
   })
 })
 
+/**
+ * Every locus a command line names is read as the app's boxes read one (§26.1):
+ * 1-based and inclusive, digits grouped or not. It was cooler's grammar, read as
+ * written, so the digits a reader copied off the app named a window one base
+ * along at a shell — and the console wrote its windows in that grammar to match,
+ * a base away from every other locus on the screen.
+ */
+describe('a locus on the command line (§26.1)', () => {
+  /** The fixture's assembly, as the session's context would describe it. */
+  const context: AnalysisContext = {
+    uri: 'sample.hic',
+    layout: 'cool',
+    hasMap: true,
+    hasGenomes: false,
+    hasWeights: false,
+    scoreColumns: [],
+    binsize: 1000,
+    nBins: 180,
+    contigs: [
+      { name: 'chrI', length: 120_000, startBin: 0, bins: 120, genome: -1 },
+      { name: 'chrII', length: 60_000, startBin: 120, bins: 60, genome: -1 },
+    ],
+    genomes: null,
+    entries: [],
+    framing: null,
+    blockLoaded: false,
+    blockBytes: 0,
+  }
+
+  it('reads --window 1-based and inclusive, digits grouped or not', async () => {
+    for (const window of ['chrI:10,001-50,000', 'chrI:10001-50000', 'chrI:10,001–50,000']) {
+      reset()
+      const where = join(directory, 'window-typed')
+      expect(await main(['expected', sample, '--out', where, '--quiet', '--window', window])).toBe(0)
+      const text = await readFile(join(where, 'sample.expected.ps.tsv'), 'utf8')
+      expect(text).toMatch(/^# framing: chrI:10,001-50,000 at 1000 bp/m)
+    }
+  })
+
+  it('takes the window the console writes for a framing, as the bins that framing was', async () => {
+    // A view of chrI's bins 10–50 at 1 kb, written as the console writes it…
+    const command = cliCommandFor({
+      task: taskById('expected') as AnalysisTask,
+      provenance: {
+        task: 'expected',
+        taskVersion: 1,
+        params: {},
+        framing: {
+          uri: sample,
+          rows: [10, 50],
+          cols: [10, 50],
+          binsize: 1000,
+          binsPerCell: 1,
+          balance: false,
+          value: 'count',
+          normalise: null,
+          level: 'bin',
+          label: 'chrI:10,001-50,000 · 1 kb bins · count',
+        },
+        app: 'test',
+        createdAt: '2026-10-01T00:00:00Z',
+      },
+      context,
+    }).text
+    const words = command.split('\n').pop()?.split(' ') ?? []
+    const window = words[words.indexOf('--window') + 1]
+    expect(window).toBe('chrI:10,001-50,000')
+    // …is those bins to the shell, and the framing it records says so.
+    expect(typedLocusToRegion(window)).toBe('chrI:10000-50000')
+    reset()
+    const where = join(directory, 'window-console')
+    expect(await main(['expected', sample, '--out', where, '--quiet', '--window', window])).toBe(0)
+    const text = await readFile(join(where, 'sample.expected.ps.tsv'), 'utf8')
+    expect(text).toMatch(/^# framing: chrI:10,001-50,000 at 1000 bp/m)
+  })
+
+  it('reads a task’s locus flag 1-based, and records it as it was typed', async () => {
+    // The 4C anchor's bins name the profile, so the reading is in the file name:
+    // base 1,000 is the last of bin 0, and base 1,001 the first of bin 1.
+    reset()
+    const where = join(directory, 'anchor-typed')
+    expect(await main(['fourc', sample, '--anchor', 'chrI:1,000-1,000', '--out', where, '--quiet'])).toBe(0)
+    expect(await main(['fourc', sample, '--anchor', 'chrI:1,001-2,000', '--out', where, '--quiet'])).toBe(0)
+    const names = await readdir(where)
+    expect(names).toContain('sample.fourc.fourc-0-1.tsv')
+    expect(names).toContain('sample.fourc.fourc-1-2.tsv')
+    const text = await readFile(join(where, 'sample.fourc.fourc-1-2.tsv'), 'utf8')
+    expect(text).toMatch(/^# param anchor: chrI:1,001-2,000$/m)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('replays a recorded locus with the same reading', async () => {
+    reset()
+    const path = join(directory, 'anchored.metacooler.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: 1,
+        createdAt: '2026-10-01T00:00:00.000Z',
+        active: 0,
+        tabs: [
+          {
+            version: 1,
+            createdAt: '2026-10-01T00:00:00.000Z',
+            state: { uri: 'sample.hic', view: 'contigs' },
+            tracks: [],
+            manual: [],
+            bookmarks: [],
+            // As the form holds it: the display form, grouped.
+            analysis: { fourc: { anchor: 'chrI:1,001-2,000', normalise: 'none', cis: true } },
+          },
+        ],
+      }),
+    )
+    const where = join(directory, 'anchor-replayed')
+    expect(await main(['replay', path, '--over', sample, '--out', where, '--quiet'])).toBe(0)
+    const text = await readFile(join(where, 'sample.fourc.fourc-1-2.tsv'), 'utf8')
+    expect(text).toMatch(/^# param anchor: chrI:1,001-2,000$/m)
+  })
+
+  it('says loci are 1-based in its own help', async () => {
+    reset()
+    expect(await main([])).toBe(0)
+    expect(said()).toMatch(/--window <chr:a-b>\s+a window rather than the whole file, 1-based and\s+inclusive/)
+  })
+})
+
 describe('replaying a workspace', () => {
   /** A workspace file of one tab — what the save button writes for one tab. */
   const tabOf = (analysis: unknown, uri = 'sample.hic') => ({
@@ -1276,5 +1424,83 @@ describe('the small pieces', () => {
     // twice.
     expect(stemOf('/data/sample.mcool::/resolutions/1000')).toBe('sample_1000')
     expect(stemOf('/data/sample.mcool::')).toBe('sample')
+  })
+})
+
+/**
+ * What `--features` and `--pairs` read a file as: what the app's loader reads it
+ * as (§8), through the same parsers.
+ *
+ * The shell asked four of the worker's sniffers and then `sniffFormat`, whose
+ * last line is `return 'bed'` — so every other format a reader hands a task was
+ * read as a BED, and none of them said so. A genePred, a GTF and a VCF came out
+ * as nothing, each having a word where a BED has its start or its end; an
+ * interact as one box spanning both of its anchors; a longrange as a BED4 whose
+ * names were its arcs.
+ */
+describe('what a file named for a task is read as', () => {
+  const INTERACT =
+    'chrI\t1000\t20000\tloop1\t500\t5.000000\texpA\t#0000FF\tchrI\t1000\t2000\tprom1\t+\tchrI\t19000\t20000\tenh1\t-'
+  const LONGRANGE = ['chrI\t1000\t2000\tchrI:19000-20000,3.5', 'chrI\t19000\t20000\tchrI:1000-2000,3.5'].join(
+    '\n',
+  )
+  const GENEPRED = 'NM_001\tchrI\t+\t1000\t20000\t1200\t19000\t3\t1000,5000,18000,\t2000,6000,20000,'
+
+  it('reads a genePred as its transcripts, exons and all', () => {
+    const read = readFeatureText(GENEPRED, 'genes.txt')
+    expect('features' in read).toBe(true)
+    if (!('features' in read)) return
+    expect(read.features.length).toBe(1)
+    expect(read.features.id[0]).toBe('NM_001')
+    expect([read.features.start[0], read.features.end[0]]).toEqual([1000, 20000])
+    // Three exons, at the absolute coordinates the file lists them at, and the
+    // coding span inside them.
+    const { exonAt, exonStart, exonEnd } = read.features
+    expect(Array.from(exonStart.subarray(exonAt[0], exonAt[1]))).toEqual([1000, 5000, 18000])
+    expect(Array.from(exonEnd.subarray(exonAt[0], exonAt[1]))).toEqual([2000, 6000, 20000])
+    expect([read.features.cdsStart[0], read.features.cdsEnd[0]]).toEqual([1200, 19000])
+  })
+
+  it('reads an interact and a longrange as the loop sets they are', () => {
+    const interact = readFeatureText(INTERACT, 'loops.txt')
+    expect('pairs' in interact && interact.pairs.length).toBe(1)
+    if ('pairs' in interact) {
+      expect([interact.pairs.start1[0], interact.pairs.end1[0]]).toEqual([1000, 2000])
+      expect([interact.pairs.start2[0], interact.pairs.end2[0]]).toEqual([19000, 20000])
+      // `value`, the number the pipeline computed, and not the display score.
+      expect(interact.pairs.score[0]).toBe(5)
+    }
+    // Written twice, once from each end, and folded back to the one loop.
+    const longrange = readFeatureText(LONGRANGE, 'loops.longrange')
+    expect('pairs' in longrange && longrange.pairs.length).toBe(1)
+  })
+
+  it('reads a GTF and a VCF as the app does, rather than as BEDs of nothing', () => {
+    const gtf = readFeatureText(
+      'chrI\tsgd\tgene\t1001\t2000\t.\t+\t.\tgene_id "YAL001C"; gene_name "TFC3";',
+      'genes.gtf',
+    )
+    expect('features' in gtf && gtf.features.length).toBe(1)
+    const vcf = readFeatureText(
+      '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\nchrI\t1500\trs1\tA\tG\t50\tPASS\t.',
+      'calls.vcf',
+    )
+    expect('features' in vcf && vcf.features.length).toBe(1)
+  })
+
+  it('still reads a BED as a BED, and a bedpe as pairs', () => {
+    const bed = readFeatureText('chrI\t1000\t2000\tpeak1\t500\t+', 'peaks.bed')
+    expect('features' in bed && bed.features.length).toBe(1)
+    const bedpe = readFeatureText('chrI\t1000\t2000\tchrI\t19000\t20000', 'loops.bedpe')
+    expect('pairs' in bedpe && bedpe.pairs.length).toBe(1)
+  })
+
+  it('reads a --pairs file in whichever of the three paired formats it is', () => {
+    expect(readPairText(INTERACT, 'loops.txt').start2[0]).toBe(19000)
+    expect(readPairText(LONGRANGE, 'loops.txt').length).toBe(1)
+    // A bedpe the BED sniffer would not take — an Ensembl one, whose second
+    // contig is called `1` — is still a bedpe here, as the flag says it is.
+    const ensembl = readPairText('1\t1000\t2000\t1\t19000\t20000', 'loops.txt')
+    expect([ensembl.start1[0], ensembl.start2[0]]).toEqual([1000, 19000])
   })
 })

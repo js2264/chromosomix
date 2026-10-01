@@ -105,8 +105,8 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     const fill = dialog !== null
     if (built.kind === 'matrix' && built.output.streaks !== undefined) {
       // A dot plot on screen is a view of its own (§28.2): its streaks drawn
-      // as lines at any zoom and read under the pointer. Its cells stay what an
-      // export draws.
+      // as lines at any zoom and read under the pointer. An export draws the
+      // same lines, the window on screen; the cells stay in the TSV.
       const figure = dotplotFigure(built.output.streaks)
       figure.setFill?.(fill)
       return figure
@@ -170,7 +170,10 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     // instance — and therefore the element the dialog may be holding.
     const live = chart()
     if (live !== null && sameFigure(spec, before, style)) live.update(style)
-    else swap()
+    // A dot plot is not rebuilt for a style: its view draws the streaks and
+    // nothing the style says (§28.2), and a new one would throw away the window
+    // the reader had zoomed to — for a title, which is the head's.
+    else if (!(spec.kind === 'matrix' && spec.output.streaks !== undefined)) swap()
     settings?.refresh()
     paintStrip()
     // The head carries the title, which is one of the things a control sets.
@@ -363,6 +366,14 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a figure can be redrawn into a raster or onto a page.
+ *
+ * A table is DOM and a plot is a canvas, so only one of the two has a `draw` to
+ * hand a different context to. Asked of the figure rather than of the output
+ * kind that produced it, so the day a third figure kind appears the compiler
+ * asks the question at the one place that has to answer it.
+ */
 function asDrawable(figure: { el: HTMLElement; destroy(): void }): PlotFigure | null {
   return 'draw' in figure ? (figure as PlotFigure) : null
 }

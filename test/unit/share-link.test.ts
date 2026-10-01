@@ -312,6 +312,34 @@ describe('reading a link', () => {
     })
   })
 
+  it('sends the name of a map on a bucket, as it sends the map', async () => {
+    // A `gs://` address opens in any browser since `sources/rewrite.ts` gave it
+    // one (SPECS §24.5), so a link carries the session over it, its lanes and
+    // its companions. The names were judged by a copy of the test of their own
+    // that predated `gs:`, and arrived stripped: the recipient opened the same
+    // maps under file names where the sender had written words.
+    const config = configOf({
+      mapNames: {
+        'gs://lab-bucket/rep1.mcool': 'wild type',
+        's3://lab-bucket/rep2.mcool': 'replicate 2',
+        'rep3.mcool': 'the unpublished one',
+      },
+      lanes: [laneOn('a3', 'gs://lab-bucket/rep1.mcool::/resolutions/1000')],
+      state: { uri: 'gs://lab-bucket/rep1.mcool::/resolutions/1000', view: 'region' },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    const back = decoded(await decodeShare(payload))
+    expect(back?.mapNames).toEqual({
+      'gs://lab-bucket/rep1.mcool': 'wild type',
+      's3://lab-bucket/rep2.mcool': 'replicate 2',
+    })
+    // One test for every field keyed on a file, so a name and the lane drawn on
+    // the same map travel or stay together.
+    expect(back?.lanes).toEqual([laneOn('a3', 'gs://lab-bucket/rep1.mcool::/resolutions/1000')])
+    expect(JSON.stringify(await inflated(payload))).not.toContain('unpublished')
+  })
+
   it('sends a lane on a remote companion and holds a local one’s back', async () => {
     // `lanes` says where each track was drawn, keyed on the file the companion
     // was showing — so a placement on a local companion carries the same bare

@@ -23,7 +23,7 @@ import { el } from '../ui/dom'
 import { describeStreak, drawDotplot, type DotplotPicture } from '../ui/dotplotFigure'
 import { icon } from '../ui/icons'
 import { recall, remember } from '../state/UiMemory'
-import { foundFrom, pickSets, throughEdit, type EditedLines, type FoundStreaks } from './dotplotLines'
+import { foundFrom, sequenceSets, throughEdit, type EditedLines, type FoundStreaks } from './dotplotLines'
 
 export interface LiveDotplotProps {
   store: AnnotationStore
@@ -69,15 +69,7 @@ export class LiveDotplot {
 
   /** A corner plot for a stage, or `null` where the session holds no other reference to set the file against. */
   static of(props: LiveDotplotProps): LiveDotplot | null {
-    return LiveDotplot.sets(props.store).others.length === 0 ? null : new LiveDotplot(props)
-  }
-
-  private static sets(store: AnnotationStore): ReturnType<typeof pickSets<{ id: string; matched: number; label: string }>> {
-    const sequences = store.entries
-      .filter((entry) => entry.kind === 'sequence' && entry.status === 'ready')
-      .map((entry) => ({ id: entry.id, matched: entry.overlap?.matched ?? 0, label: entry.label }))
-    const picked = pickSets(sequences)
-    return picked.own === null ? { own: null, others: [] } : picked
+    return sequenceSets(props.store.entries).others.length === 0 ? null : new LiveDotplot(props)
   }
 
   private constructor(private readonly props: LiveDotplotProps) {
@@ -130,7 +122,7 @@ export class LiveDotplot {
   }
 
   private fillPicker(): void {
-    const { others } = LiveDotplot.sets(this.props.store)
+    const { others } = sequenceSets(this.props.store.entries)
     const remembered = recall<string>(this.props.memoryKey, REFERENCE_SCOPE)
     this.picker.replaceChildren(...others.map((set) => el('option', { value: set.id, text: `against ${set.label}` })))
     const chosen = others.find((set) => set.id === remembered) ?? others[0]
@@ -150,7 +142,7 @@ export class LiveDotplot {
 
   /** Set the file against `reference`: its streaks found once, in the annotations worker. */
   private choose(reference: string): void {
-    const { own } = LiveDotplot.sets(this.props.store)
+    const { own } = sequenceSets(this.props.store.entries)
     if (own === null || reference === this.reference) return
     this.reference = reference
     remember(this.props.memoryKey, REFERENCE_SCOPE, reference)

@@ -631,10 +631,14 @@ function thresholdTable(global: Float64Array, drawn: number): TableOutput {
 }
 
 /**
- * One row per peak tested: yapc's `.tsv`, in the display form (§26.1).
+ * One row per peak tested: yapc's `.tsv`.
  *
- * Starts and summits are **1-based** here, as every coordinate a reader reads
- * is, while the lane and a BED saved from it keep the file's 0-based form.
+ * Starts and summits are held **0-based**, as yapc writes them and as the lane
+ * and a BED saved from it keep them, and printed 1-based like every coordinate
+ * a reader reads (`TableColumn.coordinate`, §26.1). They used to be held
+ * 1-based, which printed right and saved a TSV whose sequence, start and end
+ * this app's own reader takes as BED's (§8.3) — every peak dropped back on a
+ * map a base to the right of where it was called.
  */
 function peakTable(options: {
   names: readonly string[]
@@ -654,9 +658,9 @@ function peakTable(options: {
   tested.forEach((i, k) => {
     const row: Record<string, string | number> = {
       sequence: contig[i],
-      start: starts[i] + 1,
+      start: starts[i],
       end: ends[i],
-      summit: modes[i] + 1,
+      summit: modes[i],
       width: ends[i] - starts[i],
     }
     scores.forEach((column, t) => {
@@ -678,9 +682,9 @@ function peakTable(options: {
     label: options.replicate ? 'Every peak tested' : 'Every peak',
     columns: [
       { key: 'sequence', label: 'Sequence', kind: 'text' },
-      { key: 'start', label: 'Start', kind: 'number', hint: '1-based.' },
-      { key: 'end', label: 'End', kind: 'number' },
-      { key: 'summit', label: 'Summit', kind: 'number', hint: 'The most concave base, 1-based.' },
+      { key: 'start', label: 'Start', kind: 'number', coordinate: 'start' },
+      { key: 'end', label: 'End', kind: 'number', coordinate: 'end' },
+      { key: 'summit', label: 'Summit', kind: 'number', coordinate: 'start', hint: 'The most concave base.' },
       { key: 'width', label: 'Width', kind: 'number' },
       ...names.map((name, t) => ({
         key: `curvature${t}`,

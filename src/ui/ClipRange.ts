@@ -9,14 +9,15 @@
  *
  * It carried a two-handled slider over the block's value extent for a while.
  * The boxes outlived it: a clip is two numbers a reader arrives at by reading
- * the colourbar, and picking them off a 200-pixel track meant a range of about
+ * the key, and picking them off a 200-pixel track meant a range of about
  * four significant figures per pixel and no way to type the one you wanted
  * without going through the box anyway.
  *
- * Units are **transformed** units, the same ones `vmax` has always been in and
- * the ones the URL hash carries. A reader thinks in counts, so the caption under
- * the boxes prints the untransformed pair — and the colourbar, which is labelled
- * in counts throughout, remains the authority.
+ * Units are **transformed** units, the same ones `vmax` has always been in, the
+ * ones the URL hash carries, and the ones the key in the map's corner prints
+ * and takes typed — its title names the transform, `Balanced (log10)`. A reader
+ * thinks in counts, so the caption under the boxes prints the untransformed
+ * pair, in the units the readout under the pointer uses.
  *
  * Both of those numbers are on screen at once — `-4.182` in a box, `0.000066`
  * in the caption — so both say what they are: the caller puts the transform in
@@ -122,7 +123,7 @@ export class ClipRange {
       // screen. The box is sized by its column here, so it declares one digit.
       attrs: { step: 'any', size: '1', 'aria-label': `${which} clip value` },
       title:
-        'In transformed units — the same ones the colourbar is built from. ' +
+        'In transformed units — the same ones the key in the map’s corner prints. ' +
         'The low bound must stay below the high one.',
     })
     node.addEventListener('change', () => this.fromBox(which, node))

@@ -8,16 +8,24 @@
  * opposite of a per-MAG diagnostic. That is the property most worth pinning
  * here, and it is the one a reimplementation would get wrong by writing the
  * obvious `else` branch.
+ *
+ * At the end, the inter-MAG network run on the matrix the QC pass produces:
+ * each of its three edge weights, on a file small enough to do by hand.
  */
 
 import { describe, expect, it } from 'vitest'
 
+import type { JobContext } from '@/analysis/job'
 import {
   binContigIndex,
   binGenomeMap,
   ContigPurityAccumulator,
   GenomeContactAccumulator,
 } from '@/analysis/mags'
+import { runMagNetwork, runMagQc } from '@/analysis/run/mags'
+import type { AnalysisFraming, Params, TableOutput } from '@/analysis/types'
+import type { TaskInputs } from '@/analysis/worker/protocol'
+import type { MetaCooler } from '@/metacooler/MetaCooler'
 
 /** Two MAGs of two contigs each, plus one unassigned contig. */
 const CONTIGS = [
@@ -135,5 +143,146 @@ describe('ContigPurityAccumulator', () => {
     expect(acc.droppedPartners).toBeGreaterThan(0)
     // Everything is still counted in the totals; only the breakdown is capped.
     expect(acc.other[0]).toBe(10)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The inter-MAG network, run on the matrix the QC pass hands it
+// ---------------------------------------------------------------------------
+
+/**
+ * Three MAGs and `__unbinned__`, as a metagenome's tables describe them: `A`
+ * two bins, `B` four, `C` one, and one unassigned bin at the end.
+ */
+const LAYOUT = [
+  { name: 'cA', genome: 0, extent: [0, 2] as [number, number] },
+  { name: 'cB', genome: 1, extent: [2, 6] as [number, number] },
+  { name: 'cC', genome: 2, extent: [6, 7] as [number, number] },
+  { name: 'cU', genome: 3, extent: [7, 8] as [number, number] },
+]
+
+/**
+ * Every pixel of the file, which gives by hand
+ *
+ * | | A | B | C |
+ * |---|---|---|---|
+ * | A | 100 | 40 | 5 |
+ * | B | | 400 | 30 |
+ * | C | | | 25 |
+ *
+ * and nothing at all from the two pixels touching `__unbinned__`.
+ */
+const MAG_PIXELS: Array<[number, number, number]> = [
+  [0, 0, 60],
+  [0, 1, 40],
+  [2, 3, 400],
+  [6, 6, 25],
+  [1, 2, 40],
+  [0, 6, 5],
+  [5, 6, 30],
+  [0, 7, 500],
+  [7, 7, 999],
+]
+
+function metagenome(): MetaCooler {
+  return {
+    nBins: 8,
+    nContigs: LAYOUT.length,
+    nGenomes: 4,
+    binsize: 1000,
+    chromnames: LAYOUT.map((contig) => contig.name),
+    chromsizes: new Map(
+      LAYOUT.map((contig) => [contig.name, (contig.extent[1] - contig.extent[0]) * 1000]),
+    ),
+    contigGenomeIds: Int32Array.from(LAYOUT, (contig) => contig.genome),
+    genomeNames: ['A', 'B', 'C', '__unbinned__'],
+    contigExtent: (cid: number) => LAYOUT[cid].extent,
+    displayGenomes: () => [0, 1, 2],
+    scanPixels: async (options: {
+      onChunk(chunk: {
+        bin1: Int32Array
+        bin2: Int32Array
+        count: Float64Array
+        length: number
+      }): boolean | void
+    }) => {
+      options.onChunk({
+        bin1: Int32Array.from(MAG_PIXELS, ([a]) => a),
+        bin2: Int32Array.from(MAG_PIXELS, ([, b]) => b),
+        count: Float64Array.from(MAG_PIXELS, ([, , count]) => count),
+        length: MAG_PIXELS.length,
+      })
+    },
+  } as unknown as MetaCooler
+}
+
+const MAG_FRAMING: AnalysisFraming = {
+  uri: 'test.metacool',
+  label: 'whole file',
+  binsize: 1000,
+  binsPerCell: 1,
+  rows: [0, 8],
+  cols: [0, 8],
+  balance: false,
+  value: '',
+  normalise: null,
+  level: 'bin',
+}
+
+function jobOf(params: Params, inputs: TaskInputs = {}): JobContext {
+  return {
+    mc: metagenome(),
+    params,
+    framing: MAG_FRAMING,
+    inputs,
+    cancelled: () => false,
+    throwIfCancelled: () => {},
+    breathe: async () => {},
+    progress: () => {},
+    note: () => {},
+    toBp: (bins: number) => bins * 1000,
+    toBins: (bp: number) => Math.max(1, Math.round(bp / 1000)),
+  } as unknown as JobContext
+}
+
+/** The network's edges as `[pair, weight, contacts]`, in the order it ranked them. */
+async function network(normalise: string): Promise<Array<[string, number, number]>> {
+  // The composite as the runner runs it: the QC pass first, its outputs handed
+  // on as the network's upstream.
+  const qc = await runMagQc(jobOf({}))
+  const upstream = { magqc: { outputs: qc } } as unknown as TaskInputs['upstream']
+  const outputs = await runMagNetwork(jobOf({ normalise }, { upstream }))
+  const table = outputs.find((output): output is TableOutput => output.kind === 'table')
+  if (table === undefined) throw new Error('no edge table')
+  return table.rows.map((row) => [`${row['a']}–${row['b']}`, Number(row['weight']), Number(row['raw'])])
+}
+
+describe('the inter-MAG network', () => {
+  it('lists the raw contacts as they are', async () => {
+    expect(await network('raw')).toEqual([
+      ['A–B', 40, 40],
+      ['B–C', 30, 30],
+      ['A–C', 5, 5],
+    ])
+  })
+
+  it('divides per bin pair by the product of the two MAGs’ bin counts', async () => {
+    // It fell through to the raw contacts, so the option did nothing at all:
+    // 40 over A's two bins and B's four is 5, and the one-bin MAG C rises to
+    // the top of the list.
+    expect(await network('bins')).toEqual([
+      ['B–C', 7.5, 30],
+      ['A–B', 5, 40],
+      ['A–C', 2.5, 5],
+    ])
+  })
+
+  it('divides per coverage by the geometric mean of the two MAGs’ intra-MAG contacts', async () => {
+    const edges = await network('coverage')
+    expect(edges.map(([pair]) => pair)).toEqual(['B–C', 'A–B', 'A–C'])
+    // 30 / √(400 · 25), 40 / √(100 · 400), 5 / √(100 · 25).
+    expect(edges[0][1]).toBeCloseTo(0.3, 12)
+    expect(edges[1][1]).toBeCloseTo(0.2, 12)
+    expect(edges[2][1]).toBeCloseTo(0.1, 12)
   })
 })
