@@ -43,7 +43,9 @@ import {
   readsOf,
   scaleOf,
   searchesByName,
+  translationOf,
 } from '../annotations/types'
+import { READING_FRAMES, codonAt, frameName } from '../annotations/codons'
 import { ReadCache } from '../annotations/reads'
 import {
   packPile,
@@ -121,6 +123,7 @@ import {
   layoutFeatures,
 } from '../render/features'
 import {
+  laneBand,
   laneBands,
   GRIP_ROOM,
   GROUP_BAR,
@@ -132,6 +135,7 @@ import {
   gripBox,
   groupRuns,
   laneRect,
+  laneText,
   snapTo,
   withinGrip,
   type LaneFrame,
@@ -155,6 +159,16 @@ import type { MapId } from '../annotations/placement'
 import { setHoverPlace } from './hoverLocus'
 import { Scale } from '../render/scale'
 import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
+import {
+  FRAME_ROW,
+  TICKS_MAX_BASES_PER_PIXEL,
+  drawFrames,
+  frameAtAcross,
+  frameRows,
+  framesRungFor,
+  framesThickness,
+  type FramesRung,
+} from '../render/frames'
 import {
   ceilingFactor,
   drawTrack,
@@ -285,6 +299,11 @@ const NAME_FONT = '600 12px system-ui, sans-serif'
  * above them.
  */
 const BASE_FONT = '600 11px system-ui, sans-serif'
+/**
+ * The amino acids in a reading frame's codons, and the frames' names (§8.8):
+ * a size under the residues', since a row is twelve pixels and not a lane.
+ */
+const FRAME_FONT = '600 9.5px system-ui, sans-serif'
 /** Milliseconds within which a second click is a double click. */
 const DOUBLE_CLICK_MS = 250
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
@@ -397,6 +416,25 @@ interface Lane {
    * from the frame itself (`basesAreDrawable`).
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
+  /**
+   * A sequence lane's six reading frames, where its settings ask for them (§8.8).
+   *
+   * Drawn in a band of the lane's own, under the residues: `sequence` is the
+   * strip the residues or the GC line are drawn in — the height the reader set —
+   * and `band` the strip under it, which the lane is that much taller for. One
+   * lane rather than a second one in the stack, so the frames move, close and
+   * hide with the sequence they are a reading of, and a drag on the lane's
+   * border still sets the residues' height and nothing else.
+   */
+  translation: {
+    sequence: LaneFrame
+    band: LaneFrame
+    /** One row's thickness, at the reader's text size. */
+    row: number
+    code: number
+    rung: FramesRung
+    regions: BaseRegion[]
+  } | null
   /**
    * The read this lane is waiting on, where it is waiting on one: a window of
    * samples or of letters still on its way from the worker, with how far it
@@ -1716,15 +1754,31 @@ export class BrowserView {
    * comparable by construction.
    */
   private layout(): Lane[] {
-    return this.stack().map((slot) => ({
-      entry: slot.host,
-      overlaid: slot.overlaid,
-      frame: this.frameAt(slot.acrossFrom, slot.thickness),
-      profiles: [],
-      residues: [],
-      reads: [],
-      pending: null,
-    }))
+    return this.stack().map((slot) => {
+      const frame = this.frameAt(slot.acrossFrom, slot.thickness)
+      const room = this.framesRoom(slot.host)
+      const translation =
+        room > 0 && slot.thickness > room
+          ? {
+              sequence: laneBand(frame, 0, slot.thickness - room),
+              band: laneBand(frame, slot.thickness - room, room),
+              row: scaleLength(FRAME_ROW),
+              code: translationOf(slot.host.style).code,
+              rung: 'none' as FramesRung,
+              regions: [],
+            }
+          : null
+      return {
+        entry: slot.host,
+        overlaid: slot.overlaid,
+        frame,
+        profiles: [],
+        residues: [],
+        translation,
+        reads: [],
+        pending: null,
+      }
+    })
   }
 
   /**
@@ -1750,11 +1804,19 @@ export class BrowserView {
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,
       modeOf: (group) => this.props.groups.modeOf(group),
-      sizeOf: (entry) => entry.style.size,
+      // A sequence with its frames on is that much taller, so the height the
+      // reader set stays the height of the residues (§8.8).
+      sizeOf: (entry) => entry.style.size + this.framesRoom(entry),
       gap: LANE_GAP,
       from: this.rulerHeight + LANE_GAP,
       minimum: LANE_MIN_SIZE,
     })
+  }
+
+  /** The band a sequence lane's reading frames add under it, or nought (§8.8). */
+  private framesRoom(entry: AnnotationEntry): number {
+    if (entry.kind !== 'sequence' || !translationOf(entry.style).frames) return 0
+    return framesThickness(scaleLength(FRAME_ROW))
   }
 
   private frameAt(acrossFrom: number, thickness: number): LaneFrame {
@@ -2334,7 +2396,10 @@ export class BrowserView {
     /** The track alone, its name and range left off — only for {@link laneImage}. */
     bare = false,
   ): void {
-    const { entry, frame } = lane
+    const { entry } = lane
+    // The strip the track itself is drawn in: the whole lane, or — under a
+    // sequence's reading frames — the part above them (§8.8).
+    const frame = lane.translation?.sequence ?? lane.frame
     // What to write on the lane, decided by the branch that drew it and written
     // *after* the clip is released: with a name column the label sits outside
     // the lane's own rectangle, and a clip to the data would take it away.
@@ -2345,8 +2410,8 @@ export class BrowserView {
     } | null = null
     // The bands a stack of heatmaps was divided into, kept for the label: one
     // name per row, in the row it names (§18.11).
-    let labelBands: LaneFrame[] | null = null
-    clipLane(ctx, frame)
+    let labelBands: LaneFrame[] | null = lane.translation === null ? null : [frame]
+    clipLane(ctx, lane.frame)
     if (lane.reads.length > 0) {
       label = this.paintPile(ctx, lane, palette)
     } else if (lane.residues.length > 0) {
@@ -2380,7 +2445,7 @@ export class BrowserView {
             lane.profiles.map(() => ({ fill: true as const })),
           )
         : null
-      labelBands = bands
+      labelBands = bands ?? labelBands
       // **Ribbons tile, they do not overlay** — the same rule, from the same
       // module, read here for the same reason the heatmap one is.
       const nested = nestsAsRibbons(lane.profiles.map(({ entry: member }) => member))
@@ -2570,10 +2635,80 @@ export class BrowserView {
         }
       }
     }
+    if (lane.translation !== null) this.paintFrames(ctx, lane.translation, entry, palette)
     ctx.restore()
     if (label !== null && !bare) {
       this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
     }
+    if (lane.translation !== null && !bare) this.labelFrames(ctx, lane.translation, palette)
+  }
+
+  /**
+   * A sequence lane's six reading frames, in the band under its residues (§8.8).
+   *
+   * The codons are `render/frames.ts`'s; what is here is this view's text: the
+   * sentence the band says when it is too far out to draw anything, inside the
+   * lane's clip, and — by {@link labelFrames}, after it — the frames' names.
+   */
+  private paintFrames(
+    ctx: CanvasRenderingContext2D,
+    translation: NonNullable<Lane['translation']>,
+    entry: AnnotationEntry,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): void {
+    const { band, row, rung } = translation
+    drawFrames(ctx, band, this.trackAxis, translation.regions, {
+      code: translation.code,
+      rung,
+      row,
+      font: scaleFont(FRAME_FONT),
+      opacity: entry.style.opacity,
+      ink: palette.labelColor,
+      inkOnColour: '#ffffff',
+    })
+    if (!this.text || rung !== 'none') return
+    ctx.save()
+    ctx.font = scaleFont(LANE_FONT)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = palette.labelColor
+    laneText(
+      ctx,
+      band,
+      `reading frames at ${TICKS_MAX_BASES_PER_PIXEL} bp per pixel or closer — zoom in`,
+      (band.alongFrom + band.alongTo) / 2,
+      band.thickness / 2,
+      { halo: palette.labelHaloColor },
+    )
+    ctx.restore()
+  }
+
+  /**
+   * The six frames' names: in the name column where there is one, right-aligned
+   * against the data as the lane's own name is; over the data where there is
+   * not, haloed, at the start of each row, where the reader's eye enters it.
+   * Outside the lane's clip, since the column is.
+   */
+  private labelFrames(
+    ctx: CanvasRenderingContext2D,
+    translation: NonNullable<Lane['translation']>,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): void {
+    if (!this.text || translation.rung === 'none') return
+    const inColumn = this.nameColumn > 0
+    const along = inColumn ? this.gutter - GUTTER_PAD - GRIP_ROOM : translation.band.alongFrom + 3
+    const rows = frameRows(translation.band, translation.row)
+    ctx.save()
+    ctx.font = scaleFont(FRAME_FONT)
+    ctx.textAlign = inColumn ? 'right' : 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = palette.labelColor
+    for (const [at, frame] of READING_FRAMES.entries()) {
+      laneText(ctx, rows[at], frameName(frame), along, rows[at].thickness / 2, {
+        halo: palette.labelHaloColor,
+      })
+    }
+    ctx.restore()
   }
 
   /**
@@ -2824,6 +2959,24 @@ export class BrowserView {
 
   /** Resolve every lane's samples and profiles for this frame. */
   private fill(lane: Lane): void {
+    // The reading frames first, from the same cache and under the same key as
+    // the residues: they want the same bases, from further out — up to
+    // `TICKS_MAX_BASES_PER_PIXEL` — and a window fetched for the ticks is the
+    // window the letters are drawn from once the reader has zoomed in to them.
+    const translation = lane.translation
+    if (translation !== null) {
+      translation.rung = framesRungFor(translation.band, translation.row)
+      if (translation.rung !== 'none') {
+        translation.regions =
+          this.bases.basesFor({
+            entry: lane.entry.id,
+            scope: 'browser',
+            axis: this.trackAxis,
+            domain: lane.frame.domain,
+          }) ?? []
+        lane.pending = this.bases.pendingOf(lane.entry.id, 'browser') ?? lane.pending
+      }
+    }
     const members = [lane.entry, ...lane.overlaid]
     for (const member of members) {
       // A FASTA is the one lane whose *picture* changes with the zoom rather
@@ -4209,6 +4362,35 @@ export class BrowserView {
           ),
         )
         parts.push(`${entry.label} ${letter}`)
+      }
+      // …and, over a row of the reading frames, the codon under the pointer
+      // and what it reads as in the lane's code (§8.8). Only for the row the
+      // pointer is on: six codons at once is a table, not a readout.
+      const translation = lane.translation
+      if (translation !== null && translation.rung !== 'none' && inside === lane && inFile !== null) {
+        const shown = frameAtAcross(y - translation.band.acrossFrom, translation.row)
+        const read = shown === null ? null : inFile.reversed ? (-shown as typeof shown) : shown
+        const codon =
+          shown === null || read === null
+            ? null
+            : codonAt(translation.regions, inFile.contig, inFile.bp, read, translation.code)
+        if (shown !== null && codon !== null) {
+          const text = `${codon.codon} → ${codon.aa === '*' ? 'stop' : codon.aa}`
+          rows.push(
+            el(
+              'div',
+              { class: 'cell-tip-row is-here' },
+              el('span', { class: 'cell-tip-chip', style: { background: lane.entry.style.colour } }),
+              el('span', {
+                class: 'cell-tip-key',
+                text: `frame ${frameName(shown)}:`,
+                style: { color: lane.entry.style.colour },
+              }),
+              el('span', { class: 'cell-tip-val', text }),
+            ),
+          )
+          parts.push(`frame ${frameName(shown)} ${text}`)
+        }
       }
     }
     const read = this.readAtPoint(x, y)

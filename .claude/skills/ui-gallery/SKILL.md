@@ -64,6 +64,7 @@ node scripts/ui-vector-pdf.mjs gallery      # the Export card with PDF (vector) 
 node scripts/ui-loci.mjs gallery             # every locus a reader sees or types, 1-based: bookmarks, marks, the map's menu, 4C's anchor, its lane and the console's line, FRiP per feature, a genome view's box: lo01 … lo10
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
 node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
+node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -355,3 +356,13 @@ note or a squashed plot is a bug the tests did not see, and this is where it sho
   The click road opens the browser's own file picker, which the page cannot answer.
 - The cell's own hover speaks in the status bar and on the maps, not in its corner readout.
 - Vite serves `.gz` with `Content-Encoding: gzip` unless `vite.config.ts`'s dev plugin strips it.
+`scripts/ui-orfs.mjs` drives a **sequence lane's reading frames** (§8.8) on the 1D browser demo,
+with the General and Aesthetics columns folded so the browser is wide enough for each rung to land
+where it would on a laptop: the FASTA row's settings before and after *reading frames* is pressed,
+UTP5's start codon on chromosome IV at 120 bp — every codon with its amino acid, the gene's `M` in
+`+1` — and the readout over it (found by the start's green, which must say *frame +1: ATG → M*),
+1 kb of bare codons, 20 kb of start and stop ticks, and the whole chromosome, where the band says to
+zoom in. Then one window in the standard code and in table 4, printing where its `TGA`s are so the
+reds that turn to `W` can be checked against them, a reload that must bring the frames and table 4
+back, and the dark theme (the whole page, then the ticks). Run it after any change to
+`render/frames.ts`, `annotations/codons.ts`, or how the browser lays out a sequence lane.

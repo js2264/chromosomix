@@ -34,6 +34,7 @@
  * screen even when the file format is.
  */
 import { DEFAULT_DIVERGING_COLORMAP } from '../render/colormaps'
+import { DEFAULT_GENETIC_CODE, isGeneticCode } from './codons'
 import type { TrackOp } from './derived'
 import type { FeatureStyle } from './fields'
 import type { DetectedFormat } from './worker/protocol'
@@ -1038,6 +1039,14 @@ export interface AnnotationStyle {
    * existing kind, no `defaultStyle` arm and no stored row changes shape.
    */
   structure?: StructureStyle
+  /**
+   * The six reading frames under a sequence lane, and the code they are read
+   * with (§8.8).
+   *
+   * Optional for the reason the three above are; {@link translationOf} is the
+   * one reader.
+   */
+  translation?: TranslationStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
@@ -1106,6 +1115,42 @@ export interface AnnotationStyle {
    * because only one member of the pair is flipped.
    */
   flip: boolean
+}
+
+/**
+ * The reading frames a sequence lane can draw under its residues (§8.8).
+ *
+ * Off by default: six rows of codons are a question about a gene, and a lane
+ * that answered it unasked would spend eighty pixels of every genome's stack on
+ * it. The code is NCBI's number (`annotations/codons.ts`) and is remembered with
+ * the switch off, so turning the frames back on in a Mycoplasma genome does not
+ * quietly go back to reading `TGA` as a stop.
+ */
+export interface TranslationStyle {
+  frames: boolean
+  code: number
+}
+
+/** A lane's frames setting, whether or not its style carries one. */
+export function translationOf(style: AnnotationStyle): TranslationStyle {
+  return style.translation ?? { frames: false, code: DEFAULT_GENETIC_CODE }
+}
+
+/**
+ * Read a stored frames setting back: untrusted, like every stored style, so a
+ * table NCBI does not publish is read as the standard one rather than handed to
+ * a lane that would index an alphabet it does not have.
+ */
+export function translationStyleOf(value: unknown): TranslationStyle {
+  if (typeof value !== 'object' || value === null) {
+    return { frames: false, code: DEFAULT_GENETIC_CODE }
+  }
+  const row = value as Record<string, unknown>
+  const code = row['code']
+  return {
+    frames: row['frames'] === true,
+    code: isGeneticCode(code) ? code : DEFAULT_GENETIC_CODE,
+  }
 }
 
 /**

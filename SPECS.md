@@ -2916,6 +2916,44 @@ come out of the annotations worker, which holds the FASTA and answers a window a
 it answers a bigWig (§8.2), and the FASTA is also the assembly — every sequence and its exact length
 — which is what lets a genome be browsed with nothing else open (§5.8).
 
+**A sequence lane can read its six frames.** *Reading frames* in the row's settings adds a band of
+six rows under the residues — `+1`, `+2`, `+3` over `−1`, `−2`, `−3` — and the lane grows by the
+band, so the height the reader set stays the residues' and a drag on the lane's border sets it alone.
+It is one lane and not two: the frames move, hide and close with the sequence they read. Its picture
+changes with the zoom as the residues' does, decided from the frame alone (`render/frames.ts`) by the
+fetch, the paint and the readout: where a codon is nine pixels wide, every codon is a box, every
+other one shaded darker so its ends can be seen, with its amino acid written in it, a start filled
+green and a stop red; down to a pixel a base, the same boxes without the letters; out to 24 bases a
+pixel, the starts and stops alone as ticks, the picture IGV and UCSC draw — a long frame with no red
+in it is a gene or the place for one; further out, nothing, and the band says *reading frames at 24
+bp per pixel or closer — zoom in*. The residues come from the same cache and the same windows as the
+letters, from further out: three screens at 24 bases a pixel is under a hundred and fifty thousand
+bases on a 2000-pixel lane, inside the worker's cap.
+
+**A frame is the genome's, not the window's.** `+1` reads the codons that begin at a multiple of
+three counted from the sequence's first base, `+2` and `+3` one and two bases on, so a frame does not
+move when the view pans; `−1`, `−2` and `−3` are the reverse complement read in the **same boxes** as
+`+1`, `+2` and `+3`, so a codon sits directly over its complement. A lowercase base — soft-masking —
+translates as the upper-case one, a `U` as a `T`, and a codon with an `N` or any other letter in it
+is an `X`. On an edited axis a stretch read backwards (§27.2) shows its other strand, as the residues
+do, so there the top three rows are the file's reverse frames. Over a row, the readout names the
+codon as its strand reads it and what it codes for: *frame +1: ATG → M*.
+
+**The genetic code is chosen, and it is NCBI's.** Beside the switch, every translation table NCBI
+publishes, by number and name — 1 to 6, 9 to 16, 21 to 33; 7, 8 and 17 – 20 were retired — each held
+as NCBI writes it (`annotations/codons.ts`): 64 amino acids and 64 start marks over the codons in
+`TCAG` order, which is the form every other tool prints and the one a reader checking a table would
+hold it against. Table 4 is what a Mycoplasma or a Spiroplasma reads, where `TGA` is tryptophan and
+the frames of the standard code are broken every few dozen codons by stops that are not there. A
+start is green where the table lets a protein begin *and* the codon reads as methionine; the other
+starts a table allows — `TTG` and `GTG` in a bacterium — read as their amino acid inside a gene, and
+are tinted rather than filled, since filling them would mark a start every few codons of every frame.
+Tables 27, 28 and 31, whose stops depend on context, draw the sense reading NCBI gives. Both the
+switch and the code are remembered with the row (§8.6) — the code with the frames off, since it is a
+fact about the genome — and a stored code NCBI never published is read as the standard one. Beside a
+map the lane is GC content and has no codons to read; the frames are drawn wherever the residues are,
+in the 1D browser and a deck's tracks cells, and in the figure saved from either.
+
 **How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
 read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
 and forty, and holding one is what makes every zoom draw GC content, every pan free and the motif

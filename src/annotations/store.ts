@@ -52,6 +52,7 @@ import {
   readStyleOf,
   searchesByName,
   structureStyleOf,
+  translationStyleOf,
 } from './types'
 import { featureStyleOf } from './fields'
 
@@ -1233,7 +1234,8 @@ export class AnnotationStore {
       rows.push(
         row.style.reads === undefined &&
           row.style.features === undefined &&
-          row.style.structure === undefined
+          row.style.structure === undefined &&
+          row.style.translation === undefined
           ? row
           : {
               ...row,
@@ -1254,6 +1256,11 @@ export class AnnotationStore {
                 ...(row.style.structure === undefined
                   ? {}
                   : { structure: structureStyleOf(row.style.structure) }),
+                // …and a fourth for a sequence's reading frames (§8.8): a code
+                // NCBI never published would be read as the standard one.
+                ...(row.style.translation === undefined
+                  ? {}
+                  : { translation: translationStyleOf(row.style.translation) }),
               },
             },
       )

@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A FASTA's six reading frames, in any of NCBI's genetic codes (§8.8).** *Reading frames* in a
+  sequence row's settings draws six rows under its residues — `+1`, `+2`, `+3` over `−1`, `−2`, `−3`,
+  anchored to the sequence's first base so they do not move with the window — each codon a shaded box
+  with its amino acid in it, starts green and stops red; further out the starts and stops alone as
+  ticks, to 24 bases a pixel. The code beside it offers every NCBI translation table, so a
+  Mycoplasma's frames can be read in table 4, where `TGA` is tryptophan and not a stop. A hover over
+  a row names the codon and what it codes for; both settings are remembered with the row.
+
 - **A 3D model coloured by a BED's names, A red and B blue (§25.5, §8.16).** Every feature set with a
   name column — a BED4 or wider, a bigBed, a task's segments — is offered under the model's *colour by*
   as *· names*: each bead takes the name that overlaps it most, so a compartment call colours the

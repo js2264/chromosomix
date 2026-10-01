@@ -33,6 +33,7 @@ import {
   TRACK_SCALES,
   readsOf,
   scaleOf,
+  translationOf,
   type AnnotationEntry,
   type ColourBy,
   type FeatureSet,
@@ -40,7 +41,9 @@ import {
   type ReadStyle,
   type TrackMode,
   type TrackScale,
+  type TranslationStyle,
 } from '../annotations/types'
+import { GENETIC_CODES } from '../annotations/codons'
 import { groupsFor } from '../annotations/bam/reads'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { readPalette } from '../render/alignments'
@@ -1076,5 +1079,69 @@ export function fillFeatureLegend(
       })
       return el('label', { class: 'ann-key-item' }, swatch, el('span', { text: level.label }))
     }),
+  )
+}
+
+/**
+ * A sequence lane's six reading frames, and the genetic code they are read in
+ * (§8.8).
+ *
+ * A chip for the frames, for the reason the alignment lane's switches are chips:
+ * it is a state the lane is in and has no picture anyone would recognise. The
+ * code beside it is a select of NCBI's tables by number and name — the number
+ * is what a GenBank file's `transl_table` says, so it is what a reader will be
+ * looking for — and stays live with the frames off, since the code is a fact
+ * about the genome and not about whether its frames are on screen.
+ *
+ * Drawn wherever the lane draws residues: the 1D browser and a deck's tracks
+ * cells. Beside a map the lane is GC content and has no codons to show.
+ */
+export function framesField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const live = (): TranslationStyle =>
+    translationOf(store.entries.find((each) => each.id === entry.id)?.style ?? entry.style)
+  const on = translationOf(entry.style).frames
+  const select = el('select', {
+    class: 'select',
+    title:
+      'The genetic code the frames are read in — NCBI’s translation tables. 4 for Mycoplasma and ' +
+      'Spiroplasma, where TGA is tryptophan; 11 for bacteria, archaea and plastids; 2 for a ' +
+      'vertebrate mitochondrion.',
+  })
+  for (const code of GENETIC_CODES) {
+    select.appendChild(el('option', { value: String(code.id), text: `${code.id} · ${code.name}` }))
+  }
+  select.value = String(translationOf(entry.style).code)
+  select.addEventListener('change', () => {
+    store.restyle(entry.id, { translation: { ...live(), code: Number(select.value) } })
+  })
+  const chip = button(
+    'reading frames',
+    () => {
+      const next = !live().frames
+      store.restyle(entry.id, { translation: { ...live(), frames: next } })
+      // Here as well as on the card's rebuild, which waits while a control
+      // holds focus — and this one does, having just been pressed.
+      chip.classList.toggle('is-on', next)
+      chip.setAttribute('aria-pressed', String(next))
+    },
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Six rows under the sequence: the codons of frames +1, +2, +3 and of −1, −2, −3 on the ' +
+        'other strand, each with its amino acid where it fits, starts in green and stops in red. ' +
+        'Further out, the starts and stops alone. In the 1D browser and a deck’s tracks cells.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  return el(
+    'div',
+    { class: 'ann-inline' },
+    el('div', { class: 'ann-chips' }, chip),
+    el(
+      'label',
+      { class: 'field ann-field ann-field-tight' },
+      el('span', { class: 'field-label', text: 'code' }),
+      select,
+    ),
   )
 }

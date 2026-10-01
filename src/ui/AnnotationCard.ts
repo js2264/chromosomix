@@ -61,6 +61,7 @@ import {
   fillFeatureLegend,
   fillLegend,
   flipButton,
+  framesField,
   scaleField,
   heightField,
   layoutField,
@@ -1222,7 +1223,12 @@ export class AnnotationCard {
     // between 0.3 and 0.5 is where a genome's variation actually lives. No
     // group, though — GC shares no units with anything else on the stack, so
     // resolving it together with a coverage track would flatten both.
-    if (entry.kind === 'sequence') out.push(this.limits(entry))
+    //
+    // And its reading frames, with the code they are read in (§8.8): six rows
+    // under the residues, drawn wherever the residues are.
+    if (entry.kind === 'sequence') {
+      out.push(this.limits(entry), framesField(this.props.store, entry))
+    }
     if (entry.card === 'overlay') {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))

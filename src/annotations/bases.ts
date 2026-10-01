@@ -107,7 +107,9 @@ export class BaseCache {
         // reply truncated by the worker's cap, which would then be drawn short
         // and silently: that cap is four hundred thousand residues and a request
         // from here is a few thousand, since letters are only ever asked for at
-        // a zoom where one fills a pixel.
+        // a zoom where one fills a pixel. The reading frames' ticks ask from
+        // further out (§8.8) — three screens at 24 bases a pixel, under a
+        // hundred and fifty thousand on a 2000-pixel lane — and still under it.
         for (const window of wanted) covered.set(window.contig, [window.start, window.end])
         this.held.set(key, { covered, regions: result.regions })
         this.onChange()
