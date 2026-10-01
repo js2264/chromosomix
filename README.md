@@ -88,7 +88,7 @@ npm run dev
 
 ### From a static HTML file
 
-Every release produces a single `index.html` (roughly 15 MB). It has
+Every release produces a single `index.html` (about 14 MB). It has
 no server and no install: put it on a USB stick, email it, open it by
 double-clicking and you end up with a fully functional genome browser.
 
