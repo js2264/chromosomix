@@ -442,8 +442,8 @@ export function swapItems<T>(items: readonly T[], a: number, b: number): T[] {
 }
 
 /**
- * Where the session's own cell stands in its deck, and whether it is on screen
- * (§16.9).
+ * Where the session's own cell stands in its deck, whether it is on screen
+ * (§16.9), and whether it is following the deck's navigation (§16.3).
  *
  * The lead is the session's view re-parented into the grid rather than a
  * companion, so it has no member in `maps` — and it used to have no place
@@ -466,6 +466,16 @@ export interface DeckLead {
    * parked behind the grid — until its eye or the deck's bar puts it back.
    */
   hidden: boolean
+  /**
+   * Whether the chain on its heading was closed.
+   *
+   * A companion's is kept with its look (`DeckLook.locked`) and the first
+   * map's is kept here, beside its place, on the same terms: `false` is the
+   * one value written, since a first map the reader took off the deck is one
+   * they deliberately set moving on its own, and a reload that chained it
+   * again would carry every other map with it on its first pan.
+   */
+  locked?: boolean
 }
 
 /**
@@ -481,7 +491,11 @@ export function readDeckLead(value: unknown): DeckLead | null {
   const row = value as Record<string, unknown>
   const at = row['at']
   if (typeof at !== 'number' || !Number.isInteger(at) || at < 0) return null
-  return { at: Math.min(at, MAX_PANELS - 1), hidden: row['hidden'] === true }
+  return {
+    at: Math.min(at, MAX_PANELS - 1),
+    hidden: row['hidden'] === true,
+    ...(row['locked'] === false ? { locked: false } : {}),
+  }
 }
 
 /**

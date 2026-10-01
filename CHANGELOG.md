@@ -2122,6 +2122,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   band per strand was declared undrawable at half the genes it can draw: 230 yeast genes drew as named
   boxes at one width and as a solid block at another.
 
+- **The single-file build has no store drawer, and nothing that opens one (§19, §24.2).** It built
+  the drawer as any window does: a button in the header, the backslash and *Stores* in the palette,
+  each opening catalogues of addresses that a page with no network cannot read, and a `?store=` link
+  that went and tried. The drawer is not built there now, and the palette leaves the row out rather
+  than greying it, since no state of that build opens a store.
+
+- **An embed's landing page is *Load files* alone (§21.2).** It offered the store tiles and the row
+  of places to connect, and a frame builds neither the drawer a tile opens nor the Files column a
+  place is connected into: a tile did nothing when pressed, and a folder chosen was connected into a
+  column nobody could see.
+
+- **The 1D browser's track-height box reads its lanes, as the map's does (§8.8).** It was built
+  without them, so it went on showing the last number it had applied — `90` over a stack the same
+  box beside the map called 46 — and a press of *down* made a 46-pixel track taller, which is what
+  the box beside the map had just stopped doing.
+
+- **A first map moving on its own stays so across a reload (§16.6).** A companion's chain has always
+  been kept with its look, per file; the first map's was kept nowhere, and came back closed on every
+  build of the deck — a reload, a restored workspace — so the map the reader had taken off the deck
+  carried every other map with it on its first pan. It is kept beside the first map's place, and a
+  saved workspace carries it.
+
+- **Closing the map keeps the Manual annotations card in the browser it falls back to (§5.8,
+  §8.1).** The column that road built held the tracks and left the marks card out, though a browser
+  opened fresh has it: the marks drawn on the map stayed in the session with no card to see, place
+  or remove one by.
+
 - **A tracks cell marks both ends of the map's cell under the pointer (§25.4).** It drew one hairline,
   at the first of the two anchors, where the lanes beside the map mark both.
 

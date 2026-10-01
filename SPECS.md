@@ -1139,7 +1139,9 @@ screen, in sentences, of which the longest was the longest line on the page.
 The two shapes of session convert into each other. Dropping a `.cool` on the tracks makes the tab its
 map, tracks and all; closing the map — the × on its row of the Contact maps card, which the File
 card used to carry — falls back to a browser on the cooler's own `/chroms`, with the same tracks
-still loaded. Neither is a new session: the tab, its id and its memory are the same throughout.
+still loaded and the same marks in the Manual annotations card (§8.1), which that road used to
+leave out of the column while a browser opened fresh had it. Neither is a new session: the tab, its
+id and its memory are the same throughout.
 
 **A genome has a Chromosomes table too.** The trail's root picks between it and *Whole genome*, the
 browser, as a map's picks between its table and its whole: the sequences the genome was opened with,
@@ -2543,9 +2545,10 @@ squared because it *resolves* to one range, and a mark does not — and it snaps
 cells the two ends are in, which is what commits. Holding Shift locks the box to the diagonal, so a
 domain is one gesture. All three modes stay on for as many marks as the reader wants, and a click
 while the map is waiting for a drag places nothing rather than navigating. Beside the 1D browser
-(§5.8) the buttons read *pick on track* and *draw on track*: a track has one axis, so what they place
-lands on the diagonal — a line as a crosshair, an arrowhead on the diagonal, a rectangle as the square
-on it — which is the mark a map opened afterwards already shows.
+(§5.8) — opened on a genome, or the one a closed map falls back to, which keeps the card and the
+marks the map had — the buttons read *pick on track* and *draw on track*: a track has one axis, so
+what they place lands on the diagonal — a line as a crosshair, an arrowhead on the diagonal, a
+rectangle as the square on it — which is the mark a map opened afterwards already shows.
 
 **A box drawn on a turned map is a box of the square underneath it.** Both ends of the drag are taken
 back to the square they were rotated out of, exactly as a click is, so pressing over one contact and
@@ -2844,8 +2847,10 @@ Both surfaces mount the same **bulk controls** on the Aesthetics column's Tracks
 tracks*, autoscale every lane, *stretch* them all to one height that fills the room, and *shrink*
 them all to the shortest; and *track height*, a typed box between two one-pixel steps, from 12 to
 400 pixels. The heights' arithmetic is one module (`ui/trackControls.ts`), with one floor where
-there used to be three that disagreed. Beside a map the box reads the lanes on screen, blank where
-they disagree, and a step from blank starts at their middle height.
+there used to be three that disagreed. On both surfaces the box reads the lanes on screen, blank
+where they disagree, follows them when stretch, shrink, a group or a dragged border moves them, and
+a step from blank starts at their middle height; the browser's was built without its lanes and
+showed the last number it had applied.
 
 **A lane's limits are the colour clip's control** (§7.1, `ui/ClipRange.ts`'s idiom): two number
 boxes, the `⇅` mark every autoscale in the app wears — unavailable while there is nothing to go back
@@ -5400,7 +5405,8 @@ map used to have a name and no grip, on the argument that it is the session's ow
 a session is of is not a thing a drag should change. Nor does the drag change it — the breadcrumb,
 the tables and the tracks are the same file's afterwards — and a deck with one cell that could not be
 moved was a deck whose first picture was wherever it happened to start. Where the lead stands is kept
-in the session's memory beside the column count (§8.6), and not in `maps`, which lists the companions:
+in the session's memory beside the column count (§8.6), with whether it is shown and its chain
+(§16.6), and not in `maps`, which lists the companions:
 it is arrangement, like the columns, and a link that moved only the lead would say nothing new. A cell
 closing before it moves it up with the rest of the grid, and a `+` re-seats it with every other cell,
 in the row and column it had.
@@ -5559,6 +5565,11 @@ columns the grid has is furniture in the sense the width of a side panel is. Whi
 *not* furniture and is in the hash, because it is part of the list of maps rather than part of how
 they are arranged — a deck of three with a gap in the middle is a different deck from a deck of
 three.
+
+The lock is kept a chain at a time: a companion's with its look (`deck:looks`), the first map's
+beside its place (`deck:lead`, written only while it is open). So a reload, a restored workspace and
+a deck built again all bring back every map that was moving on its own, the first included — whose
+chain used to come back closed, driving the deck, whatever the reader had left it.
 
 ### 16.7 Cost
 
@@ -8388,8 +8399,11 @@ written, and each is absolute rather than a degradation:
    refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
 
 **The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
-URL box and the store tiles (the version picker is gone already, as it is from every target that is
-not the web), leaves the landing page's folder row with the one
+URL box, the store tiles (the version picker is gone already, as it is from every target that is
+not the web) and the store drawer with everything that opens it — the header's button, the
+backslash, the palette's *Stores* (absent there rather than greyed, since no state of this build
+opens a store) and a `?store=` link, which reads nothing (§24.2); leaves the landing page's folder
+row with the one
 place this build can reach — under *Connect a folder*, since a heading naming two kinds over a row
 holding one is the same false promise in smaller type, and the Files column's button and the
 palette's command say *connect a folder* with it rather than offering a remote half there is not —
@@ -8725,7 +8739,8 @@ so it has to beat the `src=` or every reload would undo the reader's last click)
 **`?config=<url>`**, a published `.metacooler.json` fetched and opened through
 `Session.openConfigUrl` — the same road the picker's own URL box takes, so a seeded session and a
 chosen one differ in nothing after the fetch.
-With none of the three, an embed is the file picker, which is a legitimate thing to embed.
+With none of the three, an embed is the file picker — its *Load files* alone (§21.2) — which is a
+legitimate thing to embed.
 
 `?config=` is the pointer form of what `#session=` carries as a payload. A payload cannot be changed once
 the embed is published and grows the URL by the size of the session; a pointer is a file on a bucket,
@@ -8765,6 +8780,11 @@ embed — which has no drawer — ignores it.
   column inside somebody's figure because the reader once left it open on the app's own site;
   writing would rearrange the application for a reader who opened a panel in a page they were only
   reading. Same rule as the window's memory above, one level down.
+
+  **The landing page loses the two doors that led to what is gone.** A store tile opens the drawer
+  and a place is connected into the Files column, so an embed's picker is *Load files* alone, with
+  neither the tiles nor the row of places (§24.2): it had both, and in a frame a tile pressed did
+  nothing and a folder chosen was connected into a column nobody could see.
 
   Everything else — the view, the analysis drawer, the content area, dropping a file, every keyboard
   shortcut — is built exactly as it is for a top-level window, so no view knows it is embedded.
@@ -9478,7 +9498,9 @@ reader typed keeps that address in its sentence, because there the address is wh
 on. Whatever the reason a store could not be read, the sentence is not drawn under controls for a
 catalogue that is not there: no search box, no facets, no *clear filters*, no list and matrix pair,
 no filter over cards (§8.5). The standalone build (§19) has no tiles and no drawer, for the reason
-it has no URL box.
+it has no URL box, and so no header button, no backslash, no *Stores* in the palette, and a
+`?store=` link that reads nothing. An embed has no drawer either (§21.2) and its landing page no
+tiles; its palette keeps *Stores* greyed, as it keeps the console.
 
 ### 24.3 Where the built-in stores come from
 

@@ -129,6 +129,22 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('[aria-label="console"]')).toBeNull()
   })
 
+  it('lands on Load files alone, with no stores and no places to connect', () => {
+    // A tile opens the drawer and a place is connected into the Files column,
+    // and a frame builds neither (§21.2): the tiles did nothing when pressed,
+    // and a folder chosen went into a column nobody could see.
+    const { root } = windowAt('?embed=1')
+    expect(root.querySelector('.view-picker .load-box')).not.toBeNull()
+    expect(root.querySelector('.picker-stores')).toBeNull()
+    expect(root.querySelector('.picker-providers')).toBeNull()
+  })
+
+  it('offers both on the landing page of a window of its own', () => {
+    const { root } = windowAt('')
+    expect(root.querySelector('.picker-stores')).not.toBeNull()
+    expect(root.querySelector('.picker-providers')).not.toBeNull()
+  })
+
   it('keeps all five in a window of its own, and no bar', () => {
     const { root } = windowAt('')
     expect(root.querySelectorAll('.panel-column')).toHaveLength(5)

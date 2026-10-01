@@ -30,7 +30,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { mintMarkId, type ManualMark, type ManualStore } from '@/annotations/manual'
+import { describeMark, mintMarkId, type ManualMark, type ManualStore } from '@/annotations/manual'
 import { assemblyAxis, assemblyOf, type Assembly } from '@/genome/assembly'
 import { Scale } from '@/render/scale'
 import { Session, type SessionHost } from '@/app/Session'
@@ -429,5 +429,80 @@ describe('marks across a change of file', () => {
     view.inside.carry('yeast.bw')
     view.inside.setUpBrowserAnnotations(view.assembly)
     expect(view.inside.annotations?.manual.marks).toHaveLength(1)
+  })
+})
+
+/**
+ * Closing the map, which falls back to a browser on the cooler's own sequences
+ * with every track still loaded (§5.8) — and every mark. The card was left out
+ * of the column that road built, where a browser opened fresh has it, so the
+ * session held the marks drawn on the map with no card to see, place or
+ * remove one by.
+ */
+describe('a browser a closed map fell back to', () => {
+  /** What closing the map reaches, beside what {@link Innards} names. */
+  interface MapInnards {
+    file: unknown
+    manualCard: unknown
+    setAnnotations(nodes: readonly HTMLElement[]): void
+    closeMap(): void
+  }
+
+  /**
+   * A session holding a map of {@link genome}'s two sequences and the
+   * annotations it was drawn with — one mark among them — closed into its
+   * browser. The map is the least `closeMap` reads: its address, its sequences
+   * and where it came from.
+   */
+  function closed(options: { card: boolean }): Open {
+    const session = new Session(host)
+    built.push(session)
+    const inside = session as unknown as Innards & MapInnards
+    const assembly = genome('yeast.cool')
+    inside.setUpBrowserAnnotations(assembly)
+    inside.annotations?.manual.add({
+      id: mintMarkId(),
+      kind: 'line',
+      axis: 'vertical',
+      at: { contig: 'II', bp: 300 },
+      colour: '#111318',
+    })
+    if (!options.card) inside.manualCard = null
+    // The map's column, which the browser's replaces, and the map.
+    inside.setAnnotations([])
+    inside.assembly = null
+    inside.file = {
+      uri: 'yeast.cool',
+      contigs: {
+        table: { columns: ['name', 'length'], length: 2, data: { name: ['I', 'II'], length: Int32Array.from([1_000, 1_000]) } },
+      },
+      source: { kind: 'remote', url: 'https://data.example/yeast.cool' },
+    }
+    inside.closeMap()
+    inside.browser?.remeasure()
+    return attach(session, inside, assembly)
+  }
+
+  it('has the marks card, under the tracks, with the marks the map had', () => {
+    const view = closed({ card: true })
+    const titles = Array.from(view.session.annotationsHost.querySelectorAll('.card-head')).map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(titles.indexOf('Manual annotations')).toBeGreaterThan(titles.indexOf('Tracks'))
+    expect(Array.from(view.card.querySelectorAll('.manual-where')).map((node) => node.textContent)).toEqual([
+      describeMark(view.marks[0]),
+    ])
+    // …and it points at the tracks now, since the map has gone.
+    expect(view.label('Lines')).toBe('pick on track')
+    view.press('Lines', 'pick on track')
+    view.click('I', 400)
+    expect(view.marks).toHaveLength(2)
+  })
+
+  it('builds one over the session’s marks where it had none', () => {
+    const view = closed({ card: false })
+    expect(Array.from(view.card.querySelectorAll('.manual-where')).map((node) => node.textContent)).toEqual([
+      describeMark(view.marks[0]),
+    ])
   })
 })

@@ -351,3 +351,44 @@ describe('closing the session’s own cell', () => {
     expect(second.deck.leadShown).toBe(false)
   })
 })
+
+/**
+ * The first map's chain, kept as a companion's is (§16.3, §16.6): per file, in
+ * the session's memory. A companion's has always been kept with its look; the
+ * first map's started closed on every build of the deck, so a first map the
+ * reader had set moving on its own came back driving the others.
+ */
+describe('the chain on the session’s own cell', () => {
+  const chain = (deck: PanelDeck): HTMLButtonElement => {
+    const node = leadCell(deck).querySelector<HTMLButtonElement>('.deck-head-lead .deck-lock')
+    if (node === null) throw new Error('no chain on the lead’s heading')
+    return node
+  }
+
+  it('stays open across a reload of the same deck', () => {
+    const first = make()
+    first.deck.add({ kind: 'structure' })
+    chain(first.deck).click()
+    expect(recall(KEY, 'deck:lead')).toEqual({ at: 0, hidden: false, locked: false })
+    first.deck.destroy()
+    first.deck.el.remove()
+    const second = make()
+    second.deck.apply(state('3d'))
+    expect(chain(second.deck).getAttribute('aria-pressed')).toBe('false')
+    expect(chain(second.deck).title).toBe('lead.cool is moving on its own. Click to put it back in step.')
+  })
+
+  it('is kept when the cell moves, and written no more once it is closed again', () => {
+    const { deck } = make()
+    deck.add({ kind: 'structure' })
+    chain(deck).click()
+    drag(
+      leadCell(deck).querySelector('.deck-head-lead .deck-grip') as Element,
+      deck.el.querySelector('.deck-grid > .deck-structure') as Element,
+    )
+    // One record, written whole: moving the cell does not forget its chain.
+    expect(recall(KEY, 'deck:lead')).toEqual({ at: 1, hidden: false, locked: false })
+    chain(deck).click()
+    expect(recall(KEY, 'deck:lead')).toEqual({ at: 1, hidden: false })
+  })
+})

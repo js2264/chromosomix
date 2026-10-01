@@ -118,6 +118,7 @@ import {
   mapStarTitle,
   readDeckLead,
   withLead,
+  type DeckLead,
 } from './deck'
 import { ViewportLock, spansAgree, type LockUnit } from './lock'
 import { offerLanding, within, type LaneCarry, type LaneSurface } from '../ui/laneCarry'
@@ -672,6 +673,16 @@ export class PanelDeck {
   private writes = 0
   /** Whether the echo on the maps is one a structure cell's pointer put there. */
   private echoingPlace = false
+  /**
+   * Whether the first map's chain is closed — whether it drives the deck.
+   *
+   * Remembered with its place (`DeckLead.locked`), as a companion's is with
+   * its look, and read back by the constructor: it started `true` on every
+   * build of the deck, so a first map the reader had set moving on its own
+   * came back driving the others after a reload, a restored workspace or the
+   * deck being built again, while every companion beside it kept its chain
+   * open.
+   */
   private leadLocked = true
   /**
    * The lead's last report, kept because the alignment is recomputed without it.
@@ -804,11 +815,13 @@ export class PanelDeck {
     // Where the lead was left, and whether it was on screen. Reconciled against
     // the deck when its cells arrive: a place past their end is the end
     // ({@link order}), and a hidden lead in a deck that comes back with no other
-    // cell is shown ({@link paintGrid}).
+    // cell is shown ({@link paintGrid}). Its chain needs no reconciling: open,
+    // it seeds nothing ({@link seedFromLead}), and the lock asks it each time.
     const place = readDeckLead(recall<unknown>(props.memoryKey(), LEAD_SCOPE))
     if (place !== null) {
       this.leadAt = place.at
       this.leadHidden = place.hidden
+      this.leadLocked = place.locked !== false
     }
     this.wireLeadGrip()
     // A pointer on a structure cell is a place on every map (§25.4): the cell
@@ -3427,7 +3440,21 @@ export class PanelDeck {
     if (place === this.leadAt && hidden === this.leadHidden) return
     this.leadAt = place
     this.leadHidden = hidden
-    remember(this.props.memoryKey(), LEAD_SCOPE, { at: place, hidden })
+    this.rememberLead()
+  }
+
+  /**
+   * The lead's record in this file's memory: its place, whether it is shown,
+   * and its chain where it is open. One record written whole by both of the
+   * things that change it, so moving the first map cannot forget its chain.
+   */
+  private rememberLead(): void {
+    const lead: DeckLead = {
+      at: this.leadAt,
+      hidden: this.leadHidden,
+      ...(this.leadLocked ? {} : { locked: false }),
+    }
+    remember(this.props.memoryKey(), LEAD_SCOPE, lead)
   }
 
   /**
@@ -3457,6 +3484,8 @@ export class PanelDeck {
    */
   private toggleLeadLock(): void {
     this.leadLocked = !this.leadLocked
+    // Kept per file, as a companion's chain is with its look (§16.6).
+    this.rememberLead()
     if (this.leadLocked) {
       this.seedFromLead()
       this.lock.catchUp(LEAD)

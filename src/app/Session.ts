@@ -174,6 +174,7 @@ import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/Cont
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
+import { embedded } from '../embed'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { offerLanding, type LaneSurface } from '../ui/laneCarry'
@@ -1059,15 +1060,25 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files, { fromLanding: true }),
-      // The tiles are the shell's door: a store is a drawer over the window,
-      // not a fact about this tab (`ui/StoreDrawer.ts`).
-      onStore: (id) => this.host.openStore(id),
-      // And so is a place: a connected folder belongs to the window's Files
-      // column, which every tab shares (§20.4). Two callbacks because two
-      // things can happen — a dialog opens on the place, or *choose a folder…*
-      // has already been through the picker and has one.
-      onConnect: (provider) => this.host.openConnect(provider),
-      onConnected: (id) => this.host.folderConnected(id),
+      // Neither door in an embed, whose landing page is *Load files* alone
+      // (§21.2): the drawer a tile opens is not built there, and nor is the
+      // Files column a place is connected into — so a tile pressed did
+      // nothing, and a folder chosen was connected into a column nobody could
+      // see. Left out, the picker draws neither section.
+      ...(embedded()
+        ? {}
+        : {
+            // The tiles are the shell's door: a store is a drawer over the
+            // window, not a fact about this tab (`ui/StoreDrawer.ts`).
+            onStore: (id: string) => this.host.openStore(id),
+            // And so is a place: a connected folder belongs to the window's
+            // Files column, which every tab shares (§20.4). Two callbacks
+            // because two things can happen — a dialog opens on the place, or
+            // *choose a folder…* has already been through the picker and has
+            // one.
+            onConnect: (provider: ProviderId) => this.host.openConnect(provider),
+            onConnected: (id: string) => this.host.folderConnected(id),
+          }),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)
@@ -4896,6 +4907,17 @@ export class Session {
     if (held === null) this.setUpBrowserAnnotations(assembly)
     else {
       this.compareCard = this.newCompareCard(assembly.uri)
+      // The marks, which this column used to leave out: the map's carried them
+      // and a browser opened fresh does (`setUpBrowserAnnotations`), so closing
+      // the map was the one road to a genome browser whose store held marks
+      // with no card to see, place or remove one by. The map's own card where
+      // there is one — the same store, and a picker that re-words its buttons
+      // for the tracks on the render below — as hiding the map keeps it.
+      this.manualCard ??= new ManualCard({
+        store: held.manual,
+        picker: this.markPicker(),
+        fileLabel: fileLabel(assembly.uri),
+      })
       this.setAnnotations([
         this.compareCard.el,
         new AnnotationCard({
@@ -4906,6 +4928,7 @@ export class Session {
           ...this.syntheticRowHooks(),
         }).el,
         this.structureCardFor(held.store, held.loader),
+        this.manualCard.el,
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
     }

@@ -28,6 +28,7 @@ import {
   planStack,
   resolveGroupExtents,
   type GroupSettings,
+  type StackSlot,
 } from '../annotations/groups'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
@@ -1714,6 +1715,27 @@ export class BrowserView {
    * comparable by construction.
    */
   private layout(): Lane[] {
+    return this.stack().map((slot) => ({
+      entry: slot.host,
+      overlaid: slot.overlaid,
+      frame: this.frameAt(slot.acrossFrom, slot.thickness),
+      profiles: [],
+      residues: [],
+      reads: [],
+      pending: null,
+    }))
+  }
+
+  /**
+   * {@link layout}'s slots as the store has them now, before a frame is cut
+   * for any of them.
+   *
+   * Apart for the one reader that cannot wait for a draw: the track-height box
+   * is told of a change when the store makes it, a frame before the repaint
+   * that brings `this.lanes` up to date, so the lanes the last draw laid out
+   * would answer it with the heights from before the change.
+   */
+  private stack(): Array<StackSlot<AnnotationEntry>> {
     // Both *file* cards, because in one dimension there is no "on the map" to
     // be an overlay of: a BED is boxes and a BEDPE is arcs, and each takes a
     // lane of its own like everything else here.
@@ -1731,15 +1753,7 @@ export class BrowserView {
       gap: LANE_GAP,
       from: this.rulerHeight + LANE_GAP,
       minimum: LANE_MIN_SIZE,
-    }).map((slot) => ({
-      entry: slot.host,
-      overlaid: slot.overlaid,
-      frame: this.frameAt(slot.acrossFrom, slot.thickness),
-      profiles: [],
-      residues: [],
-      reads: [],
-      pending: null,
-    }))
+    })
   }
 
   private frameAt(acrossFrom: number, thickness: number): LaneFrame {
@@ -3111,7 +3125,14 @@ export class BrowserView {
             this.optionToggle('gutter'),
           ),
         ),
-        trackHeightField((px) => this.setTrackHeight(px)),
+        // Told what the lanes are, as the box beside a map is. Built without
+        // them it showed the last number it had applied, which stretch,
+        // shrink, a group's levelling and a dragged border all leave behind —
+        // `90` here over a stack the same box beside the map called 46.
+        trackHeightField((px) => this.setTrackHeight(px), {
+          lanes: () => this.stack().map((slot) => ({ members: [slot.host, ...slot.overlaid] })),
+          subscribe: (onChange) => this.props.store.subscribe(onChange),
+        }),
         el(
           'div',
           { class: 'field field-block' },

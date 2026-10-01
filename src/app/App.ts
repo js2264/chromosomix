@@ -104,6 +104,7 @@ import {
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
 import { embedded, mounting } from '../embed'
+import { IS_STANDALONE } from '../version'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
@@ -266,7 +267,8 @@ export class App implements SessionHost {
    * drawer, on the Files column's argument: a store is not a fact about the
    * file in front, and a catalogue somebody was half way through narrowing
    * should survive a switch of tab. `null` in an embed, which has no header to
-   * open it from and no business fetching a catalogue into somebody's figure.
+   * open it from and no business fetching a catalogue into somebody's figure,
+   * and in the single file, which has no network to read one over (§19).
    */
   private readonly storeDrawer: StoreDrawer | null
   private readonly theme: ThemeToggle
@@ -399,7 +401,15 @@ export class App implements SessionHost {
           // window's height moves and no box a `ResizeObserver` watches does.
           onLayout: relayout,
         })
-    this.storeDrawer = this.embed
+    // Built in neither of the two mounts that have no use for it. An embed has
+    // no header to put its button in (§21.2). The single file has no network
+    // (§19), and a store is a list of addresses: every catalogue but the lab's
+    // is a fetch that fails before a byte moves, and every figure on the lab's
+    // is a file on a bucket. A drawer there is the URL box that build leaves
+    // out, one door over — so it is absent rather than offered, and so is
+    // everything that opens it: the header's button, the key, the palette's
+    // row and a `?store=` link.
+    this.storeDrawer = this.embed || IS_STANDALONE
       ? null
       : new StoreDrawer({
           host: {
@@ -962,7 +972,9 @@ export class App implements SessionHost {
     // whatever the window shows, so a link naming both a config and a store
     // gets both — the figure in the tab and the catalogue beside it. A link is
     // a gesture, which is what licenses the fetch: nothing here runs unless
-    // somebody clicked a URL naming this store.
+    // somebody clicked a URL naming this store. A window with no drawer — an
+    // embed, the single file — has nothing for the link to open, and fetches
+    // nothing for it either.
     const shelf = mounting().store
     if (shelf !== null) this.storeDrawer?.openLink(shelf, mounting().storeView)
     // Only when session storage had nothing, which is exactly "the browser was
@@ -2027,18 +2039,28 @@ export class App implements SessionHost {
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
       },
-      {
-        id: 'open-store',
-        group: 'File',
-        title: 'Stores',
-        // Not a list of them, which named four of the seven that ship: the
-        // drawer's tiles are the list, read off the registry (§24.2).
-        hint: 'Every data store this viewer ships with, and any you connected, as a drawer down the left.',
-        keys: KEYS.stores,
-        enabled: this.storeDrawer !== null,
-        ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),
-        run: () => this.storeDrawer?.toggle.click(),
-      },
+      // Absent from the single file rather than greyed (§19). Greying is for a
+      // command another state of this window could make work — the palette
+      // keeps its shape for that (§26.6) — and that build has no state in which
+      // a store opens: there is no drawer, so the key goes with the row. An
+      // embed keeps the row greyed, as it keeps the console's: the web build's
+      // own command, in a frame with no room for its panel (§21.2).
+      ...(IS_STANDALONE
+        ? []
+        : [
+            {
+              id: 'open-store',
+              group: 'File',
+              title: 'Stores',
+              // Not a list of them, which named four of the seven that ship: the
+              // drawer's tiles are the list, read off the registry (§24.2).
+              hint: 'Every data store this viewer ships with, and any you connected, as a drawer down the left.',
+              keys: KEYS.stores,
+              enabled: this.storeDrawer !== null,
+              ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),
+              run: () => this.storeDrawer?.toggle.click(),
+            },
+          ]),
       {
         id: 'open-file',
         group: 'File',
