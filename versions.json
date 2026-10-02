@@ -1,6 +1,13 @@
 {
-  "latest": "05f1b2f",
+  "latest": "6409249",
   "versions": [
+    {
+      "commit": "6409249",
+      "version": "0.13.0",
+      "date": "2026-10-02T19:16:04+02:00",
+      "subject": "Draw a place visited again from memory (§2, §7.2, §12) (#90)",
+      "tag": ""
+    },
     {
       "commit": "05f1b2f",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": "v0.13.0"
     },
     {
-      "commit": "a9e840b",
-      "version": "0.12.0",
-      "date": "2026-09-20T22:38:23+02:00",
-      "subject": "chores: clean up",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -205,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 90,
-      "commit": "99acbf6",
-      "title": "Cache reader answers to avoid re-reading visited maps",
-      "branch": "js/focused-ramanujan-j1pyxw",
-      "date": "2026-10-02T14:53:14Z"
-    }
-  ]
+  "pulls": []
 }
