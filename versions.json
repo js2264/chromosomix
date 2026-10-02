@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 90,
+      "commit": "99acbf6",
+      "title": "Cache reader answers to avoid re-reading visited maps",
+      "branch": "js/focused-ramanujan-j1pyxw",
+      "date": "2026-10-02T14:53:14Z"
+    }
+  ]
 }
