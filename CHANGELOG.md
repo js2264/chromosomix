@@ -1924,6 +1924,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A linear chromosome read with few bins is no longer read as circular (§8.15).** A map opened
+  at a coarse resolution was measured there, and with a few dozen bins a line's two ends are too
+  near each other for the junction test: contacts flatten out across a chromosome's territory,
+  and a yeast chromosome's telomeres are held together. The mouse progenitors map opened at
+  2.56 Mb ticked chr9, chr11, chr12, chr15, chr19 and chrY, and the yeast demo `.hic` opened at
+  16 kb its chromosome I, at 0.92. A sequence is now measured only where it has fifty bins at the
+  rung read — over thirty-two maps no linear chromosome read with more was ticked — and a smaller
+  circle read coarsely is left undecided, for the reader to tick: the yeast mitochondrion of the
+  yeast and *M. pneumoniae* demo at its landing rung (43 bins at 2 kb), *E. coli* opened at
+  100 kb, and in `metacooler-run circular` at the zoo's 4 kb, a plasmid under 200 kb.
+
 - **A linear chromosome is no longer read as circular on one stray read (§8.15).** The junction
   test took the median of three separations, and where the balancer had dropped an end it was the
   median of one: chrY of the demo store's mouse progenitors map, opened at 10 kb and measured at
@@ -1931,8 +1942,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   end with nothing on its own diagonal, and the map opened under *chrY reads as circular*. A
   separation now counts only where the junction has a cell and the diagonal has contacts at both
   ends, and a score needs two of the three; with fewer the sequence is left undecided, and
-  `metacooler-run circular` leaves its row empty. Over thirty-two maps every bacterial chromosome
-  and plasmid ticked before is still ticked, at every rung.
+  `metacooler-run circular` leaves its row empty. Over thirty-two maps the rule changes no
+  bacterial chromosome's or plasmid's verdict at any rung.
 
 - **A tab's note goes with its file (§5.6).** The bar under the tabs said what a tab had found out
   about its file and stayed until dismissed, so a link that moved a tab from the mouse map to a

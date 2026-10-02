@@ -99,6 +99,7 @@ import { gridAt } from '../analysis/context'
 import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
+  MIN_JUNCTION_SEQUENCE_BINS,
   junctionCandidates,
   junctionQuorum,
   measureJunctions,
@@ -1661,8 +1662,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
   metacooler-run circular <file.mcool::/resolutions/<bp>> [...]
       Which sequences join their own ends: the junction test the app runs when
       a map is first opened, as a table on stdout — sequence, length, score,
-      and yes or no where it could be decided. The names to hand every other
-      run as --circular.
+      and yes or no where it could be decided: a sequence needs 50 bins at the
+      resolution read. The names to hand every other run as --circular.
 
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
@@ -1944,9 +1945,11 @@ async function replayCommand(args: Args): Promise<number> {
  * what the viewer would have ticked on opening the file at that resolution.
  *
  * Every sequence gets a row, in the file's order: a score and a verdict where
- * the test was run and decided, both empty where it was not — too short, past
- * the fifty longest, or ends that leave fewer than two of the three separations
- * to compare: one the balancer dropped, or one with nothing on its diagonal.
+ * the test was run and decided, both empty where it was not — fewer than fifty
+ * bins at the resolution read, past the fifty longest, or ends that leave fewer
+ * than two of the three separations to compare: one the balancer dropped, or one
+ * with nothing on its diagonal. A batch that wants a small plasmid decided reads
+ * the map at a resolution that gives it fifty bins.
  */
 async function circularCommand(args: Args): Promise<number> {
   if (args.positional.length === 0) {
@@ -1969,8 +1972,8 @@ async function circularCommand(args: Args): Promise<number> {
           `# metacooler metacooler-run ${VERSION}`,
           `# file: ${path}`,
           `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
-            `or fewer, at ${junctionQuorum()} of them at least; ` +
-            `circular at ${CIRCULAR_SCORE} or more (§8.15)`,
+            `or fewer, at ${junctionQuorum()} of them at least, on sequences of ` +
+            `${MIN_JUNCTION_SEQUENCE_BINS} bins or more; circular at ${CIRCULAR_SCORE} or more (§8.15)`,
           `# framing: ${mc.binsize} bp${balance ? ', balanced' : ''}`,
           ['sequence', 'length', 'score', 'circular'].join('\t'),
         ]

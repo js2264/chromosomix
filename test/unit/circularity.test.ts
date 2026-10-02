@@ -172,20 +172,36 @@ describe('the test over a whole map', () => {
   it('measures the long sequences, longest first, where each one starts', () => {
     const candidates = junctionCandidates(
       [
-        ['plasmid', 30_000],
+        ['plasmid', 60_000],
         ['chromosome', 200_000],
-        ['scrap', 5_000],
+        ['scrap', 30_000],
         ['megaplasmid', 100_000],
       ],
       1000,
     )
     expect(candidates).toEqual([
-      { name: 'chromosome', from: 30, n: 200 },
-      { name: 'megaplasmid', from: 235, n: 100 },
-      { name: 'plasmid', from: 0, n: 30 },
+      { name: 'chromosome', from: 60, n: 200 },
+      { name: 'megaplasmid', from: 290, n: 100 },
+      { name: 'plasmid', from: 0, n: 60 },
     ])
-    expect(MIN_JUNCTION_SEQUENCE_BINS).toBeGreaterThan(5)
     expect(junctionCandidates([['a', 90_000], ['b', 80_000]], 1000, 1).map((one) => one.name)).toEqual(['a'])
+  })
+
+  /**
+   * Fifty bins at the rung read, counted as the map counts them — a last
+   * part-bin is a bin — so a sequence just past 49 kb is measured at 1 kb and
+   * one of 49 kb is not.
+   */
+  it('measures a sequence of fifty bins and not one of forty-nine', () => {
+    expect(MIN_JUNCTION_SEQUENCE_BINS).toBe(50)
+    const names = junctionCandidates(
+      [
+        ['forty-nine', 49_000],
+        ['fifty', 49_001],
+      ],
+      1000,
+    ).map((one) => one.name)
+    expect(names).toEqual(['fifty'])
   })
 
   /** A map of a 200-bin circle followed by a 100-bin line, read a block at a time. */

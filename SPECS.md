@@ -3848,7 +3848,7 @@ first are **neighbours**, so the cells joining them hold what the diagonal holds
 at the same separation — the most contacts there are — while anything else that
 brightens a corner brightens it by a factor, never to the level of the diagonal
 itself. So the first time a file is opened, each of its fifty longest sequences of
-at least twelve bins is read at its two ends and at its corner — three blocks a
+at least fifty bins is read at its two ends and at its corner — three blocks a
 few bins wide — and scored as the contacts across the junction at a circular
 separation of one, two and three bins over the contacts along the diagonal at the
 same separations, measured at the two ends the junction joins, the median of the
@@ -3862,9 +3862,18 @@ median was there so that one noisy cell would not decide, and once ends went mis
 was a median of one: on chrY of a mouse map, measured at 640 kb, the balancer had dropped
 the last two bins, and the one junction cell left — a single read pair, beside an end
 whose own diagonal held nothing at that separation — scored 0.41 and ticked a linear
-chromosome. Over thirty-two maps — bacteria, yeasts, a chytrid, mouse — the rule ticks
-every bacterial chromosome and plasmid the median of three did, at every rung, and leaves
-the yeast mitochondrion undecided only at 1 kb, where its ends are two cells. **Each sequence is measured at the coarsest
+chromosome. **And fifty bins, at the rung read, is the floor.** On a line the cells
+joining its ends are its length apart less a few bins, and a few dozen bins is not far
+enough down the decay: contacts flatten out across a chromosome's territory, and a yeast
+chromosome's two telomeres are held together, so a short line's corner can pass for a
+circle's. Over thirty-two maps — bacteria, yeasts, a chytrid, mouse — linear chromosomes
+read with 12 to 49 bins scored up to 0.9 (yeast chromosome I at 16 kb; chr9, chr11,
+chr12, chr15, chr19 and chrY of the mouse map at 2.56 Mb); with both rules none is ticked
+at any rung, and every bacterial chromosome and plasmid of those maps still is at its
+landing rung (§9). The floor costs a small circle read coarsely, left undecided for the
+reader to tick: *E. coli* opened at 100 kb (47 bins), *C. necator*'s pBB2 at 16 kb (27),
+and the yeast mitochondrion of the yeast and *M. pneumoniae* demo at its landing rung —
+43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **Each sequence is measured at the coarsest
 rung of the file's ladder that still gives it a hundred bins**, the rung it was opened at where
 none does: the blocks are a few bins wide, so what a read costs is the rung's index and weights,
 and at a large file's finest rung those are megabytes a read — 111 MiB for the three reads on each
@@ -3886,7 +3895,9 @@ resolution the map is opened at rather than at a rung of its own — and is answ
 sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
 handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a
 few of them linear, can neither declare them all round nor ask a person which. The DNA Bacterial
-Zoo's analyses are framed that way (§24.3).
+Zoo's analyses are framed that way (§24.3). The fifty-bin floor holds at the resolution read, so a
+batch that wants a small plasmid decided reads the map where it has fifty bins: at the zoo's 4 kb, a
+plasmid under 200 kb is left undecided, and framed as a line unless it is named.
 
 So it is a **column of tick boxes in the Chromosomes table**, beside the lengths,
 one row per sequence. It was a tickbox in the Map card, and that was the right

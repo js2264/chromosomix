@@ -27,14 +27,23 @@
 export const JUNCTION_BINS = 3
 
 /**
- * The fewest bins a sequence needs for the test to mean anything.
+ * The fewest bins a sequence needs, at the rung it is read at, for the test to
+ * mean anything.
  *
- * The diagonal it is compared with is measured on `2k` bins at each end, and a
- * sequence shorter than four times that is mostly its ends: a small plasmid at a
- * coarse resolution is two or three bins, and every bin of it is next to every
- * other whether it is a circle or not.
+ * On a line of `n` bins the cells joining its ends are `n − s` bins apart, so
+ * the junction reads as a line's only where that is far down the decay — and a
+ * few dozen bins can fall short of it, where contacts flatten out across a
+ * chromosome's territory or its two ends are held together, as clustered
+ * telomeres are. Over thirty-two maps, linear chromosomes read with 12 to 49
+ * bins scored up to 0.9 (yeast chromosome I at 16 kb, six mouse chromosomes at
+ * 2.56 Mb); with {@link junctionQuorum}'s two separations, none read with fifty
+ * or more reached 0.2. It is half the {@link JUNCTION_TARGET_BINS} the session
+ * measures at wherever the ladder lets it, so it binds only where the rung read
+ * gives a sequence fewer than fifty bins — a file opened coarsely, or a short
+ * sequence — and what it costs is a small circle read there, left undecided
+ * rather than ticked: the yeast mitochondrion is 43 bins at 2 kb.
  */
-export const MIN_JUNCTION_SEQUENCE_BINS = 4 * JUNCTION_BINS
+export const MIN_JUNCTION_SEQUENCE_BINS = 50
 
 /** At or above this the sequence is read as circular. */
 export const CIRCULAR_SCORE = 0.2
