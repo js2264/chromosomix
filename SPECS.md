@@ -8345,14 +8345,15 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, a notebook at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eight analyses twice over public data from the bucket — once through `metacooler-run`,
-once through the package each reproduces, called as it is meant to be called and never
-re-implemented — and lines the two up bin by bin or call by call: insulation, compartments and P(s)
-against cooltools, the directionality index against `domaincaller`, peak calling against yapc 0.1,
-loops against chromosight 1.6.3, reproducibility against `hicrep` 0.2.6 and `hicreppy` 0.1.0, and
-the 3D model against pastis; and it times every command. It is a developer's document, not a test:
-it needs the data (about 7 GB), the reference packages and yapc's own environment, and nothing in the
-suite runs it.
+Quarto, runs eight analyses twice over public data, each file named by its accession (4DN, GEO) —
+once through `metacooler-run`, once through the package each reproduces, called as it is meant to be
+called and never re-implemented — and lines the two up bin by bin or call by call: insulation,
+compartments and P(s) against cooltools, the directionality index against `domaincaller`, peak
+calling with IDR on two replicates against yapc 0.1, loops against chromosight 1.6.3,
+reproducibility against `hicrep` 0.2.6, and the 3D model against pastis; and it times every command,
+giving each `metacooler-run` command's speed as a fold over its reference. It is a document, not a
+test: it needs the data (about 6 GB), the reference packages and yapc's own environment, and nothing
+in the suite runs it.
 
 ### 18.11 A set of scales is one picture
 
