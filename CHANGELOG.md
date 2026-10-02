@@ -854,6 +854,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The validation notebook reads public data only, each file by its accession (§18.10).** Mouse
+  Hi-C 4DNFIOZ1TRUS and three chicken maps (4DNFIH8L6WON, 4DNFITBCUX56, 4DNFIIML46E5) from 4DN, yeast
+  Micro-C GSE151553 from GEO, two mouse ATAC-seq replicates (4DNFIIY4QW2D, 4DNFITBRHVZE) from 4DN, and
+  UCSC's mm10 for GC phasing. Peak calling runs yapc's whole pipeline, IDR included, on the two
+  replicates (chr19); HiCRep is held to `hicrep` alone; the 3D model runs its default 150 steps;
+  compartments leave chrY out of the comparison. The times table gives each `metacooler-run` command
+  as a fold faster than its reference, and the text the mean of those folds. The prose is cut to what
+  a reader of the results needs. Its reference scripts are files of their own in `notebooks/scripts/`,
+  rather than strings it wrote out at render time.
+
 - **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
   way round, on the argument that a band along a genomic axis is what a contact map is *for* — which
   is true of the figure and wrong about the arrival. The only blocks that can turn are single
@@ -1895,6 +1905,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Both notebooks render again against this `metacooler-run` (§18.8, §18.10, §23.1).** The DBZ
+  figures read the inter-arm table's log2 `score`, which has since become its *enrichment*, a fold,
+  with *enrichment after detrend* beside it, and E1's share from a column cooltools' method now
+  writes as *of contacts*; and they handed compartments `--contacts cis`, which a shell reads as the
+  number of contacts to draw the map to, and refuses. Their check on the secondary diagonal is the
+  task's reading again — each distance's mean, in log2, from the origin out to the reach — and lands
+  on the table's two folds to the three decimals they are written to. The validation notebook took
+  one from the peak list's starts and summits, which are written 0-based now as yapc writes them,
+  and read the BED's `#` line as a peak, so no region matched yapc's.
 
 - **A bedMethyl lane names `e`, `g` and `b` as the SAM spec does (§8.20).** They were called 4mC,
   8oxoG and 4hmC; SAMtags §1.7 has them as 5fU, 5hmU and 5caU (8oxoG is `o`, and 4mC is ChEBI
