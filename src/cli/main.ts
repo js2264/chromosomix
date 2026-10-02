@@ -100,6 +100,7 @@ import {
   CIRCULAR_SCORE,
   JUNCTION_BINS,
   junctionCandidates,
+  junctionQuorum,
   measureJunctions,
 } from '../analysis/circularity'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
@@ -1944,7 +1945,8 @@ async function replayCommand(args: Args): Promise<number> {
  *
  * Every sequence gets a row, in the file's order: a score and a verdict where
  * the test was run and decided, both empty where it was not — too short, past
- * the fifty longest, or an end the balancer dropped.
+ * the fifty longest, or ends that leave fewer than two of the three separations
+ * to compare: one the balancer dropped, or one with nothing on its diagonal.
  */
 async function circularCommand(args: Args): Promise<number> {
   if (args.positional.length === 0) {
@@ -1967,7 +1969,8 @@ async function circularCommand(args: Args): Promise<number> {
           `# metacooler metacooler-run ${VERSION}`,
           `# file: ${path}`,
           `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
-            `or fewer; circular at ${CIRCULAR_SCORE} or more (§8.15)`,
+            `or fewer, at ${junctionQuorum()} of them at least; ` +
+            `circular at ${CIRCULAR_SCORE} or more (§8.15)`,
           `# framing: ${mc.binsize} bp${balance ? ', balanced' : ''}`,
           ['sequence', 'length', 'score', 'circular'].join('\t'),
         ]

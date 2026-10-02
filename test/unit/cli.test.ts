@@ -133,15 +133,41 @@ describe('the junction test', () => {
       .filter((line) => line !== '' && !line.startsWith('#'))
       .map((line) => line.split('\t'))
 
-  it('reads the sequences of a map whose ends are a chromosome apart as lines', async () => {
+  it('reads a sequence whose ends are a chromosome apart as a line', async () => {
+    // Every cell present, and each a function of the separation along the line.
+    const n = 60
+    const line: HicRecord[] = []
+    for (let x = 0; x < n; x++) {
+      for (let y = x; y < n; y++) line.push({ x, y, value: Math.round(10_000 / (1 + y - x) ** 1.5) })
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'line', length: n * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': line },
+      blockBinCount: 32,
+    })
+    const file = join(directory, 'line.hic')
+    await writeFile(file, fixture.bytes)
     reset()
-    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(await main(['circular', file, '--quiet'])).toBe(0)
     expect(said()).toMatch(/^# framing: 1000 bp$/m)
     const rows = table()
     expect(rows[0]).toEqual(['sequence', 'length', 'score', 'circular'])
-    expect(rows.slice(1).map((row) => [row[0], row[1], row[3]])).toEqual([
-      ['chrI', '120000', 'no'],
-      ['chrII', '60000', 'no'],
+    expect(rows[1][0]).toBe('line')
+    expect(Number(rows[1][2])).toBeLessThan(0.05)
+    expect(rows[1][3]).toBe('no')
+  })
+
+  it('leaves a sequence undecided where it can be compared at one separation alone', async () => {
+    // The sample's cells are one in five, laid out so that each sequence's
+    // diagonal holds contacts at one separation of the three — the third on
+    // chrI, the first on chrII — and a score there would be one cell's.
+    reset()
+    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(table().slice(1)).toEqual([
+      ['chrI', '120000', '', ''],
+      ['chrII', '60000', '', ''],
     ])
   })
 

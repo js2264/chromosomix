@@ -262,8 +262,16 @@ export interface SessionHost {
    */
   panelLayout(): PanelLayout
   applyPanelLayout(layout: PanelLayout | undefined): void
-  /** Say something quiet and dismissible about what just happened. */
-  notify(message: string): void
+  /**
+   * Say something quiet and dismissible about what just happened.
+   *
+   * A session names itself as `owner`: what it says is about the file it has
+   * open, so it is shown while this tab is the one in front, and stays only
+   * until the session withdraws it ({@link withdrawNotice}, §5.6).
+   */
+  notify(message: string, owner?: Session): void
+  /** Take down what `owner` said, if it is still up: its file is no longer open. */
+  withdrawNotice(owner: Session): void
   /** A read finished; the status bar's counters are worth another look. */
   activity(session: Session): void
   /**
@@ -1044,6 +1052,17 @@ export class Session {
   private analysisOn = false
   private destroyed = false
   /**
+   * The file this session's note is about, by its path before `::` (`null`
+   * where none was open), or `null` itself while no note of its is up (§5.6).
+   *
+   * Everything a session says is a fact about the file it has open: a
+   * sequence that reads as circular, an origin set, an edit not drawn. So it
+   * goes when the tab moves to another file or to none ({@link unsay}) — a
+   * banner naming chrY stayed up over a chicken map with no chrY after a link
+   * moved the tab there. A change of resolution is the same file, and keeps it.
+   */
+  private said: { file: string | null } | null = null
+  /**
    * This session holds a view state it has not acted on yet.
    *
    * The state of a tab that was restored and not clicked. It is a real state —
@@ -1385,6 +1404,8 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    // What it said goes with the tab.
+    this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
     this.editStage?.close()
     this.stopEdgeLanding()
@@ -2141,6 +2162,27 @@ export class Session {
   }
 
   /**
+   * Put a note up about the file at `uri` — the one open, where none is named —
+   * in the bar under the tabs, as this session's (see {@link said}).
+   */
+  private say(message: string, uri: string | undefined = this.file?.uri ?? this.assembly?.uri): void {
+    this.said = { file: uri === undefined ? null : splitUri(uri).path }
+    this.host.notify(message, this)
+  }
+
+  /**
+   * Take this session's note down, unless it is about the file at `uri`: the
+   * file it is moving to, which may be the same one at another resolution.
+   * With no `uri` the tab is going to no file at all, and it goes.
+   */
+  private unsay(uri?: string): void {
+    if (this.said === null) return
+    if (uri !== undefined && this.said.file === splitUri(uri).path) return
+    this.said = null
+    this.host.withdrawNotice(this)
+  }
+
+  /**
    * Say so, once, when the file handed over is not the file this session was
    * made from.
    *
@@ -2156,7 +2198,7 @@ export class Session {
    * A remark and never a refusal. The two cases are indistinguishable from here,
    * and one of them is a thing people do on purpose.
    */
-  private noteSourceMismatch(config: SessionConfig, source: SourceSpec): void {
+  private noteSourceMismatch(uri: string, config: SessionConfig, source: SourceSpec): void {
     const saved = config.source
     if (saved === undefined || source.kind !== 'local') return
     const file = source.file
@@ -2166,10 +2208,11 @@ export class Session {
     if (!sizeMoved && !timeMoved) return
     const was = sourceNote(saved)
     const now = sourceNote({ name: file.name, size: file.size, lastModified: file.lastModified })
-    this.host.notify(
+    this.say(
       `${file.name} is not the file this session was made from — that one was ${was ?? 'different'}` +
         `, this one is ${now ?? 'different'}. The session has opened; the numbers in it are this ` +
         'file’s.',
+      uri,
     )
   }
 
@@ -2292,7 +2335,7 @@ export class Session {
       await this.open(uri, source)
       return
     }
-    this.noteSourceMismatch(config, source)
+    this.noteSourceMismatch(uri, config, source)
     applyConfig(config, this.memoryKey(uri))
     // Kept for the one hop `open` can make on its own: a collection addressed
     // at its root lands on one of its entries, under a URI this config has
@@ -2407,6 +2450,9 @@ export class Session {
     label?: string,
   ): Promise<void> {
     if (this.opening === uri) return
+    // A file dropped, picked or chosen from a store opens without a state to
+    // render first, so the note about the last one is taken down here too.
+    this.unsay(uri)
     // An empty tab takes the file's name as its own, as {@link addRemote}'s
     // does. Read before anything below replaces what the tab holds.
     const wasEmpty = this.file === null && this.assembly === null
@@ -2503,7 +2549,7 @@ export class Session {
       const info = await task.promise
       this.lens = edit !== undefined && info.edit?.refusal === null ? { edit, assembly: EditedAssembly.of(edit) } : null
       const refusal = info.edit?.refusal ?? null
-      if (refusal !== null) this.host.notify(`The edit kept for this file is not drawn. ${refusal}`)
+      if (refusal !== null) this.say(`The edit kept for this file is not drawn. ${refusal}`, uri)
       // A new map in the worker is a map as stored (§6.5): whatever it was told
       // to draw the last one to went with it, and the render below tells it
       // again.
@@ -2978,6 +3024,8 @@ export class Session {
       }
     }
     if (this.opening === uri) return
+    // As {@link open} does, for the genome a file is browsed as.
+    this.unsay(uri)
     // Asked again here for the door a `view=browser` link comes through
     // directly; from {@link open} the answer is already in hand and costs nothing.
     if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
@@ -5758,9 +5806,10 @@ export class Session {
     if (file === null || file.uri !== uri) return
     const taken = this.originStore()?.fill(found) ?? []
     if (taken.length === 0) return
-    this.host.notify(
+    this.say(
       `Origin set on ${taken.slice(0, 3).join(', ')}${taken.length > 3 ? ', …' : ''} — the arms ` +
         'are read from it from now on. It is on the Chromosomes table.',
+      uri,
     )
     this.rederive()
     this.deck?.redeclared()
@@ -5900,10 +5949,11 @@ export class Session {
     const added = circular.filter((name) => store.has(name))
     for (const name of added) this.adoptCircular(name, true)
     if (added.length > 0) {
-      this.host.notify(
+      this.say(
         `${added.slice(0, 3).join(', ')}${added.length > 3 ? ', …' : ''} ` +
           `${added.length === 1 ? 'reads' : 'read'} as circular — the contacts across the ` +
           'junction are those of neighbours. Untick on the Chromosomes table if not.',
+        uri,
       )
     }
   }
@@ -7466,7 +7516,7 @@ export class Session {
         // The panel has already asked for the score to move, so this only says
         // what happened. Without the move the next render would ask for the
         // correlation again and the failure would repeat once per frame.
-        this.host.notify(`Correlation failed: ${message}`)
+        this.say(`Correlation failed: ${message}`)
       },
       smooth: state.smooth ?? '0',
       onSmoothChange: (token) => {
@@ -7725,6 +7775,10 @@ export class Session {
     if (this.destroyed) return
     this.painted = true
     this.host.sessionChanged(this)
+    // What this session said is about the file it had open, and a state naming
+    // another, or none, takes it down — before anything below opens the next
+    // file and has something of its own to say about it (§5.6).
+    this.unsay(state?.uri)
 
     if (state === null) {
       this.file = null

@@ -59,6 +59,7 @@ const host: SessionHost = {
   panelLayout: () => ({}) as never,
   applyPanelLayout: () => {},
   notify: () => {},
+  withdrawNotice: () => {},
   activity: () => {},
   landingFileOpened: () => {},
 }
