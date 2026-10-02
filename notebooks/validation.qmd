@@ -301,7 +301,7 @@ DATASETS = [
          url=f'{FOURDN}/7fb6d419-a8de-4bc8-9c17-f68f814496a2/4DNFIIY4QW2D.bw'),
     dict(data='Mouse ATAC-seq (mm10), replicate 2', accession='4DNFITBRHVZE', source='4DN',
          url=f'{FOURDN}/e567a80e-c7d2-41ff-b12d-67047906c076/4DNFITBRHVZE.bw'),
-    dict(data='Mouse genome sequence', accession='mm10', source='UCSC (Illumina iGenomes)', name='mm10.fa',
+    dict(data='Mouse genome sequence (Illumina iGenomes copy)', accession='mm10', source='UCSC', name='mm10.fa',
          url='https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10/Sequence/WholeGenomeFasta/genome.fa'),
 ]
 PATHS = {d['accession']: fetch(d['url'], d.get('name')) for d in DATASETS}
@@ -602,7 +602,8 @@ TEXT['cmp_n'] = f'{len(phased)}'
 TEXT['cmp_eig'] = f"{phased['eigenvalue E1, relative difference'].max():.2%}"
 TEXT['cmp_ab'] = f"{phased['A/B agreement'].min():.2%}"
 ambiguous = ', '.join(cmp_table.loc[cmp_table['phasing'] == 'ambiguous', 'chromosome'])
-TEXT['cmp_ambiguous'] = f' Phasing is ambiguous on {ambiguous}, where E1\'s sign is arbitrary.' if ambiguous else ''
+TEXT['cmp_subject'] = (f'the {len(phased)} chromosomes compared, every one phased by GC content' if not ambiguous else
+                       f'the {len(phased)} chromosomes whose phasing is set ({ambiguous}: ambiguous, its E1 sign arbitrary)')
 e23 = pd.concat([phased[f'r E{k}'] for k in (2, 3)])
 TEXT['cmp_e23'] = f"{int((e23.abs() >= 0.98).sum())} of {len(e23)}"
 
@@ -626,11 +627,10 @@ ax.legend(loc='lower left', ncols=2)
 plt.show()
 ```
 
-On the `{python} TEXT['cmp_n']` chromosomes whose phasing is set, E1 correlates at
-r ≥ `{python} TEXT['cmp_min_r']`, eigenvalues agree within `{python} TEXT['cmp_eig']` and the A/B call
-on at least `{python} TEXT['cmp_ab']` of bins.`{python} TEXT['cmp_ambiguous']` E2 and E3 agree up to
-sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98); the others lie beside an
-eigenvalue of nearly the same magnitude, where the eigenvector is not unique.
+On `{python} TEXT['cmp_subject']`, E1 correlates at r ≥ `{python} TEXT['cmp_min_r']`, eigenvalues
+agree within `{python} TEXT['cmp_eig']` and the A/B call on at least `{python} TEXT['cmp_ab']` of bins.
+E2 and E3 agree up to sign on `{python} TEXT['cmp_e23']` chromosome-components (|r| ≥ 0.98); the others
+lie beside an eigenvalue of nearly the same magnitude, where the eigenvector is not unique.
 
 ```{python}
 record('Compartments', 'mouse Hi-C, 100 kb, GC-phased', f"cooltools {VERSIONS['cooltools']}",
