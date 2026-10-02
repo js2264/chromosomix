@@ -864,6 +864,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a reader of the results needs. Its reference scripts are files of their own in `notebooks/scripts/`,
   rather than strings it wrote out at render time.
 
+- **A place visited again is drawn from memory (§2, §7.2, §12).** Going back to a chromosome, a
+  window or a whole genome already seen on the same map read it again — every pixel decompressed and
+  pooled again, and whatever another read had pushed out of the source's cache fetched again — for
+  an answer that could not differ: on the lab's mouse `progenitors.mcool` at 10 kb, chr1 → chr2 →
+  chr1 took 3.6 s the second time, and a window of chr1 and back to the chromosome 3.7 s, with every
+  byte in memory. The reader's answers are now kept on the page, by question and by the map the
+  worker holds, each with its pooled picture, and the same place comes back in under 0.4 s with no
+  request; a place asked for again while its first read is under way waits for that read rather than
+  starting a second. Coolers and `.hic` alike — the same walk's returns on a 940 MB chicken `.hic`
+  took 1.7 s and 3.1 s and take 0.3 — in a single map, every cell of a deck and a comparison's
+  second file, under one budget for the page: a sixteenth of the memory the device reports, 512 MiB
+  where it says nothing, a gibibyte at most. `scripts/ui-revisit.mjs` drives the walk and prints the
+  table. A resolution left and come back to finds its answers again; a total drawn to, a cell set
+  and a failed open start afresh. The colouring writes each pixel as one word rather than four bytes
+  — the same bytes — and takes a third less time for it. A window seen for the first time is still a
+  read: it is drawn at a finer grid than the chromosome it was cut from, so nothing kept can draw
+  it.
+
 - **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
   way round, on the argument that a band along a genomic axis is what a contact map is *for* — which
   is true of the figure and wrong about the arrival. The only blocks that can turn are single

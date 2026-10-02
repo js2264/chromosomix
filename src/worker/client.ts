@@ -4,12 +4,15 @@
  * A thin correlator: stamp an id on each request, park a promise, resolve it
  * when the matching response arrives, and revive `ViewerError` so the UI can
  * keep switching on `code`. It holds no reader state of its own — the worker is
- * the only place a file is open.
+ * the only place a file is open — but it does keep the reader's answers, so a
+ * question asked again of the same map is answered without asking
+ * (`worker/answers.ts`).
  */
 
 import { registerThread } from '../perf/threads'
 import { withAccess } from '../s3/attach'
 import { devFeature } from '../state/devFeatures'
+import { AnswerCache } from './answers'
 import { spawnReaderWorker } from './spawn'
 import {
   reviveError,
@@ -39,6 +42,8 @@ export class ReaderClient {
   private nextId = 1
   /** This worker's line in the status bar's CPU figure. */
   private readonly thread = registerThread('reader')
+  /** Answers already given about the map the worker holds (`worker/answers.ts`). */
+  private readonly answers = new AnswerCache()
   /**
    * Progress from a request whose caller did not ask to follow it.
    *
@@ -95,11 +100,51 @@ export class ReaderClient {
     }
   }
 
-  /** Issue a request and await its single result. */
+  /**
+   * Issue a request and await its single result.
+   *
+   * Answered from memory where the same question has been answered about the
+   * same map, or is being answered now — a reader stepping back to a place
+   * still being read waits for that read rather than starting a second.
+   */
   request<K extends RequestKind>(
     payload: RequestOf<K>,
     onProgress?: ProgressHandler,
   ): Promise<ResultMap[K]> {
+    const answered = this.answers.answer(payload, true)
+    if (answered !== undefined) return answered as Promise<ResultMap[K]>
+    const { message, promise } = this.send<K>(payload, onProgress)
+    return this.answers.track(message, promise, true)
+  }
+
+  /**
+   * Issue a request that can be called off. Cancellation is cooperative: the
+   * worker checks between pixel chunks, so the scan stops at the next chunk
+   * boundary rather than being killed mid-write.
+   *
+   * An answer already in hand is handed back with nothing to call off. A read
+   * still on its way for somebody else is not joined: calling this one off
+   * would call off theirs.
+   */
+  cancellable<K extends RequestKind>(
+    payload: RequestOf<K>,
+    onProgress?: ProgressHandler,
+  ): Cancellable<ResultMap[K]> {
+    const answered = this.answers.answer(payload, false)
+    if (answered !== undefined) return { promise: answered as Promise<ResultMap[K]>, cancel: () => {} }
+    const { message, promise } = this.send<K>(payload, onProgress)
+    return {
+      promise: this.answers.track(message, promise, false),
+      cancel: () => {
+        void this.request<'cancel'>({ kind: 'cancel', target: message.id })
+      },
+    }
+  }
+
+  private send<K extends RequestKind>(
+    payload: RequestOf<K>,
+    onProgress?: ProgressHandler,
+  ): { message: WorkerRequest; promise: Promise<ResultMap[K]> } {
     const id = this.nextId++
     // The one place a private bucket's key joins a request to this worker. See
     // `s3/attach.ts`: stamping here rather than where the source was built is
@@ -107,33 +152,16 @@ export class ReaderClient {
     // makes a key edited mid-session apply to the next request rather than to
     // the next reload.
     const message = withDevGate(withAccess({ ...payload, id }) as WorkerRequest)
-    return new Promise<ResultMap[K]>((resolve, reject) => {
+    const promise = new Promise<ResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)
     })
-  }
-
-  /**
-   * Issue a request that can be called off. Cancellation is cooperative: the
-   * worker checks between pixel chunks, so the scan stops at the next chunk
-   * boundary rather than being killed mid-write.
-   */
-  cancellable<K extends RequestKind>(
-    payload: RequestOf<K>,
-    onProgress?: ProgressHandler,
-  ): Cancellable<ResultMap[K]> {
-    const id = this.nextId
-    const promise = this.request<K>(payload, onProgress)
-    return {
-      promise,
-      cancel: () => {
-        void this.request<'cancel'>({ kind: 'cancel', target: id })
-      },
-    }
+    return { message, promise }
   }
 
   /** Drop the worker entirely. Any in-flight request rejects. */
   terminate(): void {
+    this.answers.clear()
     this.failAll(new Error('reader worker terminated'))
     this.thread.release()
     this.worker.terminate()

@@ -6,15 +6,17 @@
  * canvas once, then `drawImage` that offscreen canvas through a transform onto
  * the display canvas. Pan and zoom only change the transform, so they perform
  * **zero** I/O and zero re-rasterisation — which is the whole reason the app
- * needs no tile server, no LRU cache and no progressive refinement.
+ * needs no tile server, no tile cache and no progressive refinement.
  *
  * Re-rasterising happens on exactly three events: a new matrix, a new colour
- * scale, or a new colormap. Never on pan, never on zoom, never on resize.
+ * scale, or a new colormap. Never on pan, never on zoom, never on resize. A
+ * matrix the reader came back to is new to its view but not to the page, and
+ * keeps the pooling made of it before ({@link pooledOf}).
  */
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
-import { applyColormap, colormapIndex } from './colormaps'
+import { applyColormap } from './colormaps'
 import {
   anchorRays,
   cellAt as squareOf,
@@ -183,6 +185,57 @@ function poolsRawMax(transform: Transform, balanced: boolean): boolean {
   return transform !== 'log10' || balanced
 }
 
+/**
+ * The scale's neutral value in display units, or `null` for a one-ended
+ * quantity — {@link PooledDisplay.centre}.
+ *
+ * A neutral value only *has* a middle if it survives the transform. `log2` of
+ * a difference map's neutral `0` is `-Infinity`, which is not a position on
+ * the scale and would make every departure from it infinite; there the field
+ * is drawn by the ordinary rules, which is the honest outcome — a signed
+ * difference has no logarithm to be symmetric about.
+ */
+function displayCentre(scale: ColorScale): number | null {
+  const centre = scale.neutral === undefined ? null : transformValue(scale.neutral, scale.transform)
+  return centre !== null && Number.isFinite(centre) ? centre : null
+}
+
+/**
+ * The last pooled display made of a block, by the block's own values.
+ *
+ * Every navigation builds its view afresh, and with it a heatmap whose
+ * {@link HeatmapView.pooled} starts empty — so a block the reader came back to
+ * was pooled, transformed and measured for its colour range again, though the
+ * reader's cache handed back the very object drawn before
+ * (`worker/answers.ts`): two thirds of the main thread's second on a 3,910-cell
+ * chromosome, on every visit. Keyed weakly, so a pooling lives exactly as long
+ * as the block it was made of and no longer; one per block, the latest.
+ */
+const pooledByValues = new WeakMap<Float32Array, { nrows: number; ncols: number; pooled: PooledDisplay }>()
+
+/**
+ * {@link poolDisplay} at the default cap, answered from {@link pooledByValues}
+ * where this block has been pooled the same way before. The auto range comes
+ * with it, memoised on the pooling ({@link autoRangeOfPooled}).
+ */
+export function pooledOf(matrix: DenseMatrix, scale: ColorScale, isotropic: boolean): PooledDisplay {
+  const held = pooledByValues.get(matrix.values)
+  if (
+    held !== undefined &&
+    held.nrows === matrix.nrows &&
+    held.ncols === matrix.ncols &&
+    held.pooled.transform === scale.transform &&
+    held.pooled.balanced === (scale.balanced === true) &&
+    held.pooled.centre === displayCentre(scale) &&
+    held.pooled.isotropic === isotropic
+  ) {
+    return held.pooled
+  }
+  const pooled = poolDisplay(matrix, scale, { isotropic })
+  pooledByValues.set(matrix.values, { nrows: matrix.nrows, ncols: matrix.ncols, pooled })
+  return pooled
+}
+
 export function poolDisplay(
   matrix: DenseMatrix,
   scale: ColorScale,
@@ -206,13 +259,6 @@ export function poolDisplay(
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
   const pooled = new Float32Array(width * height)
-  // A neutral value only *has* a middle if it survives the transform. `log2` of
-  // a difference map's neutral `0` is `-Infinity`, which is not a position on
-  // the scale and would make every departure from it infinite; there the field
-  // is drawn by the ordinary rules, which is the honest outcome — a signed
-  // difference has no logarithm to be symmetric about.
-  const centreRaw = scale.neutral === undefined ? null : transformValue(scale.neutral, transform)
-  const centre = centreRaw !== null && Number.isFinite(centreRaw) ? centreRaw : null
   const pool: PooledDisplay = {
     width,
     height,
@@ -222,7 +268,7 @@ export function poolDisplay(
     values: pooled,
     transform,
     balanced,
-    centre,
+    centre: displayCentre(scale),
   }
 
   // Nothing is pooled: a block small enough to draw a pixel per cell. The
@@ -376,19 +422,23 @@ export function colorize(
   // colormap click is 66 MB of garbage on a full-size raster, produced at the
   // exact moment the memory budget is tightest.
   const data =
-    into !== undefined && into.length === width * height * 4
+    into !== undefined && into.length === width * height * 4 && into.byteOffset % 4 === 0
       ? into
       : new Uint8ClampedArray(width * height * 4)
+  // A pixel is one 32-bit word, copied whole out of a 32-bit view of the table.
+  // Both views are of bytes in the platform's own order, so the four bytes land
+  // exactly as four byte writes put them, at a quarter of the stores — this loop
+  // is the whole of a returning block's paint (`pooledOf`).
+  const pixels = new Uint32Array(data.buffer, data.byteOffset, width * height)
+  const colours = new Uint32Array(lut.buffer, lut.byteOffset, lut.length / 4)
+  const size = colours.length
+  const last = size - 1
   for (let i = 0; i < values.length; i++) {
     const best = values[i]
-    const o = i * 4
     if (Number.isNaN(best)) {
-      // Every byte is written on every path, including this one: the buffer may
-      // be a reused one that still holds the previous colouring.
-      data[o] = 0
-      data[o + 1] = 0
-      data[o + 2] = 0
-      data[o + 3] = 0
+      // Every pixel is written on every path, including this one: the buffer
+      // may be a reused one that still holds the previous colouring.
+      pixels[i] = 0
       continue
     }
     // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
@@ -405,20 +455,15 @@ export function colorize(
     // carried the wrong sign. The normalised position carries the distinction
     // for free: `(Infinity - vmin) / span` is `Infinity` and its negative
     // counterpart is `-Infinity`, so only the sign has to be read off.
-    const t = span > 0 ? (best - vmin) / span : 0
-    const k = colormapIndex(Number.isFinite(t) ? t : t > 0 ? 1 : 0)
-    if (k < 0) {
-      data[o] = 0
-      data[o + 1] = 0
-      data[o + 2] = 0
-      data[o + 3] = 0
-      continue
-    }
-    const s = k * 4
-    data[o] = lut[s]
-    data[o + 1] = lut[s + 1]
-    data[o + 2] = lut[s + 2]
-    data[o + 3] = lut[s + 3]
+    //
+    // The table index is `colormapIndex`'s — `t × N` truncated, clamped onto
+    // the end colours — with the clamp taken first, so the truncation is an
+    // integer conversion of a number already inside the table and an infinite
+    // or undefined position needs no case of its own: `+Infinity` fails the
+    // first test and lands on the last colour, `-Infinity` and `NaN` the second
+    // and land on the first, exactly where the call put them.
+    const x = (span > 0 ? (best - vmin) / span : 0) * size
+    pixels[i] = colours[x >= size ? last : x > 0 ? x | 0 : 0]
   }
 
   return {
@@ -4145,7 +4190,7 @@ export class HeatmapView {
       // one the square view would show and that one is measured over a *pooled*
       // raster — above the cap a pooled cell is the brightest of the several it
       // stands for, which moves a percentile.
-      const measured = poolDisplay(gauge, this.colorScale)
+      const measured = pooledOf(gauge, this.colorScale, false)
       this.gaugeRange = {
         transform: pooled.transform,
         balanced: pooled.balanced,
@@ -4182,7 +4227,7 @@ export class HeatmapView {
       this.pooled.centre !== centre ||
       this.pooled.isotropic !== isotropic
     ) {
-      this.pooled = poolDisplay(this.matrix, this.colorScale, { isotropic })
+      this.pooled = pooledOf(this.matrix, this.colorScale, isotropic)
     }
     // Both buffers are handed back to the next colouring. A colormap change or
     // a clip drag never resizes the raster, so the common case reuses a 4 B/px

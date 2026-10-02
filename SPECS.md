@@ -83,6 +83,18 @@ rather than beside it:
   was that map's. A zoom that reads is a zoom that can wait, and a wait nobody asked for is a surprise
   rather than a feature.
 
+**And a place already seen is not read again.** A navigation builds its view afresh, and a view used
+to ask for its block whatever had been asked before — so chr1, then chr2, then chr1 read chr1 twice,
+and a window of a chromosome and back read the chromosome twice, paying again each time for pixels
+that had not changed (§12 has the measurement). The reader's answers are kept on the page, by question
+and by the map the worker holds (`worker/answers.ts`): a question asked again of the same map is
+answered from memory, and one asked while its first read is still under way waits for that read. It
+is a cache of *answers*, not of tiles: a kept block is the whole picture of the window it was asked
+for, at the grid it was asked at, drawn as it came — nothing is cut from it or stitched to it, and a
+window it does not answer exactly is read as it always was. So a finer picture of part of a kept
+block is still a read: the chromosome was drawn at a grid the window's own picture is finer than
+(§7.2), and its cells cannot draw it.
+
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
 
@@ -752,6 +764,7 @@ Every operation the app performs, with its cost, because the cost model *is* the
 | Load one genome's matrix | the held `bin1_offset` + 1 `/pixels` slice, read in windows | bounded, contiguous |
 | Genome pair (both loaded) | reuse; or 1 bounded slice | bounded |
 | Contig-level view within a genome | aggregate the already-loaded genome matrix | free |
+| Any view visited again — the same map, window and settings | the answer kept from the first visit (§2, §12) | free |
 | **Genome × genome overview** | **every non-zero pixel** | **whole file** |
 
 The last row is the only expensive operation, and there is no index that shortcuts it — summing all
@@ -1862,6 +1875,15 @@ time — the raster's own pooling is reached only by a block that already fits. 
 grid is anchored to the *sequence*, not to the request, so the same base pair falls
 in the same cell holding the same sum in every view of it, and a range is widened to
 those cell edges rather than starting a grid of its own.
+
+**A block come back to is not pooled again.** The raster is made in two passes: the block reduced to
+display values — transformed, pooled to the raster's size, and measured for its automatic range — and
+those values coloured. The first is a property of the block, the transform, the balancing and the
+neutral value, and of nothing a colormap or a clip can move, so it is kept beside the block for as long
+as the block is held anywhere (`pooledOf`), and a view built over a block the reader came back to (§2,
+§12) goes straight to the colouring. The colouring writes each pixel as one 32-bit word out of a 32-bit
+view of the table — the same four bytes the four byte writes it replaced put down — which took a
+3,910-cell chromosome's from 410 ms to 280 ms on the machine it was measured on.
 
 **What is accepted, and stated rather than fixed:** the raster is at most 4,096 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
@@ -5035,6 +5057,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
+| A place visited again — the same window, grid and settings of the same map | **0 requests** and no read: answered from memory, its pooled display with it, so only the colouring is redone |
+| A place asked for again while its first read is under way | **0** more requests: that read, waited on |
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 | A region read chunk after chunk (remote) | from the third near miss, one request a stretch growing to 16 MiB — thirty-two sequential chunks in ≤ 8 requests (§6.1) |
@@ -5056,6 +5080,32 @@ check (§8.15) are that work. Every other request counts itself in while it runs
 none has run for 250 ms, which covers the hop to the main thread between a view's `range` and its
 `matrix`. On a 1 GB `.hic` from S3 (4DNFIYUR29KO), chromosome 1 clicked from the Chromosomes table
 while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s.
+
+**A place already seen is answered from memory.** Every navigation builds its view afresh, and every
+view used to read its block afresh. `scripts/ui-revisit.mjs` walks the lab's 689 MB
+`demo/mouse/progenitors.mcool` at 10 kb — chr1, chr2, chr1 again, a window of chr1, chr1 again — and
+the same walk on a 940 MB chicken `.hic`, timing each step from the link to the picture. In headless
+Chromium against a server answering as S3 does, at 40 ms a round trip and 25 MiB/s, the second chr1
+took 3.6 s and the third 3.7 s with every byte already in memory: most of it the worker decompressing
+and pooling the same pixels again, the rest the page pooling, ranging and colouring the same block
+again — and where another read had pushed the chromosome's chunks out of the source's cache, the
+round trips again as well. The answers are now kept on the page by question and by the map the
+worker holds (§2, `worker/answers.ts`), each with its pooled display (§7.2), and both come back in
+under 0.4 s without a request, most of it the colouring; on the `.hic`, 1.7 s and 3.1 s became 0.3.
+A window first asked for is still a read, since nothing kept answers it (§2).
+
+What is kept is bounded by one budget for the page: a sixteenth of the memory the device reports,
+512 MiB where it reports none, a gibibyte at most, least recently used out first, each picture
+counted twice for the display kept beside it. Every reader on the page shares it — a deck's cells
+and a comparison's second file included (§16.7) — and a reader put down takes its answers with it.
+An `open` names the map it opens, by its file, entry, source, edit and import, so a resolution left
+and come back to finds its answers, and two files of one name dropped from two folders are two maps.
+A total drawn to (§6.5), a cell set (§3.8), a `close`, a failed open and any request the cache has no
+word for start a name nothing is filed under; an answer asked before such a change and arriving after
+it is handed to its caller and not kept. A failed read is never kept. The status bar's *read* panel
+says what a view answered from memory cost — no request and no byte — where the worker, which never
+sees it, would go on naming the read before; a view that waited on a read already under way is that
+read's cost, and says so.
 
 And for an alignment lane (§8.13), where the open cost is separated from the window cost for the same
 reason the table above separates opening a file from loading one MAG's matrix — a `.bai` for a human
@@ -5208,8 +5258,10 @@ reader zooms into it (§2). Every one of those reads is a whole bounded block. W
 The through-line: each answer protects the assumption in §2 that a unit of display fits in memory in
 one bounded read. Variable bins broke the arithmetic, `__unbinned__` broke the size bound, and
 whole-genome coolers broke both. With all three excluded, the invariant holds for every view the app
-can reach — which is what makes a viewer with no tile server, no cache eviction and no progressive
-rendering a defensible design rather than a compromise.
+can reach — which is what makes a viewer with no tile server, no eviction from under a picture and no
+progressive rendering a defensible design rather than a compromise. The answers §12 keeps for a place
+visited again are evicted, but whole and only from memory: what is let go is a picture nobody is
+looking at, and it costs a read the next time it is asked for and nothing before.
 
 ### Remaining judgement calls
 
@@ -5762,6 +5814,10 @@ panel's — divided by the number of panels. Two consequences, both wanted: a de
 than the single map it replaced, and **every map added shrinks every panel's share**, so an
 over-large deck is refused by arithmetic rather than by a limit somebody had to guess. The refusal is
 `checkBrowserDenseSize`'s own, with its own numbers in it, printed beside the panel it is about.
+
+The answers kept so that a place visited again costs nothing (§12) are not divided: they are one
+budget for the page however many panels it holds, so a deck of eight keeps fewer places per panel
+than one map does, and never more memory. A panel's answers go with its worker.
 
 Above that sits a backstop of **64 cells including the lead**, an 8 × 8 grid (`MAX_PANELS`). It was
 a hard ceiling of six, for the reason `MAX_SESSIONS` has one: a panel is a worker and an h5wasm

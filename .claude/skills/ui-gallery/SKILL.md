@@ -68,6 +68,7 @@ node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.
 node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
+node scripts/ui-revisit.mjs gallery          # a place visited again, drawn from memory: chr1, chr2, chr1 again, a window and chr1 again on the lab's mouse .mcool at 10 kb, then on a chicken .hic, each step timed with its requests and the memory figure, and the read panel on a revisit: rv01 … rv11
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -378,3 +379,13 @@ on the first strong red call (found by its colour) and the card its read opens, 
 the depth row turned into *% modified* with its card and drawn as points up close, a 0.9 threshold,
 and the dark theme. It prints the rows, the picker's options, the hovers and the read card. Run it
 after any change to `annotations/bam/basemods.ts`, the pile's colourings or the depth's road.
+`scripts/ui-revisit.mjs` drives **a place visited again** (§2, §12) — the walk a reader makes and the
+one the kept answers exist for: on the lab's 689 MB `progenitors.mcool` at 10 kb, chr1, chr2, chr1
+again, a window of chr1 and chr1 again, then the same on a 940 MB chicken `.hic`. Each step is timed
+from the hash to the picture on screen, its requests to the data's host counted, and the status bar's
+memory figure read; the table it prints is the one §12 quotes, and a revisit must show 0 requests in
+well under a second. On the first revisit it opens the *read* panel, which must say the last view
+cost nothing. It reads the lab's bucket unless `GALLERY_DATA` names a folder served with byte ranges
+and CORS holding both files — a headless browser that cannot trust this machine's proxy needs that,
+and a server that adds round-trip latency keeps the timings honest. Run it after any change to
+`worker/answers.ts`, `worker/client.ts`, a view's reads, or the raster's pooling and colouring.
