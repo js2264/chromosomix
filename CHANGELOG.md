@@ -861,7 +861,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   replicates (chr19); HiCRep is held to `hicrep` alone; the 3D model runs its default 150 steps;
   compartments leave chrY out of the comparison. The times table gives each `metacooler-run` command
   as a fold faster than its reference, and the text the mean of those folds. The prose is cut to what
-  a reader of the results needs.
+  a reader of the results needs. Its reference scripts are files of their own in `notebooks/scripts/`,
+  rather than strings it wrote out at render time.
 
 - **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
   way round, on the argument that a band along a genomic axis is what a contact map is *for* — which

@@ -64,7 +64,7 @@ REPO = HERE.parent if HERE.name == 'notebooks' else HERE
 CLI = REPO / 'dist-cli' / 'metacooler-run.mjs'
 WORK = REPO / 'notebooks' / 'work' / 'validation'
 DATA = WORK / 'data'
-SCRIPTS = WORK / 'scripts'
+SCRIPTS = REPO / 'notebooks' / 'scripts'
 YAPC_PYTHON = Path(YAPC_PYTHON) if Path(YAPC_PYTHON).is_absolute() else REPO / YAPC_PYTHON
 ```
 
@@ -78,7 +78,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import textwrap
 import time
 import urllib.parse
 import urllib.request
@@ -97,7 +96,6 @@ warnings.filterwarnings('ignore')
 if not CLI.exists():
     raise FileNotFoundError(f'{CLI} is not there: run `npm run build:cli` at the repository root.')
 DATA.mkdir(parents=True, exist_ok=True)
-SCRIPTS.mkdir(parents=True, exist_ok=True)
 PYTHON = sys.executable
 CHROMOSIGHT = shutil.which('chromosight') or str(Path(PYTHON).parent / 'chromosight')
 YAPC_ENV = dict(os.environ, PATH=f'{YAPC_PYTHON.parent}{os.pathsep}{os.environ["PATH"]}')
@@ -116,9 +114,10 @@ def fetch(url, name=None):
 
 
 def rel(path):
-    """A path as the commands give it: from work/validation/, where they run."""
+    """A path as the commands give it: a file of this repository relative to work/validation/, where
+    they run; any other as it is."""
     path = Path(path)
-    return str(path.relative_to(WORK)) if path.is_relative_to(WORK) else str(path)
+    return os.path.relpath(path, WORK) if path.is_relative_to(REPO) else str(path)
 
 
 def arg(value):
@@ -161,10 +160,11 @@ def mr(task, *args, out, name, analysis, label='', bench=True):
     return out
 
 
-def script(name, text):
-    """A reference's Python, written to work/validation/scripts/ to be run, printed and timed."""
+def script(name):
+    """A reference's script, in notebooks/scripts/: run, printed and timed."""
     path = SCRIPTS / f'{name}.py'
-    path.write_text(textwrap.dedent(text).strip().replace('__THREADS__', str(THREADS)) + '\n')
+    if not path.exists():
+        raise FileNotFoundError(f'{path} is not there.')
     return path
 
 
@@ -356,14 +356,8 @@ boundaries at the minima whose prominence reaches the threshold.
 INS = WORK / 'insulation'
 MOUSE_10K = f'{rel(MOUSE)}::/resolutions/10000'
 mr('insulation', MOUSE_10K, '--window', 10, out=INS / 'app', name='insulation', analysis='Diamond insulation')
-reference('cooltools-insulation', 'Diamond insulation', 'cooltools', [PYTHON, script('cooltools_insulation', r"""
-    import sys, cooler, cooltools
-    uri, out = sys.argv[1:]
-    table = cooltools.insulation(cooler.Cooler(uri), [100_000], ignore_diags=2,
-                                 clr_weight_name='weight', min_frac_valid_pixels=0.5,
-                                 threshold=0.2, nproc=__THREADS__)
-    table.to_csv(out, sep='\t', index=False)
-"""), MOUSE_10K, OUT], out=INS / 'cooltools.tsv')
+reference('cooltools-insulation', 'Diamond insulation', 'cooltools',
+          [PYTHON, script('cooltools_insulation'), MOUSE_10K, OUT, THREADS], out=INS / 'cooltools.tsv')
 
 clr10 = cooler.Cooler(f'{MOUSE}::/resolutions/10000')
 bins10 = clr10.bins()[:]
@@ -447,20 +441,8 @@ builds it.
 DI = WORK / 'di'
 MOUSE_50K = f'{rel(MOUSE)}::/resolutions/50000'
 mr('di', MOUSE_50K, '--window', 40, out=DI / 'app', name='di', analysis='Directionality index')
-reference('domaincaller-di', 'Directionality index', 'domaincaller', [PYTHON, script('domaincaller_di', r'''
-    import sys, cooler, numpy as np
-    from domaincaller.chromLev import Chrom
-    uri, out = sys.argv[1:]
-    clr = cooler.Cooler(uri)
-    di = np.full(clr.info['nbins'], np.nan)
-    for chrom in clr.chromnames:
-        matrix = clr.matrix(balance='weight', sparse=True).fetch(chrom).tocsr()
-        work = Chrom(chrom, clr.binsize, matrix)
-        work.calDI(window=2_000_000)
-        lo = clr.extent(chrom)[0]
-        di[lo:lo + len(work.DIs)] = work.DIs
-    np.save(out, di)
-'''), MOUSE_50K, OUT], out=DI / 'domaincaller.npy')
+reference('domaincaller-di', 'Directionality index', 'domaincaller',
+          [PYTHON, script('domaincaller_di'), MOUSE_50K, OUT], out=DI / 'domaincaller.npy')
 
 clr50 = cooler.Cooler(f'{MOUSE}::/resolutions/50000')
 b_di = np.load(DI / 'domaincaller.npy')
@@ -551,15 +533,9 @@ if REDO or not GC_TRACK.exists():
     gc.dropna()[['chrom', 'start', 'end', 'GC']].to_csv(GC_TRACK, sep='\t', header=False, index=False)
 mr('compartments', MOUSE_100K, '--components', 3, '--phaseTrack', GC_TRACK, out=CMP / 'app',
    name='compartments', analysis='Compartments')
-reference('cooltools-eigs', 'Compartments', 'cooltools', [PYTHON, script('cooltools_eigs_cis', r'''
-    import sys, cooler, cooltools, pandas as pd
-    uri, gc, out = sys.argv[1:]
-    values, vectors = cooltools.eigs_cis(
-        cooler.Cooler(uri), phasing_track=pd.read_csv(gc, sep='\t'), n_eigs=3,
-        clr_weight_name='weight', ignore_diags=2, clip_percentile=99.9)
-    values.to_csv(f'{out}-eigenvalues.tsv', sep='\t', index=False)
-    vectors.to_csv(f'{out}-eigenvectors.tsv', sep='\t', index=False)
-'''), MOUSE_100K, CMP / 'gc.tsv', OUT], out=CMP / 'cooltools', made=CMP / 'cooltools-eigenvectors.tsv')
+reference('cooltools-eigs', 'Compartments', 'cooltools',
+          [PYTHON, script('cooltools_eigs_cis'), MOUSE_100K, CMP / 'gc.tsv', OUT],
+          out=CMP / 'cooltools', made=CMP / 'cooltools-eigenvectors.tsv')
 
 ref_vec = pd.read_csv(CMP / 'cooltools-eigenvectors.tsv', sep='\t')
 ref_val = pd.read_csv(CMP / 'cooltools-eigenvalues.tsv', sep='\t')
@@ -652,14 +628,7 @@ PS = WORK / 'ps'
 YEAST_800 = f'{rel(YEAST)}::/resolutions/800'
 PS_CASES = {'yeast Micro-C, 800 bp': ('yeast', YEAST_800, f'{YEAST}::/resolutions/800', 'yeast 800 bp'),
             'mouse Hi-C, 10 kb': ('mouse', MOUSE_10K, f'{MOUSE}::/resolutions/10000', 'mouse 10 kb')}
-EXPECTED = script('cooltools_expected_cis', r'''
-    import sys, cooler, cooltools
-    uri, out = sys.argv[1:]
-    table = cooltools.expected_cis(cooler.Cooler(uri), ignore_diags=0, smooth=False,
-                                   aggregate_smoothed=False, clr_weight_name='weight',
-                                   nproc=__THREADS__)
-    table.to_csv(out, sep='\t', index=False)
-''')
+EXPECTED = script('cooltools_expected_cis')
 
 
 def bands(n_valid, separations, binsize):
@@ -692,7 +661,7 @@ ps = {}
 for label, (slug, uri, local, short) in PS_CASES.items():
     mr('expected', uri, '--quantity', 'expected', '--scope', 'file', out=PS / slug, name=f'expected-{slug}',
        analysis='P(s)', label=short)
-    reference(f'cooltools-expected-{slug}', 'P(s)', 'cooltools', [PYTHON, EXPECTED, uri, OUT],
+    reference(f'cooltools-expected-{slug}', 'P(s)', 'cooltools', [PYTHON, EXPECTED, uri, OUT, THREADS],
               out=PS / f'{slug}-cooltools.tsv', label=short)
     app = table(one(PS / slug, '*.expected.ps.tsv'))
     cvd = pd.read_csv(PS / f'{slug}-cooltools.tsv', sep='\t')
@@ -778,18 +747,11 @@ for source, target in zip(ATAC, REPS):
 mr('peaks', '--signal', REPS[0], '--replicate', REPS[1], '--perPeak', 'true', '--width', 150, '--times', 3,
    '--minWidth', 75, '--truncate', 100000, '--idr', 0.05, out=YP / 'app', name='peaks',
    analysis='Peak calling (yapc, IDR)')
-YAPC_SCRIPT = script('yapc_idr', r'''
-    """yapc 0.1's command line, NumPy's random state seeded by the first argument."""
-    import runpy, shutil, sys
-    import numpy as np
-    np.random.seed(int(sys.argv[1]))
-    sys.argv = ['yapc', *sys.argv[2:]]
-    runpy.run_path(shutil.which('yapc'), run_name='__main__')
-''')
+YAPC_SCRIPT = script('yapc_idr')
 SEEDS = {seed: YP / f'seed{seed}' for seed in range(5)}
 for seed, folder in SEEDS.items():
     reference(f'yapc-seed{seed}', 'Peak calling (yapc, IDR)', 'yapc 0.1', [
-        YAPC_PYTHON, YAPC_SCRIPT, seed, OUT, 'cond', *REPS, '--smoothing-window-width', 150,
+        str(YAPC_PYTHON), YAPC_SCRIPT, seed, OUT, 'cond', *REPS, '--smoothing-window-width', 150,
         '--smoothing-times', 3, '--min-concave-region-width', 75, '--truncate-idr-input', 100000],
         out=folder / 'yapc', made=folder / 'yapc_0.05.bed', env=YAPC_ENV, label=f'seed {seed}', bench=seed == 0)
 
@@ -979,19 +941,9 @@ PAIRS = f'{len(LABELS)} maps, {len(LABELS) * (len(LABELS) - 1) // 2} pairs'
 against = [a for label in LABELS[1:] for a in ('--against', URIS[label])]
 mr('hicrep', URIS[LABELS[0]], *against, '--maxDistance', STRATA, '--smooth', 1, '--no-balance',
    '--sequences', ','.join(SEQS), out=HR / 'app', name='hicrep', analysis='Reproducibility (HiCRep)', label=PAIRS)
-reference('hicrep', 'Reproducibility (HiCRep)', 'hicrep', [PYTHON, script('hicrep_scc', r'''
-    import sys, cooler, pandas as pd
-    from hicrep import hicrepSCC
-    out, seqs = sys.argv[1], sys.argv[2].split(',')
-    maps = dict(m.split('=', 1) for m in sys.argv[3:])
-    labels, rows = list(maps), []
-    for i, a in enumerate(labels):
-        for b in labels[i + 1:]:
-            scc = hicrepSCC(cooler.Cooler(maps[a]), cooler.Cooler(maps[b]), h=1,
-                            dBPMax=5_000_000, bDownSample=False, chrNames=seqs)
-            rows += [dict(a=a, b=b, sequence=s, hicrep=v) for s, v in zip(seqs, scc)]
-    pd.DataFrame(rows).to_csv(out, sep='\t', index=False)
-'''), OUT, ','.join(SEQS), *[f'{label}={URIS[label]}' for label in LABELS]], out=HR / 'hicrep.tsv', label=PAIRS)
+reference('hicrep', 'Reproducibility (HiCRep)', 'hicrep',
+          [PYTHON, script('hicrep_scc'), OUT, ','.join(SEQS), *[f'{label}={URIS[label]}' for label in LABELS]],
+          out=HR / 'hicrep.tsv', label=PAIRS)
 
 names = {'This map': LABELS[0], **{path.name: label for label, path in zip(LABELS, CHICKEN)}}
 app_scc = table(one(HR / 'app', '*.hicrep-sequences.tsv'))
@@ -1061,30 +1013,7 @@ P3 = WORK / 'pastis'
 YEAST_12K = f'{rel(YEAST)}::/resolutions/12800'
 mr('reconstruct3d', YEAST_12K, '--method', 'nb', '--alpha', 3, out=P3 / 'app', name='reconstruct3d',
    analysis='3D model (pastis-NB)', label='150 steps')
-PASTIS = script('pastis_nb', r'''
-    import sys, cooler, numpy as np, pandas as pd
-    from pastis import dispersion
-    from pastis.optimization import mds, negative_binomial_structure as nbs
-    uri, out, seed = sys.argv[1], sys.argv[2], int(sys.argv[3])
-    clr = cooler.Cooler(uri)
-    raw = clr.matrix(balance=False)[:].astype(float)
-    w = clr.bins()['weight'][:].to_numpy(float)
-    keep = np.isfinite(w) & (raw.sum(axis=0) > 0)  # the beads metacooler-run models
-    chroms = clr.bins()['chrom'][:].to_numpy()[keep]
-    lengths = np.array([np.sum(chroms == c) for c in pd.unique(chroms)])
-    counts, bias = raw[np.ix_(keep, keep)], 1 / w[keep]
-    bias /= bias.mean()
-    _, mean, variance, weights = dispersion.compute_mean_variance(counts, lengths, bias=bias)
-    fitted = dispersion.ExponentialDispersion(degree=1)
-    fitted.fit(mean, variance, sample_weights=weights ** 0.5)
-    start = mds.estimate_X(counts / np.outer(bias, bias), alpha=-3., beta=1.,
-                           random_state=np.random.RandomState(seed))
-    model = nbs.estimate_X(counts, alpha=-3., beta=1., ini=start.flatten(),
-                           dispersion=fitted, bias=bias, lengths=lengths,
-                           use_zero_entries=True,
-                           random_state=np.random.RandomState(seed))
-    np.save(out, model.reshape(-1, 3))
-''')
+PASTIS = script('pastis_nb')
 for seed in (0, 1, 2):
     reference(f'pastis-seed{seed}', '3D model (pastis-NB)', 'pastis', [PYTHON, PASTIS, YEAST_12K, OUT, seed],
               out=P3 / f'pastis-seed{seed}.npy', label=f'seed {seed}', bench=seed == 0)
@@ -1219,7 +1148,7 @@ record('3D model (pastis-NB)', f"yeast Micro-C, 12.8 kb, {TEXT['p3_beads']} bead
 
 Commands as run, from `notebooks/work/validation/`: `metacooler-run` is this checkout's
 `node dist-cli/metacooler-run.mjs`, `python` the reference packages' interpreter, `yapc-env/bin/python`
-yapc's. The reference scripts are listed [below](#reference-scripts).
+yapc's. The reference scripts, in `notebooks/scripts/`, are listed [below](#reference-scripts).
 
 ```{python}
 #| column: screen-inset
@@ -1237,17 +1166,21 @@ summary.style.hide(axis='index').set_table_styles([
 
 Insulation, the directionality index, P(s), loops and HiCRep reproduce their reference to the float32
 the app computes in or the digits it writes; peak calling gives yapc's peaks at IDR ≤ 0.05, and as
-many at each of its six thresholds; compartments give the same eigenvectors. The 3D model fits the contacts within chromosomes
-`{python} TEXT['p3_within_word']` pastis, and over all pairs `{python} TEXT['p3_all_word']` pastis.
+many at each of its six thresholds; compartments give the same eigenvectors. The 3D model fits the
+contacts within chromosomes `{python} TEXT['p3_within_word']` pastis, and over all pairs
+`{python} TEXT['p3_all_word']` pastis.
 P(s) as a density (HiContacts' `distanceLaw`), the app's default, is held to HiContacts by the unit
 tests (`test/golden/analysis/hicontacts_ps.json`).
 
 ### Reference scripts
 
+The scripts the references are called through, from `notebooks/scripts/`:
+
 ```{python}
 #| output: asis
 for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref['scripts']}.items():
-    print(f'**{analysis}**, `{path}`\n\n```python\n{(WORK / path).read_text().rstrip()}\n```\n')
+    file = Path(os.path.normpath(WORK / path))
+    print(f'**{analysis}**, `{file.relative_to(REPO)}`\n\n```python\n{file.read_text().rstrip()}\n```\n')
 ```
 
 ## Time
