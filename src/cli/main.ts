@@ -103,6 +103,7 @@ import {
   junctionCandidates,
   junctionQuorum,
   measureJunctions,
+  placeCandidate,
 } from '../analysis/circularity'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
@@ -1964,8 +1965,13 @@ async function circularCommand(args: Args): Promise<number> {
       try {
         const balance = flag(args, 'no-balance') ? false : mc.hasWeights
         const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
+        // Each where the file puts it, not where `ceil(length / binsize)` would.
+        const placed = junctionCandidates(pairs, mc.binsize).flatMap((listed) => {
+          const candidate = placeCandidate(listed, mc.contigExtent(listed.name))
+          return candidate === null ? [] : [candidate]
+        })
         const measured = await measureJunctions(
-          junctionCandidates(pairs, mc.binsize),
+          placed,
           async (rows, cols) => (await mc.matrix({ rows, cols, balance })).values,
         )
         const lines = [

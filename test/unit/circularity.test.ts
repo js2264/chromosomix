@@ -18,6 +18,7 @@ import {
   junctionQuorum,
   junctionScore,
   measureJunctions,
+  placeCandidate,
   type JunctionBlock,
 } from '../../src/analysis/circularity'
 
@@ -185,6 +186,16 @@ describe('the test over a whole map', () => {
       { name: 'plasmid', from: 0, n: 60 },
     ])
     expect(junctionCandidates([['a', 90_000], ['b', 80_000]], 1000, 1).map((one) => one.name)).toEqual(['a'])
+  })
+
+  /**
+   * A level that floors a sequence's last part-bin has a bin fewer than the
+   * arithmetic for it, and every sequence after it starts a bin earlier: a
+   * candidate is read where the file's own table puts it.
+   */
+  it('places a candidate where the file puts it, and drops one the file gives fewer than fifty bins', () => {
+    expect(placeCandidate({ name: 'II', from: 116, n: 407 }, [115, 522])).toEqual({ name: 'II', from: 115, n: 407 })
+    expect(placeCandidate({ name: 'short', from: 0, n: 50 }, [0, 49])).toBeNull()
   })
 
   /**

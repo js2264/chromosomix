@@ -51,6 +51,7 @@ import {
   junctionCandidates,
   junctionRung,
   measureJunctions,
+  placeCandidate,
   type JunctionCandidate,
   type JunctionReader,
 } from '../analysis/circularity'
@@ -5911,7 +5912,21 @@ export class Session {
             ).values,
           alive,
         )
-      for (const candidate of tested) {
+      for (const listed of tested) {
+        // Where the file itself puts the sequence: the reader's extent, which a
+        // level that floors its part-bins does not share with the arithmetic
+        // `junctionCandidates` places it by. A name the reader cannot resolve —
+        // one with a colon in it reads as a locus — is passed over rather than
+        // ending the check.
+        const extent = await this.clientOf()
+          .request<'range'>({ kind: 'range', range: listed.name })
+          .then(
+            (range) => range.extent,
+            () => null,
+          )
+        if (!alive()) return
+        const candidate = extent === null ? null : placeCandidate(listed, extent)
+        if (candidate === null) continue
         const length = lengths.get(candidate.name) ?? 0
         const rung = junctionRung(length, binsize, rungs)
         const binsAtRung = Math.ceil(length / rung)

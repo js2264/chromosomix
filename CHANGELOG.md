@@ -1924,6 +1924,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
+  sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has
+  one bin fewer for every sequence that does not end on a bin, so each sequence after the first was
+  read a bin further out for each one before it. On the yeast and *M. pneumoniae* demo at 2 kb the
+  mitochondrion was read five bins out, its tail and corner from the next sequence, and
+  `metacooler-run circular` failed on the file, its last sequence running past the end of the map.
+  Seven of thirty-two maps tried have levels written that way. Each sequence is now read at the
+  extent the reader gives it.
+
 - **A linear chromosome read with few bins is no longer read as circular (§8.15).** A map opened
   at a coarse resolution was measured there, and with a few dozen bins a line's two ends are too
   near each other for the junction test: contacts flatten out across a chromosome's territory,

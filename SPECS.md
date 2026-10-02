@@ -3881,7 +3881,12 @@ of 21 chromosomes of a 5 GB 4DN map opened at 1 kb. The score is a ratio at one 
 answer does not move: every sequence of the demo maps is decided alike at both rungs. A sequence
 the coarse rung cannot be read for as the test reads it — a level that absorbed its last part-bin —
 is asked again at the open rung; one whose end the balancer dropped is not, being undecided at every
-rung. **Its reads wait for the views'** (§12): each is asked only once nothing a reader is looking at
+rung. And at the open rung each sequence is read **where the reader's own table puts it**, not where
+`ceil(length / binsize)` a sequence would: a level written by flooring each sequence's last part-bin
+into the bin before starts every sequence after the first a bin earlier for each one before it, so the
+arithmetic drifts — on the yeast and *M. pneumoniae* demo at 2 kb it put the mitochondrion five bins
+out, and read its tail and its corner from the next sequence. Seven of the thirty-two maps have levels
+written that way. **Its reads wait for the views'** (§12): each is asked only once nothing a reader is looking at
 has read for a quarter of a second. At **0.2** or above the sequence
 is ticked, and a banner names it and says where to untick it — the tab's own, which goes
 when the tab opens another file (§5.6); below, or where its ends leave fewer than two

@@ -158,6 +158,10 @@ export interface JunctionCandidate {
  * The sequences worth measuring, from each one's name and length on a grid of
  * `binsize`: long enough for the test to mean anything, the longest first, at
  * most `limit` of them.
+ *
+ * Each one's first bin and count are cooler's convention, `ceil(length /
+ * binsize)` a sequence, which not every file's levels keep — see
+ * {@link placeCandidate}, which a caller reading the map puts each one through.
  */
 export function junctionCandidates(
   pairs: ReadonlyArray<readonly [string, number]>,
@@ -173,6 +177,27 @@ export function junctionCandidates(
   }
   candidates.sort((a, b) => b.n - a.n)
   return candidates.slice(0, limit)
+}
+
+/**
+ * A candidate where the file puts it: its first bin and its count as the
+ * reader's own table has them, or `null` where that leaves it short of
+ * {@link MIN_JUNCTION_SEQUENCE_BINS}.
+ *
+ * A level written by flooring each sequence's last part-bin into the bin before
+ * it has one bin fewer than `ceil(length / binsize)` for every sequence that does
+ * not end on a bin, so a first bin summed from that rule drifts a bin further
+ * with each sequence before it. On the yeast and *M. pneumoniae* demo at 2 kb
+ * the mitochondrion's was five bins out — its tail and its corner were read
+ * from the next sequence — and it scored 0; seven of thirty-two maps tried have
+ * levels written that way.
+ */
+export function placeCandidate(
+  candidate: JunctionCandidate,
+  extent: readonly [number, number],
+): JunctionCandidate | null {
+  const n = extent[1] - extent[0]
+  return n >= MIN_JUNCTION_SEQUENCE_BINS ? { name: candidate.name, from: extent[0], n } : null
 }
 
 /**
