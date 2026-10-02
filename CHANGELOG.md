@@ -1924,6 +1924,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
+  sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has
+  one bin fewer for every sequence that does not end on a bin, so each sequence after the first was
+  read a bin further out for each one before it. On the yeast and *M. pneumoniae* demo at 2 kb the
+  mitochondrion was read five bins out, its tail and corner from the next sequence, and
+  `metacooler-run circular` failed on the file, its last sequence running past the end of the map.
+  Seven of thirty-two maps tried have levels written that way. Each sequence is now read at the
+  extent the reader gives it.
+
+- **A linear chromosome read with few bins is no longer read as circular (§8.15).** A map opened
+  at a coarse resolution was measured there, and with a few dozen bins a line's two ends are too
+  near each other for the junction test: contacts flatten out across a chromosome's territory,
+  and a yeast chromosome's telomeres are held together. The mouse progenitors map opened at
+  2.56 Mb ticked chr9, chr11, chr12, chr15, chr19 and chrY, and the yeast demo `.hic` opened at
+  16 kb its chromosome I, at 0.92. A sequence is now measured only where it has fifty bins at the
+  rung read — over thirty-two maps no linear chromosome read with more was ticked — and a smaller
+  circle read coarsely is left undecided, for the reader to tick: the yeast mitochondrion of the
+  yeast and *M. pneumoniae* demo at its landing rung (43 bins at 2 kb), *E. coli* opened at
+  100 kb, and in `metacooler-run circular` at the zoo's 4 kb, a plasmid under 200 kb.
+
+- **A linear chromosome is no longer read as circular on one stray read (§8.15).** The junction
+  test took the median of three separations, and where the balancer had dropped an end it was the
+  median of one: chrY of the demo store's mouse progenitors map, opened at 10 kb and measured at
+  640 kb, scored 0.41 on a single read pair joining its first bin to the last one kept, beside an
+  end with nothing on its own diagonal, and the map opened under *chrY reads as circular*. A
+  separation now counts only where the junction has a cell and the diagonal has contacts at both
+  ends, and a score needs two of the three; with fewer the sequence is left undecided, and
+  `metacooler-run circular` leaves its row empty. Over thirty-two maps the rule changes no
+  bacterial chromosome's or plasmid's verdict at any rung.
+
+- **A tab's note goes with its file (§5.6).** The bar under the tabs said what a tab had found out
+  about its file and stayed until dismissed, so a link that moved a tab from the mouse map to a
+  chicken `.hic` left *chrY reads as circular* over a genome with no chrY. A tab's note now goes
+  when the tab opens another file, goes back to the picker or closes, and waits while another tab
+  is in front; another resolution of the same file keeps it, and the window's own notes stay.
+
 - **Both notebooks render again against this `metacooler-run` (§18.8, §18.10, §23.1).** The DBZ
   figures read the inter-arm table's log2 `score`, which has since become its *enrichment*, a fold,
   with *enrichment after detrend* beside it, and E1's share from a column cooltools' method now

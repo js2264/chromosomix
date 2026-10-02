@@ -12,11 +12,12 @@
  *
  * So the score is the contacts across the junction at a circular separation of
  * `s` bins, over the contacts along the diagonal at the same `s`, measured at the
- * two ends the junction joins, for `s = 1 … k` — and its median, so one noisy
- * cell does not decide. About one on a circle (0.65 on the *Pseudomonas
- * aeruginosa* PAK chromosome, 1.1 on a *Borrelia* circular plasmid), about zero
- * on a line (under 0.03 on the linear chromosomes of *Borrelia burgdorferi* and
- * *Streptomyces coelicolor*, whose telomeres are known to meet).
+ * two ends the junction joins, for `s = 1 … k` — and its median over at least two
+ * of them, each with contacts at both ends, so one noisy cell does not decide.
+ * About one on a circle (0.65 on the *Pseudomonas aeruginosa* PAK chromosome,
+ * 1.1 on a *Borrelia* circular plasmid), about zero on a line (under 0.03 on the
+ * linear chromosomes of *Borrelia burgdorferi* and *Streptomyces coelicolor*,
+ * whose telomeres are known to meet).
  *
  * Pure: three small blocks in, one number out — and, for a whole map, the
  * blocks read through whichever host holds it.
@@ -26,14 +27,23 @@
 export const JUNCTION_BINS = 3
 
 /**
- * The fewest bins a sequence needs for the test to mean anything.
+ * The fewest bins a sequence needs, at the rung it is read at, for the test to
+ * mean anything.
  *
- * The diagonal it is compared with is measured on `2k` bins at each end, and a
- * sequence shorter than four times that is mostly its ends: a small plasmid at a
- * coarse resolution is two or three bins, and every bin of it is next to every
- * other whether it is a circle or not.
+ * On a line of `n` bins the cells joining its ends are `n − s` bins apart, so
+ * the junction reads as a line's only where that is far down the decay — and a
+ * few dozen bins can fall short of it, where contacts flatten out across a
+ * chromosome's territory or its two ends are held together, as clustered
+ * telomeres are. Over thirty-two maps, linear chromosomes read with 12 to 49
+ * bins scored up to 0.9 (yeast chromosome I at 16 kb, six mouse chromosomes at
+ * 2.56 Mb); with {@link junctionQuorum}'s two separations, none read with fifty
+ * or more reached 0.2. It is half the {@link JUNCTION_TARGET_BINS} the session
+ * measures at wherever the ladder lets it, so it binds only where the rung read
+ * gives a sequence fewer than fifty bins — a file opened coarsely, or a short
+ * sequence — and what it costs is a small circle read there, left undecided
+ * rather than ticked: the yeast mitochondrion is 43 bins at 2 kb.
  */
-export const MIN_JUNCTION_SEQUENCE_BINS = 4 * JUNCTION_BINS
+export const MIN_JUNCTION_SEQUENCE_BINS = 50
 
 /** At or above this the sequence is read as circular. */
 export const CIRCULAR_SCORE = 0.2
@@ -46,6 +56,14 @@ export interface JunctionBlock {
 }
 
 /**
+ * The fewest separations a score is decided on: more than half of the `k`
+ * compared — two of the three — so the median is never one cell's.
+ */
+export function junctionQuorum(k = JUNCTION_BINS): number {
+  return Math.floor(k / 2) + 1
+}
+
+/**
  * The junction score, from the three blocks the test needs.
  *
  * - `head`: rows and columns `[0, 2k)` — the diagonal at the start;
@@ -53,8 +71,19 @@ export interface JunctionBlock {
  * - `corner`: rows `[0, k)` against columns `[n − k, n)` — the cells joining them,
  *   whose circular separation is `row + n − col`.
  *
- * `NaN` where either side has nothing at a separation — a balancer-dropped end,
- * a sequence too short — which the caller reads as *undecided*, never as linear.
+ * A separation is compared only where all three hold something at it: a
+ * junction cell the balancer kept, and contacts on the diagonal at **each** end
+ * — the junction joins the two ends, so it is held against both ends' diagonal,
+ * never against one end's alone. And the score needs {@link junctionQuorum}
+ * such separations. A median of three was meant to keep one noisy cell from
+ * deciding, and stopped doing so once ends went missing: on chrY of a mouse map
+ * at 640 kb the balancer had dropped the last two bins, one junction cell was
+ * left — one read pair, beside an end whose own diagonal held nothing at that
+ * separation — and its ratio of 0.41 was the median of itself.
+ *
+ * `NaN` where fewer separations than that can be compared — a balancer-dropped
+ * end, an end with nothing on its diagonal, a sequence too short — which the
+ * caller reads as *undecided*, never as linear.
  */
 export function junctionScore(
   n: number,
@@ -63,9 +92,10 @@ export function junctionScore(
   corner: JunctionBlock,
   k = JUNCTION_BINS,
 ): { score: number; ratios: number[] } {
-  const diagonalSum = new Float64Array(k + 1)
-  const diagonalCount = new Float64Array(k + 1)
-  for (const block of [head, tail]) {
+  /** The diagonal of one end's block, summed and counted by separation. */
+  const diagonal = (block: JunctionBlock): { sum: Float64Array; count: Float64Array } => {
+    const sum = new Float64Array(k + 1)
+    const count = new Float64Array(k + 1)
     const width = block.cols[1] - block.cols[0]
     for (let r = block.rows[0]; r < block.rows[1]; r++) {
       for (let c = block.cols[0]; c < block.cols[1]; c++) {
@@ -73,11 +103,13 @@ export function junctionScore(
         if (s < 1 || s > k) continue
         const value = block.values[(r - block.rows[0]) * width + (c - block.cols[0])]
         if (!Number.isFinite(value)) continue
-        diagonalSum[s] += value
-        diagonalCount[s] += 1
+        sum[s] += value
+        count[s] += 1
       }
     }
+    return { sum, count }
   }
+  const ends = [diagonal(head), diagonal(tail)]
   const junctionSum = new Float64Array(k + 1)
   const junctionCount = new Float64Array(k + 1)
   const width = corner.cols[1] - corner.cols[0]
@@ -93,12 +125,12 @@ export function junctionScore(
   }
   const ratios: number[] = []
   for (let s = 1; s <= k; s++) {
-    if (diagonalCount[s] === 0 || junctionCount[s] === 0) continue
-    const diagonal = diagonalSum[s] / diagonalCount[s]
-    if (!(diagonal > 0)) continue
-    ratios.push(junctionSum[s] / junctionCount[s] / diagonal)
+    if (junctionCount[s] === 0) continue
+    if (!ends.every((end) => end.count[s] > 0 && end.sum[s] > 0)) continue
+    const along = (ends[0].sum[s] + ends[1].sum[s]) / (ends[0].count[s] + ends[1].count[s])
+    ratios.push(junctionSum[s] / junctionCount[s] / along)
   }
-  if (ratios.length === 0) return { score: Number.NaN, ratios }
+  if (ratios.length < junctionQuorum(k)) return { score: Number.NaN, ratios }
   const sorted = [...ratios].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   const score = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
@@ -126,6 +158,10 @@ export interface JunctionCandidate {
  * The sequences worth measuring, from each one's name and length on a grid of
  * `binsize`: long enough for the test to mean anything, the longest first, at
  * most `limit` of them.
+ *
+ * Each one's first bin and count are cooler's convention, `ceil(length /
+ * binsize)` a sequence, which not every file's levels keep — see
+ * {@link placeCandidate}, which a caller reading the map puts each one through.
  */
 export function junctionCandidates(
   pairs: ReadonlyArray<readonly [string, number]>,
@@ -141,6 +177,27 @@ export function junctionCandidates(
   }
   candidates.sort((a, b) => b.n - a.n)
   return candidates.slice(0, limit)
+}
+
+/**
+ * A candidate where the file puts it: its first bin and its count as the
+ * reader's own table has them, or `null` where that leaves it short of
+ * {@link MIN_JUNCTION_SEQUENCE_BINS}.
+ *
+ * A level written by flooring each sequence's last part-bin into the bin before
+ * it has one bin fewer than `ceil(length / binsize)` for every sequence that does
+ * not end on a bin, so a first bin summed from that rule drifts a bin further
+ * with each sequence before it. On the yeast and *M. pneumoniae* demo at 2 kb
+ * the mitochondrion's was five bins out — its tail and its corner were read
+ * from the next sequence — and it scored 0; seven of thirty-two maps tried have
+ * levels written that way.
+ */
+export function placeCandidate(
+  candidate: JunctionCandidate,
+  extent: readonly [number, number],
+): JunctionCandidate | null {
+  const n = extent[1] - extent[0]
+  return n >= MIN_JUNCTION_SEQUENCE_BINS ? { name: candidate.name, from: extent[0], n } : null
 }
 
 /**

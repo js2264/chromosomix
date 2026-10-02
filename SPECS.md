@@ -1083,6 +1083,15 @@ fixed order spends it on the choice that repaints nothing and reads as a control
 Two tabs on one file share nothing. The per-session memory is keyed on the session id as well as the
 URI, so a second view of the same map starts with no tracks, no filters and no marks.
 
+**A tab's note is about its file.** The bar under the strip says what a tab found out about the file
+it opened — that a sequence reads as circular (§8.15), that a task set an origin, that a kept edit is
+not drawn, that a file is not the one its saved session was made from — and the note is that tab's:
+shown while it is in front, and taken down when the tab opens another file, goes back to the picker,
+or closes. Another resolution of the same file keeps it. Nothing but its own *dismiss* used to take
+one down, so a link that moved a tab from a mouse map to a chicken one left *chrY reads as circular*
+over a genome with no chrY. The window's own notes — a workspace with more tabs than the window can
+hold — are about the window, and stay until dismissed.
+
 ### 5.7 Two files in one square
 
 A second cooler may be opened into the **lower-left triangle** of the same map. A contact matrix is
@@ -3839,14 +3848,32 @@ first are **neighbours**, so the cells joining them hold what the diagonal holds
 at the same separation — the most contacts there are — while anything else that
 brightens a corner brightens it by a factor, never to the level of the diagonal
 itself. So the first time a file is opened, each of its fifty longest sequences of
-at least twelve bins is read at its two ends and at its corner — three blocks a
+at least fifty bins is read at its two ends and at its corner — three blocks a
 few bins wide — and scored as the contacts across the junction at a circular
 separation of one, two and three bins over the contacts along the diagonal at the
 same separations, measured at the two ends the junction joins, the median of the
 three (`analysis/circularity.ts`). It is about one on a circle — 0.65 on the
 *Pseudomonas aeruginosa* PAK chromosome, 1.1 on a *Borrelia* plasmid — and under
 0.03 on the linear chromosomes of *Borrelia burgdorferi* and *Streptomyces
-coelicolor*, whose telomeres are known to meet. **Each sequence is measured at the coarsest
+coelicolor*, whose telomeres are known to meet. **A separation counts only where the
+junction has a cell the balancer kept and the diagonal has contacts at both ends, and the
+score needs two of them**; with fewer, the sequence is undecided rather than scored. The
+median was there so that one noisy cell would not decide, and once ends went missing it
+was a median of one: on chrY of a mouse map, measured at 640 kb, the balancer had dropped
+the last two bins, and the one junction cell left — a single read pair, beside an end
+whose own diagonal held nothing at that separation — scored 0.41 and ticked a linear
+chromosome. **And fifty bins, at the rung read, is the floor.** On a line the cells
+joining its ends are its length apart less a few bins, and a few dozen bins is not far
+enough down the decay: contacts flatten out across a chromosome's territory, and a yeast
+chromosome's two telomeres are held together, so a short line's corner can pass for a
+circle's. Over thirty-two maps — bacteria, yeasts, a chytrid, mouse — linear chromosomes
+read with 12 to 49 bins scored up to 0.9 (yeast chromosome I at 16 kb; chr9, chr11,
+chr12, chr15, chr19 and chrY of the mouse map at 2.56 Mb); with both rules none is ticked
+at any rung, and every bacterial chromosome and plasmid of those maps still is at its
+landing rung (§9). The floor costs a small circle read coarsely, left undecided for the
+reader to tick: *E. coli* opened at 100 kb (47 bins), *C. necator*'s pBB2 at 16 kb (27),
+and the yeast mitochondrion of the yeast and *M. pneumoniae* demo at its landing rung —
+43 bins at 2 kb; at 1 kb it has 86, but its ends there are two cells. **Each sequence is measured at the coarsest
 rung of the file's ladder that still gives it a hundred bins**, the rung it was opened at where
 none does: the blocks are a few bins wide, so what a read costs is the rung's index and weights,
 and at a large file's finest rung those are megabytes a read — 111 MiB for the three reads on each
@@ -3854,20 +3881,28 @@ of 21 chromosomes of a 5 GB 4DN map opened at 1 kb. The score is a ratio at one 
 answer does not move: every sequence of the demo maps is decided alike at both rungs. A sequence
 the coarse rung cannot be read for as the test reads it — a level that absorbed its last part-bin —
 is asked again at the open rung; one whose end the balancer dropped is not, being undecided at every
-rung. **Its reads wait for the views'** (§12): each is asked only once nothing a reader is looking at
+rung. And at the open rung each sequence is read **where the reader's own table puts it**, not where
+`ceil(length / binsize)` a sequence would: a level written by flooring each sequence's last part-bin
+into the bin before starts every sequence after the first a bin earlier for each one before it, so the
+arithmetic drifts — on the yeast and *M. pneumoniae* demo at 2 kb it put the mitochondrion five bins
+out, and read its tail and its corner from the next sequence. Seven of the thirty-two maps have levels
+written that way. **Its reads wait for the views'** (§12): each is asked only once nothing a reader is looking at
 has read for a quarter of a second. At **0.2** or above the sequence
-is ticked, and a banner names it and says where to untick it; below, or where an
-end has nothing to measure, it is left alone. **It only ever adds a tick, and
+is ticked, and a banner names it and says where to untick it — the tab's own, which goes
+when the tab opens another file (§5.6); below, or where its ends leave fewer than two
+separations to compare, it is left alone. **It only ever adds a tick, and
 only once per file**: the scores are kept with the declarations — the box's own
 tooltip quotes its sequence's — so a reader who unticks one is not overruled by
 the next open, and a file whose declarations arrived in a workspace is not
 measured at all. A shell asks the same question with `metacooler-run circular <map>` — the same
-fifty sequences, three blocks, threshold and balancing, each read at the resolution the map is
-opened at rather than at a rung of its own — and is answered with a table of every
+fifty sequences, three blocks, two of three separations, threshold and balancing, each read at the
+resolution the map is opened at rather than at a rung of its own — and is answered with a table of every
 sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
 handed as `--circular`: a declaration frames every run after it, and a batch over eighty genomes, a
 few of them linear, can neither declare them all round nor ask a person which. The DNA Bacterial
-Zoo's analyses are framed that way (§24.3).
+Zoo's analyses are framed that way (§24.3). The fifty-bin floor holds at the resolution read, so a
+batch that wants a small plasmid decided reads the map where it has fifty bins: at the zoo's 4 kb, a
+plasmid under 200 kb is left undecided, and framed as a line unless it is named.
 
 So it is a **column of tick boxes in the Chromosomes table**, beside the lengths,
 one row per sequence. It was a tickbox in the Map card, and that was the right

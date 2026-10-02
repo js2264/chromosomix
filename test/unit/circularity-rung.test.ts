@@ -5,7 +5,10 @@
  * hundred bins (`junctionRung`), because at a large file's finest rung the six
  * bins the test reads cost megabytes apiece. That is only right if the answer
  * does not move: on each demo map, every sequence is scored at the finest rung
- * and at the chosen one, and the two must agree on circular or not.
+ * and at the chosen one, and the two must agree on circular or not. And a file
+ * opened coarser than that leaves some sequences fewer bins than the test needs,
+ * which are then not measured at all: read anyway, the yeast demo's chromosome I
+ * at 16 kb would pass for a circle.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -13,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CIRCULAR_SCORE,
   JUNCTION_TARGET_BINS,
+  MIN_JUNCTION_SEQUENCE_BINS,
   junctionCandidates,
   junctionRung,
   measureJunctions,
@@ -90,5 +94,29 @@ describe('the junction test at a coarse rung', () => {
       path.split('/').pop(),
       decided.map((n) => `${n}: ${fine[n].toFixed(3)} → ${coarse[n].toFixed(3)}`).join(', '),
     )
+  })
+})
+
+describe('a sequence the rung read leaves too few bins', () => {
+  /**
+   * Chromosome I of the yeast demo is 230 kb, fifteen bins at 16 kb. The cells
+   * joining its ends are then fourteen bins apart, not far down the decay, and a
+   * yeast chromosome's two telomeres are held together besides: its corner holds
+   * most of what its diagonal does, and it scores as a circle. A file opened
+   * there does not measure it.
+   */
+  it('is not measured: the yeast demo opened at 16 kb would read chromosome I as a circle', async () => {
+    const path = DEMOS[2]
+    const scores = await scoresAt(path, 16_000, ['I'])
+    expect(scores.I).toBeGreaterThanOrEqual(CIRCULAR_SCORE)
+
+    const source = await LocalFileSource.fromPath(path)
+    await source.mount()
+    const mc = await MetaCooler.open(`${path}::/resolutions/16000`, source)
+    const pairs = mc.chromnames.map((name, i) => [name, Number(mc.contigs.numbers('length')[i])] as const)
+    mc.close()
+    const length = pairs.find(([name]) => name === 'I')?.[1] ?? 0
+    expect(Math.ceil(length / 16_000)).toBeLessThan(MIN_JUNCTION_SEQUENCE_BINS)
+    expect(junctionCandidates(pairs, 16_000).map((one) => one.name)).not.toContain('I')
   })
 })

@@ -177,11 +177,13 @@ maps.
 ## Methods
 
 **Circular chromosomes**
-When a contact map is first opened, the 50 longest sequences of at least 12 bins are tested for
+When a contact map is first opened, the 50 longest sequences of at least 50 bins are tested for
 circularity. For each separation *s* of 1–3 bins, the mean contact across the junction of the two
-ends is divided by the mean contact at the same separation along the main diagonal. The median of
-the three ratios is the junction score, which is close to 1 for a circular molecule and close to 0
-for a linear one. Sequences scoring 0.2 or more are marked as circular. The score is kept with the
+ends is divided by the mean contact at the same separation along the main diagonal at those ends,
+counting a separation only where the junction has data and the diagonal has contacts at both ends.
+The junction score is the median of these ratios, close to 1 for a circular molecule and close to 0
+for a linear one; it needs two of the three separations, and a sequence with fewer is left
+undecided. Sequences scoring 0.2 or more are marked as circular. The score is kept with the
 call and shown on the sequence's tick box, which the user can change in the chromosome table. On a
 circular sequence, genomic separations are measured the short way round the circle by every task
 that uses them, from the expected contact decay to insulation and compartments.

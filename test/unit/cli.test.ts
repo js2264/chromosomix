@@ -17,12 +17,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { MIN_JUNCTION_SEQUENCE_BINS, measureJunctions } from '@/analysis/circularity'
 import { cliCommandFor } from '@/analysis/cliCommand'
 import { taskById } from '@/analysis/registry'
 import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
 import { writeBigWig } from '@/analysis/write/bigwig'
 import { main, readFeatureText, readPairText, recordedTasks, stemOf } from '@/cli/main'
 import { typedLocusToRegion } from '@/genome/assembly'
+import { MetaCooler } from '@/metacooler/MetaCooler'
+import { LocalFileSource } from '@/sources/LocalFileSource'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
 let directory = ''
@@ -133,15 +136,41 @@ describe('the junction test', () => {
       .filter((line) => line !== '' && !line.startsWith('#'))
       .map((line) => line.split('\t'))
 
-  it('reads the sequences of a map whose ends are a chromosome apart as lines', async () => {
+  it('reads a sequence whose ends are a chromosome apart as a line', async () => {
+    // Every cell present, and each a function of the separation along the line.
+    const n = 60
+    const line: HicRecord[] = []
+    for (let x = 0; x < n; x++) {
+      for (let y = x; y < n; y++) line.push({ x, y, value: Math.round(10_000 / (1 + y - x) ** 1.5) })
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [{ name: 'line', length: n * 1000 }],
+      resolutions: [1000],
+      records: { '1_1': line },
+      blockBinCount: 32,
+    })
+    const file = join(directory, 'line.hic')
+    await writeFile(file, fixture.bytes)
     reset()
-    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(await main(['circular', file, '--quiet'])).toBe(0)
     expect(said()).toMatch(/^# framing: 1000 bp$/m)
     const rows = table()
     expect(rows[0]).toEqual(['sequence', 'length', 'score', 'circular'])
-    expect(rows.slice(1).map((row) => [row[0], row[1], row[3]])).toEqual([
-      ['chrI', '120000', 'no'],
-      ['chrII', '60000', 'no'],
+    expect(rows[1][0]).toBe('line')
+    expect(Number(rows[1][2])).toBeLessThan(0.05)
+    expect(rows[1][3]).toBe('no')
+  })
+
+  it('leaves a sequence undecided where it can be compared at one separation alone', async () => {
+    // The sample's cells are one in five, laid out so that each sequence's
+    // diagonal holds contacts at one separation of the three — the third on
+    // chrI, the first on chrII — and a score there would be one cell's.
+    reset()
+    expect(await main(['circular', sample, '--quiet'])).toBe(0)
+    expect(table().slice(1)).toEqual([
+      ['chrI', '120000', '', ''],
+      ['chrII', '60000', '', ''],
     ])
   })
 
@@ -170,6 +199,45 @@ describe('the junction test', () => {
     expect(row[0]).toBe('ring')
     expect(Number(row[2])).toBeCloseTo(1, 1)
     expect(row[3]).toBe('yes')
+  })
+
+  /**
+   * A level that floors each sequence's last part-bin into the bin before it:
+   * the yeast and *M. pneumoniae* demo at 2 kb gives chromosome I 115 bins where
+   * `ceil(230,218 / 2,000)` is 116. Summed that way, every first bin after I
+   * drifted, and the test read the bins of the sequences beside each one. It
+   * reads each where the file puts it, as the oracle here does from the file's
+   * own extents.
+   */
+  it('reads each sequence where the file puts it, on a level that floors its part-bins', async () => {
+    const demo = new URL('../../demo/yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool', import.meta.url).pathname
+    const uri = `${demo}::/resolutions/2000`
+    reset()
+    expect(await main(['circular', uri, '--quiet'])).toBe(0)
+    const decided = table()
+      .slice(1)
+      .filter((row) => row[2] !== '')
+
+    const source = await LocalFileSource.fromPath(demo)
+    await source.mount()
+    const mc = await MetaCooler.open(uri, source)
+    try {
+      expect(mc.contigExtent('I')).toEqual([0, 115])
+      const placed = mc.chromnames.flatMap((name) => {
+        const [from, to] = mc.contigExtent(name)
+        return to - from >= MIN_JUNCTION_SEQUENCE_BINS ? [{ name, from, n: to - from }] : []
+      })
+      const oracle = await measureJunctions(
+        placed,
+        async (rows, cols) => (await mc.matrix({ rows, cols, balance: mc.hasWeights })).values,
+      )
+      const scores = oracle?.scores ?? {}
+      expect(Object.keys(scores).length).toBeGreaterThan(0)
+      expect(decided.map((row) => row[0]).sort()).toEqual(Object.keys(scores).sort())
+      for (const row of decided) expect(Number(row[2])).toBeCloseTo(scores[row[0]], 3)
+    } finally {
+      mc.close()
+    }
   })
 
   it('needs a file', async () => {

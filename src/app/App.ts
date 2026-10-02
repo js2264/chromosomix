@@ -184,6 +184,15 @@ export class App implements SessionHost {
    */
   private readonly noticeSlot = el('div', { class: 'notice-slot' })
   /**
+   * The note in {@link noticeSlot}, and whose it is.
+   *
+   * A tab's note is about the file it has open, so it is shown while that tab
+   * is the one in front and goes when the tab withdraws it — on moving to
+   * another file, or to none, or closing. The window's own, about the window,
+   * stays until it is dismissed.
+   */
+  private notice: { message: string; owner: Session | null } | null = null
+  /**
    * Whether the durable record may be written to yet.
    *
    * `false` for the moment between the shell existing and the boot deciding
@@ -1391,6 +1400,8 @@ export class App implements SessionHost {
     // {@link activate}, because the boot parents a session without going
     // through it.
     this.status?.refresh()
+    // …and the note, which is either the window's or the tab's own.
+    this.paintNotice()
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
     document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
@@ -1585,9 +1596,36 @@ export class App implements SessionHost {
    * that the file it was handed is not quite the file its session was made from,
    * for instance — where refusing would be wrong and silence would be worse.
    */
-  notify(message: string): void {
+  notify(message: string, owner?: Session): void {
+    this.notice = { message, owner: owner ?? null }
+    this.paintNotice()
+  }
+
+  withdrawNotice(owner: Session): void {
+    if (this.notice?.owner !== owner) return
+    this.notice = null
+    this.paintNotice()
+  }
+
+  /**
+   * The note, where it is the window's or the tab in front's.
+   *
+   * A tab's is about its own file, and a banner naming chrY over another tab's
+   * map of a chicken is the error it exists to prevent, so it waits behind
+   * its tab until that tab is in front again.
+   */
+  private paintNotice(): void {
+    const notice = this.notice
+    const shown = notice !== null && (notice.owner === null || notice.owner === this.current)
     this.noticeSlot.replaceChildren(
-      noticeBanner(message, () => this.noticeSlot.replaceChildren()),
+      ...(shown
+        ? [
+            noticeBanner(notice.message, () => {
+              this.notice = null
+              this.paintNotice()
+            }),
+          ]
+        : []),
     )
   }
 
