@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 91,
+      "commit": "9d349d6",
+      "title": "Decide a circle on two separations; a tab's note goes with its file (§8.15, §5.6)",
+      "branch": "js/wonderful-darwin-c7v10m",
+      "date": "2026-10-02T17:17:08Z"
+    }
+  ]
 }
