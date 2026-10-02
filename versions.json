@@ -1,6 +1,13 @@
 {
-  "latest": "6409249",
+  "latest": "d9ee381",
   "versions": [
+    {
+      "commit": "d9ee381",
+      "version": "0.13.0",
+      "date": "2026-10-02T19:29:06+02:00",
+      "subject": "Decide a circle on two separations; a tab's note goes with its file (§8.15, §5.6) (#91)",
+      "tag": ""
+    },
     {
       "commit": "6409249",
       "version": "0.13.0",
@@ -205,13 +212,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 91,
-      "commit": "9d349d6",
-      "title": "Decide a circle on two separations; a tab's note goes with its file (§8.15, §5.6)",
-      "branch": "js/wonderful-darwin-c7v10m",
-      "date": "2026-10-02T17:17:08Z"
-    }
-  ]
+  "pulls": []
 }
