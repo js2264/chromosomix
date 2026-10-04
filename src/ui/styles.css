@@ -379,6 +379,16 @@ p {
 /* A key printed *inside* a button, after its label. Quieter than a standing
    badge — it is a footnote to the word, not a second control — and it must not
    change the button's height, which the 2px bottom border otherwise would. */
+/* A character a keycap prints high and small — the `²` on an AZERTY PC's key
+   left of 1 — drawn larger (`ui/commands.ts` → `keyCap`), and still high: grown
+   to a digit's height and centred, a `²` is read as the `2` of the column beside
+   it. A line height of nothing, so its cap is no taller than the `1` next door. */
+.kbd-raised {
+  font-size: 1.4em;
+  line-height: 0;
+  vertical-align: -0.08em;
+}
+
 .kbd-inline {
   margin-left: 0.4rem;
   border-bottom-width: 1px;
@@ -1798,6 +1808,13 @@ p {
 .panel-tab-key {
   transform: rotate(90deg);
   opacity: 0.75;
+}
+
+/* …except a key that is a *word* — `backtick`, on the Files tab, until the
+   keyboard has said what it has left of 1 — which reads along the spine with
+   the name. Upright, it would stand across a strip a character wide. */
+.panel-tab-key.is-word {
+  transform: none;
 }
 
 .panel-tab-chevron {
@@ -5318,11 +5335,27 @@ canvas.is-frozen {
    edge down the one part of the list a reader scans vertically, looking for what
    is currently on. In a column the chips line up and the eye reads them as a
    set. The key column can be fixed here because the widest binding in the
-   registry is `Ctrl+P`, and narrowing it to that is what gives the titles the
-   room to stay on one line. */
+   registry is known — the console's `Ctrl+backtick`, Control and the key left
+   of 1 on a keyboard that has not yet said what it has there — and narrowing it
+   to that is what gives the titles the room to stay on one line. It was 5.5rem,
+   for `Ctrl+P`, and the console's key ran out of its cap into its title.
+
+   The space before the state is the chip's own margin rather than a column gap,
+   which a row with no chip would spend beside an empty column: that is the room
+   *Stretch the tracks to fill the height* needs to stay on one line beside the
+   wider key column. */
 .shortcut-grid:not(.shortcut-gestures) .shortcut-row {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 6.75rem minmax(0, 1fr) auto;
+  column-gap: 0;
+}
+
+.shortcut-grid:not(.shortcut-gestures) .shortcut-row > .shortcut-text {
+  padding-left: 0.6rem;
+}
+
+.shortcut-grid:not(.shortcut-gestures) .shortcut-row > .cmd-state {
+  margin-left: 0.6rem;
 }
 
 /* The same dimming, and the same number, as `.palette-row.disabled`: the two

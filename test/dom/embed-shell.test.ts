@@ -216,7 +216,7 @@ describe('the bar an embed has instead of a header', () => {
     // The two toggles are the panels' own buttons, so they say what they do and
     // which key does it without this row knowing anything about either.
     expect(all<HTMLButtonElement>(root, '.embed-tools button').map((button) => button.title)).toEqual(
-      ['Show the Annotations panel (A)', 'Show the Aesthetics panel (M)', 'About this viewer'],
+      ['Show the Annotations panel (2)', 'Show the Aesthetics panel (3)', 'About this viewer'],
     )
   })
 

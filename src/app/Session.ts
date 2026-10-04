@@ -149,7 +149,8 @@ import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { StructureCard } from '../ui/StructureCard'
-import { Breadcrumb } from '../ui/Breadcrumb'
+import { Breadcrumb, rungStandingAt } from '../ui/Breadcrumb'
+import { resolutionLabel } from '../units'
 import { ContactsBox, type MapTotal } from '../ui/ContactsBox'
 import type { DrawnDepth } from '../contacts'
 import type { Census } from '../metacooler/resample'
@@ -1735,6 +1736,27 @@ export class Session {
         yieldsToControls: true,
         enabled: this.current?.panel?.canCentreOnDiagonal === true,
         run: () => this.current?.panel?.centreOnDiagonal(),
+      },
+      // The resolution bar's stops, one at a time (§3.4): the lead's rung, which
+      // in a deck every map follows, exactly as a press on a stop would. The
+      // hint names the rung it goes to, as `[` and `]` name the sequence.
+      {
+        id: 'resolution-coarser',
+        group: 'View',
+        title: 'Coarser resolution',
+        hint: this.rungHint(1),
+        keys: KEYS.coarser,
+        enabled: this.rungStep(1) !== null,
+        run: () => this.stepRung(1),
+      },
+      {
+        id: 'resolution-finer',
+        group: 'View',
+        title: 'Finer resolution',
+        hint: this.rungHint(-1),
+        keys: KEYS.finer,
+        enabled: this.rungStep(-1) !== null,
+        run: () => this.stepRung(-1),
       },
       // One command and one key for the file's own landing table, whichever
       // of the two it is: a metacool's genomes, or an scool's cells. No file
@@ -6009,6 +6031,45 @@ export class Session {
     const own =
       rungs.length > 0 ? rungs : binsize > 0 ? [{ name: String(binsize), binsize }] : []
     return ladderWith(own, this.resolutionStore()?.list() ?? [])
+  }
+
+  /**
+   * The rung one step coarser (`1`) or finer (`-1`) than the one on screen, or
+   * `null` (§3.4).
+   *
+   * The bar's own ladder, read from where the bar says it stands
+   * (`rungStandingAt`), so a key steps from the stop that is lit and never from
+   * somewhere the reader is not. `null` on a view with no bar to step — the
+   * browser — at either end, and on a ladder of one.
+   */
+  private rungStep(direction: 1 | -1): (Rung & { derived?: DerivedRung }) | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null || state.view === 'browser') return null
+    const rungs = this.ladderRungs()
+    if (rungs.length < 2) return null
+    return rungs[rungStandingAt(rungs, state.coarsen, file.currentEntry) + direction] ?? null
+  }
+
+  /** `-` and `+`: stand on the next rung, by the road a press on its stop takes. */
+  private stepRung(direction: 1 | -1): void {
+    const rung = this.rungStep(direction)
+    if (rung === null) return
+    if (rung.derived !== undefined) this.openDerived(rung.binsize)
+    else this.openStoredRung(rung.name)
+  }
+
+  /** The palette's line under each: the rung it goes to, or why there is none. */
+  private rungHint(direction: 1 | -1): string | undefined {
+    const rung = this.rungStep(direction)
+    if (rung !== null) return resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
+    if (this.file === null || this.store.state?.view === 'browser') return undefined
+    // The `+` on the bar adds only coarser rungs — bins are added up, never
+    // split — so it is the way on at the coarse end and at no other.
+    if (direction < 0) return 'Already the finest resolution this file stores.'
+    return this.ladderRungs().length < 2
+      ? 'This file stores one resolution — the + beside it adds a coarser one.'
+      : 'Already the coarsest — the + beside the resolution adds a coarser one.'
   }
 
   /**

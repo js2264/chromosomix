@@ -307,7 +307,9 @@ describe('chrome stops at the data', () => {
     const plot = heatmap.plotRect
     expect(heatmap.dataRect.width).toBeCloseTo(plot.width, 6)
     // Zoom out below the fit: the matrix is now smaller than the area for it.
-    heatmap.handleKeyDown({ key: '-', preventDefault: () => {} } as KeyboardEvent)
+    // By the factor the `−` key used to take, about the centre — the key steps
+    // the resolution now, and the zoom it was is the wheel's.
+    heatmap.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / 1.25)
     expect(heatmap.dataRect.width).toBeLessThan(plot.width)
     expect(heatmap.dataRect.height).toBeLessThan(plot.height)
   })

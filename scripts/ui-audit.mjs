@@ -342,7 +342,7 @@ await look('store drawer', async (p) => {
 })
 await look('console', async (p) => {
   await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
-  await p.keyboard.press('`'); await sleep(1200)
+  await p.keyboard.press('Control+Backquote'); await sleep(1200)
 })
 await look('stored data', async (p) => {
   await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500)

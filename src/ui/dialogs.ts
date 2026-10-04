@@ -11,7 +11,7 @@
 import { Modal } from './Modal'
 import { versionPicker } from './VersionPicker'
 import { el } from './dom'
-import { groupRank, isMac, keyLabel, stateChip, type Command } from './commands'
+import { groupRank, isMac, keyCap, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
 import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
 
@@ -59,7 +59,8 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['{meta} + wheel', 'Slide the map up and down, and sideways with it'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
-  ['+ / −', 'Zoom about the centre'],
+  // No `+ / −` row: on a map the two step the resolution, and are commands —
+  // *Coarser resolution* and *Finer resolution*, in the View block above.
   ['0 or Home', 'Fit the block to the canvas'],
   // The lanes are part of this picture, and their gestures are the browser's
   // rather than the canvas's — which is exactly the kind of thing that is
@@ -130,7 +131,7 @@ function commandRow(command: Command): HTMLElement {
   return el(
     'div',
     { class: off ? 'shortcut-row disabled' : 'shortcut-row' },
-    el('kbd', { class: 'kbd', text: keyLabel(command.keys ?? '') }),
+    el('kbd', { class: 'kbd' }, ...keyCap(command.keys ?? '')),
     el('span', { class: 'shortcut-text', text: command.title }),
     ...stateChip(command),
   )

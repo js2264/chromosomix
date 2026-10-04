@@ -5188,8 +5188,14 @@ export class HeatmapView {
   // -- input ---------------------------------------------------------------
 
   /**
-   * Keyboard pan and zoom (spec §7.2). Arrows pan by a tenth of the viewport (a
-   * half with Shift), `+`/`-` zoom about the centre, `0` or Home refits.
+   * Keyboard pan (spec §7.2). Arrows pan by a tenth of the viewport (a half
+   * with Shift), `0` or Home refits.
+   *
+   * **Not `+` and `−`**, which zoomed about the centre and now step the map's
+   * resolution (`KEYS.coarser`, `KEYS.finer`). They are the app's, heard on the
+   * window — and this canvas has the focus after any press on it, so answering
+   * them here as well made one keystroke a zoom *and* a re-read at another
+   * grid. The wheel, a pinch and the boxes zoom.
    *
    * @returns `true` if the key was consumed, in which case the default action
    * has already been prevented. The caller still has to redraw.
@@ -5211,8 +5217,6 @@ export class HeatmapView {
     }
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
-    const cx = plot.x + plot.width / 2
-    const cy = plot.y + plot.height / 2
     let handled = true
     switch (event.key) {
       case 'ArrowLeft':
@@ -5226,14 +5230,6 @@ export class HeatmapView {
         break
       case 'ArrowDown':
         this.panBy(0, -plot.height * step)
-        break
-      case '+':
-      case '=':
-        this.zoomAt(cx, cy, 1.25)
-        break
-      case '-':
-      case '_':
-        this.zoomAt(cx, cy, 1 / 1.25)
         break
       case '0':
       case 'Home':

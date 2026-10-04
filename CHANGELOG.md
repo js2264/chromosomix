@@ -854,6 +854,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The digit row folds the side columns, in the order they stand, and `−` / `+` step the resolution
+  (§5.5, §26.6).** The key left of `1` folds Files, then `1` General, `2` Annotations, `3` Aesthetics
+  and `4` Analysis — left to right as the columns are on screen, where they were `f` `b` `a` `m` `j`.
+  The row is matched by where the keys are, with or without Shift or Caps Lock, so AZERTY's bare `&`
+  `é` `"` `'` are `1` to `4` and its `²` is the key left of `1`; on a Mac, whose ISO keyboards report
+  that key differently, the key beside the left Shift folds Files as well. The Files badge prints what
+  the keyboard has there — `²`, `@` on a French Mac, a backtick on QWERTY — from Chromium's layout map
+  or from the reader's own keystrokes, and its tooltips say *the key left of 1*. `−` and `+` are
+  *Coarser resolution* and *Finer resolution*: the resolution bar's stops walked one at a time from
+  the lit one, onto a rung the reader added as onto the file's own, stopping at both ends, and in a
+  deck every map follows. Either half of each key does (`_`, `=`), so neither needs Shift, and an
+  AZERTY PC's minus is still the minus under Shift or Caps Lock, where it types a `6`. The map's canvas
+  no longer zooms on `+` and `−` — it had the focus after any press on it, so one keystroke would have
+  zoomed and re-read the map together — and nor does a deck's tracks cell; the wheel, a pinch and the
+  boxes zoom, and the 1D browser keeps its 3× pair on the two keys. **The console moves to Control and
+  the key left of `1`** (ctrl-` on QWERTY, Control on a Mac too), since the key alone is Files'. The
+  desktop menu shows `1` for the General panel.
+
 - **The validation notebook reads public data only, each file by its accession (§18.10).** Mouse
   Hi-C 4DNFIOZ1TRUS and three chicken maps (4DNFIH8L6WON, 4DNFITBCUX56, 4DNFIIML46E5) from 4DN, yeast
   Micro-C GSE151553 from GEO, two mouse ATAC-seq replicates (4DNFIIY4QW2D, 4DNFITBRHVZE) from 4DN, and

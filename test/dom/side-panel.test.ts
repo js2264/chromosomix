@@ -40,6 +40,8 @@ import {
   type SidePanelSpec,
 } from '@/ui/SidePanel'
 import { icon } from '@/ui/icons'
+import { KEYS, keyCap } from '@/ui/commands'
+import { learnKey, resetLayout } from '@/ui/keyboardLayout'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -47,11 +49,13 @@ let teardown: DomTeardown
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  resetLayout()
 })
 
 afterEach(() => {
   teardown()
   window.localStorage.clear()
+  resetLayout()
 })
 
 interface Mounted {
@@ -103,7 +107,7 @@ describe('a side panel', () => {
     expect(panel.isCollapsed).toBe(false)
     expect(panel.el.classList.contains('collapsed')).toBe(false)
     expect(panel.el.querySelector('.panel-column-title')?.textContent).toBe('General')
-    expect(panel.el.querySelector('.panel-column-key')?.textContent).toBe('B')
+    expect(panel.el.querySelector('.panel-column-key')?.textContent).toBe('1')
     // The reader's own width, inline, because it is the reader's own drag.
     expect(panel.el.style.width).toBe('288px')
     // The tab is in the DOM either way — the stylesheet shows it — so what is
@@ -125,9 +129,9 @@ describe('a side panel', () => {
     // width here would beat it.
     expect(panel.el.style.width).toBe('')
     const tab = tabOf(panel)
-    expect(tab?.textContent).toBe('GeneralB')
+    expect(tab?.textContent).toBe('General1')
     expect(tab?.getAttribute('aria-label')).toBe('Show the General panel')
-    expect(tab?.title).toBe('Show the General panel (B)')
+    expect(tab?.title).toBe('Show the General panel (1)')
     // The plot has room it did not have; the shell is told so it can re-measure.
     expect(resizes()).toBe(before + 1)
   })
@@ -163,7 +167,7 @@ describe('a side panel', () => {
     // one that comes back, and it comes back as a tab rather than as nothing.
     const second = mount()
     expect(second.panel.isCollapsed).toBe(true)
-    expect(tabOf(second.panel)?.textContent).toBe('GeneralB')
+    expect(tabOf(second.panel)?.textContent).toBe('General1')
   })
 
   it('starts folded where its spec says so, until the reader opens it', () => {
@@ -222,12 +226,53 @@ describe('the four columns', () => {
     expect(AESTHETICS_PANEL.order).toBeGreaterThan(0)
   })
 
-  it('each answer to one key, and no two to the same', () => {
-    const keys = [GENERAL_PANEL, ANNOTATION_PANEL, AESTHETICS_PANEL, ANALYSIS_PANEL].map(
-      (spec) => spec.keys,
-    )
-    expect(keys).toEqual(['b', 'a', 'm', 'j'])
-    expect(new Set(keys).size).toBe(keys.length)
+  it('answer to the digit row in the order they stand, Files on the key left of 1', () => {
+    // The row of keys is the row of columns: left to right across the screen,
+    // the key left of `1` and then `1` to `4`, the map between `2` and `3`.
+    const onScreen = [...ALL_PANELS].sort((a, b) => a.order - b.order)
+    expect(onScreen.map((spec) => spec.title)).toEqual(['Files', 'General', 'Annotations', 'Aesthetics', 'Analysis'])
+    expect(onScreen.map((spec) => spec.keys)).toEqual(['`', '1', '2', '3', '4'])
+  })
+
+  it('print the key left of 1 as the keyboard has it, once the keyboard has said', () => {
+    // Built before anything is known, the Files column says *backtick* — the
+    // commonest thing on that key — and where it is. An AZERTY PC's first press
+    // of the key (or Chromium's layout map) says `²`, and every place the
+    // column wears its key follows, built once though they all were.
+    const { panel } = mount(FILES_PANEL)
+    const head = panel.el.querySelector<HTMLElement>('.panel-column-key')
+    expect(head?.textContent).toBe('backtick')
+    expect(head?.title).toBe('Press backtick (the key left of 1) to fold or open this panel')
+
+    learnKey(new KeyboardEvent('keydown', { key: '²', code: 'Backquote' }))
+    expect(head?.textContent).toBe('²')
+    expect(head?.title).toBe('Press ² (the key left of 1) to fold or open this panel')
+    expect(tabOf(panel)?.textContent).toBe('Files²')
+    expect(tabOf(panel)?.title).toBe('Show the Files panel (², the key left of 1)')
+    expect(foldOf(panel)?.title).toBe('Fold the Files panel (², the key left of 1)')
+    expect(panel.toggle.title).toBe('Fold the Files panel (², the key left of 1)')
+    // A digit's badge is its digit whatever the layout: AZERTY's bare `&` is
+    // still the key with the 1 on it.
+    learnKey(new KeyboardEvent('keydown', { key: '&', code: 'Digit1' }))
+    expect(mount(GENERAL_PANEL).panel.el.querySelector('.panel-column-key')?.textContent).toBe('1')
+  })
+
+  it('draws a ² larger than its eleven pixels would, and a digit as itself', () => {
+    // `²` is printed high and small, as on the keycap — at a badge's size a
+    // speck beside a `1` that fills its cap — so it is wrapped to be drawn
+    // larger (`.kbd-raised`). Every other badge is its label as plain text.
+    learnKey(new KeyboardEvent('keydown', { key: '²', code: 'Backquote' }))
+    const files = mount(FILES_PANEL).panel.el
+    for (const cap of [files.querySelector('.panel-column-key'), files.querySelector('.panel-tab-key')]) {
+      const raised = cap?.querySelector('.kbd-raised')
+      expect(raised?.textContent).toBe('²')
+      expect(cap?.textContent).toBe('²')
+    }
+    expect(keyCap(KEYS.console)).toHaveLength(2)
+    expect(keyCap(KEYS.console)[0]).toBe('Ctrl+')
+    expect(keyCap('1')).toEqual(['1'])
+    expect(keyCap(KEYS.coarser)).toEqual(['−'])
+    expect(mount(GENERAL_PANEL).panel.el.querySelector('.kbd-raised')).toBeNull()
   })
 
   it('put the order on the element, so the DOM order in the shell is free', () => {
@@ -325,10 +370,12 @@ describe('a column’s own fold button', () => {
       const fold = foldOf(panel)
       expect(fold).not.toBeNull()
       // Named without the key and titled with it, exactly as the tab is: a label
-      // read aloud as "(B)" spells a shortcut out to the one reader who cannot
-      // watch for it.
+      // read aloud as "(1)" spells a shortcut out to the one reader who cannot
+      // watch for it. The key left of 1 says where it is as well, since what it
+      // types is the keyboard's — and this one has said nothing yet.
       expect(fold?.getAttribute('aria-label')).toBe(`Fold the ${spec.title} panel`)
-      expect(fold?.title).toBe(`Fold the ${spec.title} panel (${spec.keys.toUpperCase()})`)
+      const key = spec === FILES_PANEL ? 'backtick, the key left of 1' : spec.keys
+      expect(fold?.title).toBe(`Fold the ${spec.title} panel (${key})`)
       expect(fold?.getAttribute('type')).toBe('button')
     }
   })

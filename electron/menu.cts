@@ -136,7 +136,9 @@ export function buildMenu(): Menu {
   })
 
   const view: MenuItemConstructorOptions[] = [
-    mirror('File info sidebar', 'fold-sidebar', 'B'),
+    // `1`, the first of the digit row that folds the columns in the order they
+    // stand (`src/ui/SidePanel.ts`). Displayed, never registered, like the rest.
+    mirror('File info sidebar', 'fold-sidebar', '1'),
     mirror('Cycle the theme', 'theme', 'T'),
     { type: 'separator' },
     { role: 'togglefullscreen' },

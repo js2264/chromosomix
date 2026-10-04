@@ -15,7 +15,7 @@
 
 import { Modal } from './Modal'
 import { el } from './dom'
-import { groupRank, keyLabel, stateChip, type Command } from './commands'
+import { groupRank, keyCap, stateChip, type Command } from './commands'
 
 /**
  * Score a command against a query. `null` means no match; lower is better.
@@ -171,7 +171,7 @@ export function openCommandPalette(commands: Command[], onClose?: () => void): M
                   ...stateChip(command),
                   ...(command.keys === undefined
                     ? []
-                    : [el('kbd', { class: 'kbd', text: keyLabel(command.keys) })]),
+                    : [el('kbd', { class: 'kbd' }, ...keyCap(command.keys))]),
                 )
                 row.addEventListener('mousemove', () => {
                   if (selection === index) return

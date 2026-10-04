@@ -346,6 +346,16 @@ export interface BrowserViewProps {
   /** The view moved; the hash follows. `undefined` is the whole genome. */
   onLocusChange(locus: string | undefined): void
   /**
+   * Whether `+` and `−` zoom this browser while it has the focus. Absent is yes.
+   *
+   * `false` in a deck's tracks cell (`panels/TracksPanel.ts`), where the two
+   * keys are the deck's resolution (`KEYS.coarser`, `KEYS.finer`) and are heard
+   * on the window: a cell that zoomed on them as well would answer one
+   * keystroke twice. A browser of its own has no resolution to step, and keeps
+   * the 3× pair on them (§5.4).
+   */
+  zoomKeys?: boolean
+  /**
    * How each group is drawn and scaled, for this file.
    *
    * The session's, not this view's: a group made here is the same group beside
@@ -4239,6 +4249,7 @@ export class BrowserView {
   }
 
   private watchKeys(): void {
+    const zoomKeys = this.props.zoomKeys !== false
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const step = (this.scale.domain[1] - this.scale.domain[0]) * 0.2
@@ -4255,10 +4266,12 @@ export class BrowserView {
         // or a key with a press (§26.6).
         case '+':
         case '=':
+          if (!zoomKeys) return
           this.scale.zoomAt(this.scale.pixels / 2, 3)
           break
         case '-':
         case '_':
+          if (!zoomKeys) return
           this.scale.zoomAt(this.scale.pixels / 2, 1 / 3)
           break
         case '0':

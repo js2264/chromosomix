@@ -897,7 +897,8 @@ about.
 the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
 a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
 something else on the tracks beside it; and the browser's `−` / `+` keys, once the tracks have the
-focus, drive the 3× pair rather than a factor of their own. **A deck's tracks cell has no bar** — no
+focus, drive the 3× pair rather than a factor of their own — except in a deck's tracks cell, where
+they are the deck's resolution (§5.5). **A deck's tracks cell has no bar** — no
 locus box, no steps, no summary line — only its axis, the chromosome's bar and ruler drawn at the
 top of its picture (§25.3). It had the box and the four steps, which were a second place to ask the
 question the lead's bar above the grid answers, in every tracks cell, and the one road there was to
@@ -1023,6 +1024,19 @@ the three and asks the reader to divide before the number means anything. Both h
 same value: the stops are real radio inputs, so the arrow keys and a screen reader get the list, and
 the slider commits on release rather than per rung, since dragging across five rungs must not
 re-open the file five times.
+
+**`-` and `+` walk the same stops from the keyboard**, one rung coarser and one finer (*Coarser
+resolution*, *Finer resolution*): counted from the stop that is lit, onto a rung the reader added as
+onto one the file stores and by the road a press on its stop takes, and stopping at both ends rather
+than wrapping — the palette says which end, and at the coarse one that the `+` beside the rung adds
+a coarser one. Their hint is the rung they go to, as `[` and `]` name the sequence. They are bound by
+what they type rather than where they are, since the two marks stand in different places on QWERTY
+and on AZERTY: either half of each key does — `_` and `=` as well — so neither needs Shift, which
+`+` takes on both; and an AZERTY PC's minus, the bare half of its 6 key, is still the minus under
+Shift or Caps Lock, where it types a `6` (§26.6). In a deck the step is the first map's, which every
+map follows (§16.2). The map's canvas zoomed on the same two keys whenever it had the focus — which
+it has after any press on it — so the one keystroke would have been a zoom and a re-read at another
+grid together; it gave them up (§7.2), and so does a deck's tracks cell (§5.4).
 An **mmetacool's entry picker is untouched** and stays where it is, before the root: switching to a
 different nested metacool invalidates every crumb after it, so that one genuinely is a step of the
 trail.
@@ -1826,8 +1840,9 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to
 the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
-colormap is selectable; keyboard pan and zoom are supported, and Space recentres the map on its
-diagonal (§8.9).
+colormap is selectable; keyboard pan is supported — the arrows, and `0` or Home to refit — and Space
+recentres the map on its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
+resolution (§5.5), and the wheel, a pinch and the boxes zoom.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
 Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
@@ -6554,7 +6569,7 @@ anyone running the app.
 
 ### 18.1 Three surfaces, and why it is three
 
-**The Analysis panel** is a fourth column, right of Aesthetics, folded with `j`. It is a *list*, in
+**The Analysis panel** is a fourth column, right of Aesthetics, folded with `4` (§26.6). It is a *list*, in
 four cards cut by the dimension the question is about — *2D tasks*, *3D tasks*, *1D tasks* and
 *Metagenome* (§18.8): one row per task, each with a title, a line of description and a state — never
 run, queued, running, done, failed, cancelled. It carries no controls — bar a stop on a row whose job
@@ -8947,12 +8962,13 @@ without asking for a permission no gesture is behind. The doors are elsewhere an
 landing page — which is what a new tab is — and *Connect a local or remote folder* in the command
 palette.
 
-`f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
-reaches for a list of files, so `f` came from the `fills` overlay — which keeps its toggle, on
-screen beside the picture it changes, and loses one keystroke. It stays in the command palette,
-which promises to list everything the app can do. `f` itself is live only while the column is
-there: with nothing connected it would fold a column nobody can see, so the palette's *Files panel*
-row is dimmed and says to connect a folder first.
+**The key left of `1` folds it** — a backtick on QWERTY, `²` on an AZERTY PC — because it stands
+left of General's `1` as the column stands left of General (§26.6). It was `f`, which the `fills`
+overlay gave up when the column arrived; the overlay keeps its toggle, on screen beside the picture
+it changes, and no key. The row stays in the command palette, which promises to list everything the
+app can do. The key itself is live only while the column is there: with nothing connected it would
+fold a column nobody can see, so the palette's *Files panel* row is dimmed and says to connect a
+folder first.
 
 ### 20.5 Two verbs on a row
 
@@ -9452,8 +9468,11 @@ should be the whole of the answer.
 
 The button is in the header, immediately **before the theme toggle**: to its left are the two other
 things that take something out of this window — a link, and the workspace as a file — and everything
-to its right is about the window rather than the work in it. `` ` `` opens it, on the key every
-terminal in every editor is behind.
+to its right is about the window rather than the work in it. **Control and the key left of `1`**
+opens it — ctrl-` on QWERTY, the chord every terminal in every editor is behind, and Ctrl-² on an
+AZERTY PC. Control on a Mac as well, not ⌘: ⌘` is the system's, which walks a program's windows and
+never reaches the page. The key alone folds the Files column (§20.4); the console used to have it
+bare, and gave it up when the digit row became the columns' (§26.6).
 
 ### 23.5 Kept for a week, in this browser, and in the account
 
@@ -9701,7 +9720,7 @@ window** rather than one per tab, on the Files column's argument (§20.4): a sto
 about the file in front, and a switch of tab must not lose a catalogue somebody was half way
 through narrowing. Its head carries the store's mark and name, the same row of tiles small, for
 switching without closing, and *copy link*. The header has a toggle for it beside the Files
-column's, on the backslash key — punctuation, like the console's backtick, so it cannot collide with
+column's, on the backslash key — punctuation, like the console's chord, so it cannot collide with
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette lists it as *Stores*, wearing its state as a
 chip. Neither the toggle's tooltip nor the palette's hint lists the stores — *every data store this
@@ -10670,10 +10689,11 @@ over the other — each turned into one frame, side by side, turning as one. The
 `f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
 **bound only while the model is enlarged**, and listed in the palette either way; the three modes
 have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
-the new tab and the Aesthetics panel that each already had one of them. They are single letters and
-so are the app's own (`f` folds the Files panel, `a` the Annotations panel); a cell sits *beside* a
-map and its commands come first in the palette's list, so binding them there took those letters from
-the panels for as long as a model was on screen. In the dialog the model is the whole window and
+the new tab and the Aesthetics panel that each already had one of them (the panel has since moved to
+`3`). They are single keys and so are the app's own (`1` `2` `3` fold the General, Annotations and
+Aesthetics panels, §26.6, as `f` and `a` folded Files and Annotations once); a cell sits *beside* a
+map and its commands come first in the palette's list, so binding them there would take those keys
+from the panels for as long as a model was on screen. In the dialog the model is the whole window and
 there is nothing else a letter could mean. And a key is **printed on a control only where it is
 bound**, through `withKey` (§26.4): the corner's *frame* and the card's *frame* and *turntable* are
 retitled when the dialog opens and closes, because a card beside a deck reading `(f)` was offering a
@@ -11426,7 +11446,15 @@ structure* card however many models the deck draws.
 - **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
   read by someone already pointing at the thing, which is exactly when "is there a faster way" is
   asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.
-  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`).
+  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`), and a hyphen as the
+  minus sign it means (`−`). The key left of `1` prints the reader's keyboard's own character there
+  and its tooltips add *the key left of 1* (§26.6). A character a keycap prints high and small — that
+  key's `²` on an AZERTY PC — is drawn larger in its badge and still high: as printed it was a speck
+  beside a `1` that filled its cap, and grown to a digit's height it read as the `2` of the column
+  beside it. On a folded column's tab a key cap stands upright, but a key that is a word —
+  *backtick* — reads along the spine with the name, since upright it would stand across the strip.
+  The shortcuts dialog's key column is as wide as the widest key in the registry, the console's
+  *Ctrl+backtick*.
 - **A toggle command is titled once, by its noun**, and wears its state as a chip — *Crosshair* `on`
   — in the palette and the shortcuts dialog alike. Titled by its outcome, *Show crosshair*, it read
   as the state, and the dialog printed whatever the app happened to be doing when it was opened.
@@ -11508,6 +11536,25 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been
   changed is a different name, and `YEAST_STRUCTURE` over a card, a tab and a Structures row all
   reading `Yeast_structure` was four names for one file.
+- **The digit row folds the columns, in the order they stand.** The key left of `1` is Files,
+  outermost on the left; `1` and `2` are General and Annotations, the two left of the map; `3` and
+  `4` are Aesthetics and Analysis, the two right of it — so a column's key is found by where the
+  column is, and each wears it beside its heading and on its folded tab. They were five letters, `f`
+  `b` `a` `m` `j`, in no order the screen suggested. **A key bound by its place is matched by its
+  place** (`KeyboardEvent.code`), with or without Shift or Caps Lock: AZERTY's bare `&` `é` `"` `'`
+  are `1` to `4`, the keypad's digits are digits, and an AZERTY PC's `²` is the key left of `1`. A
+  Mac's ISO keyboard — every European one — reports that key as `IntlBackslash` and the one beside
+  the left Shift as `Backquote`, so on a Mac both fold Files. Its badge prints what the reader's
+  keyboard has there — `²` on an AZERTY PC, `@` on a French Mac, a backtick on QWERTY — read off the
+  browser's layout map where it gives one (Chromium, and so the desktop build) and off the reader's
+  own keystrokes everywhere else, and its tooltips say *the key left of 1* whatever the badge says,
+  since until one of the two has answered the badge is the commonest guess. **Every other key is
+  matched by what it types**, letters regardless of case and `-` and `+` by either half of their keys
+  (§5.5) — the one layout whose minus key types a `6` under Shift or Caps Lock, AZERTY on a PC, is
+  read as a minus there unless that key has been seen typing something else bare. A modifier makes
+  any bare key the browser's, AltGraph included (Windows sends it as Ctrl and Alt), so the third level
+  of a key is never a shortcut. Control and the key left of `1` is the console (§23.4). In the enlarged
+  3D cell `1` `2` `3` are its beads, sticks and tube, bound only there (§25.3).
 - **The picture is never the thing that gives way.** The side columns may be squeezed to their own
   minimum widths when the window cannot hold them all, and `.content` keeps a floor of 18rem: four
   columns at their widths come to about 1,180 pixels, so on a 1366-wide laptop with all four open the

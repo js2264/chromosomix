@@ -69,6 +69,7 @@ node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: th
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
 node scripts/ui-revisit.mjs gallery          # a place visited again, drawn from memory: chr1, chr2, chr1 again, a window and chr1 again on the lab's mouse .mcool at 10 kb, then on a chicken .hic, each step timed with its requests and the memory figure, and the read panel on a revisit: rv01 … rv11
+node scripts/ui-panel-keys.mjs gallery       # the digit row and the resolution keys on QWERTY and AZERTY: 1–4 and the key left of 1 folding the columns, Shift and Caps Lock, Ctrl and that key for the console, the shortcuts dialog, − and + walking E. coli's ladder with the map focused, rungs the reader added and a dropdown ladder, AZERTY's minus on its 6 key, the caps at 3×: pk01 … pk21
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -389,3 +390,18 @@ cost nothing. It reads the lab's bucket unless `GALLERY_DATA` names a folder ser
 and CORS holding both files — a headless browser that cannot trust this machine's proxy needs that,
 and a server that adds round-trip latency keeps the timings honest. Run it after any change to
 `worker/answers.ts`, `worker/client.ts`, a view's reads, or the raster's pooling and colouring.
+`scripts/ui-panel-keys.mjs` drives **the digit row and the resolution keys** (§5.5, §26.6) on two
+keyboards. QWERTY is Playwright's own key presses; AZERTY is a French PC's, with the layout map
+Chromium would hand over stubbed in an init script (so the Files badge reads `²`) and each press
+dispatched as that keyboard sends it — `&` from `Digit1` bare, `6` from `Digit6` under Shift or Caps
+Lock — since no headless browser can be given a layout of its own. On the yeast demo: `1` to `4`
+bare, shifted and under Caps Lock, the key left of 1 with a folder connected (through the input a
+browser with no directory picker opens), Ctrl and that key for the console, and the shortcuts
+dialog; on E. coli's ladder, `−` and `+` and their other halves with the map's canvas focused —
+which must re-read the same window at the next rung rather than zoom it, printed after each press —
+to the finest rung and past it; on the yeast cooler, rungs added through the bar's `+` walked by
+the keys, and a ladder past nine rungs, whose dropdown they walk too; and the badges at 3×, where a
+superscript `²` must not pass for the `2` beside it. It prints which columns are open and what
+each badge says, and the lit rung, the entry and the window after every press. Run it after any
+change to `ui/commands.ts`'s matching, `ui/keyboardLayout.ts`, a column's key or badge, or the
+resolution bar.

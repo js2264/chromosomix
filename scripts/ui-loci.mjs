@@ -126,11 +126,11 @@ await page.keyboard.press('Escape')
 await sleep(800)
 console.log('lanes named:', (await page.$$eval('.annotation-card .ann-name', (all) => all.map((one) => one.value ?? one.textContent))).filter((name) => /4C/.test(name ?? '')))
 await shot('lo06-fourc-lane')
-await page.keyboard.press('`')
+await page.keyboard.press('Control+Backquote')
 await sleep(900)
 console.log('console:', (await page.locator('.console-list').first().textContent())?.replace(/\s+/g, ' ').slice(0, 500))
 await shot('lo07-console')
-await page.keyboard.press('`')
+await page.keyboard.press('Control+Backquote')
 await sleep(500)
 
 // ---- FRiP per feature: each peak's first base ------------------------------

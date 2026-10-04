@@ -1072,9 +1072,10 @@ export class StructurePanel implements DeckCell {
   /**
    * A title with its key, where the key is bound.
    *
-   * The same gate {@link commands} puts on the bindings themselves: a letter
+   * The same gate {@link commands} puts on the bindings themselves: a key
    * reaches the model only while it is enlarged, so a card beside a deck that
-   * printed “(f)” was offering a key that folds the Files panel instead. And
+   * printed “(1)” would be offering a key that folds the General panel instead
+   * — as “(f)” offered the Files panel's, when that was `f`. And
    * one form for it — `withKey`'s — rather than the three the cell used to
    * carry: “(m, enlarged)” in the corner, “(f)” on the card, “(F)” everywhere
    * else in the app. Re-read on every expand and collapse ({@link paintKeys}).
@@ -1110,22 +1111,25 @@ export class StructurePanel implements DeckCell {
     // (§26.4). It is also a title that would change under a reader looking at a
     // dialog that does not repaint.
     const on = (flag: boolean): 'on' | 'off' => (flag ? 'on' : 'off')
-    // **A key only while the model is enlarged.** These are single letters, and
-    // the app's own are too: `f` folds the Files panel, `a` the Annotations
-    // panel. A structure cell sits *beside* a map, and its commands come first
-    // in the palette's list, so binding them there took those letters away from
-    // the panels for as long as a model was on screen. In the dialog the model
-    // is the whole window and there is nothing else the letter could mean, so
-    // that is where they are bound; the palette lists them either way, which is
-    // how they are reached from the cell.
+    // **A key only while the model is enlarged.** These are single keys, and
+    // the app's own are too: `1`, `2` and `3` — beads, sticks and tube here —
+    // fold the General, Annotations and Aesthetics panels. A structure cell
+    // sits *beside* a map, and its commands come first in the palette's list,
+    // so binding them there would take those keys from the panels for as long
+    // as a model was on screen (it took `f` and `a` from the two panels that
+    // had them, once). In the dialog the model is the whole window and there
+    // is nothing else the key could mean, so that is where they are bound; the
+    // palette lists them either way, which is how they are reached from the
+    // cell.
     //
     // **And the three modes have none at all** (§25.4): a bare letter that arms
     // a mode is a letter pressed by accident while the pointer happens to be
     // over the model, which is true in the dialog above all — the model is the
-    // whole window there. `e`, `o` and `m` also each belonged to something else
-    // (breaks, a new tab, the Aesthetics panel), so the shortcuts dialog
-    // printed two rows for one letter and the reader could not tell which it
-    // would do. They are pressed on the buttons, in the corner or on the card.
+    // whole window there. `e` and `o` also belong to something else (breaks, a
+    // new tab), as `m` did (the Aesthetics panel, then), so the shortcuts
+    // dialog printed two rows for one letter and the reader could not tell
+    // which it would do. They are pressed on the buttons, in the corner or on
+    // the card.
     const key = (binding: string): { keys?: string } => (this.expanded === null ? {} : { keys: binding })
     return [
       { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key(STRUCTURE_KEYS.frame), enabled: has, run: () => this.frameLit() },
