@@ -1,0 +1,29 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T22:58:56.680Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/2500000
+# task: reconstruct3d v1
+# framing: whole file at 2500000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param iterations: 150
+# param method: nb
+# param region: chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chrX
+# param weights: contacts
+# output: Model from the map · chr1, chr2, chr3, chr4, chr5, chr6, chr7, chr8, chr9, chr10, chr11, chr12, chr13, chr14, chr15, chr16, chr17, chr18, chr19, chrX
+# columns: Quantity, Value
+what	value
+Method	pastis-NB · negative binomial likelihood
+Contacts	read from the file, one bin to a bead
+Beads	1,014 of 1,063 cells, 2.5 Mb each
+Sequences	20
+Pairs counted	513,591 of 513,591
+Mean of a pair	μ = β · bᵢ · bⱼ · d^(−3)
+Counts	raw, with the file’s balancing weights folded into the mean as bᵢ = 1/wᵢ
+Zeros used as evidence	0 of the 513,591 pairs the map could see
+Overdispersion (r)	14 near the diagonal, 2.53 far from it — a smaller r is more overdispersed, and pulls its pairs less
+MDS start	60 SMACOF steps
+Likelihood steps	150 of 150, over 191 evaluations
+Stopped on	the step budget — raise it for a closer fit
+−log L (to within a constant)	-6.5394e+8
+Scale β	1.514e-3
+Spearman ρ (1/d vs contacts)	0.526

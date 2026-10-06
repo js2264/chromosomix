@@ -1,0 +1,39 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T22:59:06.055Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: structuremap v1
+# framing: whole file at 250000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: chr3
+# param structure: 4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d
+# output: Model distance by separation · chr3
+# x: Genomic separation (bp)  y: Mean distance (model units)
+# n chr3: 641
+Genomic separation (bp)	chr3
+250000	0.0910017
+500000	0.129316
+750000	0.165352
+1000000	0.194636
+1250000	0.218623
+1625000	0.249856
+2125000	0.28421
+2625000	0.310908
+3250000	0.344347
+4125000	0.393094
+5125000	0.434092
+6375000	0.471098
+8000000	0.524785
+10000000	0.578432
+12500000	0.611935
+15625000	0.620008
+19500000	0.666988
+24375000	0.736542
+30500000	0.826005
+38125000	0.962977
+47625000	1.0931
+59500000	1.29235
+74375000	1.59263
+93000000	1.95755
+116250000	2.41309
+143000000	2.9793

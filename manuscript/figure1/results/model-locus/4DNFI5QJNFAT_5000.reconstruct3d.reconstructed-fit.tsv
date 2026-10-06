@@ -1,0 +1,29 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T22:59:04.563Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/5000
+# task: reconstruct3d v1
+# framing: whole file at 5000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param iterations: 150
+# param method: nb
+# param region: chr3:34,200,001-35,200,000
+# param weights: contacts
+# output: Model from the map · chr3:34,200,001-35,200,000
+# columns: Quantity, Value
+what	value
+Method	pastis-NB · negative binomial likelihood
+Contacts	read from the file, one bin to a bead
+Beads	199 of 200 cells, 5 kb each
+Sequences	1
+Pairs counted	19,008 of 19,701
+Mean of a pair	μ = β · bᵢ · bⱼ · d^(−3)
+Counts	raw, with the file’s balancing weights folded into the mean as bᵢ = 1/wᵢ
+Zeros used as evidence	693 of the 19,701 pairs the map could see
+Overdispersion (r)	7.21 near the diagonal, 4.57 far from it — a smaller r is more overdispersed, and pulls its pairs less
+MDS start	60 SMACOF steps
+Likelihood steps	150 of 150, over 180 evaluations
+Stopped on	the step budget — raise it for a closer fit
+−log L (to within a constant)	-1.7548e+5
+Scale β	4.998e-3
+Spearman ρ (1/d vs contacts)	0.715

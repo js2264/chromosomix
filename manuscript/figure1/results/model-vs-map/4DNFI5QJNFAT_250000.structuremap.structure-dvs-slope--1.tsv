@@ -1,0 +1,36 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T22:59:06.055Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: structuremap v1
+# framing: whole file at 250000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: chr3
+# param structure: 4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d
+# output: Log-log slope of the model’s distance · chr3
+# x: Genomic separation (bp)  y: d log d / d log s
+Genomic separation (bp)	chr3
+500000	0.543593
+750000	0.589878
+1000000	0.546707
+1250000	0.514418
+1625000	0.494442
+2125000	0.455851
+2625000	0.451738
+3250000	0.518936
+4125000	0.508495
+5125000	0.415824
+6375000	0.426064
+8000000	0.455921
+10000000	0.344258
+12500000	0.155531
+15625000	0.193723
+19500000	0.387315
+24375000	0.478029
+30500000	0.599276
+38125000	0.628708
+47625000	0.660945
+59500000	0.844324
+74375000	0.929709
+93000000	0.930371
+116250000	0.976175

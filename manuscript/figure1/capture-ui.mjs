@@ -1,10 +1,13 @@
 /**
  * The UI shot behind Fig. 1a: the real app, driven in headless Chromium.
  *
- * The yeast micro-C demo at IV:1.0–1.4 Mb with its tracks. From the Analysis
- * column: Diamond insulation (its lane and borders join the map) and a model
- * from the map (pastis-NB, a cell of the deck). A 1D browser cell carries ATAC,
- * Pol II and the insulation lane; the model is coloured by the Pol II track.
+ * Mouse ES-cell Hi-C (4DN 4DNFI5QJNFAT, 1.07 billion contacts) at the Sox2 locus,
+ * chr3:34.2–35.2 Mb at 5 kb, with CTCF, H3K27ac and H3K4me3 ChIP-seq — the map and
+ * the three tracks read in place from 4DN's bucket, through the session's proxy
+ * (session/mouse_sox2.metacooler.json). From the Analysis column: Diamond
+ * insulation (its lane and borders join the map) and a model from the map
+ * (pastis-NB, a cell of the deck). A 1D browser cell carries CTCF, H3K27ac and the
+ * insulation lane; the model is coloured by H3K27ac.
  * General, Annotations and Aesthetics are folded to their strips so the deck
  * has the room. Shot at twice the CSS pixel density, to stay sharp at 100 mm.
  *
@@ -45,9 +48,16 @@ mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
 
+// The 4DN bucket is reached through the session's HTTPS proxy where there is one,
+// and only https goes there: the dev server is plain http on the loopback. The
+// proxy's CA is already in the system's NSS store.
+const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy
 const browser = await chromium.launch({
   ...(executablePath === undefined ? {} : { executablePath }),
-  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  args: [
+    '--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist',
+    ...(proxy ? [`--proxy-server=https=${proxy.replace(/^https?:\/\//, '')}`] : []),
+  ],
 })
 const context = await browser.newContext({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 2 })
 const page = await context.newPage()
@@ -84,9 +94,10 @@ const runTask = async (title, done) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
-  await page.waitForFunction(() => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null, null, { timeout: 180000 })
-  await sleep(3000)
+  await page.goto(`${BASE}/?config=${BASE}/manuscript/figure1/session/mouse_sox2.metacooler.json`)
+  await page.waitForFunction(() => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null, null, { timeout: 300000 })
+  await sleep(8000)
+  await shot('u00-opened')
 
   // Two tasks from the Analysis column, with the forms' defaults.
   await fold('Show the Analysis panel')
@@ -102,7 +113,7 @@ try {
   await fold('Show the Annotations panel')
   await sleep(600)
   const placed = await page.evaluate(() => {
-    const wanted = ['demo-atac', 'demo-pol2', 'insulation']
+    const wanted = ['mm-ctcf', 'mm-h3k27ac', 'insulation-w10']
     const out = []
     for (const row of document.querySelectorAll('.annotation-card .ann-row')) {
       const id = row.getAttribute('data-id') ?? ''
@@ -132,12 +143,12 @@ try {
   await fold('Show the Aesthetics panel')
   await sleep(600)
   const options = await page.evaluate(() => Array.from(document.querySelectorAll('.structure-settings select option')).map((o) => [o.value, o.textContent]))
-  const pol2 = options.find(([v, t]) => v.startsWith('track:') && /Pol/i.test(t))
-  if (pol2) {
+  const k27 = options.find(([v, t]) => v.startsWith('track:') && /H3K27ac/i.test(t))
+  if (k27) {
     const row = page.locator('.structure-settings .field').filter({ has: page.locator('.field-label', { hasText: /^colour by$/ }) }).first()
-    await row.locator('select').selectOption(pol2[0])
+    await row.locator('select').selectOption(k27[0])
     await sleep(3500)
-  } else console.log('no Pol II option', JSON.stringify(options.slice(0, 12)))
+  } else console.log('no H3K27ac option', JSON.stringify(options.slice(0, 12)))
   await fold('Fold the Aesthetics panel')
   await fold('Fold the General panel')
   await sleep(1500)

@@ -1,0 +1,13 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T22:59:06.055Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: structuremap v1
+# framing: whole file at 250000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: chr3
+# param structure: 4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d
+# output: Model versus map · 4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d
+# columns: Sequence, Bins modelled, Pairs compared, Spearman ρ (1/d vs contacts)
+sequence	bins	pairs	rho
+chr3	624	193757	0.943

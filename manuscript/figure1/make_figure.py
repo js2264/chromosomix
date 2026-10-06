@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-"""Fig. 1 (proposal): write figure1.svg from the yeast demo and run_analyses.sh's results.
+"""Fig. 1 (proposal): write figure1.svg from 4DN mouse data and run_analyses.sh's results.
 
     python manuscript/figure1/make_figure.py        # figure1.svg
     node manuscript/figure1/svg2pdf.mjs             # figure1.pdf and figure1.png
 
-Needs numpy, cooler, pyBigWig and Pillow. Everything drawn is either a file of
-demo/yeast/ or a result the app's command line wrote (results/, see
-run_analyses.sh); the one picture of the app itself is ui-session.png, which
-capture-ui.mjs shoots. The heatmaps are rasters, everything else —
-tracks, models, text, arrows — is vector.
+Needs numpy, cooler, pyBigWig and Pillow. Everything drawn is either an input
+run_analyses.sh fetched into build/mouse/ (the F123 mESC Hi-C map, three ChIP-seq
+tracks, mm10 genes; a few hundred bases of mm10 are read by byte range) or a
+result the app's command line wrote (results/); the one picture of the app
+itself is ui-session.png, which capture-ui.mjs shoots. The heatmaps are rasters,
+everything else — tracks, models, text, arrows — is vector.
 
 The page is 180 mm wide, in millimetres throughout (1 user unit = 1 mm), and
 type is set in points: Helvetica/Arial, 5–7 pt, panel letters 8 pt bold.
@@ -20,6 +21,7 @@ import base64
 import io
 import math
 import re
+import subprocess
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,12 +33,13 @@ from PIL import Image, ImageFont
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-DEMO = ROOT / "demo" / "yeast"
 RES = HERE / "results"
 BUILD = HERE / "build"
-COOL = DEMO / "Yeast_microC_G2M_1kb.cool"
-MCOOL = BUILD / "Yeast_microC_G2M.mcool"
+MOUSE = BUILD / "mouse"
+MAP = MOUSE / "4DNFI5QJNFAT.mcool"
 UI_SHOT = HERE / "ui-session.png"
+MM10_FA = "https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10/Sequence/WholeGenomeFasta/genome.fa"
+CHROMS = [f"chr{i}" for i in range(1, 20)] + ["chrX"]
 
 # --------------------------------------------------------------------------- style
 
@@ -55,9 +58,11 @@ C2D = "#D55E00"  # two: contact maps
 C3D = "#B5579A"  # three: models
 DIM = {"1D": C1D, "2D": C2D, "3D": C3D}
 
-ATAC = "#E69F00"
-POL2 = "#009E73"
-MNASE = "#56789A"
+CTCF = "#E69F00"
+K27AC = "#009E73"
+K4ME3 = "#56789A"
+COMP_A = "#C0504D"
+COMP_B = "#4F81BD"
 INSUL = C1D
 HILITE = "#FFE7A3"  # the window the next column zooms into
 LOOP = "#2E3A59"
@@ -212,9 +217,13 @@ def arrow_head(x, y, angle, size=0.9, fill=INK2) -> str:
     return path(f"M{f(x)},{f(y)} L{f(p1[0])},{f(p1[1])} L{f(p2[0])},{f(p2[1])} Z", fill=fill)
 
 
-def curve_arrow(x1, y1, x2, y2, stroke=INK2, sw=0.3, bend=0.5, head=0.9, dash=None, horizontal=True) -> str:
-    """A cubic from (x1, y1) to (x2, y2) that leaves and arrives horizontally, with a head."""
-    if horizontal:
+def curve_arrow(x1, y1, x2, y2, stroke=INK2, sw=0.3, bend=0.5, head=0.9, dash=None, horizontal=True,
+                controls=None) -> str:
+    """A cubic from (x1, y1) to (x2, y2) that leaves and arrives horizontally, with a head;
+    `controls` sets its two control points where that S would cut a corner."""
+    if controls is not None:
+        c1, c2 = controls
+    elif horizontal:
         dx = (x2 - x1) * bend
         c1, c2 = (x1 + dx, y1), (x2 - dx, y2)
     else:
@@ -340,18 +349,18 @@ def square(m: np.ndarray, vmin: float, vmax: float, scale: int, lut: np.ndarray,
 # --------------------------------------------------------------------------- data: tracks
 
 class Tracks:
+    FILES = {"ctcf": "4DNFIFFXFV82.bw", "h3k27ac": "4DNFIXE23VC7.bw", "h3k4me3": "4DNFIQYJLKKH.bw"}
+
     def __init__(self):
-        self.bw = {k: pyBigWig.open(str(DEMO / v)) for k, v in {
-            "atac": "Yeast_ATAC.bw", "pol2": "Yeast_ChIP_Pol2-vs-input.bw", "mnase": "Yeast_MNase.bw",
-            "rna+": "Yeast_RNA_fwd.bw", "rna-": "Yeast_RNA_rev.bw"}.items()}
-        self.bw["insulation"] = pyBigWig.open(str(next((RES / "insulation").glob("*.bw"))))
+        self.bw = {k: pyBigWig.open(str(MOUSE / v)) for k, v in self.FILES.items()}
+        self.bw["insulation"] = pyBigWig.open(str(next((RES / "insulation").glob("*insulation-w10.bw"))))
         self.bw["radial"] = pyBigWig.open(str(next((RES / "spatial").glob("*radial--1.bw"))))
+        self.bw["e1"] = pyBigWig.open(str(next((RES / "compartments").glob("*e1.bw"))))
 
     def bins(self, key: str, chrom: str, start: int, end: int, n: int) -> np.ndarray:
         b = self.bw[key]
         end = min(end, b.chroms(chrom))
-        v = np.array(b.stats(chrom, start, end, nBins=n, type="mean", exact=True), dtype=float)
-        return v
+        return np.array(b.stats(chrom, start, end, nBins=n, type="mean", exact=True), dtype=float)
 
     def genome(self, key: str, layout: list[tuple[str, int]], per_bp: float) -> np.ndarray:
         out = []
@@ -361,34 +370,46 @@ class Tracks:
         return np.concatenate(out)
 
 
-def load_genes() -> list[dict]:
-    genes = []
-    with open(DEMO / "Yeast_annotations.gtf") as fh:
+def load_genes(chrom: str) -> list[dict]:
+    """Genes of one sequence from the mm10 GTF, which holds exons and no gene rows: each
+    gene is the span of its transcripts, on its strand."""
+    spans: dict[str, list] = {}
+    with open(MOUSE / "genes.gtf") as fh:
         for line in fh:
-            if line.startswith("#"):
+            if not line.startswith(chrom + "\t"):
                 continue
             p = line.split("\t")
-            if len(p) < 9 or p[2] != "gene":
+            if p[2] != "exon":
                 continue
-            name = re.search(r'gene_name "([^"]+)"', p[8])
-            gid = re.search(r'gene_id "([^"]+)"', p[8])
-            genes.append({"chrom": p[0], "start": int(p[3]) - 1, "end": int(p[4]), "strand": p[6],
-                          "name": name.group(1) if name else (gid.group(1) if gid else "")})
-    return genes
+            name = re.search(r'gene_name "([^"]+)"', p[8]) or re.search(r'gene_id "([^"]+)"', p[8])
+            g = name.group(1)
+            a, b = int(p[3]) - 1, int(p[4])
+            if g in spans:
+                spans[g][0] = min(spans[g][0], a)
+                spans[g][1] = max(spans[g][1], b)
+            else:
+                spans[g] = [a, b, p[6]]
+    return [{"chrom": chrom, "start": a, "end": b, "strand": s, "name": g} for g, (a, b, s) in spans.items()]
 
 
-def load_sequence(chrom: str) -> str:
-    seq, take = [], False
-    with open(DEMO / "S288c_syn40-XIII.fa") as fh:
-        for line in fh:
-            if line.startswith(">"):
-                if take:
-                    break
-                take = line[1:].split()[0] == chrom
-                continue
-            if take:
-                seq.append(line.strip())
-    return "".join(seq).upper()
+def mm10(chrom: str, start: int, end: int) -> str:
+    """mm10 bases [start, end), read by byte range from the iGenomes FASTA through its index
+    (fetched by run_analyses.sh) and kept in build/mouse/ after the first read."""
+    cache = MOUSE / f"{chrom}_{start}_{end}.txt"
+    if cache.exists():
+        return cache.read_text()
+    fai = {l.split()[0]: l.split() for l in open(MOUSE / "genome.fa.fai")}
+    _, _, offset, per_line, line_bytes = fai[chrom][:5]
+    offset, per_line, line_bytes = int(offset), int(per_line), int(line_bytes)
+
+    def at(pos):
+        return offset + (pos // per_line) * line_bytes + pos % per_line
+
+    raw = subprocess.run(["curl", "-sS", "--fail", "-r", f"{at(start)}-{at(end)}", MM10_FA], capture_output=True,
+                         check=True).stdout.decode()
+    seq = raw.replace("\n", "")[: end - start].upper()
+    cache.write_text(seq)
+    return seq
 
 
 def load_bed(p: Path) -> list[tuple[str, int, int]]:
@@ -428,8 +449,8 @@ class Model:
     binsize: int
 
 
-def load_model() -> Model:
-    p = next((RES / "model").glob("*.bed3d"))
+def load_model(folder: str) -> Model:
+    p = next((RES / folder).glob("*.bed3d"))
     rows = [l.split() for l in open(p) if l.strip() and not l.startswith("#")]
     chrom = np.array([r[0] for r in rows])
     start = np.array([int(r[1]) for r in rows])
@@ -564,21 +585,30 @@ def polyline(x, y, w, h, v: np.ndarray, colour: str, lo: float, hi: float, sw=0.
 
 
 def genes_lane(x, y, w, h, genes, chrom, start, end, colour="#5b6169", names=None, name_size=4.6,
-               arrows=True) -> list[str]:
-    """Genes as boxes on two rows (+ above, − below); names for the ones listed."""
+               arrows=True, hero=None) -> list[str]:
+    """Genes as boxes on two rows (+ above, − below); names for the ones listed. A `hero` gene
+    is drawn dark over paler neighbours (Sox2 lies inside Sox2ot, on the same strand) and named
+    beside its box, in the other strand's row."""
     out = []
     span = end - start
     mid = y + h / 2
     out.append(line(x, mid, x + w, mid, stroke=RULE, sw=0.12))
+    if hero is not None:
+        genes = sorted(genes, key=lambda g: g["name"] == hero)
     for g in genes:
         if g["chrom"] != chrom or g["end"] <= start or g["start"] >= end:
             continue
+        is_hero = hero is not None and g["name"] == hero
+        colour_g = INK if is_hero else (mix(colour, "#ffffff", 0.45) if hero is not None else colour)
         a = x + (max(g["start"], start) - start) / span * w
         b = x + (min(g["end"], end) - start) / span * w
         plus = g["strand"] == "+"
         gy = mid - h * 0.42 if plus else mid + h * 0.06
         gh = h * 0.36
-        out.append(rect(a, gy, max(b - a, 0.12), gh, fill=colour))
+        out.append(rect(a, gy, max(b - a, 0.12), gh, fill=colour_g))
+        if is_hero:
+            hy = (mid + h * 0.42) if plus else (mid - h * 0.06)
+            out.append(text(b + 0.35, hy, g["name"], size=name_size, fill=INK, italic=True))
         if arrows and b - a > 1.6:
             # a white chevron saying which way it reads
             cxm, cym = (a + b) / 2, gy + gh / 2
@@ -627,7 +657,7 @@ def panel_a(x0, y0, w) -> list[str]:
     """The app itself: the real window, cropped to the deck, with numbered markers."""
     out = panel_letter(x0, y0 + 2.9, "a", "A Chromlens session in a browser tab")
     im = Image.open(UI_SHOT).convert("RGB")
-    crop_h = 1362
+    crop_h = 1300
     im = im.crop((0, 0, im.width, crop_h))
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
@@ -657,10 +687,10 @@ def panel_a(x0, y0, w) -> list[str]:
         return wx + px / im.width * ww, wy + bar + py / im.width * ww
 
     marks = [
-        (1, at(700, 146), "Files read in place, nothing uploaded"),
-        (2, at(1150, 216), "Only the region and resolution in view"),
-        (3, at(2080, 541), "A deck: 2D map, 3D model, 1D tracks"),
-        (4, at(2905, 298), "Over 30 analyses, in a background worker"),
+        (1, at(700, 146), "Read in place from 4DN, nothing uploaded"),
+        (2, at(1262, 218), "Only the view is read: 47 MB of a 7-GB map"),
+        (3, at(2080, 550), "A deck: 2D map, 3D model, 1D tracks"),
+        (4, at(2905, 305), "Over 30 analyses, in a background worker"),
         (5, at(2768, 140), "Each step logged as its command line"),
     ]
     for n, (mx, my), _ in marks:
@@ -807,18 +837,20 @@ def sequence_barcode(x, y, w, h, seq: str) -> list[str]:
 
 
 def panel_c(x0, y0, data) -> list[str]:
-    out = panel_letter(x0, y0 + 2.9, "c", "One session, from the whole genome to single bases")
-    cw, g = 32.2, 3.0
-    xs = [x0 + 7.0 + k * (cw + g) for k in range(5)]
+    out = panel_letter(x0, y0 + 2.9, "c", data["c_title"])
+    cols = data["cascade"]
+    n = len(cols)
+    g = 2.2
+    lab = 8.8
+    cw = (W - lab - (n - 1) * g) / n
+    xs = [x0 + lab + k * (cw + g) for k in range(n)]
     y_head = y0 + 4.3
-    y3, h3 = y0 + 10.3, 12.4
+    y3, h3 = y0 + 10.3, 14.4
     y2, h2 = y3 + h3 + 0.7, cw / 2
     y1 = y2 + h2 + 1.2
-    slots = [("annotation", 2.8), ("ATAC", 2.4), ("Pol II", 2.4), ("MNase", 2.4)]
+    slots = data["slots"]
     sgap = 0.5
 
-    cols = data["cascade"]
-    # row labels
     for label, sub, yy, hh in (("3D", "model", y3, h3), ("2D", "map", y2, h2)):
         out.append(text(x0, yy + hh / 2 + 0.2, label, size=7, weight="bold", fill=DIM[label]))
         out.append(text(x0, yy + hh / 2 + 2.3, sub, size=5, fill=INK3))
@@ -828,39 +860,32 @@ def panel_c(x0, y0, data) -> list[str]:
         x = xs[k]
         out.append(text(x, y_head + 2.0, col["title"], size=6, weight="bold", fill=INK))
         out.append(text(x, y_head + 4.4, col["sub"], size=5, fill=INK3))
-        if k < 4:
+        if k < n - 1:
             # the zoom into the next column, at this one's right edge
             zx = x + cw
             out.append(path(f"M{f(zx - 0.55)},{f(y_head + 0.55)} l0.55,0.65 l-0.55,0.65", stroke=INK2, sw=0.22,
                             extra='stroke-linecap="round" stroke-linejoin="round"'))
             out.append(text(zx - 1.1, y_head + 2.0, col["zoom"], size=5, weight="bold", fill=INK2, anchor="end"))
-        # ---- 3D
         if col.get("model3d") is not None:
             out.append(f'<clipPath id="c3d{k}"><rect x="{f(x)}" y="{f(y3)}" width="{f(cw)}" height="{f(h3)}"/></clipPath>')
             out.append(group(col["model3d"](x, y3, cw, h3), extra=f'clip-path="url(#c3d{k})"'))
-        # ---- 2D
         if col.get("tri") is not None:
             out.append(image(x, y2, cw, h2, col["tri"]))
             out += col.get("tri_overlay", lambda *a: [])(x, y2, cw, h2)
-        # ---- 1D
         yy = y1
-        for s, (name, hh) in enumerate(slots):
-            if s == 0:
+        for s, (name, key, colour, hh) in enumerate(slots):
+            if key is None:
                 out += col["annotation"](x, yy, cw, hh)
             else:
-                key = {"ATAC": "atac", "Pol II": "pol2", "MNase": "mnase"}[name]
-                colour = {"ATAC": ATAC, "Pol II": POL2, "MNase": MNASE}[name]
                 v = col["tracks"][key]
                 out.append(area(x, yy, cw, hh, v, colour, vmax=col["vmax"][key]))
                 out.append(line(x, yy + hh, x + cw, yy + hh, stroke=mix(colour, "#ffffff", 0.5), sw=0.1))
                 if k == 0:
-                    out.append(text(x0 + 6.6, yy + hh - 0.45, name, size=5, fill=colour, anchor="end"))
+                    out.append(text(x0 + lab - 0.5, yy + hh - 0.45, name, size=5, fill=colour, anchor="end"))
             yy += hh + sgap
-        # the next column's window, as a band over the tracks
         if col.get("next") is not None:
             a, b = col["next"]
             out.insert(0, rect(x + a * cw, y1 - 0.4, max((b - a) * cw, 0.25), yy - y1 + 0.2, fill=HILITE))
-        # the bp column's letters, in the room the 2D and 3D rows leave
         if col.get("letters") is not None:
             out += col["letters"](x, y3, cw, y2 + h2 - y3, y1)
     return out
@@ -936,21 +961,21 @@ def panel_d(x0, y0, data) -> list[str]:
     my = mid + 3.2
     out.append(image(mx, my - mh, mw, mh, data["d_map"]))
     out.append(line(mx, my, mx + mw, my, stroke=INK3, sw=0.12))
-    out.append(text(mx + mw / 2, my + 2.3, "yeast G2/M micro-C, 1 kb", size=5, fill=INK2, anchor="middle"))
-    out.append(text(mx + mw / 2, my + 4.3, "shown: IV:1.0\u20131.4 Mb", size=5, fill=INK3, anchor="middle"))
+    cap1, cap2 = data["d_map_caption"]
+    out.append(text(mx + mw / 2, my + 2.3, cap1, size=5, fill=INK2, anchor="middle"))
+    out.append(text(mx + mw / 2, my + 4.3, cap2, size=5, fill=INK3, anchor="middle"))
 
     pw1, pw2 = M1[1] - M1[0] - 3.2, M2[1] - M2[0] - 3.2
     px1, px2 = M1[0] + 1.6, M2[0] + 1.6
     # ---- lane A: 2D -> 1D -> (1D x 1D, 1D -> 2D)
     yA1 = laneA[0] + 7.3
-    p, hA1 = task_pill(px1, yA1, pw1, "Diamond insulation", ("2D", "1D"), "insulation --window 10")
+    P = data["d_pills"]
+    p, hA1 = task_pill(px1, yA1, pw1, *P["insulation"])
     out += p
     yA2a, yA2b = laneA[0] + 0.5, laneA[0] + 10.9
-    p, hA2a = task_pill(px2, yA2a, pw2, "Metaplot, correlation", ("1D", "1D"), "metaplot --features borders",
-                        with_=[("Pol II ChIP-seq", POL2), ("ATAC", ATAC)])
+    p, hA2a = task_pill(px2, yA2a, pw2, *P["metaplot"])
     out += p
-    p, hA2b = task_pill(px2, yA2b, pw2, "Domain pile-up", ("1D", "2D"), "apa --mode scaled",
-                        with_=[("the map", C2D)])
+    p, hA2b = task_pill(px2, yA2b, pw2, *P["pileup"])
     out += p
     out += data["d_borders"](S2[0] + 1.2, laneA[0] + 0.6, S2[1] - S2[0] - 2.4, laneA[1] - laneA[0] - 1.2)
     out += data["d_metaplot"](S3[0] + 1.4, yA2a, S3[1] - S3[0] - 1.4, hA2a)
@@ -958,12 +983,12 @@ def panel_d(x0, y0, data) -> list[str]:
 
     # ---- lane B: 2D -> 3D -> (3D -> 2D, 3D -> 1D), coloured 1D -> 3D
     yB1 = laneB[0] + 7.3
-    p, hB1 = task_pill(px1, yB1, pw1, "Model from the map", ("2D", "3D"), "reconstruct3d --method nb")
+    p, hB1 = task_pill(px1, yB1, pw1, *P["model"])
     out += p
     yB2a, yB2b = laneB[0] + 1.4, laneB[0] + 12.2
-    p, hB2a = task_pill(px2, yB2a, pw2, "Model versus map", ("3D", "2D"), "structuremap --region IV")
+    p, hB2a = task_pill(px2, yB2a, pw2, *P["versus"])
     out += p
-    p, hB2b = task_pill(px2, yB2b, pw2, "Spatial tracks", ("3D", "1D"), "spatialtracks")
+    p, hB2b = task_pill(px2, yB2b, pw2, *P["spatial"])
     out += p
     out += data["d_model"](S2[0] + 1.2, laneB[0] + 0.4, S2[1] - S2[0] - 2.4, laneB[1] - laneB[0] - 0.8)
     out += data["d_versus"](S3[0] + 1.4, yB2a - 1.4, S3[1] - S3[0] - 1.4, hB2a + 2.8)
@@ -972,8 +997,9 @@ def panel_d(x0, y0, data) -> list[str]:
     # ---- arrows: grey into a task (what is in view), coloured out of it (by what it returns)
     a_in = INK3
     cA1, cB1 = yA1 + hA1 / 2, yB1 + hB1 / 2
-    out.append(curve_arrow(mx + mw * 0.74, my - mh * 0.5, px1, cA1, stroke=a_in, sw=0.3))
-    out.append(curve_arrow(mx + mw * 0.74, my - mh * 0.3, px1, cB1, stroke=a_in, sw=0.3))
+    fx, fy = mx + mw * 0.75 + 0.25, my - mh * 0.5  # on the map's right flank: one map, two chains
+    out.append(curve_arrow(fx, fy, px1, cA1, stroke=a_in, sw=0.3))
+    out.append(curve_arrow(fx, fy, px1, cB1, stroke=a_in, sw=0.3, controls=((fx + 11.2, fy), (px1 - 2.6, cB1))))
     out.append(curve_arrow(px1 + pw1, cA1, S2[0] + 1.4, cA1, stroke=C1D, sw=0.42))
     out.append(curve_arrow(px1 + pw1, cB1, S2[0] + 1.4, cB1, stroke=C3D, sw=0.42))
     srcA, srcB = laneA[0] + 10.4, laneB[0] + 10.5
@@ -1000,49 +1026,64 @@ def panel_d(x0, y0, data) -> list[str]:
 # --------------------------------------------------------------------------- the data each panel draws
 
 def prepare() -> dict:
-    clr = cooler.Cooler(str(COOL))
     tracks = Tracks()
-    genes = load_genes()
-    seq_iv = load_sequence("IV")
-    model = load_model()
-    layout = [(c, int(n)) for c, n in clr.chromsizes.items()]
+    clr = {r: cooler.Cooler(f"{MAP}::/resolutions/{r}") for r in (1000, 5000, 10000, 25000, 250000, 2500000)}
+    sizes = clr[10000].chromsizes
+    layout = [(c, int(sizes[c])) for c in CHROMS]
     total = sum(n for _, n in layout)
-    iv_len = dict(layout)["IV"]
-    cen = {}
-    for line_ in open(DEMO / "Yeast_cytobands.txt"):
-        if line_.startswith("#") or not line_.strip():
-            continue
-        p = line_.rstrip("\n").split("\t")
-        if len(p) >= 5 and p[4] == "acen":
-            cen[p[0]] = (cen[p[0]] + int(p[2])) / 2 if p[0] in cen else int(p[1])
-    loops = load_bedpe(next((RES / "loops").glob("*.bedpe")))
-    domains = load_bed(next((RES / "insulation").glob("*domains.bed")))
-    borders = load_bed(next((RES / "insulation").glob("*boundaries.bed")))
+    chr3_len = dict(layout)["chr3"]
+    genes3 = load_genes("chr3")
 
-    # ---- the four maps of the cascade, and the window each column hands the next
-    windows = [None, ("IV", 0, iv_len), ("IV", 1_000_000, 1_400_000), ("IV", 1_250_000, 1_290_000),
-               ("IV", 1_267_150, 1_267_650)]
-    print("maps: genome")
-    m_genome, glayout = coarse_genome(clr, 32_000)
-    print("maps: IV, locus, gene")
-    m_iv = region_matrix(clr, "IV", 4)
-    m_locus = region_matrix(clr, "IV:1000001-1400000")
-    m_gene = region_matrix(clr, "IV:1250001-1290000")
+    # the cascade's windows, and what each hands the next
+    W_REGION = ("chr3", 30_000_000, 40_000_000)
+    W_LOCUS = ("chr3", 34_200_000, 35_200_000)
+    W_GENE = ("chr3", 34_600_000, 34_800_000)
+    ATG = 34_650_415  # Sox2's start codon, 0-based (mm10 chr3:34,650,416)
+    W_BP = ("chr3", ATG - 220, ATG + 280)
+
+    # ---- maps
+    print("maps")
+    g = clr[2500000]
+    gbins = g.bins()[:]
+    keep = gbins["chrom"].astype(str).isin(CHROMS).to_numpy()
+    m_genome = g.matrix(balance=True)[:][np.ix_(keep, keep)]
+    m_chr3 = clr[250000].matrix(balance=True).fetch("chr3")
+    m_region = clr[25000].matrix(balance=True).fetch("chr3:30000001-40000000")
+    m_locus = clr[5000].matrix(balance=True).fetch("chr3:34200001-35200000")
+    m_gene = clr[1000].matrix(balance=True).fetch("chr3:34600001-34800000")
 
     def tri_png(m, width_px=1000, depth=None, lut=LUT):
         lo, hi = auto_range(m)
         return png_bytes(triangle(m, lo, hi, width_px, depth, lut))
 
-    tri = [tri_png(m_genome), tri_png(m_iv), tri_png(m_locus), tri_png(m_gene, 960)]
+    # the genome on the scale of its trans contacts, so the plaid between chromosomes shows and
+    # the chromosomes themselves saturate — the clip a reader sets for a whole-genome view
+    gchrom = gbins["chrom"].astype(str).to_numpy()[keep]
+    trans = (gchrom[:, None] != gchrom[None, :]) & np.isfinite(m_genome) & (m_genome > 0)
+    lt = np.log10(m_genome[trans])
+    tri_genome = png_bytes(triangle(m_genome, float(np.percentile(lt, 5)), float(np.percentile(lt, 99.9)), 1600))
+
+    def smooth3(m):
+        # the app's fixed 3 x 3 setting: each cell the mean of its neighbourhood, itself included
+        pad = np.pad(m, 1, constant_values=np.nan)
+        stack = np.stack([pad[i:i + m.shape[0], j:j + m.shape[1]] for i in range(3) for j in range(3)])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return np.nanmean(stack, axis=0)
+
+    tri = [tri_genome, tri_png(m_chr3, 1000), tri_png(m_region, 1000), tri_png(m_locus, 1000),
+           tri_png(smooth3(m_gene), 1000)]
 
     offsets, pos = {}, 0
     for c, n in layout:
         offsets[c] = pos
         pos += n
-    iv_frac = (offsets["IV"] / total, (offsets["IV"] + iv_len) / total)
+    chr3_frac = (offsets["chr3"] / total, (offsets["chr3"] + chr3_len) / total)
+
+    def frac(win, inside):
+        return ((win[1] - inside[1]) / (inside[2] - inside[1]), (win[2] - inside[1]) / (inside[2] - inside[1]))
 
     def outline(a, b, x, y, w, h, colour=INK, sw=0.22):
-        # a sub-window's own triangle on the base of a full one
         xa, xb = x + a * w, x + b * w
         apex = y + h - (b - a) * w / 2
         return path(f"M{f(xa)},{f(y + h)} L{f((xa + xb) / 2)},{f(apex)} L{f(xb)},{f(y + h)}",
@@ -1052,95 +1093,132 @@ def prepare() -> dict:
         out = []
         for c, n in layout[1:]:
             a = offsets[c] / total
-            # chromosome edges, as the two 45° lines from the base
-            xa = x + a * w
-            out.append(path(f"M{f(xa)},{f(y + h)} L{f(xa - min(a, 1 - a) * w)},{f(y + h - min(a, 1 - a) * w)}",
-                            stroke="#ffffff", sw=0.08, opacity=0.8))
-            out.append(path(f"M{f(xa)},{f(y + h)} L{f(xa + min(a, 1 - a) * w)},{f(y + h - min(a, 1 - a) * w)}",
-                            stroke="#ffffff", sw=0.08, opacity=0.8))
-        out.append(outline(*iv_frac, x, y, w, h))
+            xa, d = x + a * w, min(a, 1 - a) * w
+            out.append(path(f"M{f(xa)},{f(y + h)} L{f(xa - d)},{f(y + h - d)}", stroke="#ffffff", sw=0.08, opacity=0.8))
+            out.append(path(f"M{f(xa)},{f(y + h)} L{f(xa + d)},{f(y + h - d)}", stroke="#ffffff", sw=0.08, opacity=0.8))
+        out.append(outline(*chr3_frac, x, y, w, h))
         return out
 
-    def ov_iv(x, y, w, h):
-        return [outline(1_000_000 / iv_len, 1_400_000 / iv_len, x, y, w, h)]
+    loops = [l for l in load_bedpe(next((RES / "loops").glob("*.bedpe")))]
+
+    def ov_chr3(x, y, w, h):
+        return [outline(*frac(W_REGION, ("chr3", 0, chr3_len)), x, y, w, h)]
+
+    def ov_region(x, y, w, h):
+        return [outline(*frac(W_LOCUS, W_REGION), x, y, w, h)]
 
     def ov_locus(x, y, w, h):
         out = []
-        s0, s1 = 1_000_000, 1_400_000
+        s0, s1 = W_LOCUS[1], W_LOCUS[2]
         for c1, a1, b1, c2, a2, b2 in loops:
-            if c1 != "IV" or a1 < s0 or b2 > s1:
+            if c1 != "chr3" or a1 < s0 or b2 > s1:
                 continue
             u, v = ((a1 + b1) / 2 - s0) / (s1 - s0), ((a2 + b2) / 2 - s0) / (s1 - s0)
-            out.append(circle(x + (u + v) / 2 * w, y + h - (v - u) / 2 * w, 0.36, stroke=LOOP, sw=0.1, opacity=0.85))
-        out.append(outline(0.625, 0.725, x, y, w, h))
+            out.append(circle(x + (u + v) / 2 * w, y + h - (v - u) / 2 * w, 0.42, stroke=LOOP, sw=0.11, opacity=0.9))
+        out.append(outline(*frac(W_GENE, W_LOCUS), x, y, w, h))
         return out
+
+    SCR = 34_760_000
 
     def ov_gene(x, y, w, h):
-        a = (1_267_471 - 1_250_000) / 40_000
-        return [path(f"M{f(x + a * w)},{f(y + h + 0.05)} l-0.55,0.75 h1.1 Z", fill=INK)]
-
-    # ---- tracks under each column
-    def col_tracks(kind, win, n):
-        out = {}
-        for key in ("atac", "pol2", "mnase"):
-            if kind == "genome":
-                out[key] = tracks.genome(key, layout, n / total)
-            else:
-                out[key] = tracks.bins(key, win[0], win[1], win[2], n)
+        out = []
+        for p_, lab in ((ATG, "Sox2"), (SCR, "SCR")):
+            a = (p_ - W_GENE[1]) / (W_GENE[2] - W_GENE[1])
+            out.append(path(f"M{f(x + a * w)},{f(y + h + 0.05)} l-0.55,0.75 h1.1 Z", fill=INK))
+        # where the Sox2 promoter meets its enhancer on the map: a place, not a call
+        u, v = (ATG - W_GENE[1]) / 200_000, (SCR - W_GENE[1]) / 200_000
+        cx_, cy_ = x + (u + v) / 2 * w, y + h - (v - u) / 2 * w
+        out.append(path(f"M{f(cx_ - 1.05)},{f(cy_)} a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0", stroke=INK,
+                        sw=0.16, extra='stroke-dasharray="0.45 0.35"'))
+        out.append(text(cx_ + 1.5, cy_ - 0.9, "Sox2\u2013SCR", size=5, fill=INK, halo="#ffffff"))
         return out
 
-    tr = [col_tracks("genome", None, 160), col_tracks("r", windows[1], 160), col_tracks("r", windows[2], 200),
-          col_tracks("r", windows[3], 200), col_tracks("r", windows[4], 250)]
+    # ---- tracks under each column
+    keys = ("ctcf", "h3k27ac", "h3k4me3")
+
+    def col_tracks(win, n):
+        if win is None:
+            return {k: tracks.genome(k, layout, n / total) for k in keys}
+        return {k: tracks.bins(k, win[0], win[1], win[2], n) for k in keys}
+
+    tr = [col_tracks(None, 200), col_tracks(("chr3", 0, chr3_len), 200), col_tracks(W_REGION, 200),
+          col_tracks(W_LOCUS, 200), col_tracks(W_GENE, 200), col_tracks(W_BP, 250)]
 
     def vmax_of(t):
         return {k: float(np.nanpercentile(v, 99.5)) if np.isfinite(v).any() else 1.0 for k, v in t.items()}
 
     # ---- annotation lanes
     def ann_genome(x, y, w, h):
-        out = karyotype(x, y + h * 0.1, w, h * 0.8, layout, total, "IV", cen)
-        a, b = iv_frac
-        out.append(text(x + (a + 0.66 * (b - a)) * w, y + h * 0.5 + 0.62, "IV", size=5, weight="bold",
-                        fill="#ffffff", anchor="middle"))
+        out = []
+        for i, (c, n) in enumerate(layout):
+            a, b = x + offsets[c] / total * w, x + (offsets[c] + n) / total * w
+            colour = "#7d848d" if c == "chr3" else ("#c3c8cf" if i % 2 else "#d6dae0")
+            out.append(rect(a + 0.06, y + h * 0.1, max(b - a - 0.12, 0.1), h * 0.8, fill=colour, rx=h * 0.4))
+        a, b = chr3_frac
+        out.append(text(x + (a + b) / 2 * w, y + h * 0.5 + 0.62, "3", size=5, weight="bold", fill="#ffffff",
+                        anchor="middle"))
         return out
 
-    def ann_iv(x, y, w, h):
-        return ideogram(x, y + h * 0.18, w, h * 0.64, iv_len, cen["IV"])
+    e1 = tracks.bins("e1", "chr3", 0, chr3_len, 320)
+
+    def ann_chr3(x, y, w, h):
+        # chromosome 3's compartments, as the app called them: E1 above the line is A, below it B
+        v = np.nan_to_num(e1)
+        top = float(np.nanpercentile(np.abs(e1), 98)) or 1.0
+        mid = y + h / 2
+        out = [line(x, mid, x + w, mid, stroke=RULE, sw=0.1)]
+        step = w / len(v)
+        for sign, colour in ((1, COMP_A), (-1, COMP_B)):
+            d = []
+            for i, val in enumerate(v):
+                if val * sign > 0:
+                    hh = min(abs(val) / top, 1) * h / 2
+                    d.append(f"M{f(x + i * step)},{f(mid)} h{f(step)} v{f(-sign * hh)} h{f(-step)} Z")
+            out.append(path(" ".join(d), fill=colour))
+        out.append(text(x + w + 0.3, y + 1.3, "A", size=5, weight="bold", fill=COMP_A))
+        out.append(text(x + w + 0.3, y + h + 0.2, "B", size=5, weight="bold", fill=COMP_B))
+        return out
+
+    def ann_region(x, y, w, h):
+        return genes_lane(x, y, w, h, genes3, "chr3", W_REGION[1], W_REGION[2], arrows=False)
 
     def ann_locus(x, y, w, h):
-        return genes_lane(x, y, w, h, genes, "IV", 1_000_000, 1_400_000, arrows=False)
+        return genes_lane(x, y, w, h, genes3, "chr3", W_LOCUS[1], W_LOCUS[2], arrows=False)
 
     def ann_gene(x, y, w, h):
-        return genes_lane(x, y, w, h, genes, "IV", 1_250_000, 1_290_000)
+        out = genes_lane(x, y, w, h, genes3, "chr3", W_GENE[1], W_GENE[2], hero="Sox2")
+        a = (SCR - W_GENE[1]) / (W_GENE[2] - W_GENE[1])
+        out.append(text(x + a * w, y + h / 2 + h * 0.42, "SCR", size=4.6, fill=INK, anchor="middle"))
+        return out
 
-    seq_win = seq_iv[1_267_150:1_267_650]
+    seq_win = mm10("chr3", W_BP[1], W_BP[2])
 
     def ann_bp(x, y, w, h):
         out = sequence_barcode(x, y + 0.1, w, h * 0.5, seq_win)
-        a = (1_267_470 - 1_267_150) / 500 * w
+        a = (ATG - W_BP[1]) / (W_BP[2] - W_BP[1]) * w
         gy = y + h * 0.78
         out.append(line(x + a, gy, x + w, gy, stroke="#5b6169", sw=0.55))
         out.append(path(f"M{f(x + w - 0.1)},{f(gy)} l-0.9,-0.6 v1.2 Z", fill="#5b6169"))
-        out.append(text(x + a - 0.6, gy + 0.62, "UTP5", size=5, fill=INK2, anchor="end", italic=True))
+        out.append(text(x + a - 0.6, gy + 0.62, "Sox2", size=5, fill=INK2, anchor="end", italic=True))
         return out
 
-    # the bases themselves, magnified, where the 2D and 3D rows have stopped
-    letters_start = 1_267_470 - 9
-    letters = seq_iv[letters_start:letters_start + 27]
+    letters_start = ATG - 6
+    letters = mm10("chr3", letters_start, letters_start + 21)
+    codon_table = {"ATG": "M", "TAT": "Y", "AAC": "N", "GAG": "E", "ACG": "T", "CTG": "L", "AAG": "K",
+                   "CCG": "P"}
 
     def letters_box(x, y, w, h, y_1d):
         out = []
         size = 5.2
-        cwid = tw("A", size, bold=True, mono=True) * 1.04
+        cwid = tw("A", size, bold=True, mono=True) * 1.0
         n = len(letters)
-        bw = n * cwid + 1.6
+        bw = n * cwid + 1.4
         bx = x + (w - bw) / 2
-        by = y + h - 13.6
-        bh = 12.2
-        # each dimension stops at its own finest unit
-        lx, ly = x + 4.0, y + 2.4
+        by = y + h - 13.4
+        bh = 12.0
+        lx, ly = x + 3.0, y + 2.4
         out.append(text(lx - 1.4, ly, "finest unit drawn", size=5, fill=INK3))
-        rows_ = [("3D", "bead", "5 kb"), ("2D", "bin", "1 kb"), ("1D", "base", "1 bp")]
-        for r_, (dim_, unit_, size_) in enumerate(rows_):
+        for r_, (dim_, unit_, size_) in enumerate([("3D", "bead", "5 kb"), ("2D", "bin", "1 kb"), ("1D", "base", "1 bp")]):
             yy_ = ly + 2.5 + r_ * 2.35
             if dim_ == "3D":
                 out.append(circle(lx, yy_ - 0.6, 0.75, fill=C3D))
@@ -1148,204 +1226,235 @@ def prepare() -> dict:
                 out.append(rect(lx - 0.7, yy_ - 1.3, 1.4, 1.4, fill=C2D))
             else:
                 out.append(text(lx, yy_, "A", size=5.2, weight="bold", mono=True, fill=BASES["A"], anchor="middle"))
-            out.append(text(lx + 1.6, yy_, f"{dim_}", size=5, weight="bold", fill=DIM[dim_]))
+            out.append(text(lx + 1.6, yy_, dim_, size=5, weight="bold", fill=DIM[dim_]))
             out.append(text(lx + 1.6 + tw("3D ", 5, bold=True), yy_, f"one {unit_}: {size_}", size=5, fill=INK2))
         out.append(rect(bx, by, bw, bh, fill="#ffffff", stroke="#c9ced5", sw=0.18, rx=0.9))
-        # where these bases are in the barcode below
-        sa = x + (letters_start - 1_267_150) / 500 * w
-        sb = x + (letters_start + n - 1_267_150) / 500 * w
+        sa = x + (letters_start - W_BP[1]) / (W_BP[2] - W_BP[1]) * w
+        sb = x + (letters_start + n - W_BP[1]) / (W_BP[2] - W_BP[1]) * w
         out.append(line(bx, by + bh, sa, y_1d + 0.1, stroke=INK3, sw=0.12, dash="0.5 0.4"))
         out.append(line(bx + bw, by + bh, sb, y_1d + 0.1, stroke=INK3, sw=0.12, dash="0.5 0.4"))
         ty = by + 4.3
         for i, ch in enumerate(letters):
-            out.append(text(bx + 0.8 + (i + 0.5) * cwid, ty, ch, size=size, fill=BASES.get(ch, INK3), weight="bold",
+            out.append(text(bx + 0.7 + (i + 0.5) * cwid, ty, ch, size=size, fill=BASES.get(ch, INK3), weight="bold",
                             mono=True, anchor="middle"))
-        # the start codon and the reading frame from it
-        k0 = 9
-        out.append(rect(bx + 0.8 + k0 * cwid - 0.1, ty - 2.3, 3 * cwid + 0.2, 3.0, stroke=INK, sw=0.18, rx=0.4))
-        codon = {"ATG": "M", "GAT": "D", "TCT": "S", "CCT": "P", "GTT": "V", "CTA": "L"}
-        for c in range(6):
+        k0 = 6
+        out.append(rect(bx + 0.7 + k0 * cwid - 0.1, ty - 2.3, 3 * cwid + 0.2, 3.0, stroke=INK, sw=0.18, rx=0.4))
+        for c in range(5):
             cod = letters[k0 + 3 * c:k0 + 3 * c + 3]
-            aa = codon.get(cod, "")
-            cxm = bx + 0.8 + (k0 + 3 * c + 1.5) * cwid
+            cxm = bx + 0.7 + (k0 + 3 * c + 1.5) * cwid
             out.append(rect(cxm - 1.5 * cwid + 0.12, ty + 1.0, 3 * cwid - 0.24, 2.2, fill="#eef0f3", rx=0.3))
-            out.append(text(cxm, ty + 2.65, aa, size=5, fill=INK, anchor="middle", weight="bold"))
-        out.append(text(bx + 0.9, by + bh - 0.9, "IV:1,267,462", size=5, fill=INK3, mono=False))
-        out.append(text(bx + bw - 0.9, by + bh - 0.9, "UTP5 start", size=5, fill=INK2, anchor="end", italic=True))
+            out.append(text(cxm, ty + 2.65, codon_table.get(cod, "?"), size=5, fill=INK, anchor="middle", weight="bold"))
+        out.append(text(bx + 0.8, by + bh - 0.9, f"chr3:{letters_start + 1:,}", size=5, fill=INK3))
+        out.append(text(bx + bw - 0.8, by + bh - 0.9, "Sox2 start", size=5, fill=INK2, anchor="end", italic=True))
         return out
 
-    # ---- the model: one projection for every column, zoomed onto the window
-    R = rotation(model.xyz, yaw=0.35, pitch=-0.55, roll=0.15)
-    P_all = (model.xyz - model.xyz.mean(0)) @ R.T
-    iv = model.chrom == "IV"
-    in_locus = iv & (model.start >= 1_000_000) & (model.start < 1_400_000)
-    in_gene = iv & (model.start >= 1_250_000) & (model.start < 1_290_000)
-    pol2_bead = np.array(tracks.bins("pol2", "IV", 0, iv_len, -(-iv_len // model.binsize)), float)
-    pol2_all = {}
-    for c, n in layout:
-        pol2_all[c] = np.array(tracks.bins("pol2", c, 0, n, -(-n // model.binsize)), float)
-    bead_pol2 = np.array([pol2_all[c][s // model.binsize] if s // model.binsize < len(pol2_all[c]) else np.nan
-                          for c, s in zip(model.chrom, model.start)])
-    lo_p, hi_p = np.nanpercentile(bead_pol2, 5), np.nanpercentile(bead_pol2, 97)
+    # ---- the models: one per scale, each inferred from the map at that scale's resolution
+    print("models")
+    models = {k: load_model(f"model-{k}") for k in ("genome", "chr3", "region", "locus")}
 
-    def pol2_colour(i):
-        v = bead_pol2[i]
-        if not np.isfinite(v):
-            return "#bfc4cb"
-        return lut_hex(LUT_VIRIDIS, (v - lo_p) / (hi_p - lo_p))
+    def bead_track(model, key):
+        vals = []
+        for c, s in zip(model.chrom, model.start):
+            vals.append(tracks.bw[key].stats(c, int(s), int(min(s + model.binsize, sizes[c])), type="mean")[0])
+        return np.array([np.nan if v is None else v for v in vals], float)
 
-    centre = model.xyz.mean(0)
+    k27_region = bead_track(models["region"], "h3k27ac")
+    k27_locus = bead_track(models["locus"], "h3k27ac")
+    k27_chr3 = bead_track(models["chr3"], "h3k27ac")
 
-    def fit(keep, x, y, w, h, pad=0.9):
-        P = P_all[keep]
-        lo, hi = P[:, :2].min(0), P[:, :2].max(0)
-        s = min(w * pad / (hi[0] - lo[0]), h * pad / (hi[1] - lo[1]))
-        mid = (lo + hi) / 2
-        return s, x + w / 2 - mid[0] * s, y + h / 2 + mid[1] * s
+    def viridis_of(values):
+        lo, hi = np.nanpercentile(values, 5), np.nanpercentile(values, 97)
 
-    everything = np.ones(len(model.chrom), bool)
-    zr = (float(P_all[:, 2].min()), float(P_all[:, 2].max()))
+        def colour(i):
+            v = values[i]
+            return "#bfc4cb" if not np.isfinite(v) else lut_hex(LUT_VIRIDIS, (v - lo) / (hi - lo))
+
+        return colour
+
+    def projector(model, yaw=0.35, pitch=-0.55, roll=0.15):
+        R = rotation(model.xyz, yaw=yaw, pitch=pitch, roll=roll)
+        centre = model.xyz.mean(0)
+        P = (model.xyz - centre) @ R.T
+        zr = (float(P[:, 2].min()), float(P[:, 2].max()))
+
+        def fit(keep, x, y, w, h, pad=0.9):
+            Q = P[keep]
+            lo, hi = Q[:, :2].min(0), Q[:, :2].max(0)
+            s = min(w * pad / (hi[0] - lo[0]), h * pad / (hi[1] - lo[1]))
+            mid = (lo + hi) / 2
+            return s, x + w / 2 - mid[0] * s, y + h / 2 + mid[1] * s
+
+        return R, centre, P, zr, fit
+
+    mg = models["genome"]
+    Rg, cg, Pg, zg, fitg = projector(mg)
+    is3 = mg.chrom == "chr3"
 
     def m3d_genome(x, y, w, h):
-        s, cx, cy = fit(everything, x, y, w, h, 0.94)
-        grey = draw_model(model, R, centre, s, cx, cy, lambda i: "#c3c8cf", 0.22, ~iv, depth_range=zr, fog=0.45)
-        hi_ = draw_model(model, R, centre, s, cx, cy, lambda i: C3D, 0.36, iv, depth_range=zr, fog=0.25)
-        return [grey, hi_]
+        s, cx, cy = fitg(np.ones(len(mg.chrom), bool), x, y, w, h, 0.94)
+        return [draw_model(mg, Rg, cg, s, cx, cy, lambda i: "#c3c8cf", 0.2, ~is3, depth_range=zg, fog=0.45),
+                draw_model(mg, Rg, cg, s, cx, cy, lambda i: C3D, 0.34, is3, depth_range=zg, fog=0.25)]
 
-    def m3d_iv(x, y, w, h):
-        s, cx, cy = fit(iv, x, y, w, h, 0.92)
-        ghost = draw_model(model, R, centre, s, cx, cy, lambda i: "#e6e9ed", 0.2, ~iv, depth_range=zr, fog=0.0)
-        body = draw_model(model, R, centre, s, cx, cy, lambda i: C3D if in_locus[i] else "#8d949d", 0.42, iv,
-                          depth_range=zr, fog=0.3)
-        return [ghost, body]
+    mc = models["chr3"]
+    Rc, cc, Pc, zc, fitc = projector(mc)
+    in_region = (mc.start >= W_REGION[1]) & (mc.start < W_REGION[2])
 
-    def m3d_locus(x, y, w, h):
-        s, cx, cy = fit(in_locus, x - 2.0, y, w, h, 0.92)
-        ghost = draw_model(model, R, centre, s, cx, cy, lambda i: "#e6e9ed", 0.3, ~in_locus, depth_range=zr, fog=0.0,
-                           halo_w=0.0)
-        body = draw_model(model, R, centre, s, cx, cy, pol2_colour, 0.6, in_locus, depth_range=zr, fog=0.2, run=3)
-        out = [ghost, body]
-        # its colour key, standing at the right edge
-        kx, ky, kh = x + w - 1.2, y + 1.2, 6.0
+    def m3d_chr3(x, y, w, h):
+        s, cx, cy = fitc(np.ones(len(mc.chrom), bool), x, y, w, h, 0.94)
+        return [draw_model(mc, Rc, cc, s, cx, cy, lambda i: C3D if in_region[i] else "#8d949d", 0.34,
+                           np.ones(len(mc.chrom), bool), depth_range=zc, fog=0.3)]
+
+    mr = models["region"]
+    Rr, cr, Pr, zr_, fitr = projector(mr)
+    col_region = viridis_of(k27_region)
+
+    def m3d_region(x, y, w, h):
+        s, cx, cy = fitr(np.ones(len(mr.chrom), bool), x - 1.5, y, w, h, 0.92)
+        out = [draw_model(mr, Rr, cr, s, cx, cy, col_region, 0.4, np.ones(len(mr.chrom), bool), depth_range=zr_,
+                          fog=0.25, run=3)]
+        kx, kh = x + w - 1.2, 6.0
+        ky = y + h - kh - 0.3  # the lower right corner, which the model leaves free
         for t in np.linspace(0, 1, 24):
             out.append(rect(kx, ky + (1 - t) * kh - kh / 24, 0.9, kh / 24 + 0.02, fill=lut_hex(LUT_VIRIDIS, t)))
-        out.append(text(kx - 0.5, ky + kh - 0.1, "Pol II", size=5, fill=INK2, anchor="end"))
+        out.append(text(kx - 0.5, ky + kh - 0.1, "H3K27ac", size=5, fill=INK2, anchor="end"))
         return out
+
+    ml = models["locus"]
+    Rl, cl, Pl, zl, fitl = projector(ml)
+    col_locus = viridis_of(k27_locus)
+    in_gene = (ml.start >= W_GENE[1]) & (ml.start < W_GENE[2])
+
+    def m3d_locus(x, y, w, h):
+        s, cx, cy = fitl(np.ones(len(ml.chrom), bool), x, y, w, h, 0.92)
+        return [draw_model(ml, Rl, cl, s, cx, cy, col_locus, 0.55, np.ones(len(ml.chrom), bool), depth_range=zl,
+                           fog=0.2, run=3)]
 
     def m3d_gene(x, y, w, h):
-        s, cx, cy = fit(in_gene, x, y, w, h, 0.62)
-        ghost = draw_model(model, R, centre, s, cx, cy, lambda i: "#e6e9ed", 0.5, in_locus & ~in_gene,
-                           depth_range=zr, fog=0.0)
-        out = [ghost]
+        s, cx, cy = fitl(in_gene, x, y, w, h, 0.8)
+        out = [draw_model(ml, Rl, cl, s, cx, cy, lambda i: "#e6e9ed", 0.45, ~in_gene, depth_range=zl, fog=0.0,
+                          halo_w=0.0)]
         idx = np.flatnonzero(in_gene)
-        P = P_all[idx]
+        P = Pl[idx]
         pts = [(cx + p[0] * s, cy - p[1] * s) for p in P]
-        out.append(path("M" + " L".join(f"{f(a)},{f(b)}" for a, b in pts), stroke="#9aa1aa", sw=0.25))
-        order = np.argsort(P[:, 2])
-        r = 1.15
-        for o in order:
+        out.append(path("M" + " L".join(f"{f(a)},{f(b)}" for a, b in pts), stroke="#9aa1aa", sw=0.22))
+        r = 0.62
+        for o in np.argsort(P[:, 2]):
             (a, b), i = pts[o], idx[o]
-            colour = pol2_colour(i)
-            out.append(circle(a, b, r, fill=colour, stroke="#ffffff", sw=0.18))
-            out.append(circle(a - r * 0.32, b - r * 0.32, r * 0.32, fill="#ffffff", opacity=0.35))
+            out.append(circle(a, b, r, fill=col_locus(i), stroke="#ffffff", sw=0.14))
+            out.append(circle(a - r * 0.32, b - r * 0.32, r * 0.3, fill="#ffffff", opacity=0.35))
         return out
 
+    def zoom(a, b):
+        z = (a[2] - a[1]) / (b[2] - b[1])
+        return f"×{z:.0f}"
+
     cascade = [
-        dict(title="Genome", sub="12.1 Mb · 32-kb bins", zoom="×8", tri=tri[0], tri_overlay=ov_genome,
-             model3d=m3d_genome, annotation=ann_genome, tracks=tr[0], vmax=vmax_of(tr[0]), next=iv_frac),
-        dict(title="Chromosome IV", sub="1.53 Mb · 4-kb bins", zoom="×4", tri=tri[1], tri_overlay=ov_iv,
-             model3d=m3d_iv, annotation=ann_iv, tracks=tr[1], vmax=vmax_of(tr[1]),
-             next=(1_000_000 / iv_len, 1_400_000 / iv_len)),
-        dict(title="Locus", sub="400 kb · 1-kb bins · loops", zoom="×10", tri=tri[2], tri_overlay=ov_locus,
-             model3d=m3d_locus, annotation=ann_locus, tracks=tr[2], vmax=vmax_of(tr[2]), next=(0.625, 0.725)),
-        dict(title="Gene", sub="40 kb · 1-kb bins, 5-kb beads", zoom="×80", tri=tri[3], tri_overlay=ov_gene,
-             model3d=m3d_gene, annotation=ann_gene, tracks=tr[3], vmax=vmax_of(tr[3]),
-             next=((1_267_150 - 1_250_000) / 40_000, (1_267_650 - 1_250_000) / 40_000)),
-        dict(title="Base pairs", sub="500 bp · single bases", tri=None, model3d=None,
-             annotation=ann_bp, tracks=tr[4], vmax=vmax_of(tr[4]), letters=letters_box),
+        dict(title="Genome", sub="2.6 Gb · 2.5-Mb bins", zoom=f"×{total / chr3_len:.0f}", tri=tri[0],
+             tri_overlay=ov_genome, model3d=m3d_genome, annotation=ann_genome, tracks=tr[0], vmax=vmax_of(tr[0]),
+             next=chr3_frac),
+        dict(title="Chromosome 3", sub="160 Mb · 250-kb bins", zoom=zoom(("chr3", 0, chr3_len), W_REGION),
+             tri=tri[1], tri_overlay=ov_chr3, model3d=m3d_chr3, annotation=ann_chr3, tracks=tr[1], vmax=vmax_of(tr[1]),
+             next=frac(W_REGION, ("chr3", 0, chr3_len))),
+        dict(title="Region", sub="10 Mb · 25-kb bins", zoom=zoom(W_REGION, W_LOCUS), tri=tri[2],
+             tri_overlay=ov_region, model3d=m3d_region, annotation=ann_region, tracks=tr[2], vmax=vmax_of(tr[2]),
+             next=frac(W_LOCUS, W_REGION)),
+        dict(title="Locus", sub="1 Mb · 5-kb bins · loops", zoom=zoom(W_LOCUS, W_GENE), tri=tri[3],
+             tri_overlay=ov_locus, model3d=m3d_locus, annotation=ann_locus, tracks=tr[3], vmax=vmax_of(tr[3]),
+             next=frac(W_GENE, W_LOCUS)),
+        dict(title="Gene", sub="200 kb · 1-kb bins, 3 × 3", zoom=zoom(W_GENE, W_BP), tri=tri[4], tri_overlay=ov_gene,
+             model3d=m3d_gene, annotation=ann_gene, tracks=tr[4], vmax=vmax_of(tr[4]), next=frac(W_BP, W_GENE)),
+        dict(title="Base pairs", sub="500 bp · single bases", tri=None, model3d=None, annotation=ann_bp,
+             tracks=tr[5], vmax=vmax_of(tr[5]), letters=letters_box),
     ]
+    slots = [("annotation", None, None, 3.0), ("CTCF", "ctcf", CTCF, 2.8), ("H3K27ac", "h3k27ac", K27AC, 2.8),
+             ("H3K4me3", "h3k4me3", K4ME3, 2.8)]
 
-    # ---- panel d: the chain
-    d_map = tri_png(m_locus, 900)
-
-    s0, s1 = 1_000_000, 1_400_000
-    lo_l, hi_l = auto_range(m_locus)
-    depth = 180
-    band_png = png_bytes(triangle(m_locus, lo_l, hi_l, 1000, depth))
-    ins = tracks.bins("insulation", "IV", s0, s1, 400)
-    b_in = [(a, b) for c, a, b in borders if c == "IV" and s0 <= a < s1]
-    d_in = [(a, b) for c, a, b in domains if c == "IV" and a >= s0 and b <= s1]
+    # ---- panel d: the chain, on the map at 10 kb
+    print("chain")
+    W_D = ("chr3", 32_500_000, 36_500_000)
+    m_d = clr[10000].matrix(balance=True).fetch("chr3:32500001-36500000")
+    d_map = tri_png(m_d, 900)
+    lo_d, hi_d = auto_range(m_d)
+    depth = 140
+    band_png = png_bytes(triangle(m_d, lo_d, hi_d, 1000, depth))
+    nd = m_d.shape[0]
+    ins = tracks.bins("insulation", *W_D, nd)
+    borders = load_bed(next((RES / "insulation").glob("*boundaries.bed")))
+    domains = load_bed(next((RES / "insulation").glob("*domains.bed")))
+    b_in = [(a, b) for c, a, b in borders if c == W_D[0] and W_D[1] <= a < W_D[2]]
+    d_in = [(a, b) for c, a, b in domains if c == W_D[0] and a >= W_D[1] and b <= W_D[2]]
 
     def d_borders(x, y, w, h):
         out = []
-        th = w * depth / (2 * 400)
+        th = w * depth / (2 * nd)
         out.append(image(x, y, w, th, band_png))
+        span_max = depth / nd
         for a, b in d_in:
-            u, v = (a - s0) / (s1 - s0), (b - s0) / (s1 - s0)
-            span = min(v - u, depth / 400)
+            u, v = (a - W_D[1]) / (W_D[2] - W_D[1]), (b - W_D[1]) / (W_D[2] - W_D[1])
             xa, xb = x + u * w, x + v * w
-            if v - u <= depth / 400:
+            if v - u <= span_max:
                 d = f"M{f(xa)},{f(y + th)} L{f((xa + xb) / 2)},{f(y + th - (v - u) * w / 2)} L{f(xb)},{f(y + th)}"
             else:
-                yt = y + th - span * w / 2
-                d = (f"M{f(xa)},{f(y + th)} L{f(xa + span * w / 2)},{f(yt)} L{f(xb - span * w / 2)},{f(yt)} "
+                yt = y + th - span_max * w / 2
+                d = (f"M{f(xa)},{f(y + th)} L{f(xa + span_max * w / 2)},{f(yt)} L{f(xb - span_max * w / 2)},{f(yt)} "
                      f"L{f(xb)},{f(y + th)}")
             out.append(path(d, stroke=C1D, sw=0.2, extra='stroke-linejoin="round"'))
         ty = y + th + 0.7
-        thh = 4.2
+        thh = 4.0
         v = np.nan_to_num(ins)
         lo_i, hi_i = np.nanpercentile(ins, 1), np.nanpercentile(ins, 99)
-        out.append(line(x, ty + thh * (hi_i / (hi_i - lo_i)), x + w, ty + thh * (hi_i / (hi_i - lo_i)),
-                        stroke=RULE, sw=0.1))
+        if lo_i < 0 < hi_i:
+            out.append(line(x, ty + thh * (hi_i / (hi_i - lo_i)), x + w, ty + thh * (hi_i / (hi_i - lo_i)),
+                            stroke=RULE, sw=0.1))
         out.append(polyline(x, ty, w, thh, v, C1D, lo_i, hi_i, sw=0.28))
         for a, b in b_in:
-            u = ((a + b) / 2 - s0) / (s1 - s0)
+            u = ((a + b) / 2 - W_D[1]) / (W_D[2] - W_D[1])
             out.append(line(x + u * w, ty + thh + 0.35, x + u * w, ty + thh + 1.25, stroke=C1D, sw=0.22))
         out.append(text(x, ty + thh + 3.5, "insulation track, borders, domains", size=5, fill=INK2))
-        out.append(text(x, ty + thh + 5.6, f"{len(borders):,} borders, {len(domains):,} domains", size=5,
-                        fill=INK3))
+        out.append(text(x, ty + thh + 5.6, f"{len(borders):,} borders, {len(domains):,} domains", size=5, fill=INK3))
         return out
 
-    head, mp = load_table(next((RES / "metaplot").glob("*metaplot.tsv")))
-    dist = np.array([float(l.split("\t")[0]) for l in open(next((RES / "metaplot").glob("*metaplot.tsv")))
-                     if not l.startswith("#") and re.match(r"^-?\d", l)])
-    pol_mean, atac_mean = mp[:, 0], mp[:, 3]
-    flank = np.abs(dist) > 8000
-    pol_fold, atac_fold = pol_mean / pol_mean[flank].mean(), atac_mean / atac_mean[flank].mean()
+    mp_path = next((RES / "metaplot").glob("*metaplot.tsv"))
+    mp_rows = [l.rstrip("\n").split("\t") for l in open(mp_path) if not l.startswith("#")]
+    mp_head, mp = mp_rows[0], np.array([[float(v) for v in r] for r in mp_rows[1:]])
+    dist = mp[:, 0]
+    flank = np.abs(dist) > 80_000
     centre_i = np.argsort(np.abs(dist))[:2]
-    pol_peak, atac_peak = float(pol_fold[centre_i].mean()), float(atac_fold[centre_i].mean())
-    corr = {}
-    for l in open(next((RES / "trackcorr").glob("*table.tsv"))):
-        if l.startswith("#") or l.startswith("a\t"):
-            continue
-        a, b, r = l.rstrip("\n").split("\t")
-        corr[(a, b)] = float(r)
-    r_ins_pol = next(v for (a, b), v in corr.items() if "insulation" in a and "Pol2" in b)
+    quartiles = []
+    for gi in range(1, 5):
+        col = next(i for i, hname in enumerate(mp_head) if hname.endswith(f"group {gi}"))
+        v = mp[:, col] / mp[flank, col].mean()
+        quartiles.append((v, float(v[centre_i].mean())))
+    q_colours = [mix(CTCF, "#000000", 0.25), CTCF, mix(CTCF, "#ffffff", 0.35), mix(CTCF, "#ffffff", 0.6)]
 
     def d_metaplot(x, y, w, h):
         out = []
-        pw, ph = 17.0, h - 3.2
+        pw, ph = 15.5, h - 3.2
         px, py = x, y + 0.6
-        hi_f = max(atac_fold.max(), pol_fold.max()) * 1.05
+        hi_f = max(v.max() for v, _ in quartiles) * 1.04
+        lo_f = min(v.min() for v, _ in quartiles) * 0.98
         out.append(line(px, py + ph, px + pw, py + ph, stroke=INK3, sw=0.12))
         out.append(line(px + pw / 2, py, px + pw / 2, py + ph, stroke=INK3, sw=0.12, dash="0.5 0.4"))
-        for v, colour in ((atac_fold, ATAC), (pol_fold, POL2)):
+        for (v, _), colour in reversed(list(zip(quartiles, q_colours))):
             xs_ = px + (dist - dist.min()) / (dist.max() - dist.min()) * pw
-            ys_ = py + ph - (v - 0.8) / (hi_f - 0.8) * ph
-            out.append(path("M" + " L".join(f"{f(a)},{f(b)}" for a, b in zip(xs_, ys_)), stroke=colour, sw=0.32,
+            ys_ = py + ph - (v - lo_f) / (hi_f - lo_f) * ph
+            out.append(path("M" + " L".join(f"{f(a)},{f(b)}" for a, b in zip(xs_, ys_)), stroke=colour, sw=0.3,
                             extra='stroke-linejoin="round"'))
-        out.append(text(px, py + ph + 2.0, "−10 kb", size=5, fill=INK3))
-        out.append(text(px + pw / 2, py + ph + 2.0, "border", size=5, fill=INK3, anchor="middle"))
-        out.append(text(px + pw, py + ph + 2.0, "+10", size=5, fill=INK3, anchor="end"))
+        out.append(text(px, py + ph + 2.0, "\u2212100 kb", size=5, fill=INK3))
+        out.append(text(px + pw, py + ph + 2.0, "+100", size=5, fill=INK3, anchor="end"))
         tx = px + pw + 1.6
-        out.append(text(tx, y + 2.3, f"Pol II {pol_peak:.1f}×", size=5.5, weight="bold", fill=POL2))
-        out.append(text(tx, y + 4.6, f"ATAC {atac_peak:.1f}×", size=5.5, weight="bold", fill=ATAC))
-        out.append(text(tx, y + 6.9, "at the borders", size=5, fill=INK2))
-        out.append(text(tx, y + 9.2, f"ρ(insulation, Pol II) = {r_ins_pol:.2f}".replace("-", "−"),
-                        size=5, fill=INK2))
+        out.append(text(tx, y + 2.3, "CTCF at the borders,", size=5.5, weight="bold", fill=INK))
+        out.append(text(tx, y + 4.6, "by quarter of border strength:", size=5, fill=INK2))
+        cx_ = tx
+        for (_, fold), colour in zip(quartiles, q_colours):
+            out.append(line(cx_, y + 6.4, cx_ + 1.3, y + 6.4, stroke=colour, sw=0.6))
+            label = f"{fold:.1f}\u00d7"
+            out.append(text(cx_ + 1.7, y + 6.9, label, size=5, fill=INK))
+            cx_ += 1.7 + tw(label + "  ", 5)
+        out.append(text(tx, y + 9.2, "strongest to weakest", size=5, fill=INK3))
         return out
 
-    head_p, pile = load_table(next((RES / "domains").glob("*apa-0.tsv")))
+    _, pile = load_table(next((RES / "domains").glob("*apa-0.tsv")))
     pile = pile[:, :pile.shape[0]]
     pile_png = png_bytes(square(np.log2(pile), -0.5, 0.5, 12, LUT_RDBU))
 
@@ -1366,49 +1475,45 @@ def prepare() -> dict:
         out.append(text(kx + 9.0, ky, "1.4 O/E", size=5, fill=INK3))
         return out
 
+    fit_rows = {l.split("\t")[0]: l.rstrip("\n").split("\t")[1] for l in open(next((RES / "model-chr3").glob("*fit.tsv")))
+                if not l.startswith("#") and "\t" in l}
+    col_chr3 = viridis_of(k27_chr3)
+
+    def d_model(x, y, w, h):
+        out = []
+        s, cx, cy = fitc(np.ones(len(mc.chrom), bool), x + 2.0, y + 1.6, w - 4.0, h - 5.6, 1.0)
+        out.append(draw_model(mc, Rc, cc, s, cx, cy, col_chr3, 0.42, np.ones(len(mc.chrom), bool), depth_range=zc,
+                              fog=0.2, run=3))
+        beads = fit_rows.get("Beads", "").split(" of ")[0]
+        out.append(text(x, y + h - 0.5, f"chromosome 3, {beads} beads of 250 kb", size=5, fill=INK2))
+        c, cw_ = dims_badge(0, 0, "1D", "3D")
+        out.append(group(c, transform=f"translate({f(x + w - cw_)} {f(y + 0.1)})"))
+        kx, ky, kh = x + 0.2, y + 1.0, 6.0
+        for t in np.linspace(0, 1, 24):
+            out.append(rect(kx, ky + (1 - t) * kh - kh / 24, 0.9, kh / 24 + 0.02, fill=lut_hex(LUT_VIRIDIS, t)))
+        out.append(text(kx + 1.5, ky + 2.0, "H3K27ac", size=5, fill=INK3))
+        return out
+
     agree = {}
     for l in open(next((RES / "model-vs-map").glob("*agreement.tsv"))):
         if l.startswith("#") or l.startswith("sequence"):
             continue
         q = l.rstrip("\n").split("\t")
         agree[q[0]] = float(q[3])
-    fit_rows = {l.split("\t")[0]: l.rstrip("\n").split("\t")[1] for l in open(next((RES / "model").glob("*fit.tsv")))
-                if not l.startswith("#") and "\t" in l}
-
-    def d_model(x, y, w, h):
-        out = []
-        s, cx, cy = fit(everything, x + 2.0, y + 1.6, w - 4.0, h - 5.6, 1.0)
-        out.append(draw_model(model, R, centre, s, cx, cy, lambda i: "#dfe2e6", 0.26, ~iv, depth_range=zr,
-                              fog=0.0, halo_w=0.12))
-        out.append(draw_model(model, R, centre, s, cx, cy, pol2_colour, 0.5, iv, depth_range=zr, fog=0.2))
-        beads = fit_rows.get("Beads", "").split(" of ")[0]
-        out.append(text(x, y + h - 0.5, f"{beads} beads of 5 kb; IV coloured by Pol II", size=5, fill=INK2))
-        # the colouring is a link too: a track of the view, onto the model
-        c, cw_ = dims_badge(0, 0, "1D", "3D")
-        out.append(group(c, transform=f"translate({f(x + w - cw_)} {f(y + 0.1)})"))
-        kx, ky, kh = x + 0.2, y + 1.0, 6.0
-        for t in np.linspace(0, 1, 24):
-            out.append(rect(kx, ky + (1 - t) * kh - kh / 24, 0.9, kh / 24 + 0.02, fill=lut_hex(LUT_VIRIDIS, t)))
-        out.append(text(kx + 1.5, ky + 2.0, "Pol II", size=5, fill=INK3))
-        return out
-
-    m5 = cooler.Cooler(f"{MCOOL}::/resolutions/5000")
-    obs = m5.matrix(balance=True).fetch("IV")
+    obs = m_chr3
     _, pred = load_table(next((RES / "model-vs-map").glob("*predicted--1.tsv")))
     pred = pred[:, :pred.shape[0]]
     n5 = min(obs.shape[0], pred.shape[0])
     obs, pred = obs[:n5, :n5], pred[:n5, :n5]
     lo_o, hi_o = auto_range(obs)
     lo_m, hi_m = auto_range(pred)
-    t_obs = colorize(obs, lo_o, hi_o, LUT)
-    t_pred = colorize(pred, lo_m, hi_m, LUT)
+    both = colorize(pred, lo_m, hi_m, LUT)
     iu = np.triu_indices(n5, 0)
-    both = t_pred.copy()
-    both[iu] = t_obs[iu]
-    both = np.repeat(np.repeat(both, 3, 0), 3, 1)
+    both[iu] = colorize(obs, lo_o, hi_o, LUT)[iu]
+    rep = max(1, 1200 // n5)
+    both = np.repeat(np.repeat(both, rep, 0), rep, 1)
     versus_png = png_bytes(np.dstack([both, np.full(both.shape[:2], 255, np.uint8)]))
-    rho_iv = agree.get("IV", float("nan"))
-    rhos = [v for k, v in agree.items()]
+    rho3 = agree.get("chr3", float("nan"))
 
     def d_versus(x, y, w, h):
         out = []
@@ -1419,14 +1524,12 @@ def prepare() -> dict:
         out.append(text(x + side - 0.6, y + 2.4, "map", size=5, fill=INK, anchor="end", halo="#ffffff"))
         out.append(text(x + 0.6, y + side - 0.4, "model", size=5, fill=INK, halo="#ffffff"))
         tx = x + side + 1.6
-        out.append(text(tx, y + 2.3, f"Spearman ρ = {rho_iv:.2f}", size=5.5, weight="bold", fill=INK))
-        out.append(text(tx, y + 4.6, "chromosome IV, contacts", size=5, fill=INK2))
+        out.append(text(tx, y + 2.3, f"Spearman ρ = {rho3:.2f}", size=5.5, weight="bold", fill=INK))
+        out.append(text(tx, y + 4.6, "chromosome 3, contacts", size=5, fill=INK2))
         out.append(text(tx, y + 6.9, "vs 1/distance in the model", size=5, fill=INK2))
-        out.append(text(tx, y + 9.2, f"{min(rhos):.2f}–{max(rhos):.2f} on all 16", size=5, fill=INK3))
         return out
 
-    radial = tracks.bins("radial", "IV", 0, iv_len, -(-iv_len // 5000))
-    pol_iv = pol2_bead
+    radial = tracks.bins("radial", "chr3", 0, chr3_len, -(-chr3_len // 250_000))
 
     def d_radial(x, y, w, h):
         out = []
@@ -1437,12 +1540,26 @@ def prepare() -> dict:
         out.append(line(x, y + 0.8 + ph + 0.3, x + pw, y + 0.8 + ph + 0.3, stroke=RULE, sw=0.1))
         out.append(text(x + pw + 0.8, y + 2.2, "periphery", size=5, fill=INK3))
         out.append(text(x + pw + 0.8, y + 0.8 + ph + 0.2, "centre", size=5, fill=INK3))
-        out.append(text(x, y + ph + 3.7, "radial position along IV: a track like", size=5, fill=INK2))
-        out.append(text(x, y + ph + 5.9, "any other, ready for the next task", size=5, fill=INK2))
+        out.append(text(x, y + ph + 3.7, "radial position along chromosome 3:", size=5, fill=INK2))
+        out.append(text(x, y + ph + 5.9, "a track like any other, for the next task", size=5, fill=INK2))
         return out
 
-    return dict(cascade=cascade, d_map=d_map, d_borders=d_borders, d_metaplot=d_metaplot, d_pileup=d_pileup,
-                d_model=d_model, d_versus=d_versus, d_radial=d_radial)
+    pills = {
+        "insulation": ("Diamond insulation", ("2D", "1D"), "insulation --window 10"),
+        "metaplot": ("Metaplot, ranked", ("1D", "1D"), "metaplot --rankBy score",
+                     [("CTCF ChIP-seq", CTCF)]),
+        "pileup": ("Domain pile-up", ("1D", "2D"), "apa --mode scaled", [("the map", C2D)]),
+        "model": ("Model from the map", ("2D", "3D"), "reconstruct3d --region chr3"),
+        "versus": ("Model versus map", ("3D", "2D"), "structuremap --region chr3"),
+        "spatial": ("Spatial tracks", ("3D", "1D"), "spatialtracks"),
+    }
+    numbers = dict(borders=len(borders), domains=len(domains), ctcf_quartiles=[round(q, 2) for _, q in quartiles],
+                   rho3=rho3, beads=fit_rows.get("Beads", ""), loops=len(loops))
+    print(numbers)
+    return dict(cascade=cascade, slots=slots, c_title="One session, from a 2.6-Gb genome to single bases",
+                d_map=d_map, d_map_caption=("mouse ES cells, Hi-C, 10 kb", "shown: chr3:32.5–36.5 Mb"),
+                d_pills=pills, d_borders=d_borders, d_metaplot=d_metaplot, d_pileup=d_pileup, d_model=d_model,
+                d_versus=d_versus, d_radial=d_radial, numbers=numbers)
 
 
 def main() -> None:
