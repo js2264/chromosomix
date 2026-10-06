@@ -1627,8 +1627,8 @@ export class BrowserView {
 
   /**
    * Put the stack bar under the last lane, or away: on a stack with no lane in
-   * it, and in a deck, whose cell has its own bar for the height of the whole
-   * picture. `true` where it is shown, so the canvas keeps the room for it.
+   * it, and while this view leads a deck, which has no bar here (§5.8). `true`
+   * where it is shown, so the canvas keeps the room for it.
    */
   private placeStackBar(content: number): boolean {
     const bar = this.stackBar

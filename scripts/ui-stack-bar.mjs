@@ -57,6 +57,35 @@ const barBox = async () => {
   return bar.boundingBox()
 }
 
+/** How many stack bars and deck cell bars are on screen — displayed, not merely built. */
+const barsShown = (on) =>
+  on.evaluate(() => {
+    const shown = (bar) => getComputedStyle(bar).display !== 'none' && bar.getBoundingClientRect().height > 0
+    const bars = [...document.querySelectorAll('.cell-resize')].filter(shown)
+    const stack = bars.filter((bar) => bar.classList.contains('browser-stack-resize')).length
+    return `${stack} stack bars · ${bars.length - stack} cell bars`
+  })
+
+/** The scrolling column at its foot, where a stack bar would be under the last track. */
+const toFoot = async (on) => {
+  await on.evaluate(() => {
+    const column = document.querySelector('.content')
+    if (column !== null) column.scrollTop = column.scrollHeight
+  })
+  await sleep(800)
+}
+
+/** Press the first button on screen whose title starts with `title`. */
+const press = async (on, title) => {
+  for (const button of await on.$$(`button[title^="${title}"]`)) {
+    if (await button.isVisible()) {
+      await button.click()
+      await sleep(600)
+      return
+    }
+  }
+}
+
 await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_tracks.metacooler.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(8000)
@@ -108,18 +137,11 @@ await show('double click')
 await g.shot('sb05-double-click-fills')
 
 // The browser as a deck's lead, with a row of cells under it: the bar goes,
-// since the deck sizes its cells.
+// as it does everywhere in a deck. Shot at the column's foot, where it was.
 await page.locator('.deck-grow.is-below').first().click()
 await sleep(3000)
-console.log(
-  'browser + deck',
-  await page.evaluate(
-    () => [...document.querySelectorAll('.browser-stack-resize')].filter((bar) => getComputedStyle(bar).display !== 'none').length,
-  ),
-  'stack bars shown ·',
-  await page.locator('.deck-grid .browser-stack-resize').count(),
-  'in the deck grid',
-)
+await toFoot(page)
+console.log('browser leads ', await barsShown(page))
 await g.shot('sb05b-browser-as-deck-lead-no-bar')
 
 /** A fresh window at a config, so nothing this one remembers comes with it. */
@@ -132,21 +154,46 @@ async function fresh(config) {
   return { other, context }
 }
 
-// Beside a map there is no such bar: the lanes are the map's.
+// Beside a map there is no such bar: the lanes are the map's. Shot at the
+// foot of the lanes under it.
 const map = await fresh('Yeast_microC.metacooler.json')
-console.log('beside a map  ', await map.other.locator('.browser-stack-resize').count(), 'bars')
+await toFoot(map.other)
+console.log('beside a map  ', await barsShown(map.other), '·', await map.other.locator('.browser-stack-resize').count(), 'built')
 await map.other.screenshot({ path: `${OUT}/sb06-map-no-bar.png` })
 console.log('wrote sb06-map-no-bar.png')
 await map.context.close()
 
-// …nor in a deck's tracks cell, which has the cell's own bar under it.
+// …nor in a deck's tracks cell, which has the cell's own bar under it: one
+// added to the two maps' deck, with two of the session's tracks on it.
 const deck = await fresh('Yeast_deck.metacooler.json')
+await deck.other.click('.deck-add-toggle')
+await deck.other.click('.deck-add-tracks')
+await deck.other.waitForSelector('.deck-tracks', { timeout: 20000 })
+await press(deck.other, 'Show the Annotations panel')
+for (const id of ['demo-genes', 'demo-atac']) {
+  const more = await deck.other.$(`.ann-row[data-id="${id}"] .ann-more`)
+  if (more !== null) {
+    await more.click()
+    await sleep(300)
+  }
+}
+await deck.other.evaluate(() => {
+  for (const row of document.querySelectorAll('.annotation-card .ann-place-map')) {
+    if (row.querySelector('.ann-place-name')?.textContent !== 'tracks') continue
+    const bottom = [...row.querySelectorAll('button.ann-place')].find((button) => button.dataset.edge === 'bottom')
+    if (bottom !== undefined && !bottom.disabled && bottom.getAttribute('aria-pressed') !== 'true') bottom.click()
+  }
+})
+await sleep(2000)
+await press(deck.other, 'Fold the Annotations panel')
+await sleep(3000)
+await toFoot(deck.other)
 console.log(
   'in a deck     ',
-  await deck.other.locator('.browser-stack-resize:not(.hidden)').count(),
-  'stack bars ·',
-  await deck.other.locator('.cell-resize:not(.browser-stack-resize)').count(),
-  'cell bars',
+  await barsShown(deck.other),
+  '·',
+  await deck.other.locator('.deck-tracks .browser-stack-resize').count(),
+  'built in the tracks cell',
 )
 await deck.other.screenshot({ path: `${OUT}/sb07-deck-cell-bars-only.png` })
 console.log('wrote sb07-deck-cell-bars-only.png')

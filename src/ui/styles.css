@@ -10812,9 +10812,9 @@ span.deck-name {
   z-index: 3;
 }
 
-/* Never in a deck, whose cells have the cell's own bar for the height of the
-   whole picture: moved into the grid as its lead, the browser is not redrawn,
-   so the rule is the stylesheet's as well as the view's. */
+/* Never in a deck (§5.8), where a tracks cell has the cell's own bar and the
+   browser as its lead has none: moved into the grid as the lead, the browser
+   is not redrawn, so the rule is the stylesheet's as well as the view's. */
 .deck-grid .browser-stack-resize {
   display: none;
 }
