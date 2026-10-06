@@ -1,0 +1,33 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T21:42:35.590Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/Yeast_microC_G2M.mcool::/resolutions/5000
+# task: structuremap v1
+# framing: whole file at 5000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: IV
+# param structure: Yeast_microC_G2M_5000.reconstruct3d.reconstructed-model.bed3d
+# output: Log-log slope of the model’s distance · IV
+# x: Genomic separation (bp)  y: d log d / d log s
+Genomic separation (bp)	IV
+10000	0.506523
+15000	0.309593
+20000	0.256975
+25000	0.415297
+32500	0.590232
+42500	0.658429
+52500	0.660776
+65000	0.662461
+82500	0.676569
+102500	0.687596
+127500	0.633411
+160000	0.553638
+200000	0.488762
+250000	0.466003
+312500	0.437437
+390000	0.385187
+487500	0.518325
+610000	0.665413
+762500	0.520887
+952500	0.00708112
+1190000	-0.820747

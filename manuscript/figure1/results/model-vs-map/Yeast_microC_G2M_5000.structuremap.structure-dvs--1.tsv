@@ -1,0 +1,36 @@
+# metacooler metacooler-run 0.13.0
+# created: 2026-10-06T21:42:35.590Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/Yeast_microC_G2M.mcool::/resolutions/5000
+# task: structuremap v1
+# framing: whole file at 5000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: IV
+# param structure: Yeast_microC_G2M_5000.reconstruct3d.reconstructed-model.bed3d
+# output: Model distance by separation · IV
+# x: Genomic separation (bp)  y: Mean distance (model units)
+# n IV: 307
+Genomic separation (bp)	IV
+5000	0.095071
+10000	0.142878
+15000	0.165852
+20000	0.177078
+25000	0.189117
+32500	0.216636
+42500	0.258672
+52500	0.297074
+65000	0.342514
+82500	0.400777
+102500	0.466134
+127500	0.540626
+160000	0.61803
+200000	0.693656
+250000	0.768673
+312500	0.854014
+390000	0.933731
+487500	1.01357
+610000	1.17737
+762500	1.36496
+952500	1.48499
+1190000	1.36927
+1412500	1.07467
