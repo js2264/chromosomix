@@ -4113,6 +4113,58 @@ p {
   z-index: 2;
 }
 
+/* The keys, which the legend toggle hides together; the slot itself stays,
+   for the hint under them. */
+.map-keys {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* How to zoom into a region, under the keys (`MatrixPanel.paintReframeHint`):
+   a line or two of plain text in the corner, shown only while the pointer is
+   over the map, which is when the question is asked. No box: a halo of the
+   page's own colour is what keeps it legible over cells without covering
+   them, and the page's text colour reads in both themes. Never on a screen
+   with no pointer to hover, which has no Option key to hold either. */
+.browser-hint {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.map-hint,
+.browser-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: var(--step--2);
+  line-height: 1.25;
+  color: var(--text);
+  text-shadow:
+    0 0 2px var(--bg),
+    0 0 2px var(--bg),
+    0 0 3px var(--bg);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.heatmap-wrap:hover .map-hint,
+.browser-stage:hover .browser-hint {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .map-hint,
+  .browser-hint {
+    display: none;
+  }
+}
+
 .map-key {
   display: flex;
   flex-direction: column;

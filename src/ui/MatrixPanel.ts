@@ -39,7 +39,7 @@ import {
 import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { KEYS, keyLabel, optionKey, withKey } from './commands'
+import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
@@ -1199,6 +1199,13 @@ export class MatrixPanel {
   private readonly key: MapKey
   private readonly key2: MapKey
   private readonly keySlot: HTMLElement
+  /** The two keys in {@link keySlot}, hidden together where the legend is off or the screen is a phone's. */
+  private readonly keys: HTMLElement
+  /**
+   * How to zoom into a region from here, under the keys while the pointer is
+   * over the map ({@link paintReframeHint}).
+   */
+  private readonly reframeHint: HTMLElement
   /**
    * The four edges of the picture, as things a hand can take hold of.
    *
@@ -2129,7 +2136,7 @@ export class MatrixPanel {
       // the option changes nothing on its own: hidden here, and skipped in the
       // export, which draws what the screen shows.
       this.legendOn = options.legend
-      this.keySlot.classList.toggle('hidden', this.narrow || !this.legendOn)
+      this.keys.classList.toggle('hidden', this.narrow || !this.legendOn)
       // Put away now, not on the next pointer move: a control that needs the
       // hand to twitch before it takes effect reads as not having worked.
       if (!options.tooltip) this.tooltip.classList.add('hidden')
@@ -2147,6 +2154,7 @@ export class MatrixPanel {
     this.unsubscribeDiagonalLock = subscribeDiagonalLock((on) => {
       this.heatmap.setDiagonalLock(on)
       this.paintDiagonalLock(on)
+      this.paintReframeHint()
       this.schedule()
     })
 
@@ -2476,7 +2484,13 @@ export class MatrixPanel {
     // Built on every file, not only where annotations can be loaded: the
     // rectangles are also where a lane already drawn is dragged to move it to
     // another edge, and that gesture needs no loader.
-    this.keySlot = el('div', { class: 'map-key-slot' }, this.key.el, this.key2.el)
+    // The keys, and under them how to zoom into a region: one column in the
+    // corner, so the hint moves up into the corner when the legend is off and
+    // stands under the keys when it is on.
+    this.keys = el('div', { class: 'map-keys' }, this.key.el, this.key2.el)
+    this.reframeHint = el('div', { class: 'map-hint', attrs: { 'aria-hidden': 'true' } })
+    this.keySlot = el('div', { class: 'map-key-slot' }, this.keys, this.reframeHint)
+    this.paintReframeHint(false)
     const wrap = (this.wrap = el(
       'div',
       { class: 'heatmap-wrap' },
@@ -2611,7 +2625,9 @@ export class MatrixPanel {
     // draws cannot read a media query.
     this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
       this.narrow = narrow
-      this.keySlot.classList.toggle('hidden', narrow || !this.legendOn)
+      this.keys.classList.toggle('hidden', narrow || !this.legendOn)
+      // Nor the hint, on a screen with no Option key to hold.
+      this.reframeHint.classList.toggle('hidden', narrow)
       this.schedule()
     })
 
@@ -3210,6 +3226,32 @@ export class MatrixPanel {
     if (button === null) return
     button.classList.toggle('is-disabled', !possible)
     if (button instanceof HTMLButtonElement) button.disabled = !possible
+  }
+
+  /**
+   * Say how to zoom into a region from here — the words under the key while
+   * the pointer is over the map (§7.2).
+   *
+   * Option and a drag is the gesture, and nothing on the picture says so: a
+   * reader who has not opened the shortcuts dialog pans, wheels and gives up on
+   * the one gesture that opens a stretch at its own resolution. So it is said in
+   * the corner, small and with no box round it — a halo of the page for
+   * legibility over cells — and only while the hand is over the map, which is
+   * when the question is asked. In the reader's own modifiers, and saying what a
+   * drag will do *now*: under the diagonal lock Option alone draws on the
+   * diagonal, under a turn the box is a stretch of the genome, and Shift's line
+   * only where there is a diagonal for it to pin a box to.
+   */
+  private paintReframeHint(turned: boolean = this.turned !== null): void {
+    const opt = optionKey()
+    const lines = turned
+      ? [`${opt} + drag to zoom into a stretch`]
+      : !this.diagonalPossible
+        ? [`${opt} + drag to zoom into a region`]
+        : diagonalLocked()
+          ? [`${opt} + drag to zoom along the diagonal`]
+          : [`${opt} + drag to zoom into a region`, `${shiftKey()} + ${opt} + drag to zoom along the diagonal`]
+    this.reframeHint.replaceChildren(...lines.map((text) => el('div', { text })))
   }
 
   /**
@@ -6497,6 +6539,7 @@ export class MatrixPanel {
         Math.max(data.rowExtent[0], data.colExtent[0]) <
           Math.min(data.rowExtent[1], data.colExtent[1]),
     )
+    this.paintReframeHint(turned !== null)
     // The **square** block's values, even under a turn, because the one reader
     // of this indexes it by square row and column ({@link derivedReading}). It
     // used to be `out`, which on a turned map is a band of a different shape

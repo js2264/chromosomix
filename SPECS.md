@@ -3190,6 +3190,19 @@ without looking. It stands down wherever Space already has a job: a focused butt
 tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the shortcuts dialog
 and the palette as *Diagonal lock*, with its state, and in the toggle's own tooltip.
 
+**The corner says how to zoom into a region**, while the pointer is over the map: under the key —
+or in its place when the legend is off — a line or two of plain text, small and in no box, in the
+reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
+diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
+the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
+stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. Nobody finds
+the gesture by panning and wheeling, and the shortcuts dialog is a place a reader goes once; the hint
+is where the hand already is, gone the moment it leaves the map, and drawn in no export. A halo of
+the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
+paper in both themes. Not on a screen with no pointer to hover, nor where the plot is too narrow for
+the key (§7.1). The 1D browser says the same under its ruler while the pointer is over its tracks:
+*⌥ + drag to zoom into a stretch*, *or drag along the ruler*.
+
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
 lane canvases to the map's along their shared axis, and two conversions would be two chances to name

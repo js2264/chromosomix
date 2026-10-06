@@ -231,7 +231,7 @@ import {
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import type { CellFigure } from '../panels/deckFigure'
-import { KEYS, withKey } from './commands'
+import { KEYS, optionKey, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
 // The map's own zoom steps and the button that draws one. §26.6: one bar shape
@@ -540,6 +540,13 @@ export class BrowserView {
   private readonly overlays = el('div', { class: 'browser-overlays' })
   private readonly tooltip = el('div', { class: 'cell-tip hidden' })
   /**
+   * How to zoom into a stretch, in the corner under the ruler while the pointer
+   * is over the tracks — the map's hint (`MatrixPanel.paintReframeHint`) for this
+   * picture's gestures: Option and a drag over the tracks, or a drag along the
+   * ruler with nothing held.
+   */
+  private readonly reframeHint = el('div', { class: 'browser-hint', attrs: { 'aria-hidden': 'true' } })
+  /**
    * Where the tooltip is pointing and how large it turned out to be.
    *
    * Two facts kept apart because they arrive at different times: the pointer is
@@ -759,7 +766,12 @@ export class BrowserView {
     this.scale = new Scale([0, Math.max(1, this.view.total)], 1)
 
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
-    this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip)
+    this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip, this.reframeHint)
+    this.reframeHint.append(
+      el('div', { text: `${optionKey()} + drag to zoom into a stretch` }),
+      el('div', { text: 'or drag along the ruler' }),
+    )
+    this.reframeHint.style.top = `${this.rulerHeight + LANE_GAP}px`
 
     // One box, not two. What a reader types into a genome browser is "where do
     // I want to be", and `chrIV:1,000-2,000`, `chrIV` and `GAL4` are three
@@ -958,6 +970,7 @@ export class BrowserView {
     this.unsubscribes.push(
       subscribeTextScale((scale) => {
         this.rulerHeight = rulerHeightFor(scale)
+        this.reframeHint.style.top = `${this.rulerHeight + LANE_GAP}px`
         this.schedule()
       }),
     )

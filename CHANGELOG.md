@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The map says how to zoom into a region while the pointer is over it (§8.9).** Under the key in
+  its top-right corner — or in the corner itself with the legend off — a line or two of plain text:
+  *Alt + drag to zoom into a region* and *Shift + Alt + drag to zoom along the diagonal*, or ⌥ and ⇧
+  on a Mac. One line under the diagonal lock, which already pins the box, *a stretch* on a turned
+  map, and no Shift line on a block the diagonal does not cross. Gone when the pointer leaves, never
+  in an export, and not on a touch screen. The 1D browser says *Alt + drag to zoom into a stretch, or
+  drag along the ruler* under its ruler.
+
 - **Base modifications from a BAM's `MM`/`ML` tags (§8.13, §8.20).** A pile lane's *colour by* offers
   *base modification*: the reads are drawn grey and each 5mC, 5hmC, 6mA or other call sits at its own
   base, red where modified and blue where not, as opaque as the caller was sure — for the code chosen
