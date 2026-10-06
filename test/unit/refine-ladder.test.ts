@@ -20,6 +20,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { denseCellCap } from '@/metacooler/matrix'
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
 import {
   BlockLadder,
@@ -57,7 +58,7 @@ function block(rows: Extent, binsPerCell: number, cols: Extent = rows): MatrixRe
 }
 
 /** A ladder with a fake clock, a fake timer and a recording reader. */
-function ladder(options: { ceiling?: Extent; reads?: Array<Extent> } = {}) {
+function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; budget?: number } = {}) {
   const ceiling: Extent = options.ceiling ?? [0, 50_000]
   const asked: Array<{ rows: Extent; cols: Extent }> = []
   const given: MatrixResult[] = []
@@ -85,6 +86,7 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent> } = {}) {
       return true
     },
     onBusy: (on) => busy.push(on),
+    ...(options.budget === undefined ? {} : { budget: () => options.budget }),
   })
 
   return {
@@ -162,10 +164,13 @@ describe('the coverage and padding arithmetic', () => {
   })
 
   it('restates the reader’s grid choice, and never finer than it', () => {
-    // A window that fits the cap is read at the file's own bins.
-    expect(gridFor([0, POOLED_CELL_CAP], [0, POOLED_CELL_CAP])).toBe(1)
-    // One bin past it needs two bins to a cell.
-    expect(gridFor([0, POOLED_CELL_CAP + 1], [0, POOLED_CELL_CAP + 1])).toBe(2)
+    // A window the dense read takes is read at the file's own bins — a whole
+    // yeast chromosome IV at 100 bp among them.
+    const dense = denseCellCap()
+    expect(dense).toBeGreaterThanOrEqual(15_320)
+    expect(gridFor([0, dense], [0, dense])).toBe(1)
+    // One bin past it is pooled, to the pooled read's grid.
+    expect(gridFor([0, dense + 1], [0, dense + 1])).toBe(Math.ceil((dense + 1) / POOLED_CELL_CAP))
     // Human chr1 at 5 kb: 49,792 bins is thirteen to a cell.
     expect(gridFor([0, 49_792], [0, 49_792])).toBe(13)
     // The widest axis decides, because the reader shares one grid across both.
@@ -199,12 +204,14 @@ describe('choosing a rung of a laddered file', () => {
   })
 
   it('takes the coarsest rung whose bins still fill a cell', () => {
-    // A whole 12.1 Mb yeast genome at 1 kb: 12,100 bins into 4,096 cells is
-    // about 2,954 bp a cell, so the 2 kb level fits and the 5 kb one would put
-    // more than one of its bins in a cell — which is the pooling this avoids.
-    expect(chooseRung(YEAST, 12_100, 1000)).toBe('2000')
-    // Ten times as much genome, ten times coarser a cell.
+    // 40 Mb at 1 kb: 40,000 bins is past what is read bin for bin, and into
+    // 4,096 cells is about 9,766 bp a cell, so the 5 kb level fits and the 10 kb
+    // one would put more than one of its bins in a cell — the pooling this avoids.
+    expect(chooseRung(YEAST, 40_000, 1000)).toBe('5000')
+    // Three times as much genome, three times coarser a cell.
     expect(chooseRung(YEAST, 121_000, 1000)).toBe('10000')
+    // A whole 12.1 Mb yeast genome is read bin for bin, so at the open 1 kb.
+    expect(chooseRung(YEAST, 12_100, 1000)).toBeUndefined()
   })
 
   it('names no rung once the window is small enough for the open map', () => {
@@ -235,11 +242,11 @@ describe('choosing a rung of a laddered file', () => {
       expect(at, `span=${span}`).toBeUndefined()
     }
     // Coarser is still allowed — that is the direction the picker did not rule on.
-    expect(chooseRung(six, 12_000, 2000)).toBe('5000')
+    expect(chooseRung(six, 40_000, 2000)).toBe('5000')
     // And a reader who opened the finest level gets the whole ladder above it:
-    // 12,000 × 100 bp is 1.2 Mb, which is 293 bp a cell, so 200 fits and 500
+    // 40,000 × 100 bp is 4 Mb, which is 977 bp a cell, so 500 fits and 1,000
     // would put more than one of its bins in a cell.
-    expect(chooseRung(six, 12_000, 100)).toBe('200')
+    expect(chooseRung(six, 40_000, 100)).toBe('500')
   })
 
   it('names nothing when every rung is finer than the open one', () => {
@@ -408,14 +415,33 @@ describe('panning against the edge of the block in hand', () => {
     expect(recentre([0, 100], [500, 520])).toEqual([460, 560])
   })
 
+  it('judges a block by the budget its reads carry, so a deck panel does not read forever', () => {
+    // A deck's panel reads with a share of the device (§16.7), and the reader
+    // reads bin for bin only as wide as that share affords. 15,300 bins on half
+    // a gigabyte is pooled four to a cell — and a ladder that judged it against
+    // the whole device would want one bin to a cell, get four, and ask again.
+    const budget = 5e8
+    expect(denseCellCap(budget)).toBeLessThan(15_300)
+    const l = ladder({ ceiling: [0, 15_300], budget })
+    l.it.adopt(block([0, 15_300], 4))
+    l.it.consider({ rows: [0, 15_300], cols: [0, 15_300], binsPerCell: 4 })
+    expect(l.asked).toHaveLength(0)
+    // The same block on the device's own budget is not good enough.
+    const whole = ladder({ ceiling: [0, 15_300] })
+    whole.it.adopt(block([0, 15_300], 4))
+    whole.it.consider({ rows: [0, 15_300], cols: [0, 15_300], binsPerCell: 4 })
+    expect(whole.asked).toHaveLength(1)
+  })
+
   it('does not read at the edge of the world', () => {
     // The block is the whole domain: its edges are the ceiling's, so pressing
     // against them is not a request for anything, it is the end of the sequence.
+    // Read bin for bin, which is how the reader answers a domain this narrow.
     const l = ladder({ ceiling: [0, 15_300] })
-    l.it.adopt(block([0, 15_300], 4))
-    l.it.consider({ rows: [0, 4000], cols: [0, 4000], binsPerCell: 4 })
+    l.it.adopt(block([0, 15_300], 1))
+    l.it.consider({ rows: [0, 4000], cols: [0, 4000], binsPerCell: 1 })
     expect(l.asked).toHaveLength(0)
-    l.it.consider({ rows: [11_300, 15_300], cols: [11_300, 15_300], binsPerCell: 4 })
+    l.it.consider({ rows: [11_300, 15_300], cols: [11_300, 15_300], binsPerCell: 1 })
     expect(l.asked).toHaveLength(0)
   })
 
@@ -628,14 +654,19 @@ describe('BlockLadder, inside a frame across a circle’s origin', () => {
 describe('the first read of a pooled window (§12)', () => {
   /** A 4DN `.hic`'s ladder, opened at 25 kb. */
   const HIC = rungsOf(['2500000', '1000000', '500000', '250000', '100000', '50000', '25000', '10000', '5000'])
-  /** Mouse chr1 at 25 kb. */
-  const CHR1: Extent = [0, 7849]
+  /**
+   * Mouse chr1 at 10 kb — 19,547 bins, past what is read bin for bin. At 25 kb
+   * (7,849 bins) it no longer is: that window is now read at the open map.
+   */
+  const CHR1: Extent = [0, 19_547]
 
   it('comes from the rung that is the grid the reader would pool the open map into', () => {
-    // 7,849 bins into 4,096 cells is two bins a cell: a 50 kb picture, which
-    // the 50 kb rung holds in a quarter of the pixels.
-    expect(gridFor(CHR1, CHR1)).toBe(2)
-    expect(poolingRung(HIC, CHR1, CHR1, 25_000)).toBe('50000')
+    // 19,547 bins into 4,096 cells is five bins a cell: a 50 kb picture, which
+    // the 50 kb rung holds in a twenty-fifth of the pixels.
+    expect(gridFor(CHR1, CHR1)).toBe(5)
+    expect(poolingRung(HIC, CHR1, CHR1, 10_000)).toBe('50000')
+    // The same chromosome at 25 kb is read whole, so no rung is named.
+    expect(poolingRung(HIC, [0, 7849], [0, 7849], 25_000)).toBeUndefined()
   })
 
   it('never reads coarser than that grid, so the picture is the one it was', () => {
@@ -650,8 +681,8 @@ describe('the first read of a pooled window (§12)', () => {
   it('reads the open map where nothing is pooled, or no rung is the grid', () => {
     const window: Extent = [0, 400]
     expect(poolingRung(HIC, window, window, 25_000)).toBeUndefined()
-    expect(poolingRung(rungsOf(['25000', '100000']), CHR1, CHR1, 25_000)).toBeUndefined()
-    expect(poolingRung([], CHR1, CHR1, 25_000)).toBeUndefined()
+    expect(poolingRung(rungsOf(['10000', '100000']), CHR1, CHR1, 10_000)).toBeUndefined()
+    expect(poolingRung([], CHR1, CHR1, 10_000)).toBeUndefined()
   })
 
   it('is taken by the ladder as it is, so no refine follows until the reader zooms', () => {
@@ -659,12 +690,12 @@ describe('the first read of a pooled window (§12)', () => {
     // The rung's block describes itself in its own bins; `source` is the window
     // in the open map's, which is what the ladder plans against.
     const rung: MatrixResult = {
-      ...block([0, 3925], 1),
+      ...block([0, 3910], 1),
       binsize: 50_000,
       source: { rows: CHR1, cols: CHR1 },
     }
     l.it.adopt(rung)
-    l.it.consider({ rows: CHR1, cols: CHR1, binsPerCell: 2 })
+    l.it.consider({ rows: CHR1, cols: CHR1, binsPerCell: 5 })
     expect(l.asked).toEqual([])
   })
 })

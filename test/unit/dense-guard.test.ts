@@ -23,12 +23,14 @@ import {
   checkDenseSize,
   DENSE_HINTS,
   denseBudgetFor,
+  denseCellCap,
   estimateBlockBytes,
   PIXEL_CHUNK_BYTES,
   readDenseMatrix,
   type MatrixSource,
 } from '@/metacooler/matrix'
 import type { Hdf5Handle } from '@/h5/api'
+import { RASTER_MAX_DIM } from '@/render/heatmap'
 
 /**
  * A source large enough to trip the guard, with a handle that throws.
@@ -196,8 +198,15 @@ describe('the browser guard, which is stricter than the CLI', () => {
 
   it('allows a whole yeast genome at 1 kb, which is the point of the estimate', () => {
     // 12.1 Mb at 1 kb is 12,100 bins: 1.46e8 cells, which every round fixed
-    // limit refuses and which costs 585 MB of values plus a bounded raster.
-    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT, { budgetBytes: 1e9 })).not.toThrow()
+    // limit refuses: 585 MB of values and, drawn a cell per pixel, 1.8 GB of
+    // raster — inside the default budget.
+    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT)).not.toThrow()
+    // A 1 GB machine cannot afford that raster, and is never asked to: its
+    // reader pools a window that wide rather than reading it bin for bin.
+    expect(denseCellCap(1e9)).toBeLessThan(12_100)
+    expect(() =>
+      checkBrowserDenseSize(denseCellCap(1e9), denseCellCap(1e9), HINT, { budgetBytes: 1e9 }),
+    ).not.toThrow()
   })
 
   it('allows the largest block one array can hold, on a machine that reports 8 GiB', () => {
@@ -255,18 +264,20 @@ describe('the browser guard, which is stricter than the CLI', () => {
     // The proxy handle throws on any access, and this call has no handle at all
     // — which is the point. The old guard reached for `nnz` to decide.
     expect(estimateBlockBytes(1_000, 1_000)).toBe(
-      1_000 * 1_000 * 4 + 1_000 * 1_000 * 16 + PIXEL_CHUNK_BYTES,
+      1_000 * 1_000 * 4 + 1_000 * 1_000 * 12 + PIXEL_CHUNK_BYTES,
     )
   })
 
   it('charges the raster as a ceiling, not as something that grows', () => {
-    // Past the pooling cap the raster term stops moving; only the cells do.
-    const a = estimateBlockBytes(20_000, 20_000)
-    const b = estimateBlockBytes(40_000, 40_000)
-    const rasterA = a - 20_000 * 20_000 * 4 - PIXEL_CHUNK_BYTES
-    const rasterB = b - 40_000 * 40_000 * 4 - PIXEL_CHUNK_BYTES
-    expect(rasterB).toBeLessThanOrEqual(rasterA * 1.01)
-    expect(rasterB).toBeLessThan(300e6)
+    // Past the raster cap the raster term stops growing; only the cells do. It
+    // moves within the ceiling as the stride steps — 20,000 is drawn at 10,000²
+    // and 40,000 at 13,334² — but never past the cap's 12 B a pixel.
+    const ceiling = 12 * RASTER_MAX_DIM * RASTER_MAX_DIM
+    for (const n of [16_384, 20_000, 40_000, 100_000]) {
+      const raster = estimateBlockBytes(n, n) - n * n * 4 - PIXEL_CHUNK_BYTES
+      expect(raster, `${n}`).toBeLessThanOrEqual(ceiling)
+    }
+    expect(ceiling).toBeLessThan(3.3e9)
   })
 
   it('says what it refused and what the limit is', () => {
@@ -287,8 +298,8 @@ describe('the browser guard, which is stricter than the CLI', () => {
   })
 
   it('lets a modest desktop block through, which is what the share is for', () => {
-    // 20,000 bins on the default budget: half of the 8 GiB fallback is 4.3 GB
-    // against an estimate of 1.9. The old third of 4 GiB was 1.4 GB and refused
+    // 20,000 bins on the default budget: three quarters of the 8 GiB fallback
+    // is 6.4 GB against an estimate of 2.8. The old third of 4 GiB was 1.4 GB and refused
     // this, on the two engines that report no memory at all — which is most of
     // them.
     expect(() => checkBrowserDenseSize(20_000, 20_000, HINT)).not.toThrow()
@@ -300,13 +311,13 @@ describe('the browser guard, which is stricter than the CLI', () => {
     expect(denseBudgetFor(0.25)).toBeLessThan(0.25 * 1024 ** 3)
     expect(denseBudgetFor(0.5)).toBeLessThan(0.5 * 1024 ** 3)
     expect(denseBudgetFor(1)).toBeLessThan(1024 ** 3)
-    // Half of what the device claims, from the bucket where the floor stops
-    // binding upwards. A machine reporting 16 — which Chrome now does — gets
-    // 8.6 GB, and is stopped by the single-array ceiling long before that.
-    expect(denseBudgetFor(2)).toBeCloseTo(1024 ** 3, 0)
-    expect(denseBudgetFor(4)).toBeCloseTo((4 * 1024 ** 3) / 2, 0)
-    expect(denseBudgetFor(8)).toBeCloseTo((8 * 1024 ** 3) / 2, 0)
-    expect(denseBudgetFor(16)).toBeCloseTo((16 * 1024 ** 3) / 2, 0)
+    // Three quarters of what the device claims, from the bucket where the floor
+    // stops binding upwards. A machine reporting 16 — which Chrome now does —
+    // gets 12.9 GB, and is stopped by the single-array ceiling long before that.
+    expect(denseBudgetFor(2)).toBeCloseTo((2 * 1024 ** 3 * 3) / 4, 0)
+    expect(denseBudgetFor(4)).toBeCloseTo((4 * 1024 ** 3 * 3) / 4, 0)
+    expect(denseBudgetFor(8)).toBeCloseTo((8 * 1024 ** 3 * 3) / 4, 0)
+    expect(denseBudgetFor(16)).toBeCloseTo((16 * 1024 ** 3 * 3) / 4, 0)
     // Never below what any machine can serve, whatever the share becomes.
     expect(denseBudgetFor(2)).toBeGreaterThanOrEqual(1e9)
   })

@@ -113,8 +113,9 @@ describe('overviewUnitCap', () => {
     // answer. That is the point of the change, not a regression: units past
     // `RASTER_MAX_DIM` were pooled a second time on the way to the screen, flat
     // and blind to the genome boundaries `poolUnits` had just snapped to.
-    const small = overviewUnitCap(1e8)
-    const large = overviewUnitCap(2e8)
+    // Both above the 201 MB the render side is charged at the hard cap.
+    const small = overviewUnitCap(2.5e8)
+    const large = overviewUnitCap(3e8)
     expect(large).toBeGreaterThan(small)
     expect(large).toBeLessThan(OVERVIEW_HARD_CAP)
   })

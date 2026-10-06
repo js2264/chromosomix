@@ -230,12 +230,12 @@ describe('a pooled read is the dense read, summed', () => {
 })
 
 describe('the pooling threshold', () => {
-  it('is the raster s own, so nothing is pooled twice', () => {
-    // Two constants that must stay equal: pooling to anything finer than the
-    // raster leaves the renderer to pool again, blind to the sequences it is
-    // collapsing; pooling to anything coarser throws away resolution the screen
-    // could have shown.
-    expect(POOLED_CELL_CAP).toBe(RASTER_MAX_DIM)
+  it('is never wider than the raster, so nothing is pooled twice', () => {
+    // Pooling to anything finer than the raster leaves the renderer to pool
+    // again, blind to the sequences it is collapsing. Coarser is a choice: the
+    // pooled read is not under the dense guard, so it keeps 4,096 while the
+    // raster is wide enough for a window read bin for bin (`denseCellCap`).
+    expect(POOLED_CELL_CAP).toBeLessThanOrEqual(RASTER_MAX_DIM)
   })
 
   it('bounds a whole-file read to the cells a screen can hold', async () => {

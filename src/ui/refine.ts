@@ -47,6 +47,7 @@
  * never turn into the whole-file scan §7.3 gates.
  */
 
+import { denseCellCap } from '../metacooler/matrix'
 import { POOLED_CELL_CAP } from '../metacooler/pooling'
 import type { Extent } from '../types'
 import type { Cancellable } from '../worker/client'
@@ -144,6 +145,17 @@ export interface LadderOptions {
    * can see.
    */
   onBlock(result: MatrixResult): boolean
+  /**
+   * The memory budget the view's reads carry, where it is not the device's own.
+   *
+   * The reader reads a window bin for bin up to what that budget affords
+   * (`denseCellCap`), so the grid this ladder expects must be computed from the
+   * same number: a deck's panel reads with a share (§16.7), and a ladder judging
+   * its blocks against the whole device would expect one bin to a cell, be handed
+   * a pooled block every time, and read again forever. Absent or `undefined` is
+   * the device's budget, which is what the reader assumes too.
+   */
+  budget?: () => number | undefined
   /**
    * The coarsest grid this ladder may refine **to**, in bins of the open map.
    *
@@ -385,7 +397,7 @@ export class BlockLadder {
    * the next frame forever.
    */
   private gridWanted(wanted: { rows: Extent; cols: Extent }): number {
-    return Math.max(this.floor(), gridFor(wanted.rows, wanted.cols))
+    return Math.max(this.floor(), gridFor(wanted.rows, wanted.cols, this.options.budget?.()))
   }
 
   /** The declared grid, as a whole number of the open map's bins per cell. */
@@ -589,9 +601,17 @@ export function clip(extent: Extent, bounds: Extent): Extent {
  * never to ask for one — the plan is the reader's to choose, and a client that
  * sent its own would anchor the grid to the pan position (`reader.worker.ts`).
  */
-export function gridFor(rows: Extent, cols: Extent): number {
-  const widest = Math.max(rows[1] - rows[0], cols[1] - cols[0])
-  return Math.max(1, Math.ceil(widest / POOLED_CELL_CAP))
+export function gridFor(rows: Extent, cols: Extent, budgetBytes?: number): number {
+  return gridForSpan(Math.max(rows[1] - rows[0], cols[1] - cols[0]), POOLED_CELL_CAP, budgetBytes)
+}
+
+/**
+ * {@link gridFor} for the widest axis alone: `1` up to what the reader reads
+ * unpooled ({@link denseCellCap}), and the pooled read's grid past it.
+ */
+export function gridForSpan(widest: number, cap = POOLED_CELL_CAP, budgetBytes?: number): number {
+  if (widest <= denseCellCap(budgetBytes)) return 1
+  return Math.max(1, Math.ceil(widest / cap))
 }
 
 function keyOf(rows: Extent, cols: Extent): string {
@@ -732,6 +752,7 @@ export function chooseRung(
   spanBins: number,
   binsize: number,
   cap = POOLED_CELL_CAP,
+  budgetBytes?: number,
 ): string | undefined {
   if (rungs.length === 0 || !(binsize > 0) || !(spanBins > 0)) return undefined
   // The floor, applied before anything is chosen rather than after: a rung
@@ -739,7 +760,11 @@ export function chooseRung(
   // candidate.
   const above = rungs.filter((rung) => rung.binsize >= binsize)
   if (above.length === 0) return undefined
-  const target = (spanBins * binsize) / Math.max(1, cap)
+  // The cell the open map would be read at, so a window narrow enough to be read
+  // unpooled stays on the open rung rather than being swapped for a coarser one
+  // the picture had room to avoid.
+  const target =
+    spanBins <= denseCellCap(budgetBytes) ? binsize : (spanBins * binsize) / Math.max(1, cap)
   let best: { name: string; binsize: number } | null = null
   for (const rung of above) {
     if (rung.binsize > target) continue
@@ -848,6 +873,8 @@ export function attachRefine(options: {
    * when the resolution was added, and it is the map that is open.
    */
   floor?: () => number
+  /** The budget the view's reads carry; see {@link LadderOptions.budget}. */
+  budget?: () => number | undefined
   onBusy?: (busy: boolean) => void
   onError?: (err: unknown) => void
   /**
@@ -864,6 +891,7 @@ export function attachRefine(options: {
   const ladder = new BlockLadder({
     ceiling: options.ceiling,
     ...(options.floor === undefined ? {} : { floor: options.floor }),
+    ...(options.budget === undefined ? {} : { budget: options.budget }),
     read: (rows, cols) => {
       const held = Math.max(1, Math.floor(options.floor?.() ?? 1))
       // A declared grid takes the rung choice with it, for the reason
@@ -877,6 +905,8 @@ export function attachRefine(options: {
               options.rungs ?? [],
               Math.max(rows[1] - rows[0], cols[1] - cols[0]),
               options.binsize,
+              undefined,
+              options.budget?.(),
             )
       const { promise, cancel } = options.read(rows, cols, rung, held > 1 ? held : undefined)
       return {
