@@ -10800,6 +10800,25 @@ span.deck-name {
   outline-offset: 2px;
 }
 
+/* The same bar under the 1D browser's stack, where it scales every track
+   together (`BrowserView.stackBarFor`): laid over the stage at the foot of the
+   last lane rather than after it, because the canvas runs on past the stack to
+   the foot of the column. The whole width, as under a cell. */
+.browser-stage > .browser-stack-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin-top: 0;
+  z-index: 3;
+}
+
+/* Never in a deck, whose cells have the cell's own bar for the height of the
+   whole picture: moved into the grid as its lead, the browser is not redrawn,
+   so the rule is the stylesheet's as well as the view's. */
+.deck-grid .browser-stack-resize {
+  display: none;
+}
+
 /* A picture with its settings beside it (`ui/StageDialog.ts`): the model
    enlarged (§25.3), an analysis figure opened up (§18.13). The elements inside
    are the caller's own, moved in and moved back. */

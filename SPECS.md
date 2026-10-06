@@ -1240,6 +1240,20 @@ a genome browser is asked for constantly and a map has no analogue for it. And a
 reader points to say "this much", and it is the one gesture whose meaning its position already
 settles, so spending a keystroke on it buys nothing.
 
+**A bar under the stack makes every track taller or shorter together, each in proportion** — the
+deck cell's height bar in look (§25.3), under the last lane. A gene model drawn at half the height
+of the coverage above it is still half as tall when the stack has doubled: dragged, every lane's
+height is the one it had when the drag began times one factor, the stack's foot following the hand,
+each lane held to what a lane may be; Escape mid-drag puts them all back; a double click makes the
+stack's foot the column's, still in proportion and taller or shorter as the column asks — where
+*Stretch the tracks* (`h`) makes them one height — and the arrow keys step it. Only here: beside a
+map the lanes are the map's (§8.8), and a deck's cells, the browser among them when it leads a deck,
+have the cell's own bar for the height of the whole picture. The room it, *Stretch* and the canvas
+itself fill is measured from where the stage stands in the column's content to the column's foot,
+less what stands under it — measured against the box the browser is mounted in, which grows with
+what is in it, a canvas grown under a tall stack never gave the height back when the stack was made
+shorter, and *Stretch* filled that canvas rather than the window.
+
 **The ruler gains digits as it is zoomed**, and it does that by being told the gap between its own
 ticks. Two decimals of a megabase is ten kilobases, so a window narrower than that on a chromosome
 measured in megabases wrote the same number under every tick — an axis of `4.60 Mb`, four times over,

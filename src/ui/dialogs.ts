@@ -93,6 +93,7 @@ const BROWSER_KEYS: Array<[string, string]> = [
   ['drag on the chromosome bar', 'Select a span, with both ends written out to the base'],
   ['{opt} + drag', 'The same selection, over the tracks'],
   ['drag a track’s lower edge', 'Make that track taller or shorter'],
+  ['drag the bar under the tracks', 'Make every track taller or shorter, each in proportion'],
   ['drag a track’s grip', 'Move it up or down the stack'],
   ['double click', 'The whole genome'],
   ['wheel', 'Zoom about the pointer'],

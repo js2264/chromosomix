@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A bar under the 1D browser's tracks makes them all taller or shorter together, each in
+  proportion (§5.8).** The deck cell's height bar in look, under the last track: dragged, every
+  track's height is scaled by one factor, so their sizes relative to each other stay as they were;
+  Escape mid-drag puts them back, a double click fits the whole stack to the window, and the arrow
+  keys step it. Only in the 1D browser on its own — not beside a map, nor in a deck. The canvas now
+  gives its height back when the tracks are made shorter, and *Stretch the tracks* (`h`) fills the
+  window rather than a canvas a tall stack had grown.
+
 - **The map says how to zoom into a region while the pointer is over it (§8.9).** Under the key in
   its top-right corner — or in the corner itself with the legend off — a line or two of plain text:
   *Alt + drag to zoom into a region* and *Shift + Alt + drag to zoom along the diagonal*, or ⌥ and ⇧

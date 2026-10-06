@@ -208,6 +208,7 @@ import {
   LANE_MIN_SIZE,
   fieldPair,
   heightThatFills,
+  laneSize,
   setTrackHeight,
   smallestLaneSize,
   trackHeightField,
@@ -263,6 +264,14 @@ import { setReadout } from './readout'
 
 /** Gap between two stacked lanes, in CSS pixels. Same as beside the map. */
 const LANE_GAP = 4
+/**
+ * The room the stack bar takes under the last lane, on screen: its seven
+ * pixels, one either side, clear of the last lane's own border, which a lane
+ * keeps for resizing itself ({@link LANE_GRIP} past its foot).
+ */
+const STACK_BAR_ROOM = 10
+/** How far one press of an arrow key on the stack bar moves the stack's foot, in pixels. */
+const STACK_KEY_STEP = 24
 /** How close to a lane's lower border counts as being on it. */
 const LANE_GRIP = 4
 /**
@@ -546,6 +555,8 @@ export class BrowserView {
    * ruler with nothing held.
    */
   private readonly reframeHint = el('div', { class: 'browser-hint', attrs: { 'aria-hidden': 'true' } })
+  /** The bar under the stack that scales every lane together, where this view has one ({@link stackBarFor}). */
+  private readonly stackBar: HTMLElement | null
   /**
    * Where the tooltip is pointing and how large it turned out to be.
    *
@@ -767,6 +778,11 @@ export class BrowserView {
 
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
     this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip, this.reframeHint)
+    // The 1D browser's own, and only its own: a deck's tracks cell has the
+    // cell's height bar under it (`panels/cellHeight.ts`), and beside a map the
+    // lanes are the map's (§5.8).
+    this.stackBar = props.map === undefined ? this.stackBarFor() : null
+    if (this.stackBar !== null) this.stage.append(this.stackBar)
     this.reframeHint.append(
       el('div', { text: `${optionKey()} + drag to zoom into a stretch` }),
       el('div', { text: 'or drag along the ruler' }),
@@ -1510,24 +1526,19 @@ export class BrowserView {
    * Tracks card can ask the same question; what stays here is the *measurement* —
    * how much room this view has, which only this view can answer.
    *
-   * Measured against the **host**, from the top of the stage down to the bottom
-   * of the column this view was mounted in. Not against `this.el`, which is
-   * sized by its own content: asking that how much room there is compares the
-   * tracks against themselves and fits them to the height they already have,
-   * which is a button that appears to do nothing.
+   * Measured by {@link stageRoom}, from the top of the stage down to the foot of
+   * the column this view was mounted in. Not against `this.el`, which is sized by
+   * its own content: asking that how much room there is compares the tracks
+   * against themselves and fits them to the height they already have, which is
+   * a button that appears to do nothing.
    */
   fitTracks(): void {
     const lanes = this.lanes
     if (lanes.length === 0) return
-    const host = this.roomHost()
-    if (host === null) return
-    const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
+    const stage = this.stageRoom()
+    if (stage === null) return
     const room =
-      host.getBoundingClientRect().bottom -
-      (Number.isFinite(padding) ? padding : 0) -
-      this.stage.getBoundingClientRect().top -
-      this.rulerHeight -
-      LANE_GAP * (lanes.length + 1)
+      stage - this.rulerHeight - LANE_GAP * (lanes.length + 1) - (this.standalone() ? STACK_BAR_ROOM : 0)
     const size = heightThatFills(room, lanes.length)
     if (size !== null) this.setTrackHeight(size)
   }
@@ -1548,6 +1559,182 @@ export class BrowserView {
   /** Give every lane one height, chosen rather than computed. */
   setTrackHeight(px: number): void {
     setTrackHeight(this.props.store, this.laneMembers(), px)
+  }
+
+  /**
+   * The bar under the stack (§5.8): every track taller or shorter **together,
+   * each in proportion** — a gene model drawn at half the height of the coverage
+   * above it is still half as tall when the stack has doubled.
+   *
+   * The deck cell's height bar in look (`panels/cellHeight.ts`), for a different
+   * thing: that one sets a picture's height and this one its lanes', so the
+   * stack's foot follows the hand. Escape mid-drag puts every lane back; a
+   * double click makes the stack fill the column, still in proportion — where
+   * *Stretch the tracks* (`h`) makes them one height; the arrow keys step it.
+   */
+  private stackBarFor(): HTMLElement {
+    const bar = el('div', {
+      class: 'cell-resize browser-stack-resize hidden',
+      attrs: { role: 'separator', 'aria-orientation': 'horizontal', tabindex: '0', 'aria-label': 'every track’s height' },
+      title: 'Drag to make every track taller or shorter, each in proportion · double-click to fill the window',
+    })
+    bar.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      const from = this.stackHeights()
+      const total = this.stackTotal()
+      if (from.size === 0 || !(total > 0)) return
+      event.preventDefault()
+      bar.setPointerCapture(event.pointerId)
+      bar.classList.add('is-dragging')
+      const y0 = event.clientY
+      const move = (moved: PointerEvent): void => this.scaleStack(from, (total + moved.clientY - y0) / total)
+      const finish = (keep: boolean): void => {
+        bar.removeEventListener('pointermove', move)
+        bar.removeEventListener('pointerup', up)
+        bar.removeEventListener('pointercancel', cancel)
+        window.removeEventListener('keydown', abort, true)
+        bar.classList.remove('is-dragging')
+        if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId)
+        if (!keep) this.scaleStack(from, 1)
+      }
+      const up = (ended: PointerEvent): void => {
+        move(ended)
+        finish(true)
+      }
+      const cancel = (): void => finish(false)
+      // Escape is the gesture's while it lasts, as a drag on the map's is.
+      const abort = (key: KeyboardEvent): void => {
+        if (key.key !== 'Escape') return
+        key.preventDefault()
+        key.stopPropagation()
+        finish(false)
+      }
+      bar.addEventListener('pointermove', move)
+      bar.addEventListener('pointerup', up)
+      bar.addEventListener('pointercancel', cancel)
+      window.addEventListener('keydown', abort, true)
+    })
+    bar.addEventListener('dblclick', () => this.fillStack())
+    bar.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowUp' ? -STACK_KEY_STEP : event.key === 'ArrowDown' ? STACK_KEY_STEP : 0
+      if (step === 0) return
+      event.preventDefault()
+      const total = this.stackTotal()
+      if (total > 0) this.scaleStack(this.stackHeights(), (total + step) / total)
+    })
+    return bar
+  }
+
+  /**
+   * Put the stack bar under the last lane, or away: on a stack with no lane in
+   * it, and in a deck, whose cell has its own bar for the height of the whole
+   * picture. `true` where it is shown, so the canvas keeps the room for it.
+   */
+  private placeStackBar(content: number): boolean {
+    const bar = this.stackBar
+    if (bar === null) return false
+    const shown = this.lanes.length > 0 && this.standalone()
+    bar.classList.toggle('hidden', !shown)
+    if (shown) bar.style.top = `${content + 1}px`
+    return shown
+  }
+
+  /** Each drawn track's height, by id: a lane's overlaid tracks take their host's. */
+  private stackHeights(): Map<string, number> {
+    const out = new Map<string, number>()
+    for (const lane of this.lanes) {
+      for (const member of [lane.entry, ...lane.overlaid]) out.set(member.id, lane.entry.style.size)
+    }
+    return out
+  }
+
+  /** The lanes' heights added up, each lane once: what the stack bar scales. */
+  private stackTotal(): number {
+    return this.lanes.reduce((sum, lane) => sum + lane.entry.style.size, 0)
+  }
+
+  /**
+   * Every track's height times `factor`, from the heights in `from`: in
+   * proportion, each held to what a lane may be (`trackControls.ts`), and
+   * announced once for the lot (`AnnotationStore.restyleEach`).
+   */
+  private scaleStack(from: ReadonlyMap<string, number>, factor: number): void {
+    const by = Math.max(0, factor)
+    this.props.store.restyleEach([...from.keys()], (style, id) => ({
+      size: laneSize((from.get(id) ?? style.size) * by),
+    }))
+  }
+
+  /**
+   * The stack's foot to the foot of the column, every lane in proportion — the
+   * stack bar's double click: taller where the stack is short of the column,
+   * shorter where it runs past it, so the whole of it is on screen.
+   *
+   * Against the column's own height, from where the stage stands in the
+   * column's *content* rather than on the screen: the bar is pressed with the
+   * column scrolled to the stack's foot, and measured on the screen the stage
+   * then begins above the window, which counted the scrolled-off stretch as
+   * room and filled nothing.
+   */
+  private fillStack(): void {
+    const total = this.stackTotal()
+    const stage = this.stageRoom()
+    if (!(total > 0) || stage === null) return
+    const room = stage - this.rulerHeight - LANE_GAP * (this.lanes.length + 1) - STACK_BAR_ROOM
+    if (room > 0) this.scaleStack(this.stackHeights(), room / total)
+    // Back to the top of the column, where the stack it was fitted to begins.
+    this.scrollHost().scrollTop = 0
+  }
+
+  /** Whether this is the 1D browser on its own — not a deck's tracks cell, not a deck's lead. */
+  private standalone(): boolean {
+    return this.stackBar !== null && this.el.closest('.deck-grid') === null
+  }
+
+  /**
+   * How tall the stage can be before the column runs out — the room
+   * {@link screenHeight}, {@link fitTracks} and the stack bar's double click all
+   * fill.
+   *
+   * **On its own, measured against the column that scrolls**: from where the
+   * stage stands in the column's *content* — not on the screen, where a column
+   * scrolled down to the stack's foot puts the stage's top above the window and
+   * the scrolled-off stretch counted as room — to the column's foot, less what
+   * stands under the stage (the deck's `+` edge, the column's padding).
+   * {@link roomHost} was asked before, and it is sized by what is in it: the
+   * room it reported was the canvas's own height, so a canvas grown under a tall
+   * stack never gave the height back when the stack was made shorter, and
+   * *Stretch* filled the grown canvas rather than the window.
+   *
+   * In a deck, against {@link roomHost}, the cell the browser is drawn in.
+   */
+  private stageRoom(): number | null {
+    if (this.standalone()) {
+      const column = this.scrollHost()
+      const stage = this.stage.getBoundingClientRect()
+      const top = stage.top - column.getBoundingClientRect().top - column.clientTop + column.scrollTop
+      const frame = (this.el.closest('.deck-frame') ?? this.el).getBoundingClientRect()
+      const padding = Number.parseFloat(window.getComputedStyle(column).paddingBottom)
+      const below = Math.max(0, frame.bottom - stage.bottom) + (Number.isFinite(padding) ? padding : 0)
+      return column.clientHeight - top - below
+    }
+    const host = this.roomHost()
+    if (host === null) return null
+    const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
+    return (
+      host.getBoundingClientRect().bottom -
+      (Number.isFinite(padding) ? padding : 0) -
+      this.stage.getBoundingClientRect().top
+    )
+  }
+
+  /** The nearest ancestor that scrolls — the column this view is read in — or the page's own. */
+  private scrollHost(): HTMLElement {
+    for (let node = this.el.parentElement; node !== null; node = node.parentElement) {
+      const overflow = window.getComputedStyle(node).overflowY
+      if (overflow === 'auto' || overflow === 'scroll') return node
+    }
+    return (document.scrollingElement as HTMLElement | null) ?? document.documentElement
   }
 
   /** The lanes this view is drawing, as the bulk height actions want them. */
@@ -1929,23 +2116,19 @@ export class BrowserView {
    * with: the empty space was the column's, not the plot's, and the pointer
    * moved over it silently.
    *
-   * Measured exactly as {@link fitTracks} measures, and against the same host,
-   * because it is the same question about the same room. The measurement cannot
-   * chase its own tail: what it reads is where the stage *begins*, which depends
-   * on the header above it and not on how tall this canvas turns out to be.
+   * Measured by {@link stageRoom}, as {@link fitTracks} measures, because it is
+   * the same question about the same room. The measurement cannot chase its own
+   * tail: what it reads is where the stage *begins* and what stands *under* it,
+   * neither of which depends on how tall this canvas turns out to be — so a
+   * canvas grown under a tall stack gives the height back when the stack is
+   * made shorter.
    *
    * Only on screen. A figure is a picture of the tracks, and blank paper under
    * them is not part of it — so {@link heightOf} is what the export asks for.
    */
   private screenHeight(content: number): number {
-    const host = this.roomHost()
-    if (host === null) return content
-    const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
-    const room =
-      host.getBoundingClientRect().bottom -
-      (Number.isFinite(padding) ? padding : 0) -
-      this.stage.getBoundingClientRect().top
-    return Math.max(content, Math.floor(room))
+    const room = this.stageRoom()
+    return room === null ? content : Math.max(content, Math.floor(room))
   }
 
   // -------------------------------------------------------------------------
@@ -2011,7 +2194,9 @@ export class BrowserView {
     // the axis carries on past the stack, and so does what a reader can point
     // at. See {@link screenHeight}. Measured before the canvas is resized, so
     // the read costs nothing the `clientWidth` above has not already paid for.
-    const height = this.screenHeight(this.heightOf(this.lanes))
+    const content = this.heightOf(this.lanes)
+    const bar = this.placeStackBar(content)
+    const height = this.screenHeight(content + (bar ? STACK_BAR_ROOM : 0))
 
     this.canvas.style.width = `${width}px`
     this.canvas.style.height = `${height}px`
