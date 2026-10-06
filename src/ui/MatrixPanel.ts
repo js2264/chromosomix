@@ -2224,7 +2224,7 @@ export class MatrixPanel {
     picture.push(
       iconButton(
         'maximize',
-        'Undo every pan and zoom (0, or a double click on the plot)',
+        withKey('Undo every pan and zoom — a double click on the plot does too', KEYS.fit),
         () => this.fit(),
         { class: 'btn btn-icon', size: 15 },
       ),
@@ -3069,6 +3069,25 @@ export class MatrixPanel {
     // written from the same measurement the map's own size comes out of, so this
     // has to go all the way round rather than only asking for a repaint.
     this.remeasure()
+  }
+
+  /**
+   * Whether the O/E toggle is lit, for its command's chip (`KEYS.expected`) —
+   * `null` where this panel offers none: a companion of a deck, a view with no
+   * derivation to take.
+   */
+  get expectedLit(): boolean | null {
+    return this.expectedButton === null ? null : this.expectedButton.getAttribute('aria-pressed') === 'true'
+  }
+
+  /** Whether {@link toggleExpected} has a toggle to press: one offered, and not greyed by a baseline. */
+  get canToggleExpected(): boolean {
+    return this.expectedButton !== null && !this.expectedButton.hasAttribute('disabled')
+  }
+
+  /** `e`: the O/E toggle's press (§7.5), whatever its button would do. */
+  toggleExpected(): void {
+    if (this.canToggleExpected) this.expectedButton?.click()
   }
 
   /** Whether {@link centreOnDiagonal} has somewhere to go: a diagonal in the block, and no turn. */

@@ -6,9 +6,11 @@
  * Aesthetics and `4` Analysis — and each is the key with that digit on it
  * whatever the layout types there: AZERTY's bare `&`, `é`, `"`, `'` are the
  * row as much as QWERTY's `1` to `4` are, with Shift or Caps Lock or without.
- * Control on the key left of `1` is the console. What is pinned here is the
- * window's own dispatch, from a real `keydown`, since the matching alone is
- * `test/unit/commands.test.ts`.
+ * Control on the key left of `1` is the console. The tab's own keys beside
+ * them — `−` and `+`, `<` and `>`, `0` — are reached the same way on every
+ * layout, and none of them a second time after a focused control has answered
+ * it. What is pinned here is the window's own dispatch, from a real `keydown`,
+ * since the matching alone is `test/unit/commands.test.ts`.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -199,5 +201,110 @@ describe('minus and plus', () => {
     press({ key: '-', code: 'Minus', ctrlKey: true })
     press({ key: '=', code: 'Equal', metaKey: true })
     expect(counts).toEqual({ coarser: 0, finer: 0 })
+  })
+})
+
+describe('the steps, the refit and the shortcuts', () => {
+  /** A tab in front that answers `<`, `>` and `0`, and counts; `<` dead when `first`. */
+  function counting(first = false): { previous: number; next: number; fit: number } {
+    const counts = { previous: 0, next: 0, fit: 0 }
+    windowWithAFile([
+      {
+        id: 'go-prev',
+        group: 'Go',
+        title: 'Previous sequence',
+        keys: '<',
+        enabled: !first,
+        run: () => counts.previous++,
+      },
+      { id: 'go-next', group: 'Go', title: 'Next sequence', keys: '>', run: () => counts.next++ },
+      { id: 'map-fit', group: 'View', title: 'Fit the view', keys: '0', run: () => counts.fit++ },
+    ])
+    return counts
+  }
+
+  it('step on QWERTY’s comma and full stop, with or without Shift', () => {
+    const counts = counting()
+    press({ key: ',', code: 'Comma' })
+    press({ key: '<', code: 'Comma', shiftKey: true })
+    press({ key: '.', code: 'Period' })
+    press({ key: '>', code: 'Period', shiftKey: true })
+    expect(counts).toEqual({ previous: 2, next: 2, fit: 0 })
+  })
+
+  it('step on AZERTY’s own key, and refit on its bare 0, which types à', () => {
+    const counts = counting()
+    press({ key: '<', code: 'IntlBackslash' })
+    press({ key: '>', code: 'IntlBackslash', shiftKey: true })
+    press({ key: 'à', code: 'Digit0' })
+    press({ key: '0', code: 'Digit0', shiftKey: true })
+    // AZERTY's comma and `;` carry no mark.
+    press({ key: ',', code: 'KeyM' })
+    press({ key: ';', code: 'Comma' })
+    expect(counts).toEqual({ previous: 1, next: 1, fit: 2 })
+  })
+
+  it('never fold Files from a French Mac’s `<` key, even with nothing before this sequence', () => {
+    Object.defineProperty(window.navigator, 'platform', { value: 'MacIntel', configurable: true })
+    try {
+      let previous = 0
+      const app = windowWithAFile([
+        { id: 'go-prev', group: 'Go', title: 'Previous sequence', keys: '<', enabled: false, run: () => previous++ },
+      ])
+      const folder = connectSnapshot('maps', [new File([], 'sample.mcool')])
+      connected.push(folder.id)
+      expect(app.filesPanel.isCollapsed).toBe(false)
+      // The key beside the left Shift, which a French Mac reports as Backquote.
+      press({ key: '<', code: 'Backquote' })
+      press({ key: '>', code: 'Backquote', shiftKey: true })
+      expect(app.filesPanel.isCollapsed).toBe(false)
+      expect(previous).toBe(0)
+      // Its key left of 1, `@`, is the one that folds it.
+      press({ key: '@', code: 'IntlBackslash' })
+      expect(app.filesPanel.isCollapsed).toBe(true)
+    } finally {
+      Object.defineProperty(window.navigator, 'platform', { value: '', configurable: true })
+    }
+  })
+
+  it('leave a key alone that a focused control has already answered', () => {
+    const counts = counting()
+    // A picture with keys of its own — a dot plot's canvas — refits on `0`.
+    const canvas = document.createElement('canvas')
+    canvas.tabIndex = 0
+    document.body.appendChild(canvas)
+    canvas.addEventListener('keydown', (event) => {
+      if (event.key === '0') event.preventDefault()
+    })
+    press({ key: '0', code: 'Digit0', cancelable: true }, canvas)
+    expect(counts.fit).toBe(0)
+    // Not cancelable, as every other press here: the windows of the tests above
+    // still listen, and the first of them to answer a cancelable one would
+    // answer it for this one too.
+    press({ key: '0', code: 'Digit0' })
+    expect(counts.fit).toBe(1)
+  })
+
+  it('open the shortcuts on ?, and leave ? to a box being typed into', () => {
+    windowWithAFile()
+    const box = document.createElement('input')
+    document.body.appendChild(box)
+    box.focus()
+    press({ key: '?', code: 'Slash', shiftKey: true }, box)
+    expect(document.querySelector('.modal-shortcuts')).toBeNull()
+    box.blur()
+    press({ key: '?', code: 'Slash', shiftKey: true })
+    expect(document.querySelector('.modal-shortcuts')).not.toBeNull()
+  })
+
+  it('take a Control chord from a box being typed into, as they take ⌘P', () => {
+    let tabs = 0
+    windowWithAFile([{ id: 'prev-tab', group: 'Go', title: 'Previous tab', keys: 'ctrl+<', run: () => tabs++ }])
+    const box = document.createElement('input')
+    document.body.appendChild(box)
+    box.focus()
+    press({ key: '<', code: 'IntlBackslash', ctrlKey: true }, box)
+    press({ key: '<', code: 'IntlBackslash' }, box)
+    expect(tabs).toBe(1)
   })
 })

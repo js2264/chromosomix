@@ -220,8 +220,8 @@ describe('the ‹ › pair', () => {
       noun: 'genome',
     })
     const [back, on] = all<HTMLButtonElement>(node, 'button')
-    expect(back.title).toBe('Previous genome: MAG_004 ([)')
-    expect(on.title).toBe('Next genome: MAG_006 (])')
+    expect(back.title).toBe('Previous genome: MAG_004 (<)')
+    expect(on.title).toBe('Next genome: MAG_006 (>)')
     expect(back.disabled).toBe(false)
     expect(on.disabled).toBe(false)
   })

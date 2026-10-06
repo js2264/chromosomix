@@ -154,6 +154,15 @@ describe('key bindings', () => {
       expect(matchesKeys(press({ key: '<', code: 'IntlBackslash' }), '`')).toBe(false)
     })
 
+    it('is never the `<` key a French or German Mac reports as Backquote', () => {
+      on('MacIntel')
+      expect(matchesKeys(press({ key: '<', code: 'Backquote' }), '`')).toBe(false)
+      expect(matchesKeys(press({ key: '>', code: 'Backquote', shiftKey: true }), '`')).toBe(false)
+      expect(matchesKeys(press({ key: '<', code: 'Backquote', ctrlKey: true }), KEYS.console)).toBe(false)
+      // …which steps to the sequence before this one instead.
+      expect(matchesKeys(press({ key: '<', code: 'Backquote' }), KEYS.previous)).toBe(true)
+    })
+
     it('opens the console with Control, on a Mac too, where ⌘ and it are the system’s', () => {
       on('Linux x86_64')
       expect(matchesKeys(press({ key: '²', code: 'Backquote', ctrlKey: true }), KEYS.console)).toBe(true)
@@ -221,6 +230,96 @@ describe('key bindings', () => {
     it('stand down for a modifier: ⌘+ and Ctrl+ are the browser’s zoom', () => {
       expect(matchesKeys(press({ key: '=', code: 'Equal', ctrlKey: true }), '+')).toBe(false)
       expect(matchesKeys(press({ key: '-', code: 'Minus', metaKey: true }), '-')).toBe(false)
+    })
+  })
+
+  /**
+   * `<` and `>`, the sequence steps: over the comma and the full stop on
+   * American and British QWERTY, Mac or PC, and a key of their own beside the
+   * left Shift on AZERTY — `IntlBackslash` on a PC, `Backquote` on a Mac.
+   */
+  describe('the angle brackets', () => {
+    const on = (platform: string): void => {
+      vi.stubGlobal('navigator', { platform, userAgent: platform })
+    }
+
+    it('take QWERTY’s comma and full-stop keys, with or without Shift', () => {
+      for (const platform of ['Win32', 'MacIntel']) {
+        on(platform)
+        expect(matchesKeys(press({ key: '<', code: 'Comma', shiftKey: true }), KEYS.previous)).toBe(true)
+        expect(matchesKeys(press({ key: ',', code: 'Comma' }), KEYS.previous)).toBe(true)
+        expect(matchesKeys(press({ key: '>', code: 'Period', shiftKey: true }), KEYS.next)).toBe(true)
+        expect(matchesKeys(press({ key: '.', code: 'Period' }), KEYS.next)).toBe(true)
+        expect(matchesKeys(press({ key: ',', code: 'Comma', caps: true }), KEYS.previous)).toBe(true)
+        // …and keep the two apart.
+        expect(matchesKeys(press({ key: '.', code: 'Period' }), KEYS.previous)).toBe(false)
+        expect(matchesKeys(press({ key: '<', code: 'Comma', shiftKey: true }), KEYS.next)).toBe(false)
+      }
+    })
+
+    it('take AZERTY’s own key, bare for `<` and shifted for `>`, on a PC and on a Mac', () => {
+      on('Win32')
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash' }), KEYS.previous)).toBe(true)
+      expect(matchesKeys(press({ key: '>', code: 'IntlBackslash', shiftKey: true }), KEYS.next)).toBe(true)
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash', caps: true }), KEYS.previous)).toBe(true)
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash' }), KEYS.next)).toBe(false)
+      on('MacIntel')
+      expect(matchesKeys(press({ key: '<', code: 'Backquote' }), KEYS.previous)).toBe(true)
+      expect(matchesKeys(press({ key: '>', code: 'Backquote', shiftKey: true }), KEYS.next)).toBe(true)
+    })
+
+    it('leave AZERTY’s comma and full stop alone, which carry no mark', () => {
+      on('Win32')
+      // The comma is on the M key, the `;` where QWERTY has its comma, and the
+      // full stop is Shift and that `;`.
+      expect(matchesKeys(press({ key: ',', code: 'KeyM' }), KEYS.previous)).toBe(false)
+      expect(matchesKeys(press({ key: ';', code: 'Comma' }), KEYS.previous)).toBe(false)
+      expect(matchesKeys(press({ key: '.', code: 'Comma', shiftKey: true }), KEYS.next)).toBe(false)
+      expect(matchesKeys(press({ key: ':', code: 'Period' }), KEYS.next)).toBe(false)
+    })
+
+    it('stand down for a modifier, AltGraph included, and walk the tabs with Control', () => {
+      on('Win32')
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash', ctrlKey: true }), KEYS.previous)).toBe(false)
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash', altKey: true }), KEYS.previous)).toBe(false)
+      expect(matchesKeys(press({ key: '<', code: 'IntlBackslash', ctrlKey: true }), KEYS.prevSession)).toBe(true)
+      expect(matchesKeys(press({ key: '.', code: 'Period', ctrlKey: true }), KEYS.nextSession)).toBe(true)
+      // AltGr is Ctrl and Alt on Windows, and is a key's third level, not a tab.
+      expect(
+        matchesKeys(press({ key: '<', code: 'IntlBackslash', ctrlKey: true, altKey: true }), KEYS.prevSession),
+      ).toBe(false)
+      // Control on a Mac too: ⌘< walks a French Mac's windows, and ⌘, is settings.
+      on('MacIntel')
+      expect(matchesKeys(press({ key: '<', code: 'Backquote', ctrlKey: true }), KEYS.prevSession)).toBe(true)
+      expect(matchesKeys(press({ key: '<', code: 'Backquote', metaKey: true }), KEYS.prevSession)).toBe(false)
+      expect(matchesKeys(press({ key: ',', code: 'Comma', metaKey: true }), KEYS.prevSession)).toBe(false)
+    })
+  })
+
+  describe('the rest of the remapped keys', () => {
+    it('fits on the 0 key by its place: AZERTY’s bare one types à', () => {
+      expect(matchesKeys(press({ key: '0', code: 'Digit0' }), KEYS.fit)).toBe(true)
+      expect(matchesKeys(press({ key: 'à', code: 'Digit0' }), KEYS.fit)).toBe(true)
+      expect(matchesKeys(press({ key: ')', code: 'Digit0', shiftKey: true }), KEYS.fit)).toBe(true)
+      expect(matchesKeys(press({ key: '0', code: 'Numpad0' }), KEYS.fit)).toBe(true)
+      expect(matchesKeys(press({ key: '0', code: 'Digit0', metaKey: true }), KEYS.fit)).toBe(false)
+    })
+
+    it('opens the shortcuts on ?, wherever the layout puts it', () => {
+      // Shift and `/` on QWERTY, Shift and the M key's comma on AZERTY.
+      expect(matchesKeys(press({ key: '?', code: 'Slash', shiftKey: true }), KEYS.shortcuts)).toBe(true)
+      expect(matchesKeys(press({ key: '?', code: 'KeyM', shiftKey: true }), KEYS.shortcuts)).toBe(true)
+      expect(matchesKeys(press({ key: '/', code: 'Slash' }), KEYS.shortcuts)).toBe(false)
+      expect(matchesKeys(press({ key: '?', code: 'Slash', shiftKey: true, ctrlKey: true }), KEYS.shortcuts)).toBe(
+        false,
+      )
+    })
+
+    it('gives f to the track fill, m to the breaks, e to the O/E and b to the bookmark', () => {
+      expect(PLOT_OPTION_KEYS.fills).toBe('f')
+      expect(PLOT_OPTION_KEYS.breaks).toBe('m')
+      expect(KEYS.expected).toBe('e')
+      expect(KEYS.bookmark).toBe('b')
     })
   })
 })
@@ -304,6 +403,15 @@ describe('keyLabel', () => {
     expect(keyLabel(KEYS.finer)).toBe('+')
   })
 
+  it('prints the steps as their marks, and the tabs with Control on both platforms', () => {
+    expect(keyLabel(KEYS.previous)).toBe('<')
+    expect(keyLabel(KEYS.next)).toBe('>')
+    on('Linux x86_64')
+    expect(keyLabel(KEYS.nextSession)).toBe('Ctrl+>')
+    on('MacIntel')
+    expect(keyLabel(KEYS.prevSession)).toBe('⌃<')
+  })
+
   /**
    * The key left of 1 prints what the reader's keyboard has there, which the
    * page learns from the layout (`ui/keyboardLayout.ts`) — and *backtick*, the
@@ -362,7 +470,7 @@ describe('keyLabel', () => {
   it('has no stray separator anywhere', () => {
     for (const platform of ['Linux x86_64', 'MacIntel']) {
       on(platform)
-      for (const keys of ['mod+p', 'g', 'c', 'w', '[', ']', 'x', 'd', 'l', '1', 't', '?', '-', 'ctrl+`']) {
+      for (const keys of ['mod+p', 'g', 'c', 'w', '<', '>', 'ctrl+<', 'x', 'd', 'l', '0', '1', 't', '?', '-', 'ctrl+`']) {
         expect(keyLabel(keys)).not.toContain('++')
         expect(keyLabel(keys).endsWith('+')).toBe(false)
       }
@@ -415,16 +523,16 @@ describe('the key tables', () => {
   // is `isTypingTarget`, and it is only consulted for bindings without a
   // modifier — so a *chord* is the only kind of binding that may also be a
   // character somebody types. The digit row is the columns', in the order they
-  // stand; `0` is still the canvas's, which answers it from its own handler.
-  it('gives the digit row to the columns, and leaves 0 to the canvas', () => {
+  // stand, and `0`, at its far end, refits the picture from anywhere.
+  it('gives the digit row to the columns, and 0 to the refit', () => {
     const digits = bindings.filter(([, keys]) => /^\d$/.test(keys))
     expect(digits.map(([name, keys]) => `${keys} ${name}`)).toEqual([
+      '0 fit',
       '1 General panel',
       '2 Annotations panel',
       '3 Aesthetics panel',
       '4 Analysis panel',
     ])
-    expect(bindings.some(([, keys]) => keys === '0')).toBe(false)
   })
 
   it('folds Files on the key left of 1, and opens the console with Control on it', () => {

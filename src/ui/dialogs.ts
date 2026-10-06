@@ -59,9 +59,11 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['{meta} + wheel', 'Slide the map up and down, and sideways with it'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
-  // No `+ / −` row: on a map the two step the resolution, and are commands —
-  // *Coarser resolution* and *Finer resolution*, in the View block above.
-  ['0 or Home', 'Fit the block to the canvas'],
+  ['Page Up / Page Down', 'Zoom in and out about the centre'],
+  // No `+ / −` row and no `0`: on a map the two step the resolution and the
+  // `0` refits from anywhere, and all three are commands — *Coarser
+  // resolution*, *Finer resolution* and *Fit the view*, in the View block above.
+  ['Home', 'Fit the block to the canvas'],
   // The lanes are part of this picture, and their gestures are the browser's
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.
@@ -105,7 +107,7 @@ const BROWSER_KEYS: Array<[string, string]> = [
   ['drop a file on the tracks', 'Load it — a .cool opens the map on this genome'],
   ['← →', 'Pan by a fifth of the window'],
   ['+ / −', 'Zoom about the centre'],
-  ['0', 'The whole genome'],
+  // No `0` row: it is *Fit the view*, a command, in the View block above.
 ]
 
 function keyRow(keys: string, description: string): HTMLElement {

@@ -854,6 +854,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **`<` and `>` step to the neighbouring sequence, and the letters are where they read (§5.5, §5.6,
+  §7.2, §8.10, §26.6).** The sequence steps were `[` and `]`, which a French keyboard types with
+  AltGr — never a shortcut here — and a French Mac with ⇧⌥. `<` and `>` step on every layout: over
+  the comma and the full stop on American and British QWERTY, so `,` and `.` step without Shift, and
+  bare and shifted on the key of their own that AZERTY and most European keyboards have beside the
+  left Shift — on a French or German Mac that key no longer folds Files when there is no sequence to
+  step to, and the Files badge no longer prints it. **Control with them is the tab beside this one**
+  (it was ⌘[ and ⌘]), Control on a Mac too, from a box being typed into as well. `e` is the O/E
+  toggle, the breaks overlay moves to `m`, `f` is the track fill's again, and `b` bookmarks the view,
+  as the button beside `go` does. **`0` refits from anywhere in the window** — *Fit the view*, the 1D
+  browser's whole genome — rather than only once the map had been clicked, and by its place, so
+  AZERTY's bare `à` does; Home still refits the focused map. **Page Up and Page Down zoom the focused
+  map** about its centre, a wheel notch a press. **`?` opens the shortcuts dialog** (it was ⌘/ or
+  Ctrl+/). A key a focused picture has already answered is no longer the window's too: a dot plot's
+  canvas zooming on `+` stepped the map's resolution with it. The desktop menu shows `<`, `>` and `?`.
+
 - **The digit row folds the side columns, in the order they stand, and `−` / `+` step the resolution
   (§5.5, §26.6).** The key left of `1` folds Files, then `1` General, `2` Annotations, `3` Aesthetics
   and `4` Analysis — left to right as the columns are on screen, where they were `f` `b` `a` `m` `j`.

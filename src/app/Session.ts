@@ -200,7 +200,7 @@ import {
 } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import { KEYS, type Command } from '../ui/commands'
+import { KEYS, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
@@ -1467,13 +1467,15 @@ export class Session {
     // a zoom — have no counterpart on a map. Listing a map's actions beside a
     // browser (greyed out, every one of them) would be a palette that mostly
     // says no.
-    // One word for the list `[` and `]` walk, and it is the word §26.4 gives a
+    // One word for the list `<` and `>` walk, and it is the word §26.4 gives a
     // stretch of DNA in prose: a **sequence**. The two branches used to name it
     // differently — "Previous sequence" here, "Previous genome or contig" on a
     // map — so pressing `v` rewrote half the palette, and on a plain cooler
     // "genome or contig" named neither of the things the key steps through. A
     // genome view is the one place the step really is a genome, and says so.
     const stepNoun = state?.view === 'genome' ? 'genome' : 'sequence'
+    const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
+    const expected = this.current?.panel?.expectedLit ?? null
     if (this.assembly !== null) {
       return [
         {
@@ -1482,6 +1484,17 @@ export class Session {
           title: 'Whole genome',
           hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
+          run: () => this.store.patch({ locus: undefined }),
+        },
+        // `0` is the map's refit, and the browser's whole genome is what a refit
+        // is here: the same key in both, so a reader who learnt it on one picture
+        // does not find it dead on the other.
+        {
+          id: 'browser-fit',
+          group: 'View',
+          title: 'Fit the view',
+          hint: 'The whole genome across, as W and a double click on the tracks do.',
+          keys: KEYS.fit,
           run: () => this.store.patch({ locus: undefined }),
         },
         // The same two keys a map has, walking the same list. They were left out
@@ -1737,9 +1750,31 @@ export class Session {
         enabled: this.current?.panel?.canCentreOnDiagonal === true,
         run: () => this.current?.panel?.centreOnDiagonal(),
       },
+      {
+        id: 'map-fit',
+        group: 'View',
+        title: 'Fit the view',
+        // The first map's, which in a deck is every map's, as Space's is.
+        hint: 'Every pan and zoom undone, the block back to its canvas — as a double click on the plot does.',
+        keys: KEYS.fit,
+        enabled: this.current?.panel !== undefined,
+        run: () => this.current?.panel?.fit(),
+      },
+      {
+        id: 'map-expected',
+        group: 'View',
+        title: 'Observed over expected',
+        // The lead's toggle, the one on the Map card: a companion of a deck keeps
+        // an O/E of its own (§16.2), on its own card.
+        hint: 'Every cell divided by what its distance from the diagonal predicts — the O/E toggle on the Map card.',
+        keys: KEYS.expected,
+        ...(expected === null ? {} : { state: chip(expected) }),
+        enabled: this.current?.panel?.canToggleExpected === true,
+        run: () => this.current?.panel?.toggleExpected(),
+      },
       // The resolution bar's stops, one at a time (§3.4): the lead's rung, which
       // in a deck every map follows, exactly as a press on a stop would. The
-      // hint names the rung it goes to, as `[` and `]` name the sequence.
+      // hint names the rung it goes to, as `<` and `>` name the sequence.
       {
         id: 'resolution-coarser',
         group: 'View',
@@ -1834,6 +1869,17 @@ export class Session {
         keys: KEYS.next,
         enabled: this.stepTarget(1) !== null,
         run: () => this.step(1),
+      },
+      // The button beside `go`, and the card's own *save this view*: one act,
+      // which answers on the card — a row, or the reason there is none.
+      {
+        id: 'bookmark-view',
+        group: 'Go',
+        title: 'Bookmark this view',
+        hint: 'The place on screen, at this resolution, kept on the Bookmarks card.',
+        keys: KEYS.bookmark,
+        enabled: this.bookmarksCard !== null && this.current?.panel !== undefined,
+        run: () => this.bookmarksCard?.saveFramed(),
       },
     ]
   }
@@ -1931,7 +1977,7 @@ export class Session {
    *
    * Its sequences are the **assembly's**, not a contigs table's — a browser
    * session has no map and often no cooler at all — but the gesture is the one
-   * the map has: `[` and `]` walk the file's own order, one sequence at a time.
+   * the map has: `<` and `>` walk the file's own order, one sequence at a time.
    * Leaving them unbound there made the browser the one view where the plainest
    * thing anybody does with a genome had to go through the locus box.
    *
@@ -7354,7 +7400,7 @@ export class Session {
     if (this.bookmarksCard === null) return undefined
     return iconButton(
       'bookmark-plus',
-      'Bookmark this view — the place on screen, at this resolution',
+      withKey('Bookmark this view — the place on screen, at this resolution', KEYS.bookmark),
       () => this.bookmarksCard?.saveFramed(),
     )
   }

@@ -238,28 +238,27 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
  * a shortcut, and `App.commands` binds it. Written twice, they drift, and the
  * one that drifts is always the tooltip — nothing fails when it is wrong.
  *
- * **`fills` has no key.** It gave `f` to the Files panel when a fifth panel
- * arrived and the single-letter space was down to `q` and `z`: between one of
- * five columns and one of eleven overlay toggles, the key belonged to the
- * column, while an overlay's toggle is a button on screen beside the picture it
- * changes. The panels have since moved to the digit row, in the order they
- * stand (`ui/SidePanel.ts`), which leaves `f` unbound; the toggle has not taken
- * it back, and is one keystroke short on the option whose button is hardest to
- * miss.
+ * **`fills` has `f` back.** It gave the letter to the Files panel when a fifth
+ * panel arrived and the single-letter space was down to `q` and `z`; the panels
+ * have since moved to the digit row, in the order they stand
+ * (`ui/SidePanel.ts`), and the letter came home. **`breaks` is `m`**, for the
+ * margin they are drawn in: `e` went to the O/E toggle (`KEYS.expected`), whose
+ * letter it is.
  *
- * A missing entry is therefore a real state and every reader of this table
- * handles it: the tooltip prints the label alone, and `App.commands` registers
- * nothing.
+ * **`legend` has no key**, so a missing entry is a real state and every reader
+ * of this table handles it: the tooltip prints the label alone, and
+ * `App.commands` registers nothing.
  */
 export const PLOT_OPTION_KEYS: Partial<Record<PlotOptionKey, string>> = {
   text: 'n',
+  fills: 'f',
   outline: 'i',
   baseline: 'r',
   gutter: 'u',
   crosshair: 'x',
   tooltip: 'p',
   dividers: 'd',
-  breaks: 'e',
+  breaks: 'm',
   labels: 'l',
   ticks: 'k',
 }

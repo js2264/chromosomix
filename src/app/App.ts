@@ -2193,7 +2193,7 @@ export class App implements SessionHost {
     // that goes stale is the one nothing tests.
     //
     // Iterated over the **labels**, not over the bindings. Not every overlay has
-    // a key — `fills` has none (`ui/plotOptions.ts`) — and iterating the keys
+    // a key — `legend` has none (`ui/plotOptions.ts`) — and iterating the keys
     // would have dropped that one out of the palette altogether, which is the
     // one place in this app that promises to list everything it can do. A
     // command with no `keys` is a palette-only command, which is a state the
@@ -2379,7 +2379,7 @@ export class App implements SessionHost {
    * Dispatch a keystroke.
    *
    * A dialog owns the keyboard while it is open, and anything typed into an
-   * input belongs to that input — `?` and `[` are legal in a contig name, and
+   * input belongs to that input — `?` and `<` are legal in a contig name, and
    * `o` is legal in every name there is. Chords survive both, because ⌘P from a
    * text box is still ⌘P.
    */
@@ -2388,6 +2388,13 @@ export class App implements SessionHost {
     // says as much about the layout as a shortcut does, and the press that
     // teaches is the first one read with what it taught.
     learnKey(event)
+    // **A key the focused control has already answered is not the app's too.**
+    // The pictures with keys of their own say so the way the drawers' Escape
+    // does: a dot plot's canvas zooms on `+` and `−` and refits on `0`, a 1D
+    // browser's zooms and shows the whole genome, a plot's edge goes back to its
+    // default on `0` — and each of those, heard here as well, stepped the map's
+    // resolution or refitted it under a press that was about something else.
+    if (event.defaultPrevented) return
     if (this.modal !== null) return
     const typing = isTypingTarget(event.target)
     // Above the loop, not inside it.
@@ -2401,7 +2408,9 @@ export class App implements SessionHost {
     if (typing && !isChord(event)) return
     for (const command of this.commands()) {
       if (command.keys === undefined || command.enabled === false) continue
-      if (typing && !command.keys.startsWith('mod+')) continue
+      // ⌘ or Ctrl, and Control on a Mac: the tabs' `ctrl+<` from a filter box is
+      // still the next tab, as `mod+p` there is still the palette.
+      if (typing && !/^(mod|ctrl)\+/.test(command.keys)) continue
       // ⌘C is the browser's before it is ours whenever there is text under it.
       if (command.yieldsToText === true && wantsTextCopy(event.target)) continue
       // …and Space is a focused button's, tickbox's or menu row's before ours.

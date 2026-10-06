@@ -196,8 +196,8 @@ describe('the stepper', () => {
     const [prev, next] = all<HTMLButtonElement>(node, 'button')
     // The key that does the same thing, because a tooltip is where a reader
     // who is already pointing at the button discovers there is a faster way.
-    expect(prev.title).toBe('Previous genome: MAG_01 ([)')
-    expect(next.title).toBe('Next genome: MAG_03 (])')
+    expect(prev.title).toBe('Previous genome: MAG_01 (<)')
+    expect(next.title).toBe('Next genome: MAG_03 (>)')
     expect(prev.disabled).toBe(false)
   })
 

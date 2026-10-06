@@ -1075,7 +1075,8 @@ export class StructurePanel implements DeckCell {
    * The same gate {@link commands} puts on the bindings themselves: a key
    * reaches the model only while it is enlarged, so a card beside a deck that
    * printed “(1)” would be offering a key that folds the General panel instead
-   * — as “(f)” offered the Files panel's, when that was `f`. And
+   * — as “(f)” offered the Files panel's, when that was `f`, and offers the
+   * track fill's now. And
    * one form for it — `withKey`'s — rather than the three the cell used to
    * carry: “(m, enlarged)” in the corner, “(f)” on the card, “(F)” everywhere
    * else in the app. Re-read on every expand and collapse ({@link paintKeys}).
@@ -1125,11 +1126,10 @@ export class StructurePanel implements DeckCell {
     // **And the three modes have none at all** (§25.4): a bare letter that arms
     // a mode is a letter pressed by accident while the pointer happens to be
     // over the model, which is true in the dialog above all — the model is the
-    // whole window there. `e` and `o` also belong to something else (breaks, a
-    // new tab), as `m` did (the Aesthetics panel, then), so the shortcuts
-    // dialog printed two rows for one letter and the reader could not tell
-    // which it would do. They are pressed on the buttons, in the corner or on
-    // the card.
+    // whole window there. `e`, `o` and `m` also belong to something else (the
+    // O/E, a new tab, the breaks), so the shortcuts dialog printed two rows
+    // for one letter and the reader could not tell which it would do. They are
+    // pressed on the buttons, in the corner or on the card.
     const key = (binding: string): { keys?: string } => (this.expanded === null ? {} : { keys: binding })
     return [
       { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key(STRUCTURE_KEYS.frame), enabled: has, run: () => this.frameLit() },

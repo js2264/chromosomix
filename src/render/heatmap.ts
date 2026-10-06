@@ -632,6 +632,15 @@ function createRasterCanvas(width: number, height: number): RasterCanvas {
 const DOUBLE_CLICK_MS = 250
 
 /**
+ * How far one press of Page Up or Page Down zooms about the centre.
+ *
+ * About one notch of a mouse wheel (`exp(100 × 0.002)`, 1.22), and what `+`
+ * and `−` took when they were this canvas's zoom: a press is a step a reader
+ * can see and undo, and a held key repeats it into a sweep.
+ */
+const KEY_ZOOM = 1.25
+
+/**
  * How long a freeze lasts before it shows a spinner.
  *
  * Most refines are served out of the byte source's chunk cache and land in a few
@@ -5188,14 +5197,17 @@ export class HeatmapView {
   // -- input ---------------------------------------------------------------
 
   /**
-   * Keyboard pan (spec §7.2). Arrows pan by a tenth of the viewport (a half
-   * with Shift), `0` or Home refits.
+   * Keyboard pan and zoom (spec §7.2). Arrows pan by a tenth of the viewport (a
+   * half with Shift), Page Up and Page Down zoom about the centre by a wheel
+   * notch's worth, and Home refits.
    *
-   * **Not `+` and `−`**, which zoomed about the centre and now step the map's
-   * resolution (`KEYS.coarser`, `KEYS.finer`). They are the app's, heard on the
+   * **Not `+` and `−`**, which zoomed here once and now step the map's
+   * resolution (`KEYS.coarser`, `KEYS.finer`), **nor `0`**, which refits from
+   * anywhere in the window (`KEYS.fit`). They are the app's, heard on the
    * window — and this canvas has the focus after any press on it, so answering
    * them here as well made one keystroke a zoom *and* a re-read at another
-   * grid. The wheel, a pinch and the boxes zoom.
+   * grid. The paging pair is the zoom they gave up, on the two keys that
+   * already mean "a long way" and that nothing else on a map answers.
    *
    * @returns `true` if the key was consumed, in which case the default action
    * has already been prevented. The caller still has to redraw.
@@ -5231,7 +5243,12 @@ export class HeatmapView {
       case 'ArrowDown':
         this.panBy(0, -plot.height * step)
         break
-      case '0':
+      case 'PageUp':
+        this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, KEY_ZOOM)
+        break
+      case 'PageDown':
+        this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / KEY_ZOOM)
+        break
       case 'Home':
         this.fit()
         break

@@ -6,7 +6,7 @@
  * works but is not in the dialog, or a palette entry whose key has drifted, is
  * how command surfaces rot.
  *
- * Keys are written as `mod+p`, `?`, `[`. `mod` is ⌘ on a Mac and Ctrl
+ * Keys are written as `mod+p`, `?`, `<`. `mod` is ⌘ on a Mac and Ctrl
  * elsewhere, and `ctrl` is Control on both, which is what {@link matchesKeys}
  * resolves and {@link keyLabel} renders.
  *
@@ -43,12 +43,20 @@ export const KEYS = {
    *
    * `F2`, which is what every list with renameable rows has used since file
    * managers had rows — and the one binding here that costs nothing else: the
-   * single-letter space is spent (`ui/plotOptions.ts` explains giving up `f`),
-   * and the browser claims every chord a rename would otherwise want.
+   * single-letter space is spent, and the browser claims every chord a rename
+   * would otherwise want.
    */
   renameSession: 'F2',
-  nextSession: 'mod+]',
-  prevSession: 'mod+[',
+  /**
+   * The tab beside this one: Control with the marks that step to the sequence
+   * beside this one ({@link KEYS.next}), the same two marks one level up.
+   *
+   * Control on a Mac too, not ⌘, on the console's reasoning: a French Mac's
+   * `<` is the key the system walks a program's windows with (⌘<, its ⌘`), and
+   * ⌘ with the comma under QWERTY's `<` is every Mac program's settings.
+   */
+  nextSession: 'ctrl+>',
+  prevSession: 'ctrl+<',
   theme: 't',
   /**
    * The console (§23), on the chord every terminal in every editor is behind.
@@ -69,7 +77,14 @@ export const KEYS = {
    * out of the window's edge rather than a dialog.
    */
   stores: '\\',
-  shortcuts: 'mod+/',
+  /**
+   * The shortcuts dialog, on the question mark — what every web application
+   * that has such a card answers to, and the key a reader presses to ask.
+   *
+   * A bare key, so a box keeps it: `?` is a character of a URL and of a
+   * contig name, and typed into one it is text (`App.onKeyDown`).
+   */
+  shortcuts: '?',
   /**
    * The one box every view has, whatever it is called there.
    *
@@ -88,8 +103,41 @@ export const KEYS = {
   genomes: 'g',
   contigs: 'c',
   whole: 'w',
-  previous: '[',
-  next: ']',
+  /**
+   * The sequence before and after this one (§5.5), on the two marks that point
+   * that way.
+   *
+   * They were `[` and `]`, which a French keyboard types with AltGr — a third
+   * level, and so never a shortcut here — and a French Mac with ⇧⌥. Every
+   * keyboard has `<` and `>` within reach of the left hand or under the right,
+   * and {@link pressed} takes either half of the key they are on: QWERTY puts
+   * them over the comma and the full stop, so those step too without Shift,
+   * while AZERTY gives them a key of their own beside the left Shift, bare and
+   * shifted.
+   */
+  previous: '<',
+  next: '>',
+  /**
+   * Undo every pan and zoom: the map's block back to its canvas, the whole
+   * genome across the 1D browser.
+   *
+   * The app's, heard on the window, like `−` and `+` beside it, rather than the
+   * canvas's alone — which is where it used to be, so it did nothing until the
+   * picture had been clicked. Bound by its place, as the digits that fold the
+   * columns are: AZERTY's bare `0` key types `à`.
+   */
+  fit: '0',
+  /**
+   * *Bookmark this view* (§8.10): the place on screen, at the resolution it is
+   * open at — the button beside `go`, from the keyboard.
+   */
+  bookmark: 'b',
+  /**
+   * The O/E toggle (§7.5): every cell divided by what its distance from the
+   * diagonal predicts. `e` for expected; it was the breaks overlay's, which
+   * took `m` for the margin they are drawn in (`ui/plotOptions.ts`).
+   */
+  expected: 'e',
   /**
    * One rung coarser and one finer on the resolution bar (§3.4): the same stops
    * the bar's radios are, walked from the keyboard.
@@ -157,10 +205,10 @@ export const KEYS = {
  *
  * `undefined` gives the text back unchanged, so a control that has no shortcut
  * can be described by the same call as one that has. Not every control does:
- * `ui/plotOptions.ts` gave `f` to the Files panel and left its `fills` toggle
- * keyless, and the single-letter space is spent enough that it will not be the
- * last. Absorbed here rather than at the call sites, because a `?? ''` at each
- * of them would print `Track fill — … ()`.
+ * `ui/plotOptions.ts` leaves the `legend` toggle keyless, and the single-letter
+ * space is spent enough that it will not be the last. Absorbed here rather than
+ * at the call sites, because a `?? ''` at each of them would print
+ * `Legend — … ()`.
  */
 export function withKey(text: string, keys: string | undefined): string {
   if (keys === undefined) return text
@@ -459,7 +507,7 @@ export function stateChip(command: Command): HTMLElement[] {
   return [el('span', { class: 'kbd cmd-state', text: command.state })]
 }
 
-/** Does this event match a binding such as `mod+p`, `?` or `1`. */
+/** Does this event match a binding such as `mod+p`, `?`, `<` or `1`. */
 export function matchesKeys(event: KeyboardEvent, keys: string): boolean {
   const { mods, key } = parseKeys(keys)
   if (mods.includes('mod')) {
@@ -485,23 +533,53 @@ export function matchesKeys(event: KeyboardEvent, keys: string): boolean {
  * the keypad arrives: AZERTY's bare `1` key types `&`, and a reader pressing the
  * key with the 1 on it means the 1 whichever half of it the layout puts first.
  *
- * **The key left of 1 by position as well**: a backtick on QWERTY, `²` on an
- * AZERTY PC, `@` on a French Mac, and the binding is the place. A Mac's ISO
- * keyboard — every European one — reports that key as `IntlBackslash` and the
- * one beside the left Shift as `Backquote`, so on a Mac both answer.
+ * **The key left of 1 by position as well** ({@link isLeftOfOne}): a backtick
+ * on QWERTY, `²` on an AZERTY PC, `@` on a French Mac, and the binding is the
+ * place.
  *
- * **`-` and `+` by what they type** ({@link isMinus}, {@link isPlus}), because
- * they are not at one place across layouts; and every other key the same way,
- * letters regardless of case.
+ * **`-`, `+`, `<` and `>` by what they type** ({@link isMinus}, {@link isPlus},
+ * {@link isAngle}), either half of the key they are on, because they are not
+ * at one place across layouts; and every other key the same way, letters
+ * regardless of case.
  */
 function pressed(event: KeyboardEvent, key: string): boolean {
   if (/^\d$/.test(key)) return event.code === `Digit${key}` || event.key === key
-  if (key === '`') {
-    return event.code === 'Backquote' || (event.code === 'IntlBackslash' && isMac()) || event.key === '`'
-  }
+  if (key === '`') return isLeftOfOne(event)
   if (key === '-') return isMinus(event)
   if (key === '+') return isPlus(event)
+  if (key === '<' || key === '>') return isAngle(event, key)
   return typeof event.key === 'string' && event.key.toLowerCase() === key.toLowerCase()
+}
+
+/**
+ * The key left of `1`, wherever the keyboard reports it.
+ *
+ * A Mac's ISO keyboard — every European one — reports that key as
+ * `IntlBackslash` and the one beside the left Shift as `Backquote`, so on a Mac
+ * both answer: on a British one the second is a backtick too. **Never a key
+ * that types `<` or `>`**, though, which is what that second key is on a French
+ * or a German Mac — the sequence steps' (`KEYS.previous`), and a press of it
+ * folded the Files column whenever there was no sequence to step to.
+ */
+function isLeftOfOne(event: KeyboardEvent): boolean {
+  if (event.key === '<' || event.key === '>') return false
+  return event.code === 'Backquote' || (event.code === 'IntlBackslash' && isMac()) || event.key === '`'
+}
+
+/**
+ * `<` or `>`, either half of the key it is on.
+ *
+ * AZERTY, like most European layouts, gives the pair a key of its own beside
+ * the left Shift, and there the two marks are its two halves. American and
+ * British QWERTY put them over the comma and the full stop, so those count too
+ * — by place as well as by character, since AZERTY types its comma on the M key
+ * and its full stop as Shift and `;`, neither of which carries a mark.
+ */
+function isAngle(event: KeyboardEvent, mark: '<' | '>'): boolean {
+  if (event.key === mark) return true
+  return mark === '<'
+    ? event.key === ',' && event.code === 'Comma'
+    : event.key === '.' && event.code === 'Period'
 }
 
 const DIGIT_ROW = /^Digit\d$/

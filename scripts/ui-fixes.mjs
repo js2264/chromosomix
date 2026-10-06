@@ -49,7 +49,7 @@ const hashRegions = (tab) =>
 await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(6000)
-await page.keyboard.press('Control+/')
+await page.keyboard.press('?')
 await sleep(900)
 const gestures = await page.$$eval('.shortcut-gestures .shortcut-row', (rows) =>
   rows.map((row) => row.textContent?.replace(/\s+/g, ' ').trim() ?? '').filter((text) => /sideways|Shift|diagonal|lane|edge/i.test(text)),
@@ -97,9 +97,9 @@ await sleep(400)
 // ---- a picker tab's status bar ---------------------------------------------
 await page.keyboard.press('o')
 await sleep(1200)
-await page.keyboard.press('Control+[')
+await page.keyboard.press('Control+Comma')
 await sleep(1500)
-await page.keyboard.press('Control+]')
+await page.keyboard.press('Control+Period')
 await sleep(1500)
 console.log(
   'status bar on the picker tab:',

@@ -103,6 +103,13 @@ describe('the key left of 1', () => {
     learnKey(press({ key: '`', code: 'Backquote' }))
     expect(leftOfOne(true)).toBe('`')
   })
+
+  it('is not the `<` key a French Mac reports as Backquote, when that is all it has said', () => {
+    learnKey(press({ key: '<', code: 'Backquote' }))
+    expect(leftOfOne(true)).toBeUndefined()
+    learnKey(press({ key: 'a', code: 'KeyQ' }))
+    expect(leftOfOne(true)).toBe('@')
+  })
 })
 
 describe('the browser’s own layout map', () => {

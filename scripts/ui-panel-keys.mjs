@@ -232,7 +232,7 @@ try {
     await shot('pk04-qwerty-console')
     await page.keyboard.press('Control+Backquote')
     await sleep(500)
-    await page.keyboard.press('Control+/')
+    await page.keyboard.press('?')
     await sleep(900)
     console.log('dialog View rows:', await page.evaluate(() =>
       [...document.querySelectorAll('.shortcut-group')]
@@ -381,7 +381,7 @@ try {
     console.log('  Files tab :', await page.evaluate(() => document.querySelector('.panel-files .panel-tab')?.title))
     await shot('pk14-azerty-console')
     await azerty(page, { key: '²', code: 'Backquote', ctrlKey: true })
-    await page.keyboard.press('Control+/')
+    await page.keyboard.press('?')
     await sleep(900)
     await shot('pk15-azerty-shortcuts-dialog')
     await shotOf('pk15b-azerty-dialog-view-keys', '.shortcut-group:has(.shortcut-row .shortcut-text:text-is("Console"))')

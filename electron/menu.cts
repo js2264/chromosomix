@@ -130,8 +130,8 @@ export function buildMenu(): Menu {
       mirror('Contigs table', 'go-contigs', 'C'),
       mirror('Whole genome', 'go-overview', 'W'),
       { type: 'separator' },
-      mirror('Previous sequence', 'go-prev', '['),
-      mirror('Next sequence', 'go-next', ']'),
+      mirror('Previous sequence', 'go-prev', '<'),
+      mirror('Next sequence', 'go-next', '>'),
     ],
   })
 
@@ -168,7 +168,7 @@ export function buildMenu(): Menu {
   template.push({
     label: '&Help',
     submenu: [
-      { label: 'Keyboard shortcuts', click: () => send('shortcuts') },
+      mirror('Keyboard shortcuts', 'shortcuts', '?'),
       { label: 'About (meta)cooler', click: () => send('about') },
       { type: 'separator' },
       {

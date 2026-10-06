@@ -159,14 +159,17 @@ export function looksAzerty(): boolean {
  * there (`ui/commands.ts`). So the label prefers `IntlBackslash`'s character
  * unless the layout is American or British, whose `Backquote` types a backtick:
  * on an American keyboard that *is* the top-left key, and on a British one it is
- * the key by Shift, which folds the column too.
+ * the key by Shift, which folds the column too. On a French or a German Mac the
+ * key by Shift types `<`, which steps to the sequence before this one rather
+ * than folding anything (`ui/commands.ts`), so it says nothing about this label.
  */
 export function leftOfOne(mac: boolean): string | undefined {
   const grave = bare.get('Backquote')
   if (!mac) return grave ?? (looksAzerty() ? '²' : undefined)
+  const beside = grave === '<' || grave === '>' ? undefined : grave
   const section = bare.get('IntlBackslash')
-  if (section !== undefined && grave !== '`') return section
-  if (grave !== undefined) return grave
+  if (section !== undefined && beside !== '`') return section
+  if (beside !== undefined) return beside
   return looksAzerty() ? '@' : undefined
 }
 
