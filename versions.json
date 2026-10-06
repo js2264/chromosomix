@@ -212,5 +212,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 92,
+      "commit": "de8c5a6",
+      "title": "Bind keyboard shortcuts by position for the digit row",
+      "branch": "ccr-9f7b3c25-4had99",
+      "date": "2026-10-06T13:24:02Z"
+    }
+  ]
 }
