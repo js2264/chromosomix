@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 92,
-      "commit": "de8c5a6",
-      "title": "Bind keyboard shortcuts by position for the digit row",
+      "commit": "343e345",
+      "title": "Fold the columns from the digit row, step on the angle brackets, lock the map onto its diagonal, and say how to zoom in (§5.5, §7.2, §8.9, §26.6)",
       "branch": "ccr-9f7b3c25-4had99",
-      "date": "2026-10-06T13:24:02Z"
+      "date": "2026-10-06T14:33:11Z"
     }
   ]
 }
