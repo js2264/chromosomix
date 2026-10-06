@@ -371,10 +371,11 @@ describe('saving the deck', () => {
     expect(saved.names[0]).toMatch(/^deck-\d{8}-\d{6}\.pdf$/)
     const bytes = new Uint8Array(await saved.blobs[0].arrayBuffer())
     const content = await contentOf(bytes)
-    // The model is the painter's paths — its tube, by default — and its name
-    // is text: no raster anywhere on a deck with no map's cells on it.
+    // The model is the painter's paths — its tube, by default, as closed
+    // outlines, a band of its shading each — and its name is text: no raster
+    // anywhere on a deck with no map's cells on it.
     expect(latin1(bytes)).not.toContain('/Subtype /Image')
-    expect(content).toMatch(/ c$/m)
+    expect(content).toMatch(/^h$/m)
     expect(content).toContain('(chr1) Tj')
     deck.destroy()
   })

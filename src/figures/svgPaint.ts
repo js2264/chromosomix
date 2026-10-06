@@ -27,8 +27,8 @@
  * Three limits, stated rather than hidden:
  *
  * - **A linear gradient is bands.** A canvas context can hold a
- *   `CanvasGradient`, but a {@link VectorPage} cannot — its `fillStyle` is a
- *   colour string — so a shape filled with one is clipped to and filled with a
+ *   `CanvasGradient`, but a {@link VectorPage} holds only the radial one its
+ *   structure painter asks for — so a shape filled with a linear one is clipped to and filled with a
  *   hundred bands across the gradient's line, each the colour the gradient has
  *   at its middle. That is what a chart's continuous colour bar is: it used to
  *   be flattened to its middle stop, and every exported pileup's key was one

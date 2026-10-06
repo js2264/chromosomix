@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A model's PDF is lit, as its PNG is (§25.7).** Every bead is a shaded sphere, a PDF radial
+  shading from a highlight to a shadowed rim, and the tube and the sticks are drawn band by band
+  from the rim in shadow to a highlight on the side the screen's key light comes from, so the
+  fibre reads as a solid on paper rather than as flat ribbons. Still paths and shadings and nothing
+  else, smooth at any zoom; the fog fades the shading with the rest. The file is larger for it.
+
 - **Every colour swatch opens one picker of the app's own, hex first, with the colours last picked
   (§26.6).** The six digits are the box, ready to type or paste into; the square and the hue bar
   can be dragged across without the picker closing — the platform's closed after the first step,

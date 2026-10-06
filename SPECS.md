@@ -11267,11 +11267,21 @@ The card's last row is **the export row** (§26.6) — `[resolution] [format] [�
 under it — so a model is saved the way a map and a browser are, and at the resolution the reader
 chose rather than at a fixed one. The PNG is the picture the GPU lit, at that resolution. The PDF is
 **paths, whatever the model is drawn as**, through `structure/painter.ts`, projected through the
-same camera the screen was: beads as discs, sticks as segments, and the **tube** as a stroke per
-bead along the Catmull–Rom curve the GPU draws it on, a darker rim under a lighter core, each bead's
-stretch running from half way to one neighbour to half way to the next — the stretch the GPU colours
-by that bead — and meeting the next butt to butt, so no rim is laid across another stretch's core;
-a run ends round, and a tube thinner than three pixels is one flat stroke. The tube used to export
+same camera the screen was: beads as discs, sticks as segments, and the **tube** as a stretch per
+bead along the Catmull–Rom curve the GPU draws it on, each bead's stretch running from half way to
+one neighbour to half way to the next — the stretch the GPU colours by that bead — and meeting the
+next at one width, the perspective's change of width running along the stretch rather than stepping
+at the joint; a run ends round. **Every surface is lit, as the screen's is**, by the screen's own key
+light, which rides with the eye: a bead is a PDF radial shading from a highlight up and to the
+right of its centre out to a rim in shadow — smooth at any zoom, one shading per bead — and a tube
+or a stick, round whose curve no shading can follow, is a stack of bands, eight at the fewest and
+none wider than a third of a pixel, each narrower, lighter and nudged towards the light than the
+one under it, so a fibre reads as a solid rather than a ribbon. Each of a tube's bands is the ring
+of the section that is its own, reaching three bands in under the next: laid whole, the bands of
+one stretch put their edges at one line over the lighter ones of its neighbour, and a reader's
+anti-aliasing drew a dark hairline across the tube at every bead. The fog mixes every colour of
+the shading towards the paper, as it does a flat one. Only what is under three quarters of a pixel
+across, and what is ghosted, is one flat colour. The tube used to export
 as the raster the GPU drew, on the argument that a lit surface is no `arc`; it is the default
 representation, so most models left as a picture of pixels in the one file meant to be a drawing.
 Nothing in a model's PDF is a raster now, so the format reads **PDF (vector)** and the row's
