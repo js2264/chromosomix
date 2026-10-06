@@ -309,6 +309,8 @@ export class TracksPanel implements DeckCell {
       map: this.props.id,
       hoverSource: this.source,
       onLocusChange: () => this.report(),
+      // `+` and `−` are the deck's resolution here, not this cell's zoom.
+      zoomKeys: false,
       ...(this.props.leadSampleWidth === undefined
         ? {}
         : { sampleWidth: () => this.props.leadSampleWidth?.() ?? 0 }),

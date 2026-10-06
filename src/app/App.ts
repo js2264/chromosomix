@@ -61,6 +61,7 @@ import {
   withKey,
   type Command,
 } from '../ui/commands'
+import { learnKey, readLayout } from '../ui/keyboardLayout'
 import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
@@ -705,6 +706,10 @@ export class App implements SessionHost {
     )
 
     window.addEventListener('keydown', (event) => this.onKeyDown(event))
+    // What the keyboard puts where, for the keys bound by their place on it
+    // (`ui/keyboardLayout.ts`): asked of the browser once, where it will say,
+    // and read off every keystroke from here on.
+    void readLayout()
     window.addEventListener('popstate', () => this.readHash())
     window.addEventListener('hashchange', () => this.readHash())
 
@@ -2188,7 +2193,7 @@ export class App implements SessionHost {
     // that goes stale is the one nothing tests.
     //
     // Iterated over the **labels**, not over the bindings. Not every overlay has
-    // a key — `fills` gave `f` up to the Files panel — and iterating the keys
+    // a key — `legend` has none (`ui/plotOptions.ts`) — and iterating the keys
     // would have dropped that one out of the palette altogether, which is the
     // one place in this app that promises to list everything it can do. A
     // command with no `keys` is a palette-only command, which is a state the
@@ -2248,7 +2253,7 @@ export class App implements SessionHost {
         // one, so the column had to be reachable before anything was open — has
         // moved out of this column: the landing page offers the four places
         // itself and §20.4 now says the column exists exactly when a folder is
-        // connected. Which makes `f` with none connected the very thing the
+        // connected. Which makes its key with none connected the very thing the
         // Annotations gate exists to prevent: a key that folds an invisible
         // column, and so appears to do nothing.
         hint:
@@ -2374,11 +2379,22 @@ export class App implements SessionHost {
    * Dispatch a keystroke.
    *
    * A dialog owns the keyboard while it is open, and anything typed into an
-   * input belongs to that input — `?` and `[` are legal in a contig name, and
+   * input belongs to that input — `?` and `<` are legal in a contig name, and
    * `o` is legal in every name there is. Chords survive both, because ⌘P from a
    * text box is still ⌘P.
    */
   private onKeyDown(event: KeyboardEvent): void {
+    // First, and whatever the key turns out to be for: a word typed into a box
+    // says as much about the layout as a shortcut does, and the press that
+    // teaches is the first one read with what it taught.
+    learnKey(event)
+    // **A key the focused control has already answered is not the app's too.**
+    // The pictures with keys of their own say so the way the drawers' Escape
+    // does: a dot plot's canvas zooms on `+` and `−` and refits on `0`, a 1D
+    // browser's zooms and shows the whole genome, a plot's edge goes back to its
+    // default on `0` — and each of those, heard here as well, stepped the map's
+    // resolution or refitted it under a press that was about something else.
+    if (event.defaultPrevented) return
     if (this.modal !== null) return
     const typing = isTypingTarget(event.target)
     // Above the loop, not inside it.
@@ -2392,7 +2408,9 @@ export class App implements SessionHost {
     if (typing && !isChord(event)) return
     for (const command of this.commands()) {
       if (command.keys === undefined || command.enabled === false) continue
-      if (typing && !command.keys.startsWith('mod+')) continue
+      // ⌘ or Ctrl, and Control on a Mac: the tabs' `ctrl+<` from a filter box is
+      // still the next tab, as `mod+p` there is still the palette.
+      if (typing && !/^(mod|ctrl)\+/.test(command.keys)) continue
       // ⌘C is the browser's before it is ours whenever there is text under it.
       if (command.yieldsToText === true && wantsTextCopy(event.target)) continue
       // …and Space is a focused button's, tickbox's or menu row's before ours.

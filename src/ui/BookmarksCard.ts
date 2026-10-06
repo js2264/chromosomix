@@ -37,6 +37,7 @@ import {
   type BookmarkStore,
 } from '../annotations/bookmarks'
 import { formatLocus, formatPosition } from '../genome/assembly'
+import { KEYS, withKey } from './commands'
 import { button, el } from './dom'
 import { resolutionLabel } from '../units'
 import { cardTitle, icon, iconButton, setFolded, startFolded } from './icons'
@@ -91,7 +92,7 @@ export class BookmarksCard {
     // rather than as the second way to fill it.
     this.here = button('save this view', () => this.saveFramed(), {
       class: 'btn',
-      title: 'Save the stretch of genome on screen, at the resolution it is open at',
+      title: withKey('Save the stretch of genome on screen, at the resolution it is open at', KEYS.bookmark),
     })
     // Folded until it is asked for, as the Metadata annotations card above it
     // is (§8.10): the last card in the column, opened when a reader has a place

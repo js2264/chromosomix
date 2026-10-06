@@ -1,6 +1,6 @@
 /**
- * When a sideways scroll slides a map along its diagonal (SPECS §7.2): wherever
- * the block is cis and square. Cis is the diagonal in the picture — its rows and
+ * When a sideways scroll slides a map along its diagonal while the view is held
+ * on it (SPECS §7.2): wherever the block is cis and square. Cis is the diagonal in the picture — its rows and
  * columns share a stretch of bins — or two stretches of one sequence, whose
  * diagonal is off the picture but whose bands of one separation run parallel to
  * it. Not over a turned band, whose diagonal runs across the screen already, nor

@@ -14,6 +14,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A bar under the 1D browser's tracks makes them all taller or shorter together, each in
+  proportion (§5.8).** The deck cell's height bar in look, under the last track: dragged, every
+  track's height is scaled by one factor, so their sizes relative to each other stay as they were;
+  Escape mid-drag puts them back, a double click fits the whole stack to the window, and the arrow
+  keys step it. Only in the 1D browser on its own — not beside a map, nor in a deck. The canvas now
+  gives its height back when the tracks are made shorter, and *Stretch the tracks* (`h`) fills the
+  window rather than a canvas a tall stack had grown.
+
+- **The map says how to zoom into a region while the pointer is over it (§8.9).** Under the key in
+  its top-right corner — or in the corner itself with the legend off — a line or two of plain text:
+  *Alt + drag to zoom into a region* and *Shift + Alt + drag to zoom along the diagonal*, or ⌥ and ⇧
+  on a Mac. One line under the diagonal lock, which already pins the box, *a stretch* on a turned
+  map, and no Shift line on a block the diagonal does not cross. Gone when the pointer leaves, never
+  in an export, and not on a touch screen. The 1D browser says *Alt + drag to zoom into a stretch, or
+  drag along the ruler* under its ruler.
+
 - **Base modifications from a BAM's `MM`/`ML` tags (§8.13, §8.20).** A pile lane's *colour by* offers
   *base modification*: the reads are drawn grey and each 5mC, 5hmC, 6mA or other call sits at its own
   base, red where modified and blue where not, as opaque as the caller was sure — for the code chosen
@@ -853,6 +869,52 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **Space locks the map onto its diagonal, and a second press lets go (§7.2, §8.9).** It used to put
+  the view back on the diagonal once — *Recentre on the diagonal* — and every pan, box and zoom after
+  it landed a little off the line again. Now it slides the view onto the diagonal at the zoom it is
+  at and keeps it there: a drag moves it along the line by as much of the drag as points that way, a
+  zoom (wheel, pinch, Page Up and Page Down) is about the point of the line nearest the pointer, the
+  arrows walk along it, a sideways scroll slides down it, and an Option-drag draws its box on the
+  diagonal as Option and Shift do. **Unlocked, a sideways scroll is the columns alone**, where it
+  always followed the diagonal. The button beside the turn is the lock's toggle, lit while it holds;
+  the palette and the shortcuts dialog call it *Diagonal lock* and show its state. It is every map's,
+  so a deck moves as one, it holds the next sequence stepped to, and the browser remembers it, as it
+  does *Refine on zoom*.
+
+- **`<` and `>` step to the neighbouring sequence, and the letters are where they read (§5.5, §5.6,
+  §7.2, §8.10, §26.6).** The sequence steps were `[` and `]`, which a French keyboard types with
+  AltGr — never a shortcut here — and a French Mac with ⇧⌥. `<` and `>` step on every layout: over
+  the comma and the full stop on American and British QWERTY, so `,` and `.` step without Shift, and
+  bare and shifted on the key of their own that AZERTY and most European keyboards have beside the
+  left Shift — on a French or German Mac that key no longer folds Files when there is no sequence to
+  step to, and the Files badge no longer prints it. **Control with them is the tab beside this one**
+  (it was ⌘[ and ⌘]), Control on a Mac too, from a box being typed into as well. `e` is the O/E
+  toggle, the breaks overlay moves to `m`, `f` is the track fill's again, and `b` bookmarks the view,
+  as the button beside `go` does. **`0` refits from anywhere in the window** — *Fit the view*, the 1D
+  browser's whole genome — rather than only once the map had been clicked, and by its place, so
+  AZERTY's bare `à` does; Home still refits the focused map. **Page Up and Page Down zoom the focused
+  map** about its centre, a wheel notch a press. **`?` opens the shortcuts dialog** (it was ⌘/ or
+  Ctrl+/). A key a focused picture has already answered is no longer the window's too: a dot plot's
+  canvas zooming on `+` stepped the map's resolution with it. The desktop menu shows `<`, `>` and `?`.
+
+- **The digit row folds the side columns, in the order they stand, and `−` / `+` step the resolution
+  (§5.5, §26.6).** The key left of `1` folds Files, then `1` General, `2` Annotations, `3` Aesthetics
+  and `4` Analysis — left to right as the columns are on screen, where they were `f` `b` `a` `m` `j`.
+  The row is matched by where the keys are, with or without Shift or Caps Lock, so AZERTY's bare `&`
+  `é` `"` `'` are `1` to `4` and its `²` is the key left of `1`; on a Mac, whose ISO keyboards report
+  that key differently, the key beside the left Shift folds Files as well. The Files badge prints what
+  the keyboard has there — `²`, `@` on a French Mac, a backtick on QWERTY — from Chromium's layout map
+  or from the reader's own keystrokes, and its tooltips say *the key left of 1*. `−` and `+` are
+  *Coarser resolution* and *Finer resolution*: the resolution bar's stops walked one at a time from
+  the lit one, onto a rung the reader added as onto the file's own, stopping at both ends, and in a
+  deck every map follows. Either half of each key does (`_`, `=`), so neither needs Shift, and an
+  AZERTY PC's minus is still the minus under Shift or Caps Lock, where it types a `6`. The map's canvas
+  no longer zooms on `+` and `−` — it had the focus after any press on it, so one keystroke would have
+  zoomed and re-read the map together — and nor does a deck's tracks cell; the wheel, a pinch and the
+  boxes zoom, and the 1D browser keeps its 3× pair on the two keys. **The console moves to Control and
+  the key left of `1`** (ctrl-` on QWERTY, Control on a Mac too), since the key alone is Files'. The
+  desktop menu shows `1` for the General panel.
 
 - **The validation notebook reads public data only, each file by its accession (§18.10).** Mouse
   Hi-C 4DNFIOZ1TRUS and three chicken maps (4DNFIH8L6WON, 4DNFITBCUX56, 4DNFIIML46E5) from 4DN, yeast

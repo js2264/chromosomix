@@ -941,20 +941,23 @@ export class AnnotationStore {
    *
    * The patch may be a function of each row's style, for a setting that keeps
    * part of what the row had: *auto* on a batch keeps each row's own manual
-   * pair for when it leaves auto again, as a row's own button does.
+   * pair for when it leaves auto again, as a row's own button does. It is told
+   * the row's id as well, for a patch read off something kept per row — the 1D
+   * browser's stack bar scales each lane from the height it had when the drag
+   * began (`ui/BrowserView.ts`).
    */
   restyleEach(
     ids: readonly string[],
     patch:
       | Partial<AnnotationEntry['style']>
-      | ((style: AnnotationEntry['style']) => Partial<AnnotationEntry['style']>),
+      | ((style: AnnotationEntry['style'], id: string) => Partial<AnnotationEntry['style']>),
   ): void {
     const wanted = new Set(ids)
     let hit = false
     this.items = this.items.map((entry) => {
       if (!wanted.has(entry.id)) return entry
       hit = true
-      const change = typeof patch === 'function' ? patch(entry.style) : patch
+      const change = typeof patch === 'function' ? patch(entry.style, entry.id) : patch
       return { ...entry, style: { ...entry.style, ...change } }
     })
     if (hit) this.changed()

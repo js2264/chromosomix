@@ -246,6 +246,35 @@ let groups = 0
  */
 const MAX_STOPS = 9
 
+/**
+ * Which rung of a ladder is on screen, by its index.
+ *
+ * The reader's declared bin size where they are on one, and the open entry's
+ * name otherwise — two questions with one answer, because a derived rung has no
+ * entry and the entry that is open under one is its *base*. Reading
+ * `currentEntry` alone would put the highlight on the 1 kb stop while the axis
+ * said 3 kb.
+ *
+ * Out here rather than on the bar because the bar is not the only thing that
+ * walks the ladder: `-` and `+` step it from the keyboard (`KEYS.coarser`,
+ * `KEYS.finer`), and a key that counted from a different rung than the stop
+ * that is lit would step from somewhere the reader is not.
+ */
+export function rungStandingAt(
+  rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>,
+  coarsen: number | undefined,
+  currentEntry: string | undefined,
+): number {
+  if (coarsen !== undefined) {
+    const at = rungs.findIndex((rung) => rung.binsize === coarsen)
+    if (at >= 0) return at
+  }
+  return Math.max(
+    0,
+    rungs.findIndex((rung) => rung.derived === undefined && rung.name === currentEntry),
+  )
+}
+
 export class Breadcrumb {
   readonly el: HTMLElement
 
@@ -508,25 +537,9 @@ export class Breadcrumb {
       .sort((a, b) => a.binsize - b.binsize)
   }
 
-  /**
-   * Which rung of {@link ladder} is on screen.
-   *
-   * The reader's declared bin size where they are on one, and the open entry's
-   * name otherwise — two questions with one answer, because a derived rung has
-   * no entry and the entry that is open under one is its *base*. Reading
-   * `currentEntry` alone would put the highlight on the 1 kb stop while the axis
-   * said 3 kb.
-   */
+  /** Which rung of {@link ladder} is on screen — see {@link rungStandingAt}. */
   private standingAt(rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>): number {
-    const coarsen = this.props.coarsen?.()
-    if (coarsen !== undefined) {
-      const at = rungs.findIndex((rung) => rung.binsize === coarsen)
-      if (at >= 0) return at
-    }
-    return Math.max(
-      0,
-      rungs.findIndex((rung) => rung.derived === undefined && rung.name === this.props.currentEntry),
-    )
+    return rungStandingAt(rungs, this.props.coarsen?.(), this.props.currentEntry)
   }
 
   /**

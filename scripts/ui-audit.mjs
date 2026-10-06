@@ -314,7 +314,7 @@ const openAll = async (page) => {
 await look('landing', async (p) => { await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500) })
 await look('landing 900', async (p) => { await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500) }, { width: 900 })
 await look('landing dark', async (p) => { await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500) }, { dark: true })
-await look('shortcuts', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('Control+/'); await sleep(900) })
+await look('shortcuts', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('?'); await sleep(900) })
 await look('palette', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('Control+p'); await sleep(900) })
 await look('map', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await openAll(p) })
 await look('map 1366', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await openAll(p) }, { width: 1366, height: 768 })
@@ -342,7 +342,7 @@ await look('store drawer', async (p) => {
 })
 await look('console', async (p) => {
   await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
-  await p.keyboard.press('`'); await sleep(1200)
+  await p.keyboard.press('Control+Backquote'); await sleep(1200)
 })
 await look('stored data', async (p) => {
   await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500)

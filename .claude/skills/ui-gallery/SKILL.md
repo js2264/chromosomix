@@ -30,7 +30,9 @@ node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from ori
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
 node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
-node scripts/ui-diagonal-slide.mjs gallery  # a sideways scroll over the map zoomed onto its diagonal, sliding along it: w01, w02
+node scripts/ui-stack-bar.mjs gallery       # the bar under the 1D browser's tracks on the yeast tracks demo: at rest and hovered, dragged down with every height printed and its ratio to the first, Escape mid-drag, a double click fitting the stack to the column, gone with the browser as a deck's lead, beside a map and in a deck: sb01 … sb07, sb05b
+node scripts/ui-reframe-hint.mjs gallery    # how to zoom into a region, in the map's corner on hover: away and over, under the key, the legend off, the diagonal lock's one line, a turned map's stretch, the 1D browser under its ruler, the dark theme: rh01 … rh08
+node scripts/ui-diagonal-slide.mjs gallery  # the diagonal lock on yeast IV: a free sideways scroll leaving the line, Space taking the lock (its toggle lit), a sideways scroll and a drag held on the diagonal, an ⌥-drag's box drawn on it, V stepped to still held, Space letting go: w01 … w08
 node scripts/ui-lane-carry.mjs gallery       # a lane's grip carried to another map, a +, a tracks cell, an empty cell; a model's row on a +: lc1 … lc14
 node scripts/ui-track-location.mjs gallery   # the location marks, a left lane growing away, Space, the File card and the star, card rows on a + and an empty cell: tl1 … tl13
 node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor region, and the profile with and without the anchor: fc1 … fc4
@@ -69,6 +71,8 @@ node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: th
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
 node scripts/ui-revisit.mjs gallery          # a place visited again, drawn from memory: chr1, chr2, chr1 again, a window and chr1 again on the lab's mouse .mcool at 10 kb, then on a chicken .hic, each step timed with its requests and the memory figure, and the read panel on a revisit: rv01 … rv11
+node scripts/ui-panel-keys.mjs gallery       # the digit row and the resolution keys on QWERTY and AZERTY: 1–4 and the key left of 1 folding the columns, Shift and Caps Lock, Ctrl and that key for the console, the shortcuts dialog, − and + walking E. coli's ladder with the map focused, rungs the reader added and a dropdown ladder, AZERTY's minus on its 6 key, the caps at 3×: pk01 … pk21
+node scripts/ui-view-keys.mjs gallery        # the view's keys on QWERTY, a French PC and a French Mac: < and > stepping IV → III → IV → V (the comma and full stop bare, AZERTY's own key, a Mac's Backquote that must not fold Files), Page Up ×4 and Page Down on the focused map, 0 and à refitting from anywhere, e the O/E, f the fill, m the breaks, b a bookmark and its card, ? the dialog, Control with < and > walking two tabs: vk01 … vk14b
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
@@ -389,3 +393,18 @@ cost nothing. It reads the lab's bucket unless `GALLERY_DATA` names a folder ser
 and CORS holding both files — a headless browser that cannot trust this machine's proxy needs that,
 and a server that adds round-trip latency keeps the timings honest. Run it after any change to
 `worker/answers.ts`, `worker/client.ts`, a view's reads, or the raster's pooling and colouring.
+`scripts/ui-panel-keys.mjs` drives **the digit row and the resolution keys** (§5.5, §26.6) on two
+keyboards. QWERTY is Playwright's own key presses; AZERTY is a French PC's, with the layout map
+Chromium would hand over stubbed in an init script (so the Files badge reads `²`) and each press
+dispatched as that keyboard sends it — `&` from `Digit1` bare, `6` from `Digit6` under Shift or Caps
+Lock — since no headless browser can be given a layout of its own. On the yeast demo: `1` to `4`
+bare, shifted and under Caps Lock, the key left of 1 with a folder connected (through the input a
+browser with no directory picker opens), Ctrl and that key for the console, and the shortcuts
+dialog; on E. coli's ladder, `−` and `+` and their other halves with the map's canvas focused —
+which must re-read the same window at the next rung rather than zoom it, printed after each press —
+to the finest rung and past it; on the yeast cooler, rungs added through the bar's `+` walked by
+the keys, and a ladder past nine rungs, whose dropdown they walk too; and the badges at 3×, where a
+superscript `²` must not pass for the `2` beside it. It prints which columns are open and what
+each badge says, and the lit rung, the entry and the window after every press. Run it after any
+change to `ui/commands.ts`'s matching, `ui/keyboardLayout.ts`, a column's key or badge, or the
+resolution bar.

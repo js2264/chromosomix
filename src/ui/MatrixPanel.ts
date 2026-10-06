@@ -39,7 +39,7 @@ import {
 import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { KEYS, keyLabel, withKey } from './commands'
+import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
@@ -156,6 +156,7 @@ import {
   subscribeRefine,
   type RefineView,
 } from './refine'
+import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './diagonalLock'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
@@ -334,13 +335,18 @@ const TURN_HINT =
  */
 const DIAGONAL_ICON = 'diagonal'
 
-const DIAGONAL_HINT =
-  `Recentre on the diagonal (${keyLabel(KEYS.diagonal)}). Slides the view onto the nearest ` +
-  'on-diagonal window at the zoom it is already at, without changing the region or the ' +
-  'resolution. Every gesture that lands off the diagonal — a pan, a box, a zoom around the ' +
-  'pointer — takes several more to come back from, and no drag can say “here, but on the ' +
-  'diagonal”. Greyed on a block that has no diagonal, and while the map is turned, where the ' +
-  'picture already is one.'
+/**
+ * The diagonal lock's tooltip, in the reader's own modifier: read when the
+ * button is built, since a module's constants are read before anything has
+ * said which platform this is.
+ */
+const diagonalHint = (): string =>
+  `Lock the view on the diagonal (${keyLabel(KEYS.diagonal)}). Slides it onto the nearest ` +
+  'on-diagonal window at the zoom it is already at and keeps it there: a drag, a scroll, a ' +
+  'zoom or an arrow key moves it along the diagonal, a sideways scroll slides down it, and ' +
+  `${optionKey()} + drag draws its box on it. Pressed again, it lets go, and a sideways scroll ` +
+  'is the columns alone. Greyed on a block that has no diagonal, and while the map is turned, ' +
+  'where the picture already is one.'
 
 /** The band, as an ordinary dense block the renderer can be handed. */
 function turnedDense(turned: RotatedBlock): DenseMatrix {
@@ -1193,6 +1199,13 @@ export class MatrixPanel {
   private readonly key: MapKey
   private readonly key2: MapKey
   private readonly keySlot: HTMLElement
+  /** The two keys in {@link keySlot}, hidden together where the legend is off or the screen is a phone's. */
+  private readonly keys: HTMLElement
+  /**
+   * How to zoom into a region from here, under the keys while the pointer is
+   * over the map ({@link paintReframeHint}).
+   */
+  private readonly reframeHint: HTMLElement
   /**
    * The four edges of the picture, as things a hand can take hold of.
    *
@@ -1293,6 +1306,7 @@ export class MatrixPanel {
   private readonly unsubscribeTextScale: () => void
   private readonly unsubscribeTurnBox: () => void
   private readonly unsubscribeMapSize: () => void
+  private readonly unsubscribeDiagonalLock: () => void
   private readonly themeWatchers: () => void
   private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
@@ -1352,7 +1366,7 @@ export class MatrixPanel {
   private turned: RotatedBlock | null = null
   /** The turn control, greyed while the block on screen has no diagonal. */
   private turnButton: HTMLElement | null = null
-  /** The recentre control, greyed where there is no diagonal to go to. */
+  /** The diagonal lock's toggle, greyed where there is no diagonal to hold the view on. */
   private diagonalButton: HTMLElement | null = null
   /** Whether there is a diagonal to go to: one in the block, and no turn. */
   private diagonalPossible = false
@@ -2122,7 +2136,7 @@ export class MatrixPanel {
       // the option changes nothing on its own: hidden here, and skipped in the
       // export, which draws what the screen shows.
       this.legendOn = options.legend
-      this.keySlot.classList.toggle('hidden', this.narrow || !this.legendOn)
+      this.keys.classList.toggle('hidden', this.narrow || !this.legendOn)
       // Put away now, not on the next pointer move: a control that needs the
       // hand to twitch before it takes effect reads as not having worked.
       if (!options.tooltip) this.tooltip.classList.add('hidden')
@@ -2133,6 +2147,16 @@ export class MatrixPanel {
     // The square map's own size, on the same terms and through the same call: one
     // reader, one shape, however many pictures are drawn from it.
     this.unsubscribeMapSize = subscribeMapSize(() => this.applyTurnBox())
+    // Every map's, a companion's as well as the lead's: a deck's maps move as
+    // one, and one held on its diagonal beside one that was not would be dragged
+    // off it by its own neighbour (`ui/diagonalLock.ts`).
+    this.heatmap.setDiagonalLock(diagonalLocked())
+    this.unsubscribeDiagonalLock = subscribeDiagonalLock((on) => {
+      this.heatmap.setDiagonalLock(on)
+      this.paintDiagonalLock(on)
+      this.paintReframeHint()
+      this.schedule()
+    })
 
     // Offered whenever there is more than one answer. A file with no weights and
     // no extra columns has exactly one thing its cells can be, and a dropdown
@@ -2224,7 +2248,7 @@ export class MatrixPanel {
     picture.push(
       iconButton(
         'maximize',
-        'Undo every pan and zoom (0, or a double click on the plot)',
+        withKey('Undo every pan and zoom — a double click on the plot does too', KEYS.fit),
         () => this.fit(),
         { class: 'btn btn-icon', size: 15 },
       ),
@@ -2285,16 +2309,16 @@ export class MatrixPanel {
       picture.push(button)
 
       // Beside the turn, and offered by whoever offers it: the turn *makes* a
-      // picture of the diagonal and this one *goes to* it, and in a deck the
-      // panels' windows are locked together, so one of them moving to the
-      // diagonal takes the rest with it. A companion, which draws the turn
-      // without owning the control, has no more business owning this one.
+      // picture of the diagonal and this one *holds the view on* it, and in a
+      // deck the lock is every map's. A companion, which draws the turn without
+      // owning the control, has no more business owning this one.
       //
-      // An action rather than a toggle — there is no state to read off it — so
-      // it takes neither `btn-toggle` nor a lit state, and it is the one mark in
-      // these rows that means "do this" instead of "this is on".
-      const diagonalButton = iconButton(DIAGONAL_ICON, DIAGONAL_HINT, () => this.centreOnDiagonal(), {
-        class: 'btn btn-icon',
+      // A toggle, lit while the view is held: it used to be an action — the view
+      // slid onto the diagonal, once — and every gesture after it slid the view
+      // off again, so a reader reading along the diagonal pressed it after every
+      // drag. Locking does that press and then keeps to it (§7.2).
+      const diagonalButton = iconButton(DIAGONAL_ICON, diagonalHint(), () => void toggleDiagonalLock(), {
+        class: 'btn btn-icon btn-toggle',
         size: 15,
       })
       this.diagonalButton = diagonalButton
@@ -2302,6 +2326,7 @@ export class MatrixPanel {
       // anything is read, and a control that is live before there is a picture
       // to move is one that does nothing when pressed.
       this.paintDiagonal(false)
+      this.paintDiagonalLock(diagonalLocked())
       picture.push(diagonalButton)
     }
 
@@ -2459,7 +2484,13 @@ export class MatrixPanel {
     // Built on every file, not only where annotations can be loaded: the
     // rectangles are also where a lane already drawn is dragged to move it to
     // another edge, and that gesture needs no loader.
-    this.keySlot = el('div', { class: 'map-key-slot' }, this.key.el, this.key2.el)
+    // The keys, and under them how to zoom into a region: one column in the
+    // corner, so the hint moves up into the corner when the legend is off and
+    // stands under the keys when it is on.
+    this.keys = el('div', { class: 'map-keys' }, this.key.el, this.key2.el)
+    this.reframeHint = el('div', { class: 'map-hint', attrs: { 'aria-hidden': 'true' } })
+    this.keySlot = el('div', { class: 'map-key-slot' }, this.keys, this.reframeHint)
+    this.paintReframeHint(false)
     const wrap = (this.wrap = el(
       'div',
       { class: 'heatmap-wrap' },
@@ -2594,7 +2625,9 @@ export class MatrixPanel {
     // draws cannot read a media query.
     this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
       this.narrow = narrow
-      this.keySlot.classList.toggle('hidden', narrow || !this.legendOn)
+      this.keys.classList.toggle('hidden', narrow || !this.legendOn)
+      // Nor the hint, on a screen with no Option key to hold.
+      this.reframeHint.classList.toggle('hidden', narrow)
       this.schedule()
     })
 
@@ -3071,15 +3104,34 @@ export class MatrixPanel {
     this.remeasure()
   }
 
+  /**
+   * Whether the O/E toggle is lit, for its command's chip (`KEYS.expected`) —
+   * `null` where this panel offers none: a companion of a deck, a view with no
+   * derivation to take.
+   */
+  get expectedLit(): boolean | null {
+    return this.expectedButton === null ? null : this.expectedButton.getAttribute('aria-pressed') === 'true'
+  }
+
+  /** Whether {@link toggleExpected} has a toggle to press: one offered, and not greyed by a baseline. */
+  get canToggleExpected(): boolean {
+    return this.expectedButton !== null && !this.expectedButton.hasAttribute('disabled')
+  }
+
+  /** `e`: the O/E toggle's press (§7.5), whatever its button would do. */
+  toggleExpected(): void {
+    if (this.canToggleExpected) this.expectedButton?.click()
+  }
+
   /** Whether {@link centreOnDiagonal} has somewhere to go: a diagonal in the block, and no turn. */
   get canCentreOnDiagonal(): boolean {
     return this.diagonalPossible
   }
 
   /**
-   * The recentre button's press, and Space's (§7.2): the view slid onto the
-   * diagonal at the zoom it is at. Nothing where the button is greyed — a block
-   * with no diagonal, or a turned map, whose picture already is one.
+   * The view slid onto the diagonal at the zoom it is at — what taking the
+   * diagonal lock does first (§7.2), and nothing where its button is greyed: a
+   * block with no diagonal, or a turned map, whose picture already is one.
    */
   centreOnDiagonal(): void {
     if (this.diagonalPossible) this.heatmap.centreOnDiagonal()
@@ -3174,6 +3226,48 @@ export class MatrixPanel {
     if (button === null) return
     button.classList.toggle('is-disabled', !possible)
     if (button instanceof HTMLButtonElement) button.disabled = !possible
+  }
+
+  /**
+   * Say how to zoom into a region from here — the words under the key while
+   * the pointer is over the map (§7.2).
+   *
+   * Option and a drag is the gesture, and nothing on the picture says so: a
+   * reader who has not opened the shortcuts dialog pans, wheels and gives up on
+   * the one gesture that opens a stretch at its own resolution. So it is said in
+   * the corner, small and with no box round it — a halo of the page for
+   * legibility over cells — and only while the hand is over the map, which is
+   * when the question is asked. In the reader's own modifiers, and saying what a
+   * drag will do *now*: under the diagonal lock Option alone draws on the
+   * diagonal, under a turn the box is a stretch of the genome, and Shift's line
+   * only where there is a diagonal for it to pin a box to.
+   */
+  private paintReframeHint(turned: boolean = this.turned !== null): void {
+    const opt = optionKey()
+    const lines = turned
+      ? [`${opt} + drag to zoom into a stretch`]
+      : !this.diagonalPossible
+        ? [`${opt} + drag to zoom into a region`]
+        : diagonalLocked()
+          ? [`${opt} + drag to zoom along the diagonal`]
+          : [`${opt} + drag to zoom into a region`, `${shiftKey()} + ${opt} + drag to zoom along the diagonal`]
+    this.reframeHint.replaceChildren(...lines.map((text) => el('div', { text })))
+  }
+
+  /**
+   * Light the diagonal lock's toggle.
+   *
+   * From the store rather than from the press, for {@link paintRefine}'s reason:
+   * the lock is every map's and is moved from the keyboard and the palette as
+   * often as from here. Lit and greyed together is a state too — a lock taken
+   * on a block the diagonal does not cross, waiting for the next one that it
+   * does.
+   */
+  private paintDiagonalLock(on: boolean): void {
+    const button = this.diagonalButton
+    if (button === null) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
   }
 
   /**
@@ -3617,6 +3711,7 @@ export class MatrixPanel {
     this.unsubscribeTextScale()
     this.unsubscribeTurnBox()
     this.unsubscribeMapSize()
+    this.unsubscribeDiagonalLock()
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -5648,7 +5743,7 @@ export class MatrixPanel {
       // as the two coming apart.
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
         event.preventDefault()
-        this.heatmap.panBy(-event.deltaX, this.heatmap.slidesAlongDiagonal ? -event.deltaX : 0)
+        this.heatmap.slideSideways(event.deltaX)
         return
       }
       event.preventDefault()
@@ -6444,6 +6539,7 @@ export class MatrixPanel {
         Math.max(data.rowExtent[0], data.colExtent[0]) <
           Math.min(data.rowExtent[1], data.colExtent[1]),
     )
+    this.paintReframeHint(turned !== null)
     // The **square** block's values, even under a turn, because the one reader
     // of this indexes it by square row and column ({@link derivedReading}). It
     // used to be `out`, which on a turned map is a band of a different shape
@@ -9667,9 +9763,10 @@ function watchTheme(onChange: () => void): () => void {
  * a picture nobody asked to have coarsened.
  */
 /**
- * Whether a sideways scroll over a block slides along its diagonal (see
- * `HeatmapView.setDiagonalSlide`): wherever the block is **cis** and square,
- * not turned into a band whose diagonal already runs across the screen.
+ * Whether a sideways scroll over a block slides along its diagonal while the
+ * view is held on it (see `HeatmapView.setDiagonalSlide` and the diagonal
+ * lock): wherever the block is **cis** and square, not turned into a band whose
+ * diagonal already runs across the screen.
  *
  * Cis is two things, and both slide. The diagonal is in the picture where the
  * rows and the columns share a stretch of bins. And a block of **two stretches

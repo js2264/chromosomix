@@ -897,7 +897,8 @@ about.
 the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
 a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
 something else on the tracks beside it; and the browser's `−` / `+` keys, once the tracks have the
-focus, drive the 3× pair rather than a factor of their own. **A deck's tracks cell has no bar** — no
+focus, drive the 3× pair rather than a factor of their own — except in a deck's tracks cell, where
+they are the deck's resolution (§5.5). **A deck's tracks cell has no bar** — no
 locus box, no steps, no summary line — only its axis, the chromosome's bar and ruler drawn at the
 top of its picture (§25.3). It had the box and the four steps, which were a second place to ask the
 question the lead's bar above the grid answers, in every tracks cell, and the one road there was to
@@ -918,7 +919,7 @@ picture of two places and has no one range to scale — and they navigate throug
 so three presses and three presses of the back button are the same journey in reverse (§5.5).
 
 The `‹ ›` pair **beside the title** is not that back arrow: it steps to the previous and next
-sequence — the `[` and `]` keys as buttons (§5.5) — named by the neighbour it would open in its
+sequence — the `<` and `>` keys as buttons (§5.5) — named by the neighbour it would open in its
 tooltip, and greyed at either end, so a reader at the last sequence is told so rather than left
 pressing a dead control. Two chevrons beside a title are the universal history pair, so the contract
 has to say which of the two these are.
@@ -962,10 +963,14 @@ from the modal's own right edge.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
-`[` and `]` step to the neighbouring genome, in the table's order, on a genome view, and to the
+`<` and `>` step to the neighbouring genome, in the table's order, on a genome view, and to the
 neighbouring sequence, in the file's own order, on a region and in the 1D browser (§5.8); the `‹ ›`
 beside a title is the same two keys as buttons (§5.4). A `contig × contig` block has two axes and no
-single neighbour, and does not step.
+single neighbour, and does not step. They were `[` and `]`, which a French PC types with AltGr — a
+third level, so never a shortcut (§26.6) — and a French Mac with ⇧⌥. Either half of the key the
+marks are on steps: over the comma and the full stop on American and British QWERTY, so `,` and `.`
+step without Shift, and a key of their own beside the left Shift on AZERTY and most European
+layouts, bare for `<` and shifted for `>`. Control with them is the tab beside this one (§5.6).
 
 **Every view has a trail, the 1D browser included**, where it reads `genome → Whole genome → IV →
 1,000,001-1,400,000`: a genome opened as tracks has no map to go up to, so its root is the whole
@@ -1023,6 +1028,19 @@ the three and asks the reader to divide before the number means anything. Both h
 same value: the stops are real radio inputs, so the arrow keys and a screen reader get the list, and
 the slider commits on release rather than per rung, since dragging across five rungs must not
 re-open the file five times.
+
+**`-` and `+` walk the same stops from the keyboard**, one rung coarser and one finer (*Coarser
+resolution*, *Finer resolution*): counted from the stop that is lit, onto a rung the reader added as
+onto one the file stores and by the road a press on its stop takes, and stopping at both ends rather
+than wrapping — the palette says which end, and at the coarse one that the `+` beside the rung adds
+a coarser one. Their hint is the rung they go to, as `<` and `>` name the sequence. They are bound by
+what they type rather than where they are, since the two marks stand in different places on QWERTY
+and on AZERTY: either half of each key does — `_` and `=` as well — so neither needs Shift, which
+`+` takes on both; and an AZERTY PC's minus, the bare half of its 6 key, is still the minus under
+Shift or Caps Lock, where it types a `6` (§26.6). In a deck the step is the first map's, which every
+map follows (§16.2). The map's canvas zoomed on the same two keys whenever it had the focus — which
+it has after any press on it — so the one keystroke would have been a zoom and a re-read at another
+grid together; it gave them up (§7.2), and so does a deck's tracks cell (§5.4).
 An **mmetacool's entry picker is untouched** and stays where it is, before the root: switching to a
 different nested metacool invalidates every crumb after it, so that one genuinely is a step of the
 trail.
@@ -1068,8 +1086,9 @@ shows: "Close this session" read as something larger than closing the thing bein
 *Session* stays as the implementation's word, in this document and in the code. The every-tab
 file keeps its own name, said as *Save every tab as a file*, because it genuinely is a different
 thing. No key closes one: ⌘W is the browser's chord for closing the window, and a binding that is
-right about what it does and wrong about what it closes costs a workspace. `o` opens one and ⌘[ /
-⌘] step between them. A tab is renamed in place, by a double-click on it or `F2`: Enter commits, an
+right about what it does and wrong about what it closes costs a workspace. `o` opens one and
+Control with `<` or `>` steps between them — Control on a Mac too, where ⌘< walks a French Mac's
+windows and ⌘, is every program's settings — from a box being typed into as well. A tab is renamed in place, by a double-click on it or `F2`: Enter commits, an
 emptied box hands the tab back to its file's name, and Escape abandons. A middle-click closes one,
 and the last is emptied rather than closed, since a window with no tab has nothing to drop a file on.
 
@@ -1212,7 +1231,7 @@ it went to.
 The gestures are the map's, deliberately (§7.2): a drag pans, Option- or Shift-drag selects a range
 to zoom into, the wheel zooms about the pointer, a **sideways** wheel slides along the axis, a double
 click fits, a lane's border resizes it, a drag across it moves its ceiling (§8.8), and its handle, in
-the margin before the axis, reorders the stack. `[` and `]` step to the sequence before or after
+the margin before the axis, reorders the stack. `<` and `>` step to the sequence before or after
 this one, as they do on a map — the plainest thing anybody does with a genome, and it was the one
 view where it had to be typed into the locus box. Two gestures are not the map's. ⌘-scroll over a
 lane moves *that* track's ceiling, as it does over a lane beside a map, because it is the adjustment
@@ -1220,6 +1239,21 @@ a genome browser is asked for constantly and a map has no analogue for it. And a
 **ruler** selects a range to zoom into with no modifier at all: the coordinate strip is where a
 reader points to say "this much", and it is the one gesture whose meaning its position already
 settles, so spending a keystroke on it buys nothing.
+
+**A bar under the stack makes every track taller or shorter together, each in proportion** — the
+deck cell's height bar in look (§25.3), under the last lane. A gene model drawn at half the height
+of the coverage above it is still half as tall when the stack has doubled: dragged, every lane's
+height is the one it had when the drag began times one factor, the stack's foot following the hand,
+each lane held to what a lane may be; Escape mid-drag puts them all back; a double click makes the
+stack's foot the column's, still in proportion and taller or shorter as the column asks — where
+*Stretch the tracks* (`h`) makes them one height — and the arrow keys step it. Only here: not beside
+a map, whose lanes are the map's (§8.8), and nowhere in a deck — a tracks cell has the cell's own
+bar for the height of the whole picture (§25.3), and the browser leading a deck has neither bar. The
+room it, *Stretch* and the canvas itself fill is measured from where the stage stands in the
+column's content to the column's foot, less what stands under it — measured against the box the
+browser is mounted in, which grows with what is in it, a canvas grown under a tall stack never gave
+the height back when the stack was made shorter, and *Stretch* filled that canvas rather than the
+window.
 
 **The ruler gains digits as it is zoomed**, and it does that by being told the gap between its own
 ticks. Two decimals of a megabase is ten kilobases, so a window narrower than that on a chromosome
@@ -1826,16 +1860,23 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to
 the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
-colormap is selectable; keyboard pan and zoom are supported, and Space recentres the map on its
-diagonal (§8.9).
+colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
+Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
+anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
+Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
+resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
+is the whole genome, as a double click is.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
 Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
-is and what they already meant over this app's own tracks — and on a map, **along its diagonal**:
-rows and columns together, by the same distance, so the diagonal stays where it is on the screen
-and the picture moves down the genome under it, as the reference editor's stage (§27.3) has always
-slid. A slide that took the columns alone carried a cis map's diagonal off the side of the picture
-within a screen. **Every cis block slides that way**, a block of two stretches of one sequence
+is and what they already meant over this app's own tracks — on a map, **the columns alone**, and
+**along its diagonal while the view is held on it** (the diagonal lock, §8.9): rows and columns
+together, by the same distance, so the diagonal stays where it is on the screen and the picture moves
+down the genome under it, as the reference editor's stage (§27.3) has always slid. It slid along the
+diagonal always, which a reader who had panned off it to read a stretch of the off-diagonal could not
+get out of: letting go of the lock is saying the next slide is meant to leave the line, and a slide
+that kept to it anyway was the map overruling the hand. **Every cis block slides that way** while
+locked, a block of two stretches of one sequence
 included — the off-diagonal window an Option-drag opens, whose diagonal is off the picture: it is
 read by separation as the diagonal is, and moving rows and columns together keeps a band parallel to
 the diagonal, one distance apart, under the pointer, where the columns alone carried the reader
@@ -2133,7 +2174,7 @@ arithmetic in `analysis/compartments.ts`:
 | Family | Offered as | Cost |
 |---|---|---|
 | **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
-| **Baseline** — observed / expected | a toggle of its own | two passes |
+| **Baseline** — observed / expected | a toggle of its own, and `e` | two passes |
 | **Baseline** — observed / expected along a bacterial chromosome's two arms | `arms`, a toggle beside it (§8.15) | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Baseline** — the expected along both arms, on one sequence declared circular | `arm decay`, an entry in the score picker (§8.15) | two passes |
@@ -3142,20 +3183,40 @@ at a fitted whole-genome view is a two-pixel target on a 45° line. Off on a tur
 reading is already measured from the diagonal and the snap would be onto the picture's own bottom
 edge.
 
-**Recentre on the diagonal** is the same idea as a control: a button in Aesthetics → Map, between the
-turn and `O/E`, that slides the view onto the nearest on-diagonal window at the zoom it is already at
-— the perpendicular foot of the *picture's* centre, which is the least it has to move. Every gesture
-that lands off the diagonal takes several more of the same gestures to come back from, and no drag can
-say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
-where the picture already is one.
+**The diagonal lock** is the same idea as a control: a toggle in Aesthetics → Map, between the turn
+and `O/E`, lit while it holds. Taking it slides the view onto the nearest on-diagonal window at the
+zoom it is already at — the perpendicular foot of the *picture's* centre, which is the least it has
+to move — and **keeps it there, whatever moves it**: a drag keeps the part of itself that runs along
+the line, the mean of its two components, since one zoom serves both axes and the line is at 45° on
+the screen; a zoom, by the wheel, a pinch or the paging keys, is about the point of the line nearest
+the pointer; the arrow keys walk along it; a sideways scroll slides down it (§7.2); and an
+Option-drag draws its box on the diagonal, as Option and Shift do. A second press lets go, and every
+gesture goes where the hand does again. It used to be **Recentre on the diagonal**, the slide alone,
+once: every gesture after it landed a little off the line again, so a reader reading along the
+diagonal pressed it after every drag. Greyed where the block has no diagonal, and while the map is
+turned, where the picture already is one — lit and greyed together on a block the diagonal does not
+cross, a lock waiting for the next one that it does. It is **every map's**: a deck's maps move as one
+(§16.2), and one held on its diagonal beside one that was not would be dragged off it by its own
+neighbour. It outlives a navigation, so a reader stepping along a genome on its diagonal stays on it
+at the next sequence, and like *Refine on zoom* (§2) it is kept by the browser, not the hash.
 
 **Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
-without looking, for the one gesture a reader makes over and over while reading a map — every pan and
-box lands a little off the diagonal, and the way back was a trip to a 15-pixel button in another
-column. It is the button's press, gated as the button is, and on a deck the first map's, whose
-window the others are locked to. It stands down wherever Space already has a job: a focused button
-it presses, a tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the
-shortcuts dialog and the palette as *Recentre on the diagonal*, and in the button's own tooltip.
+without looking. It stands down wherever Space already has a job: a focused button it presses, a
+tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the shortcuts dialog
+and the palette as *Diagonal lock*, with its state, and in the toggle's own tooltip.
+
+**The corner says how to zoom into a region**, while the pointer is over the map: under the key —
+or in its place when the legend is off — a line or two of plain text, small and in no box, in the
+reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
+diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
+the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
+stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. Nobody finds
+the gesture by panning and wheeling, and the shortcuts dialog is a place a reader goes once; the hint
+is where the hand already is, gone the moment it leaves the map, and drawn in no export. A halo of
+the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
+paper in both themes. Not on a screen with no pointer to hover, nor where the plot is too narrow for
+the key (§7.1). The 1D browser says the same under its ruler while the pointer is over its tracks:
+*⌥ + drag to zoom into a stretch*, *or drag along the ruler*.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -3202,7 +3263,8 @@ contact map takes two — a square map takes the window on both axes and a turne
 the genomic axis and lets the other follow.
 
 **Three ways in, because they are three moments.** A button beside `go` on the title line saves the
-window on screen, which is for the place you have just found and do not want to retype. The card
+window on screen, which is for the place you have just found and do not want to retype — and so does
+`b`, *Bookmark this view*, from anywhere in the window, answering on the card as the button does. The card
 takes typed coordinates, which is for a place from a paper or a colleague. And the card imports
 **BED**, which is for the forty places anybody who has called peaks or loops already has in hand —
 read as the first three columns and the name, so a narrowPeak, a BEDPE's first mate and a headed
@@ -5778,7 +5840,7 @@ and not before: behind the whole-genome gate — a heading, what the read would 
 that starts it — the column used to show the whole Map card over an empty canvas, clip and all, and a
 reader who nudged the clip there and saw nothing happen concluded the card was broken. The **overlays**
 row holds only the marks that light: the refit, which is an action, stands with the turn and the
-recentre in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
+diagonal lock in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
 read as an overlay that was off, and turned on by a press that threw the reader's pan away.
 
 The deck's controls ride **above the grid**, and are deliberately not another card in the side
@@ -6554,7 +6616,7 @@ anyone running the app.
 
 ### 18.1 Three surfaces, and why it is three
 
-**The Analysis panel** is a fourth column, right of Aesthetics, folded with `j`. It is a *list*, in
+**The Analysis panel** is a fourth column, right of Aesthetics, folded with `4` (§26.6). It is a *list*, in
 four cards cut by the dimension the question is about — *2D tasks*, *3D tasks*, *1D tasks* and
 *Metagenome* (§18.8): one row per task, each with a title, a line of description and a state — never
 run, queued, running, done, failed, cancelled. It carries no controls — bar a stop on a row whose job
@@ -8947,12 +9009,12 @@ without asking for a permission no gesture is behind. The doors are elsewhere an
 landing page — which is what a new tab is — and *Connect a local or remote folder* in the command
 palette.
 
-`f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
-reaches for a list of files, so `f` came from the `fills` overlay — which keeps its toggle, on
-screen beside the picture it changes, and loses one keystroke. It stays in the command palette,
-which promises to list everything the app can do. `f` itself is live only while the column is
-there: with nothing connected it would fold a column nobody can see, so the palette's *Files panel*
-row is dimmed and says to connect a folder first.
+**The key left of `1` folds it** — a backtick on QWERTY, `²` on an AZERTY PC — because it stands
+left of General's `1` as the column stands left of General (§26.6). It was `f`, which the `fills`
+overlay gave up when the column arrived and has had back since the columns moved to the digit row. The row stays in the command palette, which promises to list everything the
+app can do. The key itself is live only while the column is there: with nothing connected it would
+fold a column nobody can see, so the palette's *Files panel* row is dimmed and says to connect a
+folder first.
 
 ### 20.5 Two verbs on a row
 
@@ -9452,8 +9514,11 @@ should be the whole of the answer.
 
 The button is in the header, immediately **before the theme toggle**: to its left are the two other
 things that take something out of this window — a link, and the workspace as a file — and everything
-to its right is about the window rather than the work in it. `` ` `` opens it, on the key every
-terminal in every editor is behind.
+to its right is about the window rather than the work in it. **Control and the key left of `1`**
+opens it — ctrl-` on QWERTY, the chord every terminal in every editor is behind, and Ctrl-² on an
+AZERTY PC. Control on a Mac as well, not ⌘: ⌘` is the system's, which walks a program's windows and
+never reaches the page. The key alone folds the Files column (§20.4); the console used to have it
+bare, and gave it up when the digit row became the columns' (§26.6).
 
 ### 23.5 Kept for a week, in this browser, and in the account
 
@@ -9701,7 +9766,7 @@ window** rather than one per tab, on the Files column's argument (§20.4): a sto
 about the file in front, and a switch of tab must not lose a catalogue somebody was half way
 through narrowing. Its head carries the store's mark and name, the same row of tiles small, for
 switching without closing, and *copy link*. The header has a toggle for it beside the Files
-column's, on the backslash key — punctuation, like the console's backtick, so it cannot collide with
+column's, on the backslash key — punctuation, like the console's chord, so it cannot collide with
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette lists it as *Stores*, wearing its state as a
 chip. Neither the toggle's tooltip nor the palette's hint lists the stores — *every data store this
@@ -10670,10 +10735,12 @@ over the other — each turned into one frame, side by side, turning as one. The
 `f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
 **bound only while the model is enlarged**, and listed in the palette either way; the three modes
 have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
-the new tab and the Aesthetics panel that each already had one of them. They are single letters and
-so are the app's own (`f` folds the Files panel, `a` the Annotations panel); a cell sits *beside* a
-map and its commands come first in the palette's list, so binding them there took those letters from
-the panels for as long as a model was on screen. In the dialog the model is the whole window and
+the new tab and the Aesthetics panel that each already had one of them (the panel has since moved to
+`3`, `e` to the O/E and the breaks to `m`). They are single keys and so are the app's own (`1` `2`
+`3` fold the General, Annotations and Aesthetics panels, §26.6, as `f` and `a` folded Files and
+Annotations once); a cell sits *beside* a
+map and its commands come first in the palette's list, so binding them there would take those keys
+from the panels for as long as a model was on screen. In the dialog the model is the whole window and
 there is nothing else a letter could mean. And a key is **printed on a control only where it is
 bound**, through `withKey` (§26.4): the corner's *frame* and the card's *frame* and *turntable* are
 retitled when the dialog opens and closes, because a card beside a deck reading `(f)` was offering a
@@ -11425,8 +11492,16 @@ structure* card however many models the deck draws.
   them, and the line a reader learns to skip is the line that makes them skip the next one.
 - **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
   read by someone already pointing at the thing, which is exactly when "is there a faster way" is
-  asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.
-  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`).
+  asked. Never on a dead control: `No next genome (>)` offers a key for a thing there is none of.
+  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`), and a hyphen as the
+  minus sign it means (`−`). The key left of `1` prints the reader's keyboard's own character there
+  and its tooltips add *the key left of 1* (§26.6). A character a keycap prints high and small — that
+  key's `²` on an AZERTY PC — is drawn larger in its badge and still high: as printed it was a speck
+  beside a `1` that filled its cap, and grown to a digit's height it read as the `2` of the column
+  beside it. On a folded column's tab a key cap stands upright, but a key that is a word —
+  *backtick* — reads along the spine with the name, since upright it would stand across the strip.
+  The shortcuts dialog's key column is as wide as the widest key in the registry, the console's
+  *Ctrl+backtick*.
 - **A toggle command is titled once, by its noun**, and wears its state as a chip — *Crosshair* `on`
   — in the palette and the shortcuts dialog alike. Titled by its outcome, *Show crosshair*, it read
   as the state, and the dialog printed whatever the app happened to be doing when it was opened.
@@ -11465,12 +11540,13 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   nothing and says nothing, and saves the render too. Where a browser has no such dialog (Firefox,
   Safari) or refuses to open it, the file is the plain download it always was, under the suggested
   name. What a card writes under its button afterwards names the file under the reader's name.
-- **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
+- **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `<` / `>` beside it.
 - **The command palette and the shortcuts dialog are two printings of one registry**
   (`ui/commands.ts`): the same commands — the dialog those with a key — in the same group order, App,
   File, Go, View, Help; what cannot act greyed in both rather than hidden from either; and the gesture
   tables in the reader's own platform's modifier rather than `⌥ / Alt` to choose from. The palette
-  does not list itself.
+  does not list itself. The dialog opens on `?`, which every web application with such a card
+  answers to, and a box being typed into keeps it, since it is a character of a URL.
 - **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
   of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough
   for every option any of them offers. The line under the label is kept for a control that is not one
@@ -11508,6 +11584,30 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been
   changed is a different name, and `YEAST_STRUCTURE` over a card, a tab and a Structures row all
   reading `Yeast_structure` was four names for one file.
+- **The digit row folds the columns, in the order they stand.** The key left of `1` is Files,
+  outermost on the left; `1` and `2` are General and Annotations, the two left of the map; `3` and
+  `4` are Aesthetics and Analysis, the two right of it — so a column's key is found by where the
+  column is, and each wears it beside its heading and on its folded tab. They were five letters, `f`
+  `b` `a` `m` `j`, in no order the screen suggested. **A key bound by its place is matched by its
+  place** (`KeyboardEvent.code`), with or without Shift or Caps Lock: AZERTY's bare `&` `é` `"` `'`
+  are `1` to `4`, the keypad's digits are digits, and an AZERTY PC's `²` is the key left of `1`. `0`,
+  at the row's far end, refits the picture from anywhere (§7.2), by its place as well: AZERTY types
+  `à` there. A Mac's ISO keyboard — every European one — reports that key as `IntlBackslash` and the
+  one beside the left Shift as `Backquote`, so on a Mac both fold Files — unless that second key
+  types `<` or `>`, as on a French or a German Mac, where it is the sequence steps' (§5.5). Its badge prints what the reader's
+  keyboard has there — `²` on an AZERTY PC, `@` on a French Mac, a backtick on QWERTY — read off the
+  browser's layout map where it gives one (Chromium, and so the desktop build) and off the reader's
+  own keystrokes everywhere else, and its tooltips say *the key left of 1* whatever the badge says,
+  since until one of the two has answered the badge is the commonest guess. **Every other key is
+  matched by what it types**, letters regardless of case and `-`, `+`, `<` and `>` by either half of
+  their keys (§5.5) — the one layout whose minus key types a `6` under Shift or Caps Lock, AZERTY on
+  a PC, is read as a minus there unless that key has been seen typing something else bare. A modifier makes
+  any bare key the browser's, AltGraph included (Windows sends it as Ctrl and Alt), so the third level
+  of a key is never a shortcut. Control and the key left of `1` is the console (§23.4). In the enlarged
+  3D cell `1` `2` `3` are its beads, sticks and tube, bound only there (§25.3). **A key a focused
+  control has answered is not the app's as well**: a dot plot's canvas zooms on `+` and `−` and
+  refits on `0`, a plot's edge goes back to its default on `0`, and each says so by taking the key's
+  default, which the window's dispatch then leaves alone.
 - **The picture is never the thing that gives way.** The side columns may be squeezed to their own
   minimum widths when the window cannot hold them all, and `.content` keeps a floor of 18rem: four
   columns at their widths come to about 1,180 pixels, so on a 1366-wide laptop with all four open the

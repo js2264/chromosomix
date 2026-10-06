@@ -149,7 +149,8 @@ import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { StructureCard } from '../ui/StructureCard'
-import { Breadcrumb } from '../ui/Breadcrumb'
+import { Breadcrumb, rungStandingAt } from '../ui/Breadcrumb'
+import { resolutionLabel } from '../units'
 import { ContactsBox, type MapTotal } from '../ui/ContactsBox'
 import type { DrawnDepth } from '../contacts'
 import type { Census } from '../metacooler/resample'
@@ -199,7 +200,8 @@ import {
 } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import { KEYS, type Command } from '../ui/commands'
+import { KEYS, withKey, type Command } from '../ui/commands'
+import { diagonalLocked, toggleDiagonalLock } from '../ui/diagonalLock'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
@@ -1466,13 +1468,15 @@ export class Session {
     // a zoom — have no counterpart on a map. Listing a map's actions beside a
     // browser (greyed out, every one of them) would be a palette that mostly
     // says no.
-    // One word for the list `[` and `]` walk, and it is the word §26.4 gives a
+    // One word for the list `<` and `>` walk, and it is the word §26.4 gives a
     // stretch of DNA in prose: a **sequence**. The two branches used to name it
     // differently — "Previous sequence" here, "Previous genome or contig" on a
     // map — so pressing `v` rewrote half the palette, and on a plain cooler
     // "genome or contig" named neither of the things the key steps through. A
     // genome view is the one place the step really is a genome, and says so.
     const stepNoun = state?.view === 'genome' ? 'genome' : 'sequence'
+    const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
+    const expected = this.current?.panel?.expectedLit ?? null
     if (this.assembly !== null) {
       return [
         {
@@ -1481,6 +1485,17 @@ export class Session {
           title: 'Whole genome',
           hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
+          run: () => this.store.patch({ locus: undefined }),
+        },
+        // `0` is the map's refit, and the browser's whole genome is what a refit
+        // is here: the same key in both, so a reader who learnt it on one picture
+        // does not find it dead on the other.
+        {
+          id: 'browser-fit',
+          group: 'View',
+          title: 'Fit the view',
+          hint: 'The whole genome across, as W and a double click on the tracks do.',
+          keys: KEYS.fit,
           run: () => this.store.patch({ locus: undefined }),
         },
         // The same two keys a map has, walking the same list. They were left out
@@ -1725,16 +1740,62 @@ export class Session {
       {
         id: 'map-diagonal',
         group: 'View',
-        title: 'Recentre on the diagonal',
-        // The first map's, which in a deck is every map's: their windows are
-        // locked together, so one of them going to the diagonal takes the rest.
+        // A switch, titled by its noun and wearing its state (§26.4). Every map's,
+        // as a deck's windows move together (`ui/diagonalLock.ts`).
+        title: 'Diagonal lock',
         hint:
-          'The view slid onto the nearest on-diagonal window, at the zoom it is at — the button ' +
-          'beside the turn. A focused button or tickbox keeps Space for itself.',
+          'The view slid onto the diagonal and held there — every drag, scroll and box runs along ' +
+          'it — until the same key lets go; a focused button or tickbox keeps Space for itself.',
         keys: KEYS.diagonal,
         yieldsToControls: true,
-        enabled: this.current?.panel?.canCentreOnDiagonal === true,
-        run: () => this.current?.panel?.centreOnDiagonal(),
+        state: chip(diagonalLocked()),
+        // Live wherever there is a diagonal to hold, and wherever the lock is on,
+        // so it can always be let go of.
+        enabled: this.current?.panel?.canCentreOnDiagonal === true || diagonalLocked(),
+        run: () => void toggleDiagonalLock(),
+      },
+      {
+        id: 'map-fit',
+        group: 'View',
+        title: 'Fit the view',
+        // The first map's, which in a deck is every map's, as Space's is.
+        hint: 'Every pan and zoom undone, the block back to its canvas — as a double click on the plot does.',
+        keys: KEYS.fit,
+        enabled: this.current?.panel !== undefined,
+        run: () => this.current?.panel?.fit(),
+      },
+      {
+        id: 'map-expected',
+        group: 'View',
+        title: 'Observed over expected',
+        // The lead's toggle, the one on the Map card: a companion of a deck keeps
+        // an O/E of its own (§16.2), on its own card.
+        hint: 'Every cell divided by what its distance from the diagonal predicts — the O/E toggle on the Map card.',
+        keys: KEYS.expected,
+        ...(expected === null ? {} : { state: chip(expected) }),
+        enabled: this.current?.panel?.canToggleExpected === true,
+        run: () => this.current?.panel?.toggleExpected(),
+      },
+      // The resolution bar's stops, one at a time (§3.4): the lead's rung, which
+      // in a deck every map follows, exactly as a press on a stop would. The
+      // hint names the rung it goes to, as `<` and `>` name the sequence.
+      {
+        id: 'resolution-coarser',
+        group: 'View',
+        title: 'Coarser resolution',
+        hint: this.rungHint(1),
+        keys: KEYS.coarser,
+        enabled: this.rungStep(1) !== null,
+        run: () => this.stepRung(1),
+      },
+      {
+        id: 'resolution-finer',
+        group: 'View',
+        title: 'Finer resolution',
+        hint: this.rungHint(-1),
+        keys: KEYS.finer,
+        enabled: this.rungStep(-1) !== null,
+        run: () => this.stepRung(-1),
       },
       // One command and one key for the file's own landing table, whichever
       // of the two it is: a metacool's genomes, or an scool's cells. No file
@@ -1812,6 +1873,17 @@ export class Session {
         keys: KEYS.next,
         enabled: this.stepTarget(1) !== null,
         run: () => this.step(1),
+      },
+      // The button beside `go`, and the card's own *save this view*: one act,
+      // which answers on the card — a row, or the reason there is none.
+      {
+        id: 'bookmark-view',
+        group: 'Go',
+        title: 'Bookmark this view',
+        hint: 'The place on screen, at this resolution, kept on the Bookmarks card.',
+        keys: KEYS.bookmark,
+        enabled: this.bookmarksCard !== null && this.current?.panel !== undefined,
+        run: () => this.bookmarksCard?.saveFramed(),
       },
     ]
   }
@@ -1909,7 +1981,7 @@ export class Session {
    *
    * Its sequences are the **assembly's**, not a contigs table's — a browser
    * session has no map and often no cooler at all — but the gesture is the one
-   * the map has: `[` and `]` walk the file's own order, one sequence at a time.
+   * the map has: `<` and `>` walk the file's own order, one sequence at a time.
    * Leaving them unbound there made the browser the one view where the plainest
    * thing anybody does with a genome had to go through the locus box.
    *
@@ -6012,6 +6084,45 @@ export class Session {
   }
 
   /**
+   * The rung one step coarser (`1`) or finer (`-1`) than the one on screen, or
+   * `null` (§3.4).
+   *
+   * The bar's own ladder, read from where the bar says it stands
+   * (`rungStandingAt`), so a key steps from the stop that is lit and never from
+   * somewhere the reader is not. `null` on a view with no bar to step — the
+   * browser — at either end, and on a ladder of one.
+   */
+  private rungStep(direction: 1 | -1): (Rung & { derived?: DerivedRung }) | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null || state.view === 'browser') return null
+    const rungs = this.ladderRungs()
+    if (rungs.length < 2) return null
+    return rungs[rungStandingAt(rungs, state.coarsen, file.currentEntry) + direction] ?? null
+  }
+
+  /** `-` and `+`: stand on the next rung, by the road a press on its stop takes. */
+  private stepRung(direction: 1 | -1): void {
+    const rung = this.rungStep(direction)
+    if (rung === null) return
+    if (rung.derived !== undefined) this.openDerived(rung.binsize)
+    else this.openStoredRung(rung.name)
+  }
+
+  /** The palette's line under each: the rung it goes to, or why there is none. */
+  private rungHint(direction: 1 | -1): string | undefined {
+    const rung = this.rungStep(direction)
+    if (rung !== null) return resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
+    if (this.file === null || this.store.state?.view === 'browser') return undefined
+    // The `+` on the bar adds only coarser rungs — bins are added up, never
+    // split — so it is the way on at the coarse end and at no other.
+    if (direction < 0) return 'Already the finest resolution this file stores.'
+    return this.ladderRungs().length < 2
+      ? 'This file stores one resolution — the + beside it adds a coarser one.'
+      : 'Already the coarsest — the + beside the resolution adds a coarser one.'
+  }
+
+  /**
    * The resolution the reader is looking at, where it is one they added.
    *
    * `null` on every ordinary view — the open rung's own bins — and on a state
@@ -7293,7 +7404,7 @@ export class Session {
     if (this.bookmarksCard === null) return undefined
     return iconButton(
       'bookmark-plus',
-      'Bookmark this view — the place on screen, at this resolution',
+      withKey('Bookmark this view — the place on screen, at this resolution', KEYS.bookmark),
       () => this.bookmarksCard?.saveFramed(),
     )
   }

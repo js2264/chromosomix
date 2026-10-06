@@ -10,7 +10,7 @@
  * is nothing to go to, and a disabled button that says which name it would have
  * opened is the difference between "broken" and "you are at the last one".
  *
- * Both wear `[` and `]`, the keys that do the same thing — see `ui/commands.ts`
+ * Both wear `<` and `>`, the keys that do the same thing — see `ui/commands.ts`
  * on why a tooltip is where a shortcut is actually found.
  */
 
@@ -32,9 +32,9 @@ export function stepper(props: StepperProps): HTMLElement {
       glyph,
       // The key belongs in the tooltip of the button that performs the action,
       // which is where a reader who is already pointing at it will read it —
-      // and `[` / `]` step through exactly this, so a stepper that did not print
+      // and `<` / `>` step through exactly this, so a stepper that did not print
       // them left the app's most-used shortcut discoverable only in a dialog.
-      // Not on the dead end: "No next genome (])" offers a key for a thing
+      // Not on the dead end: "No next genome (>)" offers a key for a thing
       // there is none of.
       name === null
         ? `No ${delta < 0 ? 'previous' : 'next'} ${props.noun}`

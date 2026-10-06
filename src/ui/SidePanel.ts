@@ -87,7 +87,8 @@
 import { icon, type IconName } from './icons'
 import { el } from './dom'
 import { resizeHandle } from './resizeHandle'
-import { keyLabel, withKey } from './commands'
+import { keyCap, keyLabel, keyPlace, withKey } from './commands'
+import { onLayoutChange } from './keyboardLayout'
 
 /**
  * One column's shape, as a workspace file carries it.
@@ -142,6 +143,14 @@ export interface SidePanelSpec {
    * lists them is two gestures away. This one is written where the thing it acts
    * on already is — which is also where a reader is looking when the thought
    * "get this out of the way" arrives.
+   *
+   * **The digit row, in the order the columns stand.** `1` and `2` are the two
+   * columns left of the map, `3` and `4` the two right of it, and the key left
+   * of `1` is Files, outermost on the left — so a column's key is found by
+   * where the column is. They were five letters, `f` `b` `a` `m` `j`, in no
+   * order anybody could guess from the screen. The row is matched by position
+   * (`ui/commands.ts`), with or without Shift or Caps Lock: on AZERTY the bare
+   * key with the 1 on it types `&`, and it is still the `1`.
    */
   keys: string
   /**
@@ -163,9 +172,11 @@ export interface SidePanelSpec {
  * map should be the two that are about the map. `order: -3` puts it there, and
  * puts its folded tab outside General's, which is the order they are read in.
  *
- * `f`, for files, which cost `ui/plotOptions.ts` a shortcut it explains giving
- * up. The alternative was `q` or `z` — all that the single-letter space had left
- * — and a column nobody can name the key of is a column reached by mouse only.
+ * **The key left of `1`**, because it stands left of General's `1` exactly as
+ * this column stands left of General (see {@link SidePanelSpec.keys}): a
+ * backtick on QWERTY, `²` on an AZERTY PC, and the badge prints whichever the
+ * keyboard has (`ui/keyboardLayout.ts`). It was `f`, which cost the `fills`
+ * overlay its key (`ui/plotOptions.ts`).
  *
  * A `folder-tree` rather than a plain folder: what is behind it is not one
  * directory but a set of places, each opening into levels, and the mark that
@@ -184,7 +195,7 @@ export const FILES_PANEL: SidePanelSpec = {
   maxWidth: 600,
   closeIcon: 'folder-tree',
   openIcon: 'folder-tree',
-  keys: 'f',
+  keys: '`',
 }
 
 /**
@@ -218,7 +229,7 @@ export const GENERAL_PANEL: SidePanelSpec = {
   maxWidth: 560,
   closeIcon: 'file-cog',
   openIcon: 'file-cog',
-  keys: 'b',
+  keys: '1',
 }
 
 /**
@@ -241,7 +252,7 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
   maxWidth: 560,
   closeIcon: 'layers',
   openIcon: 'layers',
-  keys: 'a',
+  keys: '2',
 }
 
 /**
@@ -252,8 +263,8 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
  * them is a column that does neither, which is why the drawer is a second
  * surface rather than this one growing a form.
  *
- * `j`, because `b`, `a` and `m` are the other three and the single-letter space
- * is otherwise all but spent between `ui/commands.ts` and `ui/plotOptions.ts`.
+ * `4`, the end of the row for the column at the end of the window (see
+ * {@link SidePanelSpec.keys}).
  *
  * Outermost on the right — `order: 2`, past Aesthetics — because it is the
  * column touched least often per session and the one whose absence costs the
@@ -271,7 +282,7 @@ export const ANALYSIS_PANEL: SidePanelSpec = {
   maxWidth: 520,
   closeIcon: 'beaker',
   openIcon: 'beaker',
-  keys: 'j',
+  keys: '4',
 }
 
 /**
@@ -301,7 +312,7 @@ export const AESTHETICS_PANEL: SidePanelSpec = {
   maxWidth: 480,
   closeIcon: 'chart-spline',
   openIcon: 'chart-spline',
-  keys: 'm',
+  keys: '3',
 }
 
 /**
@@ -373,6 +384,11 @@ export class SidePanel {
   readonly zone = el('div', { class: 'card-zone' })
   /** What a folded column shows instead of itself; see the file header. */
   private readonly tab: HTMLButtonElement
+  /** The chevron in the open column's heading ({@link chevron}). */
+  private readonly foldButton: HTMLButtonElement
+  /** The key beside the heading and on the tab, written by {@link paintKey}. */
+  private readonly headKey = el('kbd', { class: 'kbd panel-column-key' })
+  private readonly tabKey = el('kbd', { class: 'kbd panel-tab-key' })
   private collapsed: boolean
   private width: number
   private available = false
@@ -423,6 +439,7 @@ export class SidePanel {
     this.width = (this.remembers ? readWidth(spec) : null) ?? spec.defaultWidth
 
     this.tab = this.spine()
+    this.foldButton = this.chevron()
     this.el = el(
       'div',
       // The title is also the identifying class, so a stylesheet can name one
@@ -433,12 +450,8 @@ export class SidePanel {
         'div',
         { class: 'panel-column-head' },
         el('h2', { class: 'panel-column-title', text: spec.title }),
-        el('kbd', {
-          class: 'kbd panel-column-key',
-          text: keyLabel(spec.keys),
-          title: `Press ${keyLabel(spec.keys)} to fold or open this panel`,
-        }),
-        this.chevron(),
+        this.headKey,
+        this.foldButton,
       ),
       this.body,
       this.handle(),
@@ -453,7 +466,34 @@ export class SidePanel {
     })
     this.toggle.addEventListener('click', () => this.fold(!this.collapsed))
 
+    this.paintKey()
     this.paint()
+    // For as long as the window lives, which is as long as a column does.
+    onLayoutChange(() => {
+      this.paintKey()
+      this.paint()
+    })
+  }
+
+  /**
+   * The key, everywhere this column wears it but the header's button.
+   *
+   * Written again when the keyboard's layout answers (`ui/keyboardLayout.ts`),
+   * for the one key whose character is the keyboard's rather than the
+   * binding's: the Files column's, left of `1`, which is built saying
+   * `backtick` before an AZERTY keyboard has said it has `²` there. The
+   * header's button is {@link paint}'s, which runs beside this.
+   */
+  private paintKey(): void {
+    const key = keyLabel(this.spec.keys)
+    const place = keyPlace(this.spec.keys)
+    this.headKey.replaceChildren(...keyCap(this.spec.keys))
+    this.headKey.title = `Press ${key}${place === undefined ? '' : ` (${place})`} to fold or open this panel`
+    this.tabKey.replaceChildren(...keyCap(this.spec.keys))
+    // A word reads along the spine with the name; a key cap stands upright.
+    this.tabKey.classList.toggle('is-word', [...key].length > 1)
+    this.tab.title = withKey(`Show the ${this.spec.title} panel`, this.spec.keys)
+    this.foldButton.title = withKey(`Fold the ${this.spec.title} panel`, this.spec.keys)
   }
 
   /**
@@ -467,18 +507,16 @@ export class SidePanel {
    * turned with the words would point along the spine and mean nothing.
    */
   private spine(): HTMLButtonElement {
-    const key = keyLabel(this.spec.keys)
     const node = el(
       'button',
       {
         class: 'panel-tab',
         type: 'button',
-        title: withKey(`Show the ${this.spec.title} panel`, this.spec.keys),
         attrs: { 'aria-label': `Show the ${this.spec.title} panel` },
       },
       icon(this.spec.openIcon, { size: 14, class: 'panel-tab-mark' }),
       el('span', { class: 'panel-tab-title', text: this.spec.title }),
-      el('kbd', { class: 'kbd panel-tab-key', text: key }),
+      this.tabKey,
       icon(this.spec.side === 'left' ? 'chevron-right' : 'chevron-left', {
         size: 13,
         class: 'panel-tab-mark panel-tab-chevron',
@@ -519,10 +557,10 @@ export class SidePanel {
       {
         class: 'panel-column-fold',
         type: 'button',
-        title: withKey(`Fold the ${this.spec.title} panel`, this.spec.keys),
-        // The key is in the tooltip but not in the name, as on the tab: a label
-        // read aloud as "fold the General panel, bracket, B" is a shortcut
-        // spelled out to the one reader who cannot press it while looking.
+        // The key is in the tooltip (`paintKey`) but not in the name, as on the
+        // tab: a label read aloud as "fold the General panel, bracket, 1" is a
+        // shortcut spelled out to the one reader who cannot press it while
+        // looking.
         attrs: { 'aria-label': `Fold the ${this.spec.title} panel` },
       },
       icon(this.spec.side === 'left' ? 'chevron-left' : 'chevron-right', { size: 14 }),

@@ -632,6 +632,15 @@ function createRasterCanvas(width: number, height: number): RasterCanvas {
 const DOUBLE_CLICK_MS = 250
 
 /**
+ * How far one press of Page Up or Page Down zooms about the centre.
+ *
+ * About one notch of a mouse wheel (`exp(100 × 0.002)`, 1.22), and what `+`
+ * and `−` took when they were this canvas's zoom: a press is a step a reader
+ * can see and undo, and a held key repeats it into a sweep.
+ */
+const KEY_ZOOM = 1.25
+
+/**
  * How long a freeze lasts before it shows a spinner.
  *
  * Most refines are served out of the byte source's chunk cache and land in a few
@@ -1670,6 +1679,8 @@ export class HeatmapView {
   private bandMode: 'zoom' | 'pick' = 'zoom'
   /** A sideways scroll slides along the diagonal: see {@link setDiagonalSlide}. */
   private diagonalSlide = false
+  /** The view is held on the diagonal: see {@link setDiagonalLock}. */
+  private diagonalLock = false
   /**
    * A form is waiting for a **box**, so a plain drag draws one.
    *
@@ -2473,8 +2484,10 @@ export class HeatmapView {
    * would be snapping to the frame.
    */
   /**
-   * Whether a sideways scroll slides **along the diagonal** — both axes at once,
-   * a slide down the genome — rather than along the columns alone.
+   * Whether a sideways scroll *can* slide **along the diagonal** — both axes at
+   * once, a slide down the genome — rather than along the columns alone; it
+   * does while the view is held on the diagonal ({@link setDiagonalLock},
+   * {@link slideSideways}), and the columns alone are the slide otherwise.
    *
    * A cis map is read along its diagonal, and a sideways slide that took the
    * columns and left the rows carried the diagonal off the side of the picture
@@ -2495,6 +2508,60 @@ export class HeatmapView {
   /** Whether a sideways scroll slides along the diagonal — see {@link setDiagonalSlide}. */
   get slidesAlongDiagonal(): boolean {
     return this.diagonalSlide
+  }
+
+  /**
+   * Hold the view on the diagonal, or let it go (§7.2) — Space, and the button
+   * beside the turn.
+   *
+   * Locking is a press of the old recentre as well: the view goes onto the line
+   * at the zoom it is at ({@link centreOnDiagonal}), and then **stays there,
+   * whatever moves it**. A pan keeps only the part of itself that runs along the
+   * line ({@link panBy}), so a drag across the map slides it down the diagonal by
+   * as much of the drag as points that way; a zoom is about the point of the
+   * line nearest the pointer ({@link zoomAt}); a sideways scroll slides down it
+   * ({@link slideSideways}); and an Option-drag draws its box on it, as Option
+   * and Shift do. Off, a sideways scroll is the columns alone and every gesture
+   * goes where the hand does.
+   *
+   * Held only where there is a line to hold it on — a block the diagonal
+   * crosses, square, not turned ({@link heldOnDiagonal}) — and the flag outlives
+   * a block that has none, so the next one that does is held again.
+   */
+  setDiagonalLock(on: boolean): void {
+    if (this.diagonalLock === on) return
+    this.diagonalLock = on
+    if (on && this.heldOnDiagonal) this.centreOnDiagonal()
+  }
+
+  /** Whether the view is held on the diagonal — see {@link setDiagonalLock}. */
+  get diagonalLocked(): boolean {
+    return this.diagonalLock
+  }
+
+  /**
+   * Whether the lock is holding *this* picture: locked, a diagonal in the
+   * block, and not turned — a turned map's diagonal is the bottom edge of the
+   * picture, which no gesture can leave.
+   */
+  private get heldOnDiagonal(): boolean {
+    return this.diagonalLock && !this.spanGestures && this.diagonalOffset() !== null
+  }
+
+  /**
+   * A sideways scroll — two fingers, or a tilt of the wheel — by `deltaX`.
+   *
+   * **Down the diagonal while the view is held on it**: rows and columns
+   * together, by the same distance, so the line stays where it is on the screen;
+   * and so on a block of two stretches of one sequence, whose bands of one
+   * separation run the same way (`MatrixPanel.slidesAlongDiagonal`). **The
+   * columns alone otherwise**, which is what a sideways scroll is everywhere
+   * else: a reader who has let go of the diagonal has said they mean to move off
+   * it. The lanes beside the map take theirs through here too, so a scroll over
+   * a track is the same slide as one over the map.
+   */
+  slideSideways(deltaX: number): void {
+    this.panBy(-deltaX, this.diagonalLock && this.diagonalSlide ? -deltaX : 0)
   }
 
   setSpanGestures(on: boolean): void {
@@ -2559,9 +2626,16 @@ export class HeatmapView {
     this.changed()
   }
 
-  /** Pan by a screen distance in CSS pixels. Positive `dx` drags content right. */
+  /**
+   * Pan by a screen distance in CSS pixels. Positive `dx` drags content right.
+   *
+   * Held on the diagonal, only the part of the pan that runs along it: the line
+   * is at 45° on the screen, because one zoom serves both axes, so that part is
+   * the same distance on each — the mean of the two.
+   */
   panBy(dx: number, dy: number): void {
     if (this.frozen) return
+    if (this.heldOnDiagonal) dx = dy = (dx + dy) / 2
     this.originX -= dx / this.zoom
     this.originY -= dy / this.zoom
     this.clampView()
@@ -2572,13 +2646,17 @@ export class HeatmapView {
   /**
    * Zoom about a point given in canvas CSS pixels, keeping the matrix cell
    * under it fixed. `factor > 1` zooms in.
+   *
+   * Held on the diagonal, about the point of the line nearest the one given: a
+   * zoom about a point of the line keeps a view centred on it centred on it.
    */
   zoomAt(x: number, y: number, factor: number): void {
     if (this.frozen) return
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
+    const [ax, ay] = this.heldOnDiagonal ? this.onDiagonal(x, y) : [x, y]
     const plot = this.plotRect
-    const px = x - plot.x
-    const py = y - plot.y
+    const px = ax - plot.x
+    const py = ay - plot.y
     const u = this.originX + px / this.zoom
     const v = this.originY + py / this.zoom
     const next = clamp(this.zoom * factor, this.minZoom(), this.maxZoom())
@@ -5189,7 +5267,16 @@ export class HeatmapView {
 
   /**
    * Keyboard pan and zoom (spec §7.2). Arrows pan by a tenth of the viewport (a
-   * half with Shift), `+`/`-` zoom about the centre, `0` or Home refits.
+   * half with Shift), Page Up and Page Down zoom about the centre by a wheel
+   * notch's worth, and Home refits.
+   *
+   * **Not `+` and `−`**, which zoomed here once and now step the map's
+   * resolution (`KEYS.coarser`, `KEYS.finer`), **nor `0`**, which refits from
+   * anywhere in the window (`KEYS.fit`). They are the app's, heard on the
+   * window — and this canvas has the focus after any press on it, so answering
+   * them here as well made one keystroke a zoom *and* a re-read at another
+   * grid. The paging pair is the zoom they gave up, on the two keys that
+   * already mean "a long way" and that nothing else on a map answers.
    *
    * @returns `true` if the key was consumed, in which case the default action
    * has already been prevented. The caller still has to redraw.
@@ -5211,8 +5298,6 @@ export class HeatmapView {
     }
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
-    const cx = plot.x + plot.width / 2
-    const cy = plot.y + plot.height / 2
     let handled = true
     switch (event.key) {
       case 'ArrowLeft':
@@ -5227,15 +5312,12 @@ export class HeatmapView {
       case 'ArrowDown':
         this.panBy(0, -plot.height * step)
         break
-      case '+':
-      case '=':
-        this.zoomAt(cx, cy, 1.25)
+      case 'PageUp':
+        this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, KEY_ZOOM)
         break
-      case '-':
-      case '_':
-        this.zoomAt(cx, cy, 1 / 1.25)
+      case 'PageDown':
+        this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / KEY_ZOOM)
         break
-      case '0':
       case 'Home':
         this.fit()
         break
@@ -5385,8 +5467,10 @@ export class HeatmapView {
       // …except on a turned map, where the diagonal is the bottom edge of the
       // picture and a corner snapped to it would be a corner snapped to the
       // frame. The selection is already the on-diagonal one there, whichever
-      // modifiers are held ({@link setSpanGestures}).
-      const diagonal = mode === 'select' && e.shiftKey && !this.spanGestures
+      // modifiers are held ({@link setSpanGestures}). Held on the diagonal, an
+      // Option-drag is Option and Shift's: a box off the line is a window the
+      // view could not stay in.
+      const diagonal = mode === 'select' && (e.shiftKey || this.heldOnDiagonal) && !this.spanGestures
       const [ax, ay] = diagonal ? this.onDiagonal(x, y) : [x, y]
       this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal, shift: e.shiftKey }
       this.lastX = x
@@ -5610,10 +5694,11 @@ export class HeatmapView {
       // it does over the rest of the page; that is the wrong trade over a
       // picture you navigate by sliding. Back and forward are still a sideways
       // swipe *outside* the picture, which is where a page gesture belongs.
-      // Along the diagonal where there is one (see `setDiagonalSlide`).
+      // Along the diagonal while the view is held on it, the columns alone
+      // otherwise ({@link slideSideways}).
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         e.preventDefault()
-        this.panBy(-e.deltaX, this.diagonalSlide ? -e.deltaX : 0)
+        this.slideSideways(e.deltaX)
         return
       }
       // **With ⌘ held, up and down slide too** — both axes at once, so two

@@ -238,29 +238,27 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
  * a shortcut, and `App.commands` binds it. Written twice, they drift, and the
  * one that drifts is always the tooltip — nothing fails when it is wrong.
  *
- * **`fills` has no key any more, and gave `f` to the Files panel.** The
- * single-letter space was down to `q` and `z` when a fifth panel arrived, and
- * neither is a letter anyone reaches for a list of files. Between a panel — one
- * of five columns, in the row of marks at the top of every window — and one of
- * eleven overlay toggles, `f` belongs to the panel: the four other panels are
- * `b`, `a`, `m` and `j`, so a keyless one would be the odd column out, while an
- * overlay's toggle is a button that is on screen beside the picture it changes.
- * The toggle is untouched; it is one keystroke that is gone, from the option
- * whose button is hardest to miss.
+ * **`fills` has `f` back.** It gave the letter to the Files panel when a fifth
+ * panel arrived and the single-letter space was down to `q` and `z`; the panels
+ * have since moved to the digit row, in the order they stand
+ * (`ui/SidePanel.ts`), and the letter came home. **`breaks` is `m`**, for the
+ * margin they are drawn in: `e` went to the O/E toggle (`KEYS.expected`), whose
+ * letter it is.
  *
- * A missing entry is therefore a real state and every reader of this table
- * handles it: the tooltip prints the label alone, and `App.commands` registers
- * nothing.
+ * **`legend` has no key**, so a missing entry is a real state and every reader
+ * of this table handles it: the tooltip prints the label alone, and
+ * `App.commands` registers nothing.
  */
 export const PLOT_OPTION_KEYS: Partial<Record<PlotOptionKey, string>> = {
   text: 'n',
+  fills: 'f',
   outline: 'i',
   baseline: 'r',
   gutter: 'u',
   crosshair: 'x',
   tooltip: 'p',
   dividers: 'd',
-  breaks: 'e',
+  breaks: 'm',
   labels: 'l',
   ticks: 'k',
 }

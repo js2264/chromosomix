@@ -157,10 +157,10 @@ await scene('landing', async ({ page, shot }) => {
   await page.keyboard.press('\\')
   await sleep(500)
   // The console, empty.
-  await page.keyboard.press('`')
+  await page.keyboard.press('Control+Backquote')
   await sleep(800)
   await shot('08-console-empty')
-  await page.keyboard.press('`')
+  await page.keyboard.press('Control+Backquote')
   await sleep(300)
   // What the browser remembers.
   await page.keyboard.press('Control+p')
@@ -301,7 +301,7 @@ await scene('map', async ({ page, shot, fold, opened }) => {
   await shot('25b-tab-rename', { clip: { x: 0, y: 50, width: 800, height: 50 } })
   await page.keyboard.press('Escape')
   // The console after work.
-  await page.keyboard.press('`')
+  await page.keyboard.press('Control+Backquote')
   await sleep(800)
   await shot('26-console')
 })

@@ -130,13 +130,15 @@ export function buildMenu(): Menu {
       mirror('Contigs table', 'go-contigs', 'C'),
       mirror('Whole genome', 'go-overview', 'W'),
       { type: 'separator' },
-      mirror('Previous sequence', 'go-prev', '['),
-      mirror('Next sequence', 'go-next', ']'),
+      mirror('Previous sequence', 'go-prev', '<'),
+      mirror('Next sequence', 'go-next', '>'),
     ],
   })
 
   const view: MenuItemConstructorOptions[] = [
-    mirror('File info sidebar', 'fold-sidebar', 'B'),
+    // `1`, the first of the digit row that folds the columns in the order they
+    // stand (`src/ui/SidePanel.ts`). Displayed, never registered, like the rest.
+    mirror('File info sidebar', 'fold-sidebar', '1'),
     mirror('Cycle the theme', 'theme', 'T'),
     { type: 'separator' },
     { role: 'togglefullscreen' },
@@ -166,7 +168,7 @@ export function buildMenu(): Menu {
   template.push({
     label: '&Help',
     submenu: [
-      { label: 'Keyboard shortcuts', click: () => send('shortcuts') },
+      mirror('Keyboard shortcuts', 'shortcuts', '?'),
       { label: 'About (meta)cooler', click: () => send('about') },
       { type: 'separator' },
       {

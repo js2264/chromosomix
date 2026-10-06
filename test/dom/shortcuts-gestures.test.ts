@@ -47,10 +47,10 @@ function mapGestures(): Map<string, string> {
 }
 
 describe('the map’s gestures', () => {
-  it('says a sideways scroll slides along the diagonal, and where it does not', () => {
+  it('says a sideways scroll slides down the diagonal while it is locked, and sideways otherwise', () => {
     const slide = mapGestures().get('two fingers sideways') ?? ''
-    expect(slide).toMatch(/along the diagonal/)
-    expect(slide).toMatch(/turned map/)
+    expect(slide).toMatch(/down the diagonal while it is locked/)
+    expect(slide).toMatch(/Space/)
     expect(slide).not.toMatch(/left and right/)
   })
 

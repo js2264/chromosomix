@@ -307,7 +307,9 @@ describe('chrome stops at the data', () => {
     const plot = heatmap.plotRect
     expect(heatmap.dataRect.width).toBeCloseTo(plot.width, 6)
     // Zoom out below the fit: the matrix is now smaller than the area for it.
-    heatmap.handleKeyDown({ key: '-', preventDefault: () => {} } as KeyboardEvent)
+    // By the factor the `−` key used to take, about the centre — the key steps
+    // the resolution now, and the zoom it was is the wheel's.
+    heatmap.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / 1.25)
     expect(heatmap.dataRect.width).toBeLessThan(plot.width)
     expect(heatmap.dataRect.height).toBeLessThan(plot.height)
   })
@@ -888,9 +890,10 @@ describe('the two axes of a wheel', () => {
     expect(prevented()).toBe(2)
   })
 
-  it('slides along the diagonal on a horizontal one where the picture has a diagonal: rows and columns together', () => {
+  it('slides along the diagonal on a horizontal one while the view is held on it: rows and columns together', () => {
     const { heatmap, wheel } = wheeled()
     heatmap.setDiagonalSlide(true)
+    heatmap.setDiagonalLock(true)
     wheel(0, -400)
     const plot = heatmap.plotRect
     const corner = (): { row?: number; col?: number } => {
@@ -903,6 +906,22 @@ describe('the two axes of a wheel', () => {
     // Down the genome on both axes at once, by the same number of cells.
     expect((after.col ?? 0) - (before.col ?? 0)).toBeGreaterThan(0)
     expect((after.row ?? 0) - (before.row ?? 0)).toBe((after.col ?? 0) - (before.col ?? 0))
+  })
+
+  it('slides the columns alone once the diagonal is let go of, where the picture has one', () => {
+    const { heatmap, wheel } = wheeled()
+    heatmap.setDiagonalSlide(true)
+    wheel(0, -400)
+    const plot = heatmap.plotRect
+    const corner = (): { row?: number; col?: number } => {
+      const cell = heatmap.cellAt(plot.x + 1, plot.y + 1)
+      return { row: cell?.row, col: cell?.col }
+    }
+    const before = corner()
+    wheel(180, 4)
+    const after = corner()
+    expect((after.col ?? 0) - (before.col ?? 0)).toBeGreaterThan(0)
+    expect(after.row).toBe(before.row)
   })
 
   it('slides up and down with ⌘ held, instead of zooming', () => {
@@ -1370,5 +1389,108 @@ describe('showing a window that came from outside', () => {
     // rather than infinity — which is what a bookmark of one base pair is.
     expect(Number.isFinite(heatmap.zoomLevel)).toBe(true)
     expect(heatmap.zoomLevel).toBeGreaterThanOrEqual(before)
+  })
+})
+
+/**
+ * The diagonal lock (§7.2): onto the diagonal at the zoom the map is at, and
+ * held there whatever moves the view — a pan keeps the part of itself that runs
+ * along the line, a zoom is about the point of the line nearest the pointer,
+ * and an Option-drag draws its box on it. Asserted through the cell at the
+ * plot's centre, which is on the diagonal exactly when its row and column are
+ * the same bin.
+ */
+describe('held on the diagonal', () => {
+  const centre = (heatmap: HeatmapView): { row: number; col: number } => {
+    const plot = heatmap.plotRect
+    const cell = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    return { row: cell?.row ?? Number.NaN, col: cell?.col ?? Number.NaN }
+  }
+  /** Rows 70–90 against columns 10–30, as far off the diagonal as a pan can leave a window. */
+  const offDiagonal = (heatmap: HeatmapView): void => {
+    const plot = heatmap.plotRect
+    heatmap.zoomToBox(plot.x + 40, plot.y + 280, plot.x + 120, plot.y + 360)
+  }
+
+  it('goes onto the diagonal the moment it is locked, at the zoom it is at', () => {
+    const heatmap = view()
+    offDiagonal(heatmap)
+    const zoom = heatmap.zoomLevel
+    heatmap.setDiagonalLock(true)
+    expect(heatmap.diagonalLocked).toBe(true)
+    expect(heatmap.zoomLevel).toBe(zoom)
+    expect(centre(heatmap).row).toBeCloseTo(50, 0)
+    expect(centre(heatmap).col).toBeCloseTo(50, 0)
+  })
+
+  it('pans along the diagonal whichever way the hand goes, and stays on it', () => {
+    const heatmap = view()
+    offDiagonal(heatmap)
+    heatmap.setDiagonalLock(true)
+    const before = centre(heatmap)
+    // Straight left, then straight up, then across the line: each keeps the
+    // part of itself that runs along it.
+    heatmap.panBy(-80, 0)
+    let now = centre(heatmap)
+    expect(now.row).toBe(now.col)
+    expect(now.col).toBeGreaterThan(before.col)
+    heatmap.panBy(0, 120)
+    now = centre(heatmap)
+    expect(now.row).toBe(now.col)
+    const across = centre(heatmap)
+    heatmap.panBy(60, -60)
+    expect(centre(heatmap)).toEqual(across)
+  })
+
+  it('zooms about the point of the diagonal nearest the pointer', () => {
+    const heatmap = view()
+    offDiagonal(heatmap)
+    heatmap.setDiagonalLock(true)
+    const plot = heatmap.plotRect
+    // A pointer well below the line, in the bottom-left corner of the plot.
+    heatmap.zoomAt(plot.x + 20, plot.y + plot.height - 20, 1.6)
+    const now = centre(heatmap)
+    expect(now.row).toBe(now.col)
+  })
+
+  it('draws an Option-drag’s box on the diagonal, as Option and Shift do', () => {
+    const { canvas, fire } = harness(400)
+    const boxes: SelectionBox[] = []
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1, onSelect: (box) => boxes.push(box) })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.setDiagonalLock(true)
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 200, plot.y + 280], { altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].rows).toEqual(boxes[0].cols)
+  })
+
+  it('lets go when unlocked: a pan goes where the hand does', () => {
+    const heatmap = view()
+    offDiagonal(heatmap)
+    heatmap.setDiagonalLock(true)
+    heatmap.setDiagonalLock(false)
+    const before = centre(heatmap)
+    heatmap.panBy(-80, 0)
+    const now = centre(heatmap)
+    expect(now.row).toBe(before.row)
+    expect(now.col).toBeGreaterThan(before.col)
+  })
+
+  it('holds nothing on a block the diagonal does not cross', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setMatrix(
+      { nrows: 100, ncols: 100, values: new Float32Array(100 * 100), rowExtent: [500, 600], colExtent: [0, 100] },
+      [],
+    )
+    const plot = heatmap.plotRect
+    heatmap.zoomToBox(plot.x + 40, plot.y + 40, plot.x + 120, plot.y + 120)
+    heatmap.setDiagonalLock(true)
+    const before = centre(heatmap)
+    heatmap.panBy(-80, 0)
+    const now = centre(heatmap)
+    expect(now.row).toBe(before.row)
+    expect(now.col).toBeGreaterThan(before.col)
   })
 })

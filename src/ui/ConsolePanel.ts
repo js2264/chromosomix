@@ -60,6 +60,7 @@
 import { button, el, fmt } from './dom'
 import { durationText } from '../units'
 import { KEYS, withKey } from './commands'
+import { onLayoutChange } from './keyboardLayout'
 import { copyTextToClipboard, downloadBlob, fileStamp } from './export'
 import { icon, iconButton, type IconName } from './icons'
 import { resizeHandle } from './resizeHandle'
@@ -254,6 +255,8 @@ export class ConsolePanel {
   private readonly outputBox: HTMLButtonElement
   private readonly emptyEl: HTMLElement
   private readonly unsubscribe: () => void
+  /** The key's character is the keyboard's, so the toggle's tooltip follows it (`ui/keyboardLayout.ts`). */
+  private readonly unsubscribeLayout: () => void
   private readonly options: ConsolePanelOptions
 
   private opened = false
@@ -335,6 +338,7 @@ export class ConsolePanel {
     )
 
     this.unsubscribe = subscribeActions(() => this.onChanged())
+    this.unsubscribeLayout = onLayoutChange(() => this.paintToggle())
     window.addEventListener('keydown', this.onKeyDown)
     // The height is a number of pixels the reader dragged, and its ceiling is a
     // fraction of a window that can be made smaller afterwards. The stylesheet
@@ -381,6 +385,7 @@ export class ConsolePanel {
 
   destroy(): void {
     this.unsubscribe()
+    this.unsubscribeLayout()
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('resize', this.onResize)
     this.el.remove()
