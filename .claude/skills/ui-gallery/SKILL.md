@@ -30,7 +30,7 @@ node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from ori
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
 node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
-node scripts/ui-diagonal-slide.mjs gallery  # a sideways scroll over the map zoomed onto its diagonal, sliding along it: w01, w02
+node scripts/ui-diagonal-slide.mjs gallery  # the diagonal lock on yeast IV: a free sideways scroll leaving the line, Space taking the lock (its toggle lit), a sideways scroll and a drag held on the diagonal, an ⌥-drag's box drawn on it, V stepped to still held, Space letting go: w01 … w08
 node scripts/ui-lane-carry.mjs gallery       # a lane's grip carried to another map, a +, a tracks cell, an empty cell; a model's row on a +: lc1 … lc14
 node scripts/ui-track-location.mjs gallery   # the location marks, a left lane growing away, Space, the File card and the star, card rows on a + and an empty cell: tl1 … tl13
 node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor region, and the profile with and without the anchor: fc1 … fc4

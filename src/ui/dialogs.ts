@@ -11,7 +11,7 @@
 import { Modal } from './Modal'
 import { versionPicker } from './VersionPicker'
 import { el } from './dom'
-import { groupRank, isMac, keyCap, stateChip, type Command } from './commands'
+import { groupRank, isMac, keyCap, optionKey, shiftKey, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
 import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
 
@@ -30,8 +30,8 @@ import { devFeature, devFeaturesOn, setDevFeatures } from '../state/devFeatures'
 function gestureKeys(pattern: string): string {
   const mac = isMac()
   return pattern
-    .replace(/\{opt\}/g, mac ? '⌥' : 'Alt')
-    .replace(/\{shift\}/g, mac ? '⇧' : 'Shift')
+    .replace(/\{opt\}/g, optionKey())
+    .replace(/\{shift\}/g, shiftKey())
     .replace(/\{ceil\}/g, mac ? '⌘' : 'Alt')
     // The key the browser reports as `metaKey`: ⌘ on a Mac, the Windows key
     // elsewhere — what slides a map up and down (`render/heatmap.ts`).
@@ -41,7 +41,7 @@ function gestureKeys(pattern: string): string {
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
   ['drag', 'Pan'],
-  ['{opt} + drag', 'Select a square and open it as a region'],
+  ['{opt} + drag', 'Select a square and open it as a region — on the diagonal while it is locked'],
   ['{shift} + {opt} + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
   // The map's own gesture in one dimension (§8.9), and the reason the row above
   // says *pinned*: Shift is the on-diagonal modifier throughout, and a table
@@ -49,13 +49,9 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['{shift} + drag', 'Zoom to the stretch it spans, on the diagonal, and copy its locus'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
-  // Along the diagonal, rows and columns together — `setDiagonalSlide` — where
-  // the picture has one to follow (§7.2). It said *left and right*, which is
-  // what a sideways scroll did before it followed the diagonal.
-  [
-    'two fingers sideways',
-    'Slide along the diagonal — the columns alone on a turned map or between two sequences',
-  ],
+  // Along the diagonal, rows and columns together, while the view is held on
+  // it — `slideSideways` — and the columns alone otherwise (§7.2).
+  ['two fingers sideways', 'Slide sideways — down the diagonal while it is locked (Space)'],
   ['{meta} + wheel', 'Slide the map up and down, and sideways with it'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],

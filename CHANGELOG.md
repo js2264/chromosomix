@@ -854,6 +854,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Space locks the map onto its diagonal, and a second press lets go (§7.2, §8.9).** It used to put
+  the view back on the diagonal once — *Recentre on the diagonal* — and every pan, box and zoom after
+  it landed a little off the line again. Now it slides the view onto the diagonal at the zoom it is
+  at and keeps it there: a drag moves it along the line by as much of the drag as points that way, a
+  zoom (wheel, pinch, Page Up and Page Down) is about the point of the line nearest the pointer, the
+  arrows walk along it, a sideways scroll slides down it, and an Option-drag draws its box on the
+  diagonal as Option and Shift do. **Unlocked, a sideways scroll is the columns alone**, where it
+  always followed the diagonal. The button beside the turn is the lock's toggle, lit while it holds;
+  the palette and the shortcuts dialog call it *Diagonal lock* and show its state. It is every map's,
+  so a deck moves as one, it holds the next sequence stepped to, and the browser remembers it, as it
+  does *Refine on zoom*.
+
 - **`<` and `>` step to the neighbouring sequence, and the letters are where they read (§5.5, §5.6,
   §7.2, §8.10, §26.6).** The sequence steps were `[` and `]`, which a French keyboard types with
   AltGr — never a shortcut here — and a French Mac with ⇧⌥. `<` and `>` step on every layout: over

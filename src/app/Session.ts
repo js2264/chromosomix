@@ -201,6 +201,7 @@ import {
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, withKey, type Command } from '../ui/commands'
+import { diagonalLocked, toggleDiagonalLock } from '../ui/diagonalLock'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
@@ -1739,16 +1740,19 @@ export class Session {
       {
         id: 'map-diagonal',
         group: 'View',
-        title: 'Recentre on the diagonal',
-        // The first map's, which in a deck is every map's: their windows are
-        // locked together, so one of them going to the diagonal takes the rest.
+        // A switch, titled by its noun and wearing its state (§26.4). Every map's,
+        // as a deck's windows move together (`ui/diagonalLock.ts`).
+        title: 'Diagonal lock',
         hint:
-          'The view slid onto the nearest on-diagonal window, at the zoom it is at — the button ' +
-          'beside the turn. A focused button or tickbox keeps Space for itself.',
+          'The view slid onto the diagonal and held there — every drag, scroll and box runs along ' +
+          'it — until the same key lets go; a focused button or tickbox keeps Space for itself.',
         keys: KEYS.diagonal,
         yieldsToControls: true,
-        enabled: this.current?.panel?.canCentreOnDiagonal === true,
-        run: () => this.current?.panel?.centreOnDiagonal(),
+        state: chip(diagonalLocked()),
+        // Live wherever there is a diagonal to hold, and wherever the lock is on,
+        // so it can always be let go of.
+        enabled: this.current?.panel?.canCentreOnDiagonal === true || diagonalLocked(),
+        run: () => void toggleDiagonalLock(),
       },
       {
         id: 'map-fit',

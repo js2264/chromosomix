@@ -173,10 +173,13 @@ try {
   console.log('after Space:', await region())
   await shotOf('.heatmap-canvas', 'tl6-space-put-it-back', 30)
   const hint = await page.evaluate(() => {
-    const button = Array.from(document.querySelectorAll('button')).find((b) => (b.getAttribute('title') ?? '').startsWith('Recentre on the diagonal'))
+    const button = Array.from(document.querySelectorAll('button')).find((b) => (b.getAttribute('title') ?? '').startsWith('Lock the view on the diagonal'))
     return button?.getAttribute('title')?.slice(0, 40) ?? 'no button'
   })
   console.log('the button says:', hint)
+  // Let go again: the lock is the browser's, and the deck below is read free.
+  await page.keyboard.press('Space')
+  await sleep(500)
 
   // -------------------------------------------------------------------------
   // The deck.

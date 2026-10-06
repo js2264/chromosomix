@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 /**
- * Space puts the map back on its diagonal (§7.2), and stands down wherever
- * Space already has a job.
+ * Space locks the map onto its diagonal (§7.2), and stands down wherever Space
+ * already has a job.
  *
  * The key is bound once, in `KEYS`, and read three ways: the command list
- * dispatches it, the shortcuts dialog prints it, and the recentre button's own
- * tooltip names it. What it does is the button's press, gated exactly as the
- * button is — nothing on a block with no diagonal, nothing under a turn. And
+ * dispatches it, the shortcuts dialog prints it, and the lock's own toggle
+ * names it in its tooltip. What it does is the toggle's press: the lock is
+ * every map's (`ui/diagonalLock.ts`), and taking it puts each map that has a
+ * diagonal onto it — nothing on a block with none, nothing under a turn. And
  * because Space is the one key the page itself already uses — it presses a
  * focused button, ticks a focused box, opens a focused menu row — the command
  * yields to any of those rather than taking the gesture from under them.
@@ -16,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HeatmapView } from '@/render/heatmap'
 import { KEYS, keyLabel, matchesKeys, wantsSpace } from '@/ui/commands'
+import { diagonalLocked, resetDiagonalLock, setDiagonalLocked, toggleDiagonalLock } from '@/ui/diagonalLock'
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -25,12 +27,15 @@ const built: MatrixPanel[] = []
 
 beforeEach(() => {
   teardown = setUpDom({ canvas: 'stub' })
+  window.localStorage.clear()
+  resetDiagonalLock()
 })
 
 afterEach(() => {
   for (const panel of built.splice(0, built.length)) panel.destroy()
   teardown()
   vi.restoreAllMocks()
+  resetDiagonalLock()
 })
 
 const press = (init: Partial<KeyboardEvent>): KeyboardEvent =>
@@ -111,20 +116,43 @@ describe('what it does', () => {
     return panel
   }
 
-  it('is the recentre button’s press, on a block with a diagonal', () => {
+  it('locks, and puts a map with a diagonal onto it; a second press lets go', () => {
     const centre = vi.spyOn(HeatmapView.prototype, 'centreOnDiagonal')
+    const held = vi.spyOn(HeatmapView.prototype, 'setDiagonalLock')
     const panel = map([0, 40], [0, 40])
     expect(panel.canCentreOnDiagonal).toBe(true)
-    panel.centreOnDiagonal()
+    expect(diagonalLocked()).toBe(false)
+    expect(toggleDiagonalLock()).toBe(true)
+    expect(held).toHaveBeenLastCalledWith(true)
+    expect(centre).toHaveBeenCalledTimes(1)
+    expect(toggleDiagonalLock()).toBe(false)
+    expect(held).toHaveBeenLastCalledWith(false)
     expect(centre).toHaveBeenCalledTimes(1)
   })
 
-  it('does nothing where the button is greyed: a block the diagonal does not cross', () => {
+  it('holds a map built while it is locked — the next sequence, stepped to', () => {
+    setDiagonalLocked(true)
+    const held = vi.spyOn(HeatmapView.prototype, 'setDiagonalLock')
+    map([0, 40], [0, 40])
+    expect(held).toHaveBeenCalledWith(true)
+  })
+
+  it('moves nothing where the toggle is greyed: a block the diagonal does not cross', () => {
     const centre = vi.spyOn(HeatmapView.prototype, 'centreOnDiagonal')
     // Rows 0–40 against columns 100–140: two stretches that never meet.
     const panel = map([0, 40], [100, 140])
     expect(panel.canCentreOnDiagonal).toBe(false)
+    setDiagonalLocked(true)
     panel.centreOnDiagonal()
     expect(centre).not.toHaveBeenCalled()
+  })
+
+  it('is remembered by the browser, as Refine on zoom is', () => {
+    setDiagonalLocked(true)
+    resetDiagonalLock()
+    expect(diagonalLocked()).toBe(true)
+    setDiagonalLocked(false)
+    resetDiagonalLock()
+    expect(diagonalLocked()).toBe(false)
   })
 })

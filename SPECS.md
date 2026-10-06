@@ -1848,17 +1848,20 @@ the display canvas. Pan and zoom are canvas transforms over the in-memory matrix
 colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
 anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
-Space recentres the map on its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
+Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
 Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
-is and what they already meant over this app's own tracks — and on a map, **along its diagonal**:
-rows and columns together, by the same distance, so the diagonal stays where it is on the screen
-and the picture moves down the genome under it, as the reference editor's stage (§27.3) has always
-slid. A slide that took the columns alone carried a cis map's diagonal off the side of the picture
-within a screen. **Every cis block slides that way**, a block of two stretches of one sequence
+is and what they already meant over this app's own tracks — on a map, **the columns alone**, and
+**along its diagonal while the view is held on it** (the diagonal lock, §8.9): rows and columns
+together, by the same distance, so the diagonal stays where it is on the screen and the picture moves
+down the genome under it, as the reference editor's stage (§27.3) has always slid. It slid along the
+diagonal always, which a reader who had panned off it to read a stretch of the off-diagonal could not
+get out of: letting go of the lock is saying the next slide is meant to leave the line, and a slide
+that kept to it anyway was the map overruling the hand. **Every cis block slides that way** while
+locked, a block of two stretches of one sequence
 included — the off-diagonal window an Option-drag opens, whose diagonal is off the picture: it is
 read by separation as the diagonal is, and moving rows and columns together keeps a band parallel to
 the diagonal, one distance apart, under the pointer, where the columns alone carried the reader
@@ -3165,20 +3168,27 @@ at a fitted whole-genome view is a two-pixel target on a 45° line. Off on a tur
 reading is already measured from the diagonal and the snap would be onto the picture's own bottom
 edge.
 
-**Recentre on the diagonal** is the same idea as a control: a button in Aesthetics → Map, between the
-turn and `O/E`, that slides the view onto the nearest on-diagonal window at the zoom it is already at
-— the perpendicular foot of the *picture's* centre, which is the least it has to move. Every gesture
-that lands off the diagonal takes several more of the same gestures to come back from, and no drag can
-say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
-where the picture already is one.
+**The diagonal lock** is the same idea as a control: a toggle in Aesthetics → Map, between the turn
+and `O/E`, lit while it holds. Taking it slides the view onto the nearest on-diagonal window at the
+zoom it is already at — the perpendicular foot of the *picture's* centre, which is the least it has
+to move — and **keeps it there, whatever moves it**: a drag keeps the part of itself that runs along
+the line, the mean of its two components, since one zoom serves both axes and the line is at 45° on
+the screen; a zoom, by the wheel, a pinch or the paging keys, is about the point of the line nearest
+the pointer; the arrow keys walk along it; a sideways scroll slides down it (§7.2); and an
+Option-drag draws its box on the diagonal, as Option and Shift do. A second press lets go, and every
+gesture goes where the hand does again. It used to be **Recentre on the diagonal**, the slide alone,
+once: every gesture after it landed a little off the line again, so a reader reading along the
+diagonal pressed it after every drag. Greyed where the block has no diagonal, and while the map is
+turned, where the picture already is one — lit and greyed together on a block the diagonal does not
+cross, a lock waiting for the next one that it does. It is **every map's**: a deck's maps move as one
+(§16.2), and one held on its diagonal beside one that was not would be dragged off it by its own
+neighbour. It outlives a navigation, so a reader stepping along a genome on its diagonal stays on it
+at the next sequence, and like *Refine on zoom* (§2) it is kept by the browser, not the hash.
 
 **Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
-without looking, for the one gesture a reader makes over and over while reading a map — every pan and
-box lands a little off the diagonal, and the way back was a trip to a 15-pixel button in another
-column. It is the button's press, gated as the button is, and on a deck the first map's, whose
-window the others are locked to. It stands down wherever Space already has a job: a focused button
-it presses, a tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the
-shortcuts dialog and the palette as *Recentre on the diagonal*, and in the button's own tooltip.
+without looking. It stands down wherever Space already has a job: a focused button it presses, a
+tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the shortcuts dialog
+and the palette as *Diagonal lock*, with its state, and in the toggle's own tooltip.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -5802,7 +5812,7 @@ and not before: behind the whole-genome gate — a heading, what the read would 
 that starts it — the column used to show the whole Map card over an empty canvas, clip and all, and a
 reader who nudged the clip there and saw nothing happen concluded the card was broken. The **overlays**
 row holds only the marks that light: the refit, which is an action, stands with the turn and the
-recentre in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
+diagonal lock in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
 read as an overlay that was off, and turned on by a press that threw the reader's pan away.
 
 The deck's controls ride **above the grid**, and are deliberately not another card in the side

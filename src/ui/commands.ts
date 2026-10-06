@@ -187,15 +187,16 @@ export const KEYS = {
    */
   mapToggle: 'v',
   /**
-   * Back onto the diagonal, at the zoom the map is at — the recentre button
-   * beside the turn.
+   * The diagonal lock (§7.2): onto the diagonal at the zoom the map is at, and
+   * held there — the toggle beside the turn.
    *
-   * Space, the one key a hand finds without looking, for the one gesture a
-   * reader makes over and over while reading a map: every pan and box lands a
-   * little off the diagonal, and the way back used to be a trip to a 15 px
-   * button in the Aesthetics column. It stands down wherever Space already has
-   * a job — a focused button it presses, a box it ticks, a field it types into
-   * (see `Command.yieldsToControls`).
+   * Space, the one key a hand finds without looking, for the way a reader reads
+   * a map along its diagonal. It used to put the view back on the line once,
+   * and every pan and box after it landed a little off it again, so the key was
+   * pressed after every gesture; now one press holds it and a second lets go.
+   * It stands down wherever Space already has a job — a focused button it
+   * presses, a box it ticks, a field it types into (see
+   * `Command.yieldsToControls`).
    */
   diagonal: ' ',
 } as const
@@ -390,6 +391,20 @@ const SPACE_TAKERS = [
 export function isMac(): boolean {
   if (typeof navigator === 'undefined') return false
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+}
+
+/**
+ * The modifier a map's selection takes, as the reader's keyboard prints it: ⌥
+ * on a Mac, Alt elsewhere — never both, which asks a reader to work out which
+ * half is theirs (`ui/dialogs.ts` on the gesture tables).
+ */
+export function optionKey(): string {
+  return isMac() ? '⌥' : 'Alt'
+}
+
+/** Shift, as {@link optionKey} prints Option: ⇧ on a Mac, the word elsewhere. */
+export function shiftKey(): string {
+  return isMac() ? '⇧' : 'Shift'
 }
 
 /**
