@@ -62,6 +62,8 @@ function scaleOf(m: Matrix): number {
 interface State {
   matrix: Matrix
   fillStyle: string
+  /** The gradient a `fill` paints with, or `null` for the flat `fillStyle`. */
+  fillGradient: PageGradient | null
   strokeStyle: string
   lineWidth: number
   globalAlpha: number
@@ -168,7 +170,60 @@ export type VectorTarget = Pick<
   | 'lineCap'
   | 'setLineDash'
   | 'getLineDash'
+  | 'createRadialGradient'
 >
+
+/**
+ * A radial gradient on the page: two circles and the colours between them,
+ * in the canvas's own coordinates as they were when it was made.
+ *
+ * Written as a PDF **radial shading** (type 3), painted with `sh` inside the
+ * path it fills, so a lit bead is a smooth sphere at any zoom rather than a
+ * raster of one (`structure/painter.ts`). Colours only; a stop's alpha is
+ * ignored, as a shading has none — the fill's `globalAlpha` still applies.
+ */
+class PageGradient {
+  readonly stops: Array<{ offset: number; rgb: [number, number, number] }> = []
+
+  constructor(readonly coords: [number, number, number, number, number, number]) {}
+
+  addColorStop(offset: number, colour: string): void {
+    if (!Number.isFinite(offset)) return
+    this.stops.push({ offset: Math.max(0, Math.min(1, offset)), rgb: pdfColour(colour) })
+    this.stops.sort((a, b) => a.offset - b.offset)
+  }
+}
+
+/** A gradient's stops as a PDF function of one variable on `[0, 1]`. */
+function shadingFunction(stops: PageGradient['stops']): string {
+  const colour = (rgb: [number, number, number]): string => rgb.map(round).join(' ')
+  const pieces = stops.length === 0 ? [{ offset: 0, rgb: [0, 0, 0] as [number, number, number] }] : stops
+  const ramp = (from: [number, number, number], to: [number, number, number]): string =>
+    `<< /FunctionType 2 /Domain [0 1] /C0 [${colour(from)}] /C1 [${colour(to)}] /N 1 >>`
+  if (pieces.length === 1) return ramp(pieces[0].rgb, pieces[0].rgb)
+  // A stitching function: one linear ramp between each pair of stops, the
+  // stops themselves the bounds. Stops before the first offset and after the
+  // last take the end colours, as a canvas does.
+  const ends = [
+    ...(pieces[0].offset > 0 ? [{ offset: 0, rgb: pieces[0].rgb }] : []),
+    ...pieces,
+    ...(pieces[pieces.length - 1].offset < 1 ? [{ offset: 1, rgb: pieces[pieces.length - 1].rgb }] : []),
+  ]
+  // Two stops at one offset would be a ramp of no width, which not every
+  // reader takes: the later is kept, so a hard step softens to a ramp.
+  for (let k = ends.length - 2; k >= 0; k--) if (ends[k].offset === ends[k + 1].offset) ends.splice(k, 1)
+  if (ends.length === 1) return ramp(ends[0].rgb, ends[0].rgb)
+  const functions: string[] = []
+  const bounds: number[] = []
+  for (let k = 0; k + 1 < ends.length; k++) {
+    if (k > 0) bounds.push(ends[k].offset)
+    functions.push(ramp(ends[k].rgb, ends[k + 1].rgb))
+  }
+  return (
+    `<< /FunctionType 3 /Domain [0 1] /Functions [${functions.join(' ')}] ` +
+    `/Bounds [${bounds.map(round).join(' ')}] /Encode [${functions.map(() => '0 1').join(' ')}] >>`
+  )
+}
 
 /**
  * A page, and a context that draws onto it.
@@ -188,6 +243,8 @@ export class VectorPage {
   /** Where the current subpath started, for `closePath` and for `arc`. */
   private current: { x: number; y: number } | null = null
   private readonly alphas = new Map<number, string>()
+  /** The radial shadings painted on this page, as `/Shn` resources, in order. */
+  private readonly shadings: string[] = []
   /**
    * The rasters placed on this page, in the order they were drawn.
    *
@@ -208,6 +265,7 @@ export class VectorPage {
     this.state = {
       matrix: { ...IDENTITY },
       fillStyle: '#000000',
+      fillGradient: null,
       strokeStyle: '#000000',
       lineWidth: 1,
       globalAlpha: 1,
@@ -327,7 +385,12 @@ export class VectorPage {
         return self.state.fillStyle
       },
       set fillStyle(value: string | CanvasGradient | CanvasPattern) {
-        if (typeof value === 'string') self.state.fillStyle = value
+        if (typeof value === 'string') {
+          self.state.fillStyle = value
+          self.state.fillGradient = null
+        } else if (value instanceof PageGradient) {
+          self.state.fillGradient = value
+        }
       },
       get strokeStyle(): string {
         return self.state.strokeStyle
@@ -467,10 +530,11 @@ export class VectorPage {
         end: number,
         counter?: boolean,
       ) => {
-        // Flattened. A circle drawn as 24 segments is indistinguishable at any
-        // size a figure is printed at, and it keeps this module free of the
-        // four-Bézier arc approximation for a shape used by one caller.
-        const steps = 24
+        // As cubics, a quarter turn at most each — the standard approximation,
+        // within three parts in ten thousand of the radius. It used to be 24
+        // straight segments, which no one saw on a dot; a lit bead zoomed to
+        // the size of a coin is a polygon at that, and a page of paths is
+        // there to be zoomed.
         const sweep = counter === true ? start - end : end - start
         // A sweep of a whole turn or more is the whole circle, as the canvas
         // defines it — and the modulo below reads exactly one turn as none, which
@@ -480,21 +544,59 @@ export class VectorPage {
           sweep >= Math.PI * 2
             ? Math.PI * 2
             : ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
-        let last = { x, y }
-        for (let i = 0; i <= steps; i++) {
-          const angle = start + (counter === true ? -1 : 1) * span * (i / steps)
-          last = { x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius }
-          const [px, py] = self.point(last.x, last.y)
-          self.path.push(`${round(px)} ${round(py)} ${i === 0 ? 'm' : 'l'}`)
+        const direction = counter === true ? -1 : 1
+        const steps = Math.max(1, Math.ceil(span / (Math.PI / 2) - 1e-9))
+        const piece = (span / steps) * direction
+        // Each control point lies along the tangent at its end, this far.
+        const reach = (4 / 3) * Math.tan(piece / 4) * radius
+        const at = (angle: number): { x: number; y: number } => ({
+          x: x + Math.cos(angle) * radius,
+          y: y + Math.sin(angle) * radius,
+        })
+        let last = at(start)
+        const [sx, sy] = self.point(last.x, last.y)
+        self.path.push(`${round(sx)} ${round(sy)} m`)
+        for (let i = 0; i < steps; i++) {
+          const from = start + piece * i
+          const to = from + piece
+          const end = at(to)
+          const c1 = self.point(last.x - Math.sin(from) * reach, last.y + Math.cos(from) * reach)
+          const c2 = self.point(end.x + Math.sin(to) * reach, end.y - Math.cos(to) * reach)
+          const [ex, ey] = self.point(end.x, end.y)
+          self.path.push(`${c1.map(round).join(' ')} ${c2.map(round).join(' ')} ${round(ex)} ${round(ey)} c`)
+          last = end
         }
         self.current = last
       },
       fill: () => {
         self.alpha()
+        if (self.state.fillGradient !== null) {
+          // The path as a clip, the shading painted through it, and the clip
+          // gone again with the `Q`.
+          const gradient = self.state.fillGradient
+          const [x0, y0, r0, x1, y1, r1] = gradient.coords
+          const scale = scaleOf(self.state.matrix)
+          const [ax, ay] = self.point(x0, y0)
+          const [bx, by] = self.point(x1, y1)
+          const name = `Sh${self.shadings.length}`
+          self.shadings.push(
+            `/${name} << /ShadingType 3 /ColorSpace /DeviceRGB ` +
+              `/Coords [${[ax, ay, r0 * scale, bx, by, r1 * scale].map(round).join(' ')}] ` +
+              `/Function ${shadingFunction(gradient.stops)} /Extend [true true] >>`,
+          )
+          self.emit('q')
+          self.flushPath()
+          self.emit('W n')
+          self.emit(`/${name} sh`)
+          self.emit('Q')
+          return
+        }
         self.setFill()
         self.flushPath()
         self.emit('f')
       },
+      createRadialGradient: (x0: number, y0: number, r0: number, x1: number, y1: number, r1: number) =>
+        new PageGradient([x0, y0, r0, x1, y1, r1]) as unknown as CanvasGradient,
       stroke: () => {
         self.alpha()
         self.setStroke()
@@ -741,6 +843,7 @@ export class VectorPage {
       `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${round(pageWidth)} ${round(pageHeight)}] ` +
         '/Resources << /Font << /F1 5 0 R /F2 6 0 R >> ' +
         `/ExtGState << ${gs} >>` +
+        `${this.shadings.length === 0 ? '' : ` /Shading << ${this.shadings.join(' ')} >>`}` +
         `${xobjects === '' ? '' : ` /XObject << ${xobjects} >>`} >> /Contents 4 0 R >>\nendobj\n`,
     )
     startObject()

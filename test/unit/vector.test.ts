@@ -238,11 +238,14 @@ describe('VectorPage', () => {
     page.ctx.arc(50, 50, 10, 0, Math.PI * 2)
     page.ctx.fill()
     const content = await contentOf(await bytesOf(await page.toBlob()))
-    const points = [...content.matchAll(/^(-?[\d.]+) (-?[\d.]+) [ml]$/gm)].map((m) => [
+    // A move, then four quarter turns as cubics; every curve's end is on the circle.
+    expect(content.match(/ m$/gm) ?? []).toHaveLength(1)
+    expect(content.match(/ c$/gm) ?? []).toHaveLength(4)
+    const points = [...content.matchAll(/(-?[\d.]+) (-?[\d.]+) [mc]$/gm)].map((m) => [
       Number(m[1]),
       Number(m[2]),
     ])
-    expect(points.length).toBe(25)
+    for (const [x, y] of points) expect(Math.hypot(x - 50, y - 50)).toBeCloseTo(10, 2)
     const xs = points.map(([x]) => x)
     const ys = points.map(([, y]) => y)
     // It reaches both sides of the centre on both axes: a circle, not a point.
@@ -385,5 +388,44 @@ describe('the state a charted figure needs', () => {
     ctx.fill()
     const content = await contentOf(await bytesOf(await page.toBlob({ title: 'compose' })))
     expect(content).toContain('30 60 m')
+  })
+
+  it('fills with a radial gradient as a shading painted through the path', async () => {
+    const page = new VectorPage(100, 100)
+    const ctx = page.ctx
+    const gradient = ctx.createRadialGradient(40, 40, 0, 50, 50, 10)
+    gradient.addColorStop(0, '#ffffff')
+    gradient.addColorStop(0.5, '#ff0000')
+    gradient.addColorStop(1, '#000000')
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(50, 50, 10, 0, Math.PI * 2)
+    ctx.fill()
+    // A colour string afterwards is a flat fill again.
+    ctx.fillStyle = '#00ff00'
+    ctx.fillRect(0, 0, 5, 5)
+    const bytes = await bytesOf(await page.toBlob({ title: 'gradient' }))
+    const file = latin1(bytes)
+    const content = await contentOf(bytes)
+    // In page space, y flipped, as every path is: (40, 40) → (40, 60).
+    expect(file).toContain('/Sh0 << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [40 60 0 50 50 10]')
+    expect(file).toContain('/FunctionType 3')
+    expect(file).toContain('/Bounds [0.5]')
+    expect(content).toMatch(/q\n[^]*W n\n\/Sh0 sh\nQ/)
+    expect(content).toContain('0 1 0 rg')
+  })
+
+  it('draws an arc as cubics on the circle, the way the canvas turns', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    // Counter-clockwise a quarter turn, from the right to the top: on the page,
+    // whose y runs up, the top of the circle is y = 60.
+    page.ctx.arc(50, 50, 10, 0, -Math.PI / 2, true)
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(content).toContain('60 50 m')
+    expect(content).toMatch(/ 50 60 c$/m)
+    // The control points of a quarter turn sit 0.5523 of the radius along the tangents.
+    expect(content).toContain('60 55.523 55.523 60 50 60 c')
   })
 })

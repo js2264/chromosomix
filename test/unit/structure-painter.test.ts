@@ -77,13 +77,14 @@ describe('the painter', () => {
 
   it('draws a dashed run across a gap, always', async () => {
     const sticks = { ...defaultStructureStyle(), beads: false, sticks: true, tube: false }
-    const dashed = await streamOf(view({ style: sticks }))
+    const dashed = await contentOf(view({ style: sticks }))
     // The gap between 20 kb and 40 kb on chrA is a dashed segment of ink. With
-    // the far side of the gap hidden there is no gap to dash and one stick
-    // fewer — and a deflated stream with fewer operators in it is a shorter one.
+    // the far side of the gap hidden there is no gap to dash, and no ink
+    // stroked anywhere on the page.
     const lit = new Uint8Array([1, 1, 1, 0, 1, 1])
-    const cut = await streamOf(view({ lit, style: { ...sticks, others: 'hide' } }))
-    expect(dashed.length).toBeGreaterThan(cut.length)
+    const cut = await contentOf(view({ lit, style: { ...sticks, others: 'hide' } }))
+    expect(dashed).toContain(`${rgbOf(PAPER_PALETTE.ink)} RG`)
+    expect(cut).not.toContain(`${rgbOf(PAPER_PALETTE.ink)} RG`)
   })
 
   it('hides beads outside the window under `hide`, and keeps them under `ghost`', async () => {
@@ -143,24 +144,29 @@ function rgbOf(hex: string): string {
 describe('the tube', () => {
   const tube = { ...defaultStructureStyle(), beads: false, sticks: false, tube: true, axes: false, labels: false }
 
-  it('is paths: the curve the screen draws, a rim under a core, and no image', async () => {
-    // Wide enough to be shaded: two tones, so two stroke colours per bead.
+  it('is paths: the curve the screen draws, lit band by band, and no image', async () => {
+    // Wide enough to be shaded: a stack of bands per bead, each a shade of
+    // the bead's colour, from its rim in shadow to its highlight, each filled
+    // as the outline of the curve offset either side of it.
     const content = await contentOf(view({ style: { ...tube, tubeRadius: 0.5 } }))
-    // The spline's spans are cubics, written as cubics.
-    expect(content).toMatch(/ c$/m)
-    const strokes = new Set(content.match(/^[\d.]+ [\d.]+ [\d.]+ RG$/gm) ?? [])
-    expect(strokes.size).toBeGreaterThanOrEqual(4)
-    // A run's two ends are round, which a butt-ended stroke cannot be: a disc.
-    expect(content).toMatch(/^f$/m)
+    const fills = new Set(content.match(/^[\d.]+ [\d.]+ [\d.]+ rg$/gm) ?? [])
+    expect(fills.size).toBeGreaterThanOrEqual(12)
+    expect(content).toMatch(/^h$/m)
+    // A run's two ends are round, which a band cut square at its midpoints
+    // cannot be: a disc, written as the arc's many short lines.
+    expect((content.match(/ l$/gm) ?? []).length).toBeGreaterThan(100)
   })
 
-  it('is one flat stroke per bead where it is too thin for two tones', async () => {
-    // A small page, so the thinner tube is a pixel or less across.
+  it('is one flat band per bead where it is too thin to shade', async () => {
+    // A small page, so the thinner tube is under a pixel across.
     const small = { width: 40, height: 30 }
     const wide = await contentOf(view({ style: { ...tube, tubeRadius: 0.5 } }), small)
     const thin = await contentOf(view({ style: { ...tube, tubeRadius: 0.05 } }), small)
-    const count = (content: string): number => (content.match(/^S$/gm) ?? []).length
+    const count = (content: string): number => (content.match(/^f$/gm) ?? []).length
     expect(count(thin)).toBeLessThan(count(wide))
+    expect(new Set(thin.match(/^[\d.]+ [\d.]+ [\d.]+ rg$/gm) ?? []).size).toBeLessThan(
+      new Set(wide.match(/^[\d.]+ [\d.]+ [\d.]+ rg$/gm) ?? []).size,
+    )
   })
 
   it('dashes the gap where the file left a bead out, whatever the model is drawn as', async () => {
@@ -177,6 +183,22 @@ describe('the tube', () => {
     const sliced = await contentOf(view({ style: { ...tube, slab: 0.05 } }))
     expect(sliced.length).toBeLessThan(whole.length)
   })
+})
+
+describe('the beads', () => {
+  const beads = { ...defaultStructureStyle(), beads: true, sticks: false, tube: false, axes: false, labels: false }
+
+  it('are lit spheres: a radial shading per bead, painted through its disc', async () => {
+    const page = new VectorPage(400, 300)
+    drawStructure(page.ctx, { width: 400, height: 300 }, view({ style: { ...beads, beadRadius: 0.4 } }), PAPER_PALETTE)
+    const file = await (await page.toBlob({ title: 'test', created: new Date(0) })).text()
+    const content = await contentOf(view({ style: { ...beads, beadRadius: 0.4 } }))
+    // Six beads, six shadings, each from a highlight to the shadowed rim.
+    expect(file.match(/\/ShadingType 3/g) ?? []).toHaveLength(6)
+    expect(content.match(/^\/Sh\d+ sh$/gm) ?? []).toHaveLength(6)
+    expect(content).toMatch(/^W n$/m)
+  })
+
 })
 
 describe('what else the PNG carries, on the page too', () => {
