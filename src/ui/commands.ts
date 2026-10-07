@@ -139,6 +139,17 @@ export const KEYS = {
    */
   expected: 'e',
   /**
+   * The reader's own marks, off and back on (§8.1): every line, arrowhead and
+   * rectangle on every map, lane and model at once — the eye over the Manual
+   * annotations card's list, from the keyboard.
+   *
+   * `a` for annotations, the card's own word, and a letter the digit row gave
+   * back when it took the panels (it folded the Annotations column). Off and on
+   * is the whole of it: what `a` hid is what `a` brings back, so a mark put
+   * away by hand for a figure stays away through any number of presses.
+   */
+  marks: 'a',
+  /**
    * One rung coarser and one finer on the resolution bar (§3.4): the same stops
    * the bar's radios are, walked from the keyboard.
    *

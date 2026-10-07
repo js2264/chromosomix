@@ -858,3 +858,160 @@ export function drawArrowheads(
   ctx.restore()
 }
 
+
+// ---------------------------------------------------------------------------
+// Which mark the hand is on
+// ---------------------------------------------------------------------------
+
+/** How near a rule or an outline the pointer has to be to be on it, in CSS pixels. */
+export const MARK_REACH = 6
+
+/** The drawn marks, kind by kind, as `ManualStore` hands them to a painter. */
+export interface DrawnMarks {
+  readonly lines: readonly ManualLine[]
+  readonly arrowheads: readonly ManualArrowhead[]
+  readonly rects: readonly ManualRect[]
+}
+
+/**
+ * The marks under a point of the map, nearest first — what its right-click
+ * menu offers to hide (§8.1).
+ *
+ * **Measured on the ink.** Each mark is drawn again, alone, into a context that
+ * keeps the path it was handed rather than painting it, and the pointer is
+ * measured against that path: the rule or the V a line is, the glyph an
+ * arrowhead is, the outline — or the triangle, or the leaning lobes — a box is.
+ * So the answer cannot part from the picture on either presentation, and a
+ * fourth copy of each mark's geometry is not written here to drift from the
+ * three painters.
+ *
+ * A rule or an outline is under the pointer within `reach` pixels of it, and an
+ * arrowhead anywhere on its glyph or within reach of it — which takes in the
+ * cell it names, a few pixels off its tip. A box is the one mark that is an
+ * area, so a point **inside** one is on it too, after anything the pointer is
+ * on the line of, and the smaller of two boxes first: the domain inside the
+ * compartment, not the compartment around the domain.
+ */
+export function manualMarksAt(
+  frame: OverlayFrame,
+  axes: OverlayAxes,
+  marks: DrawnMarks,
+  at: { x: number; y: number },
+  reach: number = MARK_REACH,
+): Array<ManualLine | ManualArrowhead | ManualRect> {
+  const found: Array<{ mark: ManualLine | ManualArrowhead | ManualRect; distance: number; area: number }> = []
+  const measure = (
+    mark: ManualLine | ManualArrowhead | ManualRect,
+    draw: (ctx: CanvasRenderingContext2D) => void,
+    inside: number | null,
+  ): void => {
+    const path = new PathRecorder()
+    draw(path as unknown as CanvasRenderingContext2D)
+    const near = path.near(at, inside)
+    if (near !== null && near.distance <= reach) found.push({ mark, ...near })
+  }
+  for (const line of marks.lines) measure(line, (ctx) => drawManualLines(ctx, frame, axes, [line]), null)
+  for (const mark of marks.arrowheads) measure(mark, (ctx) => drawArrowheads(ctx, frame, axes, [mark], ''), 0)
+  // Inside a box counts as just within reach: after every mark whose own line
+  // the pointer is on, before nothing it is not.
+  for (const rect of marks.rects) measure(rect, (ctx) => drawManualRects(ctx, frame, axes, [rect]), reach * 0.9)
+  found.sort((one, two) => one.distance - two.distance || one.area - two.area)
+  return found.map((entry) => entry.mark)
+}
+
+/**
+ * Just enough of a 2D context to read back where a painter put its ink: the
+ * paths it stroked or filled, in its own coordinates.
+ *
+ * What a painter clips to is dropped — a frame around the data is not part of
+ * a mark — and so is anything built and never drawn.
+ */
+class PathRecorder {
+  strokeStyle: unknown = ''
+  fillStyle: unknown = ''
+  lineWidth = 1
+  lineJoin = ''
+  globalAlpha = 1
+  private readonly drawn: Array<{ points: Point[]; closed: boolean }> = []
+  private path: Array<{ points: Point[]; closed: boolean }> = []
+
+  save(): void {}
+  restore(): void {}
+  beginPath(): void {
+    this.path = []
+  }
+  moveTo(x: number, y: number): void {
+    this.path.push({ points: [{ x, y }], closed: false })
+  }
+  lineTo(x: number, y: number): void {
+    const open = this.path[this.path.length - 1]
+    if (open === undefined) this.moveTo(x, y)
+    else open.points.push({ x, y })
+  }
+  closePath(): void {
+    const open = this.path[this.path.length - 1]
+    if (open !== undefined) open.closed = true
+  }
+  rect(x: number, y: number, width: number, height: number): void {
+    this.path.push({
+      points: [
+        { x, y },
+        { x: x + width, y },
+        { x: x + width, y: y + height },
+        { x, y: y + height },
+      ],
+      closed: true,
+    })
+  }
+  clip(): void {
+    this.path = []
+  }
+  stroke(): void {
+    this.drawn.push(...this.path)
+  }
+  fill(): void {
+    this.drawn.push(...this.path)
+  }
+
+  /**
+   * How far a point is from the ink, and the area of the smallest closed shape
+   * around it. `inside` is the distance a point within a closed shape counts as
+   * — `null` where a shape is only its outline.
+   */
+  near(at: Point, inside: number | null): { distance: number; area: number } | null {
+    let distance = Number.POSITIVE_INFINITY
+    let area = Number.POSITIVE_INFINITY
+    for (const { points, closed } of this.drawn) {
+      const count = closed ? points.length : points.length - 1
+      if (points.length === 1) distance = Math.min(distance, Math.hypot(at.x - points[0].x, at.y - points[0].y))
+      for (let i = 0; i < count; i++) {
+        distance = Math.min(distance, segmentDistance(at, points[i], points[(i + 1) % points.length]))
+      }
+      if (closed && points.length >= 3 && inside !== null && polygonHolds(points, at)) {
+        distance = Math.min(distance, inside)
+        area = Math.min(area, Math.abs(windingOf(points)) / 2)
+      }
+    }
+    return Number.isFinite(distance) ? { distance, area } : null
+  }
+}
+
+/** Distance from a point to a segment. */
+function segmentDistance(at: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const length = dx * dx + dy * dy
+  const t = length === 0 ? 0 : Math.max(0, Math.min(1, ((at.x - a.x) * dx + (at.y - a.y) * dy) / length))
+  return Math.hypot(at.x - (a.x + t * dx), at.y - (a.y + t * dy))
+}
+
+/** Whether a polygon holds a point: an even-odd ray cast, which any simple polygon answers. */
+function polygonHolds(polygon: readonly Point[], at: Point): boolean {
+  let holds = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]
+    const b = polygon[j]
+    if (a.y > at.y !== b.y > at.y && at.x < ((b.x - a.x) * (at.y - a.y)) / (b.y - a.y) + a.x) holds = !holds
+  }
+  return holds
+}

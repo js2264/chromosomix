@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ManualStore,
+  type ManualMark,
   type ManualPoint,
   type ManualRect,
   type ManualSpan,
@@ -394,5 +395,103 @@ describe('importing', () => {
     expect(card.form('Import').querySelector('.ann-note')?.textContent).toBe(
       'marks.bedpe: 1 added.',
     )
+  })
+})
+
+describe('hiding and showing marks (§8.1)', () => {
+  const line = (id: string, bp: number): ManualMark => ({
+    id,
+    kind: 'line',
+    axis: 'vertical',
+    at: { contig: 'I', bp },
+    colour: '#111318',
+  })
+  const box = (id: string): ManualMark => ({
+    id,
+    kind: 'rect',
+    a: { contig: 'I', from: 120_000, to: 180_000 },
+    b: { contig: 'I', from: 120_000, to: 180_000 },
+    colour: '#c0392b',
+  })
+  const eyes = (): HTMLButtonElement[] => Array.from(document.querySelectorAll<HTMLButtonElement>('.manual-mark .ann-eye'))
+  const allEye = (): HTMLButtonElement => {
+    const node = document.querySelector<HTMLButtonElement>('.manual-all-eye')
+    if (node === null) throw new Error('no eye over the list')
+    return node
+  }
+  const note = (): string => document.querySelector('.manual-list-note')?.textContent ?? ''
+  const drawn = (store: ManualStore): string[] => store.shown.map((mark) => mark.id)
+
+  it('heads the list only once there is a mark to hide', () => {
+    const card = mount()
+    expect(document.querySelector('.manual-list-head')).toBeNull()
+    card.store.add(line('k1', 1_000))
+    expect(document.querySelector('.manual-list-head')).not.toBeNull()
+  })
+
+  it('puts an eye on every row, lit while its mark is drawn, that hides it on every picture', () => {
+    const card = mount()
+    card.store.add(line('k1', 1_000))
+    card.store.add(box('k2'))
+    expect(eyes().map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['true', 'true'])
+    const first = eyes()[0]
+    first.focus()
+    first.click()
+    // Off the drawn lists every picture paints from, kept on the card's own.
+    expect(card.store.lines).toHaveLength(0)
+    expect(card.store.marks[0].hidden).toBe('own')
+    // The same button, repainted where it stands: the hand and the focus stay on it.
+    expect(eyes()[0]).toBe(first)
+    expect(document.activeElement).toBe(first)
+    expect(first.getAttribute('aria-pressed')).toBe('false')
+    expect(first.title).toMatch(/^Show this mark again/)
+    expect(note()).toBe('1 of 2 hidden')
+    first.click()
+    expect(drawn(card.store)).toEqual(['k1', 'k2'])
+    expect(note()).toBe('')
+  })
+
+  it('hides every mark from the eye over the list, and brings back only the ones it hid', () => {
+    const card = mount()
+    for (const mark of [line('k1', 1_000), line('k2', 2_000), box('k3')]) card.store.add(mark)
+    eyes()[1].click()
+    expect(allEye().getAttribute('aria-pressed')).toBe('true')
+    expect(allEye().title).toMatch(/^Hide every mark.*\(A\)$/)
+    allEye().click()
+    expect(drawn(card.store)).toEqual([])
+    expect(note()).toBe('all 3 hidden')
+    expect(allEye().getAttribute('aria-pressed')).toBe('false')
+    expect(eyes().map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false'])
+    allEye().click()
+    // The line hidden from its own row before stays hidden.
+    expect(drawn(card.store)).toEqual(['k1', 'k3'])
+    expect(note()).toBe('1 of 3 hidden')
+  })
+
+  it('shows one mark alone on a double-click on its eye, and the rest back on a second', () => {
+    const card = mount()
+    for (const mark of [line('k1', 1_000), line('k2', 2_000), box('k3')]) card.store.add(mark)
+    const doubleClick = (eye: HTMLButtonElement): void => {
+      // As a browser sends one: two clicks, then the double-click.
+      eye.click()
+      eye.click()
+      eye.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    }
+    doubleClick(eyes()[2])
+    expect(drawn(card.store)).toEqual(['k3'])
+    expect(note()).toBe('2 of 3 hidden')
+    doubleClick(eyes()[2])
+    expect(drawn(card.store)).toEqual(['k1', 'k2', 'k3'])
+  })
+
+  it('writes the hidden marks with the rest, and says how many of them are hidden', () => {
+    const card = mount()
+    card.store.add(line('k1', 1_000))
+    card.store.add(line('k2', 2_000))
+    eyes()[0].click()
+    const save = Array.from(document.querySelectorAll<HTMLButtonElement>('.manual-export button')).find((node) =>
+      node.title.startsWith('Write'),
+    )
+    expect(save?.title).toMatch(/^Write 2 to a file .*, the 1 hidden among them$/)
   })
 })

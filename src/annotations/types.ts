@@ -1420,14 +1420,15 @@ export interface StructureStyle {
    * click. By name, so the choice survives a re-read of the same file.
    */
   ghosted: string[]
-  /** A colour the reader chose for a sequence, by name, over the palette's. */
-  sequenceColours: Record<string, string>
   /**
-   * Marks left out of *colour by manual annotations* (§25.5): the key's click,
-   * by the mark's id. The model's own, and not the mark's — hiding one from the
-   * colouring leaves it drawn on every map, which is where it was made.
+   * A colour the reader chose for a sequence, by name, over the palette's.
+   *
+   * Beside it there used to be `marksHidden`, the marks the key of *colour by
+   * manual annotations* took off this model's colouring. A mark's key row hides
+   * the mark itself now, on every picture (§8.1, §25.5), so a style stored with
+   * that list reads without it and the model is coloured by every drawn mark.
    */
-  marksHidden: string[]
+  sequenceColours: Record<string, string>
   /**
    * How deep the fog sits, 0 (none) to 1 (the far side gone): space + scroll
    * in the cell, or the slider. 0.6 is the depth cue the cell always had.
@@ -1521,7 +1522,6 @@ export function defaultStructureStyle(): StructureStyle {
     loops: '',
     ghosted: [],
     sequenceColours: {},
-    marksHidden: [],
     fog: 0.6,
     fogOn: true,
     chords: true,
@@ -1603,9 +1603,6 @@ export function structureStyleOf(value: unknown): StructureStyle {
       ? (row['ghosted'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 200).slice(0, 10000)
       : [],
     sequenceColours: sequenceColoursOf(row['sequenceColours']),
-    marksHidden: Array.isArray(row['marksHidden'])
-      ? (row['marksHidden'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 64).slice(0, 10000)
-      : [],
     fog: bounded(row['fog'], 0, 1, fallback.fog),
     fogOn: row['fogOn'] !== false,
     chords: row['chords'] !== false,

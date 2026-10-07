@@ -24,6 +24,7 @@ node scripts/ui-stars.mjs gallery            # the deck's stars and empty cells:
 node scripts/ui-deck-reads.mjs gallery       # headings under zoom, own windows, the maps card: h*, w*, c*
 node scripts/ui-saves.mjs gallery            # every export through the save dialog: x1 … x3
 node scripts/ui-marks.mjs gallery            # marks on the card and the model's key: k1 … k5
+node scripts/ui-marks-hide.mjs gallery       # marks hidden and shown (§8.1): a row's eye, A off and back with a hand-hidden mark kept hidden, the map's menu on a rule, a mark alone and the rest back, the turned map's V, the 1D browser's menu and A there, the model's key and its menu on a marked bead, the palette's switch, dark: h01 … h14b
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
@@ -129,6 +130,20 @@ The eighth follows the reader's **marks** from the Manual annotations card to th
 annotations* and its key, a mark hidden from the key, one recoloured from it — with the card's row
 checked to have taken the same colour — and one moved by typing over its row. Run it after any
 change to the marks, the Manual annotations card or the structure's key.
+
+`scripts/ui-marks-hide.mjs` drives the reader's marks **off and back on** (§8.1, §25.5) on the yeast
+demo: four marks typed — a vertical line, a horizontal one, an arrowhead off the diagonal and a domain
+on it — then the horizontal line hidden from its row's eye, every mark hidden with `A` and brought back
+by it (the one hidden by hand must stay hidden), the map's right-click on the vertical line found by
+its ink and *Hide this line* pressed, a double-click on the box's eye showing it alone and a second
+bringing back exactly what the first put away, the turned map's menu on an arm of the V, the 1D
+browser's menu on its rule and `A` there, the model coloured by the marks with the card's hidden row
+faded on its key and a key row clicked (the card's eye must go dark with it), a bead Shift-clicked and
+the model's menu on it, the palette's *Manual annotations* switch, and the dark theme. It prints the
+card's rows and eyes, every menu's rows and the key at each step, so a surface that kept drawing a
+hidden mark, or a heading that miscounted, is a line in the log. Run it after any change to
+`annotations/manual.ts`'s visibility, the card's eyes, `ui/marksMenu.ts`, a painter's marks or the
+hit tests that find them.
 
 The ninth saves **figures** with the Export card's *caption* switch on and off (§7.2) and writes
 the saved PNGs themselves next to the shots, through a stand-in dialog that keeps the bytes: the

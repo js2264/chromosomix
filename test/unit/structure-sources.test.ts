@@ -104,13 +104,13 @@ describe('colouring by the reader’s marks', () => {
     expect(source.label).toBe('manual annotations')
   })
 
-  it('leaves out a mark its key has hidden, and only that one', () => {
-    const marks = [
-      { id: 'm1', kind: 'rect', a: { contig: 'chrA', from: 0, to: 25000 }, b: { contig: 'chrB', from: 0, to: 5000 }, colour: 'red' },
-      { id: 'm2', kind: 'line', axis: 'both', at: { contig: 'chrA', bp: 15000 }, colour: 'blue' },
-    ] as const
-    expect(marksSource(model(), marks, new Set(['m1'])).colours).toEqual([null, 'blue', null, null, null, null])
-    expect(marksSource(model(), marks, new Set(['m2'])).colours).toEqual(['red', 'red', 'red', null, 'red', null])
+  it('leaves out a mark the reader has hidden, by either hand, and only that one', () => {
+    const rect = { id: 'm1', kind: 'rect', a: { contig: 'chrA', from: 0, to: 25000 }, b: { contig: 'chrB', from: 0, to: 5000 }, colour: 'red' } as const
+    const line = { id: 'm2', kind: 'line', axis: 'both', at: { contig: 'chrA', bp: 15000 }, colour: 'blue' } as const
+    // Hidden from its own row: the line paints alone.
+    expect(marksSource(model(), [{ ...rect, hidden: 'own' }, line]).colours).toEqual([null, 'blue', null, null, null, null])
+    // Hidden with the rest: the rectangle paints alone, through the bead the line would have taken.
+    expect(marksSource(model(), [rect, { ...line, hidden: 'all' }]).colours).toEqual(['red', 'red', 'red', null, 'red', null])
   })
 })
 

@@ -16,6 +16,7 @@
 import {
   MANUAL_PALETTE,
   describeMark,
+  isShown,
   mintMarkId,
   pointLabel,
   spanLabel,
@@ -29,10 +30,11 @@ import {
 } from '../annotations/manual'
 import { formatMarks, marksFor, readMarks, type MarkFormat } from '../annotations/export'
 import { filesFrom } from './chooseFiles'
+import { KEYS, withKey } from './commands'
 import { button, dragHasFiles, el, fmt } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { exportRow, type ExportRow } from './exportRow'
-import { cardTitle, iconButton } from './icons'
+import { cardTitle, icon, iconButton, setPressed } from './icons'
 import type { PickHandlers } from './mapPick'
 
 /**
@@ -106,6 +108,26 @@ export class ManualCard {
   /** The line under the import zone saying what the last file gave. */
   private readonly importNote = el('p', { class: 'ann-note hidden' })
   private importZone!: HTMLElement
+  /**
+   * The eye over the list: every mark at once (§8.1), standing in the column
+   * the rows' own eyes stand in, so which eyes it speaks for is read off the
+   * card rather than off a label.
+   */
+  private readonly allEye = el('button', { class: 'btn btn-icon ann-eye manual-all-eye', type: 'button' })
+  /** How many of them are hidden, beside the list's heading. */
+  private readonly allNote = el('span', { class: 'manual-list-note' })
+  /** Each row's eye by its mark's id, for a change of visibility to repaint in place. */
+  private readonly eyes = new Map<string, HTMLButtonElement>()
+  /**
+   * What the rows were last built from: each mark's id, colour and place.
+   *
+   * A change that leaves this alone — a mark hidden or shown — repaints the
+   * eyes where they stand rather than building the list again. Rebuilt, the
+   * button a reader had just pressed was gone from under the hand: a keyboard
+   * lost its focus on every press, and the second click of a double-click
+   * landed on a new button that had never had a first.
+   */
+  private builtFrom = ''
 
   constructor(private readonly props: ManualCardProps) {
     this.exporter = exportRow({
@@ -135,6 +157,7 @@ export class ManualCard {
       this.exportBlock(),
     )
     this.cardDrops(this.el, this.importZone)
+    this.allEye.addEventListener('click', () => this.props.store.toggleAll())
     this.unsubscribe = props.store.subscribe(() => this.render())
     this.render()
   }
@@ -593,13 +616,19 @@ export class ManualCard {
   /** Nothing of this kind to write is a disabled button, not an empty file. */
   private paintSave(): void {
     const format = this.exporter.format() as MarkFormat
-    const count = marksFor(this.props.store.marks, format).length
+    const marks = marksFor(this.props.store.marks, format)
+    const count = marks.length
+    // Every mark is written, the hidden ones too: hiding is about what is
+    // drawn, and a file of marks is the marks — the tooltip says how many of
+    // them the pictures are not showing, so the count is not a surprise.
+    const hidden = marks.filter((mark) => !isShown(mark)).length
     const save = this.exporter.parts.save
     save.disabled = count === 0
     save.title =
       count === 0
         ? `No ${format === 'bed' ? 'lines' : 'arrowheads or rectangles'} have been drawn yet`
-        : `Write ${fmt.int(count)} to a file this app — and bedtools — reads back`
+        : `Write ${fmt.int(count)} to a file this app — and bedtools — reads back` +
+          (hidden === 0 ? '' : `, the ${fmt.int(hidden)} hidden among them`)
   }
 
   private async save(format: MarkFormat): Promise<void> {
@@ -622,16 +651,109 @@ export class ManualCard {
     this.paintSave()
     const marks = this.props.store.marks
     if (marks.length === 0) {
+      this.builtFrom = ''
+      this.eyes.clear()
       this.list.replaceChildren()
       return
     }
-    this.list.replaceChildren(
-      ...marks.map((mark) => this.row(mark)),
-      button('remove all', () => this.props.store.clear(), {
-        class: 'btn btn-quiet btn-wide',
-        title: 'Clear every hand-drawn mark on this file',
-      }),
+    const shape = marks.map((mark) => `${mark.id}\t${mark.colour}\t${describeMark(mark)}`).join('\n')
+    if (shape !== this.builtFrom) {
+      this.builtFrom = shape
+      this.eyes.clear()
+      this.list.replaceChildren(
+        this.listHead(),
+        ...marks.map((mark) => this.row(mark)),
+        button('remove all', () => this.props.store.clear(), {
+          class: 'btn btn-quiet btn-wide',
+          title: 'Clear every hand-drawn mark on this file',
+        }),
+      )
+    }
+    this.paintVisibility(marks)
+  }
+
+  /**
+   * The list's heading: its name, how many are hidden, and the eye for all of
+   * them — over the column of the rows' eyes, with the room a row's × takes
+   * kept empty after it, so the one eye stands at the head of the others.
+   *
+   * The eye is lit while **any** mark is drawn, as the Groups card's is for a
+   * group, and a press then hides them all; with none drawn it brings back the
+   * ones it hid — and only those, so a mark put away from its own row for a
+   * figure stays away (`ManualStore.toggleAll`). `A` is the same press.
+   */
+  private listHead(): HTMLElement {
+    // The ×'s twin, unseen: the same button at the same size, so the room it
+    // keeps is the room a row's × takes whatever the theme or the text scale.
+    const room = iconButton('x', '', () => {}, { class: 'btn-close manual-list-room', size: 14 })
+    room.tabIndex = -1
+    room.setAttribute('aria-hidden', 'true')
+    return el(
+      'div',
+      { class: 'ann-row manual-list-head' },
+      el(
+        'div',
+        { class: 'ann-head' },
+        el('span', { class: 'manual-form-title', text: 'Marks' }),
+        this.allNote,
+        this.allEye,
+        room,
+      ),
     )
+  }
+
+  /** Every eye on the card, from the store as it stands: the rows' and the one over them. */
+  private paintVisibility(marks: readonly ManualMark[]): void {
+    for (const mark of marks) {
+      const eye = this.eyes.get(mark.id)
+      if (eye === undefined) continue
+      const shown = isShown(mark)
+      paintEye(
+        eye,
+        shown,
+        shown
+          ? 'Hide this mark on every map, track and model — double-click to show it alone'
+          : mark.hidden === 'all'
+            ? 'Hidden with the rest: show this one again — double-click to show it alone'
+            : 'Show this mark again — double-click to show it alone',
+      )
+    }
+    const hidden = this.props.store.hiddenCount
+    const anyShown = hidden < marks.length
+    paintEye(
+      this.allEye,
+      anyShown,
+      withKey(
+        anyShown
+          ? 'Hide every mark, on every map, track and model'
+          : marks.some((mark) => mark.hidden === 'all')
+            ? 'Show the marks again — the ones hidden together'
+            : 'Show every mark again',
+        KEYS.marks,
+      ),
+    )
+    this.allNote.textContent =
+      hidden === 0 ? '' : anyShown ? `${fmt.int(hidden)} of ${fmt.int(marks.length)} hidden` : `all ${fmt.int(marks.length)} hidden`
+  }
+
+  /**
+   * A row's eye (§8.1): the mark off every map, track and model, and back.
+   *
+   * A click reads the mark as it is *now*, not as the row was built with it —
+   * the row outlives a change of visibility. A double-click shows the mark
+   * alone, and alone already, brings the others back: its two clicks have
+   * hidden it and shown it again by then, so the store is asked from where the
+   * reader started.
+   */
+  private eye(mark: ManualMark): HTMLButtonElement {
+    const node = el('button', { class: 'btn btn-icon ann-eye', type: 'button' })
+    node.addEventListener('click', () => {
+      const held = this.props.store.marks.find((each) => each.id === mark.id)
+      if (held !== undefined) this.props.store.setShown(mark.id, !isShown(held))
+    })
+    node.addEventListener('dblclick', () => this.props.store.showAlone(mark.id))
+    this.eyes.set(mark.id, node)
+    return node
   }
 
   private row(mark: ManualMark): HTMLElement {
@@ -657,6 +779,9 @@ export class ManualCard {
     head.append(
       colour,
       where,
+      // Where the Tracks card's rows carry theirs, before the ×: the same
+      // control with the same meaning, a column apart.
+      this.eye(mark),
       iconButton('x', 'Remove this mark', () => this.props.store.remove(mark.id), {
         class: 'btn-close',
         size: 14,
@@ -707,9 +832,12 @@ export class ManualCard {
       boxes.forEach((box, i) => box.classList.toggle('is-bad', next === null && this.badBox(mark, boxes, i)))
       if (next === null) return
       done = true
-      // The store's change repaints the list; the row this editor stands in
-      // goes with it, so nothing needs putting back.
+      // The store's change repaints the list, and a mark that moved takes the
+      // row this editor stands in with it. One entered back where it was is
+      // repainted in place (see {@link builtFrom}), so the row is put back
+      // here — its text is the same text.
       this.props.store.reshape(next)
+      if (editor.isConnected) editor.replaceWith(where)
     }
     editor.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
@@ -783,6 +911,22 @@ function axisBox(axis: 'rows' | 'columns', placeholder: string): HTMLInputElemen
   // arrowhead form's shorter pair still fits across.
   box.style.flexBasis = `calc(${placeholder.length}ch + 1.2rem)`
   return box
+}
+
+/**
+ * Draw an eye as a toggle is drawn (§26.3): open and lit while what it speaks
+ * for is shown, shut and plain while it is not, named for what a press does.
+ * The glyph is swapped only when the state is, so a repaint under a hovering
+ * pointer does not flicker it.
+ */
+function paintEye(node: HTMLButtonElement, shown: boolean, title: string): void {
+  if (node.dataset['shown'] !== String(shown)) {
+    node.dataset['shown'] = String(shown)
+    node.replaceChildren(icon(shown ? 'eye' : 'eye-off', { size: 14 }))
+  }
+  node.title = title
+  node.setAttribute('aria-label', title)
+  setPressed(node, shown)
 }
 
 /** Re-exported so a caller needs one import to seed a colour. */

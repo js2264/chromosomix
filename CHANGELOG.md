@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Marks hidden and shown, one or all of them, on every map, track and model at once (§8.1).**
+  Each row of the Manual annotations card has an eye, as a track's row does, and the list a heading,
+  `MARKS`, with how many are hidden and one eye for all of them over the rows' eyes; `A` is that eye
+  from the keyboard, and the palette's *Manual annotations* switch. A hidden mark leaves the map
+  (square or turned), the lanes and their anchors, the 1D browser, a tracks cell and the 3D model —
+  its bead, its chord, its colouring — and figures, and stays on the card to be shown again. Hiding
+  every mark and showing them again brings back exactly what was drawn: a mark hidden from its own
+  row stays hidden. A double-click on an eye shows that mark alone, and a second brings the rest
+  back. Every right-click menu — the map's, a lane's, the 1D browser's and the model's — names the
+  marks under the pointer, *Hide this line* and the like, measured on the ink as it is drawn, and
+  offers *Hide every mark* or *Show the marks*. Hidden marks are kept with the session, a link and a
+  reopen at another resolution, and the card's BED and BEDPE still carry them.
+
 - **Half a window upstream and downstream, beside `go` on a region (§5.4).** Two arrows straight
   after the locus box's `go` move the window half its own width along the sequence, re-read as a
   navigation, so a reader at a locus can walk the chromosome without retyping it. They slide in to
@@ -891,6 +904,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **A mark's row on the 3D key hides the mark itself (§25.5).** Under *colour by manual annotations*
+  a click on a mark's name hid it from that model's colouring alone and left it on every map; it is
+  now the mark's own eye on the card — the mark goes from the model, the maps and the tracks
+  together, and the card's eye goes dark with it — and a double-click shows it alone everywhere. A
+  model saved with marks taken off its colouring opens coloured by every drawn mark.
 
 - **The link, the save button and the console moved next to back and forward (§5.5, §23).** They
   follow the two history buttons in the group after the panels, and the right of the header holds

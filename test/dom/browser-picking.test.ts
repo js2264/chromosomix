@@ -507,3 +507,65 @@ describe('a browser a closed map fell back to', () => {
     ])
   })
 })
+
+describe('putting marks away from the tracks (§8.1)', () => {
+  /** The open menu's rows, a heading as `# name` and an action as `label | hint`. */
+  const menu = (): string[] =>
+    Array.from(document.querySelectorAll('.context-menu > *')).map((node) =>
+      node.classList.contains('context-menu-head')
+        ? `# ${node.textContent ?? ''}`
+        : `${node.querySelector('span')?.textContent ?? ''} | ${node.querySelector('.context-menu-hint')?.textContent ?? ''}`,
+    )
+  const rightClick = (view: Open, contig: string, bp: number): void => {
+    const canvas = view.session.contentEl.querySelector('canvas.browser-canvas')
+    canvas?.dispatchEvent(
+      new MouseEvent('contextmenu', { clientX: xOf(view.assembly, contig, bp), clientY: 200, bubbles: true, cancelable: true }),
+    )
+  }
+  const press = (label: string): void => {
+    const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.context-menu button')).find(
+      (node) => node.querySelector('span')?.textContent === label,
+    )
+    if (row === undefined) throw new Error(`no menu row called ${label}`)
+    row.click()
+  }
+
+  it('names the mark under the pointer on the tracks’ menu, and hides it there', () => {
+    const view = open()
+    const manual = view.inside.annotations?.manual
+    manual?.add({ id: mintMarkId(), kind: 'line', axis: 'both', at: { contig: 'I', bp: 400 }, colour: '#111318' })
+    rightClick(view, 'I', 400)
+    expect(menu()).toEqual(['# Marks', 'Hide this line | ┼ I:401', 'Hide every mark | A'])
+    press('Hide this line')
+    expect(view.marks.map((mark) => mark.hidden)).toEqual(['own'])
+    // Nothing drawn is under a pointer any more; the switch is what is left, and it shows.
+    rightClick(view, 'I', 400)
+    expect(menu()).toEqual(['# Marks', 'Show the marks | A'])
+    press('Show the marks')
+    expect(view.marks.map((mark) => mark.hidden)).toEqual([undefined])
+  })
+
+  it('leaves the right click to the page where there are no marks', () => {
+    const view = open()
+    rightClick(view, 'I', 400)
+    expect(document.querySelector('.context-menu')).toBeNull()
+  })
+
+  it('is one switch on A, in the browser as beside a map: off, then back to what it hid', () => {
+    const view = open()
+    const command = (): ReturnType<Session['commands']>[number] | undefined =>
+      view.session.commands().find((entry) => entry.id === 'marks-toggle')
+    // Greyed with nothing to hide.
+    expect(command()).toMatchObject({ keys: 'a', enabled: false })
+    const manual = view.inside.annotations?.manual
+    manual?.add({ id: 'k1', kind: 'line', axis: 'both', at: { contig: 'I', bp: 100 }, colour: '#111318' })
+    manual?.add({ id: 'k2', kind: 'line', axis: 'both', at: { contig: 'II', bp: 100 }, colour: '#c0392b' })
+    manual?.setShown('k2', false)
+    expect(command()).toMatchObject({ title: 'Manual annotations', state: 'on', enabled: true })
+    command()?.run()
+    expect(manual?.anyShown).toBe(false)
+    expect(command()?.state).toBe('off')
+    command()?.run()
+    expect(view.marks.map((mark) => `${mark.id}:${mark.hidden ?? '-'}`)).toEqual(['k1:-', 'k2:own'])
+  })
+})

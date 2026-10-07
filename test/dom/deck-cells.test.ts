@@ -1371,7 +1371,7 @@ describe('the key (§25.5)', () => {
 })
 
 describe('the key of colour by manual annotations (§25.5)', () => {
-  it('lists every mark, hides one on a click, shows one alone on a double-click, and recolours the mark itself', async () => {
+  it('lists every mark, hides it everywhere on a click, shows one alone on a double-click, and recolours the mark itself', async () => {
     const entry = structureEntry()
     const byMarks = {
       ...entry,
@@ -1391,9 +1391,19 @@ describe('the key of colour by manual annotations (§25.5)', () => {
     expect(names.map((b) => b.textContent)).toEqual(['│ chr1:12,001', '▭ chr1:10,001-20,000'])
     names[0].click()
     await new Promise((r) => setTimeout(r, 260))
-    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    // Hidden on the mark itself (§8.1), so the card's eye and every map go
+    // with it — not in the model's style, where it was the colouring alone.
+    expect(manual.marks.find((mark) => mark.id === 'k1')?.hidden).toBe('own')
+    expect(manual.shown.map((mark) => mark.id)).toEqual(['k2'])
+    await new Promise((r) => setTimeout(r, 60))
+    expect(all<HTMLElement>(cell, '.structure-key-mark').map((row) => row.classList.contains('is-off'))).toEqual([true, false])
+    // The one mark drawn, double-clicked, is every mark back…
     names[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-    expect(store.restyled.at(-1)?.patch.structure?.marksHidden).toEqual(['k1'])
+    expect(manual.shown.map((mark) => mark.id)).toEqual(['k1', 'k2'])
+    // …and another, double-clicked, is that one alone, the rest put away together.
+    names[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    expect(manual.shown.map((mark) => mark.id)).toEqual(['k1'])
+    expect(manual.marks.find((mark) => mark.id === 'k2')?.hidden).toBe('all')
     // The swatch writes the mark, which is what the card and every map draw.
     const swatch = cell.querySelector<HTMLInputElement>('.structure-key-mark .structure-key-swatch')
     swatch!.value = '#112233'

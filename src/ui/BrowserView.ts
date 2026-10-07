@@ -103,10 +103,12 @@ import {
 } from '../render/browser'
 import {
   orderedSpan,
+  type ManualMark,
   type ManualPoint,
   type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
+import { MARK_REACH } from '../render/overlays'
 import {
   getTextScale,
   scaleFont,
@@ -248,6 +250,8 @@ import {
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { laneMenuFeature, openLaneMenu, readCanvasPalette, type DeckExport } from './MatrixPanel'
+import { marksMenu } from './marksMenu'
+import { openMenu } from './Menu'
 import { endCarry, landingAt, startCarry, type LaneCarry, type LaneLanding } from './laneCarry'
 import {
   PLOT_OPTION_ICONS,
@@ -2522,6 +2526,36 @@ export class BrowserView {
   }
 
   /**
+   * The drawn marks under a point of the canvas, nearest first — what its
+   * right-click menu offers to hide (§8.1).
+   *
+   * From {@link manualMarks}, which is what {@link paintManual} draws, so the
+   * answer is the picture's: a rule or an anchor within reach of the pointer
+   * along the axis, the one this view has, and a box's wash wherever the
+   * pointer is inside it — after the rules, and the narrower of two first,
+   * since a wash is an area and a rule is aimed at something.
+   */
+  private marksAt(x: number): ManualMark[] {
+    const store = this.props.manual
+    if (store === undefined) return []
+    const nearest = new Map<string, { distance: number; width: number }>()
+    for (const mark of this.manualMarks) {
+      const from = this.gutter + this.scale.toPixel(mark.from)
+      const to = this.gutter + this.scale.toPixel(mark.to)
+      const edge = Math.min(Math.abs(x - from), Math.abs(x - to))
+      const distance = mark.kind === 'band' && x >= from && x <= to ? Math.min(edge, MARK_REACH * 0.9) : edge
+      if (distance > MARK_REACH) continue
+      const held = nearest.get(mark.id)
+      if (held === undefined || distance < held.distance) nearest.set(mark.id, { distance, width: to - from })
+    }
+    const order = [...nearest.entries()].sort(
+      (one, two) => one[1].distance - two[1].distance || one[1].width - two[1].width,
+    )
+    const shown = new Map(store.shown.map((mark) => [mark.id, mark]))
+    return order.flatMap(([id]) => shown.get(id) ?? [])
+  }
+
+  /**
    * Put those marks on the canvas.
    *
    * Between the tracks and the crosshair, which is where a mark belongs: over
@@ -4144,8 +4178,18 @@ export class BrowserView {
 
     const onMenu = (event: MouseEvent): void => {
       const { x, y } = at(event)
+      // The reader's marks run down every track and the room under them, so
+      // their group is on every menu this canvas opens (§8.1) — and off the
+      // lanes, on the ruler or under the last track, it is the menu, where
+      // there are marks at all. With none, that right click stays the page's.
+      const marks = marksMenu(this.props.manual, this.marksAt(x))
       const hit = this.laneAt(y)
-      if (hit === null) return
+      if (hit === null) {
+        if (marks.length === 0) return
+        event.preventDefault()
+        openMenu(event.clientX, event.clientY, marks)
+        return
+      }
       event.preventDefault()
       // The feature under the pointer, if there is one, with what this surface
       // can do with it: open its card, and frame it on the one axis it has.
@@ -4161,8 +4205,16 @@ export class BrowserView {
       // no location to offer and every lane reads the way a horizontal track
       // under a ruler does.
       const id = hit.lane.entry.id
-      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null, undefined, feature, () =>
-        copyPicture('track', this.laneImage(id)),
+      openLaneMenu(
+        event.clientX,
+        event.clientY,
+        hit.lane.entry,
+        this.props.store,
+        null,
+        undefined,
+        feature,
+        () => copyPicture('track', this.laneImage(id)),
+        marks,
       )
     }
 
