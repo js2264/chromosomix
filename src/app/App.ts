@@ -322,6 +322,18 @@ export class App implements SessionHost {
    */
   private readonly brandLink: HTMLAnchorElement | null = null
   /**
+   * The browser's back and forward, as buttons in the header (§5.5). Greyed
+   * where the Navigation API says there is nowhere to go; where it is missing
+   * they stay live, and a press with nowhere to go does nothing, as the
+   * browser's own does.
+   */
+  private readonly backButton: HTMLButtonElement = iconButton('undo-2', 'Go back', () =>
+    window.history.back(),
+  )
+  private readonly forwardButton: HTMLButtonElement = iconButton('redo-2', 'Go forward', () =>
+    window.history.forward(),
+  )
+  /**
    * The header's link button, held so that {@link syncShare} can withdraw it.
    *
    * There is nothing to put in a link until something is open, and §8.5's rule
@@ -535,38 +547,50 @@ export class App implements SessionHost {
           this.aestheticsPanel.toggle,
           this.analysisPanel.toggle,
         ),
+        // Past a second divider: the window's history, then what takes the
+        // work out of it. Back and forward are the browser's own, as buttons —
+        // every navigation in a tab is a history entry (§5.5), so these walk
+        // the places this window has been, a tab's own steps included — and
+        // the three after them were on the far side of the bar, away from the
+        // controls a reader's hand is already among.
+        el(
+          'div',
+          { class: 'head-history' },
+          this.backButton,
+          this.forwardButton,
+          // Share one tab as a link, save the whole window as a file. A
+          // deliberate pair that says different things: a link is *what is
+          // being looked at* (§5.5) and there is one of those on screen,
+          // while a file is the window.
+          //
+          // Nothing here *opens* a file, and the doors that do are elsewhere:
+          // the file crumb's *Open a file* adds one to this tab, and the
+          // brand — whose hover says so — goes back to the picker and
+          // replaces.
+          //
+          // Held, because it is the one header button whose promise depends
+          // on the tab: with nothing open there is no view to put in a link,
+          // and an always-live button that answers with a refusal dialog is
+          // §8.5's own failure — the palette's copy of this command has been
+          // gated on the same test all along.
+          this.shareButton,
+          iconButton(
+            'save',
+            withKey('Save every tab as a file, to open again later', KEYS.saveSession),
+            () => this.exportWorkspace(),
+          ),
+          // The third of the commands that repeat the day: a link and a file
+          // are what a reader hands to somebody else, and a script is how the
+          // same steps are taken again.
+          ...(this.consolePanel === null ? [] : [this.consolePanel.toggle]),
+        ),
       ),
       palette,
       el(
         'div',
         { class: 'head-actions' },
-        // Share one tab as a link, save the whole window as a file, theme,
-        // shortcuts, source, about. The two leftmost are a deliberate pair and
-        // say different things: a link is *what is being looked at* (§5.5) and
-        // there is one of those on screen, while a file is the window.
-        //
-        // Nothing here *opens* a file, and the doors that do are elsewhere:
-        // the file crumb's *Open a file* adds one to this tab, and the brand —
-        // whose hover says so — goes back to the picker and replaces. That is
-        // the same add-versus-replace line this side draws between a dropped
-        // workspace and the startup offer.
-        // Held, because it is the one header button whose promise depends on
-        // the tab: with nothing open there is no view to put in a link, and an
-        // always-live button that answers with a refusal dialog is §8.5's own
-        // failure — the palette's copy of this command has been gated on the
-        // same test all along.
-        this.shareButton,
-        iconButton(
-          'save',
-          withKey('Save every tab as a file, to open again later', KEYS.saveSession),
-          () => this.exportWorkspace(),
-        ),
-        // Before the theme, and after the two that take something *out* of this
-        // window: a link and a file are what a reader hands to somebody else,
-        // and this is the third of them — the commands that repeat the day.
-        // Everything to its right is about the window rather than the work in
-        // it, which is the line this button sits on.
-        ...(this.consolePanel === null ? [] : [this.consolePanel.toggle]),
+        // About the window rather than the work in it: theme, shortcuts,
+        // source, about.
         this.theme.el,
         iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
           this.openShortcutsDialog(),
@@ -712,6 +736,22 @@ export class App implements SessionHost {
     void readLayout()
     window.addEventListener('popstate', () => this.readHash())
     window.addEventListener('hashchange', () => this.readHash())
+    // Where the browser will say whether there is a way back and a way forward,
+    // the header's two buttons are greyed when there is not (Chromium's
+    // Navigation API); elsewhere they stay live.
+    const navigation = (
+      window as unknown as {
+        navigation?: EventTarget & { canGoBack: boolean; canGoForward: boolean }
+      }
+    ).navigation
+    if (navigation !== undefined && !this.embed) {
+      const sync = (): void => {
+        this.backButton.disabled = !navigation.canGoBack
+        this.forwardButton.disabled = !navigation.canGoForward
+      }
+      navigation.addEventListener('currententrychange', sync)
+      sync()
+    }
 
     // A menu click and a keystroke are the same thing arriving by a different
     // road, so they end at the same place: the command registry. The menu holds

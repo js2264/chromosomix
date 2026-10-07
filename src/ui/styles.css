@@ -297,10 +297,12 @@ p {
 
 /* Three columns rather than `space-between`: the action bar has to sit in the
    middle of the *header*, not in the middle of whatever space the two side
-   groups happen to leave. */
+   groups happen to leave — until the left group is wider than half of what is
+   left, and then it takes its own width and the bar gives way, rather than the
+   bar being drawn over the history and the save button. */
 .app-head {
   display: grid;
-  grid-template-columns: 1fr minmax(0, 22rem) 1fr;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, 22rem) minmax(max-content, 1fr);
   align-items: center;
   gap: var(--gap);
   padding: 0.6rem 1rem;
@@ -345,6 +347,15 @@ p {
   font: inherit;
   font-size: var(--step--1);
   cursor: pointer;
+}
+
+/* One line, cut short where the header's left side has taken the room: a
+   sentence broken over two lines made the whole header a line taller. */
+.action-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-bar:hover {
@@ -436,7 +447,22 @@ p {
 
 @media (max-width: 60rem) {
   .app-head {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  /* Four groups after the name do not fit beside the bar and the window's own
+     buttons in half a screen, so the last of them goes under the first rather
+     than under the bar. */
+  .head-left {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+
+  /* …and without its divider, which at the start of a line divides nothing. */
+  .head-left > .head-history {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
   }
 
   /* The bar loses its sentence and keeps its badge, rather than going
@@ -495,7 +521,8 @@ p {
    takes its own line with it, which a separator standing on its own would not
    do. */
 .head-files,
-.head-panels {
+.head-panels,
+.head-history {
   display: flex;
   gap: 0.25rem;
   margin-left: 0.9rem;
@@ -2168,6 +2195,14 @@ p {
   gap: 0.2rem;
   padding-inline: 0.45rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Half a window upstream and downstream, beside `go`: a pair that wraps together
+   as the zoom steps do, sized to the row's bordered buttons. */
+.pan-steps {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
 }
 
 /* The four of them as one thing. The row they sit in wraps, and it was wrapping
@@ -8483,7 +8518,8 @@ body.is-carrying-card * {
      has one row of room, and two dividers in it are lines asking for width that
      what they point at does not have. */
   .head-files,
-  .head-panels {
+  .head-panels,
+  .head-left > .head-history {
     margin-left: 0.35rem;
     padding-left: 0;
     border-left: 0;

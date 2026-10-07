@@ -174,7 +174,7 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('.app-foot')).not.toBeNull()
   })
 
-  it('puts the console under the body, and its button before the theme (§23)', () => {
+  it('puts the console under the body, and its button after back, forward, link and file (§23, §5.5)', () => {
     const { root } = windowAt('')
     // Under everything and across the whole body: the drawer is beside the map
     // and this is below it, so both can be up without either covering the
@@ -183,18 +183,26 @@ describe('a window mounted as an embed', () => {
     expect(panel).not.toBeNull()
     expect(panel?.classList.contains('collapsed')).toBe(true)
 
-    // Immediately before the theme toggle, after the two buttons that take
-    // something *out* of this window — a link and a file — because the commands
-    // that repeat the day are the third of those.
-    const actions = Array.from(
-      root.querySelectorAll('.head-actions [aria-label]'),
-    ).map((node) => node.getAttribute('aria-label'))
-    expect(actions.indexOf('console')).toBeGreaterThanOrEqual(0)
+    // Past the panels' divider: the window's history, then the two buttons that
+    // take something *out* of this window — a link and a file — then the
+    // console, because the commands that repeat the day are the third of those.
+    const group = Array.from(root.querySelectorAll('.head-history [aria-label]')).map((node) =>
+      node.getAttribute('aria-label'),
+    )
+    expect(group[0]).toBe('Go back')
+    expect(group[1]).toBe('Go forward')
+    expect(group[group.length - 1]).toBe('console')
+    expect(group.slice(2, 4).map((name) => name?.split(' ')[0])).toEqual(['Share', 'Save'])
+    // And the right of the bar is about the window alone, theme first.
+    const actions = Array.from(root.querySelectorAll('.head-actions [aria-label]')).map((node) =>
+      node.getAttribute('aria-label'),
+    )
+    expect(actions.indexOf('console')).toBe(-1)
     // The theme button's accessible name is its state now — it was the constant
     // "colour theme", which a screen reader read out identically whichever way
     // the theme had just been set — so the row is identified by what the name
     // starts with rather than by the whole of it.
-    expect(actions[actions.indexOf('console') + 1]).toMatch(/^Theme: /)
+    expect(actions[0]).toMatch(/^Theme: /)
   })
 
   it('reads a hand-edited "no" as a plain window', () => {

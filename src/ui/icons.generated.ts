@@ -793,6 +793,18 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"}],
     ],
   },
+  'move-left': {
+    shapes: [
+    ['path', {"d":"M6 8L2 12L6 16"}],
+    ['path', {"d":"M2 12H22"}],
+    ],
+  },
+  'move-right': {
+    shapes: [
+    ['path', {"d":"M18 8L22 12L18 16"}],
+    ['path', {"d":"M2 12H22"}],
+    ],
+  },
   'bars-decreasing': {
     shapes: [
     ['path', {"d":"M3 6h18"}],
