@@ -1,6 +1,13 @@
 {
-  "latest": "2764a8f",
+  "latest": "59f70c1",
   "versions": [
+    {
+      "commit": "59f70c1",
+      "version": "0.13.0",
+      "date": "2026-10-07T17:01:01+02:00",
+      "subject": "Move a region half a window either way, and put back, forward, link, save and console after the panels (§5.4, §5.5, §23) (#96)",
+      "tag": ""
+    },
     {
       "commit": "2764a8f",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "4a686f1",
-      "version": "0.13.0",
-      "date": "2026-09-23T18:51:28+02:00",
-      "subject": "Metagenome sequences card and unified level control (#71)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -212,13 +212,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 96,
-      "commit": "f04ff85",
-      "title": "Add pan and back/forward navigation controls",
-      "branch": "js/sleepy-babbage-sel7zp",
-      "date": "2026-10-07T14:51:12Z"
-    }
-  ]
+  "pulls": []
 }
