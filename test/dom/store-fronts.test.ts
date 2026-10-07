@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EMPTY_VIEW } from '@/state/facets'
-import { STORE_KIND, STORE_VERSION, type StoreEntry } from '@/state/store'
+import { STORE_KIND, STORE_VERSION, type StoreEntry, type StoreFile } from '@/state/store'
 import { readStoreRows } from '@/state/stores'
 import { CustomView } from '@/ui/stores/CustomView'
 import { GalleryView } from '@/ui/stores/GalleryView'
@@ -78,8 +78,47 @@ describe('the lab’s gallery', () => {
     const front = frontById('rsg')
     const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host([]) })
     document.body.appendChild(view.el)
-    expect(all(view.el, '.gallery-card')).toHaveLength(4)
+    expect(all(view.el, '.gallery-card')).toHaveLength(7)
     expect(view.el.textContent ?? '').not.toMatch(/\.m?metacool(?!er)|mock (microbial )?community|\bMAGs?\b/i)
+  })
+
+  it('files the figures under Demo and Papers, in the order the store gives them', () => {
+    const front = frontById('rsg')
+    const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host([]) })
+    document.body.appendChild(view.el)
+    // One heading a section, over its own run of cards — what the viewer does,
+    // then the figures of the lab's papers.
+    expect(textsOf(view.el, '.gallery-heading')).toEqual(['Demo', 'Papers'])
+    const sections = all(view.el, '.gallery-section')
+    expect(textsOf(sections[0], '.gallery-card-title')).toEqual([
+      'Yeast micro-C',
+      'Yeast chromatin landscape',
+      'Hi-C, micro-C and PCP',
+      'Splicing on human chrX',
+      'Mitotic chromosome formation',
+      'Mock microbial community',
+    ])
+    expect(textsOf(sections[1], '.gallery-card-title')).toEqual([
+      'Chromlens, Fig. 1',
+      'Bacterial chromosomes in a yeast nucleus',
+    ])
+    // The files no figure names are still the gallery's, not a section's.
+    expect(view.el.querySelector('.gallery-section .gallery-loose')).toBeNull()
+  })
+
+  it('draws a store whose figures name no section as one run of cards, with no heading', () => {
+    const entries: StoreEntry[] = [
+      { label: 'One', uri: 'https://lab.example.org/one.metacooler.json', kind: 'workspace' },
+      { label: 'Two', uri: 'https://lab.example.org/two.metacooler.json', kind: 'workspace' },
+    ]
+    const front = frontById('rsg') as NonNullable<ReturnType<typeof frontById>>
+    const rows = front.rows as NonNullable<typeof front.rows>
+    const inline: StoreFile = { kind: STORE_KIND, version: STORE_VERSION, name: 'Two figures', columns: [], entries }
+    const view = new GalleryView({ front: { ...front, rows: { ...rows, inline } }, host: host([]) })
+    document.body.appendChild(view.el)
+    expect(all(view.el, '.gallery-heading')).toHaveLength(0)
+    expect(all(view.el, '.gallery-section')).toHaveLength(0)
+    expect(textsOf(view.el, '.gallery-card-title')).toEqual(['One', 'Two'])
   })
 
   it('draws one card per figure: the name and its one verb, the chips, the line, and its files under a fold', () => {
@@ -88,49 +127,57 @@ describe('the lab’s gallery', () => {
     expect(front).not.toBeNull()
     const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host(opened) })
     document.body.appendChild(view.el)
-    // No headings and no section of files apart from the figures: every file
-    // is under the figure it belongs to.
-    expect(all(view.el, '.gallery-heading')).toHaveLength(0)
     const cards = all(view.el, '.gallery-card')
-    expect(cards.length).toBe(5)
+    expect(cards.length).toBe(8)
     // The first line is the name and the one verb, an icon with the words in its title.
     const head = cards[0].querySelector('.gallery-card-head') as HTMLElement
-    expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C, G2/M')
+    expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C')
     const open = head.querySelector('.gallery-card-open') as HTMLButtonElement
     expect(open.textContent).toBe('')
     expect(open.title).toContain('new tab')
-    expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')[0]).toBe('S288C (syn XIII-40)')
-    expect(cards[0].querySelector('.gallery-card-line')?.textContent).toContain('One map, with the sequence')
+    expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')[0]).toBe('S288C (R64)')
+    expect(cards[0].querySelector('.gallery-card-line')?.textContent).toContain('One map at 1.6 kb')
     open.click()
     expect(opened[0]?.kind).toBe('workspace')
-    expect(opened[0]?.uri).toMatch(/Yeast_microC\.metacooler\.json$/)
+    expect(opened[0]?.uri).toMatch(/store\/yeast\/Yeast_microC\.metacooler\.json$/)
     // The figure's own files, each a store row with the two verbs.
     const fold = cards[0].querySelector('.gallery-card-more') as HTMLElement
-    expect(fold.querySelector('summary')?.textContent).toBe('8 files')
-    expect(all(fold, '.portal-row')).toHaveLength(8)
-    expect(all(fold, '.row-verb-add')).toHaveLength(8)
-    // The deck's four, the tracks-only figure's eleven, human chrX's five, the
-    // metagenome's two.
-    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 5)).toEqual([
-      '8 files',
-      '11 files',
-      '4 files',
+    expect(fold.querySelector('summary')?.textContent).toBe('9 files')
+    expect(all(fold, '.portal-row')).toHaveLength(9)
+    expect(all(fold, '.row-verb-add')).toHaveLength(9)
+    // The landscape's seven, the three maps' five, human chrX's five, the time
+    // course's fifteen, the metagenome's two; then the papers: Fig. 1's seven
+    // and the Meneu paper's sixteen.
+    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 8)).toEqual([
+      '9 files',
+      '7 files',
       '5 files',
+      '5 files',
+      '15 files',
       '2 files',
+      '7 files',
+      '16 files',
     ])
-    // …and the files no figure names — two maps, the shotgun coverage, the
-    // synthetic barChart and the `.2bit`. The barChart is deliberately in none:
-    // every figure here carries a DOI, and a lane of generated numbers does not
-    // belong in one. The `.2bit` is the same sequence a figure already names as
-    // a FASTA, published beside it because the paste box's hub example points at
-    // it (§8.21, §24.10). Then five for §8.22 and §8.23: the yeast karyotype and
-    // the yeast test subset's junctions, which are there to be dropped on the
-    // yeast map, and the human samples' junctions no figure draws — two more
-    // STAR tables and one as regtools writes it. They are still offered, under
-    // the cards.
+    // A file one figure reaches into another's folder for is one row, under
+    // both: the deck's Hi-C is the Meneu paper's G1 map.
+    const deck = cards[2].querySelector('.gallery-card-more') as HTMLElement
+    const meneu = cards[7].querySelector('.gallery-card-more') as HTMLElement
+    expect(deck.textContent).toContain('Hi-C, M. mycoides, G1')
+    expect(meneu.textContent).toContain('Hi-C, M. mycoides, G1')
+    // …and the files no figure names: the micro-C map as a `.hic` and the
+    // sequence as a `.2bit`, which the paste box's hub example points at
+    // (§8.21, §24.10), and three junction tables of the human samples no
+    // figure draws — two more STAR tables and one as regtools writes it.
     const loose = view.el.querySelector('.gallery-loose') as HTMLElement
-    expect(loose.querySelector('summary')?.textContent).toBe('10 more files, in no figure')
-    expect(all(loose, '.portal-row')).toHaveLength(10)
+    expect(loose.querySelector('summary')?.textContent).toBe('5 more files, in no figure')
+    expect(all(loose, '.portal-row')).toHaveLength(5)
+  })
+
+  it('says nothing of the synthetic chromosome the old yeast demo was built on', () => {
+    const front = frontById('rsg')
+    const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host([]) })
+    document.body.appendChild(view.el)
+    expect(view.el.textContent ?? '').not.toMatch(/syn ?XIII|XIII-?syn|syn-?40/i)
   })
 })
 

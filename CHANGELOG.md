@@ -870,6 +870,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The RSG lab data store is new, and in two sections (§24.2, §24.3).** *Demo*: a yeast micro-C
+  map at 1.6 kb with the sequence, genes, RNA-seq as a chart per gene, ATAC, MNase, shotgun, SNPs
+  in sixteen samples and its loops; the same tracks with no map, at 5.5 kb with the six reading
+  frames; Hi-C, micro-C and PCP of one locus in a deck of three, MNase and the genes under each;
+  splicing on human chrX; and Gibcus et al. 2018's mitotic Hi-C time course in three tabs of decks.
+  *Papers*: the session behind this viewer's Fig. 1 — 4DN's mouse ES-cell Hi-C at *Sox2* with
+  CTCF, H3K27ac and H3K4me3, its insulation and its 3D model — and Meneu et al. 2025's
+  *M. mycoides* and *M. pneumoniae* chromosomes in yeast, with MNase, RNA-seq, Pol II and Scc1. The
+  yeast is R64 throughout: nothing in the store, the shelf beside its map or the paste boxes'
+  examples names the old demo's synthetic chromosome XIII. The files live in one folder on the
+  bucket, `demo/store/`, listed with their sources in `demo/store/MANIFEST.tsv`, written by
+  `scripts/make_rsg_store.py` and published by `scripts/publish-store.sh`.
+
 - **Space locks the map onto its diagonal, and a second press lets go (§7.2, §8.9).** It used to put
   the view back on the diagonal once — *Recentre on the diagonal* — and every pan, box and zoom after
   it landed a little off the line again. Now it slides the view onto the diagonal at the zoom it is
@@ -1985,6 +1998,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A workspace's tracks come back under the companions they were drawn under (§16.6).** Restoring
+  the tracks wrote the session's lanes, none yet, over the record of where they were drawn before it
+  was read, and a lane whose map opened before its track had been read was dropped: a deck with
+  MNase under each of three maps opened with every companion bare and MNase on the first map only.
 
 - **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
   sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has

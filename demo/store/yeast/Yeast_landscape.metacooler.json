@@ -1,0 +1,280 @@
+{
+  "kind": "metacooler.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Yeast chromatin landscape",
+      "state": {
+        "uri": "S288c.fa",
+        "view": "browser",
+        "locus": "XIV:299,501-305,000"
+      },
+      "tracks": [
+        {
+          "id": "yeast-sequence",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "S288c.fa",
+            "url": "S288c.fa"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "translation": {
+              "frames": true,
+              "code": 1
+            }
+          }
+        },
+        {
+          "id": "yeast-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "S288c.gtf",
+            "url": "S288c.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "yeast-rna",
+          "card": "linear",
+          "kind": "barchart",
+          "label": "RNA-seq, CPM",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_RNAseq.barChart",
+            "url": "Yeast_RNAseq.barChart"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 60,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 400
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "yeast-atac",
+          "card": "linear",
+          "kind": "track",
+          "label": "ATAC",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ATAC.bw",
+            "url": "Yeast_ATAC.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 70,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "chromatin",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "yeast-mnase",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_MNase.bw",
+            "url": "Yeast_MNase.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 70,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "chromatin",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "yeast-shotgun",
+          "card": "linear",
+          "kind": "track",
+          "label": "shotgun",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_shotgun.bw",
+            "url": "Yeast_shotgun.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#8c8c8c",
+            "size": 46,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "yeast-snps",
+          "card": "linear",
+          "kind": "variants",
+          "label": "SNPs, 16 samples",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_snps.vcf.gz",
+            "url": "Yeast_snps.vcf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 60,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [
+        "XIV"
+      ],
+      "groups": {
+        "chromatin": "stacked"
+      },
+      "scaling": {
+        "chromatin": "each"
+      },
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": true,
+        "crosshair": true,
+        "dividers": false,
+        "breaks": true,
+        "labels": false,
+        "ticks": true
+      }
+    }
+  ]
+}

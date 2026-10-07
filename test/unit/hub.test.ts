@@ -932,7 +932,7 @@ describe('the paste boxes’ examples', () => {
     if (!result.ok) return
     expect(result.store.name).toBe('Example hub')
     expect(result.store.entries.map((entry) => entry.label)).toEqual([
-      'Saccharomyces cerevisiae (sacCer3_syn40)',
+      'Saccharomyces cerevisiae (R64-1-1)',
       'MNase',
       'ATAC',
       'Micro-C map',
@@ -943,7 +943,7 @@ describe('the paste boxes’ examples', () => {
     const genome = result.store.entries[0]
     expect(genome.fields?.['role']).toBe('sequence')
     expect(genome.fields?.['format']).toBe('2bit')
-    expect(genome.uri).toMatch(/Yeast_reference\.2bit$/)
+    expect(genome.uri).toMatch(/store\/yeast\/S288c\.2bit$/)
     // …and the contact map goes through the map door.
     expect(result.store.entries[3].kind).toBe('map')
   })
@@ -964,7 +964,8 @@ describe('the paste boxes’ examples', () => {
       .concat([...exampleStoreText().matchAll(/https?:\/\/[^"]+/g)].map((match) => match[0]))
       // The commented `twoBitPath` line is an illustration, not a file.
       .filter((url) => !url.includes('your.host'))
-      .map((url) => url.split('/').slice(-2).join('/'))
+      // As a path under `demo/`, which is how the published set is named.
+      .map((url) => url.slice(url.indexOf('/demo/') + '/demo/'.length))
     expect(named.length).toBeGreaterThan(0)
     for (const path of new Set(named)) {
       expect(EXAMPLE_FILES).toContain(path)

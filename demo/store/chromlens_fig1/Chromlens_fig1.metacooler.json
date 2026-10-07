@@ -1,0 +1,251 @@
+{
+  "kind": "metacooler.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Chromlens, Fig. 1",
+      "state": {
+        "uri": "4DNFI5QJNFAT.mcool::resolutions/5000",
+        "maps": "3d",
+        "view": "region",
+        "region": "chr3:34200001-35200000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "fig1-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "mm10_genes.gtf.gz",
+            "url": "mm10_genes.gtf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": true,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 62,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "fig1-ctcf",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIFFXFV82.bw",
+            "url": "4DNFIFFXFV82.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 60,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "fig1-h3k27ac",
+          "card": "linear",
+          "kind": "track",
+          "label": "H3K27ac",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXE23VC7.bw",
+            "url": "4DNFIXE23VC7.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 60,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "fig1-h3k4me3",
+          "card": "linear",
+          "kind": "track",
+          "label": "H3K4me3",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQYJLKKH.bw",
+            "url": "4DNFIQYJLKKH.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": true,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 60,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "fig1-insulation",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · 100 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.insulation-w10.bw",
+            "url": "4DNFI5QJNFAT_10000.insulation-w10.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 50,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "fig1-model",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · Sox2 locus, 5 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_5000.Sox2-locus.bed3d",
+            "url": "4DNFI5QJNFAT_5000.Sox2-locus.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:fig1-h3k27ac"
+            }
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "deck": {
+        "columns": 2
+      },
+      "mapNames": {
+        "4DNFI5QJNFAT.mcool": "Hi-C · mouse ES cells (4DN)"
+      }
+    }
+  ]
+}

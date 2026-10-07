@@ -5346,7 +5346,14 @@ export class Session {
     // seated now, and read once the map has drawn its first block, so the map
     // does not share its first read with every track download (`holdUntil`).
     loader.holdUntil(this.firstPicture())
-    loader.restore(AnnotationStore.stored(scope))
+    // …and where they were *drawn*, when the answer is not "on the lead".
+    // Seeded rather than placed: the lanes go into the store's parking, and
+    // `adoptHome` — which already runs once per render for every live cell —
+    // puts each one back the moment a panel opens the file it belongs to. So a
+    // companion that comes back gets its tracks, and one that does not leaves
+    // them on the lead, which is exactly what closing a cell has always done.
+    // `AnnotationStore.restore` is the order the two must be read back in.
+    AnnotationStore.restore(store, scope, (rows) => loader.restore(rows))
     // The tracks the reader asked for, put on. After the cards are mounted and
     // after `restore`, for `restore`'s own reason: a row landing in a list that
     // does not exist yet is a row nobody draws, and a row landing *before* the
@@ -5354,14 +5361,6 @@ export class Session {
     if (wanted) {
       for (const entry of published) loader.addUrl(entry.url, entry.label)
     }
-
-    // Where the tracks were *drawn*, when the answer is not "on the lead".
-    // Seeded rather than placed: the lanes go into the store's parking, and
-    // `adoptHome` — which already runs once per render for every live cell —
-    // puts each one back the moment a panel opens the file it belongs to. So a
-    // companion that comes back gets its tracks, and one that does not leaves
-    // them on the lead, which is exactly what closing a cell has always done.
-    store.seedHomes(AnnotationStore.storedLanes(scope))
     this.restoreMetadata(scope)
     // …and what this session was already holding, when the file under it has
     // just changed. Dropping a cooler on a genome browser is the case: the

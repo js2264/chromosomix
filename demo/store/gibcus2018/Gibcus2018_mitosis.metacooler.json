@@ -1,0 +1,528 @@
+{
+  "kind": "metacooler.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "G2 to prometaphase, chromosome 7",
+      "state": {
+        "uri": "G2_4DNFIT479GDR.mcool::resolutions/250000",
+        "maps": "5m_4DNFINSJ2GYV.mcool::resolutions/250000|10m_4DNFIYOEGHHV.mcool::resolutions/250000|15m_4DNFILKIISAU.mcool::resolutions/250000|30m_4DNFI165SFJU.mcool::resolutions/250000|60m_4DNFIWHQLZTL.mcool::resolutions/250000",
+        "view": "region",
+        "region": "chr7:1-36946936",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [],
+      "deck": {
+        "columns": 3
+      },
+      "mapNames": {
+        "G2_4DNFIT479GDR.mcool": "G2",
+        "5m_4DNFINSJ2GYV.mcool": "5 min",
+        "10m_4DNFIYOEGHHV.mcool": "10 min",
+        "15m_4DNFILKIISAU.mcool": "15 min",
+        "30m_4DNFI165SFJU.mcool": "30 min",
+        "60m_4DNFIWHQLZTL.mcool": "60 min"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Compartments fade",
+      "state": {
+        "uri": "G2_4DNFIT479GDR.mcool::resolutions/100000",
+        "maps": "5m_4DNFINSJ2GYV.mcool::resolutions/100000|10m_4DNFIYOEGHHV.mcool::resolutions/100000|15m_4DNFILKIISAU.mcool::resolutions/100000|30m_4DNFI165SFJU.mcool::resolutions/100000|60m_4DNFIWHQLZTL.mcool::resolutions/100000",
+        "view": "region",
+        "region": "chr1:20000000-60000000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "e1-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · G2",
+          "source": {
+            "kind": "remote",
+            "name": "G2_4DNFILLAMSTE_compartments.bw",
+            "url": "G2_4DNFILLAMSTE_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "e1-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 5 min",
+          "source": {
+            "kind": "remote",
+            "name": "5m_4DNFI9HASBHH_compartments.bw",
+            "url": "5m_4DNFI9HASBHH_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "e1-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 10 min",
+          "source": {
+            "kind": "remote",
+            "name": "10m_4DNFIG48YRMT_compartments.bw",
+            "url": "10m_4DNFIG48YRMT_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "e1-3",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 15 min",
+          "source": {
+            "kind": "remote",
+            "name": "15m_4DNFIY1KBU1S_compartments.bw",
+            "url": "15m_4DNFIY1KBU1S_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "e1-4",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 30 min",
+          "source": {
+            "kind": "remote",
+            "name": "30m_4DNFIOCFXWMD_compartments.bw",
+            "url": "30m_4DNFIOCFXWMD_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "e1-5",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 60 min",
+          "source": {
+            "kind": "remote",
+            "name": "60m_4DNFIX92O41_compartments.bw",
+            "url": "60m_4DNFIX92O41_compartments.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1.5,
+              "max": 1.5
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "e1-1",
+          "uri": "5m_4DNFINSJ2GYV.mcool::resolutions/100000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "e1-2",
+          "uri": "10m_4DNFIYOEGHHV.mcool::resolutions/100000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "e1-3",
+          "uri": "15m_4DNFILKIISAU.mcool::resolutions/100000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "e1-4",
+          "uri": "30m_4DNFI165SFJU.mcool::resolutions/100000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "e1-5",
+          "uri": "60m_4DNFIWHQLZTL.mcool::resolutions/100000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 3
+      },
+      "mapNames": {
+        "G2_4DNFIT479GDR.mcool": "G2",
+        "5m_4DNFINSJ2GYV.mcool": "5 min",
+        "10m_4DNFIYOEGHHV.mcool": "10 min",
+        "15m_4DNFILKIISAU.mcool": "15 min",
+        "30m_4DNFI165SFJU.mcool": "30 min",
+        "60m_4DNFIWHQLZTL.mcool": "60 min"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Domains fade",
+      "state": {
+        "uri": "G2_4DNFIT479GDR.mcool::resolutions/25000",
+        "maps": "5m_4DNFINSJ2GYV.mcool::resolutions/25000|60m_4DNFIWHQLZTL.mcool::resolutions/25000",
+        "view": "region",
+        "region": "chr1:30000000-34000000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "ins-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · G2",
+          "source": {
+            "kind": "remote",
+            "name": "G2_4DNFI1PRBI5L_diamond.bw",
+            "url": "G2_4DNFI1PRBI5L_diamond.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "ins-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · 5 min",
+          "source": {
+            "kind": "remote",
+            "name": "5m_4DNFIIAPL9WO_insulation.bw",
+            "url": "5m_4DNFIIAPL9WO_insulation.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "ins-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · 60 min",
+          "source": {
+            "kind": "remote",
+            "name": "60m_4DNFI12IF3LX_diamond.bw",
+            "url": "60m_4DNFI12IF3LX_diamond.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": -1,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "ins-1",
+          "uri": "5m_4DNFINSJ2GYV.mcool::resolutions/25000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "ins-2",
+          "uri": "60m_4DNFIWHQLZTL.mcool::resolutions/25000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 3
+      },
+      "mapNames": {
+        "G2_4DNFIT479GDR.mcool": "G2",
+        "5m_4DNFINSJ2GYV.mcool": "5 min",
+        "60m_4DNFIWHQLZTL.mcool": "60 min"
+      }
+    }
+  ]
+}

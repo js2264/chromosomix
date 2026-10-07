@@ -1,0 +1,303 @@
+{
+  "kind": "metacooler.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Hi-C, micro-C and PCP",
+      "state": {
+        "uri": "GSE151553_A364_merged.mcool::resolutions/1600",
+        "maps": "../meneu2025/HiC/HiC_Mmyco_G1.mcool::resolutions/1000|Yeast_PCP_GSM8476641_G1_rep1.mcool::resolutions/1000",
+        "view": "region",
+        "region": "chrXV:200000-400000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "deck-mnase-microc",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_MNase.bw",
+            "url": "Yeast_MNase.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "deck-genes-microc",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "S288c.gtf",
+            "url": "S288c.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "deck-mnase-hic",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_MNase.bw",
+            "url": "Yeast_MNase.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "deck-genes-hic",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "S288c.gtf",
+            "url": "S288c.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "deck-mnase-pcp",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_MNase.bw",
+            "url": "Yeast_MNase.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "deck-genes-pcp",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "S288c.gtf",
+            "url": "S288c.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "deck-mnase-hic",
+          "uri": "../meneu2025/HiC/HiC_Mmyco_G1.mcool::resolutions/1000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "deck-genes-hic",
+          "uri": "../meneu2025/HiC/HiC_Mmyco_G1.mcool::resolutions/1000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "deck-mnase-pcp",
+          "uri": "Yeast_PCP_GSM8476641_G1_rep1.mcool::resolutions/1000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "deck-genes-pcp",
+          "uri": "Yeast_PCP_GSM8476641_G1_rep1.mcool::resolutions/1000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 3
+      },
+      "circular": [
+        "chrM"
+      ],
+      "mapNames": {
+        "../meneu2025/HiC/HiC_Mmyco_G1.mcool": "Hi-C · Meneu et al. 2025, G1",
+        "Yeast_PCP_GSM8476641_G1_rep1.mcool": "PCP · Delamarre et al. 2025, G1",
+        "GSE151553_A364_merged.mcool": "Micro-C · Costantino et al. 2020"
+      }
+    }
+  ]
+}

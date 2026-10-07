@@ -5900,6 +5900,14 @@ beside its place (`deck:lead`, written only while it is open). So a reload, a re
 a deck built again all bring back every map that was moving on its own, the first included — whose
 chain used to come back closed, driving the deck, whatever the reader had left it.
 
+The lanes drawn on companions are kept the same way, each against its companion's file
+(`deck:lanes`, a workspace's `lanes`), and come back as the maps do: parked until a cell opens that
+file, then put under it at the edge they were on. Two things decide that they do come back. The
+record is **read before the tracks are restored**, because restoring a track writes the session's
+lanes — none yet — over it; and a lane waits **for its track as well as for its map**, since a cell
+can open before the track it carries has been read. Either wrong, and a workspace whose MNase was
+drawn under each of three maps opened with every companion bare and the track on the first map only.
+
 ### 16.7 Cost
 
 `checkBrowserDenseSize` budgets **one** block against a share of what the device reports, and has no
@@ -9620,7 +9628,7 @@ Four rules carry most of the design:
 - **A row carries its size** when the generator knew it, so the row can say what a five-gigabyte
   file costs before it is clicked. The size is drawn on the row and not handed to the open, which
   learns it from its own probe as any URL's does. `tracks` on a row are a shelf: once the row is
-  open, the Tracks card offers them the way it offers the demo map's ten — *load the 10 tracks
+  open, the Tracks card offers them the way it offers the demo map's seven — *load the 7 tracks
   published with this map* (`registerShelf`, `ui/examples.ts`).
 - **A row may name the group it belongs to.** The portal generators write the experiment set a 4DN
   file belongs to (`set`) and the experiment an ENCODE file belongs to (`dataset`), and every
@@ -9794,7 +9802,12 @@ genome's name — that is the chip under it. Every file is a store row with the 
 §20.5, so a reader who wants the ATAC bigWig on their own map has it a fold away from the figure
 it appears in; the lab's store lists every file its figures name (`fields.files` on the workspace
 row, the URIs `|`-joined), and the few files no figure names sit under the cards in a fold of their
-own. There is no section of files apart from the figures and no heading over the cards.
+own. There is no section of files apart from the figures. The cards themselves stand under
+**headings** when the store files them under some — a figure's `section` field, each heading where
+its first figure stands: the lab's are *Demo*, what the viewer does, and *Papers*, the figures of the
+lab's papers, each a session over the data the paper published. A reader comes to that shelf for one
+of the two, and eight cards in one run made them read the paragraphs to find out which. A store
+whose figures name no section is one run of cards, with no heading over it.
 
 **ENCODE's two shard facets are facets like any other.** A genome and a kind of file are choices of
 *which shards to read* (§24.3), and they used to be radios — one shard on screen at a time, so the
@@ -9815,7 +9828,12 @@ why one table for all of them was the wrong shape and is gone:
 - **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
   — a title and *open*, the assembly and the provenance as chips (the provenance clipped at the
   card's width and whole on its tooltip), one line with the paragraph that used to be the row on
-  its tooltip, and the figure's files behind a fold. Inline, so it costs no request.
+  its tooltip, and the figure's files behind a fold — under two headings. **Demo**: one yeast
+  micro-C map with its tracks; the same tracks with no map, close enough for the reading frames;
+  Hi-C, micro-C and PCP of one locus in a deck of three; splicing on human chrX in the 1D browser;
+  a mitotic Hi-C time course in three tabs of decks; and the metagenome, a dev feature (§29).
+  **Papers**: the session behind this viewer's Fig. 1, and Meneu et al. 2025's bacterial
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
 - **DNA Bacterial Zoo** — the genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
   reference and every track under the fold. The session opens **three tracks and nothing else**:
@@ -10133,6 +10151,24 @@ bucket answers 404, which a shipped store reads as *Nothing has been published f
 sentence says what publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to
 the Stores workflow, which has nothing to do with it.
 
+**Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
+the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
+dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromlens_fig1/` — with every name inside
+a workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
+not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
+into it **on the bucket** — from the lab's own published data and from 4DN's open-data bucket — and
+never pass through git. What the repository keeps is the folder's workspaces and
+`demo/store/MANIFEST.tsv`, one line a file naming where it comes from: a key on a bucket, a file of
+this repository, or a file `scripts/make_rsg_store.py derive` computes (the RNA-seq counts as a
+barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by this viewer's own
+Chromosight, the sequence as a `.2bit` and the map as a `.hic` for the hub example). The same script
+writes the workspaces and the manifest from one table, so a file a card names and a file the folder
+holds cannot drift apart, and `scripts/publish-store.sh` makes the bucket match the manifest —
+server-side copies, uploads, a skip for what is already there at its size, and an anonymous check of
+every file afterwards. It deletes nothing. `demo-examples.test.ts` reads a name under `store/` on
+disk **or in the manifest**, checks every line whose source is in the repository, and opens only the
+maps it can read, so a card naming a file the publish step would not put there is a red CI run.
+
 Every generated store carries `generatedAt` and `source` — *both* of the places it came from, the
 store that decided which rows exist and the query that decided what is in their cells — because a
 shelf with no provenance is a screenshot.
@@ -10445,7 +10481,8 @@ the next file is. `hasGenomeStanzas` is what tells a whole hub from its first fi
 only a `hub.txt` is refused by name and told what to paste after it. A pasted shelf is not put in the
 address bar and not offered for remembering: a store worth keeping is one with an address, and the
 honest way to get one is to publish the file. Each box offers a **worked example** that reads — a hub
-and a store over the published demo files — because an example beside a paste box is not there to
+and a store over the lab store's yeast files, the hub an assembly hub naming R64 as a `.2bit`, two
+bigWigs and the micro-C map as a `.hic` — because an example beside a paste box is not there to
 show syntax, which this document does better, but to be pressed: the reader's first edit should be to
 something that already drew a shelf.
 

@@ -20,34 +20,34 @@
  * in the list could only ever offer what dropping that file offers: a map at
  * its landing view, with nothing beside it. What a first-time reader should
  * meet is the application doing its job — a window worth looking at, tracks on
- * both edges of the map, a group of two strands sharing a lane — and all of
- * that is exactly what `state/workspace.ts` writes down. So the figures are
- * four `.metacooler.json` files that live next to the data they name, and
- * choosing one is the same gesture as dropping a workspace somebody sent you.
- * The data files are listed too, under the figures, for the reader who wants
- * the `.cool` alone — as rows, with the two verbs every store row has.
+ * both edges of the map, three maps of one locus side by side — and all of that
+ * is exactly what `state/workspace.ts` writes down. So the figures are
+ * `.metacooler.json` files that live next to the data they name, and choosing
+ * one is the same gesture as dropping a workspace somebody sent you. The data
+ * files are listed too, under each figure's fold, for the reader who wants the
+ * `.mcool` alone — as rows, with the two verbs every store row has.
  *
- * The four are ordered as an argument rather than by dataset: **one map with
- * its tracks**, then **the same assembly with no map at all**, then **two maps
- * side by side**, and only then **the metagenome**. A reader meeting this
- * viewer for the first time should meet the simplest complete thing it does
- * first; the multi-genome file it exists for is the last of the four because it
- * is the one that needs the other three to be legible.
+ * The figures are filed under two headings (§24.2). **Demo** is what the viewer
+ * does, ordered as an argument rather than by dataset: one map with its tracks,
+ * then the same tracks with no map at all and close enough to read the reading
+ * frames, then three maps of one locus side by side, then a human chromosome's
+ * splicing in the 1D browser, then a time course in decks — the simplest
+ * complete thing first. **Papers** is the figures of the lab's papers, each a
+ * session over the data the paper published.
  *
  * A note on the format, because it is what made every one of these stop
  * opening once: `App.openWorkspaceFile` reads `kind: "metacooler.workspace"`
  * and refuses anything else, so a published file still written in the older
  * single-session shape is a card that fails on click with "not a workspace".
- * The four files in `demo/` are the current shape; the copies on the bucket are
- * only as current as the last run of `scripts/publish-demo.sh`, which is the
- * step that makes the store true.
+ * The files in `demo/store/` are written by `scripts/make_rsg_store.py`, in the
+ * current shape; the copies on the bucket are only as current as the last run
+ * of `scripts/publish-store.sh`, which is the step that makes the store true.
  *
  * Each workspace sits in the bucket folder holding the files it names, and the
  * names *inside* it stay relative — resolved against the file's own URL on the
- * way in (`resolveConfig`). That is what keeps a dataset folder a
- * self-contained thing: `demo/yeast/` can be copied to another bucket, or
- * served off a laptop, and both of its workspaces still open. It is also why
- * moving the data to S3 changed no line of any `.metacooler.json`.
+ * way in (`resolveConfig`). That is what keeps a card's folder a self-contained
+ * thing: `demo/store/` can be copied to another bucket, or served off a laptop,
+ * and every one of its workspaces still opens.
  */
 
 import { splitUri } from './labels'
@@ -60,10 +60,14 @@ declare const __DEMO_BASE__: string
 /**
  * The published root, with its trailing slash: one folder per dataset under it.
  *
- * The repository's own `demo/` directory mirrors this exactly — it is what
+ * The repository's own `demo/` directory mirrors this — it is what
  * `scripts/publish-demo.sh` uploads and what `demo-examples.test.ts` checks —
- * so the tree on disk and the tree on the bucket are the same tree, and a demo
- * that is broken on the site is broken in CI first.
+ * with one exception: the store's folder, `demo/store/`, holds files of several
+ * gigabytes that are copied into it on the bucket rather than kept in git, so
+ * the repository carries its workspaces and `demo/store/MANIFEST.tsv`, which
+ * names every file in it and where it comes from. The test reads the manifest
+ * where it cannot read the file, so a name a workspace uses that the bucket
+ * will not have is still a red CI run.
  */
 export const DEMO_BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/'
 
@@ -81,6 +85,14 @@ export const DEMO_BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/
 const DEMO_BASE: string = typeof __DEMO_BASE__ === 'string' ? __DEMO_BASE__ : ''
 
 /**
+ * The headings the store's figures are filed under, in the order they stand.
+ *
+ * *Demo* is what the viewer does; *Papers* is the figures of the lab's papers,
+ * each card a session over the data the paper published (§24.2).
+ */
+export type DemoSection = 'Demo' | 'Papers'
+
+/**
  * The figures, in the order they are offered.
  *
  * Each card says enough to choose and no more: a `title`, one `line` on what
@@ -90,12 +102,13 @@ const DEMO_BASE: string = typeof __DEMO_BASE__ === 'string' ? __DEMO_BASE__ : ''
  * card: it says what the *session* adds on top of the file, which is the part a
  * reader cannot see from the name.
  *
- * `folder` is the dataset's own directory under {@link DEMO_BUCKET}, and it is
- * where every file that session names is looked for: entries sharing a folder —
- * as the three yeast sessions do — are that many figures over one copy of the
- * data, not that many copies of it.
+ * `folder` is the card's own directory under {@link DEMO_BUCKET}, and its
+ * `files` are named from there: entries sharing a folder — as the three yeast
+ * figures do — are that many figures over one copy of the data, not that many
+ * copies of it, and a `../` reaches a file another card's folder holds.
  */
 const DEMO: Array<{
+  section: DemoSection
   folder: string
   file: string
   title: string
@@ -103,78 +116,89 @@ const DEMO: Array<{
   assembly: string
   provenance: string
   detail: string
-  /** The data files the session is made of, by name in its folder — its card's *N files* fold. */
+  /** The data files the session is made of, from its folder — its card's *N files* fold. */
   files: string[]
   /** The dev feature this figure belongs to, if it is one (§29): absent from the store while it is off. */
   dev?: DevFeature
 }> = [
   {
-    folder: 'yeast',
+    section: 'Demo',
+    folder: 'store/yeast',
     file: 'Yeast_microC.metacooler.json',
-    title: 'Yeast micro-C, G2/M',
-    line: 'One map, with the sequence, genes, ATAC, Pol II and 1,506 loop calls on its edges.',
-    assembly: 'S288C (syn XIII-40)',
-    provenance: 'DOI 10.1126/science.adm9466',
+    title: 'Yeast micro-C',
+    line: 'One map at 1.6 kb, with the sequence, genes, RNA-seq, ATAC, MNase, shotgun, SNPs and its loops.',
+    assembly: 'S288C (R64)',
+    provenance: 'GEO GSE151553 · DOI 10.7554/eLife.59889',
     detail:
-      'A mitotic micro-C map of synthetic yeast at 1 kb (XIII carries a 40 kb insertion, hence ' +
-      'XIII-syn40), balanced, opened at IV:1.0–1.4 Mb. The sequence and the gene model run along ' +
-      'both edges; ATAC and its peak calls sit under the map, Pol II over input and its peaks ' +
-      'beside it, and 1,506 loop calls are drawn on it.',
+      'Micro-C XL of strain A364A (Costantino et al. 2020), balanced, opened on 400 kb of chromosome XIV ' +
+      'at 1.6 kb — a window with a weight for every bin. The sequence and the gene model run along both ' +
+      'edges; under the map, RNA-seq of a wild type and a mutant, two replicates each, drawn as one chart ' +
+      'per gene; ATAC, MNase and shotgun coverage; and SNPs in sixteen samples of wine, ale, lager, bioethanol ' +
+      'and other strains. The 636 loops drawn on it were called on this map by the app’s own Chromosight.',
     files: [
-      'Yeast_microC_G2M_1kb.cool',
-      'S288c_syn40-XIII.fa',
-      'Yeast_annotations.gtf',
+      'GSE151553_A364_merged.mcool',
+      'S288c.fa',
+      'S288c.gtf',
+      'Yeast_RNAseq.barChart',
       'Yeast_ATAC.bw',
-      'Yeast_ATAC.narrowPeak',
-      'Yeast_ChIP_Pol2-vs-input.bw',
-      'Yeast_ChIP_Pol2-vs-input.narrowPeak',
-      'Yeast_microC_loops.tsv',
-    ],
-  },
-  {
-    folder: 'yeast',
-    file: 'Yeast_tracks.metacooler.json',
-    title: 'Yeast chromatin and transcription',
-    line: 'The 1D browser with no map: eleven lanes over 50 kb of chromosome IV.',
-    assembly: 'S288C (syn XIII-40)',
-    provenance: 'DOI 10.1126/science.adm9466',
-    detail:
-      'The same assembly with no contact map at all: the sequence as GC content, the gene ' +
-      'model, MNase and ATAC grouped on pinned axes, both peak call sets, the micro-C anchors ' +
-      'as an interval lane, the two RNA strands on one shared axis with the reverse read ' +
-      'downwards, and the loop calls as arcs. Drop a .cool on it to turn the same session into ' +
-      'a map.',
-    files: [
-      'S288c_syn40-XIII.fa',
-      'Yeast_annotations.gtf',
       'Yeast_MNase.bw',
-      'Yeast_ATAC.bw',
-      'Yeast_ATAC.narrowPeak',
-      'Yeast_microC_anchors.bed',
-      'Yeast_ChIP_Pol2-vs-input.bw',
-      'Yeast_ChIP_Pol2-vs-input.narrowPeak',
-      'Yeast_RNA_fwd.bw',
-      'Yeast_RNA_rev.bw',
-      'Yeast_microC_loops.tsv',
+      'Yeast_shotgun.bw',
+      'Yeast_snps.vcf.gz',
+      'Yeast_microC_loops.bedpe',
     ],
   },
   {
-    folder: 'yeast',
-    file: 'Yeast_deck.metacooler.json',
-    title: 'Micro-C beside Hi-C',
-    line: 'Two maps of one locus in two formats, a .cool and a .hic, locked side by side.',
-    assembly: 'S288C (syn XIII-40)',
-    provenance: 'DOI 10.1126/science.adm9466',
+    section: 'Demo',
+    folder: 'store/yeast',
+    file: 'Yeast_landscape.metacooler.json',
+    title: 'Yeast chromatin landscape',
+    line: 'No map, and close: 5.5 kb of chromosome XIV with its six reading frames, the genes, RNA-seq by sample, ATAC, MNase, shotgun and SNPs.',
+    assembly: 'S288C (R64)',
+    provenance: 'Ensembl R64-1-1 · GEO GSE151553 (the map’s tracks)',
     detail:
-      'The same locus read out of two files in two different formats, in two locked columns: ' +
-      'the micro-C .cool on the left and a Juicer .hic on the right, both balanced, both at ' +
-      'IV:1.0–1.4 Mb. IV is one of the sequences the two assemblies agree about to the base, ' +
-      'which is why the window is there. Panning either panel pans both.',
-    files: ['Yeast_microC_G2M_1kb.cool', 'Yeast_hic.hic', 'Yeast_annotations.gtf', 'Yeast_ATAC.bw'],
+      'The same tracks with no contact map, opened from the FASTA alone at RHO5, RPS3 and MRPL22. Close ' +
+      'enough for the sequence lane to draw the six reading frames under it — starts in green, stops in ' +
+      'red — so an open reading frame reads as a run of grey between two red marks, and lines up with the ' +
+      'gene above it. RNA-seq is one chart per gene, wild type against mutant on a 0–400 CPM axis; ATAC ' +
+      'and MNase share a group and each keep their own axis, so the nucleosome-free promoter and the ' +
+      'array beside it are read together.',
+    files: [
+      'S288c.fa',
+      'S288c.gtf',
+      'Yeast_RNAseq.barChart',
+      'Yeast_ATAC.bw',
+      'Yeast_MNase.bw',
+      'Yeast_shotgun.bw',
+      'Yeast_snps.vcf.gz',
+    ],
   },
   {
-    folder: 'human',
-    file: 'Human_chrX_RNA.metacooler.json',
+    section: 'Demo',
+    folder: 'store/yeast',
+    file: 'Yeast_HiC_microC_PCP.metacooler.json',
+    title: 'Hi-C, micro-C and PCP',
+    line: 'One locus by three methods, side by side, each map with MNase and the genes under it.',
+    assembly: 'S288C (R64); W303 for the Hi-C',
+    provenance: 'GEO GSE151553 · GSE217022 · GSM8476641',
+    detail:
+      'Three maps of chrXV:200–400 kb in one deck: micro-C XL of A364A at 1.6 kb (Costantino et al. 2020), ' +
+      'Hi-C of G1 cells carrying the M. mycoides chromosome at 1 kb (Meneu et al. 2025) and PCP — proximity ' +
+      'copy paste — of G1 cells at 1 kb (Delamarre et al.), drawn as counts since the file carries no ' +
+      'weights. The files share no resolution, so each is read at the one nearest the others. The Hi-C ' +
+      'strain is W303, whose chromosome XV lies within 26 bp of S288C’s here, so one window is one place ' +
+      'in all three; MNase and the S288C genes are under every map.',
+    files: [
+      'GSE151553_A364_merged.mcool',
+      '../meneu2025/HiC/HiC_Mmyco_G1.mcool',
+      'Yeast_PCP_GSM8476641_G1_rep1.mcool',
+      'Yeast_MNase.bw',
+      'S288c.gtf',
+    ],
+  },
+  {
+    section: 'Demo',
+    folder: 'store/human',
+    file: 'Human_chrX_splicing.metacooler.json',
     title: 'Splicing on human chrX',
     line: 'The 1D browser over hg19’s karyotype: a sashimi plot from reads, and two samples’ junctions on one axis.',
     assembly: 'hg19 (GRCh37)',
@@ -184,7 +208,7 @@ const DEMO: Array<{
       'declares the genome — at RPL10 in Xq28. Under the ideogram, the Ensembl gene model; one ' +
       'lymphoblastoid sample’s reads as depth, with the introns they skip drawn over it as arcs ' +
       'and counted; and STAR’s junction tables for a GBR and a YRI sample, both read against one ' +
-      'typed axis of 1 to 400 reads so their arcs compare. Pan out to FLNA to see the reverse ' +
+      'typed axis of 1 to 500 reads so their arcs compare. Pan out to FLNA to see the reverse ' +
       'strand’s arcs hang below the line, or type a band — Xq13 — in the locus box.',
     files: [
       'hg19_cytoBand.txt',
@@ -195,6 +219,39 @@ const DEMO: Array<{
     ],
   },
   {
+    section: 'Demo',
+    folder: 'store/gibcus2018',
+    file: 'Gibcus2018_mitosis.metacooler.json',
+    title: 'Mitotic chromosome formation',
+    line: 'Chicken DT40 cells from G2 into prometaphase: six Hi-C maps of the time course, in three decks.',
+    assembly: 'galGal5',
+    provenance: '4DN · Gibcus et al. 2018 · DOI 10.1126/science.aao6135',
+    detail:
+      'One synchronous release from a G2 block, at G2, 5, 10, 15, 30 and 60 min (Gibcus et al. 2018, from ' +
+      'the 4DN Data Portal), in three tabs: chromosome 7 whole at 250 kb, where the checkerboard of ' +
+      'compartments is gone by 10 min and a broad mitotic band takes the diagonal; 40 Mb of chromosome 1 ' +
+      'at 100 kb with each time point’s first eigenvector under its map; and 4 Mb of it at 25 kb, at G2, ' +
+      '5 and 60 min, with their insulation on one axis as the domains disappear.',
+    files: [
+      'G2_4DNFIT479GDR.mcool',
+      '5m_4DNFINSJ2GYV.mcool',
+      '10m_4DNFIYOEGHHV.mcool',
+      '15m_4DNFILKIISAU.mcool',
+      '30m_4DNFI165SFJU.mcool',
+      '60m_4DNFIWHQLZTL.mcool',
+      'G2_4DNFILLAMSTE_compartments.bw',
+      '5m_4DNFI9HASBHH_compartments.bw',
+      '10m_4DNFIG48YRMT_compartments.bw',
+      '15m_4DNFIY1KBU1S_compartments.bw',
+      '30m_4DNFIOCFXWMD_compartments.bw',
+      '60m_4DNFIX92O41_compartments.bw',
+      'G2_4DNFI1PRBI5L_diamond.bw',
+      '5m_4DNFIIAPL9WO_insulation.bw',
+      '60m_4DNFI12IF3LX_diamond.bw',
+    ],
+  },
+  {
+    section: 'Demo',
     folder: 'metagenomics/mock-community',
     file: 'Mock_microbial_community.metacooler.json',
     title: 'Mock microbial community',
@@ -207,17 +264,74 @@ const DEMO: Array<{
     files: ['Mock_microbial_community.metacool', 'Mock_microbial_community.mmetacool'],
     dev: 'metacool',
   },
+  {
+    section: 'Papers',
+    folder: 'store/chromlens_fig1',
+    file: 'Chromlens_fig1.metacooler.json',
+    title: 'Chromlens, Fig. 1',
+    line: 'Mouse ES-cell Hi-C at Sox2, with CTCF, H3K27ac and H3K4me3, and the insulation and 3D model the figure computed.',
+    assembly: 'mm10',
+    provenance: '4DN 4DNFI5QJNFAT · Kubo et al. 2021 · Huang et al. 2021',
+    detail:
+      'The session behind Fig. 1 of the Chromlens paper: in situ Hi-C of F123 mouse embryonic stem cells ' +
+      '(a 7-GB .mcool of 1.07 billion contacts) at chr3:34.2–35.2 Mb and 5 kb, with ChIP-seq of CTCF, ' +
+      'H3K27ac and H3K4me3 from the same cells and the mm10 genes. Beside it, what the app computed for ' +
+      'the figure: diamond insulation at 10 kb over the whole genome, and the pastis-NB model of this ' +
+      'window, in a cell of its own and coloured by H3K27ac.',
+    files: [
+      '4DNFI5QJNFAT.mcool',
+      'mm10_genes.gtf.gz',
+      '4DNFIFFXFV82.bw',
+      '4DNFIXE23VC7.bw',
+      '4DNFIQYJLKKH.bw',
+      '4DNFI5QJNFAT_10000.insulation-w10.bw',
+      '4DNFI5QJNFAT_5000.Sox2-locus.bed3d',
+    ],
+  },
+  {
+    section: 'Papers',
+    folder: 'store/meneu2025',
+    file: 'Meneu2025_bacterial_chromosomes.metacooler.json',
+    title: 'Bacterial chromosomes in a yeast nucleus',
+    line: 'Yeast carrying an M. mycoides or an M. pneumoniae chromosome: each with its nucleosomes, transcription and cohesin, then both genomes whole.',
+    assembly: 'W303 + M. mycoides; S288C + M. pneumoniae',
+    provenance: 'GEO GSE217022 · DOI 10.1126/science.adm9466',
+    detail:
+      'Meneu et al. 2025, in two tabs. First the two bacterial chromosomes in G2/M, side by side at 4 kb ' +
+      '— M. mycoides’s 1.2 Mb and M. pneumoniae’s 818 kb, each cell on its own chromosome — with the ' +
+      'genes, MNase (130–200 bp fragments), RNA-seq on both strands, and Pol II and Scc1 ChIP over input ' +
+      'under each. Then the two strains in G1, whole genome at 16 kb, each bacterial chromosome beside ' +
+      'the sixteen of yeast.',
+    files: [
+      'HiC/HiC_Mmyco_G2M.mcool',
+      'HiC/HiC_Mpneumo_G2M.mcool',
+      'HiC/HiC_Mmyco_G1.mcool',
+      'HiC/HiC_Mpneumo_G1.mcool',
+      'genome_references/W303_Mmmyco.gff3',
+      'genome_references/S288c_Mpneumo.gtf',
+      'MNase/MNase_Mmyco_rep1.130-200.CPM.bw',
+      'MNase/MNase_Mpneumo_rep1.130-200.CPM.bw',
+      'RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw',
+      'RNA/RNAseq_Mmyco_rep1.rev-CPM.bw',
+      'RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw',
+      'RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw',
+      'ChIP/PolII_Mmyco_rep1.vs-input.bw',
+      'ChIP/PolII_Mpneumo_rep1.vs-input.bw',
+      'ChIP/Scc1_Mmyco_rep1.vs-input.bw',
+      'ChIP/Scc1_Mpneumo_rep1.vs-input.bw',
+    ],
+  },
 ]
 
 /**
  * The data files under the figures, one row each.
  *
  * What the store lists *besides* the figures: every file the figures are made
- * of, and the two maps no figure uses, so a reader who wants the `.cool`
- * alone, the ATAC bigWig on their own map, or the metagenome as an
- * `.mmetacool` ladder, has a row to press. Each figure's card lists its own
- * rows under a fold (`ui/stores/GalleryView.ts`); the same tracks are also
- * offered beside the yeast map once it is open ({@link demoAnnotationsFor}).
+ * of, so a reader who wants the micro-C map alone, the MNase bigWig on their
+ * own map, or the metagenome as an `.mmetacool` ladder, has a row to press.
+ * Each figure's card lists its own rows under a fold (`ui/stores/GalleryView.ts`);
+ * a row shared by two figures — the yeast tracks, the Meneu paper's G1 Hi-C —
+ * is one row, under each.
  */
 const DEMO_DATA: Array<{
   folder: string
@@ -230,75 +344,34 @@ const DEMO_DATA: Array<{
   /** The dev feature this file belongs to, if it is one (§29). */
   dev?: DevFeature
 }> = [
-  {
-    folder: 'yeast',
-    file: 'Yeast_microC_G2M_1kb.cool',
-    label: 'Yeast micro-C, G2/M, 1 kb',
-    kind: 'map',
-    format: 'cool',
-    assembly: 'S288C (syn XIII-40)',
-    dataset: 'Yeast',
-  },
-  {
-    folder: 'yeast',
-    file: 'Yeast_hic.hic',
-    label: 'Yeast Hi-C, G2/M',
-    kind: 'map',
-    format: 'hic',
-    assembly: 'S288C (syn XIII-40)',
-    dataset: 'Yeast',
-  },
-  {
-    folder: 'yeast',
-    file: 'S288c_syn40-XIII.fa',
-    label: 'S288C sequence, synthetic XIII',
-    kind: 'genome',
-    format: 'fasta',
-    assembly: 'S288C (syn XIII-40)',
-    dataset: 'Yeast',
-  },
-  {
-    // The same sequence packed at two bits a base (§8.21). Published beside the
-    // FASTA rather than instead of it, because the two are read by different
-    // roads and both are worth having openable: a FASTA under the whole-read
-    // limit is held and searchable, a `.2bit` is read by range and is what an
-    // assembly hub names — which is why the hub example in the paste box points
-    // at this file.
-    folder: 'yeast',
-    file: 'Yeast_reference.2bit',
-    label: 'S288C sequence, as a .2bit',
-    kind: 'genome',
-    format: '2bit',
-    assembly: 'S288C (syn XIII-40)',
-    dataset: 'Yeast',
-  },
   ...(
     [
-      ['Yeast_annotations.gtf', 'Genes', 'gtf'],
-      ['Yeast_MNase.bw', 'MNase-seq', 'bigwig'],
-      ['Yeast_ATAC.bw', 'ATAC-seq', 'bigwig'],
-      ['Yeast_ATAC.narrowPeak', 'ATAC peaks', 'narrowPeak'],
-      ['Yeast_ChIP_Pol2-vs-input.bw', 'Pol II over input', 'bigwig'],
-      ['Yeast_ChIP_Pol2-vs-input.narrowPeak', 'Pol II peaks', 'narrowPeak'],
-      ['Yeast_RNA_fwd.bw', 'RNA-seq, forward strand', 'bigwig'],
-      ['Yeast_RNA_rev.bw', 'RNA-seq, reverse strand', 'bigwig'],
-      ['Yeast_Shotgun.bw', 'Shotgun coverage', 'bigwig'],
-      ['Yeast_expression.barChart', 'Expression by condition (synthetic)', 'barChart'],
-      ['Yeast_microC_anchors.bed', 'Micro-C anchors', 'bed'],
-      ['Yeast_microC_loops.tsv', 'Micro-C loop calls', 'loops'],
-      // The karyotype as a cytoBand (§8.22): arms, centromeres and the rDNA —
-      // no bands, since yeast chromosomes take no G-banding.
-      ['Yeast_cytobands.txt', 'Karyotype: arms, centromeres, rDNA', 'cytoBand'],
-      // STAR's junctions for nf-core's chrI test subset of GSE110004 (§8.23).
-      ['Yeast_RNA_junctions.SJ.out.tab', 'RNA-seq splice junctions, chrI subset', 'SJ.out.tab'],
+      ['GSE151553_A364_merged.mcool', 'Yeast micro-C, A364A', 'map', 'mcool'],
+      // The same counts as a Juicer .hic, which is the only contact map an
+      // assembly hub can name — the hub example in the paste box points at it.
+      ['GSE151553_A364_merged.hic', 'Yeast micro-C, A364A, as a .hic', 'map', 'hic'],
+      ['Yeast_PCP_GSM8476641_G1_rep1.mcool', 'Yeast PCP, G1', 'map', 'mcool'],
+      ['S288c.fa', 'S288C sequence', 'genome', 'fasta'],
+      // The same sequence packed at two bits a base (§8.21). Beside the FASTA
+      // rather than instead of it, because the two are read by different roads:
+      // a FASTA under the whole-read limit is held and searchable, a `.2bit` is
+      // read by range and is what an assembly hub names.
+      ['S288c.2bit', 'S288C sequence, as a .2bit', 'genome', '2bit'],
+      ['S288c.gtf', 'Genes', 'genome', 'gtf'],
+      ['Yeast_RNAseq.barChart', 'RNA-seq, wild type and mutant, CPM per gene', 'genome', 'barChart'],
+      ['Yeast_ATAC.bw', 'ATAC-seq', 'genome', 'bigwig'],
+      ['Yeast_MNase.bw', 'MNase-seq', 'genome', 'bigwig'],
+      ['Yeast_shotgun.bw', 'Shotgun coverage', 'genome', 'bigwig'],
+      ['Yeast_snps.vcf.gz', 'SNPs, 16 samples', 'genome', 'vcf'],
+      ['Yeast_microC_loops.bedpe', 'Micro-C loop calls', 'genome', 'bedpe'],
     ] as const
-  ).map(([file, label, format]) => ({
-    folder: 'yeast',
+  ).map(([file, label, kind, format]) => ({
+    folder: 'store/yeast',
     file,
     label,
-    kind: 'genome' as const,
+    kind,
     format,
-    assembly: 'S288C (syn XIII-40)',
+    assembly: 'S288C (R64)',
     dataset: 'Yeast',
   })),
   ...(
@@ -313,7 +386,7 @@ const DEMO_DATA: Array<{
       ['Geuvadis_chrX_GBR_ERR188428.junctions.bed', 'Splice junctions as regtools writes them', 'junctions.bed'],
     ] as const
   ).map(([file, label, format]) => ({
-    folder: 'human',
+    folder: 'store/human',
     file,
     label,
     kind: 'genome' as const,
@@ -321,24 +394,69 @@ const DEMO_DATA: Array<{
     assembly: 'hg19 (GRCh37)',
     dataset: 'Human, Geuvadis chrX',
   })),
-  {
-    folder: 'yeast-mpneumoniae',
-    file: 'Yeast_mpneumoniae_G2M.mcool',
-    label: 'Yeast with M. pneumoniae, G2/M',
-    kind: 'map',
-    format: 'mcool',
-    assembly: 'S288C + M. pneumoniae',
-    dataset: 'Yeast and M. pneumoniae',
-  },
-  {
-    folder: 'ecoli',
-    file: 'Ecoli.mcool',
-    label: 'E. coli Hi-C',
-    kind: 'map',
-    format: 'mcool',
-    assembly: 'E. coli',
-    dataset: 'E. coli',
-  },
+  ...(
+    [
+      ['G2', 'G2_4DNFIT479GDR', 'G2_4DNFILLAMSTE', 'G2_4DNFI1PRBI5L_diamond'],
+      ['5 min', '5m_4DNFINSJ2GYV', '5m_4DNFI9HASBHH', '5m_4DNFIIAPL9WO_insulation'],
+      ['10 min', '10m_4DNFIYOEGHHV', '10m_4DNFIG48YRMT', null],
+      ['15 min', '15m_4DNFILKIISAU', '15m_4DNFIY1KBU1S', null],
+      ['30 min', '30m_4DNFI165SFJU', '30m_4DNFIOCFXWMD', null],
+      ['60 min', '60m_4DNFIWHQLZTL', '60m_4DNFIX92O41', '60m_4DNFI12IF3LX_diamond'],
+    ] as const
+  ).flatMap(([when, map, e1, insulation]) => [
+    { file: `${map}.mcool`, label: `DT40 Hi-C, ${when}`, kind: 'map' as const, format: 'mcool' },
+    { file: `${e1}_compartments.bw`, label: `Compartments (E1), ${when}`, kind: 'genome' as const, format: 'bigwig' },
+    ...(insulation === null
+      ? []
+      : [{ file: `${insulation}.bw`, label: `Insulation, ${when}`, kind: 'genome' as const, format: 'bigwig' }]),
+  ]).map((row) => ({ ...row, folder: 'store/gibcus2018', assembly: 'galGal5', dataset: 'Gibcus et al. 2018' })),
+  ...(
+    [
+      ['HiC/HiC_Mmyco_G2M.mcool', 'Hi-C, M. mycoides, G2/M', 'map', 'mcool', 'W303 + M. mycoides'],
+      ['HiC/HiC_Mpneumo_G2M.mcool', 'Hi-C, M. pneumoniae, G2/M', 'map', 'mcool', 'S288C + M. pneumoniae'],
+      ['HiC/HiC_Mmyco_G1.mcool', 'Hi-C, M. mycoides, G1', 'map', 'mcool', 'W303 + M. mycoides'],
+      ['HiC/HiC_Mpneumo_G1.mcool', 'Hi-C, M. pneumoniae, G1', 'map', 'mcool', 'S288C + M. pneumoniae'],
+      ['genome_references/W303_Mmmyco.gff3', 'Genes, W303 and M. mycoides', 'genome', 'gff3', 'W303 + M. mycoides'],
+      ['genome_references/S288c_Mpneumo.gtf', 'Genes, S288C and M. pneumoniae', 'genome', 'gtf', 'S288C + M. pneumoniae'],
+      ['MNase/MNase_Mmyco_rep1.130-200.CPM.bw', 'MNase-seq, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['MNase/MNase_Mpneumo_rep1.130-200.CPM.bw', 'MNase-seq, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw', 'RNA-seq +, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['RNA/RNAseq_Mmyco_rep1.rev-CPM.bw', 'RNA-seq −, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw', 'RNA-seq +, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw', 'RNA-seq −, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['ChIP/PolII_Mmyco_rep1.vs-input.bw', 'Pol II over input, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['ChIP/PolII_Mpneumo_rep1.vs-input.bw', 'Pol II over input, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+      ['ChIP/Scc1_Mmyco_rep1.vs-input.bw', 'Scc1 over input, M. mycoides', 'genome', 'bigwig', 'W303 + M. mycoides'],
+      ['ChIP/Scc1_Mpneumo_rep1.vs-input.bw', 'Scc1 over input, M. pneumoniae', 'genome', 'bigwig', 'S288C + M. pneumoniae'],
+    ] as const
+  ).map(([file, label, kind, format, assembly]) => ({
+    folder: 'store/meneu2025',
+    file,
+    label,
+    kind,
+    format,
+    assembly,
+    dataset: 'Meneu et al. 2025',
+  })),
+  ...(
+    [
+      ['4DNFI5QJNFAT.mcool', 'Mouse ES-cell Hi-C (4DN)', 'map', 'mcool'],
+      ['mm10_genes.gtf.gz', 'Genes, UCSC mm10', 'genome', 'gtf'],
+      ['4DNFIFFXFV82.bw', 'CTCF ChIP-seq', 'genome', 'bigwig'],
+      ['4DNFIXE23VC7.bw', 'H3K27ac ChIP-seq', 'genome', 'bigwig'],
+      ['4DNFIQYJLKKH.bw', 'H3K4me3 ChIP-seq', 'genome', 'bigwig'],
+      ['4DNFI5QJNFAT_10000.insulation-w10.bw', 'Diamond insulation, 10 kb', 'genome', 'bigwig'],
+      ['4DNFI5QJNFAT_5000.Sox2-locus.bed3d', '3D model of the Sox2 locus, 5 kb', 'genome', 'bed3d'],
+    ] as const
+  ).map(([file, label, kind, format]) => ({
+    folder: 'store/chromlens_fig1',
+    file,
+    label,
+    kind,
+    format,
+    assembly: 'mm10',
+    dataset: 'Chromlens, Fig. 1',
+  })),
   {
     folder: 'metagenomics/mock-community',
     file: 'Mock_microbial_community.metacool',
@@ -362,19 +480,34 @@ const DEMO_DATA: Array<{
 ]
 
 /**
+ * A file's path under `demo/`, from the folder that names it — `..` stepped up
+ * out of, so a card's `../meneu2025/…` and the row the Meneu card lists are one
+ * path and one row.
+ */
+function under(folder: string, file: string): string {
+  const out: string[] = []
+  for (const part of `${folder}/${file}`.split('/')) {
+    if (part === '..') out.pop()
+    else if (part !== '' && part !== '.') out.push(part)
+  }
+  return out.join('/')
+}
+
+/**
  * The annotation files published beside a demo map, and where each belongs.
  *
  * Keyed by the map's file name rather than by its URL, because the URL depends
- * on where the app is served from and the pairing does not. All ten are on the
- * map's own assembly — same sixteen contig names, same lengths, `XIII-syn40`
- * included — which is exactly what makes them worth offering as one click: a
- * reader gets a complete, correct picture without hunting for ten URLs, and the
- * §8.2 overlap report has something to report success about.
+ * on where the app is served from and the pairing does not. All seven are on the
+ * map's own assembly — Ensembl's R64-1-1, whose `I`…`XVI` the map spells
+ * `chrI`…`chrXVI`, which §8.2 reads as the same names — which is exactly what
+ * makes them worth offering as one click: a reader gets a complete, correct
+ * picture without hunting for seven URLs, and the overlap report has something
+ * to report success about.
  *
- * Not the same thing as the sessions above, and both are worth having. A
- * session is a composed figure — six of the ten, placed, coloured and grouped —
- * and this is the whole shelf, offered to a reader who opened the map by URL
- * and wants the rest of it.
+ * Not the same thing as the figures above, and both are worth having. A figure
+ * is a composed session — the tracks placed, coloured and grouped — and this is
+ * the whole shelf, offered to a reader who opened the map on its own (its row
+ * under the yeast cards, or its URL) and wants the rest of it.
  */
 interface DemoAnnotation {
   file: string
@@ -388,22 +521,19 @@ interface DemoAnnotation {
  * The folder is recorded even though {@link demoAnnotationsFor} never reads it
  * — that function resolves against the *map's own URL*, which is the only thing
  * that also works for a copy of the folder served from somewhere else. It is
- * here for the test, which has to find these files on disk.
+ * here for the test, which has to find these files on disk or in the manifest.
  */
 const DEMO_ANNOTATIONS: Record<string, { folder: string; entries: DemoAnnotation[] }> = {
-  'Yeast_microC_G2M_1kb.cool': {
-    folder: 'yeast',
+  'GSE151553_A364_merged.mcool': {
+    folder: 'store/yeast',
     entries: [
-      { file: 'Yeast_annotations.gtf', label: 'genes' },
-      { file: 'Yeast_MNase.bw', label: 'MNase' },
+      { file: 'S288c.gtf', label: 'genes' },
+      { file: 'Yeast_RNAseq.barChart', label: 'RNA-seq' },
       { file: 'Yeast_ATAC.bw', label: 'ATAC' },
-      { file: 'Yeast_ChIP_Pol2-vs-input.bw', label: 'Pol II / input' },
-      { file: 'Yeast_RNA_fwd.bw', label: 'RNA +' },
-      { file: 'Yeast_RNA_rev.bw', label: 'RNA −' },
-      { file: 'Yeast_Shotgun.bw', label: 'shotgun' },
-      { file: 'Yeast_ATAC.narrowPeak', label: 'ATAC peaks' },
-      { file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak', label: 'Pol II peaks' },
-      { file: 'Yeast_microC_loops.tsv', label: 'loops' },
+      { file: 'Yeast_MNase.bw', label: 'MNase' },
+      { file: 'Yeast_shotgun.bw', label: 'shotgun' },
+      { file: 'Yeast_snps.vcf.gz', label: 'SNPs' },
+      { file: 'Yeast_microC_loops.bedpe', label: 'loops' },
     ],
   },
 }
@@ -424,8 +554,8 @@ export interface DemoAnnotationLink extends DemoAnnotation {
  * outright rather than being concatenated.
  *
  * The table itself is matched on the file name at the end of the URI, so it
- * works for the bucket, for a local copy of `demo/yeast/` served from anywhere
- * else, and for a fork publishing the same folder under its own name — and not
+ * works for the bucket, for a local copy of `demo/store/yeast/` served from
+ * anywhere else, and for a fork publishing the same folder under its own name — and not
  * for a *local* file of the same name, which would be someone else's data under
  * a familiar name.
  */
@@ -433,10 +563,13 @@ export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
   const registered = shelves.get(splitUri(uri).path)
   if (registered !== undefined) return registered.map((link) => ({ ...link }))
   if (!/^https?:\/\//i.test(uri)) return []
-  const name = uri.split('?')[0].split('#')[0].split('/').pop() ?? ''
+  // The file half: an `.mcool` is opened at one of its entries, and the name
+  // the table is keyed by is the file's, not `1600`.
+  const file = splitUri(uri).path.split('?')[0].split('#')[0]
+  const name = file.split('/').pop() ?? ''
   const shelf = DEMO_ANNOTATIONS[name]
   if (shelf === undefined) return []
-  const base = uri.slice(0, uri.length - name.length)
+  const base = file.slice(0, file.length - name.length)
   return shelf.entries.map((entry) => ({ ...entry, url: `${base}${entry.file}` }))
 }
 
@@ -445,7 +578,7 @@ export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
  *
  * A **restored session already names the tracks it wants** and is a moment away
  * from putting them on screen. Offered anyway, the button appeared under rows
- * that were already appearing and proposed ten more, most of them the same files
+ * that were already appearing and proposed seven more, most of them the same files
  * a second time. `restoring` covers an imported workspace, a `?config=` link and
  * a plain reload alike, because all three arrive the same way.
  */
@@ -461,18 +594,18 @@ export function demoAnnotationsToOffer(
  * checks they are on disk — and so for the sync that puts them on the bucket.
  */
 export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOTATIONS).flatMap(
-  (shelf) => shelf.entries.map((entry) => `${shelf.folder}/${entry.file}`),
+  (shelf) => shelf.entries.map((entry) => under(shelf.folder, entry.file)),
 )
 
 /**
  * The workspace files this module offers, as their paths under `demo/`, for the
  * test that reads every one of them off disk and opens what it names.
  */
-export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder}/${entry.file}`)
+export const DEMO_FILES: readonly string[] = DEMO.map((entry) => under(entry.folder, entry.file))
 
 /** The data files the store lists, as their paths under `demo/`, for the same test. */
-export const DEMO_DATA_FILES: readonly string[] = DEMO_DATA.map(
-  (entry) => `${entry.folder}/${entry.file}`,
+export const DEMO_DATA_FILES: readonly string[] = DEMO_DATA.map((entry) =>
+  under(entry.folder, entry.file),
 )
 
 /**
@@ -498,12 +631,14 @@ function demoBase(): string {
  * The columns the lab's store declares.
  *
  * Every card and every file row is drawn from these, so what a column is
- * called here is what the gallery reads: `provenance` and `detail` are the
- * card's chip and its fold, `format` and `dataset` are the file rows' chip and
- * their grouping. A store somebody else writes may call its columns anything;
- * this one is read by a front that knows it.
+ * called here is what the gallery reads: `section` is the heading a card stands
+ * under, `provenance` and `detail` are the card's chip and its fold, `format`
+ * and `dataset` are the file rows' chip and their grouping. A store somebody
+ * else writes may call its columns anything; this one is read by a front that
+ * knows it.
  */
 const DEMO_COLUMNS = [
+  { key: 'section', label: 'Section' },
   { key: 'assembly', label: 'Assembly' },
   { key: 'dataset', label: 'Dataset' },
   { key: 'format', label: 'Format' },
@@ -512,7 +647,7 @@ const DEMO_COLUMNS = [
 ]
 
 /**
- * The lab's store, inline: the figures, then the data files.
+ * The lab's store, inline: the figures, under their sections, then the data files.
  *
  * Inline rather than fetched because it is the one store that costs no request
  * and the only one that is certainly there (§24.2). Every URI is absolute
@@ -537,24 +672,25 @@ export function demosStore(): StoreFile {
       ...DEMO.filter(shown).map(
         (entry): StoreEntry => ({
           label: entry.title,
-          uri: `${base}${entry.folder}/${entry.file}`,
+          uri: `${base}${under(entry.folder, entry.file)}`,
           kind: 'workspace',
           note: entry.line,
           fields: {
+            section: entry.section,
             assembly: entry.assembly,
             provenance: entry.provenance,
             detail: entry.detail,
             // The files the figure is made of, as the URIs of the rows below,
             // so the card lists them under its fold without a second lookup.
             // `|`-joined because a field is one string; no URI carries a bar.
-            files: entry.files.map((file) => `${base}${entry.folder}/${file}`).join('|'),
+            files: entry.files.map((file) => `${base}${under(entry.folder, file)}`).join('|'),
           },
         }),
       ),
       ...DEMO_DATA.filter(shown).map(
         (entry): StoreEntry => ({
           label: entry.label,
-          uri: `${base}${entry.folder}/${entry.file}`,
+          uri: `${base}${under(entry.folder, entry.file)}`,
           kind: entry.kind,
           fields: { assembly: entry.assembly, dataset: entry.dataset, format: entry.format },
         }),
@@ -681,14 +817,15 @@ export function clearShelves(): void {
  *
  * Which means they are held to the same bar as any other demo: every URL is one
  * of {@link DEMO_DATA_FILES} or {@link DEMO_ANNOTATION_FILES}, so the test that
- * reads those off disk covers these too, and neither example can come to name a
- * file the bucket does not have.
+ * checks those covers these too, and neither example can come to name a file
+ * the bucket does not have.
  *
- * The hub is an **assembly hub**: it names the demo's own `.2bit` through
+ * The hub is an **assembly hub**: it names the store's own `.2bit` through
  * `twoBitPath`, which is the only way a hub carries its own sequence and the
- * rung of §24.10's ladder worth demonstrating. It is this exact text because it
- * is the one a reader wrote and checked against the bucket, rather than one
- * composed here and argued about — and the URLs are built from
+ * rung of §24.10's ladder worth demonstrating. It is the text a reader wrote and
+ * checked against the bucket, rather than one composed here and argued about,
+ * moved onto the store's R64 files with the rest of the yeast demo — the same
+ * genome line, the same composite of two, the same map — and the URLs are built from
  * {@link DEMO_BUCKET} rather than from {@link demoBase} for a reason that only
  * shows up under `DEMO_BASE`: a local copy of `demo/` has these files, but the
  * example is a thing to *press*, and a base that pointed it at a directory
@@ -705,9 +842,9 @@ export function exampleHubText(): string {
     'longLabel Yeast demo data from RSG lab',
     'useOneFile on',
     '',
-    'genome sacCer3_syn40',
+    'genome R64-1-1',
     'organism Saccharomyces cerevisiae',
-    `    twoBitPath ${DEMO_BUCKET}yeast/Yeast_reference.2bit`,
+    `    twoBitPath ${DEMO_BUCKET}store/yeast/S288c.2bit`,
     '',
     'track signal',
     'compositeTrack on',
@@ -719,20 +856,20 @@ export function exampleHubText(): string {
     '    parent signal on',
     '    shortLabel MNase',
     '    longLabel Nucleosome occupancy',
-    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_MNase.bw`,
+    `    bigDataUrl ${DEMO_BUCKET}store/yeast/Yeast_MNase.bw`,
     '    type bigWig',
     '',
     '    track atac',
     '    parent signal on',
     '    shortLabel ATAC',
     '    longLabel ATAC-seq accessibility',
-    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_ATAC.bw`,
+    `    bigDataUrl ${DEMO_BUCKET}store/yeast/Yeast_ATAC.bw`,
     '    type bigWig',
     '',
     'track contacts',
     'shortLabel Micro-C map',
     'longLabel A contact map, which opens through the map door',
-    `bigDataUrl ${DEMO_BUCKET}yeast/Yeast_hic.hic`,
+    `bigDataUrl ${DEMO_BUCKET}store/yeast/GSE151553_A364_merged.hic`,
     'type hic',
     '',
   ].join('\n')
@@ -746,7 +883,7 @@ export function exampleHubText(): string {
  * one line worth reading.
  */
 export function exampleStoreText(): string {
-  const at = `${demoBase()}yeast/`
+  const at = `${demoBase()}store/yeast/`
   return `${JSON.stringify(
     {
       kind: STORE_KIND,
@@ -759,11 +896,11 @@ export function exampleStoreText(): string {
       ],
       entries: [
         {
-          label: 'Yeast micro-C, G2/M, 1 kb',
-          uri: `${at}Yeast_microC_G2M_1kb.cool`,
+          label: 'Yeast micro-C, A364A',
+          uri: `${at}GSE151553_A364_merged.mcool`,
           kind: 'map',
           note: 'A contact map, which opens through the map door',
-          fields: { assay: 'Micro-C', assembly: 'sacCer3_syn40' },
+          fields: { assay: 'Micro-C', assembly: 'R64-1-1' },
           tracks: [{ label: 'MNase', url: `${at}Yeast_MNase.bw` }],
         },
         {
@@ -771,7 +908,7 @@ export function exampleStoreText(): string {
           uri: `${at}Yeast_MNase.bw`,
           kind: 'genome',
           note: 'A bigWig, which opens as a browser over its own genome',
-          fields: { assay: 'MNase-seq', assembly: 'sacCer3_syn40' },
+          fields: { assay: 'MNase-seq', assembly: 'R64-1-1' },
         },
       ],
     },
@@ -783,14 +920,14 @@ export function exampleStoreText(): string {
 /**
  * Every URL the two examples name, as their paths under `demo/`.
  *
- * For the test that reads the published demo files off disk: an example that
- * names a file the bucket does not have is an example that fails on its first
- * press, which is the one thing worse than no example at all.
+ * For the test that reads the published demo files off disk, or off the store's
+ * manifest: an example that names a file the bucket does not have is an example
+ * that fails on its first press, which is the one thing worse than no example at all.
  */
 export const EXAMPLE_FILES: readonly string[] = [
-  'yeast/Yeast_reference.2bit',
-  'yeast/Yeast_MNase.bw',
-  'yeast/Yeast_ATAC.bw',
-  'yeast/Yeast_hic.hic',
-  'yeast/Yeast_microC_G2M_1kb.cool',
+  'store/yeast/S288c.2bit',
+  'store/yeast/Yeast_MNase.bw',
+  'store/yeast/Yeast_ATAC.bw',
+  'store/yeast/GSE151553_A364_merged.hic',
+  'store/yeast/GSE151553_A364_merged.mcool',
 ]
