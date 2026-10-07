@@ -51,7 +51,7 @@ import {
   type FramedRegion,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
-import { icon } from './icons'
+import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -297,6 +297,54 @@ export function zoomedRegion(
 }
 
 /**
+ * The window on screen, moved along its sequence by `fraction` of its own width —
+ * as a region string.
+ *
+ * Negative is upstream, toward base 1; the buttons beside `go` move half a
+ * window each way (§5.4), so what was at one edge is in the middle after a press.
+ * Against an end of the sequence the window slides in to stop *at* the end
+ * rather than overhanging it, and `null` — which greys the button — when it is
+ * already there, or already the whole sequence.
+ *
+ * **On a circle a press stops at the ends, as on a line**, for the reason the
+ * zoom steps do (§8.15): `ori` and a window typed across the origin are the ways
+ * to the other side of it. A window *already* across the origin moves round the
+ * circle, since it has no end to stop against.
+ */
+export function shiftedRegion(
+  window: FramedRegion,
+  fraction: number,
+  options: { circular?: boolean } = {},
+): string | null {
+  const { contig, length } = window
+  const round = options.circular === true && !(window.end > window.start)
+  const span =
+    window.end > window.start
+      ? window.end - window.start
+      : round
+        ? length - window.start + window.end
+        : Number.NaN
+  if (!(span > 0) || !(length > 0) || span >= length || fraction === 0) return null
+  const by = Math.round(span * fraction)
+  if (by === 0) return null
+
+  if (round) {
+    const wrap = (at: number): number => ((at % length) + length) % length
+    return `${contig}:${wrap(window.start + by)}-${wrap(window.start + by + span)}`
+  }
+
+  const start = Math.min(Math.max(0, window.start + by), length - span)
+  if (start === window.start) return null
+  return `${contig}:${start}-${start + span}`
+}
+
+/** The two half-window moves beside `go`, upstream first. */
+export const PAN_STEPS: ReadonlyArray<{ fraction: number; upstream: boolean }> = [
+  { fraction: -0.5, upstream: true },
+  { fraction: 0.5, upstream: false },
+]
+
+/**
  * One zoom step, as a button: the mark for the direction and the factor beside it.
  *
  * Exported with {@link ZOOM_STEPS} so the 1D browser's bar draws the same four
@@ -361,6 +409,8 @@ export class RegionView {
    * has nowhere to go.
    */
   private readonly zooms: HTMLButtonElement[]
+  /** The two half-window moves, in {@link PAN_STEPS} order, greyed by {@link syncZoom}. */
+  private readonly pans: HTMLButtonElement[]
   private readonly matched: HTMLElement
   private readonly title: HTMLElement
   private readonly problem: HTMLElement
@@ -447,6 +497,16 @@ export class RegionView {
     // a control that moves the view reading as quietly as a label is a control
     // nobody finds. The mark says which way and the number says how far.
     this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.stepZoom(step.factor)))
+    // Bare marks, bordered like `go` beside them: an arrow along the sequence
+    // says which way, and half a window is the one distance there is.
+    this.pans = PAN_STEPS.map((step) =>
+      iconButton(
+        step.upstream ? 'move-left' : 'move-right',
+        step.upstream ? 'Move half a window upstream' : 'Move half a window downstream',
+        () => this.stepPan(step.fraction),
+        { class: 'btn btn-icon btn-pan', size: 14 },
+      ),
+    )
     this.matched = el('span', { class: 'match-kind' })
     // One line under the title, with the whole of it in a tooltip where it is cut.
     titleWhenCut(this.matched)
@@ -541,6 +601,13 @@ export class RegionView {
             // Enter and the button mean the same thing and a hit list the
             // button could not see would make them disagree about what "go" is.
             this.search.el,
+            // **Half a window upstream and downstream**, straight after `go`
+            // because they are the same act — a different range, through the
+            // ordinary navigation — with the box saying where it lands. The
+            // drag on the map moves the *picture* and stops at the edge of what
+            // was read; these re-read, so a reader at a locus can walk along
+            // the sequence without retyping it.
+            el('div', { class: 'pan-steps' }, ...this.pans),
             // **The zoom steps, beside the box, because they write into the box.**
             // The scroll wheel on the map is a zoom of the *picture* — the same
             // block, drawn larger or smaller — and past the edge of what was read
@@ -614,6 +681,20 @@ export class RegionView {
     if (target !== null) this.props.onChangeRegion(target)
   }
 
+  /** One press of a pan step: half a window along the sequence, as a navigation. */
+  private stepPan(fraction: number): void {
+    const target = this.panTarget(fraction)
+    if (target !== null) this.props.onChangeRegion(target)
+  }
+
+  /** Where a pan would take the view, refused off the diagonal as a zoom is. */
+  private panTarget(fraction: number): string | null {
+    if (this.props.region2 !== undefined) return null
+    const framed = this.panel.framedRegion()
+    if (framed === null) return null
+    return shiftedRegion(framed, fraction, { circular: this.props.circular?.on === true })
+  }
+
   /**
    * Where a press would take the view, or `null` when it would take it nowhere.
    *
@@ -647,6 +728,21 @@ export class RegionView {
             : 'This window is already at the file’s own bin size'
           : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ` +
             regionLabel(target)
+    })
+    PAN_STEPS.forEach((step, at) => {
+      const node = this.pans[at]
+      if (node === undefined) return
+      const target = this.panTarget(step.fraction)
+      const way = step.upstream ? 'upstream' : 'downstream'
+      const title =
+        target === null
+          ? this.props.region2 !== undefined
+            ? 'A block of two sequences has no one range to move along'
+            : `There is nothing further ${way} on this sequence`
+          : `Move half a window ${way}: ${regionLabel(target)}`
+      node.disabled = target === null
+      node.title = title
+      node.setAttribute('aria-label', title)
     })
   }
 

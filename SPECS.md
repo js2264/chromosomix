@@ -893,6 +893,17 @@ or one press past the locus — and they are ordinary bordered buttons like ever
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
 
+**Two arrows straight after `go` move the window half its own width along the sequence**, upstream
+(`←`, Lucide's *move-left*) and downstream (`→`, *move-right*), so a reader standing on a locus can
+walk along the chromosome without retyping it: what was at one edge is in the middle after a press,
+and two presses are one window over. The drag on the map moves the *picture* and stops at the edge of
+what was read; these, like the zoom steps, are a different **range**, re-read, through the ordinary
+navigation, so each press is a history entry. Against an end of the sequence the window slides in to
+stop at the end, keeping its width, and the arrow greys once there is nothing further that way — as
+both do on the whole sequence and on a `contig × contig` block, which has no one range to move. On a
+declared circle (§8.15) they stop at the ends as on a line, for the zoom steps' reason; a window
+already across the origin moves round it. Each names the window it would open in its tooltip.
+
 **Every locus bar zooms in these same four steps**, and from the same pair — the region bar's and
 the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
 a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
@@ -926,7 +937,8 @@ has to say which of the two these are.
 
 **And there is no back arrow in the bar, and no map/tracks cycle button.** Both were controls with
 a shorter road already beside them: going back is the browser's own back, which the bar's
-navigation has always fed, and *tracks only / map only / both* is the eye beside the map in the
+navigation has always fed — and which the header carries as a button for every view (§5.5), so it
+is one control for the window rather than one per view — and *tracks only / map only / both* is the eye beside the map in the
 column that lists what is drawn — where every other thing on screen is shown and hidden, one row at
 a time, by the control that names it. A second way to do a thing is not a convenience when the
 first way is a row the reader is already looking at; it is a control to learn, in the bar that has
@@ -962,6 +974,20 @@ from the modal's own right edge.
 `genomes table → genome → contig → region`, with a breadcrumb whose segments are clickable to go back
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
+
+**Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
+*undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
+entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
+stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
+browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
+is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
+does. After them in the same group, in this order, are the three that take the work out of the
+window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
+sit on the far side of the command bar, away from the controls a reader's hand is already among; the
+far right is now only about the window itself — theme, shortcuts, source, about. Where the header
+cannot hold the groups beside the command bar, it lets the bar's sentence shorten first; in a window
+narrower than 60rem the last group goes under the first, without its divider, rather than under the
+bar. An embed has no header and no buttons for these (§21).
 
 `<` and `>` step to the neighbouring genome, in the table's order, on a genome view, and to the
 neighbouring sequence, in the file's own order, on a region and in the 1D browser (§5.8); the `‹ ›`
@@ -9537,9 +9563,10 @@ The **day is a separator across the list** rather than a column, carrying its ow
 copy, because "what did I run on Tuesday" is the question this panel exists to answer and one press
 should be the whole of the answer.
 
-The button is in the header, immediately **before the theme toggle**: to its left are the two other
-things that take something out of this window — a link, and the workspace as a file — and everything
-to its right is about the window rather than the work in it. **Control and the key left of `1`**
+The button is in the header, **last of the group after the four panels** (§5.5): back and forward,
+then the two other things that take something out of this window — a link, and the workspace as a
+file — then this. Everything on the far right of the header is about the window rather than the work
+in it. **Control and the key left of `1`**
 opens it — ctrl-` on QWERTY, the chord every terminal in every editor is behind, and Ctrl-² on an
 AZERTY PC. Control on a Mac as well, not ⌘: ⌘` is the system's, which walks a program's windows and
 never reaches the page. The key alone folds the Files column (§20.4); the console used to have it

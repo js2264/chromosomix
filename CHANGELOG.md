@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Half a window upstream and downstream, beside `go` on a region (§5.4).** Two arrows straight
+  after the locus box's `go` move the window half its own width along the sequence, re-read as a
+  navigation, so a reader at a locus can walk the chromosome without retyping it. They slide in to
+  stop at an end and grey once there, on the whole sequence and on a block of two sequences, and name
+  the window they would open in their tooltips.
+
+- **Back and forward in the header (§5.5).** The browser's own back and forward as two buttons, past
+  a divider after the four panels' toggles, greyed where the browser says there is nowhere to go.
+
 - **A model's PDF is lit, as its PNG is (§25.7).** Every bead is a shaded sphere, a PDF radial
   shading from a highlight to a shadowed rim, and the tube and the sticks are drawn band by band
   from the rim in shadow to a highlight on the side the screen's key light comes from, so the
@@ -882,6 +891,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **The link, the save button and the console moved next to back and forward (§5.5, §23).** They
+  follow the two history buttons in the group after the panels, and the right of the header holds
+  only theme, shortcuts, source and about. The command bar's sentence is cut short on one line rather
+  than broken over two where the left side needs the room, and below 60rem the header's last group
+  wraps under the first instead of running under the bar.
 
 - **A whole chromosome is read and drawn one bin to a pixel up to 16,384 bins a side (§7.2, §9).**
   The raster's cap goes from 4,096 to 16,384, so yeast chromosome IV at 100 bp — 15,320 bins — opens
