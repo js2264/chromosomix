@@ -212,5 +212,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 97,
+      "commit": "cd3c870",
+      "title": "Add RSG lab demo store and Figure 1 manuscript materials",
+      "branch": "claude/manuscript-figure-1-proposal-5b4edn",
+      "date": "2026-10-07T18:07:51Z"
+    }
+  ]
 }
