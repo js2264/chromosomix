@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 98,
+      "commit": "69b5e4f",
+      "title": "Hide and show the reader's marks, one or all, on every map, track and model (§8.1, §25.5)",
+      "branch": "ccr-557ba684-hx43tn",
+      "date": "2026-10-07T23:02:44Z"
+    },
+    {
       "number": 97,
       "commit": "cd3c870",
       "title": "Add RSG lab demo store and Figure 1 manuscript materials",
