@@ -1996,6 +1996,7 @@ export class MapPanel {
       ceiling: { rows: result.rowExtent, cols: result.colExtent },
       binsize: info.binsize ?? 1,
       rungs: rungsOf(info.entries),
+      budget: () => this.props.budgetBytes(),
       read: (rows, cols, rung) => {
         const own = this.client.cancellable<'matrix'>({
           kind: 'matrix',

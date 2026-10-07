@@ -22,18 +22,17 @@
 /**
  * The most units either axis of the overview may have, whatever the budget.
  *
- * `RASTER_MAX_DIM`, because the renderer draws no more than that per axis and
- * anything above it is pooled a second time on the way to the screen — flat,
- * four units to a pixel, with no idea where the genome boundaries are. That is
- * the straddling `poolUnits` is here to prevent, undone one step later: the
- * pointer resolves one genome and the pixel is the largest of the sixteen pairs
- * under it. It used to be 16,384, which was a *memory* bound — a 16,384²
- * `Float64Array` is 2 GB — and memory was never the binding constraint on a
- * picture that is at most four thousand pixels wide.
+ * `POOLED_CELL_CAP`, the bound every whole-file read keeps. It used to be
+ * `RASTER_MAX_DIM`, on the argument that anything wider is pooled a second time
+ * on the way to the screen — flat, with no idea where the genome boundaries are.
+ * That still holds, but the raster is now 16,384 wide so that a single
+ * chromosome can be read bin for bin, and an overview that followed it would be
+ * a 2 GB accumulator: memory is the binding constraint again, as it was when
+ * this was last 16,384, and the whole-file picture keeps the 4,096 it has.
  */
-import { RASTER_MAX_DIM } from '../render/heatmap'
+import { POOLED_CELL_CAP } from '../metacooler/pooling'
 
-export const OVERVIEW_HARD_CAP = RASTER_MAX_DIM
+export const OVERVIEW_HARD_CAP = POOLED_CELL_CAP
 
 /**
  * Bytes one unit of the accumulator costs, per unit of the other axis.
@@ -48,10 +47,10 @@ const BYTES_PER_UNIT_PAIR = 8
 /**
  * What the *render* side costs, whatever the unit count.
  *
- * Bounded by `RASTER_MAX_DIM`: pooled values, RGBA, canvas backing store and
- * the transient auto-range buffer, at 4 B each over at most 4096².
+ * Bounded by {@link OVERVIEW_HARD_CAP}: pooled values, RGBA and canvas backing
+ * store, 4 B each over at most that many units a side (`estimateBlockBytes`).
  */
-const RENDER_CEILING_BYTES = 4 * 4096 * 4096
+const RENDER_CEILING_BYTES = 12 * OVERVIEW_HARD_CAP * OVERVIEW_HARD_CAP
 
 /**
  * The most units this machine will draw an overview of.

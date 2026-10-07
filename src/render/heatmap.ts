@@ -81,14 +81,18 @@ export interface Raster {
 /**
  * The largest raster the renderer will build, per axis.
  *
- * Chosen well below every browser's canvas cap (Firefox stops at 32,767 px per
- * side, Chrome's *area* cap is 2^28 px) and above any display: 4096 px is more
- * than 4K across, so pooling above it costs no visible detail at fit zoom, and
- * a zoomed-in view of a pooled block re-rasterises nothing because pooling is
- * per matrix, not per view. It caps the two allocations that scale with the
- * *picture* rather than with the data: 67 MB of RGBA and 67 MB of canvas.
+ * Chosen at or below every desktop browser's canvas cap (Firefox stops at
+ * 32,767 px per side, Chrome's *area* cap is 2^28 px, which is exactly 16,384²).
+ * Not a display bound: the raster is drawn once and then scaled, so a zoomed-in
+ * view of it re-rasterises nothing, and a raster this wide is what lets a whole
+ * yeast chromosome IV be read at 100 bp (15,320 bins) and then zoomed to single
+ * bins without another read. It used to be 4,096, which pooled that chromosome
+ * to 400 bp. What it caps are the allocations that scale with the *picture*:
+ * at the cap, 1 GB each of pooled values, RGBA and canvas — which is why how
+ * close a block may come to it is the memory guard's call
+ * ({@link denseCellCap}), not this constant's.
  */
-export const RASTER_MAX_DIM = 4096
+export const RASTER_MAX_DIM = 16384
 
 /** Matrix cells per raster pixel needed to fit one axis of `n` in the cap. */
 export function rasterStride(n: number, maxDim = RASTER_MAX_DIM): number {

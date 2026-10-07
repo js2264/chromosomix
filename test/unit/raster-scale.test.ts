@@ -265,8 +265,9 @@ describe('the shape of a raster pixel', () => {
   it('is square when the caller says the two axes are one measure', () => {
     // 9,281 × 4,039 is E. coli at 1 kb, turned: the width needs pooling by three
     // and the height by one, and a raster of 4 × 2 cells per pixel is what the
-    // reader saw as aliasing while scrolling into it.
-    const pooled = poolDisplay(band(9281, 4039), scale, { isotropic: true })
+    // reader saw as aliasing while scrolling into it — under the 4,096 cap it
+    // was measured at, which is named here because the shape is what is tested.
+    const pooled = poolDisplay(band(9281, 4039), scale, { isotropic: true, maxDim: 4096 })
     expect(pooled.strideX).toBe(pooled.strideY)
     expect(pooled.strideX).toBe(3)
     expect(pooled.isotropic).toBe(true)
@@ -275,7 +276,7 @@ describe('the shape of a raster pixel', () => {
   it('is per-axis otherwise, because a genome pair has two sequences in it', () => {
     // 600 × 8,141 — the shape of every pair involving a large MAG. One stride
     // would halve the 600-bin axis to suit the axis that needed pooling.
-    const pooled = poolDisplay(band(600, 8141), scale)
+    const pooled = poolDisplay(band(600, 8141), scale, { maxDim: 4096 })
     expect(pooled.strideX).toBe(1)
     expect(pooled.strideY).toBe(2)
     expect(pooled.isotropic).toBe(false)

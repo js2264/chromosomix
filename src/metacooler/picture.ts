@@ -3,7 +3,7 @@
  * up to 16,384 cells a side, one byte a cell.
  *
  * It exists for one reason: a reader cannot curate a genome they cannot see,
- * and the 4,096-cell ceiling every other map keeps (`RASTER_MAX_DIM`) is a
+ * and the 4,096-cell ceiling a whole-genome map keeps (`POOLED_CELL_CAP`) is a
  * cell of 760 kb on a human genome — larger than most of the contigs a curator
  * has come to move. So the stage keeps a picture of its own, four times finer,
  * and keeps it **in the file's order**: an edit is then a new mapping from the

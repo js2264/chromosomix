@@ -24,7 +24,7 @@ import {
   type StorageMode,
 } from '../constants'
 import { yieldToEventLoop } from '../async'
-import { rasterStride } from '../render/heatmap'
+import { RASTER_MAX_DIM, rasterStride } from '../render/heatmap'
 import { ViewerError } from '../errors'
 import type { Hdf5Handle } from '../h5/api'
 import { dtypeKind } from '../h5/typed'
@@ -133,10 +133,8 @@ export function checkDenseSize(nRows: number, nCols: number, hint: string): void
  * things that scale with the selection and one that does not:
  *
  * - the dense values, `4 B` per cell, held for as long as the view is open;
- * - the raster: pooled values, RGBA, canvas backing store and the transient
- *   auto-range buffer, `16 B` per raster pixel — and the raster is pooled at
- *   {@link RASTER_MAX_DIM}, so this is a constant ceiling rather than something
- *   that grows;
+ * - the raster: pooled values, RGBA and canvas backing store, `12 B` per raster
+ *   pixel, pooled at {@link RASTER_MAX_DIM} so it stops growing there;
  * - the pixel read, one bounded window at a time
  *   ({@link forEachPixelSpan}), which is why there is no `nnz` term any more.
  *
@@ -152,12 +150,13 @@ export function estimateBlockBytes(nRows: number, nCols: number): number {
   const cells = nRows * nCols
   const rasterPixels =
     Math.ceil(nRows / rasterStride(nRows)) * Math.ceil(nCols / rasterStride(nCols))
-  // 16 B per raster pixel, not 8: the pooled `Float32Array`, the RGBA bytes and
-  // the canvas backing store are all live at once (4 each), and the auto-range
-  // buffer is a fourth, transient, over the *pooled* values rather than over
-  // the matrix. All four are bounded by `RASTER_MAX_DIM`, so this whole term is
-  // a ceiling of about 268 MB however large the selection is.
-  return cells * 4 + rasterPixels * 16 + PIXEL_CHUNK_BYTES
+  // 12 B per raster pixel: the pooled `Float32Array`, the RGBA bytes and the
+  // canvas backing store are all live at once, 4 each. The auto-range buffer
+  // this used to charge as a fourth is not live beside them: it holds only the
+  // finite contacts, and it is garbage before the RGBA is allocated
+  // (`colorize`). Measured on yeast IV at 100 bp, 15,320² cells, the tab held
+  // 2.9 GB where 16 B had estimated 4.7 GB and refused it.
+  return cells * 4 + rasterPixels * 12 + PIXEL_CHUNK_BYTES
 }
 
 /**
@@ -172,6 +171,24 @@ export function deviceDenseBudgetBytes(): number {
   return denseBudgetFor(
     typeof reported === 'number' && reported > 0 ? reported : DEVICE_MEMORY_FALLBACK_GIB,
   )
+}
+
+/**
+ * The widest window, in bins a side, this machine reads unpooled.
+ *
+ * A window up to this wide is read bin for bin through the dense path, which
+ * {@link checkBrowserDenseSize} guards; a wider one is pooled to `POOLED_CELL_CAP`
+ * cells by the reader. Derived from the same budget so that the two cannot
+ * disagree: a window this wide always passes the guard, and the picture never
+ * turns into a refusal where a pooled one would have drawn. Bounded by
+ * {@link RASTER_MAX_DIM}, past which the raster would pool it anyway — on a
+ * laptop reporting 8 GiB that bound is what binds, and a whole yeast
+ * chromosome IV at 100 bp (15,320 bins) is read whole.
+ */
+export function denseCellCap(budgetBytes = deviceDenseBudgetBytes()): number {
+  // Square, at one raster pixel per cell: 4 B of values and 12 of raster.
+  const side = Math.floor(Math.sqrt(Math.max(0, budgetBytes - PIXEL_CHUNK_BYTES) / 16))
+  return Math.max(1, Math.min(RASTER_MAX_DIM, side))
 }
 
 /**

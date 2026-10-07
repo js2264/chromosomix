@@ -870,6 +870,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A whole chromosome is read and drawn one bin to a pixel up to 16,384 bins a side (§7.2, §9).**
+  The raster's cap goes from 4,096 to 16,384, so yeast chromosome IV at 100 bp — 15,320 bins — opens
+  whole at 100 bp and a zoom reaches single bins without another read, where it was drawn at 400 bp.
+  How wide a window is read at its own bins is the memory guard's call, so a smaller machine reads a
+  smaller square and pools the rest rather than refusing. To afford it, a block's memory budget is
+  three quarters of what the device reports instead of half (6.4 GB on a machine reporting 8), and the
+  raster is costed at 12 B a pixel instead of 16 — the auto-range buffer it also charged is never live
+  beside the others. It costs time and memory: chromosome IV opens in about 45 s and 2.9 GB where it
+  took 9 s and 235 MB. A chromosome that used to be pooled and read from a coarser rung of a ladder is
+  now read at the open one, so mouse chr1 at 25 kb takes the open rung's 4.3 s instead of 1.3 s, for a
+  picture twice as fine on each axis, and the whole yeast genome of a 100 bp ladder is its 2 kb rung
+  read whole (6,064 bins, 2 kb) where it was that rung pooled to 4 kb. A pooled read — a whole genome
+  no rung brings under the cap, a metagenome, the overview — keeps its 4,096 cells, and so do the
+  correlation and smoothing; smoothing on a block past 16 M cells falls back to its floor and says so.
+
 - **Space locks the map onto its diagonal, and a second press lets go (§7.2, §8.9).** It used to put
   the view back on the diagonal once — *Recentre on the diagonal* — and every pan, box and zoom after
   it landed a little off the line again. Now it slides the view onto the diagonal at the zoom it is
