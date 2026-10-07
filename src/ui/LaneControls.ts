@@ -33,10 +33,11 @@ export type LaneMark =
   | { kind: 'auto'; entries: AnnotationEntry[]; at: { x: number; y: number } }
 
 /**
- * A colour picker for one track, as the platform's own control.
+ * A colour picker for one track.
  *
- * An `<input type=color>` rather than a button that opens one, because
- * `showPicker` is not offered everywhere and the input *is* the picker. Shared
+ * An `<input type=color>` rather than a button that opens one, because the
+ * input *is* the swatch — what it opens is the app's picker (`colourPicker.ts`,
+ * §26.6), which takes over every colour input in the document. Shared
  * with the lane's right-click menu, so the two cannot drift about what a colour
  * is.
  */

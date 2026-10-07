@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every colour swatch opens one picker of the app's own, hex first, with the colours last picked
+  (§26.6).** The six digits are the box, ready to type or paste into; the square and the hue bar
+  can be dragged across without the picker closing — the platform's closed after the first step,
+  because the card under it was rebuilt — and the lane follows the drag. Under them, the last
+  sixteen colours picked anywhere in the app, one click each; an eyedropper where the browser has
+  one.
+
 - **A bar under the 1D browser's tracks makes them all taller or shorter together, each in
   proportion (§5.8).** The deck cell's height bar in look, under the last track: dragged, every
   track's height is scaled by one factor, so their sizes relative to each other stay as they were;

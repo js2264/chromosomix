@@ -11655,6 +11655,18 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   thousands separators, so the box that takes several sequences has two meanings for one character:
   a comma is part of a number when a digit is on its left and exactly three digits are on its right,
   and separates otherwise. `I, II` and `1,2` are two regions each; `IV:1,000,001-1,400,000` is one.
+- **A colour is picked in one picker**, `ui/colourPicker.ts`, which every `<input type="color">` in
+  the app opens in place of the platform's — the swatches stay the inputs callers listen to, and
+  only the popup is the app's. It leads with **hex**: six digits after a `#` set outside the box,
+  taking three or six, pasted with or without the `#` (an alpha is dropped); over that a square of
+  saturation by brightness and a hue bar, both **dragged** — the pointer is captured, so a drag
+  that leaves the popup keeps going — and an eyedropper where the browser has one. Under it the
+  **colours last picked**, newest first, sixteen at most, shared by every picker and kept in
+  `localStorage` (§5.5's reason); a colour joins them when the picker closes on a colour it did not
+  open on. A drag writes `input` on every step and `change` on the release, as the platform's did,
+  and the popup lives in the document's body, so a card rebuilt by the write under it does not
+  take the picker with it — the platform's closed after one step of a drag for exactly that
+  reason. A press outside, Escape, Enter in the hex box or a second click on the swatch closes it.
 - **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
   literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
   exists to answer.

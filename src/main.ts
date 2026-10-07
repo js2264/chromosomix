@@ -20,11 +20,15 @@ import { embedded } from './embed'
 import { parseViewState } from './state/ViewState'
 import { readShareHash } from './state/shareLink'
 import { initTheme } from './ui/ThemeToggle'
+import { installColourPicker } from './ui/colourPicker'
 import { mountPinnedNotice } from './ui/VersionPicker'
 import { recoverPinnedNavigation, registerServiceWorker } from './pwa'
 
 // Before the app mounts, so a user who chose dark gets no flash of light.
 initTheme()
+
+// Every colour input opens the app's own picker rather than the platform's (§26.6).
+installColourPicker()
 
 // Before *anything else* mounts. The case this catches is a document built for
 // the site root whose address names an archived build, which only a worker
