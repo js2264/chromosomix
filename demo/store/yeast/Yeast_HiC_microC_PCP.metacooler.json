@@ -288,7 +288,11 @@
         }
       ],
       "deck": {
-        "columns": 3
+        "columns": 3,
+        "lead": {
+          "at": 1,
+          "hidden": false
+        }
       },
       "circular": [
         "chrM"

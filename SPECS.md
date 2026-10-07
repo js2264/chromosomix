@@ -6129,7 +6129,10 @@ frame, which it must not reach hidden; *close deck* is that too. While it is hid
 stand on a map nobody can see — the *Map* card would be setting a picture off the screen — and moves
 to the first map still on screen, where there is one; the deck's count says the maps on screen, and
 its figure, its copy and the Export card's save are of the cells on screen. Hidden or not, it is
-remembered with its place, in this session's memory and in a saved workspace (§8.6).
+remembered with its place, in this session's memory and in a saved workspace (§8.6) — which brings
+both back whether it is dropped on the window or opened from its address, a published figure or a
+`?config=` link, whose names are resolved against it on the way in (§21.1). The second road used to
+lose them: resolving rebuilt the deck from the fields it knew, and the lead's was not among them.
 
 Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
 there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip

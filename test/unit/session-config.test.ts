@@ -759,6 +759,35 @@ describe('resolveConfig', () => {
     expect(out.deck.looks?.[0].vmax).toBe(2.5)
   })
 
+  it('keeps where the session’s own cell stands, which names no file (§16.9)', () => {
+    // Arrangement, as the columns are. It was left off the list this rebuilds
+    // the deck from, so a workspace opened from its address — a published
+    // figure, a `?config=` link — put the first map back in the first cell, on
+    // screen and chained, while the same file dropped on the window came back
+    // as it was saved.
+    const placed = deckConfig({ deck: { columns: 3, lead: { at: 1, hidden: false, locked: false } } })
+    const out = resolveConfig(placed, base)
+    expect(out.deck).toEqual({ columns: 3, lead: { at: 1, hidden: false, locked: false } })
+    // …all the way to the memory the deck reads its place from when it is built.
+    applyConfig(out, 's7|lead.cool')
+    expect(recall('s7|lead.cool', 'deck:lead')).toEqual({ at: 1, hidden: false, locked: false })
+  })
+
+  it('keeps every field of a deck but the one that names a private file', () => {
+    // `Required`, so that a field added to the deck later fails to compile here
+    // until somebody decides whether a workspace opened from its address keeps
+    // it: `lead` was lost by exactly that omission, with nothing to say so.
+    const every: Required<SessionConfig['deck']> = {
+      starred: 'p2',
+      columns: 3,
+      locals: [{ index: 0, uri: 'rep2.cool' }],
+      looks: [{ uri: 'https://other.org/rep4.cool', vmax: 2.5 }],
+      lead: { at: 1, hidden: true },
+    }
+    const { locals: _private, ...kept } = every
+    expect(resolveConfig({ ...deckConfig(), deck: every }, base).deck).toEqual(kept)
+  })
+
   it('drops the private names a recipient could only mistake for their own', () => {
     // `compare` and `deck.locals` are bare local filenames. Resolved, they would
     // mint a URL for a file that was never published; left alone, they reach

@@ -496,7 +496,10 @@ def yeast_deck() -> dict:
     state = {"uri": lead, "maps": "|".join(maps), "view": "region", "region": DECK_REGION, "level": "bin",
              "balance": True, "transform": "log10", "colormap": "default"}
     names = {uri.split("::")[0]: name for uri, name in maps.items()}
-    return workspace(tab("Hi-C, micro-C and PCP", state, tracks, lanes=lanes, deck={"columns": 3},
+    # The session's own map, micro-C, stands second, so the deck reads as the card's title does:
+    # Hi-C, micro-C, PCP (§16.9).
+    return workspace(tab("Hi-C, micro-C and PCP", state, tracks, lanes=lanes,
+                         deck={"columns": 3, "lead": {"at": 1, "hidden": False}},
                          circular=["chrM"],
                          mapNames={**names, MICROC: "Micro-C · Costantino et al. 2020"}))
 

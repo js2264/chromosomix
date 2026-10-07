@@ -181,8 +181,8 @@ const DEMO: Array<{
     assembly: 'S288C (R64); W303 for the Hi-C',
     provenance: 'GEO GSE151553 · GSE217022 · GSM8476641',
     detail:
-      'Three maps of chrXV:200–400 kb in one deck: micro-C XL of A364A at 1.6 kb (Costantino et al. 2020), ' +
-      'Hi-C of G1 cells carrying the M. mycoides chromosome at 1 kb (Meneu et al. 2025) and PCP — proximity ' +
+      'Three maps of chrXV:200–400 kb in one deck: Hi-C of G1 cells carrying the M. mycoides chromosome at ' +
+      '1 kb (Meneu et al. 2025), micro-C XL of A364A at 1.6 kb (Costantino et al. 2020) and PCP — proximity ' +
       'copy paste — of G1 cells at 1 kb (Delamarre et al.), drawn as counts since the file carries no ' +
       'weights. The files share no resolution, so each is read at the one nearest the others. The Hi-C ' +
       'strain is W303, whose chromosome XV lies within 26 bp of S288C’s here, so one window is one place ' +

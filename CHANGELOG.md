@@ -1999,6 +1999,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A workspace opened from its address puts the first map where it was saved (§16.9).** A published
+  figure or a `?config=` link whose deck had its first map moved, hidden or unchained opened with it
+  back in the first cell, on screen and chained: resolving the workspace's names rebuilt the deck
+  from its other fields and dropped the lead's. A dropped workspace file was not affected. The
+  store's Hi-C, micro-C and PCP deck now reads in that order, micro-C second.
+
 - **A workspace's tracks come back under the companions they were drawn under (§16.6).** Restoring
   the tracks wrote the session's lanes, none yet, over the record of where they were drawn before it
   was read, and a lane whose map opened before its track had been read was dropped: a deck with

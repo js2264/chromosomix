@@ -2,7 +2,7 @@
  * Drive the deck's first cell as a cell like the others, and a structure file
  * dropped on an empty window, in headless Chromium (§16.9, §25.3).
  *
- * Two things no other gallery passes through:
+ * Three things no other gallery passes through:
  *
  * - a lone bed3d dropped on the landing page, which must open as its model —
  *   alone, filling the view, the empty 1D browser it names hidden behind it —
@@ -11,7 +11,10 @@
  * - the yeast deck's first map moved by its grip to the other cell, hidden by
  *   the × on its heading — the other map then following the locus box alone,
  *   the star on it, the first map's row on the Contact maps card dimmed with
- *   its eye dark — and put back by that eye where it stood.
+ *   its eye dark — and put back by that eye where it stood;
+ * - a workspace whose first map stands second, opened from its address — the
+ *   road a published figure and a `?config=` link take, which resolves the
+ *   workspace's names on the way in and used to lose the first map's place.
  *
  * It prints the grid's order, the hash and the card's eyes at each step, so a
  * cell that did not move, or a lead that came back in the wrong place, is a
@@ -23,7 +26,7 @@
 
 import { createRequire } from 'node:module'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -181,6 +184,26 @@ try {
   await sleep(4000)
   console.log('first map shown by its eye:', JSON.stringify(await grid()), '· card:', JSON.stringify(await eyes()))
   await shot('m5-first-map-back-where-it-stood')
+
+  // -------------------------------------------------------------------------
+  // The same deck saved with its first map second, opened from its address.
+  // -------------------------------------------------------------------------
+  // Served by the route rather than written to disk, beside the files it names
+  // so its relative names resolve as a published workspace's do (§21.1).
+  const placed = JSON.parse(readFileSync('demo/yeast/Yeast_deck.metacooler.json', 'utf8'))
+  placed.tabs[0].deck = { ...placed.tabs[0].deck, lead: { at: 1, hidden: false } }
+  page = await fresh()
+  // Matched on the path: a glob would match the page's own address too, which
+  // carries this URL in its query string.
+  await page.route(
+    (url) => url.pathname === '/demo/yeast/Yeast_deck_placed.metacooler.json',
+    (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(placed) }),
+  )
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck_placed.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
+  await sleep(5000)
+  console.log('workspace opened from its address, first map saved second:', JSON.stringify(await grid()))
+  await shot('m6-workspace-first-map-second')
 
   console.log(errors.length === 0 ? 'no page errors' : `page errors:\n${errors.join('\n')}`)
 } finally {
