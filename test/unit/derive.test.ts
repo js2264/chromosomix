@@ -795,6 +795,8 @@ describe('drawing a diverging field at fit zoom', () => {
     const pooled = poolDisplay(
       { nrows: rows, ncols: cols, values: sparseRatios(rows, cols), rowExtent: [0, rows], colExtent: [0, cols] },
       { vmin: Number.NaN, vmax: Number.NaN, transform: 'log2', colormap: 'RdBu_r', neutral: 1 },
+      // The raster cap this was measured under; the reduction is what is tested.
+      { maxDim: 4096 },
     )
     // Something must actually have been pooled, or the test proves nothing.
     expect(pooled.strideY).toBeGreaterThan(1)

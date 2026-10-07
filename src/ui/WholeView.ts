@@ -1003,6 +1003,7 @@ export class WholeView {
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       floor: () => this.props.binsPerCell ?? 1,
+      budget: () => budget.budgetBytes,
       read: (rows, cols, rung, binsPerCell) => {
         const own = client.cancellable<'matrix'>({
           kind: 'matrix',

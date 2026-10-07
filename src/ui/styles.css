@@ -297,10 +297,12 @@ p {
 
 /* Three columns rather than `space-between`: the action bar has to sit in the
    middle of the *header*, not in the middle of whatever space the two side
-   groups happen to leave. */
+   groups happen to leave — until the left group is wider than half of what is
+   left, and then it takes its own width and the bar gives way, rather than the
+   bar being drawn over the history and the save button. */
 .app-head {
   display: grid;
-  grid-template-columns: 1fr minmax(0, 22rem) 1fr;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, 22rem) minmax(max-content, 1fr);
   align-items: center;
   gap: var(--gap);
   padding: 0.6rem 1rem;
@@ -345,6 +347,15 @@ p {
   font: inherit;
   font-size: var(--step--1);
   cursor: pointer;
+}
+
+/* One line, cut short where the header's left side has taken the room: a
+   sentence broken over two lines made the whole header a line taller. */
+.action-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-bar:hover {
@@ -436,7 +447,22 @@ p {
 
 @media (max-width: 60rem) {
   .app-head {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  /* Four groups after the name do not fit beside the bar and the window's own
+     buttons in half a screen, so the last of them goes under the first rather
+     than under the bar. */
+  .head-left {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+
+  /* …and without its divider, which at the start of a line divides nothing. */
+  .head-left > .head-history {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
   }
 
   /* The bar loses its sentence and keeps its badge, rather than going
@@ -495,7 +521,8 @@ p {
    takes its own line with it, which a separator standing on its own would not
    do. */
 .head-files,
-.head-panels {
+.head-panels,
+.head-history {
   display: flex;
   gap: 0.25rem;
   margin-left: 0.9rem;
@@ -2168,6 +2195,14 @@ p {
   gap: 0.2rem;
   padding-inline: 0.45rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Half a window upstream and downstream, beside `go`: a pair that wraps together
+   as the zoom steps do, sized to the row's bordered buttons. */
+.pan-steps {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
 }
 
 /* The four of them as one thing. The row they sit in wraps, and it was wrapping
@@ -8489,7 +8524,8 @@ body.is-carrying-card * {
      has one row of room, and two dividers in it are lines asking for width that
      what they point at does not have. */
   .head-files,
-  .head-panels {
+  .head-panels,
+  .head-left > .head-history {
     margin-left: 0.35rem;
     padding-left: 0;
     border-left: 0;
@@ -13784,4 +13820,150 @@ span.deck-name {
 .edit-dotplot.is-folded > :not(.edit-dotplot-open),
 .edit-dotplot:not(.is-folded) > .edit-dotplot-open {
   display: none;
+}
+
+/* The app's colour picker (§26.6, `ui/colourPicker.ts`), opened by every
+   `<input type="color">` in place of the platform's: a square of saturation by
+   brightness, a hue bar, the colour as hex, and the colours last picked. Above
+   every dialog and lifted card, because it is opened from them. */
+.cpick {
+  position: fixed;
+  z-index: 1100;
+  width: 15rem;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: var(--step--1);
+  user-select: none;
+}
+
+.cpick-field {
+  position: relative;
+  height: 9.5rem;
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cpick-hue {
+  position: relative;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.cpick-field:focus-visible,
+.cpick-hue:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A ring that reads on any colour under it: white inside a dark edge. */
+.cpick-knob {
+  position: absolute;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 55%), inset 0 0 0 1px rgb(0 0 0 / 25%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cpick-hue > .cpick-knob {
+  top: 50%;
+}
+
+.cpick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.cpick-preview {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+}
+
+.cpick-hex-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 0.4rem;
+  height: 1.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: text;
+}
+
+.cpick-hex-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.cpick-hash {
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+
+.cpick-hex {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 0 0 0.1rem;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--step-0, 0.875rem);
+  font-variant-numeric: slashed-zero tabular-nums;
+  text-transform: lowercase;
+  user-select: text;
+}
+
+.cpick-hex.is-invalid {
+  color: var(--danger);
+}
+
+.cpick-recent {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.3rem;
+}
+
+.cpick-recent-label {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+}
+
+.cpick-chip {
+  aspect-ratio: 1;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.cpick-chip:hover {
+  transform: scale(1.12);
+}
+
+.cpick-chip.is-current {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

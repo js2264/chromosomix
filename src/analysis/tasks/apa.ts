@@ -5,7 +5,7 @@
  * in this catalogue where the expensive choice is the correct one (§18.6).
  *
  * A pileup could be taken from one big read covering every anchor. It must not
- * be: a bounding-box read is pooled at `RASTER_MAX_DIM` (§7.2), so on any
+ * be: a bounding-box read is pooled at `POOLED_CELL_CAP` (§7.2), so on any
  * sizeable genome the pileup would quietly be at a coarser bin than the file
  * has, and the picture would not say so. So this reads one small block per
  * feature, at the file's own resolution, and pays for it — on a local file with

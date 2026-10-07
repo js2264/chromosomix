@@ -893,6 +893,17 @@ or one press past the locus — and they are ordinary bordered buttons like ever
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
 
+**Two arrows straight after `go` move the window half its own width along the sequence**, upstream
+(`←`, Lucide's *move-left*) and downstream (`→`, *move-right*), so a reader standing on a locus can
+walk along the chromosome without retyping it: what was at one edge is in the middle after a press,
+and two presses are one window over. The drag on the map moves the *picture* and stops at the edge of
+what was read; these, like the zoom steps, are a different **range**, re-read, through the ordinary
+navigation, so each press is a history entry. Against an end of the sequence the window slides in to
+stop at the end, keeping its width, and the arrow greys once there is nothing further that way — as
+both do on the whole sequence and on a `contig × contig` block, which has no one range to move. On a
+declared circle (§8.15) they stop at the ends as on a line, for the zoom steps' reason; a window
+already across the origin moves round it. Each names the window it would open in its tooltip.
+
 **Every locus bar zooms in these same four steps**, and from the same pair — the region bar's and
 the 1D browser's (§26.6). The browser's carried two unlabelled magnifiers at 1.8× instead, which is
 a factor nobody can predict or undo, so a reader who had learnt that one press is 3× on the map got
@@ -926,7 +937,8 @@ has to say which of the two these are.
 
 **And there is no back arrow in the bar, and no map/tracks cycle button.** Both were controls with
 a shorter road already beside them: going back is the browser's own back, which the bar's
-navigation has always fed, and *tracks only / map only / both* is the eye beside the map in the
+navigation has always fed — and which the header carries as a button for every view (§5.5), so it
+is one control for the window rather than one per view — and *tracks only / map only / both* is the eye beside the map in the
 column that lists what is drawn — where every other thing on screen is shown and hidden, one row at
 a time, by the control that names it. A second way to do a thing is not a convenience when the
 first way is a row the reader is already looking at; it is a control to learn, in the bar that has
@@ -962,6 +974,20 @@ from the modal's own right edge.
 `genomes table → genome → contig → region`, with a breadcrumb whose segments are clickable to go back
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
+
+**Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
+*undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
+entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
+stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
+browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
+is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
+does. After them in the same group, in this order, are the three that take the work out of the
+window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
+sit on the far side of the command bar, away from the controls a reader's hand is already among; the
+far right is now only about the window itself — theme, shortcuts, source, about. Where the header
+cannot hold the groups beside the command bar, it lets the bar's sentence shorten first; in a window
+narrower than 60rem the last group goes under the first, without its divider, rather than under the
+bar. An embed has no header and no buttons for these (§21).
 
 `<` and `>` step to the neighbouring genome, in the table's order, on a genome view, and to the
 neighbouring sequence, in the file's own order, on a region and in the 1D browser (§5.8); the `‹ ›`
@@ -1916,12 +1942,23 @@ wherever the reader had panned to, so a cell's value would change as it crossed
 the screen — which is why the plan is never sent by anything driven from a
 viewport.
 
-A block larger than the picture is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
+**A window is read at its own bins up to `denseCellCap`**: the widest square the dense guard
+(§9) passes on this machine, and never wider than `RASTER_MAX_DIM`, **16,384** — on a machine
+reporting 8 GiB it is the 16,384 that binds. That is what draws a whole yeast chromosome IV at
+100 bp, 15,320 bins a side, one bin to a pixel, so that a zoom into it reaches single bins without
+another read: 45 s and 2.9 GB in the tab, measured in headless Chromium, where the 4,096 the raster
+stopped at before drew it at 400 bp in 9 s and 235 MB. A smaller machine gets a smaller square, from
+the same budget, so the window it cannot afford is pooled rather than refused.
+
+A wider block is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
 and never part of one sequence beside anything else: a sequence longer than the
 capacity keeps cells of its own, cut at its own start, and only the ones too small
-to fill a cell share. The capacity is searched for against `RASTER_MAX_DIM`, so the
-grid the reader builds is the grid the renderer draws and nothing pools a second
-time — the raster's own pooling is reached only by a block that already fits. The
+to fill a cell share. The capacity is searched for against `POOLED_CELL_CAP`, **4,096**, which is
+narrower than the raster on purpose: the pooled read is the one a whole genome takes when no rung
+brings it under `denseCellCap` (a ladder's coarser rung often does — the whole yeast genome of a
+100 bp ladder is its 2 kb rung, 6,064 bins, read whole), it is not under the dense guard, and its accumulator is sized by this cap — at 16,384 it would be a gigabyte for every
+whole-genome view of a large file. Narrower is never pooled twice: the grid the reader builds fits the
+raster, and the raster's own pooling is reached only by a block a caller hands it unplanned. The
 grid is anchored to the *sequence*, not to the request, so the same base pair falls
 in the same cell holding the same sum in every view of it, and a range is widened to
 those cell edges rather than starting a grid of its own.
@@ -1935,7 +1972,7 @@ as the block is held anywhere (`pooledOf`), and a view built over a block the re
 view of the table — the same four bytes the four byte writes it replaced put down — which took a
 3,910-cell chromosome's from 410 ms to 280 ms on the machine it was measured on.
 
-**What is accepted, and stated rather than fixed:** the raster is at most 4,096 px
+**What is accepted, and stated rather than fixed:** the raster is at most 16,384 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
 minifies, and its filter averages across cell — and therefore sequence —
 boundaries. Every stage before it is exact; this one blends neighbours that are
@@ -2368,8 +2405,10 @@ which points at **the detector rather than the response** as the part still wron
 synthetic used to develop it as not reproducing whatever the real one is. Anyone picking this up
 should start by reproducing the artefact from a real block rather than from a planted spike.
 
-Blocks are capped at **16 M cells**, which is the 4096² raster cap — so in practice the setting is
-available on anything the viewer will draw. The cumulative tables are built for a **band of rows** at
+Blocks are capped at **16 M cells**, which was the 4096² raster cap. A block read at its own bins may
+now be wider (§7.2) — yeast IV at 100 bp is 235 M cells, which at this rate would be two minutes — and
+there the choice is honoured at its floor and the caption says so; anything pooled to the picture
+still fits. The cumulative tables are built for a **band of rows** at
 a time rather than for the block, so what is resident is about 128 MB whatever the block's size;
 without that a 16 M block would allocate over half a gigabyte on the thread drawing frames. What the
 cap costs instead is time, and it is roughly linear — and about twice what it was before the
@@ -2427,7 +2466,7 @@ the engine has them, and the product is shared out in bands to helper workers th
 starts and keeps for the next square (`analysis/pearsonThreads.ts`). Measured in Chromium with four
 cores, from picking the score to the picture: a thousand bins in under half a second, 2,048 in under
 one, 4,096 in two and a half, where it was capped at 1,500 and took three seconds at 929. So the map
-correlates any square block it can read, up to the raster's 4,096 cells a side — a whole bacterial
+correlates any square block it can read, up to 4,096 cells a side — a whole bacterial
 genome at 1 kb, a human chromosome at 50 kb — and the Compartments task, which correlates with the
 same arithmetic, is no longer the slow half of its own method.
 
@@ -4998,7 +5037,7 @@ of a genome layer is a fact about the file, and the reader says so.
 **Whole-genome where it fits, measured rather than assumed.** The old rule was *region level only*,
 on the grounds that a eukaryotic cooler reintroduces the streaming problem §2 avoids. That is true of
 a human cooler and false of the genomes this viewer is most often pointed at: yeast is 12.1 Mb, which
-at 1 kb bins is 12,100 bins — one bounded read, about 600 MB on screen, and the single most useful
+at 1 kb bins is 12,100 bins — one bounded read, about 2.3 GB on screen drawn a bin to a pixel, and the single most useful
 picture of the file. Refusing it would be refusing the case cool support is *for*.
 
 So the size question is asked instead. `readDenseMatrix` estimates what a block costs — its cells,
@@ -5028,10 +5067,16 @@ Concretely:
 - a block read at its own bins is size-guarded. Three guards, in order:
   `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording; the 2 GiB a browser serves in one typed
   array — about 23,170 bins a side — which no budget and no "load anyway" can lift; and then a
-  browser-side *estimate against a budget* — the dense values at 4 B per cell, the raster at 16 B
-  per pooled pixel (a constant ceiling, since it is pooled at `RASTER_MAX_DIM`), and one bounded
-  read window. There is no per-`nnz` term, because the pixel read is windowed rather than whole.
-  The budget comes from `navigator.deviceMemory`, which is Chromium-only and a coarse floor rather
+  browser-side *estimate against a budget* — the dense values at 4 B per cell, the raster at 12 B
+  per pooled pixel (pooled values, RGBA and canvas; a ceiling, since it is pooled at
+  `RASTER_MAX_DIM`), and one bounded read window. The auto-range buffer is not charged: it holds only
+  the finite contacts and is garbage before the RGBA is allocated, and charging it as a fourth 4 B
+  estimated yeast IV at 100 bp at 4.7 GB where the tab measured 2.9. There is no per-`nnz` term,
+  because the pixel read is windowed rather than whole. The budget is **three quarters** of
+  `navigator.deviceMemory` — 6.4 GB on a machine reporting 8, where the half it was refused that
+  chromosome — and the widest window the reader reads at its own bins is derived from the same
+  budget (`denseCellCap`, §7.2), so a view never meets this refusal where a pooled read would have
+  drawn. `navigator.deviceMemory` is Chromium-only and a coarse floor rather
   than a measurement — it was capped at 8, and some machines now answer 16 — so it is a *warning*
   threshold rather than a wall: a browser-side refusal offers "load anyway" with the number, and the
   allocation itself is what actually decides, translating a `RangeError` into the same typed
@@ -5063,12 +5108,15 @@ Concretely:
   with no rung that fits, a selection and a second file in the square keep the pooled read and its
   gate
 - **so is the first picture of a region wider than the reader draws at the open rung** — a whole
-  chromosome, most often. A window of more than 4,096 bins is pooled into cells of several bins, so
-  chr1 at 25 kb is a 50 kb picture summed from every 25 kb pixel; where the ladder stores a rung
+  chromosome, most often. A window wider than the reader reads at its own bins (`denseCellCap`, §7.2)
+  is pooled into cells of several bins, so mouse chr1 at 10 kb is a 50 kb picture summed from every
+  10 kb pixel; where the ladder stores a rung
   whose bins divide that cell, the first read comes from it: the same cells, balanced at their own
   resolution, from a fraction of the pixels (`poolingRung`). Never coarser than the pooled grid, so
   the picture is the one it was and the refine takes it as it stands; a zoom then reads the open
-  rung as before. On a 1 GB `.hic` from S3, chr1's read took 1.3 s where it took 4.3. A declared
+  rung as before. On a 1 GB `.hic` from S3, chr1's read took 1.3 s where it took 4.3. That chr1 was
+  at 25 kb, 7,849 bins, which is now read at its own bins: the open rung's 4.3 s, for a picture
+  twice as fine on each axis. A declared
   resolution (§3.4) and a second file keep the open rung. A `.hic` opened with no rung named stands
   the resolution picker on the rung it opened at, not on its finest
 
@@ -5918,7 +5966,10 @@ So the deck divides. Every panel is read with `budgetBytes` set to the deck's wh
 panel's — divided by the number of panels. Two consequences, both wanted: a deck can never cost more
 than the single map it replaced, and **every map added shrinks every panel's share**, so an
 over-large deck is refused by arithmetic rather than by a limit somebody had to guess. The refusal is
-`checkBrowserDenseSize`'s own, with its own numbers in it, printed beside the panel it is about.
+`checkBrowserDenseSize`'s own, with its own numbers in it, printed beside the panel it is about. The share
+also sets how wide a window the panel reads bin for bin (`denseCellCap`, §7.2) — a deck of four reads
+a whole chromosome a panel cannot afford pooled rather than refused — and the panel's zoom judges its
+blocks against that same share, so it never waits for a finer block its reads will not return.
 
 The answers kept so that a place visited again costs nothing (§12) are not divided: they are one
 budget for the page however many panels it holds, so a deck of eight keeps fewer places per panel
@@ -7139,7 +7190,7 @@ Three specific gates, each stated because each is a place the naive implementati
 
 3. **An aggregate pileup reads one small block per feature, at the file's native bin size, and never a
    bounding box.** This is a deliberate reversal of the obvious optimisation, and the reason is
-   resolution: a whole-genome or bounding-box read is pooled at `RASTER_MAX_DIM` (§7.2), so a pileup
+   resolution: a whole-genome or bounding-box read is pooled at `POOLED_CELL_CAP` (§7.2), so a pileup
    taken from it silently inherits a coarsened bin on any sizeable genome, and the reader would have no
    way to know. `k` windows inherit nothing. Where the block is already loaded the reads are free; where
    it is not, adjacent windows are **coalesced** — the pixel-band merging the selection read already
@@ -9523,9 +9574,10 @@ The **day is a separator across the list** rather than a column, carrying its ow
 copy, because "what did I run on Tuesday" is the question this panel exists to answer and one press
 should be the whole of the answer.
 
-The button is in the header, immediately **before the theme toggle**: to its left are the two other
-things that take something out of this window — a link, and the workspace as a file — and everything
-to its right is about the window rather than the work in it. **Control and the key left of `1`**
+The button is in the header, **last of the group after the four panels** (§5.5): back and forward,
+then the two other things that take something out of this window — a link, and the workspace as a
+file — then this. Everything on the far right of the header is about the window rather than the work
+in it. **Control and the key left of `1`**
 opens it — ctrl-` on QWERTY, the chord every terminal in every editor is behind, and Ctrl-² on an
 AZERTY PC. Control on a Mac as well, not ⌘: ⌘` is the system's, which walks a program's windows and
 never reaches the page. The key alone folds the Files column (§20.4); the console used to have it
@@ -11282,11 +11334,21 @@ The card's last row is **the export row** (§26.6) — `[resolution] [format] [�
 under it — so a model is saved the way a map and a browser are, and at the resolution the reader
 chose rather than at a fixed one. The PNG is the picture the GPU lit, at that resolution. The PDF is
 **paths, whatever the model is drawn as**, through `structure/painter.ts`, projected through the
-same camera the screen was: beads as discs, sticks as segments, and the **tube** as a stroke per
-bead along the Catmull–Rom curve the GPU draws it on, a darker rim under a lighter core, each bead's
-stretch running from half way to one neighbour to half way to the next — the stretch the GPU colours
-by that bead — and meeting the next butt to butt, so no rim is laid across another stretch's core;
-a run ends round, and a tube thinner than three pixels is one flat stroke. The tube used to export
+same camera the screen was: beads as discs, sticks as segments, and the **tube** as a stretch per
+bead along the Catmull–Rom curve the GPU draws it on, each bead's stretch running from half way to
+one neighbour to half way to the next — the stretch the GPU colours by that bead — and meeting the
+next at one width, the perspective's change of width running along the stretch rather than stepping
+at the joint; a run ends round. **Every surface is lit, as the screen's is**, by the screen's own key
+light, which rides with the eye: a bead is a PDF radial shading from a highlight up and to the
+right of its centre out to a rim in shadow — smooth at any zoom, one shading per bead — and a tube
+or a stick, round whose curve no shading can follow, is a stack of bands, eight at the fewest and
+none wider than a third of a pixel, each narrower, lighter and nudged towards the light than the
+one under it, so a fibre reads as a solid rather than a ribbon. Each of a tube's bands is the ring
+of the section that is its own, reaching three bands in under the next: laid whole, the bands of
+one stretch put their edges at one line over the lighter ones of its neighbour, and a reader's
+anti-aliasing drew a dark hairline across the tube at every bead. The fog mixes every colour of
+the shading towards the paper, as it does a flat one. Only what is under three quarters of a pixel
+across, and what is ghosted, is one flat colour. The tube used to export
 as the raster the GPU drew, on the argument that a lit surface is no `arc`; it is the default
 representation, so most models left as a picture of pixels in the one file meant to be a drawing.
 Nothing in a model's PDF is a raster now, so the format reads **PDF (vector)** and the row's
@@ -11670,6 +11732,18 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   thousands separators, so the box that takes several sequences has two meanings for one character:
   a comma is part of a number when a digit is on its left and exactly three digits are on its right,
   and separates otherwise. `I, II` and `1,2` are two regions each; `IV:1,000,001-1,400,000` is one.
+- **A colour is picked in one picker**, `ui/colourPicker.ts`, which every `<input type="color">` in
+  the app opens in place of the platform's — the swatches stay the inputs callers listen to, and
+  only the popup is the app's. It leads with **hex**: six digits after a `#` set outside the box,
+  taking three or six, pasted with or without the `#` (an alpha is dropped); over that a square of
+  saturation by brightness and a hue bar, both **dragged** — the pointer is captured, so a drag
+  that leaves the popup keeps going — and an eyedropper where the browser has one. Under it the
+  **colours last picked**, newest first, sixteen at most, shared by every picker and kept in
+  `localStorage` (§5.5's reason); a colour joins them when the picker closes on a colour it did not
+  open on. A drag writes `input` on every step and `change` on the release, as the platform's did,
+  and the popup lives in the document's body, so a card rebuilt by the write under it does not
+  take the picker with it — the platform's closed after one step of a drag for exactly that
+  reason. A press outside, Escape, Enter in the hex box or a second click on the swatch closes it.
 - **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
   literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
   exists to answer.
@@ -12419,8 +12493,9 @@ shown — a readout, a confidence, an export — is read from the file, never fr
 It is read once per file, by a pass over the stored pixels of the rung nearest the cell size —
 §7.3's cost class, priced and gated as that is, with a bar and a cancel — and held in **original** order,
 drawn through the lens: an edit changes the mapping, never the picture, which is what makes one instant
-at this scale. It exists only while a stage is open. §2's other maps keep the 4,096-cell ceiling
-(`RASTER_MAX_DIM`); this is the one picture that does not, and for the one reason a reader cannot curate
+at this scale. It exists only while a stage is open. §2's other maps keep their ceilings — 4,096 cells
+pooled (`POOLED_CELL_CAP`), 16,384 read at their own bins (`RASTER_MAX_DIM`); this is the one picture
+that does not, and for the one reason a reader cannot curate
 a genome they cannot see.
 
 *Built* (`metacooler/picture.ts`, the reader's `picture` request): read from the finest rung of an

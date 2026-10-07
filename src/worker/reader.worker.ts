@@ -43,7 +43,7 @@ import {
 import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
 import { needsWrapping } from './wrap'
 import { readWrapped, type WrapEnv } from './wrappedMatrix'
-import { deviceDenseBudgetBytes } from '../metacooler/matrix'
+import { denseCellCap, deviceDenseBudgetBytes } from '../metacooler/matrix'
 import {
   serialiseError,
   tableToPayload,
@@ -1246,7 +1246,7 @@ async function handleMatrix(
   if (request.wrap !== undefined) {
     const wrap = crossRung(open, mc, request.wrap)
     if (needsWrapping(rows, wrap) || needsWrapping(cols, wrap)) {
-      return atRung(mc, open, asked_, await readWrapped(mc, request, rows, cols, wrap, wrapEnvFor(mc, request.id)))
+      return atRung(mc, open, asked_, await readWrapped(mc, request, rows, cols, wrap, wrapEnvFor(mc, request.id, request.budgetBytes)))
     }
   }
   if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
@@ -1273,7 +1273,7 @@ async function handleMatrix(
       ),
     )
   }
-  const planned = fitPlan(mc, rows, cols)
+  const planned = fitPlan(mc, rows, cols, request.budgetBytes)
   if (planned !== null) {
     return atRung(
       mc,
@@ -1309,7 +1309,7 @@ async function handleMatrix(
  * closures. See `worker/wrappedMatrix.ts`, which is the half of the wrapped path
  * worth testing and therefore the half that is not in this file.
  */
-function wrapEnvFor(mc: MetaCooler, id: number): WrapEnv {
+function wrapEnvFor(mc: MetaCooler, id: number, budgetBytes?: number): WrapEnv {
   return {
     // A wrapped window has the same cell count as an unwrapped one of the same
     // width on the same sequence, so the plan is fitted against a real extent of
@@ -1320,7 +1320,7 @@ function wrapEnvFor(mc: MetaCooler, id: number): WrapEnv {
         const width = Math.max(1, Math.min(span, wrap[1] - wrap[0]))
         return [wrap[0], wrap[0] + width]
       }
-      return fitPlan(mc, lane(rowWidth), lane(colWidth))
+      return fitPlan(mc, lane(rowWidth), lane(colWidth), budgetBytes)
     },
     snap: (extent, plan) => snapToGrid(mc, extent, plan),
     hint: (rows, cols) => hintFor(rows, cols),
@@ -1526,9 +1526,18 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * resolution, and taking a coarser rung of a laddered file where one exists, are
  * the real answers and are not attempted.
  */
-function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
+function fitPlan(
+  mc: MetaCooler,
+  rows: Extent,
+  cols: Extent,
+  budgetBytes?: number,
+): PoolPlan | null {
   const spans = rows[0] === cols[0] && rows[1] === cols[1] ? [rows] : [rows, cols]
-  if (spans.every((span) => fits(mc, span, 1))) return null
+  // Unpooled up to what the dense guard will pass, which is wider than a pooled
+  // read's grid: the dense read is guarded and the pooled one is not, so only
+  // the first may grow with the machine (`denseCellCap`).
+  const unpooled = denseCellCap(budgetBytes)
+  if (spans.every(([lo, hi]) => hi - lo <= unpooled)) return null
   // The smallest grid that fits, shared by both axes because the panel has one
   // bin size: the finer axis is coarsened to the other's cell rather than given
   // a resolution the labels down the side contradict. Exact rather than

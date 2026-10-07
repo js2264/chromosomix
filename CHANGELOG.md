@@ -14,6 +14,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Half a window upstream and downstream, beside `go` on a region (§5.4).** Two arrows straight
+  after the locus box's `go` move the window half its own width along the sequence, re-read as a
+  navigation, so a reader at a locus can walk the chromosome without retyping it. They slide in to
+  stop at an end and grey once there, on the whole sequence and on a block of two sequences, and name
+  the window they would open in their tooltips.
+
+- **Back and forward in the header (§5.5).** The browser's own back and forward as two buttons, past
+  a divider after the four panels' toggles, greyed where the browser says there is nowhere to go.
+
+- **A model's PDF is lit, as its PNG is (§25.7).** Every bead is a shaded sphere, a PDF radial
+  shading from a highlight to a shadowed rim, and the tube and the sticks are drawn band by band
+  from the rim in shadow to a highlight on the side the screen's key light comes from, so the
+  fibre reads as a solid on paper rather than as flat ribbons. Still paths and shadings and nothing
+  else, smooth at any zoom; the fog fades the shading with the rest. The file is larger for it.
+
+- **Every colour swatch opens one picker of the app's own, hex first, with the colours last picked
+  (§26.6).** The six digits are the box, ready to type or paste into; the square and the hue bar
+  can be dragged across without the picker closing — the platform's closed after the first step,
+  because the card under it was rebuilt — and the lane follows the drag. Under them, the last
+  sixteen colours picked anywhere in the app, one click each; an eyedropper where the browser has
+  one.
+
 - **A bar under the 1D browser's tracks makes them all taller or shorter together, each in
   proportion (§5.8).** The deck cell's height bar in look, under the last track: dragged, every
   track's height is scaled by one factor, so their sizes relative to each other stay as they were;
@@ -882,6 +904,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   examples names the old demo's synthetic chromosome XIII. The files live in one folder on the
   bucket, `demo/store/`, listed with their sources in `demo/store/MANIFEST.tsv`, written by
   `scripts/make_rsg_store.py` and published by `scripts/publish-store.sh`.
+
+- **The link, the save button and the console moved next to back and forward (§5.5, §23).** They
+  follow the two history buttons in the group after the panels, and the right of the header holds
+  only theme, shortcuts, source and about. The command bar's sentence is cut short on one line rather
+  than broken over two where the left side needs the room, and below 60rem the header's last group
+  wraps under the first instead of running under the bar.
+
+- **A whole chromosome is read and drawn one bin to a pixel up to 16,384 bins a side (§7.2, §9).**
+  The raster's cap goes from 4,096 to 16,384, so yeast chromosome IV at 100 bp — 15,320 bins — opens
+  whole at 100 bp and a zoom reaches single bins without another read, where it was drawn at 400 bp.
+  How wide a window is read at its own bins is the memory guard's call, so a smaller machine reads a
+  smaller square and pools the rest rather than refusing. To afford it, a block's memory budget is
+  three quarters of what the device reports instead of half (6.4 GB on a machine reporting 8), and the
+  raster is costed at 12 B a pixel instead of 16 — the auto-range buffer it also charged is never live
+  beside the others. It costs time and memory: chromosome IV opens in about 45 s and 2.9 GB where it
+  took 9 s and 235 MB. A chromosome that used to be pooled and read from a coarser rung of a ladder is
+  now read at the open one, so mouse chr1 at 25 kb takes the open rung's 4.3 s instead of 1.3 s, for a
+  picture twice as fine on each axis, and the whole yeast genome of a 100 bp ladder is its 2 kb rung
+  read whole (6,064 bins, 2 kb) where it was that rung pooled to 4 kb. A pooled read — a whole genome
+  no rung brings under the cap, a metagenome, the overview — keeps its 4,096 cells, and so do the
+  correlation and smoothing; smoothing on a block past 16 M cells falls back to its floor and says so.
 
 - **Space locks the map onto its diagonal, and a second press lets go (§7.2, §8.9).** It used to put
   the view back on the diagonal once — *Recentre on the diagonal* — and every pan, box and zoom after

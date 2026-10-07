@@ -364,9 +364,10 @@ export class AnnotationCard {
    * `true` while a control in the list is being edited.
    *
    * Only the controls carrying a value the reader has not finished giving. A
-   * colour picker is the case that forces this: it fires `input` on every drag,
-   * each of which is a store change, and replacing the `<input>` underneath an
-   * open picker closes it. A half-typed name is the same problem more quietly —
+   * colour picker was the case that forced this: it fires `input` on every drag,
+   * each of which is a store change, and replacing the `<input>` underneath the
+   * platform's picker closed it. The app's own picker (`colourPicker.ts`) lives
+   * outside the card and survives that. A half-typed name is the same problem —
    * the caret and the untyped rest of the word go with the node.
    *
    * A checkbox is the case that forces the *exception*. It commits on the click

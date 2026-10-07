@@ -5,9 +5,9 @@
  * of (`ui/vector.ts`): five thousand beads are five thousand `arc`s, which is
  * squarely on the side of the line `ui/analysisPlots.ts` draws between *tens of
  * cells are paths* and *twelve thousand bins are pixels*. Beads are discs and
- * sticks are segments. The **tube** is a stroke per bead along the curve the
- * GPU draws it on, a darker rim under a lighter core — which is what a lit tube
- * reads as at any size a figure is read at. It used to be handed back to the
+ * sticks are segments. The **tube** is a stretch per bead along the curve the
+ * GPU draws it on, filled band by band from its shadowed rim to its highlight.
+ * It used to be handed back to the
  * GPU as a raster, on the argument that a lit surface is not a path; so the
  * default representation of every model left as a picture of pixels in the one
  * file that was supposed to be a drawing (§25.7). A contact map's cells are now
@@ -27,11 +27,19 @@
  *
  * Painter's algorithm: every mark is sorted by depth and drawn far to near, so
  * a bead in front covers a bead behind. Exact for discs of one radius, and the
- * right picture for sticks and a tube at the widths a figure uses. No
- * gradients, because `createLinearGradient` is not in `VectorTarget` and the
- * point of drawing this way is to stay inside it: the depth cue is the screen's
- * fog, done by mixing each mark's colour towards the paper, and beads and
- * sticks further from the eye are drawn a little smaller besides.
+ * right picture for sticks and a tube at the widths a figure uses.
+ *
+ * **Lit, as the screen is.** A model drawn in flat colour reads as a tangle of
+ * ribbons on paper beside the PNG of the same model, which reads as a solid.
+ * So every surface is shaded by the screen's own key light ({@link KEY}, which
+ * rides with the eye): a bead is a **radial shading** from its highlight out to
+ * its shadowed rim — `createRadialGradient`, which the page writes as a PDF
+ * shading, smooth at any zoom — and a tube or a stick, which no gradient can
+ * follow round a curve, is a stack of strokes, each narrower, lighter and
+ * nudged towards the light, fine enough that the steps are under a third of a
+ * pixel. The depth cue is the screen's fog besides, done by mixing every
+ * colour — each of a bead's stops — towards the paper, and beads and sticks
+ * further from the eye are drawn a little smaller.
  */
 
 import type { StructureStyle } from '../annotations/types'
@@ -112,22 +120,44 @@ export const MARKED_BEAD = 2
 const INK_SHARE = 0.5
 
 /**
- * The tube's two tones: the rim mixed this far towards black, the core this
- * far towards white, the core this share of the tube's width.
- *
- * What a lit cylinder looks like with the lighting taken out of it: the
- * screen's key light rides with the eye, so the face towards the reader is the
- * brightest and the silhouette the darkest, and two strokes say exactly that.
+ * The screen's lights, in the camera's frame — x to the right, y up, z towards
+ * the reader — where `structure/three.ts` puts them, riding with the eye: a key
+ * above and to the right in front, a weaker fill below and to the left behind,
+ * and ambient. The weights are the screen's balance read off its PNG rather
+ * than its physics: the face towards the reader is the surface's own colour, a
+ * highlight up and to the right, the silhouette away from the key in shadow.
  */
-const TUBE_RIM = 0.3
-const TUBE_CORE = 0.15
-const TUBE_CORE_WIDTH = 0.55
+const KEY = unit([1, 1.2, 1.5])
+const FILL = unit([-1, -0.4, -1])
+const AMBIENT = 0.55
+const KEY_WEIGHT = 0.6
+const FILL_WEIGHT = 0.25
+/** The specular highlight: how far towards white at its peak, and how tight it is. */
+const SPECULAR = 0.35
+const SHININESS = 24
+/** Halfway between the key and the eye: where on a sphere the highlight sits. */
+const HIGHLIGHT = unit([KEY[0], KEY[1], KEY[2] + 1])
+
+/** How many stops a bead's shading carries, from its highlight to its rim. */
+const SPHERE_STOPS = 12
 
 /**
- * Below this many pixels across, a tube is one flat stroke: a rim and a core a
- * pixel each are a texture nobody can read, in twice the operators.
+ * Below this many pixels across, a tube, a stick or a bead is flat. Low, since
+ * the page is a drawing: a tube a pixel across on the screen's framing is a
+ * reader's zoom away from being the width of a finger, and lit when it is.
  */
-const TUBE_SHADED_MIN = 3
+const TUBE_SHADED_MIN = 0.75
+
+/** The widest a tube's band of shading is, in pixels, and the fewest and most bands one carries. */
+const BAND_WIDTH = 0.3
+const BANDS_MIN = 8
+const BANDS_MAX = 32
+
+/** How many bands further in a tube's band reaches under the ones over it (see {@link tubeMarks}). */
+const RING_REACH = 3
+
+/** The longest straight piece a tube's outline is drawn in, in pixels. */
+const OUTLINE_STEP = 1.5
 
 /**
  * How far, in CSS pixels, an opaque stretch of tube runs on past the midpoint
@@ -279,30 +309,40 @@ export function drawStructure(
           const b = chain.beads[k]
           if (drawn[a] === 0 || drawn[b] === 0) continue
           marks.push({
-            depth: (depth[a] + depth[b]) / 2,
+            // Under both its beads where they are drawn: a stick runs between
+            // their centres, inside both spheres, and sorted at its middle it
+            // was laid over the farther one — invisible while both were one
+            // flat colour, a dark bar across a lit sphere once they are not.
+            depth: style.beads ? Math.max(depth[a], depth[b]) : (depth[a] + depth[b]) / 2,
             layer: 1,
             draw: () => {
               const alpha = (alphaOf(a) + alphaOf(b)) / 2
               if (alpha < GHOST_GONE) return
               const t = (back(a) + back(b)) / 2
+              const width = Math.max(0.5, stickRadius * 2 * ((size[a] + size[b]) / 2) * (1 - DEPTH_SHRINK * t))
               ctx.globalAlpha = alpha
-              ctx.lineWidth = Math.max(0.5, stickRadius * 2 * ((size[a] + size[b]) / 2) * (1 - DEPTH_SHRINK * t))
               ctx.setLineDash([])
               // Two-tone sticks, each half in its own bead's colour, so a
               // colouring by position or by a track reads along the fibre
-              // rather than in steps.
+              // rather than in steps — and lit, band by band, both halves'
+              // band before either's next, so neither half's cap is laid
+              // across the other's lighter core.
               const mx = (px[a] + px[b]) / 2
               const my = (py[a] + py[b]) / 2
-              ctx.strokeStyle = fogged(rgbOf(view.colours, a), depth[a])
-              ctx.beginPath()
-              ctx.moveTo(px[a], py[a])
-              ctx.lineTo(mx, my)
-              ctx.stroke()
-              ctx.strokeStyle = fogged(rgbOf(view.colours, b), depth[b])
-              ctx.beginPath()
-              ctx.moveTo(mx, my)
-              ctx.lineTo(px[b], py[b])
-              ctx.stroke()
+              for (const band of bandsOf(width, alpha)) {
+                const [dx, dy] = nudgeOf(width, band.outer)
+                ctx.lineWidth = width * band.outer
+                ctx.strokeStyle = fogged(band.shade(rgbOf(view.colours, a)), depth[a])
+                ctx.beginPath()
+                ctx.moveTo(px[a] + dx, py[a] + dy)
+                ctx.lineTo(mx + dx, my + dy)
+                ctx.stroke()
+                ctx.strokeStyle = fogged(band.shade(rgbOf(view.colours, b)), depth[b])
+                ctx.beginPath()
+                ctx.moveTo(mx + dx, my + dy)
+                ctx.lineTo(px[b] + dx, py[b] + dy)
+                ctx.stroke()
+              }
             },
           })
         }
@@ -378,10 +418,11 @@ export function drawStructure(
           const alpha = alphaOf(i)
           if (alpha < GHOST_GONE) return
           const t = back(i)
+          const radius = Math.max(0.4, beadRadius * size[i] * (1 - DEPTH_SHRINK * t))
           ctx.globalAlpha = alpha
-          ctx.fillStyle = fogged(rgbOf(view.colours, i), depth[i])
+          ctx.fillStyle = sphereFill(ctx, px[i], py[i], radius, rgbOf(view.colours, i), (rgb) => fogged(rgb, depth[i]))
           ctx.beginPath()
-          ctx.arc(px[i], py[i], Math.max(0.4, beadRadius * size[i] * (1 - DEPTH_SHRINK * t)), 0, Math.PI * 2)
+          ctx.arc(px[i], py[i], radius, 0, Math.PI * 2)
           ctx.fill()
         },
       })
@@ -425,7 +466,7 @@ export function drawStructure(
     const t = back(i)
     const radius = Math.max(0.8, beadRadius * size[i] * MARKED_BEAD * (1 - DEPTH_SHRINK * t))
     ctx.globalAlpha = alpha
-    ctx.fillStyle = fogged(parseColour(mark.colour), depth[i])
+    ctx.fillStyle = sphereFill(ctx, px[i], py[i], radius, parseColour(mark.colour), (rgb) => fogged(rgb, depth[i]))
     ctx.beginPath()
     ctx.arc(px[i], py[i], radius, 0, Math.PI * 2)
     ctx.fill()
@@ -619,9 +660,13 @@ export function drawStructureLabels(
  * a round end, since the stretch's own cap has to be butt where it meets the
  * next.
  *
- * Each stretch is a rim — the tube's full width, darker — under a core,
- * lighter and narrower; a ghosted bead, or a tube too thin for two tones, is
- * one flat stroke at the bead's alpha, as the adapter draws it at one.
+ * Each stretch is lit as a cylinder is ({@link bandsOf}): a stack of bands
+ * along the one curve, from the full width in shadow to a narrow highlight,
+ * each nudged towards the key light. A band is filled, not stroked, as the
+ * outline of the curve offset either side ({@link ribbon}), so its width can
+ * run from one midpoint's to the other's. A ghosted bead, or a tube too thin
+ * to shade, is one flat band at the bead's alpha, as the adapter draws it at
+ * one.
  */
 function tubeMarks(
   ctx: CanvasRenderingContext2D,
@@ -691,51 +736,41 @@ function tubeMarks(
         draw: () => {
           const alpha = options.alpha(bead)
           if (alpha < GHOST_GONE) return
-          const width = Math.max(0.5, options.radius * 2 * size[bead])
           const colour = options.colour(bead)
+          const widthOf = (b: number): number => Math.max(0.5, options.radius * 2 * size[b])
+          const width = widthOf(bead)
+          // The width at each midpoint is the two beads' mean, from either
+          // side, so two stretches meet at one width rather than a step of
+          // the perspective between them.
+          const before = j > 0 ? (width + widthOf(beads[j - 1])) / 2 : width
+          const after = j + 1 < count ? (width + widthOf(beads[j + 1])) / 2 : width
           const overlap = alpha >= 1 ? JOIN_OVERLAP : 0
-          const trace = (): void => {
-            ctx.beginPath()
-            if (into !== null && back !== null) {
-              ctx.moveTo(into[0] - back[0] * overlap, into[1] - back[1] * overlap)
-              ctx.lineTo(into[0], into[1])
-              ctx.bezierCurveTo(into[2], into[3], into[4], into[5], into[6], into[7])
-            } else {
-              ctx.moveTo(px[bead], py[bead])
-            }
-            if (out !== null && on !== null) {
-              ctx.bezierCurveTo(out[2], out[3], out[4], out[5], out[6], out[7])
-              ctx.lineTo(out[6] + on[0] * overlap, out[7] + on[1] * overlap)
-            }
-          }
-          const disc = (radius: number, fill: string): void => {
-            if (!end) return
-            ctx.fillStyle = fill
-            ctx.beginPath()
-            ctx.arc(px[bead], py[bead], radius, 0, Math.PI * 2)
-            ctx.fill()
-          }
+          const line = centreline(into, out, back, on, [px[bead], py[bead]], before, width, after, overlap)
+          const bands = bandsOf(width, alpha)
           ctx.globalAlpha = alpha
           ctx.setLineDash([])
-          ctx.lineCap = 'butt'
-          ctx.lineJoin = 'round'
-          const shaded = alpha >= 1 && width >= TUBE_SHADED_MIN
-          // The rim, then the core, each a round end where the run stops:
-          // every rim before any core, or the core's own end would be cut by
-          // the rim's.
-          const rim = options.fogged(shaded ? mix(colour, [0, 0, 0], TUBE_RIM) : colour, depth[bead])
-          disc(width / 2, rim)
-          ctx.strokeStyle = rim
-          ctx.lineWidth = width
-          trace()
-          ctx.stroke()
-          if (shaded) {
-            const core = options.fogged(mix(colour, [1, 1, 1], TUBE_CORE), depth[bead])
-            disc((width * TUBE_CORE_WIDTH) / 2, core)
-            ctx.strokeStyle = core
-            ctx.lineWidth = width * TUBE_CORE_WIDTH
-            trace()
-            ctx.stroke()
+          for (let k = 0; k < bands.length; k++) {
+            const band = bands[k]
+            ctx.fillStyle = options.fogged(band.shade(colour), depth[bead])
+            // A round end where the run stops: a disc per band.
+            if (end) {
+              const [dx, dy] = nudgeOf(width, band.outer)
+              ctx.beginPath()
+              ctx.arc(px[bead] + dx, py[bead] + dy, (width * band.outer) / 2, 0, Math.PI * 2)
+              ctx.fill()
+            }
+            // Each band is the ring of the section that is its own, and
+            // reaches only RING_REACH bands in under the next: so where this
+            // stretch is laid over its neighbour's end, every part of it lies
+            // on the neighbour's same band, and nothing shows the seam. A band
+            // laid whole over the lighter ones of the stretch below put the
+            // edge of every band at one line, and the reader's anti-aliasing
+            // left a dark hairline across the tube at every bead.
+            const inner = k + RING_REACH < bands.length ? bands[k + RING_REACH].outer : null
+            ctx.beginPath()
+            ribbon(ctx, line, band.outer, inner, 1)
+            ribbon(ctx, line, band.outer, inner, -1)
+            ctx.fill()
           }
           ctx.lineCap = 'round'
         },
@@ -1047,6 +1082,197 @@ function* counting(n: number): Generator<number, void, void> {
 }
 
 /** A colour mixed towards another by `t`. */
+function unit(v: [number, number, number]): [number, number, number] {
+  const length = Math.hypot(v[0], v[1], v[2]) || 1
+  return [v[0] / length, v[1] / length, v[2] / length]
+}
+
+/** A colour under the screen's lights, on a surface facing `normal` (camera frame, unit). */
+export function shade(colour: Rgb, normal: [number, number, number]): Rgb {
+  const dot = (l: readonly number[]): number => Math.max(0, normal[0] * l[0] + normal[1] * l[1] + normal[2] * l[2])
+  const light = AMBIENT + KEY_WEIGHT * dot(KEY) + FILL_WEIGHT * dot(FILL)
+  const lit: Rgb = [
+    Math.min(1, colour[0] * light),
+    Math.min(1, colour[1] * light),
+    Math.min(1, colour[2] * light),
+  ]
+  return mix(lit, [1, 1, 1], SPECULAR * dot(HIGHLIGHT) ** SHININESS)
+}
+
+/**
+ * The colour a lit sphere has `t` of the way from its highlight (`0`) out to
+ * the point of its silhouette furthest from the light (`1`).
+ *
+ * The family of circles a radial shading sweeps — from a point at the
+ * highlight to the whole disc, centre and radius growing together — has each
+ * circle's far side `t` of the way along that line, and the far side is most
+ * of what each band shows; so that is the normal the band is lit by. The same
+ * profile across a tube's width is the cylinder's, near enough at the widths a
+ * figure reads it at.
+ */
+function sphereAt(colour: Rgb, t: number): Rgb {
+  const [hx, hy] = [HIGHLIGHT[0], HIGHLIGHT[1]]
+  const away = Math.hypot(hx, hy) || 1
+  const x = (1 - t) * hx - (t * hx) / away
+  const y = (1 - t) * hy - (t * hy) / away
+  const z = Math.sqrt(Math.max(0, 1 - x * x - y * y))
+  return shade(colour, [x, y, z])
+}
+
+/**
+ * A bead as a lit sphere: a radial gradient from a point at its highlight to
+ * the whole disc, its stops fogged as the bead is. One flat colour where the
+ * bead is too small to shade, and on a context without gradients.
+ */
+function sphereFill(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  colour: Rgb,
+  fogged: (rgb: Rgb) => string,
+): string | CanvasGradient {
+  if (radius < TUBE_SHADED_MIN / 2 || typeof ctx.createRadialGradient !== 'function') {
+    return fogged(sphereAt(colour, 0.5))
+  }
+  // Canvas y runs down the page; the camera's runs up it.
+  const gradient = ctx.createRadialGradient(
+    x + HIGHLIGHT[0] * radius,
+    y - HIGHLIGHT[1] * radius,
+    0,
+    x,
+    y,
+    radius,
+  )
+  for (let k = 0; k <= SPHERE_STOPS; k++) {
+    const t = k / SPHERE_STOPS
+    gradient.addColorStop(t, fogged(sphereAt(colour, t)))
+  }
+  return gradient
+}
+
+/**
+ * A lit line `width` across, as bands to lay one over the next along the
+ * same path: from the full width in the shadow of its rim to a narrow
+ * highlight, each a share `outer` of the width, nudged towards the light by
+ * as much as it is narrower ({@link nudgeOf}).
+ *
+ * The nudge is one vector for a whole path, and a vector moves a line only
+ * across itself, so a tube running towards the light is lit along its middle
+ * and one running across it on its lit side — which is what a cylinder does.
+ * One flat band, the surface's own colour, for a ghosted line (bands at an
+ * alpha would add up) or one too thin to shade.
+ */
+function bandsOf(width: number, alpha: number): Array<{ outer: number; shade: (colour: Rgb) => Rgb }> {
+  if (alpha < 1 || width < TUBE_SHADED_MIN) return [{ outer: 1, shade: (colour) => colour }]
+  const count = Math.min(BANDS_MAX, Math.max(BANDS_MIN, Math.ceil(width / 2 / BAND_WIDTH)))
+  const bands: Array<{ outer: number; shade: (colour: Rgb) => Rgb }> = []
+  for (let k = 0; k < count; k++) {
+    const middle = 1 - (k + 0.5) / count
+    bands.push({ outer: 1 - k / count, shade: (colour) => sphereAt(colour, middle) })
+  }
+  return bands
+}
+
+/** How far a band a share `outer` of a line `width` across is moved towards the light, in canvas pixels. */
+function nudgeOf(width: number, outer: number): [number, number] {
+  const nudge = ((1 - outer) * width) / 2
+  // Canvas y runs down the page; the camera's runs up it.
+  return [HIGHLIGHT[0] * nudge, -HIGHLIGHT[1] * nudge]
+}
+
+/** A point on a tube's centreline: where, which way it runs, and how wide the tube is there. */
+interface Station {
+  x: number
+  y: number
+  /** The unit tangent. */
+  tx: number
+  ty: number
+  width: number
+}
+
+/**
+ * A stretch's centreline as stations, from `overlap` before its first
+ * midpoint to `overlap` past its last, the width running linearly from each
+ * midpoint's to the bead's along each half-span.
+ */
+function centreline(
+  into: number[] | null,
+  out: number[] | null,
+  back: [number, number] | null,
+  on: [number, number] | null,
+  centre: [number, number],
+  before: number,
+  width: number,
+  after: number,
+  overlap: number,
+): Station[] {
+  const stations: Station[] = []
+  const along = (half: number[], from: number, to: number, skipFirst: boolean, fallback: [number, number]): void => {
+    const reach =
+      Math.hypot(half[2] - half[0], half[3] - half[1]) +
+      Math.hypot(half[4] - half[2], half[5] - half[3]) +
+      Math.hypot(half[6] - half[4], half[7] - half[5])
+    const steps = Math.min(16, Math.max(2, Math.ceil(reach / OUTLINE_STEP)))
+    let tangent = fallback
+    for (let i = skipFirst ? 1 : 0; i <= steps; i++) {
+      const t = i / steps
+      const u = 1 - t
+      const x = u * u * u * half[0] + 3 * u * u * t * half[2] + 3 * u * t * t * half[4] + t * t * t * half[6]
+      const y = u * u * u * half[1] + 3 * u * u * t * half[3] + 3 * u * t * t * half[5] + t * t * t * half[7]
+      const dx = 3 * u * u * (half[2] - half[0]) + 6 * u * t * (half[4] - half[2]) + 3 * t * t * (half[6] - half[4])
+      const dy = 3 * u * u * (half[3] - half[1]) + 6 * u * t * (half[5] - half[3]) + 3 * t * t * (half[7] - half[5])
+      const length = Math.hypot(dx, dy)
+      if (length > 1e-9) tangent = [dx / length, dy / length]
+      stations.push({ x, y, tx: tangent[0], ty: tangent[1], width: from + (to - from) * t })
+    }
+  }
+  if (into !== null && back !== null) {
+    stations.push({ x: into[0] - back[0] * overlap, y: into[1] - back[1] * overlap, tx: back[0], ty: back[1], width: before })
+    along(into, before, width, false, back)
+  }
+  if (out !== null && on !== null) {
+    const start = into === null ? towards(out, 0) : [stations[stations.length - 1].tx, stations[stations.length - 1].ty]
+    along(out, width, after, into !== null, start as [number, number])
+    stations.push({ x: out[6] + on[0] * overlap, y: out[7] + on[1] * overlap, tx: on[0], ty: on[1], width: after })
+  }
+  if (stations.length === 0) stations.push({ x: centre[0], y: centre[1], tx: 1, ty: 0, width })
+  return stations
+}
+
+/**
+ * One side of a band of a tube, as a closed subpath: its edge on that side
+ * (`side` `1` or `-1`) out and back along the band `inner` of the width in,
+ * or along the other side's edge for the band in the middle (`inner` null).
+ *
+ * A band is a share of the tube's width wherever it is, so it narrows and
+ * widens with the tube and meets its neighbour's at the midpoint exactly.
+ */
+function ribbon(
+  ctx: CanvasRenderingContext2D,
+  line: Station[],
+  outer: number,
+  inner: number | null,
+  side: 1 | -1,
+): void {
+  if (inner === null && side === -1) return
+  const edge = (station: Station, share: number, which: 1 | -1): [number, number] => {
+    const [dx, dy] = nudgeOf(station.width, share)
+    const half = (station.width * share) / 2
+    return [station.x + dx - station.ty * half * which, station.y + dy + station.tx * half * which]
+  }
+  line.forEach((station, i) => {
+    const [x, y] = edge(station, outer, side)
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+  for (let i = line.length - 1; i >= 0; i--) {
+    const [x, y] = inner === null ? edge(line[i], outer, -1) : edge(line[i], inner, side)
+    ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+}
+
 function mix(colour: Rgb, towards: Rgb, t: number): Rgb {
   if (!(t > 0)) return colour
   return [

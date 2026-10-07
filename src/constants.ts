@@ -48,14 +48,16 @@ export const DENSE_MATRIX_BIN_LIMIT = 50_000
  * is — Chrome on a 16 GB Mac now answers 16 — but it is still a floor rather
  * than a measurement, and it is still absent in two of the three engines.
  *
- * Half, not a third. The share was set when guessing high meant a killed tab;
- * it does not any more, because the allocation itself is caught and translated
- * (`allocateDense`). What is left to lose by being generous is a clean refusal
- * arriving a moment later than it might have, and what was being lost by being
- * cautious is a picture the machine could have drawn. A modern laptop reporting
- * 8 now budgets 4.3 GB rather than 2.9.
+ * Three quarters, not a half. The share was set when guessing high meant a
+ * killed tab; it does not any more, because the allocation itself is caught and
+ * translated (`allocateDense`). What is left to lose by being generous is a
+ * clean refusal arriving a moment later than it might have, and what was being
+ * lost by being cautious is a picture the machine could have drawn — a whole
+ * yeast chromosome IV at 100 bp, 15,320 bins a side, measured 2.9 GB in the tab
+ * and was refused under the half. A laptop reporting 8 now budgets 6.4 GB
+ * rather than 4.3.
  */
-export const DEVICE_MEMORY_SHARE = 1 / 2
+export const DEVICE_MEMORY_SHARE = 3 / 4
 
 /**
  * Assumed RAM in GiB when the browser does not say.

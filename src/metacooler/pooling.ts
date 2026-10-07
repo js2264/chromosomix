@@ -32,21 +32,22 @@
  * straddling the read had just gone to the trouble of avoiding.
  */
 
-import { RASTER_MAX_DIM } from '../render/heatmap'
 import type { Coords } from './coords'
 import type { AxisGrouping } from './aggregate'
 
 /**
- * Cells per axis a pooled read aims for: exactly what the renderer will draw.
+ * Cells per axis a pooled read aims for.
  *
- * `RASTER_MAX_DIM` and not a number of its own, because the raster is the reason
- * this exists. Reading finer than the picture can show costs memory and time to
- * produce values that are pooled again a step later and never seen; reading
- * coarser would throw away detail the screen has room for. At this cap the block
- * is at most 4096² cells — 67 MB of `Float32Array` — however many bins the file
- * has.
+ * A pooled read is the one a window too wide to read bin for bin takes — a whole
+ * genome, a whole large chromosome — and it is not under the dense guard: its
+ * accumulator is sized by this cap rather than by the window. So it stays at
+ * 4,096, 67 MB of `Float32Array` however many bins the file has, while a window
+ * narrow enough to read unpooled may be up to four times wider
+ * (`denseCellCap`). It was `RASTER_MAX_DIM` until that was raised;
+ * following it to 16,384 would have made every whole-genome view of a large
+ * file a 1 GB accumulator with no guard in front of it.
  */
-export const POOLED_CELL_CAP = RASTER_MAX_DIM
+export const POOLED_CELL_CAP = 4096
 
 /**
  * How a coarser axis is built out of a finer one.

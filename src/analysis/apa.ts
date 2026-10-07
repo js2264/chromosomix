@@ -7,7 +7,7 @@
  *
  * **Reads are per window, at the file's own resolution, never a bounding box.**
  * This is a deliberate reversal of the obvious optimisation and the reason is
- * resolution: a whole-genome or bounding-box read is pooled at `RASTER_MAX_DIM`
+ * resolution: a whole-genome or bounding-box read is pooled at `POOLED_CELL_CAP`
  * (§7.2), so a pileup taken from one silently inherits a coarser bin than the
  * reader asked for, on any genome large enough for it to matter — and nothing in
  * the picture would say so. `k` windows inherit nothing. Where windows happen to

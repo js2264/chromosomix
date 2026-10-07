@@ -127,6 +127,7 @@ const LUCIDE = [
   // is true of all four of them.
   'file-cog',
   'palette',
+  'pipette',
   'sliders-horizontal',
   'pencil',
   'scan',
@@ -175,6 +176,10 @@ const LUCIDE = [
   'arrow-left-right',
   'undo-2',
   'redo-2',
+  // A region's window moved half its own width along the sequence, beside the
+  // locus box's `go` (§5.4).
+  'move-left',
+  'move-right',
 ]
 
 /**
