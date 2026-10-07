@@ -127,6 +127,7 @@ const LUCIDE = [
   // is true of all four of them.
   'file-cog',
   'palette',
+  'pipette',
   'sliders-horizontal',
   'pencil',
   'scan',
