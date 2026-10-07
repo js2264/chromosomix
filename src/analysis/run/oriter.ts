@@ -287,6 +287,10 @@ export const runOriTer: TrackTaskRunner = async (job) => {
       label: `Origin and terminus · ${reference}`,
       payload: { kind: 'features', data: loci.finish() },
       noun: { one: 'locus', many: 'loci' },
+      // Places, as the sites below are: a track beside the map, and a point on
+      // it where the reader puts them there (§18.7).
+      display: 'lane',
+      look: 'point',
     } satisfies IntervalsOutput,
   ]
   if (parCount > 0) {
@@ -296,6 +300,8 @@ export const runOriTer: TrackTaskRunner = async (job) => {
       label: `parS sites · ${motifs.parS.pattern}`,
       payload: { kind: 'features', data: parSites.finish() },
       noun: { one: 'site', many: 'sites' },
+      display: 'lane',
+      look: 'point',
     })
   }
   if (matCount > 0) {
@@ -305,6 +311,8 @@ export const runOriTer: TrackTaskRunner = async (job) => {
       label: `matS sites · ${motifs.matS.pattern}`,
       payload: { kind: 'features', data: matSites.finish() },
       noun: { one: 'site', many: 'sites' },
+      display: 'lane',
+      look: 'point',
     })
   }
 

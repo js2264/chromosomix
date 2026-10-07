@@ -1,14 +1,16 @@
 /**
- * Every called set on both surfaces (§18.7): on the map and as a lane.
+ * Every called set as one row (§18.7): a 1D track or an overlay on the map, as
+ * its display says.
  *
  * On the micro-C demo — a yeast map with the ATAC bigWig beside it — peaks are
- * called on ATAC and arrive as boxes in a lane directly under the coverage and
- * as marks on the map; diamond insulation's boundaries and domains arrive on
- * the map and as lanes under the insulation track; compartments on chromosome
- * IV arrive as A/B segments coloured by their name, on the map and under E1.
- * Then the two switches, *on the map* and *as a lane*, on a row's settings and
- * in the drawer; and last the 1D browser demo, which has no map, where the
- * peaks are a lane alone.
+ * called on ATAC and arrive as a track of boxes directly under the coverage;
+ * diamond insulation's boundaries arrive as a track under the insulation score
+ * and its domains as corners along the diagonal; compartments on chromosome IV
+ * arrive as A/B segments coloured by their name, under E1. Then the *display*
+ * dropdown on a row's settings and in the drawer, moving the A/B segments onto
+ * the map and back; a reload that keeps each row's display; and last the 1D
+ * browser demo, which has no map, where the peaks are a track and offer no
+ * display.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-task-segments.mjs [out-dir]
@@ -123,23 +125,29 @@ const goTo = async (locus) => {
 }
 const rows = () =>
   page.$$eval('.annotation-card .ann-row', (all) =>
-    all.map((row) => `${row.getAttribute('data-id')} ${row.classList.contains('ann-ready') ? 'ready' : ''}`),
+    all.map((row) => {
+      const display = row.querySelector('select[data-field="display"]')?.value
+      return `${row.getAttribute('data-id')}${display === undefined ? '' : ` display=${display}`}`
+    }),
   )
-/** Open one row's settings on the Tracks card, by the end of its id. */
+/** Open one row's settings on the Tracks card, by the end of its id (or `*part` for a part of it). */
 const openRow = async (suffix) => {
   await fold('Show the Annotations panel')
-  const row = page.locator(`.annotation-card .ann-row[data-id$="${suffix}"]`).first()
+  const selector = suffix.startsWith('*')
+    ? `.annotation-card .ann-row[data-id*="${suffix.slice(1)}"]`
+    : `.annotation-card .ann-row[data-id$="${suffix}"]`
+  const row = page.locator(selector).first()
   await row.scrollIntoViewIfNeeded()
   const more = row.locator('.ann-more').first()
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click()
   await sleep(800)
-  await page.locator(`.annotation-card .ann-row[data-id$="${suffix}"]`).first().scrollIntoViewIfNeeded()
-  return page.locator(`.annotation-card .ann-row[data-id$="${suffix}"]`).first()
+  await page.locator(selector).first().scrollIntoViewIfNeeded()
+  return page.locator(selector).first()
 }
 
 try {
   // ---------------------------------------------------------------------------
-  // A map with its coverage: peaks under ATAC, on the map and as a lane.
+  // A map with its coverage: peaks as a track under ATAC.
   // ---------------------------------------------------------------------------
   page = await fresh()
   await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
@@ -154,18 +162,18 @@ try {
   console.log('peaks, where they went:', JSON.stringify(await elsewhere()))
   await showElsewhere()
   await sleep(600)
-  await shot('s01-peaks-drawer-switches')
+  await shot('s01-peaks-drawer-display')
 
   await closeDrawer()
   await fold('Fold the Analysis panel')
   await goTo('IV:1,240,000-1,300,000')
   console.log('rows:', JSON.stringify(await rows()))
-  await shot('s02-peaks-under-atac-and-on-the-map')
+  await shot('s02-peaks-under-atac')
   await goTo('IV:1,262,000-1,272,000')
   await shot('s03-peaks-close')
 
   // ---------------------------------------------------------------------------
-  // Diamond insulation: boundaries and domains, on the map and as lanes.
+  // Diamond insulation: boundaries as a track, domains as corners on the map.
   // ---------------------------------------------------------------------------
   await goTo('IV:1,000,000-1,400,000')
   await openTask('Diamond insulation')
@@ -173,11 +181,11 @@ try {
   console.log('insulation, where they went:', JSON.stringify(await elsewhere()))
   await showElsewhere()
   await sleep(600)
-  await shot('s04-insulation-drawer-switches')
+  await shot('s04-insulation-drawer-displays')
   await closeDrawer()
   await fold('Fold the Analysis panel')
   await sleep(1500)
-  await shot('s05-insulation-boundaries-domains-map-and-lanes')
+  await shot('s05-insulation-boundaries-track-domains-corners')
 
   // ---------------------------------------------------------------------------
   // Compartments on chromosome IV: A/B segments, coloured by name.
@@ -196,61 +204,51 @@ try {
   console.log('compartments, where they went:', JSON.stringify(await elsewhere()))
   await showElsewhere()
   await sleep(600)
-  await shot('s06-compartments-drawer-switches')
+  await shot('s06-compartments-drawer-display')
   await closeDrawer()
   await fold('Fold the Analysis panel')
   await sleep(1500)
-  await shot('s07-compartments-ab-on-the-map-and-under-e1')
+  await shot('s07-compartments-ab-under-e1')
   // Closer, where the A and B boxes are wide enough to read their colours.
   await goTo('IV:150,000-650,000')
   await shot('s07b-compartments-ab-closer')
 
-  // The lane's row on the Tracks card: the two switches, coloured by name.
-  await openRow('compartment-ab:lane')
-  await sleep(600)
-  await shot('s08-compartments-lane-row-settings')
-  await shotOf('.annotation-card .ann-row[data-id$="compartment-ab:lane"]', 's09-compartments-lane-row-alone')
-
-  // A switch pressed on the row, then the panel folded so the map has its room.
-  const flip = async (which) => {
-    const row = await openRow('compartment-ab:lane')
-    await row.locator('.ann-surfaces button', { hasText: which }).first().click()
-    await sleep(600)
-    await fold('Fold the Annotations panel')
-    await sleep(1500)
-  }
-  // Off the map: the overlay goes and the lane stays.
-  await flip('on the map')
-  await shot('s10-compartments-lane-only')
-  // …and the other way round: on the map, no lane.
-  await flip('on the map')
-  await flip('as a lane')
-  await shot('s11-compartments-map-only')
-  await flip('as a lane')
-  // The overlay's own row carries the same two switches.
+  // The row on the Tracks card: the display at its head, coloured by name.
   await openRow('compartment-ab')
-  await shotOf('.annotation-card .ann-row[data-id$="compartment-ab"]', 's12-compartments-overlay-row-alone')
+  await sleep(600)
+  await shot('s08-compartments-row-settings')
+  await shotOf('.annotation-card .ann-row[data-id$="compartment-ab"]', 's09-compartments-row-as-track')
+
+  // The display moved on the row, then the panel folded so the map has its room.
+  const display = async (suffix, value) => {
+    const row = await openRow(suffix)
+    await row.locator('select[data-field="display"]').first().selectOption(value)
+    await sleep(800)
+  }
+  // On the map: the corners of the A/B stretches, and no track under E1.
+  await display('compartment-ab', 'overlay')
+  await shotOf('.annotation-card .ann-row[data-id$="compartment-ab"]', 's10-compartments-row-on-the-map')
+  await fold('Fold the Annotations panel')
+  await sleep(1500)
+  await shot('s11-compartments-on-the-map-not-under-e1')
+  // …and back to a track, where it was.
+  await display('compartment-ab', 'lane')
+  await fold('Fold the Annotations panel')
+  await sleep(1500)
+  await shot('s12-compartments-back-under-e1')
 
   // ---------------------------------------------------------------------------
-  // A session reloaded: both rows come back, with which surface was on.
+  // A session reloaded: every row comes back on the surface it was left on.
   // ---------------------------------------------------------------------------
-  const peaksLane = await openRow(':lane')
-  void peaksLane
-  await page.locator('.annotation-card .ann-row[data-id*=":peaks-"][data-id$=":lane"] .ann-surfaces button', { hasText: 'on the map' }).first().click().catch(() => console.log('no peaks overlay switch'))
-  await sleep(800)
+  await display('*:peaks-', 'overlay')
+  console.log('before a reload:', JSON.stringify(await rows()))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(6000)
   await fold('Show the Annotations panel')
   console.log('after a reload:', JSON.stringify(await rows()))
-  const peaksRow = page.locator('.annotation-card .ann-row[data-id*=":peaks-"][data-id$=":lane"]').first()
-  if (await peaksRow.count()) {
-    await peaksRow.scrollIntoViewIfNeeded()
-    await peaksRow.locator('.ann-more').first().click()
-    await sleep(800)
-    await peaksRow.scrollIntoViewIfNeeded()
-  }
-  await shot('s13-reloaded-rows-detached-switches-kept')
+  await openRow('*:peaks-')
+  await shot('s13-reloaded-rows-keep-their-display')
 
   // ---------------------------------------------------------------------------
   // No map: the 1D browser demo, where the peaks are a lane alone.
@@ -270,7 +268,7 @@ try {
   await closeDrawer()
   await fold('Fold the Analysis panel')
   await goTo('IV:1,240,000-1,300,000')
-  await shot('s14-browser-no-map-peaks-lane-under-atac')
+  await shot('s14-browser-no-map-peaks-track-under-atac')
 } finally {
   console.log(errors.length ? `page errors:\n${errors.slice(0, 20).join('\n')}` : 'no page errors')
   await browser.close()

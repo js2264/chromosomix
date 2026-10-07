@@ -47,6 +47,7 @@ import {
   drawsAProfile,
   hasAMovableAxis,
   hasFeatureRows,
+  overlayShapeOf,
   placementOn,
   type AnnotationEntry,
   type AnnotationKind,
@@ -4531,7 +4532,9 @@ export class MatrixPanel {
         drawDiagonalFeatures(ctx, frame, this.locusAxes, entry.payload.data, {
           colour: entry.style.colour,
           opacity: entry.style.opacity,
-          shape: entry.style.shape,
+          shape: overlayShapeOf(entry.style),
+          // A point is ringed in the page's own colour, as an arrowhead is.
+          halo: palette.labelHaloColor,
         })
       } else if (entry.payload?.kind === 'pairs') {
         drawPairs(ctx, frame, this.locusAxes, entry.payload.data, {

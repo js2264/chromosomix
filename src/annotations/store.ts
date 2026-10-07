@@ -1268,8 +1268,80 @@ export class AnnotationStore {
             },
       )
     }
-    return rows
+    return foldCalledPairs(rows)
   }
+}
+
+/**
+ * A called set stored as the two rows it used to be, read back as the one row
+ * it is now (§18.7).
+ *
+ * Before a called set was one row it was an overlay `<id>` and a lane
+ * `<id>:lane`, each naming the other as its `partner`, and a session written
+ * then is still in a reader's storage and in workspace files. Restored as it
+ * was, the pair would come back as two rows of one set and a Recompute would
+ * leave the lane behind as a third. So the pair is folded here, at the one door
+ * stored rows come in through:
+ *
+ * - the row keeps the overlay's **id**, which the recipe, the exports' names
+ *   and the deck's records name it by;
+ * - its **display** is what the reader had drawn — a 1D track where the lane
+ *   was on, the map where only the overlay was;
+ * - its edges, its colouring and its slot in the list are the surface it is on;
+ *   its look on the map is the overlay's, read through `overlayShapeOf` (a box
+ *   is drawn as its corner).
+ */
+function foldCalledPairs(rows: StoredEntry[]): StoredEntry[] {
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  /** Each pair's overlay, by its lane's id, with the display it folds into. */
+  const pairs = new Map<string, { overlay: StoredEntry; lane: StoredEntry; asLane: boolean }>()
+  for (const row of rows) {
+    if (row.source.kind !== 'computed' || row.card !== 'overlay' || row.partner === undefined) continue
+    const lane = byId.get(row.partner)
+    if (
+      lane === undefined ||
+      lane.id !== `${row.id}:lane` ||
+      lane.card !== 'synthetic' ||
+      lane.partner !== row.id
+    ) {
+      continue
+    }
+    pairs.set(lane.id, { overlay: row, lane, asLane: lane.visible || !row.visible })
+  }
+  if (pairs.size === 0) return rows
+  const overlays = new Map([...pairs.values()].map((pair) => [pair.overlay.id, pair]))
+
+  const out: StoredEntry[] = []
+  for (const row of rows) {
+    const asLaneRow = pairs.get(row.id)
+    const asOverlayRow = overlays.get(row.id)
+    const pair = asLaneRow ?? asOverlayRow
+    if (pair === undefined) {
+      out.push(row)
+      continue
+    }
+    // Emitted once, in the slot of the surface it folds into.
+    if ((asLaneRow !== undefined) !== pair.asLane) continue
+    const { overlay, lane, asLane } = pair
+    const lead = asLane ? lane.lead : overlay.lead
+    const { partner: _overlayPartner, lead: _overlayLead, ...base } = overlay
+    out.push({
+      ...base,
+      card: asLane ? 'synthetic' : 'overlay',
+      kind: asLane ? lane.kind : overlay.kind,
+      visible: overlay.visible || lane.visible,
+      placement: lane.placement,
+      style: {
+        ...lane.style,
+        shape: overlay.style.shape,
+        opacity: overlay.style.opacity,
+        radius: overlay.style.radius,
+      },
+      ...(lead === undefined ? {} : { lead }),
+      ...(lane.primary === true ? { primary: true } : {}),
+    })
+  }
+  return out
 }
 
 const STORE_SCOPE = 'annotations'

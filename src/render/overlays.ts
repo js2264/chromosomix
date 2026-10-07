@@ -6,8 +6,11 @@
  * it is about. A loop marked by a filled disc is a loop nobody can see; a domain
  * marked by a filled triangle is a domain whose interior has been painted over.
  * So everything here is an outline, a rule, or a glyph placed *beside* what it
- * points at — and the one filled shape, the arrowhead, sits outside the cell it
- * names, on the far side from the diagonal.
+ * points at — and of the two filled shapes, the arrowhead sits outside the cell
+ * it names, on the far side from the diagonal, and a called place's **point**
+ * sits on the diagonal itself, over the one pixel a boundary is not about: what
+ * it claims is that little crosses *there*, which is read off the map either
+ * side of the dot.
  *
  * Positions come from the two {@link LocusAxis} objects the panel already built,
  * which are the same ones the lanes use, which are built from the same runs the
@@ -19,7 +22,7 @@ import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
 import type { ManualArrowhead, ManualLine, ManualRect, ManualSpan } from '../annotations/manual'
-import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
+import { overlayShapeOf, type FeatureSet, type OverlayShape, type PairSet } from '../annotations/types'
 import type { Rect } from './heatmap'
 import { stretchOf, unitSpan, type LocusAxis } from './locus'
 import { placeRays, rowForSeparation, type RotateDirection } from './rotate'
@@ -164,24 +167,40 @@ export interface OverlayPaint {
   colour: string
   opacity: number
   shape: OverlayShape
+  /**
+   * What a `point` is ringed in before it is filled — the page's background, so
+   * a dot reads against a saturated colormap as well as against an empty
+   * corner, as an arrowhead does. Absent, a point is filled alone.
+   */
+  halo?: string
 }
 
+/** A point's radius, in CSS pixels: a dot on the diagonal, not a disc over it. */
+const POINT_RADIUS = 3
+
 /**
- * Bed features, marked where they meet the diagonal.
+ * A called set of segments, marked where it meets the diagonal (§18.7).
  *
- * Two shapes, because the two things people put in a BED beside a contact map
- * are not the same kind of object:
+ * Three looks, because the two things a task calls along a contact map are not
+ * the same kind of object and the first of them has two honest pictures:
  *
- * - **border** — a point-like call (an insulation minimum, a boundary). Drawn as
- *   a short rule *across* the diagonal at the feature's midpoint, which is the
- *   only mark that reads at any zoom: a boundary 2 kb wide is sub-pixel on a
- *   whole-genome view and a box for it would vanish.
- * - **element** — an extent (a domain, a compartment). Drawn as the outline of
- *   the square it occupies on both axes, so the reader sees the block of
- *   contacts the call is claiming rather than a mark next to it.
+ * - **point** — a place (an insulation minimum, a boundary, a site), drawn as a
+ *   dot on the diagonal at the feature's midpoint. A dot reads at any zoom: a
+ *   boundary one bin wide is sub-pixel on a whole-chromosome view, and a box for
+ *   it vanished.
+ * - **border** — the same place as a short rule *across* the diagonal, the
+ *   short diagonal marker, which says *here* without covering the diagonal's
+ *   own pixel: a run of them crosses the diagonal as a row of ticks.
+ * - **corner** — an extent (a domain, a compartment), drawn as the corner of
+ *   the square it occupies: its top edge and its right edge, which meet off the
+ *   diagonal over the block of contacts the call is claiming. One corner per
+ *   domain, on the upper side as a loop's ring is, so consecutive domains read
+ *   as the run of corners along the diagonal every domain figure draws; the
+ *   whole square drew each claim twice, once either side of the line it is
+ *   symmetric about, and hid the near-diagonal under a lattice.
  *
  * On a rectangular block — `contig_A × contig_B` — a feature that lands on both
- * axes still draws its box, which is the intersection of the two bands and is
+ * axes still draws its corner, at the intersection of the two bands, which is
  * exactly where the two features' contacts are. One that lands on only one axis
  * is skipped rather than smeared across the other, since there is no coordinate
  * there for it to have.
@@ -198,12 +217,20 @@ export function drawDiagonalFeatures(
   // A turned map has no row axis, and needs none: both ends of a feature are on
   // the axis that survived, and the height is what the two of them are apart.
   if (cols === null || (turn === null && rows === null)) return
+  // Read through the stored look, so a session written when the extent's look
+  // was a whole box draws its corner rather than nothing.
+  const shape = overlayShapeOf(paint)
+  // A point is filled rather than stroked, and a marker is ringed before it is
+  // stroked, so both are gathered and drawn after the walk, halo first; the
+  // corners are the one path the walk itself builds.
+  const points: Array<{ x: number; y: number }> = []
+  const marks: Array<[number, number, number, number]> = []
 
   ctx.save()
   if (turn !== null) clipToData(ctx, frame)
   ctx.globalAlpha = paint.opacity
   ctx.strokeStyle = paint.colour
-  ctx.lineWidth = Math.max(1 / frame.dpr, paint.shape === 'border' ? 1.25 : 1)
+  ctx.lineWidth = Math.max(1 / frame.dpr, 1.25)
   ctx.beginPath()
 
   // Candidates come from the *column* axis's visible windows and are then asked
@@ -239,25 +266,31 @@ export function drawDiagonalFeatures(
         // map and down the screen on the mirrored half of a comparison.
         const away = turn.direction === 'up' ? -1 : 1
         const mid = toX(frame, (colFrom + colTo) / 2)
-        if (paint.shape === 'border') {
-          // A tick standing on the axis rather than a cross over it: the whole
-          // of a turned map's signal is in the first few rows above the
-          // diagonal, and a cross centred there covers what it is pointing at.
-          // Snapped, because it is a hairline; the triangle below is not.
+        if (shape === 'border' || shape === 'point') {
           // The midpoint *is* the mark here, so a midpoint off screen is a mark
           // off screen — which is why this guard belongs inside this branch and
           // not above it.
           if (!insideX(frame, mid)) continue
+          // A dot resting on the axis rather than centred on it, for the tick's
+          // reason below: half of it would be over the first rows of signal.
+          if (shape === 'point') {
+            points.push({ x: mid, y: base + away * POINT_RADIUS })
+            continue
+          }
+          // A tick standing on the axis rather than a cross over it: the whole
+          // of a turned map's signal is in the first few rows above the
+          // diagonal, and a cross centred there covers what it is pointing at.
+          // Snapped, because it is a hairline; the corner below is not.
           const x = snap(mid, frame.dpr)
-          ctx.moveTo(x, base)
-          ctx.lineTo(x, base + away * 9)
+          marks.push([x, base, x, base + away * 9])
           continue
         }
-        // The square `[start, end]²` a domain occupies, turned: its two corners
-        // on the diagonal stay on the axis, and the two off it meet over the
-        // midpoint at the height of the domain's own width. A triangle standing
-        // on the axis, which is the shape a reader of a turned map is looking
-        // for and the reason the picture is worth turning.
+        // The corner of the square `[start, end]²` a domain occupies, turned:
+        // its two ends on the diagonal stay on the axis, and the corner off it
+        // stands over the midpoint at the height of the domain's own width. The
+        // two sides of a triangle standing on the axis — the shape a reader of a
+        // turned map is looking for and the reason the picture is worth turning
+        // — and no base, which would be a rule along the diagonal's own row.
         const apart = Math.abs(set.end[i] - set.start[i]) / turn.binsize
         const footFrom = toX(frame, colFrom)
         const footTo = toX(frame, colTo)
@@ -272,7 +305,6 @@ export function drawDiagonalFeatures(
         ctx.moveTo(footFrom, base)
         ctx.lineTo(mid, toY(frame, rowForSeparation(turn, apart) + 0.5))
         ctx.lineTo(footTo, base)
-        ctx.closePath()
         continue
       }
 
@@ -288,7 +320,16 @@ export function drawDiagonalFeatures(
         Math.min(set.end[i], stretchOf(rowSegment)[1]),
       )
 
-      if (paint.shape === 'border') {
+      if (shape === 'border' || shape === 'point') {
+        const x = toX(frame, (colFrom + colTo) / 2)
+        const y = toY(frame, (rowFrom + rowTo) / 2)
+        if (!insideX(frame, x) || !insideY(frame, y)) continue
+        // A dot on the diagonal at the feature's midpoint: where the place is,
+        // and nothing about a width the picture cannot show.
+        if (shape === 'point') {
+          points.push({ x, y })
+          continue
+        }
         // A short rule *across* the diagonal at the feature's midpoint: it
         // marks the place without asserting a width the picture cannot show.
         //
@@ -301,12 +342,10 @@ export function drawDiagonalFeatures(
         // stripe down the diagonal instead of reading as a row of ticks
         // crossing it. One stroke, not two: an X would put an arm back along
         // the diagonal and re-break the rule.
-        const x = snap(toX(frame, (colFrom + colTo) / 2), frame.dpr)
-        const y = snap(toY(frame, (rowFrom + rowTo) / 2), frame.dpr)
-        if (!insideX(frame, x) || !insideY(frame, y)) continue
+        const sx = snap(x, frame.dpr)
+        const sy = snap(y, frame.dpr)
         const reach = 7
-        ctx.moveTo(x - reach, y + reach)
-        ctx.lineTo(x + reach, y - reach)
+        marks.push([sx - reach, sy + reach, sx + reach, sy - reach])
         continue
       }
 
@@ -315,14 +354,17 @@ export function drawDiagonalFeatures(
       const y0 = toY(frame, rowFrom)
       const y1 = toY(frame, rowTo)
       const left = Math.min(x0, x1)
-      const right = Math.max(x0, x1)
+      // A floor of two pixels on each side, as a hand-drawn box has: a domain
+      // one bin wide on a whole-chromosome view is sub-pixel, and a corner of
+      // nothing is a mark nobody can find.
+      const right = Math.max(Math.max(x0, x1), left + 2)
       const top = Math.min(y0, y1)
-      const bottom = Math.max(y0, y1)
+      const bottom = Math.max(Math.max(y0, y1), top + 2)
       // Overlap, not corner-in-view, and the same test {@link drawManualRects}
-      // makes for the same reason: an element is an *extent*, and an extent is
+      // makes for the same reason: a domain is an *extent*, and an extent is
       // very often bigger than the window it is read in — zoom into a domain and
-      // its box surrounds the view. Guarding it by `insideX(x1)`/`insideY(y1)`
-      // asked whether its bottom-right corner was on screen, so the outline
+      // its square surrounds the view. Guarding it by `insideX(x1)`/`insideY(y1)`
+      // asked whether its bottom-right corner was on screen, so the mark
       // disappeared at exactly the zoom the reader reached for to inspect the
       // block it is claiming, and asymmetrically at that: `locusToUnit` grows
       // with bp, so a pan that kept only the domain's start drew nothing while
@@ -330,15 +372,66 @@ export function drawDiagonalFeatures(
       // (`HeatmapView.drawOverlay`) clips the painter to the data rect.
       if (right < frame.data.x || left > frame.data.x + frame.data.width) continue
       if (bottom < frame.data.y || top > frame.data.y + frame.data.height) continue
-      ctx.rect(
-        snap(left, frame.dpr),
-        snap(top, frame.dpr),
-        Math.max(2, right - left),
-        Math.max(2, bottom - top),
-      )
+      // The top edge and then the right one: from the diagonal at the domain's
+      // start, along its first row to the corner over its end, and down that
+      // column to the diagonal again. Both rules on the device grid, because
+      // they are hairlines and a corner's two arms are what is read.
+      const edgeY = snap(top, frame.dpr)
+      const edgeX = snap(right, frame.dpr)
+      ctx.moveTo(left, edgeY)
+      ctx.lineTo(edgeX, edgeY)
+      ctx.lineTo(edgeX, bottom)
     }
   }
   ctx.stroke()
+
+  // Each traced once per paint rather than painted twice off one path: the
+  // vector page (§7.2) hands a path to the operator that paints it and starts
+  // the next one empty, so a fill after the halo's stroke filled nothing and the
+  // PDF held a ring for every dot.
+  if (marks.length > 0) {
+    const rule = (): void => {
+      ctx.beginPath()
+      for (const [x0, y0, x1, y1] of marks) {
+        ctx.moveTo(x0, y0)
+        ctx.lineTo(x1, y1)
+      }
+    }
+    // A rule a pixel and a half wide in the row's colour over one three wide in
+    // the page's, so a marker crossing the darkest row of the map is still read
+    // as a mark and not as a scratch on it.
+    if (paint.halo !== undefined) {
+      rule()
+      ctx.strokeStyle = paint.halo
+      ctx.lineWidth = 3
+      ctx.stroke()
+    }
+    rule()
+    ctx.strokeStyle = paint.colour
+    ctx.lineWidth = Math.max(1 / frame.dpr, 1.5)
+    ctx.stroke()
+  }
+
+  if (points.length > 0) {
+    const trace = (): void => {
+      ctx.beginPath()
+      for (const point of points) {
+        ctx.moveTo(point.x + POINT_RADIUS, point.y)
+        ctx.arc(point.x, point.y, POINT_RADIUS, 0, Math.PI * 2)
+      }
+    }
+    // Ringed in the page's background before it is filled, as an arrowhead is,
+    // so a dot over the darkest row of the map is still a dot.
+    if (paint.halo !== undefined) {
+      trace()
+      ctx.strokeStyle = paint.halo
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+    trace()
+    ctx.fillStyle = paint.colour
+    ctx.fill()
+  }
   ctx.restore()
 }
 

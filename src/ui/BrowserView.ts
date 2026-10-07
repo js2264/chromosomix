@@ -2022,16 +2022,11 @@ export class BrowserView {
     // deck's structure cell (§25), and a chain of 5 kb beads drawn as boxes
     // along an axis is one solid bar saying nothing.
     const held = this.props.map === undefined ? this.props.store.entries : this.props.store.entriesOn(this.props.map)
-    // A called set is two rows, an overlay and a lane (§18.7), and here the lane
-    // *is* its picture: the overlay row drawn as a second lane would put every
-    // peak on the screen twice, and would keep drawing it after the reader had
-    // switched the lane off.
+    // …and a called set is one row whichever surface its display puts it on
+    // beside a map (§18.7): here there is no map, so a set drawn on one is a
+    // track like a loaded BEDPE is, and the display is the map's business.
     const entries = held.filter(
-      (entry) =>
-        entry.visible &&
-        entry.status === 'ready' &&
-        entry.kind !== 'structure' &&
-        !(entry.card === 'overlay' && entry.source.kind === 'computed' && entry.partner !== undefined),
+      (entry) => entry.visible && entry.status === 'ready' && entry.kind !== 'structure',
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,

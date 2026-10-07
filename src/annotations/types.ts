@@ -926,8 +926,38 @@ export interface Limits {
   max: number
 }
 
-/** How an on-map segment is drawn: a line across the diagonal, or a box on it. */
-export type OverlayShape = 'border' | 'element'
+/**
+ * How a called set of segments is drawn on the map: its **look** (§18.7).
+ *
+ * Two families, because the two things a task calls along the diagonal are not
+ * the same kind of object. A **point** set — boundaries, borders, sites, peaks —
+ * is a list of places, drawn as a `point` on the diagonal or as a `border`, the
+ * short marker across it; which of the two is the reader's choice. An **extent**
+ * set — domains, compartments, segments — is drawn as the `corner` of the
+ * square each one occupies: its top edge and its right edge, meeting off the
+ * diagonal, so consecutive domains read as the run of corners along it that
+ * every domain figure draws.
+ *
+ * There was a fourth, `element`, the whole square; a stored one is read as a
+ * corner ({@link overlayShapeOf}), which is the same square drawn once rather
+ * than on both sides of the diagonal it is symmetric about.
+ */
+export type OverlayShape = 'point' | 'border' | 'corner'
+
+/** The looks a point set is offered on the map, in the order the dropdown lists them. */
+export const POINT_LOOKS: readonly OverlayShape[] = ['point', 'border']
+
+/**
+ * A row's overlay look, read through what an older build may have stored.
+ *
+ * Untrusted like every stored style: `element` — the box this replaced — and
+ * anything else a hand-edited session carries are read as a corner, the look
+ * every extent set is drawn in.
+ */
+export function overlayShapeOf(style: { shape?: unknown }): OverlayShape {
+  const shape = style.shape
+  return shape === 'point' || shape === 'border' ? shape : 'corner'
+}
 
 /**
  * Everything the settings row for one annotation controls.
@@ -1077,6 +1107,10 @@ export interface AnnotationStyle {
    * can be compared by eye. `''` means this track scales alone.
    */
   group: string
+  /**
+   * How a called set of segments is drawn on the map; read through
+   * {@link overlayShapeOf}, since a stored one may predate the looks.
+   */
   shape: OverlayShape
   /** Radius of an off-diagonal pair circle, in CSS pixels. */
   radius: number
@@ -1250,7 +1284,7 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     // that is really flat — so a sequence lane starts pinned to the whole of it.
     limits: kind === 'sequence' ? { auto: false, min: 0, max: 1 } : { auto: true, min: 0, max: 1 },
     group: '',
-    shape: 'element',
+    shape: 'corner',
     radius: 7,
     opacity: kind === 'pairs' ? 0.9 : 1,
     flip: false,

@@ -429,8 +429,9 @@ function scopeId(searched: readonly Contig[]): string {
  * The sites, as an interval set.
  *
  * Straight onto an entry from here: a `FeatureSet` is what a parsed BED would
- * have produced, so it becomes an ordinary overlay row with the same colour, the
- * same shape controls and the same **Save as BED** as a file the reader dropped
+ * have produced, so it becomes an ordinary row of the Tracks card — a 1D track,
+ * or a set of points on the map — with the same colour, the same controls and
+ * the same **Save as BED** as a file the reader dropped
  * (`AnalysisWorkspace.adoptIntervals`). The names and the empty score column are
  * `motifFeatures`' decisions and are argued there.
  */
@@ -446,6 +447,10 @@ function sitesOutput(
     label,
     payload: { kind: 'features', data: motifFeatures(result, pattern) },
     noun: { one: 'site', many: 'sites' },
+    // Places: a track beside the map, and a point on it where the reader puts
+    // them there (§18.7).
+    display: 'lane',
+    look: 'point',
   }
 }
 

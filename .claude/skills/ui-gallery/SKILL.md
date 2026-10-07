@@ -43,7 +43,8 @@ node scripts/ui-compartments.mjs gallery     # the Compartments table under cool
 node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed: ia1 … ia6
 node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
-node scripts/ui-task-segments.mjs gallery-segments  # every called set on the map and as a lane: peaks under ATAC, insulation's boundaries and domains, A/B segments by name, the two switches, a reload, and the 1D browser's lane alone: s01 … s14
+node scripts/ui-task-segments.mjs gallery-segments  # every called set as one row: peaks as a track under ATAC, insulation's boundaries as a track and its domains as corners, A/B segments by name, the display moving a set onto the map and back, a reload keeping it, and the 1D browser's track with no display: s01 … s14
+node scripts/ui-called-sets.mjs gallery-called  # insulation's three rows (§18.7): the score, the boundaries as a 1D track and the domains as corners along the diagonal, the display and look dropdowns in the drawer and on each row, points and short diagonal markers close up, the domains as long segments, a turned map, a reload, the 1D browser: cs01 … cs13
 node scripts/ui-deck-maps.mjs gallery        # eight maps dropped at once, maps named in a task's tabs and all-maps tables, ori and arms on every map, rows of the Contact maps card reordered: dm01 … dm10
 node scripts/ui-insulation-hicrep.mjs gallery  # the Analysis column with Reproducibility ready, then HiCRep's and insulation's forms and runs on the yeast deck: ih00 … ih10
 node scripts/ui-overlay-maps.mjs gallery     # a loop set's maps field on a deck of three, a row and a file dropped on a map's middle, the batch box: om01 … om19
@@ -273,6 +274,17 @@ could. Then *Diamond insulation*'s form — its *Boundaries* section holding the
 calls are read over — and a run, with its lane and its domains on the map. It prints the row's
 state, each run's notes and the per-sequence rows. Run it after any change to either task's form,
 to `analysis/insulation.ts`, to `analysis/hicrep.ts`, or to how the deck tells the column its maps.
+
+`scripts/ui-called-sets.mjs` drives a called set as **one row** (§18.7) on the micro-C demo's
+chromosome IV: diamond insulation run, the drawer's two displays — and the look appearing beside the
+boundaries' when they are put on the map from there — the map with the score and the boundaries' 1D
+track on its edge and the domains' corners along the diagonal, the Tracks card's three rows, the
+boundaries' settings as a track and on the map, their points and then their short diagonal markers
+100 kb close, the domains back to a track of long segments, the map turned — corners standing on the
+axis, points resting on it — a reload keeping each row's display and look, and the 1D browser demo,
+where a peak set is a track and offers no display. It prints the drawer's dropdowns and every row's
+display and look. Run it after any change to `analysis/surfaces.ts`, `ui/calledSurfaces.ts`,
+`drawDiagonalFeatures`, or where a task's sets open.
 
 `scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
 yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the

@@ -190,8 +190,9 @@ export interface AnalysisDrawerOptions {
     format: 'bigwig' | 'bedgraph',
   ): Promise<void>
   /**
-   * The *on the map* and *as a lane* switches of a called set (§18.7), or
-   * `null` where the set did not become the two rows they switch.
+   * A called set's display and look (§18.7) — a 1D track or an overlay on the
+   * map — or `null` where the set did not become a row, or there is no map to
+   * choose.
    */
   surfaces?(output: IntervalsOutput): HTMLElement | null
 }
@@ -494,7 +495,7 @@ export class AnalysisDrawer {
   private form: ParamForm | null = null
   private params: Params = {}
   private figures: Array<{ destroy(): void }> = []
-  /** The called sets' switch slots on screen; see {@link fillSurfaces}. */
+  /** The called sets' display slots on screen; see {@link fillSurfaces}. */
   private surfaceSlots: Array<{ slot: HTMLElement; output: IntervalsOutput }> = []
   /** The result the output blocks were built from, compared by identity. */
   private drawn: TaskResult | null = null
@@ -1508,8 +1509,9 @@ export class AnalysisDrawer {
   /**
    * The outputs that are not pictures, and where they went instead.
    *
-   * A profile is a lane and a called interval is an overlay (§18.5, §18.7), and
-   * both are ordinary rows on the Annotations panel from the moment they arrive
+   * A profile is a lane and a called interval set is a 1D track or an overlay,
+   * as the display under its name says (§18.5, §18.7), and both are ordinary
+   * rows on the Annotations panel from the moment they arrive
    * — the same implementation a loaded bigWig or BED gets, not a second one. The
    * sentence is here so the drawer does not look as though the run produced
    * nothing, and the TSV is here because §18.7's *every output offers TSV* has
@@ -1547,12 +1549,12 @@ export class AnalysisDrawer {
             'structure cell (add one from the deck’s bar if none is open).'
           : where === 'overlay' && this.options.context()?.hasMap === false
             ? many
-              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as lanes, marked *.`
-              : 'Added to the Tracks card in the Annotations panel as a lane, marked *.'
+              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as 1D tracks, marked *.`
+              : 'Added to the Tracks card in the Annotations panel as a 1D track, marked *.'
           : where === 'overlay'
             ? many
-              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel, each drawn on the map it was called from and as a lane.`
-              : 'Added to the Tracks card in the Annotations panel, drawn on the map it was called from and as a lane.'
+              ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel, marked *.`
+              : 'Added to the Tracks card in the Annotations panel, marked *.'
             : 'This file carries no annotation layer, so there is no overlay to draw these on. ' +
               'Take them as a BED, which this app reads back on any file that has one.'
     return el(
@@ -1579,15 +1581,20 @@ export class AnalysisDrawer {
   }
 
   /**
-   * Put the *on the map* / *as a lane* switches into every called set's slot.
+   * Put the display dropdown into every called set's slot.
    *
-   * Public because the rows they switch are made by the workspace *after* the
+   * Public because the rows it moves are made by the workspace *after* the
    * runner has told this drawer the run is done, so a slot drawn with the
    * result is empty until the workspace says the rows are there.
    */
   fillSurfaces(): void {
     this.surfaceSlots = this.surfaceSlots.filter(({ slot }) => slot.isConnected)
-    for (const { slot, output } of this.surfaceSlots) this.fillSurface(slot, output)
+    for (const { slot, output } of this.surfaceSlots) {
+      // Not the dropdown in the reader's hand: the change it made is the one
+      // being announced, and replacing it would take the focus from under them.
+      if (slot.contains(document.activeElement)) continue
+      this.fillSurface(slot, output)
+    }
   }
 
   private fillSurface(slot: HTMLElement, output: IntervalsOutput): void {

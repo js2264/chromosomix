@@ -3,21 +3,20 @@
  * must not.
  *
  * A mark on the matrix is one of two kinds of thing, and they cannot be culled
- * the same way. A `border` is a *point*: its midpoint is the mark, and a
- * midpoint off screen is a mark off screen. An `element` is an *extent*: a
- * domain, a compartment, a hand-drawn box, and an extent is very often bigger
- * than the window it is read in — zoom into a domain and its outline surrounds
- * the view on all four sides.
+ * the same way. A `point` or a `border` is a *place*: its midpoint is the mark,
+ * and a midpoint off screen is a mark off screen. A `corner` is drawn for an
+ * *extent*: a domain, a compartment, and an extent is very often bigger than
+ * the window it is read in — zoom into a domain and the square it claims
+ * surrounds the view on all four sides.
  *
  * `drawDiagonalFeatures` used to guard both with the point test. On the square
- * map an element was kept only if its *bottom-right corner* was inside the data
- * rect, so the outline vanished at exactly the zoom the reader reached for to
+ * map an extent was kept only if its *bottom-right corner* was inside the data
+ * rect, so the mark vanished at exactly the zoom the reader reached for to
  * inspect the block it was claiming — and asymmetrically, since `locusToUnit`
  * grows with bp: a pan that kept only the domain's start drew nothing, while
  * the mirror pan kept drawing. On the turned map the same test was applied to a
  * triangle's midpoint, dropping a domain panned so that only one foot is in
- * view. `element` is the default shape for a features overlay, so neither was a
- * corner case.
+ * view. Every domain set is drawn as corners, so neither was a corner case.
  *
  * Nothing here is a claim about clipping: `HeatmapView.drawOverlay` clips the
  * painter to the data rect, so a mark that overlaps the view may be emitted
@@ -136,37 +135,52 @@ const features = (spans: Array<[number, number]>): FeatureSet => ({
 /** The domain every case below is about: `chrI:100,000-120,000`, 20 bins wide. */
 const domain = (): FeatureSet => features([[100_000, 120_000]])
 
-const element = { colour: '#f00', opacity: 1, shape: 'element' } as const
+const corner = { colour: '#f00', opacity: 1, shape: 'corner' } as const
 
-/** Draw the domain against a view of `[from, to]` bins and hand back the boxes. */
+/**
+ * Draw the domain against a view of `[from, to]` bins and hand back the square
+ * each corner stands for, as `[x, y, width, height]`.
+ *
+ * A corner is one move and two strokes — from the diagonal at the start along
+ * the top edge, then down the right edge — so its square is read off those.
+ */
 function boxesFor(from: number, to: number): Array<[number, number, number, number]> {
   const rec = ctx()
-  drawDiagonalFeatures(as2d(rec), squareFrame(from, to), squareAxes(), domain(), element)
-  return rec.rects
+  drawDiagonalFeatures(as2d(rec), squareFrame(from, to), squareAxes(), domain(), corner)
+  expect(rec.rects).toHaveLength(0)
+  expect(rec.lines).toHaveLength(rec.moves.length * 2)
+  return rec.moves.map(([x, y], i) => {
+    const [right] = rec.lines[2 * i]
+    const [, bottom] = rec.lines[2 * i + 1]
+    return [x, y, right - x, bottom - y]
+  })
 }
 
 describe('a domain on the square map, against the edges of the view', () => {
   it('is drawn when the whole of it is in view', () => {
     // The case that always worked, kept as the control: 20 bins of a 200-bin
-    // view, 2 px per bin, so the box is 40 px on a side at (200, 200).
+    // view, 2 px per bin, so the square is 40 px on a side at (200, 200) — half
+    // a pixel off exact where a rule is snapped to the device-pixel grid.
     const boxes = boxesFor(0, NBINS)
     expect(boxes).toHaveLength(1)
     const [x, y, width, height] = boxes[0]
     expect(x).toBeCloseTo(200, -0.5)
     expect(y).toBeCloseTo(200, -0.5)
-    expect(width).toBeCloseTo(40, 6)
-    expect(height).toBeCloseTo(40, 6)
+    expect(width).toBeCloseTo(40, -0.5)
+    expect(height).toBeCloseTo(40, -0.5)
   })
 
   // The reported failure, and the one that matters most: the reader zooms into
-  // the block the call is claiming, and the outline saying which block that is
+  // the block the call is claiming, and the mark saying which block that is
   // disappears. Nothing on screen says a mark is *absent*, so this read as the
   // domain not being there.
   it('is still drawn when the view is inside it', () => {
     const boxes = boxesFor(105, 115)
     expect(boxes).toHaveLength(1)
     const [x, y, width, height] = boxes[0]
-    // Surrounding the view on all four sides, which is the whole point.
+    // The square it stands for surrounds the view on all four sides, which is
+    // the whole point: the corner's arms are its top and right edges, both
+    // outside the window, and the clip decides what is seen of them.
     expect(x).toBeLessThan(0)
     expect(y).toBeLessThan(0)
     expect(x + width).toBeGreaterThan(PLOT)
@@ -198,8 +212,8 @@ describe('a domain on the square map, against the edges of the view', () => {
     // *either* axis is not a box to draw, and under a clip it would be an
     // invisible path costing a stroke on every frame.
     const rec = ctx()
-    drawDiagonalFeatures(as2d(rec), squareFrame(100, 140, [0, 40]), squareAxes(), domain(), element)
-    expect(rec.rects).toHaveLength(0)
+    drawDiagonalFeatures(as2d(rec), squareFrame(100, 140, [0, 40]), squareAxes(), domain(), corner)
+    expect(rec.moves).toHaveLength(0)
   })
 
   it('is kept on exactly the same terms as the box a reader draws by hand', () => {
@@ -258,7 +272,7 @@ describe('a domain on a turned map, against the edges of the view', () => {
   /** How many triangles were drawn: one `moveTo` per foot-to-apex-to-foot path. */
   function trianglesFor(from: number, to: number): number {
     const rec = ctx()
-    drawDiagonalFeatures(as2d(rec), turnedFrame(from, to), turnedAxes(), domain(), element)
+    drawDiagonalFeatures(as2d(rec), turnedFrame(from, to), turnedAxes(), domain(), corner)
     return rec.moves.length
   }
 

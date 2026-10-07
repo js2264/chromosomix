@@ -2591,13 +2591,16 @@ profile is a row of the Tracks card like any other.
 a card of their own: whether a file is a lane or an overlay is a fact about its format, which the
 bytes settle (§8.3), and not a shelf the reader has to put it on. Pairs — a BEDPE, an interact or a
 longrange file (§8.18), a loop set a task called — mark off-diagonal pairs as circles; an interval
-set a task called (§18.5) marks on-diagonal borders or elements; a BED the reader loads is a lane.
+set a task called (§18.5) marks places on the diagonal as points or short markers across it, and
+extents as the corners of the squares they claim (§18.7); a BED the reader loads is a lane.
 These answer a different question from a lane — not "what is on the sequence here" but "this pixel
 is a feature" — so every one is an outline, a rule or a glyph beside what it points at: an overlay
-must not hide the pixel it is about.
-A set a task *called* is the one thing wanted in both roles, since a peak set is checked against its
-coverage and a boundary against its map: it arrives as both, an overlay row and a lane row linked to
-it, each with its switch (§18.7).
+must not hide the pixel it is about. A place's point is the one dot, and it sits on the diagonal, over
+the one pixel a boundary is not about — what it claims is that little crosses there, which is read off
+the map either side of it.
+A set a task *called* is the one thing wanted in either role, since a peak set is checked against its
+coverage and a domain against its map: it is **one row**, and its *display* puts it on the map or
+beside it as a 1D track, one or the other (§18.7).
 
 An overlay is **placed per map**, as a track is, and a map draws only the overlays placed on it. It
 used to be drawn on every map of a deck: a loop set called on one of six maps was circled on all
@@ -7083,9 +7086,9 @@ limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, batch
 it.
 
 **It is a row of the Tracks card.** Every synthetic row is listed there with the loaded ones, in the
-one list whose order is the lanes' order: a task's profile, its called interval set — as two rows, the
-overlay with the overlay's shape, radius and opacity and the lane with a feature lane's colouring and
-rows (§18.7) — and a comparison of two loaded tracks (§7.5). What only a
+one list whose order is the lanes' order: a task's profile, its called interval set — one row, a 1D
+track with a feature lane's colouring and rows or an overlay with its look, radius and opacity, as its
+display says (§18.7) — and a comparison of two loaded tracks (§7.5). What only a
 synthetic row has rides in the places a loaded row keeps the matching facts:
 
 - **a `*` after its name** — the mark a resolution the file does not store wears (`3 kb*`, §3.4),
@@ -7138,7 +7141,7 @@ rows of its Tracks card like any other track; what follows is the rule for a wor
 to register a vector with, and every session that opens a map or a genome now has one.
 A called **interval set** is the other half of the split and goes the other way: its coordinates are
 on the entry itself, so a store is the whole of what it needs, and insulation's boundaries are drawn
-on a metagenome's map like any other overlay. With no worker the drawer draws the profile itself,
+on a metagenome's map, or beside it, like any other called set. With no worker the drawer draws the profile itself,
 bucketed to the width it has with a min–max band so a spike inside a bucket is visible rather than
 sampled away, and carries the exports the row would have carried: bigWig, bedGraph and TSV beside the
 PNG and the vector PDF. This is not a second opinion about the rule above — wherever there *is* a card
@@ -7242,36 +7245,67 @@ Three specific gates, each stated because each is a place the naive implementati
 Five output kinds, and a task may produce several: a **profile** (one value per bin → a synthetic
 track), a **matrix** (a pileup, a saddle, a correlation heatmap → drawn with the app's existing
 rasteriser and colormaps), a **curve** (with an optional band), a **table** (through the existing
-virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as rows of the
-Tracks card so a called boundary is on the map, and beside it as a lane, the moment the run finishes).
+virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as a row of
+the Tracks card and drawn — as a 1D track or on the map, as its display says — the moment the run
+finishes).
 
-**A called set is drawn on both surfaces, and each is a switch.** The map answers *is this pixel a
-feature* and a lane answers *what is on the sequence here*, and a called set — peaks, boundaries,
-domains, A/B segments, borders, origins, sites, flagged contigs — is asked both. It used to arrive as an
-overlay alone, which beside a map left a peak set with no way to be read against the coverage it was
-called on: the one check a peak caller's output is owed is box against bump. So every interval output
-arrives as **two rows**, linked as a BAM's depth and pile are (§8.13, `partner`): the **overlay**, on the
-map it was called from, and a **lane** of segments — a row of the computed kind with `kind: 'segments'`,
-drawn, coloured, searched and exported by exactly the code a loaded BED is (§8.16), and not by a second
-renderer (`analysis/surfaces.ts`). Each row's settings and the drawer's line for the output carry the
-pair of switches **on the map** and **as a lane**; each is one row's eye, so the switch, the eye and a
-session's memory of a hidden row (§8.6) are one setting, and a set run again keeps what the reader
-switched off. The two rows share a name, so the line under it says which is which — *Diamond
-insulation · 412 boundaries · on the map* over one and *… · as a lane* over the other. Rules that are
-contract:
+**A called set is one row, and its display says which surface it is on.** The map answers *is this
+pixel a feature* and a lane answers *what is on the sequence here*, and a called set — peaks,
+boundaries, domains, A/B segments, borders, origins, sites, flagged contigs, loops — can be asked
+either. So every interval output arrives as **one row** of the computed kind whose **display** is a
+dropdown with two answers: **1D track**, a lane of segments beside the map and in the 1D browser,
+drawn, coloured, searched and exported by exactly the code a loaded BED is (§8.16); or **map
+overlay**, drawn on the map it was called from by exactly the code an overlay file is
+(`render/overlays.ts`) — one or the other, never both. The display is the row's card, `synthetic` or
+`overlay` (`analysis/surfaces.ts`'s `setDisplay`), which is the one field the stacks and the map's face
+already ask, so the row keeps its name, its colour, its slot, its eye and its exports whichever surface
+it is on, a session remembers it with the row (§8.6), and a set run again keeps it. The row's settings
+open on the display, since it decides which of the controls under it the row has — a track's height,
+edges and colouring, or an overlay's look, opacity and maps — and the drawer's line for the output
+carries the same dropdown. It was **two rows**, an overlay and a lane linked as a BAM's depth and pile
+are (§8.13), each with a switch, and every set arrived with both switched on: one run of insulation
+listed its boundaries and its domains twice each — five rows for three results — and drew every
+boundary on the map and beside it at once. A session written then is folded into the one row on its way
+in (`AnnotationStore.stored`): under the overlay's id, a track where its lane was on and the map where
+only the overlay was.
 
-- **The lane goes directly under the row it is read against**, on that row's edges and in the slot after
-  it in the list whose order is the stacks' order: a peak set under the bigWig it was called on, the
-  A/B segments under E1, boundaries and then the domains between them under the insulation track. A
-  task names the row (`IntervalsOutput.lane.under`); unnamed, it is the run's last profile, and with none
-  the computed tracks' edge (§18.5). Only on arrival — a lane the reader has moved stays where they put it.
-- **A loop set's lane is its anchors**: both ends of every pair, each place once, under the name of the
-  first pair to reach it and the best score among them. It **starts off**, because a loop is a pixel of
-  the map and its anchors along one axis are a reading rather than the picture; the switch is there.
-- **With no map there is no overlay.** On the 1D browser demo the set is a lane alone, and in the 1D
-  browser beside a map the overlay row is not drawn as a second lane: there the lane *is* its picture,
-  and a reader who switched the lane off has switched the set off there. On a `.metacool`, which has no
-  stacks for a lane of base pairs (§8.5), the set is the overlay alone, as before.
+**On the map, a set of places has a look and a set of extents has corners.** A place — a boundary, a
+border, a site, a peak, an origin — is drawn as a **point**, a dot on the diagonal at its middle ringed
+in the page's colour, or as a **short diagonal marker**, the rule across the diagonal that leaves the
+diagonal's own pixel uncovered; which is the second dropdown, **look**, beside the display while the
+set is on the map, and the task says which a set opens in. An extent — a domain, a compartment, a
+segment, a flagged contig — is drawn as the **corner** of the square it claims: its top edge and its
+right edge, meeting off the diagonal over the block of contacts it is about, on the upper side where a
+loop's ring is, so consecutive domains read as the run of corners along the diagonal a domain figure
+draws. A turned map (§17) stands the corner on the axis as the two sides of a triangle, and rests a
+point on the axis rather than over its first rows. A set of extents had a box, the whole square, which
+drew every claim twice, once either side of the line it is symmetric about, and hid the near-diagonal
+under a lattice; a set of places had the same box one bin wide, a two-pixel square on a chromosome. A
+stored box is read as its corner. A set of pairs is a ring round each pair, its radius the row's.
+
+**Each task says where its sets open** (`IntervalsOutput.display`, `look`), by what the set is read
+against. A set read against a lane opens as a track under it — peaks under their coverage, boundaries
+and borders under the score whose minima they are, A/B segments under E1, sites and origins — and a set
+that is a picture of the map opens on it: domains as corners, loops as rings, a pattern the detector
+found on the map's own picture, a flagged contig. So a run of insulation lands as **three rows**: the
+score, the boundaries as segments one bin wide under it, and the domains as corners along the diagonal
+— each finding drawn once. Rules that are contract:
+
+- **The track goes directly under the row it is read against**, on that row's edges and in the slot
+  after it in the list whose order is the stacks' order: a peak set under the bigWig it was called on,
+  the A/B segments under E1, boundaries and then the domains between them under the insulation track.
+  A task names the row (`IntervalsOutput.lane.under`); unnamed, it is the run's last profile, and with
+  none the computed tracks' edge (§18.5). Only on arrival — a row the reader has moved stays where they
+  put it — and whichever surface the set opens on, so one put on the map and back is where it was. A
+  map it was put on as an overlay (dropped on a map's face, lit in the maps field) gives it the row's
+  edges when it becomes a track.
+- **A loop set's 1D track is its anchors**: both ends of every pair, each place once, under the name of
+  the first pair to reach it and the best score among them. It **opens on the map**, because a loop is
+  a pixel of the map and its anchors along one axis are a reading rather than the picture; the display
+  is there. It leaves as its BEDPE from either surface.
+- **With no map there is no choice.** On the 1D browser demo a set is a track and its row offers no
+  display, and in the 1D browser every called set is drawn as a track whatever its display beside a
+  map: there is no map there for it to be on, as there is none for a loaded BEDPE (§8.1).
 - **A segment carries a name**, in the BED's fourth column: `A` or `B`, `peak_12`, `domain_3`,
   `boundary_40`, `border_7` — numbered in genomic order. The lane can be coloured by it (§8.16), and a
   compartment lane is from the start, since two kinds of segment are what it is drawn to show; a set of
@@ -7611,14 +7645,18 @@ one promised and did not do. Its price beside **Run** is the band's as well — 
 it and the widest band held at a time — where it went on pricing one dense square a sequence after
 the square was gone.
 **It calls the domains between those boundaries too, and by default**: the span from each call to the
-next, as a second overlay beside the points. That is not a second algorithm — it is the eight lines of
+next, as a second called set beside the boundaries. That is not a second algorithm — it is the eight lines of
 pairing that every reader was writing by hand — and it is on by default because a boundary set is half
 an answer: everything downstream of insulation takes an *interval* rather than a point, and the scaled
 pileup over those intervals is the domain APA. Consecutive domains **tile**, so the lane reads as a
 segmentation the way the A/B track does, and each carries the **weaker** of its two edges as its score,
 because a domain is only as well defined as its worse-supported side. Two boundaries make a domain and
 one makes nothing: the two ends of a sequence are left out rather than run to the telomere, which would
-assert an edge the data never placed.
+assert an edge the data never placed. A run lands as **three rows** (§18.7): the score; the boundaries
+as a 1D track of segments one bin wide — the resolution they were called at — under it, where each is
+read against the minimum it was called from, or on the map as points or short diagonal markers; and the
+domains on the map as the corners of their squares along the diagonal, or as a 1D track of long
+segments. Each row's display moves it, and a second run keeps where the reader put it.
 *Directionality index* — Dixon et al. (2012)'s signed χ², and the other answer to the question the
 diamond asks. Insulation says *little contact crosses here* and finds a boundary whatever is on either
 side of it; the index says *this bin looks one way* and finds it from the asymmetry, which also marks
@@ -7635,7 +7673,7 @@ own numbers were computed with every cell in. `minValid` is a fraction of **each
 because a bin with a full window one way and an empty one the other is the worst case and would pass a
 test on the total.
 
-It calls **borders and domains**, the same two overlays the diamond produces, the domains through the
+It calls **borders and domains**, the same two sets the diamond produces, the domains through the
 same kernel. The reading the index gives of a domain is a shape rather than a value — the 5′ half looks
 downstream and the 3′ half upstream — so a border is the negative-to-positive flip between two domains.
 Called flip by flip that is fragile, because a track that stutters across zero has crossings a bin apart
@@ -7644,7 +7682,7 @@ badly. So the index is **integrated** first: the running sum climbs through ever
 block and falls through every upstream-biased one, which makes each border a *local minimum* and each
 stutter a dimple on the flank of the real trough — exactly the distinction `callBoundaries` draws, with
 tests, by each minimum's prominence, which is what the diamond's own calls are read by since they became
-cooltools' (`insulationBoundaries`). Both overlays filter on that column and tile the same way, and the
+cooltools' (`insulationBoundaries`). Both sets filter on that column and tile the same way, and the
 call lands **one bin past the minimum**, which is the first
 bin that looks downstream again and therefore the opening bin of the new domain rather than the closing
 bin of the old one.

@@ -349,9 +349,12 @@ export const runPeaks: TrackTaskRunner = async (job) => {
           : `Peaks · ${nameOf(signal)} + ${nameOf(replicate)} · IDR ≤ ${threshold}`,
       payload: { kind: 'features', data: build.finish() },
       noun: { one: 'peak', many: 'peaks' },
-      // Its lane directly under the coverage it was called on, which is where a
-      // peak is checked: box against bump (§18.7).
+      // A track directly under the coverage it was called on, which is where a
+      // peak is checked: box against bump (§18.7). On the map a peak is a place
+      // — narrower than a bin of any map it is drawn on.
       lane: { under: { entry: signal } },
+      display: 'lane',
+      look: 'point',
     } satisfies IntervalsOutput)
   }
   const figure = curvatureFigure(entries.map(nameOf), scores, tested, passes, replicate !== null, n, flats)

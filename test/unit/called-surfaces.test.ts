@@ -1,11 +1,11 @@
 /**
- * A called set on both surfaces: an overlay on the map and a lane beside it
- * (§18.7, `analysis/surfaces.ts`).
+ * A called set as one row, on one of its two surfaces: a 1D track beside the
+ * map, or an overlay on it (§18.7, `analysis/surfaces.ts`).
  *
- * What is pinned here is the conversion and the two rows it makes, because
- * those are what every task's interval output goes through — peaks, boundaries,
- * domains, A/B segments, loops. Drawing either row is the code a loaded BED and
- * a loaded BEDPE already go through, and is tested there.
+ * What is pinned here is the conversion, the row it makes and the display that
+ * moves it, because those are what every task's interval output goes through —
+ * peaks, boundaries, domains, A/B segments, loops. Drawing either surface is the
+ * code a loaded BED and a loaded BEDPE already go through, and is tested there.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -13,17 +13,29 @@ import { describe, expect, it } from 'vitest'
 import { FeatureBuilder, PairBuilder } from '@/annotations/featureset'
 import { FIELD_NAME, featureFields, fieldText, featuresOf } from '@/annotations/fields'
 import { AnnotationStore } from '@/annotations/store'
+import { remember } from '@/state/UiMemory'
 import {
   adoptCalledSet,
   anchorsOf,
-  laneIdOf,
+  calledPayloadOf,
+  displayOf,
+  isCalledSet,
   laneSetOf,
   laneStyleFor,
-  surfaceWord,
-  surfacesOf,
+  legacyLaneIdOf,
+  offersLook,
+  setDisplay,
+  setLook,
   type CalledSet,
 } from '@/analysis/surfaces'
-import { placementOn, type AnnotationPayload, type ComputedSource } from '@/annotations/types'
+import {
+  emptyPlacement,
+  overlayShapeOf,
+  placementOn,
+  type AnnotationPayload,
+  type ComputedSource,
+  type StoredEntry,
+} from '@/annotations/types'
 
 const source: ComputedSource = {
   kind: 'computed',
@@ -38,6 +50,13 @@ function compartments(): AnnotationPayload {
   build.add('I', 0, 40_000, { name: 'A', score: 0.4 })
   build.add('I', 40_000, 90_000, { name: 'B', score: -0.3 })
   build.add('I', 90_000, 120_000, { name: 'A', score: 0.2 })
+  return { kind: 'features', data: build.finish() }
+}
+
+function boundaries(): AnnotationPayload {
+  const build = new FeatureBuilder()
+  build.add('I', 10_000, 11_000, { name: 'boundary_1', score: 0.4 })
+  build.add('I', 52_000, 53_000, { name: 'boundary_2', score: 0.9 })
   return { kind: 'features', data: build.finish() }
 }
 
@@ -57,9 +76,9 @@ function called(overrides: Partial<CalledSet> = {}): CalledSet {
     summary: '3 segments',
     colour: '#1f5fa9',
     map: 'lead',
+    display: 'lane',
+    look: 'corner',
     overlay: true,
-    lane: true,
-    laneShown: true,
     under: null,
     ...overrides,
   }
@@ -112,93 +131,221 @@ describe('the name column', () => {
   })
 })
 
-describe('a called set, as its two rows', () => {
-  it('is an overlay on the map and a lane beside it, each naming the other', () => {
+describe('a called set, as one row', () => {
+  it('opens as a 1D track where its task says so: one row, beside the map and not on it', () => {
     const store = fresh()
-    const ids = adoptCalledSet(store, called())
-    expect(ids).toEqual({ overlay: 'analysis:compartments:compartment-ab', lane: laneIdOf(ids.overlay ?? '') })
-    expect(store.overlays().map((row) => row.id)).toEqual([ids.overlay])
-    expect(store.drawnOn('left').map((row) => row.id)).toEqual([ids.lane])
-    const overlay = store.byId(ids.overlay ?? '')
-    const lane = store.byId(ids.lane ?? '')
-    expect(overlay?.partner).toBe(ids.lane)
-    expect(lane?.partner).toBe(ids.overlay)
-    expect(lane?.card).toBe('synthetic')
-    expect(lane?.kind).toBe('segments')
-    expect(lane?.payload).toEqual(overlay?.payload)
-    expect(surfacesOf(store, lane as never)).toEqual({ overlay, lane })
+    const id = adoptCalledSet(store, called())
+    expect(id).toBe('analysis:compartments:compartment-ab')
+    expect(store.entries).toHaveLength(1)
+    const row = store.byId(id)
+    expect(row).toMatchObject({ card: 'synthetic', kind: 'segments', status: 'ready', visible: true })
+    expect(row?.partner).toBeUndefined()
+    expect(isCalledSet(row as never)).toBe(true)
+    expect(displayOf(row as never)).toBe('lane')
+    expect(store.drawnOn('left').map((one) => one.id)).toEqual([id])
+    expect(store.overlays()).toHaveLength(0)
   })
 
-  it('says on each row which surface it is, and nothing on any other row', () => {
+  it('opens on the map where its task says so, in its look, and not as a track', () => {
     const store = fresh()
-    const ids = adoptCalledSet(store, called())
-    expect(surfaceWord(store.byId(ids.overlay ?? '') as never)).toBe('on the map')
-    expect(surfaceWord(store.byId(ids.lane ?? '') as never)).toBe('as a lane')
-    const alone = fresh()
-    adoptCalledSet(alone, called({ overlay: false }))
-    expect(surfaceWord(alone.entries[0])).toBeNull()
+    const id = adoptCalledSet(store, called({ display: 'overlay', look: 'corner' }))
+    expect(store.overlays().map((one) => one.id)).toEqual([id])
+    expect(store.drawnOn('left')).toHaveLength(0)
+    expect(overlayShapeOf(store.byId(id)!.style)).toBe('corner')
   })
 
-  it('puts the lane directly under the row it is read against, on that row’s edges', () => {
+  it('moves between the two surfaces by its display, keeping its colour, name and slot', () => {
+    const store = fresh()
+    const id = adoptCalledSet(store, called({ payload: boundaries(), display: 'lane', look: 'point' }))
+    store.restyle(id, { colour: '#ff0000' })
+    setDisplay(store, id, 'overlay')
+    expect(store.overlays().map((one) => one.id)).toEqual([id])
+    expect(store.drawnOn('left')).toHaveLength(0)
+    expect(store.byId(id)?.style.colour).toBe('#ff0000')
+    // On the map, a set of places is a point until the reader picks the marker.
+    expect(offersLook(store.byId(id)!)).toBe(true)
+    setLook(store, id, 'border')
+    expect(overlayShapeOf(store.byId(id)!.style)).toBe('border')
+    setDisplay(store, id, 'lane')
+    expect(store.drawnOn('left').map((one) => one.id)).toEqual([id])
+    expect(store.overlays()).toHaveLength(0)
+    expect(store.entries).toHaveLength(1)
+  })
+
+  it('offers a look only for a set of places: an extent is a corner, a loop a ring', () => {
+    const store = fresh()
+    const domains = adoptCalledSet(store, called({ id: 'a', display: 'overlay', look: 'corner' }))
+    const places = adoptCalledSet(store, called({ id: 'b', payload: boundaries(), display: 'overlay', look: 'point' }))
+    const rings = adoptCalledSet(store, called({ id: 'c', payload: loops(), display: 'overlay', look: 'corner' }))
+    expect(offersLook(store.byId(domains)!)).toBe(false)
+    expect(offersLook(store.byId(places)!)).toBe(true)
+    expect(offersLook(store.byId(rings)!)).toBe(false)
+  })
+
+  it('gives a track its edges back on a map it was put on as an overlay', () => {
+    const store = fresh()
+    const id = adoptCalledSet(store, called({ display: 'overlay' }))
+    // Lit in the maps field, or dropped on a map's face: a lane with no edge.
+    store.placeOn(id, 'm2', emptyPlacement())
+    setDisplay(store, id, 'lane')
+    expect(store.laneFor(id, 'm2')?.placement).toEqual(placementOn('left'))
+  })
+
+  it('puts the row directly under the row it is read against, on that row’s edges', () => {
     const store = fresh()
     const coverage = store.begin({ card: 'linear', kind: 'track', source: { kind: 'derived', name: 'ATAC' } })
     store.update(coverage.id, { status: 'ready' })
     const other = store.begin({ card: 'linear', kind: 'track', source: { kind: 'derived', name: 'Pol II' } })
     store.update(other.id, { status: 'ready' })
-    const ids = adoptCalledSet(store, called({ under: coverage.id }))
-    expect(store.entries.map((row) => row.id)).toEqual([coverage.id, ids.lane, other.id, ids.overlay])
-    expect(store.drawnOn('bottom').map((row) => row.id)).toEqual([coverage.id, ids.lane, other.id])
+    const id = adoptCalledSet(store, called({ under: coverage.id }))
+    expect(store.entries.map((row) => row.id)).toEqual([coverage.id, id, other.id])
+    expect(store.drawnOn('bottom').map((row) => row.id)).toEqual([coverage.id, id, other.id])
   })
 
-  it('keeps, on a second run, which surfaces the reader switched off and where the lane was', () => {
+  it('keeps, on a second run, its display, its look, its edges, its colour and whether it is shown', () => {
     const store = fresh()
-    const ids = adoptCalledSet(store, called())
-    store.update(ids.overlay ?? '', { visible: false })
-    store.place(ids.lane ?? '', placementOn('top'))
-    store.restyle(ids.lane ?? '', { colour: '#ff0000' })
-    adoptCalledSet(store, called({ summary: '4 segments' }))
-    expect(store.byId(ids.overlay ?? '')?.visible).toBe(false)
-    expect(store.byId(ids.lane ?? '')?.visible).toBe(true)
-    expect(store.byId(ids.lane ?? '')?.style.colour).toBe('#ff0000')
-    expect(store.drawnOn('top').map((row) => row.id)).toEqual([ids.lane])
-    expect(store.entries.filter((row) => row.id === ids.lane)).toHaveLength(1)
+    const id = adoptCalledSet(store, called({ payload: boundaries(), look: 'point' }))
+    store.place(id, placementOn('top'))
+    store.restyle(id, { colour: '#ff0000' })
+    setDisplay(store, id, 'overlay')
+    setLook(store, id, 'border')
+    store.update(id, { visible: false })
+    adoptCalledSet(store, called({ payload: boundaries(), look: 'point', summary: '2 boundaries' }))
+    const row = store.byId(id)
+    expect(row?.card).toBe('overlay')
+    expect(overlayShapeOf(row!.style)).toBe('border')
+    expect(row?.visible).toBe(false)
+    expect(row?.style.colour).toBe('#ff0000')
+    expect(row?.placement).toEqual(placementOn('top'))
+    expect(row?.summary).toBe('2 boundaries')
+    expect(store.entries).toHaveLength(1)
   })
 
-  it('is a lane alone where there is no map, and an overlay alone where there are no lanes', () => {
+  it('takes the task’s look on a second run over a look of the other family', () => {
+    // A box, stored before the looks, on a set of boundaries: a corner of a
+    // one-bin square is a hook, and the task's point is what it gets instead.
+    const store = fresh()
+    const id = adoptCalledSet(store, called({ payload: boundaries(), display: 'overlay', look: 'point' }))
+    store.restyle(id, { shape: 'element' as never })
+    adoptCalledSet(store, called({ payload: boundaries(), display: 'overlay', look: 'point' }))
+    expect(overlayShapeOf(store.byId(id)!.style)).toBe('point')
+  })
+
+  it('is a track alone where there is no map, whatever its task opens it as', () => {
     const browser = fresh()
-    expect(adoptCalledSet(browser, called({ overlay: false })).overlay).toBeNull()
+    const id = adoptCalledSet(browser, called({ overlay: false, display: 'overlay' }))
     expect(browser.entries).toHaveLength(1)
-    expect(browser.entries[0].partner).toBeUndefined()
-    expect(surfacesOf(browser, browser.entries[0])).toBeNull()
-
-    const metacool = fresh()
-    expect(adoptCalledSet(metacool, called({ lane: false })).lane).toBeNull()
-    expect(metacool.entries).toHaveLength(1)
-    expect(metacool.entries[0].card).toBe('overlay')
-    expect(metacool.entries[0].partner).toBeUndefined()
+    expect(browser.byId(id)?.card).toBe('synthetic')
   })
 
-  it('starts a loop set’s anchors switched off, as a row the reader can switch on', () => {
+  it('removes the lane a session written as two rows left behind, when it is run again', () => {
     const store = fresh()
-    const ids = adoptCalledSet(store, called({ payload: loops(), laneShown: false }))
-    expect(store.byId(ids.overlay ?? '')?.kind).toBe('pairs')
-    expect(store.byId(ids.lane ?? '')?.visible).toBe(false)
-    expect(store.drawnOn('left')).toHaveLength(0)
-    const lane = store.byId(ids.lane ?? '')
-    expect(lane?.payload?.kind === 'features' ? lane.payload.data.length : 0).toBe(3)
+    const id = 'analysis:compartments:compartment-ab'
+    store.begin({ card: 'synthetic', kind: 'segments', id: legacyLaneIdOf(id), source })
+    adoptCalledSet(store, called())
+    expect(store.entries.map((row) => row.id)).toEqual([id])
   })
+})
 
-  it('remembers both rows, the link between them and which is drawn (§8.6)', () => {
+describe('a loop set, on its two surfaces', () => {
+  it('is its pairs on the map, and its anchors as a 1D track', () => {
+    const store = fresh()
+    const id = adoptCalledSet(store, called({ payload: loops(), display: 'overlay' }))
+    expect(store.byId(id)?.kind).toBe('pairs')
+    expect(store.overlays().map((row) => row.id)).toEqual([id])
+    setDisplay(store, id, 'lane')
+    const lane = store.byId(id)
+    expect(lane?.kind).toBe('segments')
+    expect(lane?.payload?.kind === 'features' ? lane.payload.data.length : 0).toBe(3)
+    expect(store.drawnOn('left').map((row) => row.id)).toEqual([id])
+    // …and it leaves as its loops from either surface.
+    expect(calledPayloadOf(lane!)?.kind).toBe('pairs')
+    setDisplay(store, id, 'overlay')
+    const back = store.byId(id)
+    expect(back?.kind).toBe('pairs')
+    expect(back?.payload?.kind === 'pairs' ? back.payload.data.length : 0).toBe(2)
+  })
+})
+
+describe('a called set across a reload (§8.6)', () => {
+  it('remembers its one row and which surface it is on', () => {
     const uri = `surfaces-kept-${Math.random()}.cool`
     const store = new AnnotationStore(uri)
     store.clear()
-    const ids = adoptCalledSet(store, called())
-    store.update(ids.lane ?? '', { visible: false })
+    const id = adoptCalledSet(store, called({ payload: boundaries(), look: 'point' }))
+    setDisplay(store, id, 'overlay')
+    setLook(store, id, 'border')
     const stored = AnnotationStore.stored(uri)
-    const lane = stored.find((row) => row.id === ids.lane)
-    const overlay = stored.find((row) => row.id === ids.overlay)
-    expect(lane).toMatchObject({ card: 'synthetic', kind: 'segments', visible: false, partner: ids.overlay })
-    expect(overlay).toMatchObject({ card: 'overlay', kind: 'segments', visible: true, partner: ids.lane })
-    expect(lane?.source.kind).toBe('computed')
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ id, card: 'overlay', kind: 'segments', visible: true })
+    expect(stored[0].style.shape).toBe('border')
+    expect(stored[0].partner).toBeUndefined()
+    expect(stored[0].source.kind).toBe('computed')
+  })
+
+  /** A pair as a build that drew a called set as two rows wrote it down. */
+  function legacyPair(overlayVisible: boolean, laneVisible: boolean): StoredEntry[] {
+    const id = 'analysis:insulation:insulation-domains'
+    const stored = { kind: 'computed' as const, name: 'Insulation domains', task: 'insulation', recipe: {}, framing: 'f' }
+    const style = {
+      colour: '#c040a0',
+      size: 24,
+      mode: 'area' as const,
+      limits: { auto: true, min: 0, max: 1 },
+      group: '',
+      radius: 7,
+      flip: false,
+    }
+    return [
+      {
+        id: legacyLaneIdOf(id),
+        card: 'synthetic',
+        kind: 'segments',
+        label: 'Insulation domains',
+        source: stored,
+        visible: laneVisible,
+        placement: placementOn('left'),
+        style: { ...style, shape: 'corner', opacity: 1 },
+        partner: id,
+      },
+      {
+        id,
+        card: 'overlay',
+        kind: 'segments',
+        label: 'Insulation domains',
+        source: stored,
+        visible: overlayVisible,
+        placement: emptyPlacement(),
+        style: { ...style, shape: 'element' as never, opacity: 0.6 },
+        partner: legacyLaneIdOf(id),
+      },
+    ]
+  }
+
+  it('folds a pair written as two rows into one, a track where its lane was on', () => {
+    const uri = `surfaces-legacy-${Math.random()}.cool`
+    remember(uri, 'annotations', legacyPair(true, true))
+    const rows = AnnotationStore.stored(uri)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'analysis:insulation:insulation-domains',
+      card: 'synthetic',
+      visible: true,
+      placement: placementOn('left'),
+    })
+    expect(rows[0].partner).toBeUndefined()
+    // The overlay's look and opacity ride along, for when it goes on the map.
+    expect(rows[0].style.opacity).toBe(0.6)
+    expect(overlayShapeOf(rows[0].style)).toBe('corner')
+  })
+
+  it('folds it onto the map where only the overlay was drawn', () => {
+    const uri = `surfaces-legacy-${Math.random()}.cool`
+    remember(uri, 'annotations', legacyPair(true, false))
+    const rows = AnnotationStore.stored(uri)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ card: 'overlay', visible: true })
+    // Its edges are the lane's, for when it is made a track again.
+    expect(rows[0].placement).toEqual(placementOn('left'))
   })
 })

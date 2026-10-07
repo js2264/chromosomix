@@ -399,8 +399,8 @@ function profileFor(
  * Each boundary is one bin wide — it is a position, and the bin is the finest
  * this file can place one at — clamped to the sequence so the last bin of a
  * contig does not produce an interval past its end. The prominence goes in the
- * score column, so the overlay can be filtered on it and a downstream BED keeps
- * the number the call was made on.
+ * score column, so the set can be filtered on it and a downstream BED keeps the
+ * number the call was made on.
  */
 function boundaryOutput(
   job: JobContext,
@@ -425,6 +425,11 @@ function boundaryOutput(
     label: 'Insulation boundaries',
     payload: { kind: 'features', data: builder.finish() },
     noun: { one: 'boundary', many: 'boundaries' },
+    // A 1D track of one-bin segments, under the score whose minima they are,
+    // where a call is checked against the dip it was read from; on the map, a
+    // place — a point on the diagonal, or the short marker across it (§18.7).
+    display: 'lane',
+    look: 'point',
   }
 }
 
@@ -444,7 +449,7 @@ function boundaryOutput(
  * downstream complains about, or worse, does not.
  *
  * `null` where there is nothing to report, so the caller can say why rather than
- * adopting an empty overlay onto the Annotations panel.
+ * adopting an empty set onto the Annotations panel.
  */
 function domainOutput(
   job: JobContext,
@@ -459,7 +464,7 @@ function domainOutput(
       if (end <= start) continue
       count++
       builder.add(unit.name, start, end, {
-        // The weaker edge, so the overlay can be filtered on it and a reader
+        // The weaker edge, so the set can be filtered on it and a reader
         // ranking the set in APA is ranking on how well *both* sides are held.
         score: domain.strength,
         // An id rather than a kind. Compartments write `A` or `B` because there
@@ -480,6 +485,12 @@ function domainOutput(
       label: 'Insulation domains',
       payload: { kind: 'features', data: builder.finish() },
       noun: { one: 'domain', many: 'domains' },
+      // On the map, as the corners of the squares they claim along the
+      // diagonal — the picture a domain call is checked against — with the
+      // boundaries under the score beside it rather than the same edges drawn
+      // twice. A 1D track of long segments is the other display.
+      display: 'overlay',
+      look: 'corner',
     },
   }
 }

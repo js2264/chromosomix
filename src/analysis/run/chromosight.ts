@@ -514,9 +514,10 @@ function pairOutput(calls: Call[], label: string, binsize: number): TaskOutput {
     // for, and *pairs* is the half a reader needs that the label does not give
     // — it is why the button beside it writes BEDPE.
     noun: { one: 'pair', many: 'pairs' },
-    // A loop is a pixel of the map; its anchors as a lane are a reading a
-    // reader may ask for and not the picture a loop is, so the lane starts off.
-    lane: { hidden: true },
+    // A loop is a pixel of the map, so the set opens on it as rings; its
+    // anchors as a 1D track are a reading a reader may ask for and not the
+    // picture a loop is (§18.7).
+    display: 'overlay',
   }
 }
 
@@ -537,6 +538,10 @@ function featureOutput(calls: Call[], label: string, binsize: number): TaskOutpu
     label: `Detected ${label}`,
     payload: { kind: 'features', data: builder.finish() },
     noun: { one: 'interval', many: 'intervals' },
+    // A pattern found on the map's own picture, so on the map: one bin on the
+    // diagonal each, a place, drawn as the short marker a border is.
+    display: 'overlay',
+    look: 'border',
   }
 }
 

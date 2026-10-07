@@ -40,7 +40,7 @@ import { cardTitle, icon, iconButton } from './icons'
 import { batchFields } from './batchSettings'
 import { mapsOrLead, overlayMapsField, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
-import { surfaceToggles } from './calledSurfaces'
+import { calledSetFields } from './calledSurfaces'
 import {
   framingOf,
   isSynthetic,
@@ -72,7 +72,6 @@ import {
   modFractionField,
   modeField,
   radiusField,
-  shapeField,
   styleFields,
   opacityField,
   duplicatesToggle,
@@ -180,7 +179,7 @@ export class AnnotationCard {
   /** The row being dragged, while one is; see {@link grip}. */
   private dragging: string | null = null
   /** A control that should get the focus back after the next rebuild. */
-  private refocus: { attribute: 'data-grip' | 'data-tick'; id: string } | null = null
+  private refocus: { attribute: 'data-grip' | 'data-tick' | 'data-display'; id: string } | null = null
   /**
    * The rows that are ticked, for the actions that apply to several at once.
    *
@@ -1103,6 +1102,19 @@ export class AnnotationCard {
    */
   private settings(entry: AnnotationEntry): HTMLElement[] {
     const out: HTMLElement[] = []
+    // A called set's display first (§18.7), because it decides which of the
+    // controls below the row has: a 1D track's height, edges and colouring, or
+    // an overlay's look, opacity and maps. Moving it rebuilds the row around the
+    // dropdown — this card holds its rebuild while a select has the focus, so
+    // the focus is let go, and given back to the same dropdown after.
+    const called = calledSetFields(this.props.store, entry, {
+      map: this.props.context !== 'browser',
+      onDisplay: (select) => {
+        this.refocus = { attribute: 'data-display', id: entry.id }
+        select.blur()
+      },
+    })
+    if (called !== null) out.push(called)
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
     if (isLaneRow(entry)) out.push(this.laneRow(entry))
     // Which edge of the map — a choice a 1D browser does not have, since there
@@ -1178,9 +1190,9 @@ export class AnnotationCard {
     // `FeatureSet` gets it — a BED, a peak set, a gene model, a VCF — because
     // the question "what are these coloured by" has the same answer and the
     // same list of answers on all four. Not on an overlay, where the segments
-    // are drawn on the map as borders or boxes on the diagonal and there is no
-    // lane to colour: a control that silently does nothing is worse than an
-    // absent one.
+    // are drawn on the map as points, markers or corners along the diagonal in
+    // the row's one colour and there is no lane to colour: a control that
+    // silently does nothing is worse than an absent one.
     if (isLaneRow(entry) && isIntervalSet(entry.kind)) {
       // …with one exception, and it is the same rule as the two above rather
       // than a special case: a control that silently does nothing is worse than
@@ -1245,11 +1257,9 @@ export class AnnotationCard {
     if (entry.kind === 'sequence') {
       out.push(this.limits(entry), framesField(this.props.store, entry))
     }
-    // A called set's two surfaces (§18.7), on whichever of its two rows is open.
-    const surfaces = surfaceToggles(this.props.store, entry)
-    if (surfaces !== null) out.push(surfaces)
+    // On the map, a set of places has its look beside its display, above; a
+    // set of extents has one, its corners; a set of pairs has a ring's size.
     if (entry.card === 'overlay') {
-      if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))
       out.push(this.opacity(entry))
       // …and which maps it is drawn on, which a deck makes a question: the
@@ -1422,10 +1432,6 @@ export class AnnotationCard {
       if (hasTrackControls(row.kind) && row.style.group !== '') names.add(row.style.group)
     }
     return [...names].sort((a, b) => a.localeCompare(b))
-  }
-
-  private shape(entry: AnnotationEntry): HTMLElement {
-    return shapeField(this.props.store, entry)
   }
 
   private radius(entry: AnnotationEntry): HTMLElement {

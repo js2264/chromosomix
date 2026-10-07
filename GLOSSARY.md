@@ -25,7 +25,7 @@ code disagree, the code is right and this file is a bug.
 - [Maps on screen](#maps-on-screen) — lead, companion, deck, cell, star, the lock, eye and grip, the second file
 - [Annotations](#annotations) — track, lane, placement, structure, model, method, card, kind, style, ideogram, junction, group, the batch, mark, bookmark
 - [The picture](#the-picture) — score, O/E, transform, clip, drawn to a total, the turn, refine
-- [Analysis](#analysis) — task, availability, the surfaces, framing, synthetic track, port, figure spec and style, the stage dialog
+- [Analysis](#analysis) — task, availability, the surfaces, framing, synthetic track, called set, port, figure spec and style, the stage dialog
 - [Editing the reference](#editing-the-reference) — original, edit, piece, lens, breakpoint, corner, suggestion, the stage, the dot plot
 - [Machinery](#machinery) — workers, sources, budgets, dev features, buckets, the console
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, package, CLI, embed
@@ -588,7 +588,9 @@ the Poisson's own, shrunk by `r/(r + μ)`.
 
 Which kind of row a track is (`AnnotationCard`, `src/annotations/types.ts`): `linear` (drawn beside
 the map), `overlay` (drawn on it), `metadata` (columns the file already carries), `synthetic`
-(computed), `structure` (3D models, loaded or computed, drawn by the deck's cell). No longer one card
+(computed), `structure` (3D models, loaded or computed, drawn by the deck's cell). A
+[called set](#called-set-display-look) is `synthetic` while it is a 1D track and `overlay` while it is
+on the map — its display moves it between the two (§18.7). No longer one card
 on screen each: the **Tracks** card lists every `linear`, `overlay` and `synthetic` row in one list,
 whose order is the lanes' order, and the other two have cards of their own, *Metadata annotations*
 and *Structures* (§8.1, §18.5, §25.2). Each is absent — not disabled, not empty — on a file that
@@ -793,7 +795,19 @@ An analysis result that became an ordinary track — an entry in the store on th
 after its name, with its exports in its settings. Nothing downstream of it knows it was computed
 rather than loaded, which is the point: it gets renaming, height, style, limits, groups, colour,
 edges, reordering, the batch, tooltips and the exported figure for free. A comparison of two tracks
-(`derived`) is one too, and so is a set of intervals a task called, drawn as an overlay (§18.5).
+(`derived`) is one too, and so is a [called set](#called-set-display-look) (§18.5).
+
+### called set, display, look
+
+A set of intervals or pairs a task found — boundaries, domains, peaks, A/B segments, sites, loops —
+as **one** row of the Tracks card (§18.7). Its **display** says where it is drawn: as a *1D track* of
+segments beside the map and in the 1D browser, or as a *map overlay* on the map it was called from —
+one or the other, never both, and a set run again keeps it. On the map, a set of places (boundaries,
+borders, sites, peaks) has a **look** the reader chooses, a *point* on the diagonal or a *short
+diagonal marker* across it; a set of extents (domains, segments) is drawn as the *corners* of the
+squares it claims along the diagonal; a loop set is a ring round each pair, and its 1D track is its
+anchors. In the 1D browser every called set is a track. A set used to arrive as two rows, an overlay
+and a lane, with a switch each; a session written then is folded into the one row on its way back in.
 
 ### port
 

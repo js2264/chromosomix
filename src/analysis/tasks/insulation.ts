@@ -2,7 +2,7 @@
  * Diamond insulation, as a descriptor.
  *
  * The task that produces the app's first *called* object: a boundary set, drawn
- * on the map as an overlay and exported as a BED. Everything before it produced
+ * as a 1D track or on the map and exported as a BED. Everything before it produced
  * a picture or a track, which are readings; a call is a claim, and the two
  * parameters that decide how many claims it makes — the window and the
  * prominence — are therefore the two the form puts first (§18.2).
@@ -117,7 +117,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'toggle',
     key: 'call',
     label: 'call boundaries',
-    hint: 'Adds a BED of boundary calls, drawn on the map.',
+    hint: 'Adds the calls as a set of their own, a 1D track under the score to begin with.',
     default: true,
     section: 'Boundaries',
   },
@@ -172,7 +172,7 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Boundaries',
   },
   /**
-   * The domains between the calls, as a second overlay.
+   * The domains between the calls, as a second called set (§18.7).
    *
    * **On by default, because a boundary set is half an answer.** What a reader
    * wants from insulation is nearly always the *domains* — the spans a boundary
@@ -191,7 +191,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'toggle',
     key: 'domains',
     label: 'domains between them',
-    hint: 'A second overlay: the span from each call to the next, as a BED.',
+    hint: 'A second set, the span from each call to the next, drawn as corners along the diagonal to begin with.',
     default: true,
     when: (params) => params.call === true,
     section: 'Boundaries',
