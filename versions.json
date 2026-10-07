@@ -1,6 +1,13 @@
 {
-  "latest": "8cbf0c2",
+  "latest": "1bc64c9",
   "versions": [
+    {
+      "commit": "1bc64c9",
+      "version": "0.13.0",
+      "date": "2026-10-07T16:48:07+02:00",
+      "subject": "Pick every colour in one picker of the app's own: hex first, the last colours kept, and a drag that does not close it (§26.6) (#95)",
+      "tag": ""
+    },
     {
       "commit": "8cbf0c2",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "5573aed",
-      "version": "0.13.0",
-      "date": "2026-09-22T15:50:57+02:00",
-      "subject": "pastis-NB, four analysis cards, and a deck cell per model (§18.8, §25.3, §25.5, §25.6) (#68)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 95,
-      "commit": "ef80ecf",
-      "title": "Add custom colour picker for all colour inputs",
-      "branch": "js/clever-mccarthy-xtinu0",
-      "date": "2026-10-07T14:30:43Z"
-    },
     {
       "number": 94,
       "commit": "32023d4",
