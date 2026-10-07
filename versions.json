@@ -212,5 +212,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 96,
+      "commit": "f04ff85",
+      "title": "Add pan and back/forward navigation controls",
+      "branch": "js/sleepy-babbage-sel7zp",
+      "date": "2026-10-07T14:51:12Z"
+    }
+  ]
 }
