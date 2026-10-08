@@ -79,6 +79,8 @@ export function trackSource(
   samples: TrackSampleSet | null,
   label: string,
   limits: Limits,
+  /** The lane's own colour: the top of the white-to-track scale (§25.5). */
+  tint?: string,
 ): ColourSource {
   const n = structure.set.length
   const values = new Float32Array(n).fill(Number.NaN)
@@ -93,6 +95,7 @@ export function trackSource(
     label,
     values,
     ...(limits.auto ? {} : { range: { min: limits.min, max: limits.max } }),
+    ...(tint === undefined ? {} : { tint }),
   }
 }
 

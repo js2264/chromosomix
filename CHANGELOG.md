@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A model coloured by a track can run from white to the track's colour, and its key's ends can be
+  typed into (§25.5).** *White to the track's colour* joins the colour-scale picker under a track,
+  so a model coloured by H3K27ac is drawn in its lane's orange. A click on either end of the key's
+  range puts a caret in it, as on a lane; the number is written to the lane's limits, so the lane
+  follows, and an arrow beside the range puts the track back on autoscale.
+
 - **Find a motif searches a genome too large to hold, and searches the sequences ticked (§8.8,
   §18.8).** A FASTA opened by its `.fai` — a mouse or human genome — or a `.2bit` was refused by the
   search for not being held in memory; it is now read by range sixteen megabases at a time, each

@@ -71,7 +71,7 @@ import {
   trackSource,
 } from '../structure/sources'
 import { hasNames } from '../render/nameColours'
-import { rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
+import { rampCss, rgbOf, usesRamp, TELOMERE_COLOUR, TRACK_TINT_RAMP } from '../structure/colour'
 import type { ColourSource } from '../structure/colour'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { alignTo, displacements, placeStructure, type Alignment } from '../structure/align'
@@ -79,7 +79,6 @@ import { settingsField } from '../ui/laneSettings'
 import { withKey, type Command } from '../ui/commands'
 import { featureFields, featuresOf, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
 import type { LocusWindow } from '../render/locus'
-import { colormapCss } from '../render/colormaps'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import {
@@ -392,6 +391,12 @@ export class StructurePanel implements DeckCell {
   private readonly note = el('p', { class: 'deck-note structure-note' })
   private readonly wrap = el('div', { class: 'structure-wrap' })
   private readonly keyEl = el('div', { class: 'structure-key hidden' })
+  /**
+   * Whether a caret is in one end of the key's range (§25.5), so the key holds
+   * still: it is repainted every frame, and a repaint mid-typing would take
+   * the box away from under the hand.
+   */
+  private keyEditing = false
   private readonly readoutEl = el('div', { class: 'structure-readout hidden' })
   /**
    * The card under the pointer, naming the bead's sequence and coordinate.
@@ -2437,7 +2442,7 @@ export class StructurePanel implements DeckCell {
       if (entry === undefined || !hasTrackControls(entry.kind)) {
         return { label: 'a track no longer in the list' }
       }
-      return trackSource(structure, this.samplesOf(structure, entry), entry.label, entry.style.limits)
+      return trackSource(structure, this.samplesOf(structure, entry), entry.label, entry.style.limits, entry.style.colour)
     }
     if (by.startsWith(STRUCTURE_COLOUR_FEATURES)) {
       const id = by.slice(STRUCTURE_COLOUR_FEATURES.length)
@@ -2569,6 +2574,7 @@ export class StructurePanel implements DeckCell {
 
   /** The corner key, as the map's is: what the colours mean. */
   private paintKey(key: StructureKey): void {
+    if (this.keyEditing) return
     this.keyEl.replaceChildren()
     const manual = this.props.manual?.()
     if (this.style().colourBy === STRUCTURE_COLOUR_MARKS && manual !== undefined) {
@@ -2582,10 +2588,13 @@ export class StructurePanel implements DeckCell {
     this.keyEl.classList.remove('hidden')
     this.keyEl.append(el('span', { class: 'structure-key-title', text: key.title }))
     if (key.kind === 'ramp') {
-      const stops = Array.from({ length: 9 }, (_, i) => colormapCss(key.colormap, i / 8)).join(', ')
+      const stops = Array.from({ length: 9 }, (_, i) => rampCss(key.colormap, i / 8, key.tint)).join(', ')
+      const track = this.colouringTrack()
       this.keyEl.append(
         el('span', { class: 'structure-key-ramp', style: { background: `linear-gradient(to right, ${stops})` } }),
-        el('span', { class: 'structure-key-range', text: `${fmt.num(key.min)} – ${fmt.num(key.max)}` }),
+        track === null
+          ? el('span', { class: 'structure-key-range', text: `${fmt.num(key.min)} – ${fmt.num(key.max)}` })
+          : this.trackRange(track, key),
       )
       return
     }
@@ -2617,6 +2626,111 @@ export class StructurePanel implements DeckCell {
       }
       this.keyEl.append(chip)
     }
+  }
+
+  /** The track the model is coloured by, while it is coloured by one that is still loaded. */
+  private colouringTrack(): AnnotationEntry | null {
+    const by = this.style().colourBy
+    if (!by.startsWith(STRUCTURE_COLOUR_TRACK)) return null
+    const id = by.slice(STRUCTURE_COLOUR_TRACK.length)
+    const entry = this.props.store()?.entries.find((row) => row.id === id)
+    return entry !== undefined && hasTrackControls(entry.kind) ? entry : null
+  }
+
+  /**
+   * The two ends of a track's scale on the key (§25.5), each a number to type
+   * into, as the lane's own are (`ui/LaneEditor.ts`), and written to the
+   * lane's limits — the one pair a bead and the lane beside it are drawn
+   * against, so changing it here changes both. The arrow puts the track back
+   * on autoscale, as the lane's does.
+   */
+  private trackRange(track: AnnotationEntry, key: { min: number; max: number }): HTMLElement {
+    const range = el('span', { class: 'structure-key-range structure-key-limits' })
+    const end = (part: 'min' | 'max'): HTMLElement => {
+      const shown = fmt.num(key[part])
+      const limit = el('button', {
+        class: 'structure-key-limit',
+        type: 'button',
+        text: shown,
+        title: `${part === 'min' ? 'Bottom' : 'Top'} of ${track.label}’s scale, here and on its lane: click to type a number`,
+      })
+      limit.addEventListener('click', (event) => {
+        event.stopPropagation()
+        this.editLimit(track, key, part, limit, shown)
+      })
+      return limit
+    }
+    range.append(end('min'), el('span', { text: '–' }), end('max'))
+    if (!track.style.limits.auto) {
+      const auto = el('button', {
+        class: 'structure-key-limit structure-key-auto',
+        type: 'button',
+        text: '↺',
+        title: `Autoscale ${track.label} again, here and on its lane`,
+      })
+      auto.addEventListener('click', (event) => {
+        event.stopPropagation()
+        this.props.store()?.restyle(track.id, { limits: { ...track.style.limits, auto: true } })
+      })
+      range.append(auto)
+    }
+    return range
+  }
+
+  /**
+   * A caret in one end of the key's range. The lane editor's rules: Enter or a
+   * click away commits, Escape leaves it alone, an unchanged or emptied box is
+   * no decision, and a number the scale cannot take — not a number, or an end
+   * past the other — is refused in place rather than swallowed.
+   */
+  private editLimit(
+    track: AnnotationEntry,
+    key: { min: number; max: number },
+    part: 'min' | 'max',
+    limit: HTMLElement,
+    shown: string,
+  ): void {
+    const input = el('input', {
+      class: 'input structure-key-edit',
+      type: 'text',
+      value: shown,
+      title: `${part === 'min' ? 'Bottom' : 'Top'} of ${track.label}’s scale. Enter commits, Escape leaves it alone.`,
+    })
+    input.style.width = `${Math.max(3, shown.length + 2)}ch`
+    let done = false
+    const close = (): void => {
+      if (done) return
+      done = true
+      this.keyEditing = false
+      this.schedule()
+    }
+    const commit = (typing: boolean): void => {
+      if (done) return
+      const text = input.value.trim()
+      if (text === '' || text === shown) return close()
+      const typed = Number(text)
+      const next = part === 'min' ? { min: typed, max: key.max } : { min: key.min, max: typed }
+      if (!Number.isFinite(typed) || !(next.max > next.min)) {
+        if (!typing) return close()
+        input.classList.add('is-bad')
+        window.setTimeout(() => input.classList.remove('is-bad'), 700)
+        input.select()
+        return
+      }
+      close()
+      this.props.store()?.restyle(track.id, { limits: { auto: false, ...next } })
+    }
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Enter') commit(true)
+      else if (event.key === 'Escape') close()
+    })
+    input.addEventListener('blur', () => commit(false))
+    input.addEventListener('pointerdown', (event) => event.stopPropagation())
+    this.keyEditing = true
+    limit.replaceWith(input)
+    input.focus()
+    input.select()
   }
 
   /**
@@ -3215,12 +3329,17 @@ export class StructurePanel implements DeckCell {
           select(
             [
               { value: '', text: 'the colouring’s own' },
+              // White to the track's own colour, for a track: the model in
+              // the orange its H3K27ac lane is drawn in.
+              ...(style.colourBy.startsWith(STRUCTURE_COLOUR_TRACK) || style.colormap === TRACK_TINT_RAMP
+                ? [{ value: TRACK_TINT_RAMP, text: 'white to the track’s colour' }]
+                : []),
               ...COLORMAP_NAMES.map((name) => ({ value: name, text: name })),
             ],
             style.colormap,
             (value) => this.restyleAll({ colormap: value }),
           ),
-          'The ramp this colouring is drawn on; left at its own, a track’s beads take the lane’s colormap and contacts take the map’s.',
+          'The ramp this colouring is drawn on; left at its own, a track’s beads take the lane’s colormap and contacts take the map’s. A track can also run from white to its lane’s colour.',
         ),
       )
     }

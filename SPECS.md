@@ -11204,7 +11204,17 @@ below, that a track's beads take the lane's colormap and contacts the map's, so 
 picture beside it cannot disagree at the same value. It is offered only for a **ramp**: a colouring
 by sequence or haplotype is levels and has no scale to change, and a control that does nothing under
 the default colouring is one a reader tries and then distrusts. The key follows the choice, because
-a legend naming one ramp over a model drawn on another is a legend that lies.
+a legend naming one ramp over a model drawn on another is a legend that lies. Under a **track**
+the picker also offers **white to the track's colour**: a ramp from white to the colour the track's
+lane is drawn in, so a model coloured by H3K27ac is drawn in its lane's orange (`TRACK_TINT_RAMP`,
+`structure/colour.ts`; a colouring with no colour of its own keeps its own ramp under it).
+
+**And under a track the key's two ends are numbers to type into**, as the lane's own range is
+(§8): a click on either puts a caret in it, Enter or a click away commits, Escape leaves it alone,
+and a number that is not one or an end past the other is refused in place. What is typed is
+written to **the lane's limits**, the one pair the lane and the beads are drawn against, so the
+lane beside the map changes with it; once fixed, an arrow after the range puts the track back on
+autoscale, here and on the lane.
 
 One picker, on the picture, and the model's own five lead it in the order a reader goes through
 them: **sequence**; **linear position along the sequence**; **manual annotations** — the reader's
