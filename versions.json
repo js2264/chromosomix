@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 101,
+      "commit": "d9f5372",
+      "title": "Track colouring: white-to-colour scale and editable key range",
+      "branch": "js/exciting-bardeen-fhr25o",
+      "date": "2026-10-08T09:33:00Z"
+    },
+    {
       "number": 99,
       "commit": "7603f47",
       "title": "Search a genome read by range for a motif, chromosome by chromosome, and open a --sequence by its index (§8.8, §8.21, §18.8, §23.1)",
