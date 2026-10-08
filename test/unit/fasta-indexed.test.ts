@@ -6,8 +6,10 @@
  * the whole-or-by-range decision is made on the size the server reports, so a
  * few hundred bytes can stand in for a genome. What is pinned is the promise
  * the index makes — the assembly is answered without reading a residue, every
- * window read by range equals the file read whole, and the two roads that
- * need the whole sequence decline in words — and the fallbacks around it: a
+ * window read by range equals the file read whole, the roads that need the
+ * whole sequence decline in words, and the motif search, which needs it a
+ * piece at a time, finds what a search of the whole file finds — and the
+ * fallbacks around it: a
  * small file is held whole with or without an index, an index that is not
  * there is not an error, and a large file with none is refused by name.
  */
@@ -18,6 +20,8 @@ import type { AnnotationRequest, AnnotationResponse } from '@/annotations/worker
 import type { TrackSampleSet } from '@/annotations/types'
 import type { BaseResult } from '@/annotations/worker/protocol'
 import { parseFasta } from '@/annotations/fasta'
+import { compileMotif, findMotif, isMotifRefusal } from '@/annotations/motif'
+import type { AnalysisFraming, IntervalsOutput, TaskResult } from '@/analysis/types'
 
 const posted: AnnotationResponse[] = []
 let deliver: (request: AnnotationRequest) => void
@@ -298,6 +302,97 @@ describe('a large FASTA with its index', () => {
     expect(response.type, JSON.stringify(response)).toBe('result')
     expect(log.some((line) => line.includes('elsewhere/named.fai'))).toBe(true)
     expect(log.some((line) => line.includes('named.fa.fai'))).toBe(false)
+  })
+})
+
+/** A 1D browser's framing: no map, so no bin grid and no density lane. */
+const NO_MAP: AnalysisFraming = {
+  uri: 'big.fa',
+  label: 'the reference',
+  binsize: 0,
+  binsPerCell: 1,
+  rows: [0, 0],
+  cols: [0, 0],
+  balance: false,
+  value: '',
+  normalise: null,
+  level: 'genome',
+}
+
+async function runTask(task: string, entry: string, params: Record<string, unknown>): Promise<TaskResult> {
+  const response = await ask({
+    kind: 'run',
+    task,
+    params: { sequence: entry, ...params },
+    framing: NO_MAP,
+    inputs: { contigLengths: Object.fromEntries(WHOLE.contigs.map((contig) => [contig.name, contig.length])) },
+  } as Unsent<AnnotationRequest>)
+  expect(response.type, JSON.stringify(response)).toBe('result')
+  return (response as { payload: TaskResult }).payload
+}
+
+/** `contig:start:strand` per site, in the lane's order. */
+function sitesOf(result: TaskResult): string[] {
+  const output = result.outputs.find((one): one is IntervalsOutput => one.kind === 'intervals')
+  if (output?.payload.kind !== 'features') return []
+  const set = output.payload.data
+  return Array.from({ length: set.length }, (_, i) => `${set.contigs[set.contig[i]]}:${set.start[i]}:${set.strand[i]}`)
+}
+
+describe('a motif search over a FASTA read by its index', () => {
+  it('prices itself from what the row says a base costs', async () => {
+    serve({ size: LARGE, index: true })
+    const loaded = await ask({ kind: 'load', entry: 'e-price', source: source('priced.fa'), mapContigs: [] })
+    const payload = (loaded as { payload: { byRange?: { bases: number; bytesPerBase: number } } }).payload
+    // 61 bytes for 60 residues on chrI and chrIII, 51 for 50 on chrII,
+    // weighted by length — the figure the estimate multiplies by.
+    const bases = 700 + 130 + 900_000
+    expect(payload.byRange?.bases).toBe(bases)
+    expect(payload.byRange?.bytesPerBase).toBeCloseTo((700 * 61 / 60 + 130 * 51 / 50 + 900_000 * 61 / 60) / bases, 9)
+  })
+
+  it('finds every site a search of the whole file finds, reading it by range', async () => {
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-motif', source: source('searched.fa'), mapContigs: [] })
+    const before = log.filter((line) => /searched\.fa bytes=/.test(line)).length
+    const result = await runTask('motif', 'e-motif', { pattern: 'GCGC', bothStrands: true })
+    const motif = compileMotif('GCGC')
+    if (isMotifRefusal(motif)) throw new Error(motif.reason)
+    const expected = WHOLE.contigs.flatMap((contig) =>
+      findMotif(WHOLE.bases.get(contig.name) as Uint8Array, motif, { bothStrands: true }).hits.map(
+        (hit) => `${contig.name}:${hit.start}:${hit.strand}`,
+      ),
+    )
+    expect(expected.length).toBeGreaterThan(0)
+    expect(sitesOf(result)).toEqual(expected)
+    // Not refused for being read by range, and the file was read to answer.
+    expect(result.notes.join(' ')).not.toContain('rather than held')
+    expect(log.filter((line) => /searched\.fa bytes=/.test(line)).length).toBeGreaterThan(before)
+  })
+
+  it('reads only the sequences ticked', async () => {
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-ticked', source: source('ticked.fa'), mapContigs: [] })
+    const result = await runTask('motif', 'e-ticked', { pattern: 'GCGC', bothStrands: true, sequences: ['chrII'] })
+    const sites = sitesOf(result)
+    expect(sites.length).toBeGreaterThan(0)
+    expect(sites.every((site) => site.startsWith('chrII:'))).toBe(true)
+    // chrIII is most of the file and runs on past the handle's first cached
+    // chunk (256 KiB); a search of chrII alone never asks for anything there.
+    const starts = log
+      .map((line) => /ticked\.fa bytes=(\d+)/.exec(line))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => Number(match[1]))
+    expect(starts.length).toBeGreaterThan(0)
+    expect(starts.every((start) => start < 1 << 18)).toBe(true)
+  })
+
+  it('still declines the tasks that need a sequence whole, in words', async () => {
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-whole', source: source('whole.fa'), mapContigs: [] })
+    const result = await runTask('composition', 'e-whole', {})
+    expect(result.outputs).toEqual([])
+    expect(result.notes.join(' ')).toContain('not here whole to read')
   })
 })
 

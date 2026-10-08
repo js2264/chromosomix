@@ -12,7 +12,7 @@
  * CLI reads whatever the app reads: nothing here mentions the container.
  */
 
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -27,6 +27,7 @@ import { typedLocusToRegion } from '@/genome/assembly'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { LocalFileSource } from '@/sources/LocalFileSource'
 import { writeHic, type HicRecord } from '../support/hicWriter'
+import { buildTwoBit } from '../support/twoBitWriter'
 
 let directory = ''
 let sample = ''
@@ -487,6 +488,144 @@ describe('running a task', () => {
  * own case. A batch script is written from `tasks`, so the listing and the
  * dispatch disagreeing is the bug, not a cosmetic one.
  */
+/**
+ * A `--sequence` opened the way the browser opens it (§8.8, §8.21).
+ *
+ * A reference was read whole here, always, and Node will not `readFile` past
+ * 2 GiB — so a plain mouse FASTA was refused before a byte of it was parsed.
+ * Now a FASTA with its `.fai` beside it, and a `.2bit`, are read by range
+ * (`cli/reference.ts`), and what is pinned is that the answer cannot tell:
+ * the motif search walks the index a piece at a time and the composition reads
+ * each sequence whole off the disk, and both write what the whole read wrote.
+ */
+describe('a --sequence read by range', () => {
+  /** A deterministic genome over the sample's two sequences, with sites in it. */
+  function genome(): Array<[string, string]> {
+    let seed = 7
+    const next = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31
+      return seed
+    }
+    const make = (length: number): string => {
+      const out: string[] = []
+      for (let i = 0; i < length; i++) out.push('ACGT'[next() % 4])
+      // A site every 7 kb or so, on both strands, a few across a line break.
+      for (let at = 1_000; at + 5 < length; at += 7_013) {
+        out.splice(at, 5, ...(at % 2 === 0 ? 'GGTCA' : 'TGACC'))
+      }
+      return out.join('')
+    }
+    return [
+      ['chrI', make(120_000)],
+      ['chrII', make(60_000)],
+    ]
+  }
+
+  /** The FASTA, wrapped at 60, and the `.fai` `samtools faidx` writes for it. */
+  function fastaAndIndex(sequences: Array<[string, string]>): { fasta: string; fai: string } {
+    let fasta = ''
+    const fai: string[] = []
+    for (const [name, bases] of sequences) {
+      fasta += `>${name}\n`
+      fai.push(`${name}\t${bases.length}\t${fasta.length}\t60\t61`)
+      for (let at = 0; at < bases.length; at += 60) fasta += `${bases.slice(at, at + 60)}\n`
+    }
+    return { fasta, fai: fai.join('\n') + '\n' }
+  }
+
+  let whole = ''
+  let indexed = ''
+  let twobit = ''
+
+  beforeAll(async () => {
+    const sequences = genome()
+    const { fasta, fai } = fastaAndIndex(sequences)
+    whole = join(directory, 'whole.fa')
+    indexed = join(directory, 'indexed.fa')
+    twobit = join(directory, 'packed.2bit')
+    await writeFile(whole, fasta)
+    await writeFile(indexed, fasta)
+    await writeFile(`${indexed}.fai`, fai)
+    await writeFile(twobit, buildTwoBit(sequences.map(([name, bases]) => ({ name, bases }))))
+  })
+
+  /** The data rows of one written file, without the provenance that names the reference. */
+  async function rowsOf(where: string, file: string): Promise<string[]> {
+    return (await readFile(join(where, file), 'utf8')).split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+  }
+
+  it('searches a FASTA through its .fai, and a .2bit, site for site as the whole file', async () => {
+    const runs: Record<string, string[]> = {}
+    for (const [name, reference] of [['whole', whole], ['indexed', indexed], ['twobit', twobit]] as const) {
+      reset()
+      const where = join(directory, `motif-${name}`)
+      expect(
+        await main(['motif', sample, '--sequence', reference, '--pattern', 'GGTCA', '--out', where, '--quiet']),
+        complained(),
+      ).toBe(0)
+      runs[name] = await rowsOf(where, 'sample.motif.motif-GGTCA-both.tsv')
+    }
+    expect(runs.whole.length).toBeGreaterThan(20)
+    expect(runs.indexed).toEqual(runs.whole)
+    expect(runs.twobit).toEqual(runs.whole)
+  })
+
+  it('searches only the sequences named with --sequences', async () => {
+    reset()
+    const where = join(directory, 'motif-chrII')
+    expect(
+      await main([
+        'motif', sample, '--sequence', indexed, '--pattern', 'GGTCA', '--sequences', 'chrII',
+        '--out', where, '--quiet',
+      ]),
+      complained(),
+    ).toBe(0)
+    const rows = await rowsOf(where, 'sample.motif.motif-GGTCA-both-on-chrII.tsv')
+    expect(rows.length).toBeGreaterThan(5)
+    expect(rows.filter((row) => /^chrI\t/.test(row))).toEqual([])
+  })
+
+  it('reads each sequence whole off the index for a task that needs it whole', async () => {
+    const runs: Record<string, string[]> = {}
+    for (const [name, reference] of [['whole', whole], ['indexed', indexed]] as const) {
+      reset()
+      const where = join(directory, `composition-${name}`)
+      expect(await main(['composition', '--sequence', reference, '--out', where, '--quiet']), complained()).toBe(0)
+      const stem = name === 'whole' ? 'whole' : 'indexed'
+      runs[name] = await rowsOf(where, `${stem}.composition.composition-gc.bedGraph`)
+    }
+    expect(runs.whole.length).toBe(12 + 6)
+    expect(runs.indexed).toEqual(runs.whole)
+  })
+
+  it('refuses a FASTA past 2 GiB with no index, and searches it once the index is beside it', async () => {
+    // The genome, and then nothing to the 2 GiB mark — sparse, so the test
+    // writes kilobytes. Read whole it is refused by size before a byte is
+    // read; read by its index it is the genome above and nothing more.
+    const huge = join(directory, 'huge.fa')
+    const { fasta, fai } = fastaAndIndex(genome())
+    await writeFile(huge, fasta)
+    await truncate(huge, 2 ** 31 + 1)
+    reset()
+    const where = join(directory, 'motif-huge')
+    const args = ['motif', sample, '--sequence', huge, '--pattern', 'GGTCA', '--out', where, '--quiet']
+    expect(await main(args)).toBe(2)
+    expect(complained()).toContain('samtools faidx huge.fa')
+
+    await writeFile(`${huge}.fai`, fai)
+    reset()
+    expect(await main(args), complained()).toBe(0)
+    const reference = join(directory, 'motif-huge-whole')
+    expect(
+      await main(['motif', sample, '--sequence', whole, '--pattern', 'GGTCA', '--out', reference, '--quiet']),
+    ).toBe(0)
+    expect(await rowsOf(where, 'sample.motif.motif-GGTCA-both.tsv')).toEqual(
+      await rowsOf(reference, 'sample.motif.motif-GGTCA-both.tsv'),
+    )
+    await rm(huge)
+  })
+})
+
 describe('the annotations venue', () => {
   let aBed = ''
   let bBed = ''

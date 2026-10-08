@@ -261,7 +261,7 @@ const DEMO_DATA: Array<{
     // The same sequence packed at two bits a base (§8.21). Published beside the
     // FASTA rather than instead of it, because the two are read by different
     // roads and both are worth having openable: a FASTA under the whole-read
-    // limit is held and searchable, a `.2bit` is read by range and is what an
+    // limit is held whole, a `.2bit` is read by range and is what an
     // assembly hub names — which is why the hub example in the paste box points
     // at this file.
     folder: 'yeast',

@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Find a motif searches a genome too large to hold, and searches the sequences ticked (§8.8,
+  §18.8).** A FASTA opened by its `.fai` — a mouse or human genome — or a `.2bit` was refused by the
+  search for not being held in memory; it is now read by range sixteen megabases at a time, each
+  piece scanned and let go, with an overlap one base short of the motif so a site across a seam is
+  found once, and the sites are the ones a search of the whole file finds. The form takes the
+  sequences to search as tick boxes, all of them to begin with; fewer are named in the lane
+  (*GATC on chr1*) and get rows of their own. Over a reference read by range the line beside
+  **Run** prices the read — every base of the ticked sequences, in bytes, and over a network in
+  requests — and a Stop is seen between two pieces.
+
+- **`metacooler-run` opens a `--sequence` by its index (§23.1, §8.21).** A FASTA with its `.fai`
+  beside it, or a `.2bit`, is read by range as the browser reads it, so a mammalian reference is a
+  reference from a shell: Node's `readFile` refuses a file past 2 GiB, which was every plain mouse
+  or human FASTA. One past it with no index is refused by a sentence naming `samtools faidx`.
+
 - **Marks hidden and shown, one or all of them, on every map, track and model at once (§8.1).**
   Each row of the Manual annotations card has an eye, as a track's row does, and the list a heading,
   `MARKS`, with how many are hidden and one eye for all of them over the rows' eyes; `A` is that eye

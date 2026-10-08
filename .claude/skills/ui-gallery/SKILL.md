@@ -69,6 +69,7 @@ node scripts/ui-loci.mjs gallery             # every locus a reader sees or type
 node scripts/ui-fixes.mjs gallery            # the shortcuts' gestures, the circular column, a cis block slid along its diagonal, a thirteenth rung refused, a picker tab's status bar, a variant lane's menu, a .hic's normalisation, a map closed into the browser, what Pattern detection, APA under chromosight and Compartments say they will read, the palette's Annotations row on a metacool, an embed's landing page and palette: fx01 … fx17
 node scripts/ui-structure-names.mjs gallery  # a BED's names on the model (§25.5): the colour-by menu with `· names`, the model A/B with its key, A recoloured from the key and the lane by name taking it, thirty names folding into `other`, the dark theme: sn1 … sn6
 node scripts/ui-orfs.mjs gallery              # a FASTA's six reading frames: the setting off and on, UTP5's start with an amino acid in every codon, the readout over it, bare codons, start/stop ticks at 20 kb, the whole chromosome's "zoom in", one window in table 1 and in table 4 (TGA → W), a reload, dark: o01 … o13
+node scripts/ui-motif-range.mjs gallery       # Find a motif over references read by range (§8.8, §8.21, §18.8): an 80 Mb FASTA with its .fai written under out/motif-range/ and opened alone, its row, the form with every sequence ticked and the scan's price, a run mid-way, the sites, one sequence ticked and its own row, then the yeast demo's .2bit priced and searched, and the FASTA held whole: mr01 … mr10
 node scripts/ui-edit-dotplot.mjs gallery     # the stage's corner dot plot in the hand (§27.3, dev; the chrXVI–mycoides data and a config under out/reasm/): its own size, zoomed by the wheel, moved by a drag, a contig's name hovered on the bar and its lines lit, a line hovered and its contig lit on the map, sized by its grip, the dark theme with the size kept: o01 … o07
 node scripts/ui-basemods.mjs gallery         # a nanopore BAM's MM/ML calls on yeast IV: colour by base modification in the card, the reads by 5mC across UTP5 and its bare promoter and closer, a hover on a call and its read's card, 5hmC and 6mA picked, the depth row as % modified and its card, a 0.9 threshold, the dark theme: bm01 … bm14
 node scripts/ui-revisit.mjs gallery          # a place visited again, drawn from memory: chr1, chr2, chr1 again, a window and chr1 again on the lab's mouse .mcool at 10 kb, then on a chicken .hic, each step timed with its requests and the memory figure, and the read panel on a revisit: rv01 … rv11
@@ -380,6 +381,18 @@ note or a squashed plot is a bug the tests did not see, and this is where it sho
   The click road opens the browser's own file picker, which the page cannot answer.
 - The cell's own hover speaks in the status bar and on the maps, not in its corner readout.
 - Vite serves `.gz` with `Content-Encoding: gzip` unless `vite.config.ts`'s dev plugin strips it.
+`scripts/ui-motif-range.mjs` drives **Find a motif over a reference read by range** (§8.8, §8.21,
+§18.8). It writes an 80 Mb FASTA of three sequences and its `.fai` under `out/motif-range/`
+(git-ignored, written once) and opens it alone in the 1D browser, so it is past the whole-read line
+and read through its index as a mouse genome is: the row's *read by range from its index*, the form
+with every sequence ticked and the line beside **Run** pricing a scan in bytes and requests, a run
+caught mid-way with its bar naming the sequence it is reading, the sites and their density, then one
+sequence ticked — priced as that sequence — whose run lands as a row of its own. Then the yeast
+tracks demo with its `.2bit` as a second sequence row: the form on the `.2bit`, priced at a quarter
+of a byte a base, its sites at a locus, and the form on the FASTA held whole, still free. It prints
+each price and each run's notes — the `.2bit`'s and the FASTA's site counts must agree. Run it after
+any change to the motif task's form or estimate, `analysis/run/motif.ts`, or how the worker reads a
+ranged reference.
 `scripts/ui-orfs.mjs` drives a **sequence lane's reading frames** (§8.8) on the 1D browser demo,
 with the General and Aesthetics columns folded so the browser is wide enough for each rung to land
 where it would on a laptop: the FASTA row's settings before and after *reading frames* is pressed,

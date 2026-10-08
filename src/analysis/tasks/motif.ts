@@ -45,7 +45,16 @@
  */
 
 import { compileMotif, isMotifRefusal } from '../../annotations/motif'
-import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { fmt } from '../../units'
+import { tickedContigs } from '../context'
+import type {
+  AnalysisContext,
+  AnalysisTask,
+  ContextContig,
+  CostEstimate,
+  ParamSpec,
+  Params,
+} from '../types'
 import { READY, waitingFor } from '../types'
 
 /**
@@ -84,12 +93,33 @@ import { READY, waitingFor } from '../types'
  */
 export const MOTIF_SITE_LIMIT = 500_000
 
+/**
+ * How many residues of a reference read by range are searched at a time.
+ *
+ * A reference too large to hold (§8.8, §8.21) is searched a piece at a time:
+ * read, scanned, let go. Sixteen megabases is about sixteen megabytes of FASTA
+ * in one read — one request over a network, where a request is the cost that
+ * counts, and a pause short enough on a local disk that a Stop is seen within
+ * it. Two pieces are never held at once, so this is also very nearly the
+ * whole of what a search of a mammalian genome costs in memory.
+ */
+export const MOTIF_PIECE = 16_000_000
+
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequence',
     key: 'sequence',
     label: 'reference',
-    hint: 'The FASTA to search — its own sequences, in its own order.',
+    hint: 'The FASTA or .2bit to search — its own sequences, in its own order.',
+  },
+  {
+    // Which of them, because a mammalian reference read by range is read in
+    // full to be searched (§8.8): mouse chr1 is a fourteenth of the genome's
+    // 2.8 GB, and one chromosome's sites of a short motif fit under the
+    // ceiling below where the whole genome's do not.
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'text',
@@ -170,26 +200,24 @@ export function motifPattern(params: Params): string {
 /**
  * Priced before it runs, and refused where the parameters cannot answer.
  *
- * **`free` rather than `bounded` or `scan`**, and the three classes make that
- * unambiguous rather than approximate (§18.6): they are about *reads*, and this
- * task performs none at all — no range requests, no bytes, no matrix. The
- * residues are already in memory, having been read when the reader dropped the
- * file, and the scan is one linear pass over them.
+ * **`free` for a reference held whole**, and the three classes make that
+ * unambiguous rather than approximate (§18.6): they are about *reads*, and
+ * such a search performs none at all — no range requests, no bytes, no matrix.
+ * The residues are already in memory, having been read when the reader dropped
+ * the file, and the scan is one linear pass over them.
  *
  * That is not the same as free of *time*: a scan is one mask test per base of
  * the motif at every position of the reference. The note says so, because a
  * class that prices the reads and a sentence that prices the wait are two
  * different honesties and the reader needs both.
  *
- * **The wait it prices is the one this app can actually reach.** The sentence
- * used to end "a minute or so on a mammalian one", which was a price for a run
- * nobody can start: `annotations/worker/annotations.worker.ts` refuses a FASTA
- * over `FASTA_BYTE_CAP` — 300 MB, checked on the local file's size and again on
- * the decoded bytes — with a refusal saying in as many words that a mammalian
- * genome is the wrong thing to open this way. The largest reference that reaches
- * this task is therefore a few hundred megabases, which is seconds and not a
- * minute, and a sentence that overprices the wait teaches a reader to expect a
- * hang the code has already ruled out.
+ * **`scan` for a reference read by range** (§8.8, §8.21), because there every
+ * base searched is a base read: a FASTA over the whole-read line opened by its
+ * `.fai`, or a `.2bit`. The bytes are the bases of the ticked sequences times
+ * what the file spends on one (`AnnotationEntry.byRange`), and the requests —
+ * over a network, where they are what counts — one per piece the runner reads
+ * them in. A whole mouse genome is 2.8 GB of FASTA, which is a fact a reader
+ * should meet beside **Run** and not in the progress bar.
  */
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const free = { class: 'free' as const, requests: 0, bytes: 0, note: 'Nothing to read.' }
@@ -197,7 +225,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   if (typeof entry !== 'string' || entry === '') {
     return {
       ...free,
-      refusal: 'Choose a reference to search. A FASTA dropped on the Annotations panel is one.',
+      refusal:
+        'Choose a reference to search. A FASTA or a .2bit dropped on the Annotations panel is one.',
     }
   }
   // The matcher's own sentence, from the same function the runner calls. Said
@@ -207,30 +236,60 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   if (isMotifRefusal(compiled)) return { ...free, refusal: compiled.reason }
 
   const sequence = context.entries.find((row) => row.id === entry)
-  const bases = totalBases(context)
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) return { ...free, refusal: 'Tick at least one sequence.' }
+  // Every sequence ticked is the whole reference (`run/motif.ts`'s
+  // `searchedContigs`), which a reference read by range can state exactly.
+  const whole = chosen.length === context.contigs.length
+  const what = whole
+    ? (sequence?.label ?? 'the reference')
+    : chosen.length === 1
+      ? chosen[0].name
+      : `${fmt.int(chosen.length)} sequences of ${sequence?.label ?? 'the reference'}`
+
+  const byRange = sequence?.byRange
+  if (byRange !== undefined) {
+    const bases = whole ? byRange.bases : basesOf(chosen)
+    const pieces = chosen.reduce(
+      (sum, contig) => sum + Math.max(1, Math.ceil(contig.length / MOTIF_PIECE)),
+      0,
+    )
+    const remote = sequence?.source.kind === 'remote'
+    return {
+      class: 'scan',
+      requests: remote ? pieces : null,
+      bytes: Math.round(bases * byRange.bytesPerBase),
+      note:
+        `Every base of ${what}, ${(bases / 1e6).toFixed(1)} Mb, read by range and searched ` +
+        `${fmt.int(MOTIF_PIECE / 1e6)} Mb at a time`,
+    }
+  }
+
+  const bases = basesOf(whole ? context.contigs : chosen)
   return {
     class: 'free',
     requests: 0,
     bytes: 0,
     note:
-      `No file reads at all: one pass over ${sequence?.label ?? 'the reference'}` +
+      `No file reads at all: one pass over ${what}` +
       `${bases === 0 ? '' : `, ${(bases / 1e6).toFixed(1)} Mb`}, in the worker that already ` +
       `holds it. ${compiled.length} ${compiled.length === 1 ? 'base' : 'bases'} tested per ` +
       'position, so it is a moment on a yeast genome and a few seconds on the largest ' +
-      'reference this can hold.',
+      'reference held whole.',
   }
 }
 
 /**
- * The assembly's residues, in base pairs, or `0` where the context has none.
+ * The residues of a set of sequences, in base pairs.
  *
- * The *assembly's* rather than the loaded FASTA's, because the entry carries no
- * length and this is a sentence about scale rather than an accounting: a session
- * whose contigs total 12 Mb is a yeast search however the FASTA is spelled.
+ * The *assembly's* rather than the loaded FASTA's for a reference held whole,
+ * because that entry carries no length and this is a sentence about scale
+ * rather than an accounting: a session whose contigs total 12 Mb is a yeast
+ * search however the FASTA is spelled.
  */
-function totalBases(context: AnalysisContext): number {
+function basesOf(contigs: readonly ContextContig[]): number {
   let total = 0
-  for (const contig of context.contigs) total += contig.length
+  for (const contig of contigs) total += contig.length
   return total
 }
 

@@ -148,6 +148,71 @@ describe('what it costs, and what it refuses', () => {
   })
 })
 
+/**
+ * A reference read by range is priced by what it reads (§8.8, §18.8).
+ *
+ * Held whole, a search reads nothing and is `free`. Opened by its `.fai`, every
+ * base searched is a base read, so the class is `scan` and the bytes are the
+ * ticked sequences' bases times what the file spends on one — the figure a
+ * reader about to search a mouse genome over a network has to meet before
+ * **Run**, not in the progress bar.
+ */
+describe('what it costs over a reference read by range', () => {
+  function indexed(kind: 'remote' | 'local'): AnnotationEntry {
+    return {
+      ...sequenceEntry(),
+      label: 'mm10.fa',
+      source:
+        kind === 'remote'
+          ? { kind: 'remote', url: 'https://example.invalid/mm10.fa', name: 'mm10.fa' }
+          : { kind: 'local', name: 'mm10.fa' },
+      byRange: { bases: 2_600_000, bytesPerBase: 61 / 60 },
+    } as AnnotationEntry
+  }
+  const price = (entry: AnnotationEntry, sequences?: string[]): ReturnType<typeof MOTIF_TASK.estimate> =>
+    MOTIF_TASK.estimate(context({ entries: [entry] }), {
+      ...defaultParams(MOTIF_TASK.params),
+      sequence: 'seq1',
+      pattern: 'GATC',
+      ...(sequences === undefined ? {} : { sequences }),
+    })
+
+  it('is a scan of every base of the reference, in bytes and in requests', () => {
+    const estimate = price(indexed('remote'))
+    expect(estimate.class).toBe('scan')
+    expect(estimate.refusal).toBeUndefined()
+    expect(estimate.bytes).toBe(Math.round(2_600_000 * 61 / 60))
+    // One piece per sequence here, every one shorter than a piece.
+    expect(estimate.requests).toBe(3)
+    expect(estimate.note).toMatch(/Every base of mm10\.fa, 2\.6 Mb, read by range/)
+  })
+
+  it('counts no requests on a local file, whose reads are a disk’s', () => {
+    const estimate = price(indexed('local'))
+    expect(estimate.class).toBe('scan')
+    expect(estimate.requests).toBeNull()
+    expect(estimate.bytes).toBeGreaterThan(0)
+  })
+
+  it('is the ticked sequences’ bases alone when not all of them are ticked', () => {
+    const estimate = price(indexed('remote'), ['IV'])
+    expect(estimate.bytes).toBe(Math.round(1_531_933 * 61 / 60))
+    expect(estimate.requests).toBe(1)
+    expect(estimate.note).toMatch(/Every base of IV, 1\.5 Mb/)
+  })
+
+  it('refuses a run over no sequence at all', () => {
+    expect(price(indexed('remote'), []).refusal).toMatch(/Tick at least one sequence/)
+    expect(price(sequenceEntry() as AnnotationEntry, []).refusal).toMatch(/Tick at least one sequence/)
+  })
+
+  it('stays free for a reference held whole, however many are ticked', () => {
+    const estimate = price(sequenceEntry(), ['I', 'II'])
+    expect(estimate.class).toBe('free')
+    expect(estimate.note).toMatch(/one pass over 2 sequences of sacCer3\.fa, 1\.0 Mb/)
+  })
+})
+
 describe('the form it renders', () => {
   const form = (): ParamForm =>
     new ParamForm({
@@ -200,6 +265,19 @@ describe('the form it renders', () => {
     // called everywhere else in this app.
     expect(text).toContain('reference')
     expect(text).toContain('both strands')
+  })
+
+  it('offers every sequence to tick, all of them ticked to begin with', () => {
+    // Genome-wide by default, as the search always was; a reader narrowing a
+    // mammalian search to one chromosome unticks the rest (§18.8).
+    const view = form()
+    const ticks = [...view.el.querySelectorAll<HTMLInputElement>('.param-sequences input[type="checkbox"]')]
+    expect(ticks).toHaveLength(3)
+    expect(ticks.every((box) => box.checked)).toBe(true)
+    expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
+    ticks[0].checked = false
+    ticks[0].dispatchEvent(new Event('change'))
+    expect(view.value.sequences).toEqual(['II', 'IV'])
   })
 
   /**

@@ -1714,6 +1714,20 @@ export type AnnotationStatus = 'loading' | 'ready' | 'error' | 'detached'
  * re-read a dropped file without a fresh gesture — so the row is shown with its
  * colours and limits intact and a button to point at the file again.
  */
+/**
+ * What a reference read by range costs to read through (§8.8, §8.21).
+ *
+ * Present on a FASTA opened by its `.fai` and on a `.2bit`, and nowhere else:
+ * the one fact a motif search's estimate needs before **Run** is how many
+ * bytes the bases it will search are, since a search over such a reference
+ * reads every one of them (§18.8). The residues across the whole file, for a
+ * search over every sequence, and what the file spends on one.
+ */
+export interface SequenceByRange {
+  bases: number
+  bytesPerBase: number
+}
+
 export interface AnnotationEntry {
   id: string
   card: AnnotationCard
@@ -1757,6 +1771,8 @@ export interface AnnotationEntry {
   payload?: AnnotationPayload
   /** Value extent over the whole bigWig, from its header. Seeds a manual clip. */
   fileExtent?: { min: number; max: number }
+  /** A sequence row read by range rather than held: see {@link SequenceByRange}. */
+  byRange?: SequenceByRange
   /**
    * How many times this row's values have been replaced under the same id.
    *

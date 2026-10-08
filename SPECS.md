@@ -3118,9 +3118,12 @@ is on screen the moment a kilobyte of index has arrived, and nothing of the sequ
 a lane asks for a window. The index is the one named on the URL (`<url>#index=<url>`, §8.13) or
 dropped beside the file, and otherwise `<url>.fai`, guessed and never probed on the terms every other
 sidecar is. What an indexed sequence gives up is everything that needed the whole of it in memory:
-its GC lane draws nothing over a window wider than four megabases and its readout says why, the
-motif search declines it in a note naming the line, and an alignment lane colours its mismatches
-only from the slab the sequence lane last drew, never fetching for one (§8.13). Over the line with no
+its GC lane draws nothing over a window wider than four megabases and its readout says why, base
+composition and the origin call decline it in a note naming the line, and an alignment lane colours
+its mismatches only from the slab the sequence lane last drew, never fetching for one (§8.13). The
+**motif search** needs it only a piece at a time, so it is not among them: it reads every base it
+searches, by range, sixteen megabases at a time and none of them kept, and says what that costs
+before it runs (§18.8). Over the line with no
 index that can be found, the file is read whole as it always was, and refused past 300 MB by a
 sentence naming the size, `samtools faidx`, and where to put the result. A bgzipped FASTA is read
 whole whatever its size, and refused past the same 300 MB of sequence, its `.fai` needing a `.gzi`
@@ -4818,9 +4821,9 @@ The assembly is `origin: 'twobit'` and **exact** — every `dnaSize` is in the i
 genome declares its chromosomes in a few hundred kilobytes without reading a base. The store is the
 shape `IndexedSequences` has, and for the same reason: both are "an assembly in memory and a way to
 turn a window into a byte range", and every caller above them wants exactly that. What differs is two
-lines of arithmetic. The CLI reads one the same way (`cli/tracks.ts`), through the same pure
-functions, so a metaplot over ten thousand windows of hg38 reads a few megabytes rather than
-unpacking 3.1 GB.
+lines of arithmetic. The CLI reads one the same way (`cli/tracks.ts` under `--tracks`,
+`cli/reference.ts` under `--sequence`), through the same pure functions, so a metaplot over ten
+thousand windows of hg38 reads a few megabytes rather than unpacking 3.1 GB.
 
 ### 8.22 Chromosome ideograms: cytoBand
 
@@ -7000,7 +7003,8 @@ So: **a third worker, with its own mount of the same source.**
 - **Every job reports progress and can be cancelled**, through the same hooks the genome × genome scan
   (§7.3) already uses. That holds in the annotations worker too, where the 1D tasks run: a task there
   sees a Stop at its next read of a track, or where it yields on purpose — a peak call yields between
-  its windows and between IDR's rounds — and a task with neither in it, a motif scan being one
+  its windows and between IDR's rounds, a motif search over a reference read by range between its
+  pieces — and a task with neither in it, a motif scan over a reference held whole being one
   synchronous pass over the residues, runs to its end and has its answer refused rather than adopted.
   Both stop controls, the row's and the drawer's *cancel*, say which in their tooltips.
 - **A job survives navigation and tab switches** and is bound to the session rather than to the mounted
@@ -7977,7 +7981,21 @@ must not become (§18.2). A run that arrives with an empty list anyway says so a
 
 **Over the sequence.** *Find a motif* allows **mismatches**, up to four and never the whole motif,
 because a binding site is a consensus and a genome carries variants of it: its sites carry how many
-they differ by, and its name says what it was asked. *Base composition* — GC content, GC skew
+they differ by, and its name says what it was asked. It takes **the sequences to search** as the tick
+boxes: every one of the session's ticked is the whole reference, the sequences the map has not got
+included, which is what the search was before it had a list; fewer is exactly those, reached by the
+map's spelling of them (§5.9) and named in the lane's label — *GATC (both strands) on chr1*, counted
+past three — and in its id, so a search run chromosome by chromosome leaves a row per chromosome
+rather than each replacing the last. **A reference read by range is searched as well** (§8.8,
+§8.21), a FASTA over the whole-read line opened by its `.fai` or a `.2bit`: the run reads it 16 Mb at
+a time, each piece carrying one base short of the motif past its end so that a site across a seam
+lies whole in exactly one piece, scans it and lets it go, and sees a Stop between two pieces — so
+what it holds is a piece whatever the genome, and the sites are the ones a search of the whole file
+finds. Its estimate is a **scan** rather than *free*: every base of the ticked sequences times what
+the file spends on one (61/60 of a byte in a FASTA wrapped at 60, a quarter in a `.2bit`), and over a
+network a request per piece — a whole mouse genome is 2.8 GB, chr1 a fourteenth of it. The site
+ceiling stays at 500,000, and a run that reaches it over several sequences says to tick fewer.
+*Base composition* — GC content, GC skew
 `(G − C)/(G + C)`, AT skew and the cumulative GC skew, per bin and under the map's names, each a lane
 like any other and each written as a bigWig. The **bin size** is the open map's resolution unless the
 reader asks for another, and 10 kb with no map open: a 1D browser (§5.8) with a FASTA in it is enough
@@ -9477,7 +9495,11 @@ with **no contact map**, since `metacooler-run` opened its first argument as one
 refusal under it, which is a record with holes in it exactly where the reader is least likely to
 look. So the shell gained what it was said not to have, each as the code the worker already runs:
 `src/cli/tracks.ts` opens a bigWig, a bedGraph, a wig or a FASTA under `--tracks` and answers `sample`
-in the worker's own shape; a file under `--features` or `--pairs` is read by the loader's own
+in the worker's own shape; a reference under `--sequence` is opened as the browser opens one
+(`src/cli/reference.ts`) — a `.2bit`, or a FASTA with `samtools faidx`'s `.fai` beside it, by range,
+and anything else whole, where `readFile`'s 2 GiB ceiling used to refuse every mammalian FASTA before
+a byte of it was parsed and now refuses only one with no index, naming the command that makes one;
+a file under `--features` or `--pairs` is read by the loader's own
 sniffers and parsers, in its order — a BED or a peak file, a GTF, a genePred, a VCF, a cytoBand, a
 barChart, junctions, a model, a bedpe, an interact or a longrange — so it reaches a task as the
 browser draws it, where everything past the first few was read as a BED and came out empty or

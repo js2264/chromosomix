@@ -716,6 +716,7 @@ export class AnnotationLoader {
         overlap: result.overlap,
         ...(result.payload === undefined ? {} : { payload: result.payload }),
         ...(result.fileExtent === undefined ? {} : { fileExtent: result.fileExtent }),
+        ...(result.byRange === undefined ? {} : { byRange: result.byRange }),
         error: undefined,
       })
       // A BAM is two pictures and they are now two rows. Made here rather than

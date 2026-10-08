@@ -22,6 +22,7 @@ import type {
   ReadStyle,
   ReadWindow,
   Region,
+  SequenceByRange,
   TrackSampleSet,
 } from '../types'
 import type { BinVector } from './binVector'
@@ -154,6 +155,8 @@ export interface LoadResult {
   payload?: AnnotationPayload
   /** A bigWig's whole-file value range, from its header. Seeds a manual clip. */
   fileExtent?: { min: number; max: number }
+  /** A sequence file read by range rather than held: see {@link SequenceByRange}. */
+  byRange?: SequenceByRange
 }
 
 /**

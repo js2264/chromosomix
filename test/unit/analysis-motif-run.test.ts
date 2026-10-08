@@ -37,7 +37,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { runMotif } from '@/analysis/run/motif'
+import { runMotif, scanMotif } from '@/analysis/run/motif'
+import { compileMotif, isMotifRefusal, type Motif } from '@/annotations/motif'
 import type { SequenceReader, TrackJobContext } from '@/analysis/job'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from '@/analysis/runner'
 import { MOTIF_SITE_LIMIT, MOTIF_TASK } from '@/analysis/tasks/motif'
@@ -348,6 +349,167 @@ describe('the site ceiling', () => {
 })
 
 // ---------------------------------------------------------------------------
+// A reference read by range (§8.8, §8.21)
+// ---------------------------------------------------------------------------
+
+/**
+ * The toy reference as the worker hands out a FASTA opened by its `.fai`: no
+ * `bases`, a refusal for the tasks that need a sequence whole, and `read` —
+ * which logs every window it is asked for, so a case can see the pieces.
+ */
+function ranged(log: Array<[string, number, number]> = [], source = reader()): SequenceReader {
+  return {
+    contigs: source.contigs,
+    bases: () => undefined,
+    refusal: 'This FASTA is read by range from its index rather than held.',
+    read: async (contig, start, end) => {
+      log.push([contig, start, end])
+      return source.bases(contig)?.slice(start, end)
+    },
+  }
+}
+
+function compiled(pattern: string): Motif {
+  const motif = compileMotif(pattern)
+  if (isMotifRefusal(motif)) throw new Error(motif.reason)
+  return motif
+}
+
+/** `[contig, start, strand]` per site, out of a scan rather than a run. */
+function scanned(result: Awaited<ReturnType<typeof scanMotif>>): Array<[string, number, number]> {
+  return result.hits.flatMap((hits) =>
+    Array.from(hits.starts, (start, at): [string, number, number] => [hits.contig, start, hits.strands[at]]),
+  )
+}
+
+describe('a reference read by range', () => {
+  it('is searched through its windows, site for site as one held whole', async () => {
+    const held = await run({ pattern: 'GATC', bothStrands: true })
+    const read = await run({ pattern: 'GATC', bothStrands: true }, { reference: ranged() })
+    expect(sites(read.outputs)).toEqual(sites(held.outputs))
+    expect(Array.from(profile(read.outputs)?.values ?? [])).toEqual(
+      Array.from(profile(held.outputs)?.values ?? []),
+    )
+    // Not refused for not being held: the refusal is for the tasks that need a
+    // sequence whole, and a search does not.
+    expect(read.notes.join(' ')).not.toContain('rather than held')
+  })
+
+  it('finds a site across a seam once, and only once, wherever the seam falls', async () => {
+    // chrB's GATC at 2 straddles a seam at 3, its GATC at 10 one at 12 — and a
+    // piece of one base puts a seam inside every site there is. Each piece
+    // carries the next three residues, so a site lies whole in exactly one.
+    const motif = compiled('GATC')
+    const whole = await scanMotif(reader(), motif, { bothStrands: true, limit: 1000 })
+    for (let piece = 1; piece <= 17; piece++) {
+      const log: Array<[string, number, number]> = []
+      const result = await scanMotif(ranged(log), motif, { bothStrands: true, limit: 1000, piece })
+      expect(scanned(result), `pieces of ${piece}`).toEqual(scanned(whole))
+      expect(result.total).toBe(whole.total)
+      // No window longer than a piece and its overlap, and every residue read.
+      for (const [, start, end] of log) expect(end - start).toBeLessThanOrEqual(piece + 3)
+      expect(log.filter(([name]) => name === 'chrB').map(([, start]) => start)[1] ?? 16).toBe(
+        Math.min(piece, 16),
+      )
+    }
+  })
+
+  it('stops at the cap across pieces, and says whether there were more', async () => {
+    const motif = compiled('GATC')
+    // Three forward sites on chrB and chrA: a cap of two is short of them, a
+    // cap of three is exactly them, and only the first is a truncated answer.
+    // (chrGap is left out because a cap reached with a sequence still unread
+    // is a truncated answer whatever that sequence holds.)
+    const contigs = reader().contigs.slice(0, 2)
+    const short = await scanMotif(ranged(), motif, { bothStrands: false, limit: 2, piece: 3, contigs })
+    expect(short.total).toBe(2)
+    expect(short.truncated).toBe(true)
+    const exact = await scanMotif(ranged(), motif, { bothStrands: false, limit: 3, piece: 3, contigs })
+    expect(exact.total).toBe(3)
+    expect(exact.truncated).toBe(false)
+  })
+
+  it('reports as it goes, and sees a Stop between two pieces', async () => {
+    const motif = compiled('GATC')
+    const seen: number[] = []
+    await scanMotif(ranged(), motif, {
+      bothStrands: false,
+      limit: 1000,
+      piece: 4,
+      progress: (done, total) => seen.push(done / total),
+    })
+    expect(seen.at(-1)).toBe(1)
+    expect([...seen].sort((a, b) => a - b)).toEqual(seen)
+
+    let checks = 0
+    const log: Array<[string, number, number]> = []
+    const stopped = scanMotif(ranged(log), motif, {
+      bothStrands: false,
+      limit: 1000,
+      piece: 4,
+      throwIfCancelled: () => {
+        if (++checks === 3) throw new Error('cancelled')
+      },
+    })
+    await expect(stopped).rejects.toThrow('cancelled')
+    // Two pieces read, and not one more after the Stop.
+    expect(log).toHaveLength(2)
+  })
+})
+
+describe('the sequences ticked', () => {
+  it('narrow the search to themselves, and the lane says which', async () => {
+    const log: Array<[string, number, number]> = []
+    const { outputs } = await run({ pattern: 'GATC', sequences: ['chrA'] }, { reference: ranged(log) })
+    expect(sites(outputs)).toEqual([['chrA', 3, 7, 1]])
+    // Nothing of the others was read: a narrowed search over a genome read by
+    // range is a narrowed download, which is the point of narrowing it.
+    expect(new Set(log.map(([name]) => name))).toEqual(new Set(['chrA']))
+    const lane = outputs.find((output) => output.kind === 'intervals')
+    expect(lane?.label).toBe('GATC on chrA')
+    // Its own rows: chr1 searched and then chr2 are two answers.
+    expect(lane?.id).toBe('motif-GATC-on-chrA')
+  })
+
+  it('are the whole reference when every one of the session’s is ticked', async () => {
+    const { outputs } = await run({ pattern: 'GATC', sequences: ['chrB', 'chrA', 'chrGap'] })
+    expect(sites(outputs)).toHaveLength(3)
+    const lane = outputs.find((output) => output.kind === 'intervals')
+    expect(lane?.label).toBe('GATC')
+    expect(lane?.id).toBe('motif-GATC')
+  })
+
+  it('are nothing when none is ticked, and the run says so before reading', async () => {
+    const log: Array<[string, number, number]> = []
+    const { outputs, notes } = await run({ pattern: 'GATC', sequences: [] }, { reference: ranged(log) })
+    expect(outputs).toEqual([])
+    expect(notes.join(' ')).toMatch(/No sequence is ticked/)
+    expect(log).toEqual([])
+  })
+
+  it('reach the reference by the map’s spelling of them (§5.9)', async () => {
+    const roman: SequenceReader = {
+      contigs: [
+        { name: 'chrIV', length: 8 },
+        { name: 'chrV', length: 8 },
+      ],
+      bases: (contig) =>
+        contig === 'chrIV' || contig === 'chrV'
+          ? Uint8Array.from('AGATCAAA', (letter) => letter.charCodeAt(0))
+          : undefined,
+    }
+    const { outputs } = await run({ pattern: 'GATC', sequences: ['IV'] }, { reference: roman })
+    expect(sites(outputs)).toEqual([['chrIV', 1, 5, 1]])
+  })
+
+  it('say so when none of them is in the reference', async () => {
+    const { outputs, notes } = await run({ pattern: 'GATC', sequences: ['chrZ'] })
+    expect(outputs).toEqual([])
+    expect(notes.join(' ')).toMatch(/None of the ticked sequences is in this reference/)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // What Stop means for a task in this venue
 // ---------------------------------------------------------------------------
 
@@ -407,7 +569,7 @@ async function settle(): Promise<void> {
 /**
  * **Stop must not end in `done`, whatever the worker goes on to answer.**
  *
- * A motif scan is a synchronous pass over a whole reference inside the
+ * A motif scan over a reference held whole is a synchronous pass inside the
  * annotations worker, which never returns to its event loop, so the `cancel` the
  * runner now sends there (`analysis/runner.ts`, the `annotations` branch of
  * `runStep`) cannot be read before the pass ends and the run finishes

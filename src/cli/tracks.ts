@@ -45,7 +45,7 @@ import { BigWig } from '@gmod/bbi'
 import { LocalFile } from 'generic-filehandle2'
 
 import { decodeAnnotationBytes, decodeAnnotationText } from '../annotations/parse'
-import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
+import { gcBins, looksLikeFasta, parseFasta } from '../annotations/fasta'
 import { IntervalTrack, parseBedGraph, parseWig, sniffSignal } from '../annotations/signal'
 import { parseBedMethyl, sniffBedMethyl } from '../annotations/bedmethyl'
 import {
@@ -60,6 +60,7 @@ import type { Region, TrackSampleSet, TrackSamples } from '../annotations/types'
 import { bbiMagic } from '../annotations/worker/protocol'
 import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
+import { heldReference, type Reference } from './reference'
 
 /** One loaded track, sampled the way the annotations worker samples it. */
 export interface LoadedTrack {
@@ -106,7 +107,7 @@ async function loadTrack(path: string): Promise<LoadedTrack> {
   // does (§8.21).
   if (looksLikeTwoBit(raw.subarray(0, 4))) return twoBitTrack(path, name)
   const bytes = await decodeAnnotationBytes(raw)
-  if (looksLikeFasta(bytes)) return gcTrack(path, name, parseFasta(bytes))
+  if (looksLikeFasta(bytes)) return gcTrack(path, name, heldReference(parseFasta(bytes)))
   const text = await decodeAnnotationText(bytes)
   // Asked before `sniffSignal` for the reason it is asked before it everywhere:
   // a bedMethyl is a BED9 with the measurement past column 9, and nothing that
@@ -251,13 +252,10 @@ function signalTrack(
 // FASTA, as GC content
 // ---------------------------------------------------------------------------
 
-export function gcTrack(path: string, name: string, store: SequenceStore): LoadedTrack {
-  const basesOf = (contig: string): Uint8Array | undefined => {
-    const direct = store.bases.get(contig)
-    if (direct !== undefined) return direct
-    const at = contigIndexOf(store.contigs, contig)
-    return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
-  }
+export function gcTrack(path: string, name: string, store: Reference): LoadedTrack {
+  // The reference's own ladder of names (§5.9), so a FASTA writing `chrI` is
+  // sampled for a map writing `I`.
+  const basesOf = (contig: string): Uint8Array | undefined => store.bases(contig)
   return {
     path,
     name,
@@ -426,7 +424,7 @@ export function samplerOver(
  */
 export function lengthsOf(
   tracks: ReadonlyMap<string, LoadedTrack>,
-  sequences: ReadonlyMap<string, SequenceStore>,
+  sequences: ReadonlyMap<string, Pick<Reference, 'contigs'>>,
 ): Record<string, number> {
   const out: Record<string, number> = {}
   for (const track of tracks.values()) {
