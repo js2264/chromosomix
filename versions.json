@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 99,
+      "commit": "7603f47",
+      "title": "Search a genome read by range for a motif, chromosome by chromosome, and open a --sequence by its index (§8.8, §8.21, §18.8, §23.1)",
+      "branch": "js/laughing-pascal-u20ehd",
+      "date": "2026-10-08T00:00:21Z"
+    },
+    {
       "number": 98,
       "commit": "69b5e4f",
       "title": "Hide and show the reader's marks, one or all, on every map, track and model (§8.1, §25.5)",
