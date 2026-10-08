@@ -94,7 +94,9 @@ The current draft cites Fig. 1a (browsing) and Fig. 1b (analysis). With four pan
 | CTCF on the model in **d** | 0.28 to 1.30, mean signal per 250-kb bead | `make_figure.py`, from the CTCF bigWig |
 | read for the view in **a** | 47.2 MB of the 7.03-GB .mcool | the browser's network log while `capture-ui.mjs` ran |
 
-In panel **a**, *Model from the map* took 3.7 s in the browser.
+The whole chain ran in 7 min 31 s here on four 2.1-GHz cores, and a second run reproduced every
+result file but the date in its header; in panel **a**, *Model from the map* took 3.7 s in the
+browser.
 
 ## To check before it goes in
 
@@ -140,7 +142,7 @@ In panel **a**, *Model from the map* took 3.7 s in the browser.
 npm ci && npm run build:cli
 python -m pip install cooler pyBigWig numpy pillow
 
-bash manuscript/figure1/run_analyses.sh          # results/: fetches ~8.9 GB once, then the app's command line
+bash manuscript/figure1/run_analyses.sh          # results/: fetches ~8.9 GB once, then ~8 min of the app's command line
 npm run dev -- --host 127.0.0.1 --port 5173 &
 node manuscript/figure1/capture-ui.mjs           # ui-session.png: the real app, headless, reading from 4DN
 python manuscript/figure1/make_figure.py         # figure1.svg
