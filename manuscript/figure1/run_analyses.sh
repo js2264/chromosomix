@@ -64,14 +64,17 @@ DOMAINS="$(ls "$OUT"/insulation/*domains.bed)"
 # 2D -> 2D features: loops around Sox2, by the Chromosight port, at 5 kb.
 "${RUN[@]}" chromosight "$MAP::/resolutions/5000" --pattern loops --sequences chr3 --out "$OUT/loops" --quiet
 
-# 2D -> 3D: pastis-NB at every scale the figure browses — the genome at 2.5 Mb, chromosome 3
-# at 250 kb, ten megabases of it at 25 kb, the Sox2 locus at 5 kb.
+# 2D -> 3D: pastis-NB at every scale the figure browses, at that scale's resolution — the genome
+# at 2.5 Mb, chromosome 3 at 250 kb, chr3:27–37 Mb at 10 kb, chr3:34–35 Mb at 5 kb, and the
+# 250 kb around Sox2 and its control region at 2 kb.
 "${RUN[@]}" reconstruct3d "$MAP::/resolutions/2500000" --method nb --region "$SEQS" --out "$OUT/model-genome" --quiet
 "${RUN[@]}" reconstruct3d "$MAP::/resolutions/250000" --method nb --region chr3 --out "$OUT/model-chr3" --quiet
-"${RUN[@]}" reconstruct3d "$MAP::/resolutions/25000" --method nb --region chr3:30,000,001-40,000,000 \
+"${RUN[@]}" reconstruct3d "$MAP::/resolutions/10000" --method nb --region chr3:27,000,001-37,000,000 \
   --out "$OUT/model-region" --quiet
-"${RUN[@]}" reconstruct3d "$MAP::/resolutions/5000" --method nb --region chr3:34,200,001-35,200,000 \
+"${RUN[@]}" reconstruct3d "$MAP::/resolutions/5000" --method nb --region chr3:34,000,001-35,000,000 \
   --out "$OUT/model-locus" --quiet
+"${RUN[@]}" reconstruct3d "$MAP::/resolutions/2000" --method nb --region chr3:34,550,001-34,800,000 \
+  --out "$OUT/model-gene" --quiet
 
 # 3D -> 2D: chromosome 3's model against the map it came from; 3D -> 1D: its radial position.
 MODEL="$(ls "$OUT"/model-chr3/*.bed3d)"
