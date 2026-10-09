@@ -1,6 +1,13 @@
 {
-  "latest": "955f2c9",
+  "latest": "b9eda86",
   "versions": [
+    {
+      "commit": "b9eda86",
+      "version": "0.13.0",
+      "date": "2026-10-09T22:11:13+02:00",
+      "subject": "Draw a called set as one row, a 1D track or on the map as its display says; boundaries as points or short diagonal markers, domains as corners (§8.1, §18.5, §18.7, §18.8) (#100)",
+      "tag": ""
+    },
     {
       "commit": "955f2c9",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "3da40d6",
-      "version": "0.13.0",
-      "date": "2026-09-26T16:58:22+02:00",
-      "subject": "Move synthetic tracks to Tracks card, add points style (#74)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -219,13 +219,6 @@
       "title": "Track colouring: white-to-colour scale and editable key range",
       "branch": "js/exciting-bardeen-fhr25o",
       "date": "2026-10-08T09:33:00Z"
-    },
-    {
-      "number": 100,
-      "commit": "42715b9",
-      "title": "Draw a called set as one row, a 1D track or on the map as its display says; boundaries as points or short diagonal markers, domains as corners (§8.1, §18.5, §18.7, §18.8)",
-      "branch": "js/dazzling-bardeen-dcv7i7",
-      "date": "2026-10-09T18:53:52Z"
     },
     {
       "number": 97,
