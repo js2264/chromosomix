@@ -2050,6 +2050,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   reaches past. And an end of a window is labelled only when it is a round number, so a box drawn
   by hand no longer prints its edge, `8.00215`, over the tick beside it.
 
+- **A hidden series stays hidden with a figure's legend off (§18.13).** The chart hides a series
+  through its legend's selection, and a legend switched off carried none, so every series hidden in
+  the settings was drawn again, on screen and in the PNG and PDF.
+
 - **A figure's PNG and PDF leave its hidden series out of the legend (§18.13).** On screen a hidden
   series keeps its greyed entry, the control that brings it back; an export carried that grey name
   beside no line.

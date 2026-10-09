@@ -92,6 +92,18 @@ describe('optionOf', () => {
     expect(seriesOf(option).map((entry) => entry['name'])).toContain('b')
   })
 
+  it('keeps a hidden series hidden with the legend off', () => {
+    // The chart hides a series through its legend's selection; a legend that is
+    // switched off drew every hidden series again.
+    const { option } = build(curve(), (style) => {
+      style.hidden = ['b']
+      style.legend = 'none'
+    })
+    const legend = option['legend'] as { show: boolean; selected: Record<string, boolean> }
+    expect(legend.show).toBe(false)
+    expect(legend.selected).toEqual({ a: true, b: false })
+  })
+
   it('leaves a hidden series out of the legend an export draws', () => {
     const { option } = build(curve(), (style) => {
       style.hidden = ['b']

@@ -197,8 +197,12 @@ function zoomWindow(domain: [number, number] | null): ChartOption {
  * grey name beside no line is a series the figure says it has and does not show.
  */
 export function paperOption(option: ChartOption): ChartOption {
-  const legend = option['legend'] as { data?: unknown; selected?: Record<string, boolean> } | undefined
-  if (legend === undefined || !Array.isArray(legend.data) || legend.selected === undefined) return option
+  const legend = option['legend'] as
+    | { show?: boolean; data?: unknown; selected?: Record<string, boolean> }
+    | undefined
+  if (legend === undefined || legend.show === false || !Array.isArray(legend.data) || legend.selected === undefined) {
+    return option
+  }
   const selected = legend.selected
   return {
     ...option,
@@ -222,16 +226,18 @@ export function optionOf(
     hidden: style.hidden.includes(series.id),
   }))
 
+  // The chart hides a series through its legend's selection, so a legend that
+  // is switched off still carries one: without it every hidden series is drawn.
+  const names = shown.map((entry) => entry.series.name)
+  const selected = Object.fromEntries(shown.map((entry) => [entry.series.name, !entry.hidden]))
   const legend =
     style.legend === 'none'
-      ? { show: false }
+      ? { show: false, data: names, selected }
       : {
           show: true,
           type: 'scroll',
-          data: shown.map((entry) => entry.series.name),
-          selected: Object.fromEntries(
-            shown.map((entry) => [entry.series.name, !entry.hidden]),
-          ),
+          data: names,
+          selected,
           textStyle: { color: theme.ink, fontSize: style.fontSize, fontFamily: theme.fontFamily },
           ...(style.legend === 'right'
             ? { orient: 'vertical', right: 8, top: 'middle' }

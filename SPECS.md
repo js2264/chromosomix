@@ -8744,7 +8744,9 @@ in a hundred colours.
 legend, greyed, because that entry is the control that brings it back; on paper there is nothing to
 click, and a grey name beside no line is a series the figure says it has and does not show. So the
 offscreen option drops them from the legend (`paperOption`) and draws everything else as the screen
-does.
+does. **A hidden series stays hidden with the legend off**, on screen and on paper: the chart hides a
+series through its legend's selection, so a legend switched off still carries that selection and
+draws nothing — without it, every series the reader had hidden came back the moment the legend went.
 
 **The library arrives in a chunk of its own**, fetched when the first figure is built, exactly as
 three.js is for the 3D cell (§25.3) — a reader who never runs an analysis never downloads a chart
