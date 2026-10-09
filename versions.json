@@ -1,6 +1,13 @@
 {
-  "latest": "804fae6",
+  "latest": "955f2c9",
   "versions": [
+    {
+      "commit": "955f2c9",
+      "version": "0.13.0",
+      "date": "2026-10-09T20:51:55+02:00",
+      "subject": "Search a genome read by range for a motif, chromosome by chromosome, and open a --sequence by its index (§8.8, §8.21, §18.8, §23.1) (#99)",
+      "tag": ""
+    },
     {
       "commit": "804fae6",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "6ac0b40",
-      "version": "0.13.0",
-      "date": "2026-09-25T09:14:39+02:00",
-      "subject": "Add bacterial chromosome analysis: origins, arms, and group signal (#72)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -219,13 +219,6 @@
       "title": "Track colouring: white-to-colour scale and editable key range",
       "branch": "js/exciting-bardeen-fhr25o",
       "date": "2026-10-08T09:33:00Z"
-    },
-    {
-      "number": 99,
-      "commit": "d0c249b",
-      "title": "Search a genome read by range for a motif, chromosome by chromosome, and open a --sequence by its index (§8.8, §8.21, §18.8, §23.1)",
-      "branch": "js/laughing-pascal-u20ehd",
-      "date": "2026-10-09T18:44:31Z"
     },
     {
       "number": 97,
