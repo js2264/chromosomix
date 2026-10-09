@@ -410,6 +410,10 @@ export const runMagPurity: TaskRunner = async (job) => {
       label: 'Contigs to look at',
       payload: { kind: 'features', data: flagged.finish() },
       noun: { one: 'contig', many: 'contigs' },
+      // On the map, where a contig to look at is looked at: the corner of its
+      // square on the diagonal (§18.7).
+      display: 'overlay',
+      look: 'corner',
     } satisfies IntervalsOutput)
   }
   return outputs
@@ -543,6 +547,8 @@ export const runMagSplit: TaskRunner = async (job) => {
       label: 'MAGs that look like two things',
       payload: { kind: 'features', data: flagged.finish() },
       noun: { one: 'MAG', many: 'MAGs' },
+      display: 'overlay',
+      look: 'corner',
     } satisfies IntervalsOutput)
   }
   return outputs

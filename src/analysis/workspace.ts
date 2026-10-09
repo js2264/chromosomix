@@ -51,8 +51,8 @@ import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import { groupNameOn, syntheticEntry, syntheticId, type SyntheticFormat } from '../ui/synthetic'
 import type { SourceSpec } from '../worker/protocol'
 import { gridAt } from './context'
-import { adoptCalledSet } from './surfaces'
-import { surfaceToggles } from '../ui/calledSurfaces'
+import { adoptCalledSet, calledPayloadOf, isCalledSet } from './surfaces'
+import { calledSetFields } from '../ui/calledSurfaces'
 import { TASKS, tasksFor } from './registry'
 import { declaredOrigins } from './tasks/oriter'
 import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
@@ -303,7 +303,9 @@ export class AnalysisWorkspace {
         for (const [id, held] of this.intervals) {
           if (held.output !== output) continue
           const entry = store.byId(id)
-          if (entry !== undefined) return surfaceToggles(store, entry)
+          if (entry !== undefined) {
+            return calledSetFields(store, entry, { map: this.host.context()?.hasMap ?? true })
+          }
         }
         return null
       },
@@ -344,10 +346,20 @@ export class AnalysisWorkspace {
     // fires on each tick of a colour drag, and `setContext` refills every
     // control — including a column list that reads four hundred features to do
     // it. What a form cares about is which entries exist and what they are.
+    //
+    // …and the drawer's displays (§18.7), which a called set's own dropdown on
+    // the Tracks card moves too: refilled when a set changes surface or look,
+    // so the drawer never offers to move a set to where it already is.
+    let displays = store === null ? '' : displaySignature(store)
     const stopStore =
       store === null
         ? () => {}
         : store.subscribe(() => {
+            const shown = displaySignature(store)
+            if (shown !== displays) {
+              displays = shown
+              this.drawer.fillSurfaces()
+            }
             const now = entrySignature(store)
             if (now === this.entries) return
             this.entries = now
@@ -468,7 +480,7 @@ export class AnalysisWorkspace {
     // included, has both now (§8.5); the two are still two questions.
     if (store !== null && !this.laneable()) {
       for (const output of intervals) {
-        this.adoptIntervals(task, result, output, store, on, { lanes: false, under: null })
+        this.adoptIntervals(task, result, output, store, on, null, false)
       }
       for (const output of profiles) {
         this.profiles.set(syntheticId(output.id), {
@@ -564,43 +576,48 @@ export class AnalysisWorkspace {
       })
     }
 
-    // **After the profiles**, because a called set's lane is placed under the
-    // profile it was called from (§18.7), which has to be a row by then. With
-    // no row named, each set goes under the run's last profile and the next
-    // under it, so boundaries and the domains between them stack in the order
-    // the task returned them.
+    // **After the profiles**, because a called set is placed under the profile
+    // it was called from (§18.7), which has to be a row by then. With no row
+    // named, each set goes under the run's last profile and the next under it,
+    // so boundaries and the domains between them stack in the order the task
+    // returned them.
     let under: string | null =
       profiles.length === 0 ? null : syntheticId(profiles[profiles.length - 1].id, map)
     for (const output of intervals) {
       const named = output.lane?.under
-      const lane = this.adoptIntervals(task, result, output, store, on, {
-        lanes: true,
-        under:
-          named === undefined
-            ? under
-            : 'output' in named
-              ? syntheticId(named.output, map)
-              : named.entry,
-      })
-      if (named === undefined && lane !== null) under = lane
+      const row = this.adoptIntervals(
+        task,
+        result,
+        output,
+        store,
+        on,
+        named === undefined ? under : 'output' in named ? syntheticId(named.output, map) : named.entry,
+      )
+      if (named === undefined && row !== null) under = row
     }
     if (intervals.length > 0) this.drawer.fillSurfaces()
     this.host.changed()
   }
 
   /**
-   * A called interval set, as an ordinary overlay row and an ordinary lane.
+   * A called interval set, as one ordinary row: a 1D track or an overlay.
    *
-   * Boundaries from insulation, domains from CID: a set of coordinates the file
-   * did not come with, and the honest place for it is beside the BED somebody
-   * would otherwise have exported and loaded back. So it goes through the same
-   * `begin` → `ready` door a dropped file goes through, on the same card, with
-   * the same colour, the same shape controls and — the point of the exercise —
-   * the same **Save as BED** that every other overlay has.
+   * Boundaries from insulation, domains between them: a set of coordinates the
+   * file did not come with, and the honest place for it is beside the BED
+   * somebody would otherwise have exported and loaded back. So it goes through
+   * the same `begin` → `ready` door a dropped file goes through, on the same
+   * card, with the same colour, the same controls and — the point of the
+   * exercise — the same **Save as BED** every other set of intervals has.
    *
    * There is no worker round trip, unlike a profile. A `FeatureSet` lives on the
    * main thread precisely so a pan redraws with no message (§8.4), and this one
    * is already here: the payload goes straight onto the entry.
+   *
+   * @param under The row it goes directly under in the list, where there is one.
+   * @param lanes Whether this host draws lanes at all. One whose store has no
+   *   annotation worker opens every set on the map, the surface it is sure of.
+   * @returns The row's id, or `null` for a model, which is not a row of the
+   *   Tracks card and has no slot there for the next set to go under.
    */
   private adoptIntervals(
     task: AnalysisTask,
@@ -608,7 +625,8 @@ export class AnalysisWorkspace {
     output: IntervalsOutput,
     store: AnnotationStore,
     on: RunTarget,
-    surfaces: { lanes: boolean; under: string | null },
+    under: string | null,
+    lanes = true,
   ): string | null {
     const map = on.map
     const source: ComputedSource = {
@@ -639,17 +657,17 @@ export class AnalysisWorkspace {
     const label = map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`
     const held = { output, provenance: result.provenance, task: task.id }
 
-    // **Every other called set is drawn on both surfaces** (§18.7): an overlay
-    // on the map it was called from, and a lane of segments beside it — two
-    // rows, linked, each switched on its own (`analysis/surfaces.ts`). Running
+    // **Every other called set is one row, on one of two surfaces** (§18.7): a
+    // 1D track of segments beside the map, or an overlay on the map it was
+    // called from, as its display says (`analysis/surfaces.ts`). Running
     // insulation a second time with a wider window means the reader wants the
-    // *new* boundaries, so both land on the id of their task and output and
-    // replace what was there; a panel that grew a row per run is a panel nobody
-    // can read after four of them. A file with no map — the 1D browser — has
-    // nothing to overlay, and gets the lane alone; a file whose lanes cannot be
-    // drawn (a metacool, §8.5) gets the overlay alone, as it always did.
+    // *new* boundaries, so the row lands on the id of its task and output and
+    // replaces what was there, keeping where the reader put it; a panel that
+    // grew a row per run is a panel nobody can read after four of them. A file
+    // with no map — the 1D browser — has nothing to overlay, and the set is a
+    // track there whatever the task would have opened it as.
     if (!structure) {
-      const ids = adoptCalledSet(store, {
+      const id = adoptCalledSet(store, {
         id: base,
         label,
         source,
@@ -657,14 +675,15 @@ export class AnalysisWorkspace {
         summary: countedAs(output),
         colour: store.byId(base)?.style.colour ?? store.nextColour(),
         map,
-        overlay: !surfaces.lanes || (this.host.context()?.hasMap ?? true),
-        lane: surfaces.lanes,
-        laneShown: output.lane?.hidden !== true,
-        under: surfaces.under,
+        display: !lanes
+          ? 'overlay'
+          : (output.display ?? (output.payload.kind === 'pairs' ? 'overlay' : 'lane')),
+        look: output.look ?? 'corner',
+        overlay: this.host.context()?.hasMap ?? true,
+        under,
       })
-      if (ids.overlay !== null) this.intervals.set(ids.overlay, held)
-      if (ids.lane !== null) this.intervals.set(ids.lane, held)
-      return ids.lane
+      this.intervals.set(id, held)
+      return id
     }
 
     // **A model accumulates.** Two models of one map, from two methods or two
@@ -788,8 +807,7 @@ export class AnalysisWorkspace {
         placement: entry.placement,
         style: entry.style,
         visible: entry.visible,
-        // A called set's two rows (§18.7) cross together and stay linked, or
-        // the switches on either would have nothing to switch.
+        // A BAM's two rows cross together and stay linked (§8.13).
         ...(entry.partner === undefined ? {} : { partner: entry.partner }),
       })
       // Held here whether or not it can be a lane, because these values are
@@ -1053,7 +1071,9 @@ export class AnalysisWorkspace {
     // `annotations/export.ts` the hand-drawn marks use, so there is one opinion
     // in this repository about where a half-open interval ends.
     if (format === 'bed') {
-      const payload = entry.payload
+      // The set as it was called, whichever surface it is on: a loop set shown
+      // as its anchors still leaves as its loops (§18.7).
+      const payload = calledPayloadOf(entry)
       if (payload === undefined) return
       const held = this.intervals.get(entry.id)
       const context = {
@@ -1399,5 +1419,17 @@ function derivedProvenance(
 export function entrySignature(store: AnnotationStore): string {
   return store.entries
     .map((entry) => `${entry.id}:${entry.kind}:${entry.status}:${entry.label}`)
+    .join('|')
+}
+
+/**
+ * Where each called set is drawn and how it looks (§18.7): what the drawer's
+ * display dropdowns show, and so what refills them when a row's own changes.
+ * A colour dragged or a lane resized leaves it alone.
+ */
+function displaySignature(store: AnnotationStore): string {
+  return store.entries
+    .filter(isCalledSet)
+    .map((entry) => `${entry.id}:${entry.card}:${entry.style.shape}`)
     .join('|')
 }

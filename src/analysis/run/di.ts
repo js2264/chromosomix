@@ -12,7 +12,7 @@
  * The calls are the diamond's, and deliberately so: the borders come out of
  * `directionBorders`, which integrates the index and hands the curve to the very
  * kernel `run/insulation.ts` calls its minima with, and the domains come out of
- * the same `domainsBetween`. So the two tasks' overlays are the same kind of
+ * the same `domainsBetween`. So the two tasks' called sets are the same kind of
  * object, filter on the same column and tile the same way, and the one thing
  * that differs between them is the reading underneath — which is the thing a
  * reader is comparing.
@@ -24,7 +24,7 @@
  * circular sequence are called along it as though it were a line, so the domain
  * spanning the junction is the one domain never reported. That is the diamond's
  * behaviour too (SPECS §8.15), and saying it here is cheaper than a reader
- * discovering it from a gap in an overlay.
+ * discovering it from a gap in a set of domains.
  */
 
 import { FeatureBuilder } from '../../annotations/featureset'
@@ -248,7 +248,7 @@ export const runDi: TaskRunner = async (job) => {
  * One bin wide, because a border is a position and the bin is the finest this
  * file can place one at, and clamped to the sequence so the last one does not
  * produce an interval past its end. The prominence goes in the score column so
- * the overlay can be filtered on it and a BED written from it keeps the number
+ * the set can be filtered on it and a BED written from it keeps the number
  * the call was made on — the same layout the diamond's boundaries use, so the
  * two sets can be loaded side by side and sorted together.
  */
@@ -280,6 +280,10 @@ function borderOutput(
     label: 'DI borders',
     payload: { kind: 'features', data: builder.finish() },
     noun: { one: 'border', many: 'borders' },
+    // As the diamond's boundaries are (§18.7): a track under the index, and on
+    // the map a place.
+    display: 'lane',
+    look: 'point',
   }
 }
 
@@ -290,7 +294,7 @@ function borderOutput(
  * `chr1` and the first on `chr2` are neighbours in any sorted list and are not
  * two ends of anything. Consecutive domains tile, so the lane reads as a
  * segmentation rather than a row of boxes, and `null` where there is nothing to
- * report so the caller can say why instead of adopting an empty overlay.
+ * report so the caller can say why instead of adopting an empty set.
  */
 function domainOutput(
   job: JobContext,
@@ -323,6 +327,9 @@ function domainOutput(
       label: 'DI domains',
       payload: { kind: 'features', data: builder.finish() },
       noun: { one: 'domain', many: 'domains' },
+      // …and its domains as the diamond's are: corners along the diagonal.
+      display: 'overlay',
+      look: 'corner',
     },
   }
 }

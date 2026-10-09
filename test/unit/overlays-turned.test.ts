@@ -36,6 +36,7 @@ import { BIN_FRACTION, cellLoci } from '@/render/rotate'
 import { emptyFeatureSet } from '@/annotations/featureset'
 import type { FeatureSet, PairSet } from '@/annotations/types'
 import type { ManualArrowhead, ManualLine, ManualRect } from '@/annotations/manual'
+import { VectorPage } from '@/ui/vector'
 
 const BINSIZE = 1000
 /** Deepest separation the band shows, in bins. */
@@ -50,6 +51,10 @@ class Recorder {
   readonly lines: Array<[number, number]> = []
   readonly arcs: Array<[number, number, number]> = []
   readonly rects: Array<[number, number, number, number]> = []
+  /** The style each stroke and each fill was made in, in order. */
+  readonly strokes: string[] = []
+  readonly fills: string[] = []
+  closed = 0
   strokeStyle = ''
   fillStyle = ''
   lineWidth = 0
@@ -60,9 +65,15 @@ class Recorder {
   save(): void {}
   restore(): void {}
   beginPath(): void {}
-  closePath(): void {}
-  stroke(): void {}
-  fill(): void {}
+  closePath(): void {
+    this.closed++
+  }
+  stroke(): void {
+    this.strokes.push(this.strokeStyle)
+  }
+  fill(): void {
+    this.fills.push(this.fillStyle)
+  }
   clip(): void {
     this.clipped = true
     // The clip's own rect is not part of the drawing; drop it so the assertions
@@ -149,14 +160,16 @@ const features = (spans: Array<[number, number]>): FeatureSet => ({
 })
 
 describe('a domain on a turned map', () => {
-  it('is a triangle standing on the axis, apex over its own midpoint', () => {
+  it('is the two sides of a triangle standing on the axis, apex over its own midpoint', () => {
     // 10 kb wide, so 10 bins of separation: the apex is ten rows off the axis
-    // and directly over 15 kb, which is where the domain's middle is.
+    // and directly over 15 kb, which is where the domain's middle is. The
+    // corner of its square, turned, and no base: a base would be a rule along
+    // the diagonal's own row.
     const rec = ctx()
     drawDiagonalFeatures(as2d(rec), frame(), turnedAxes(), features([[10_000, 20_000]]), {
       colour: '#f00',
       opacity: 1,
-      shape: 'element',
+      shape: 'corner',
     })
     expect(rec.moves).toHaveLength(1)
     const [startX, startY] = rec.moves[0]
@@ -170,6 +183,9 @@ describe('a domain on a turned map', () => {
     expect(end[1]).toBeCloseTo(axisY(), 6)
     const perBin = PLOT / (MAX_SEPARATION + 1)
     expect(axisY() - apex[1]).toBeCloseTo(10 * perBin, 6)
+    // Two strokes from the one move, and nothing back along the axis.
+    expect(rec.lines).toHaveLength(2)
+    expect(rec.closed).toBe(0)
   })
 
   it('grows downward on the mirrored half of a comparison', () => {
@@ -177,7 +193,7 @@ describe('a domain on a turned map', () => {
     drawDiagonalFeatures(as2d(rec), frame(), turnedAxes('down'), features([[10_000, 20_000]]), {
       colour: '#f00',
       opacity: 1,
-      shape: 'element',
+      shape: 'corner',
     })
     const apex = rec.lines[0]
     expect(apex[1]).toBeGreaterThan(axisY('down'))
@@ -190,7 +206,7 @@ describe('a domain on a turned map', () => {
     drawDiagonalFeatures(as2d(rec), frame(), turnedAxes(), features([[0, 100_000]]), {
       colour: '#f00',
       opacity: 1,
-      shape: 'element',
+      shape: 'corner',
     })
     expect(rec.didClip).toBe(true)
     expect(rec.lines[0][1]).toBeLessThan(0)
@@ -201,7 +217,7 @@ describe('a domain on a turned map', () => {
     drawDiagonalFeatures(as2d(rec), frame(), turnedAxes(), features([[10_000, 20_000]]), {
       colour: '#f00',
       opacity: 1,
-      shape: 'element',
+      shape: 'corner',
     })
     expect(rec.rects).toHaveLength(0)
   })
@@ -231,6 +247,33 @@ describe('a boundary on a turned map', () => {
       shape: 'border',
     })
     expect(rec.lines[0][1]).toBeGreaterThan(rec.moves[0][1])
+  })
+})
+
+describe('a point on a turned map', () => {
+  it('rests on the axis at the feature’s midpoint rather than covering the first rows', () => {
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), frame(), turnedAxes(), features([[10_000, 12_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'point',
+    })
+    expect(rec.arcs).toHaveLength(1)
+    const [[x, y, r]] = rec.arcs
+    expect(x).toBeCloseTo(xOf(11_000), 6)
+    // Tangent to the axis on the side away from the diagonal.
+    expect(axisY() - y).toBeCloseTo(r, 6)
+    expect(rec.fills).toEqual(['#f00'])
+  })
+
+  it('rests on the other side on the mirrored half', () => {
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), frame(), turnedAxes('down'), features([[10_000, 12_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'point',
+    })
+    expect(rec.arcs[0][1]).toBeGreaterThan(axisY('down'))
   })
 })
 
@@ -565,15 +608,106 @@ describe('the square map, unchanged', () => {
     dpr: 1,
   })
 
-  it('still draws a domain as the square it occupies on both axes', () => {
+  /** Four canvas pixels per bin: 100 bins of 1 kb across a 400 px plot. */
+  const pxOf = (bp: number): number => (bp / BINSIZE) * 4
+
+  it('draws a domain as the corner of the square it occupies, on the upper side', () => {
     const rec = ctx()
     drawDiagonalFeatures(as2d(rec), squareFrame(), squareAxes(), features([[10_000, 20_000]]), {
       colour: '#f00',
       opacity: 1,
-      shape: 'element',
+      shape: 'corner',
     })
-    expect(rec.rects).toHaveLength(1)
+    expect(rec.rects).toHaveLength(0)
     expect(rec.didClip).toBe(false)
+    // From the diagonal at its start, along its first row to the column of its
+    // end, and down that column to the diagonal again: its top edge and its
+    // right edge, which meet above and to the right of the diagonal. Half a
+    // pixel off exact where a rule is snapped to the device-pixel grid.
+    expect(rec.moves).toHaveLength(1)
+    expect(rec.lines).toHaveLength(2)
+    const [[sx, sy]] = rec.moves
+    const [[cx, cy], [ex, ey]] = rec.lines
+    expect(sx).toBeCloseTo(pxOf(10_000), 6)
+    expect(sy).toBeCloseTo(pxOf(10_000), -0.5)
+    expect(cx).toBeCloseTo(pxOf(20_000), -0.5)
+    expect(cy).toBeCloseTo(sy, 6)
+    expect(ex).toBeCloseTo(cx, 6)
+    expect(ey).toBeCloseTo(pxOf(20_000), 6)
+    // The corner is off the diagonal on the side a cooler stores: right of its
+    // own row, and above its own column.
+    expect(cx).toBeGreaterThan(cy)
+  })
+
+  it('reads a stored box as the corner it now draws', () => {
+    // `element`, the whole square, is what a session written before the looks
+    // carries. It is drawn as the corner rather than as nothing.
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), squareFrame(), squareAxes(), features([[10_000, 20_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'element' as never,
+    })
+    expect(rec.rects).toHaveLength(0)
+    expect(rec.moves).toHaveLength(1)
+    expect(rec.lines).toHaveLength(2)
+  })
+
+  it('rings a short diagonal marker in the page’s colour before it is ruled', () => {
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), squareFrame(), squareAxes(), features([[40_000, 42_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'border',
+      halo: '#fff',
+    })
+    // The same rule twice, wide in the halo and then in the row's colour.
+    expect(rec.moves).toHaveLength(2)
+    expect(rec.moves[0]).toEqual(rec.moves[1])
+    expect(rec.lines[0]).toEqual(rec.lines[1])
+    expect(rec.strokes.slice(-2)).toEqual(['#fff', '#f00'])
+  })
+
+  it('keeps every dot filled on the vector page, which empties its path at each paint', () => {
+    // A stroke on the page hands its path to the operator and starts the next
+    // empty, so a fill off the halo's path would print a ring and no dot.
+    const page = new VectorPage(PLOT, PLOT)
+    drawDiagonalFeatures(page.ctx, squareFrame(), squareAxes(), features([[40_000, 42_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'point',
+      halo: '#fff',
+    })
+    const ops = (page as unknown as { ops: string[] }).ops
+    const fill = ops.lastIndexOf('f')
+    const halo = ops.lastIndexOf('S')
+    expect(halo).toBeGreaterThan(-1)
+    expect(fill).toBeGreaterThan(halo)
+    // The circle's own curves between the ring's stroke and the fill.
+    expect(ops.slice(halo + 1, fill).some((op) => op.endsWith(' c'))).toBe(true)
+  })
+
+  it('draws a point as a dot on the diagonal at the feature’s midpoint, ringed first', () => {
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), squareFrame(), squareAxes(), features([[40_000, 42_000], [70_000, 71_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'point',
+      halo: '#fff',
+    })
+    // Traced twice, once for the halo and once for the fill — the vector page
+    // empties its path at each paint, so one path would print the rings alone.
+    expect(rec.arcs).toHaveLength(4)
+    expect(rec.arcs.slice(0, 2)).toEqual(rec.arcs.slice(2))
+    const [[x, y, r]] = rec.arcs
+    expect(x).toBeCloseTo(pxOf(41_000), 6)
+    expect(y).toBeCloseTo(pxOf(41_000), 6)
+    expect(r).toBeGreaterThan(0)
+    // No rule anywhere: a dot is not a mark across or along anything.
+    expect(rec.lines).toHaveLength(0)
+    // The halo in the page's colour, then the fill in the row's.
+    expect(rec.strokes.at(-1)).toBe('#fff')
+    expect(rec.fills).toEqual(['#f00'])
   })
 
   it('still draws both arms of a crosshair', () => {
@@ -583,9 +717,6 @@ describe('the square map, unchanged', () => {
     ])
     expect(rec.moves).toHaveLength(2)
   })
-
-  /** Four canvas pixels per bin: 100 bins of 1 kb across a 400 px plot. */
-  const pxOf = (bp: number): number => (bp / BINSIZE) * 4
 
   // The one square-map shape nothing covered. `border` is the point-like call —
   // an insulation minimum, a TAD boundary — and its docstring asks for "a short

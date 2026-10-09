@@ -1639,7 +1639,7 @@ export class StructurePanel implements DeckCell {
   }
 
   private style(): StructureStyle {
-    return structureOf(this.entry?.style ?? { colour: '', size: 0, mode: 'line', limits: { auto: true, min: 0, max: 1 }, group: '', shape: 'element', radius: 0, opacity: 1, flip: false })
+    return structureOf(this.entry?.style ?? { colour: '', size: 0, mode: 'line', limits: { auto: true, min: 0, max: 1 }, group: '', shape: 'corner', radius: 0, opacity: 1, flip: false })
   }
 
   /** Write one control's value onto the row, which is what everything reads. */

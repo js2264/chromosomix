@@ -31,7 +31,7 @@
  */
 
 import { taskById } from '../analysis/registry'
-import { surfaceWord } from '../analysis/surfaces'
+import { calledPayloadOf } from '../analysis/surfaces'
 import { TRACK_OP_LABELS } from '../annotations/derived'
 import type { ProfileOutput } from '../analysis/types'
 import type { AnnotationEntry, ComputedSource, LaneEdge } from '../annotations/types'
@@ -92,9 +92,7 @@ export function syntheticMark(entry: AnnotationEntry): HTMLElement {
 export function syntheticNote(entry: AnnotationEntry): string | null {
   const made = madeBy(entry)
   const counted = entry.summary !== undefined && entry.summary !== '' ? entry.summary : null
-  // …and, on a called set's two rows, which of the two this one is (§18.7).
-  const surface = surfaceWord(entry)
-  const said = [made, counted, surface].filter((part): part is string => part !== null)
+  const said = [made, counted].filter((part): part is string => part !== null)
   return said.length === 0 ? null : said.join(' · ')
 }
 
@@ -113,7 +111,9 @@ export function syntheticExports(
   onExport: (entry: AnnotationEntry, format: SyntheticFormat) => void,
 ): HTMLElement {
   const intervals = entry.kind === 'segments' || entry.kind === 'pairs'
-  const bed = entry.kind === 'pairs' ? 'BEDPE' : 'BED'
+  // Read off the set as it was called rather than the row's kind: a loop set
+  // drawn as a 1D track is its anchors on screen and leaves as its loops (§18.7).
+  const bed = entry.kind === 'pairs' || calledPayloadOf(entry)?.kind === 'pairs' ? 'BEDPE' : 'BED'
   return el(
     'div',
     { class: 'ann-inline ann-exports' },

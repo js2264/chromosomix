@@ -920,6 +920,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A called set is one row, and its display says where it is drawn (§18.7, §18.8).** Insulation's
+  boundaries and domains — and every other set a task calls: DI's borders and domains, peaks, A/B
+  segments, sites, origins, flagged contigs, loops — arrived as two rows each, an overlay on the map
+  and a lane beside it, with a switch on each and both on: one insulation run put five rows on the
+  Tracks card for three results and drew every boundary twice, on the map as a box one bin wide and as
+  a tick beside it. Each set is now one row whose **display** — a dropdown at the head of its settings
+  and under its name in the drawer — is a **1D track** or a **map overlay**, never both. On the map a
+  set of places has a **look**, a second dropdown beside the display: a **point** on the diagonal, or
+  a **short diagonal marker** across it, ringed in the page's colour so it reads on the darkest row; a
+  set of extents is drawn as the **corners** of the squares it claims along the diagonal — top edge
+  and right edge, once, on the upper side — where it was the whole square drawn on both sides of the
+  line it is symmetric about; on a turned map a corner is the two sides of a triangle on the axis. Each
+  task says where a set opens: insulation lands as three rows, the score, the boundaries as segments
+  one bin wide under it, and the domains as corners on the map; DI the same; peaks and A/B segments
+  open as tracks under the lane they were called from, loops and the dot plot's streaks on the map. A
+  set run again keeps its display, its look and its edges; the 1D browser draws every called set as a
+  track and offers no display; a loop set's 1D track is its anchors and it still leaves as its BEDPE.
+  A session saved with the two rows comes back as the one, a track where its lane was on.
+
 - **A mark's row on the 3D key hides the mark itself (§25.5).** Under *colour by manual annotations*
   a click on a mark's name hid it from that model's colouring alone and left it on every map; it is
   now the mark's own eye on the card — the mark goes from the model, the maps and the tracks
@@ -2062,6 +2081,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A lane's *colour by* picker stays inside the card.** A select is as wide as its longest option,
+  and a set whose rows carry a long column — insulation's domains name *weaker boundary prominence* —
+  pushed the picker a few pixels past the Tracks card's edge.
 
 - **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
   sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has

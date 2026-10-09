@@ -283,6 +283,8 @@ export const runGroupSignal: TrackTaskRunner = async (job) => {
       label: `Groups · ${grouping.of}`,
       payload: { kind: 'features', data: grouping.segments },
       noun: { one: 'segment', many: 'segments' },
+      display: 'lane',
+      look: 'corner',
     } satisfies IntervalsOutput)
   }
 

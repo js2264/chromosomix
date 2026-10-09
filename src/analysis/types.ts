@@ -30,6 +30,7 @@ import type {
   AnnotationEntry,
   AnnotationKind,
   AnnotationPayload,
+  OverlayShape,
   TrackMode,
   TrackScale,
 } from '../annotations/types'
@@ -1109,9 +1110,9 @@ export interface TableOutput {
  * Intervals a task called: boundaries, domains, flagged contigs, loops.
  *
  * The payload is exactly what a parsed file would have produced, so it is
- * offered as a new row on the Annotations panel and becomes an overlay on the
- * map immediately — a called boundary the reader cannot see on the picture it
- * was called from is a called boundary nobody will check.
+ * offered as a new row of the Tracks card and is drawn the moment it arrives —
+ * as a 1D track or on the map, whichever its display opens on, since a called
+ * boundary the reader cannot see is a called boundary nobody will check.
  */
 export interface IntervalsOutput {
   kind: 'intervals'
@@ -1150,21 +1151,36 @@ export interface IntervalsOutput {
    */
   noun?: { one: string; many: string }
   /**
-   * Where the set's **lane** goes, beside the overlay (§18.7).
+   * Which surface the set opens on (§18.7): a **1D track** of segments beside
+   * the map, or an **overlay** on the map it was called from.
    *
-   * Every called set is drawn on both surfaces — on the map it was called from
-   * and as a lane of segments beside it — and a lane is read against the lane
-   * it came from: a peak set under the coverage it was called on, the A/B
-   * segments under the eigenvector that made them. `under` names that row, as
-   * one of this run's own profiles (`output`) or as a loaded row (`entry`);
-   * absent, the lane goes under the last profile the run produced, or on the
-   * computed tracks' edge where it produced none (`analysis/surfaces.ts`).
-   *
-   * `hidden` starts the lane switched off, which is right for a set of pairs:
-   * a loop's anchors as boxes along one axis is a reading a reader may want and
-   * not the picture a loop is.
+   * One row, on one surface, which the row's *display* moves between; this is
+   * only where it starts. A set read against a lane opens as a track under it —
+   * peaks under their coverage, boundaries under the insulation score, A/B
+   * segments under E1 — and a set that is a picture of the map opens on it:
+   * domains as corners along the diagonal, loops as rings. Absent is the track
+   * for intervals and the overlay for pairs, whose anchors along one axis are a
+   * reading a reader may want and not the picture a loop is.
    */
-  lane?: { under?: { output: string } | { entry: string }; hidden?: boolean }
+  display?: 'lane' | 'overlay'
+  /**
+   * How a set of intervals is drawn on the map, whichever surface it opens on
+   * (`OverlayShape`): `point` or `border` for a set of places, whose look the
+   * reader then chooses between, and `corner` for a set of extents. Absent is
+   * the corner.
+   */
+  look?: OverlayShape
+  /**
+   * Where the set's **track** goes in the list (§18.7).
+   *
+   * A track is read against the lane it came from: a peak set under the
+   * coverage it was called on, the A/B segments under the eigenvector that made
+   * them. `under` names that row, as one of this run's own profiles (`output`)
+   * or as a loaded row (`entry`); absent, it goes under the last profile the run
+   * produced, or on the computed tracks' edge where it produced none
+   * (`analysis/surfaces.ts`). The slot is the row's on either surface.
+   */
+  lane?: { under?: { output: string } | { entry: string } }
 }
 
 export type TaskOutput =

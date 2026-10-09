@@ -139,6 +139,9 @@ function boundaries(n: number): IntervalsOutput {
     label: 'Insulation boundaries',
     payload: { kind: 'features', data: builder.finish() },
     noun: { one: 'boundary', many: 'boundaries' },
+    // As the task opens it: a track, whose look on the map is a point.
+    display: 'lane',
+    look: 'point',
   }
 }
 
@@ -188,12 +191,11 @@ describe('the count on a called set', () => {
     const { workspace, store } = bench()
     finish(workspace, loops(1204))
     const notes = notesOn(workspace, store)
-    // On both of the set's rows, each saying which surface it is (§18.7).
-    expect(notes).toContain('Pattern detection · 1,204 pairs · on the map')
-    expect(notes).toContain('Pattern detection · 1,204 pairs · as a lane')
+    // On the set's one row (§18.7), whichever surface it is on.
+    expect(notes.filter((note) => note === 'Pattern detection · 1,204 pairs')).toHaveLength(1)
     // Above the framing, because the count is about the answer and the framing
     // is about the question.
-    expect(notes.indexOf('Pattern detection · 1,204 pairs · on the map')).toBeLessThan(
+    expect(notes.indexOf('Pattern detection · 1,204 pairs')).toBeLessThan(
       notes.lastIndexOf(framing().label),
     )
     workspace.destroy()
@@ -255,9 +257,8 @@ describe('the count on a called set', () => {
  */
 describe('the controls a called set is given', () => {
   /**
-   * The labels on one row. A called set is two rows since §18.7 — the overlay
-   * these tests are about, and its lane, which is a lane and has a location —
-   * so the overlay's are read from its own row.
+   * The labels on the set's one row (§18.7), with its settings open: a 1D
+   * track's controls or an overlay's, as its display says, under the display.
    */
   const labelsOn = (
     workspace: AnalysisWorkspace,
@@ -273,34 +274,84 @@ describe('the controls a called set is given', () => {
     return labels
   }
 
-  it('are the marks’ own, not four edges that cannot move it', () => {
+  it('are the marks’ own on the map, not four edges that cannot move it', () => {
     const { workspace, store } = bench()
     finish(workspace, loops(12))
     const labels = labelsOn(workspace, store, 'analysis:chromosight:chromosight-patterns')
+    // A loop set opens on the map, and says so at the head of its settings.
+    expect(labels[0]).toBe('display')
     expect(labels).not.toContain('location')
     expect(labels).toContain('opacity')
-    // A pair is a circle, so its size is the control; a segment is a box or a
-    // mark across the diagonal, so its shape is.
+    // A pair is a circle, so its size is the control; a set of places on the
+    // map has a look instead.
     expect(labels).toContain('radius')
-    expect(labels).not.toContain('shape')
+    expect(labels).not.toContain('look')
+    expect(store.entries).toHaveLength(1)
     workspace.destroy()
   })
 
-  it('are the shape and the opacity for a set of intervals', () => {
+  it('are a track’s as a 1D track, and a place’s look and opacity on the map', () => {
     const { workspace, store } = bench()
     finish(workspace, boundaries(88))
-    const labels = labelsOn(workspace, store, 'analysis:chromosight:insulation-boundaries')
-    expect(labels).not.toContain('location')
-    expect(labels).toContain('shape')
-    expect(labels).toContain('opacity')
-    expect(labels).not.toContain('radius')
-    // Both rows carry the two switches; the lane's are a lane's controls.
-    expect(labels).toContain('drawn')
-    const lane = labelsOn(workspace, store, 'analysis:chromosight:insulation-boundaries:lane')
+    const id = 'analysis:chromosight:insulation-boundaries'
+    // One row, not an overlay and a lane.
+    expect(store.entries.map((row) => row.id)).toEqual([id])
+    const lane = labelsOn(workspace, store, id)
+    expect(lane[0]).toBe('display')
     expect(lane).toContain('location')
     expect(lane).toContain('colour by')
-    expect(lane).toContain('drawn')
-    expect(lane).not.toContain('shape')
+    expect(lane).not.toContain('look')
+    expect(lane).not.toContain('opacity')
+
+    const mounted = tracksCardOver(store, workspace)
+    const display = mounted.el.querySelector<HTMLSelectElement>(
+      `.ann-row[data-id="${id}"] select[data-field="display"]`,
+    )
+    expect(Array.from(display?.options ?? []).map((option) => option.text)).toEqual([
+      '1D track',
+      'map overlay',
+    ])
+    display!.value = 'overlay'
+    display!.dispatchEvent(new Event('change', { bubbles: true }))
+    mounted.destroy()
+    expect(store.byId(id)?.card).toBe('overlay')
+
+    const overlay = labelsOn(workspace, store, id)
+    expect(overlay[0]).toBe('display')
+    expect(overlay).toContain('look')
+    expect(overlay).toContain('opacity')
+    expect(overlay).not.toContain('location')
+    expect(overlay).not.toContain('radius')
+    workspace.destroy()
+  })
+
+  it('are a point or a short diagonal marker, for a set of places on the map', () => {
+    const { workspace, store } = bench()
+    finish(workspace, { ...boundaries(88), display: 'overlay' })
+    const id = 'analysis:chromosight:insulation-boundaries'
+    const mounted = tracksCardOver(store, workspace)
+    const look = mounted.el.querySelector<HTMLSelectElement>(
+      `.ann-row[data-id="${id}"] select[data-field="look"]`,
+    )
+    expect(Array.from(look?.options ?? []).map((option) => option.text)).toEqual([
+      'point',
+      'short diagonal marker',
+    ])
+    expect(look?.value).toBe('point')
+    look!.value = 'border'
+    look!.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(store.byId(id)?.style.shape).toBe('border')
+    mounted.destroy()
+    workspace.destroy()
+  })
+
+  it('are corners along the diagonal with no look to choose, for a set of extents', () => {
+    const { workspace, store } = bench()
+    finish(workspace, { ...boundaries(8), id: 'insulation-domains', display: 'overlay', look: 'corner' })
+    const labels = labelsOn(workspace, store, 'analysis:chromosight:insulation-domains')
+    expect(labels).toContain('display')
+    expect(labels).not.toContain('look')
+    expect(labels).toContain('opacity')
     workspace.destroy()
   })
 

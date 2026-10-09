@@ -9151,6 +9151,21 @@ body.is-carrying-card * {
   min-width: 0;
 }
 
+/* A called set's display, and its look while it is on the map (§18.7): a
+   settings row each, as every other field in the body is, the look under the
+   display it belongs to. The look's slot is emptied while the set is a track,
+   and takes no room of its own either way. */
+.ann-called {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.ann-called-look {
+  display: contents;
+}
+
 /* Two controls on one row, because neither fills one: a settings body of six
    half-empty rows is a body that has to be scrolled to reach the limits.
 
@@ -9191,6 +9206,14 @@ body.is-carrying-card * {
 
 .ann-inline > .ann-field-tight:last-child {
   flex: 1 1 auto;
+}
+
+/* …and none wider than its row, whichever end it is at. A select is as wide as
+   its longest option, and a feature lane whose detail strings carry a column
+   named `weaker boundary prominence` — insulation's domains — pushed its
+   *colour by* picker past the card's edge from the first, unshrinking slot. */
+.ann-inline > .ann-field {
+  max-width: 100%;
 }
 
 .ann-field > .ann-size {
@@ -11944,6 +11967,21 @@ span.deck-name {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
+}
+
+/* A called set's display under its name (§18.7), at a settings row's width
+   rather than across the drawer: the drawer is most of the window, and a select
+   stretched over it reads as a heading. The display and the look share a line
+   here, where there is room for both. */
+.analysis-surfaces .ann-called {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.2rem 0 0.45rem;
+}
+
+.analysis-surfaces .ann-field {
+  flex: 0 1 18rem;
 }
 
 /* --- the parameter form -------------------------------------------------- */
