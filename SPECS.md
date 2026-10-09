@@ -8776,7 +8776,9 @@ that side, and nowhere else. **An end of a window is labelled only when it is ro
 tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
 one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
 `8.00215` over the `10` beside it, inside the data or past it. Where an end is not round it is left
-bare and the ticks inside it carry the axis.
+bare and the ticks inside it carry the axis. **Tick labels that would print over each other are
+thinned**, on either axis — a list too long to name, and as much a distance spelled `300.0 kb` once
+the type size is raised for print, which ran each label into the next.
 
 **A box drawn on a figure is how a reader arrives somewhere.** Hold ⌘ (or Ctrl, the same key on the
 other platforms) and drag a marquee over any chart, and the axes come back holding what was in it.
@@ -8827,7 +8829,12 @@ the PNG and the PDF; its id is `least-squares`, hidden or recoloured like any ot
 line is fitted to the points in the abscissa's window** where it has one, and refitted when the
 window moves: a box drawn across the time points whose alignment is under way, leaving out the one
 taken before anything started, is the fit of those points — the line is what is drawn, as the
-export is. A task whose every series is a sample rather than a function says
+export is. **A table drawn as a scatter has a curve's axes card**, read off the scatter it becomes:
+its scales, its windows and its names, the columns' (`number in Map`) as the placeholders a reader
+replaces with what the axes are — *Time after induction (min)*. And the chart it is drawn as keeps
+the plot's mark and its legend through a change made in place — a title, a type size — which
+used to hand it the table's own style: a line where the points were, the fitted line's legend
+moved to the side. A task whose every series is a sample rather than a function says
 so (`CurveSeries.mark = 'violin'`), and its figure opens as violins, one per series — *Signal by
 group*'s groups — which the mark control turns into boxes or a histogram like any other. A box or a
 violin names its series along the abscissa, so it has **no legend and keeps no room for one**, whatever

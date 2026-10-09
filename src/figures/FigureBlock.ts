@@ -37,6 +37,7 @@ import {
   xyOfTable,
   type FigureSpec,
   type MatrixFigureSpec,
+  type TableFigureSpec,
   type XyFigureSpec,
 } from './spec'
 import { defaultStyle, forgetStyle, recallStyle, rememberStyle, type FigureStyle } from './style'
@@ -126,43 +127,17 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
       if (!drawnAsChart(output)) return matrixFigure(output)
       return chartFigure({
         spec: { ...built, output },
-        // No legend: a heatmap has one series and its key is the colour bar.
-        style: { ...current, legend: 'none' },
+        style: drawnStyle(built, current),
         onStyle: (next) => adopt(next),
         fill,
       })
     }
     if (built.kind === 'table') {
-      if (current.plot === null) {
+      const drawn = tableChart(built, current)
+      if (drawn === null) {
         return tableView(built, current, (key, down) => apply({ sortKey: key, sortDown: down }))
       }
-      const derived =
-        current.plot.x === null
-          ? distributionOfTable(built, current.plot.y, current.plot.mark)
-          : xyOfTable(
-              built,
-              current.plot.x,
-              current.plot.y,
-              current.plot.mark,
-              current.plot.fit,
-              current.x.domain,
-            )
-      return chartFigure({
-        spec: derived,
-        // A table drawn as a chart is one series, and a legend naming one
-        // series is a column of the figure's width spent on a word already in
-        // the axis title — the same rule `defaultStyle` applies to a curve.
-        // A fitted line is the exception: its equation is its name, and the
-        // legend is where the name is read — over the picture, where a long
-        // name does not narrow it.
-        style: {
-          ...current,
-          mark: current.plot.mark,
-          legend: derived.series.length > 1 ? (current.legend === 'none' ? 'none' : 'top') : 'none',
-        },
-        onStyle: (next) => adopt(next),
-        fill,
-      })
+      return chartFigure({ spec: drawn.spec, style: drawn.style, onStyle: (next) => adopt(next), fill })
     }
     return chartFigure({ spec: built, style: current, onStyle: (next) => adopt(next), fill })
   }
@@ -195,7 +170,7 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     // A chart of the same data takes the change in place, which keeps the
     // instance — and therefore the element the dialog may be holding.
     const live = chart()
-    if (live !== null && sameFigure(spec, before, style)) live.update(style)
+    if (live !== null && sameFigure(spec, before, style)) live.update(drawnStyle(spec, style))
     // A dot plot is not rebuilt for a style: its view draws the streaks and
     // nothing the style says (§28.2), and a new one would throw away the window
     // the reader had zoomed to — for a title, which is the head's.
@@ -427,6 +402,51 @@ function sameFigure(spec: FigureSpec, before: FigureStyle, after: FigureStyle): 
     )
   }
   return true
+}
+
+/**
+ * A table drawn as a chart: the xy figure it becomes, and the style that chart
+ * is given — `null` for the table itself.
+ *
+ * A table drawn as a chart is one series, and a legend naming one series is a
+ * column of the figure's width spent on a word already in the axis title — the
+ * same rule `defaultStyle` applies to a curve. A fitted line is the exception:
+ * its equation is its name, and the legend is where the name is read — over
+ * the picture, where a long name does not narrow it. The mark is the plot's.
+ */
+export function tableChart(
+  spec: TableFigureSpec,
+  style: FigureStyle,
+): { spec: XyFigureSpec; style: FigureStyle } | null {
+  const plot = style.plot
+  if (plot === null) return null
+  const derived =
+    plot.x === null
+      ? distributionOfTable(spec, plot.y, plot.mark)
+      : xyOfTable(spec, plot.x, plot.y, plot.mark, plot.fit, style.x.domain)
+  return {
+    spec: derived,
+    style: {
+      ...style,
+      mark: plot.mark,
+      legend: derived.series.length > 1 ? (style.legend === 'none' ? 'none' : 'top') : 'none',
+    },
+  }
+}
+
+/**
+ * The style a figure's chart is drawn with: the reader's, with what the kind
+ * decides over it — a table's plot its mark and legend, a heatmap no legend
+ * (its key is the colour bar).
+ *
+ * The build and an update in place both read it. An update handed the
+ * reader's own style instead, so a title or a type size changed on a table's
+ * scatter drew it as the table's line, its fitted line's legend moved aside.
+ */
+export function drawnStyle(spec: FigureSpec, style: FigureStyle): FigureStyle {
+  if (spec.kind === 'table') return tableChart(spec, style)?.style ?? style
+  if (spec.kind === 'matrix') return { ...style, legend: 'none' }
+  return style
 }
 
 /**

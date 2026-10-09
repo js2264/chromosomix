@@ -42,6 +42,7 @@ import {
   type MarkKind,
   type TableFigureSpec,
   type XyFigureSpec,
+  xyOfTable,
 } from './spec'
 import type { FigureStyle, LegendPlace } from './style'
 
@@ -91,7 +92,7 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
             props.spec.output.streaks !== undefined
             ? [textCard(style, set)]
             : [colourCard(style, set), textCard(style, set)]
-          : [rowsCard(props.spec, style, set), textCard(style, set)]
+          : [rowsCard(props.spec, style, set), ...scatterAxes(props.spec, style, set), textCard(style, set)]
 
     host.replaceChildren(
       cardTitle('Figure', 'chart-line', 'controls-title'),
@@ -319,6 +320,17 @@ function axisRows(
     el('div', { class: 'field ann-field figure-range' }, el('span', { class: 'field-label', text: `${which} from` }), edge(0), el('span', { class: 'field-label', text: 'to' }), edge(1)),
     toggle(`${which} grid`, axis.grid, (grid) => patch({ grid }), 'Rules across the plot at the ticks'),
   ]
+}
+
+/**
+ * A table drawn as a scatter has a curve's axes card, read off the scatter it
+ * becomes: the names its columns give — `number in Map` — as the placeholders a
+ * reader replaces with what the axes are, its scales and its windows.
+ */
+function scatterAxes(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLElement[] {
+  const plot = style.plot
+  if (plot === null || plot.x === null) return []
+  return [axesCard(xyOfTable(spec, plot.x, plot.y, plot.mark, plot.fit, style.x.domain), style, set)]
 }
 
 function axesCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLElement {

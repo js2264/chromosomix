@@ -436,7 +436,10 @@ function xyOption(
       ...axisBase(theme, style, style.x.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.x.grid).axisLabel as object),
-        ...(spec.xTicks !== undefined && !histo ? { hideOverlap: true } : {}),
+        // Labels that would print over each other are thinned rather than
+        // overprinted: a list too long to name, and as much a distance spelled
+        // `300.0 kb` once the type is raised for print.
+        ...(!histo ? { hideOverlap: true } : {}),
         ...xReach.labels,
         formatter:
           xSpelling ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
@@ -456,6 +459,7 @@ function xyOption(
       ...axisBase(theme, style, style.y.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
+        ...(!histo ? { hideOverlap: true } : {}),
         ...yReach.labels,
         formatter:
           ySpelling ?? ((value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear')),

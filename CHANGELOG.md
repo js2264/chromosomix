@@ -2044,11 +2044,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A table's scatter has an axes card (§18.13).** Its scales, windows and names, the columns'
+  names (`number in Map`) as placeholders, so a time course's axes can say what they are.
+
 - **A figure's window wider than its data is the window drawn (§18.13).** The chart's zoom clamped
   a window to what was drawn, so a range typed past the data — or a figure opened on another's
   ordinate — came out as the data's own; the axis is now stretched to the window on the side it
   reaches past. And an end of a window is labelled only when it is a round number, so a box drawn
   by hand no longer prints its edge, `8.00215`, over the tick beside it.
+
+- **A table drawn as a chart keeps its mark and legend when its title or type size changes
+  (§18.13).** An update in place handed the chart the table's own style, so its points became a
+  line and a fitted line's legend moved to the side.
+
+- **A figure's tick labels no longer print over each other (§18.13).** Only an axis of names was
+  thinned; a distance axis spelled `300.0 kb`, `600.0 kb` ran each label into the next once the type
+  size was raised for print.
 
 - **A hidden series stays hidden with a figure's legend off (§18.13).** The chart hides a series
   through its legend's selection, and a legend switched off carried none, so every series hidden in

@@ -161,6 +161,18 @@ describe('optionOf', () => {
     expect(zooms[1]['endValue']).toBe(2)
   })
 
+  it('thins tick labels that would print over each other, on both axes', () => {
+    // A distance spelled `300.0 kb` at a type size raised for print ran into the
+    // next one; only a named axis was thinned.
+    const { option } = build(curve(), (style) => {
+      style.fontSize = 22
+    })
+    const x = (option['xAxis'] as Record<string, unknown>)['axisLabel'] as Record<string, unknown>
+    const y = (option['yAxis'] as Record<string, unknown>)['axisLabel'] as Record<string, unknown>
+    expect(x['hideOverlap']).toBe(true)
+    expect(y['hideOverlap']).toBe(true)
+  })
+
   it('leaves an end where a box put it unlabelled, inside the data or past it', () => {
     // A box drawn by hand from just inside the first point to past the last:
     // its ends would print as `1.0372` and `3.4518` over the ticks beside them.
