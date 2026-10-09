@@ -83,10 +83,11 @@ export interface FigureStyle {
   /**
    * The table drawn as a chart instead of as rows.
    *
-   * `y` alone is a distribution; `x` and `y` together are a scatter. `null` is
-   * the table itself, which is what a table opens as.
+   * `y` alone is a distribution; `x` and `y` together are a scatter, and `fit`
+   * draws the least-squares line through it. `null` is the table itself, which
+   * is what a table opens as.
    */
-  plot: { x: string | null; y: string; mark: MarkKind } | null
+  plot: { x: string | null; y: string; mark: MarkKind; fit: boolean } | null
 }
 
 /** The figure as the task meant it, before the reader touched anything. */
@@ -256,6 +257,7 @@ function plotOf(
     x: typeof x === 'string' && columnKeys.includes(x) ? x : null,
     y,
     mark: one(raw['mark'], MARKS, 'points'),
+    fit: flag(raw['fit'], false),
   }
 }
 

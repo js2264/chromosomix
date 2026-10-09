@@ -274,41 +274,162 @@ export function numericColumns(spec: TableFigureSpec): TableColumn[] {
 }
 
 /**
+ * The first number written in a text, unsigned — `15` in `+parB 15 min`, `2.5`
+ * in `2.5 µM` — or `NaN` where there is none.
+ *
+ * Unsigned because a hyphen in a name is a separator far more often than a
+ * minus: `rep-2` is the second replicate, not the minus-second.
+ */
+export function numberIn(text: string): number {
+  const match = /\d+(?:\.\d+)?/.exec(text)
+  return match === null ? Number.NaN : Number(match[0])
+}
+
+/**
+ * The text columns whose cells name a number, which can be an axis too.
+ *
+ * A time course is named, not numbered: a deck's maps are `+parB 15 min` and
+ * `+parB 30 min`, and the all-maps table carries those names in its `Map`
+ * column. Each row is read at the first number in its cell ({@link numberIn}),
+ * and a column is offered once at least two rows carry one, since one point is
+ * not a relation.
+ */
+export function numberedColumns(spec: TableFigureSpec): TableColumn[] {
+  return spec.columns.filter(
+    (column) =>
+      column.kind !== 'number' &&
+      spec.rows.filter((row) => Number.isFinite(numberIn(String(row[column.key] ?? '')))).length >= 2,
+  )
+}
+
+/** A straight line fitted to points by least squares. */
+export interface LineFit {
+  slope: number
+  intercept: number
+  /** The share of the ordinate's variance the line accounts for. */
+  r2: number
+  n: number
+}
+
+/**
+ * The least-squares line through points, or `null` where there is none: fewer
+ * than two points, or every point at one abscissa.
+ */
+export function leastSquares(x: readonly number[], y: readonly number[]): LineFit | null {
+  const n = Math.min(x.length, y.length)
+  if (n < 2) return null
+  let mx = 0
+  let my = 0
+  for (let i = 0; i < n; i++) {
+    mx += x[i]
+    my += y[i]
+  }
+  mx /= n
+  my /= n
+  let sxx = 0
+  let sxy = 0
+  let syy = 0
+  for (let i = 0; i < n; i++) {
+    const dx = x[i] - mx
+    const dy = y[i] - my
+    sxx += dx * dx
+    sxy += dx * dy
+    syy += dy * dy
+  }
+  if (!(sxx > 0)) return null
+  const slope = sxy / sxx
+  return { slope, intercept: my - slope * mx, r2: syy > 0 ? (sxy * sxy) / (sxx * syy) : 1, n }
+}
+
+/** A number as a fitted line's legend writes it: grouped, or to three figures. */
+function fitNumber(value: number): string {
+  const size = Math.abs(value)
+  const sign = value < 0 ? '−' : ''
+  if (size >= 1000) return sign + Math.round(size).toLocaleString('en-US')
+  if (size >= 1) return sign + String(Number(size.toFixed(2)))
+  if (size === 0) return '0'
+  return sign + size.toPrecision(3)
+}
+
+/**
+ * What the fitted line is called: its equation and how well it fits, which is
+ * the legend's entry and so goes wherever the figure goes — a PNG, a PDF.
+ */
+export function fitLabel(fit: LineFit): string {
+  const join = fit.intercept < 0 ? '−' : '+'
+  return (
+    `least squares: y = ${fitNumber(fit.slope)}·x ${join} ${fitNumber(Math.abs(fit.intercept))}` +
+    ` · r² = ${fit.r2.toFixed(3)} · n = ${fit.n}`
+  )
+}
+
+/**
  * A table as an xy figure: one column against another.
  *
  * The rows that have a number in both columns, in table order. A row missing
  * either is dropped rather than plotted at zero — a MAG with no completeness is
- * not a MAG that is 0% complete.
+ * not a MAG that is 0% complete. A text column is read at the number its cells
+ * name ({@link numberedColumns}), so a row whose cell names none is dropped the
+ * same way: `WT` beside `+parB 15 min` has no time.
+ *
+ * `fit` adds the least-squares line through what is drawn, from the first
+ * abscissa to the last, as a series of its own named by its equation. Where
+ * the abscissa has a `window`, the line is fitted to the points inside it and
+ * no others — a box drawn round the points of a time course that are under way
+ * is the fit of those points.
  */
 export function xyOfTable(
   spec: TableFigureSpec,
   xKey: string,
   yKey: string,
   mark: MarkKind,
+  fit = false,
+  window: readonly [number, number] | null = null,
 ): XyFigureSpec {
+  const label = (key: string): string =>
+    spec.columns.find((column) => column.key === key)?.label ?? key
+  const xColumn = spec.columns.find((column) => column.key === xKey)
+  const named = xColumn !== undefined && xColumn.kind !== 'number'
   const x: number[] = []
   const y: number[] = []
   for (const row of spec.rows) {
-    const a = Number(row[xKey])
+    const a = named ? numberIn(String(row[xKey] ?? '')) : Number(row[xKey])
     const b = Number(row[yKey])
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue
     x.push(a)
     y.push(b)
   }
-  const label = (key: string): string =>
-    spec.columns.find((column) => column.key === key)?.label ?? key
+  const series: FigureSeries[] = [{ id: yKey, name: label(yKey), x, y }]
+  const inside = x.map((value) => window === null || (value >= window[0] && value <= window[1]))
+  const fx = x.filter((_, i) => inside[i])
+  const fy = y.filter((_, i) => inside[i])
+  const line = fit ? leastSquares(fx, fy) : null
+  if (line !== null) {
+    const low = Math.min(...fx)
+    const high = Math.max(...fx)
+    series.push({
+      id: LEAST_SQUARES,
+      name: fitLabel(line),
+      x: [low, high],
+      y: [line.intercept + line.slope * low, line.intercept + line.slope * high],
+      mark: 'line',
+    })
+  }
   return {
     kind: 'xy',
     id: `${spec.id}:${xKey}:${yKey}`,
     label: spec.label,
-    xLabel: label(xKey),
+    xLabel: named ? `number in ${label(xKey)}` : label(xKey),
     yLabel: label(yKey),
     xScale: 'linear',
     yScale: 'linear',
     mark,
-    series: [{ id: yKey, name: label(yKey), x, y }],
+    series,
   }
 }
+
+/** The fitted line's series id, which a style can hide or recolour like any other. */
+export const LEAST_SQUARES = 'least-squares'
 
 /**
  * One numeric column as a distribution.

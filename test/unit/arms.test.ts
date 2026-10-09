@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  armDecay,
   armExpected,
   armOffsets,
   interArmProfile,
@@ -122,6 +123,42 @@ describe('the arm-frame expectation', () => {
     }
     const expected = armExpected(values, rotated, rotated, frame, 0)
     for (let at = 0; at < values.length; at++) expect(values[at] / expected[at]).toBeCloseTo(1, 9)
+  })
+})
+
+describe('the decay along both arms, as curves', () => {
+  const frame: ArmFrame = { n: 60, origin: 13, circular: true }
+  const model = (kind: 0 | 1, delta: number): number =>
+    kind === 0 ? 100 / (1 + delta) ** 1.2 : 1 + 20 / (1 + delta) ** 1.5
+
+  it('gives back the two decays a map was made of, one per kind of pair', () => {
+    const { within, across } = armDecay(build(frame, (kind, delta) => model(kind, delta)), frame)
+    expect(within.maxOffset).toBe(30)
+    for (let delta = 0; delta <= 29; delta++) {
+      expect(within.mean[delta]).toBeCloseTo(model(0, delta), 9)
+      expect(across.mean[delta]).toBeCloseTo(model(1, delta), 9)
+    }
+  })
+
+  it('is the whole-sequence expectation read by separation alone', () => {
+    // A map that is not the model: the two have to agree on anything, gaps included.
+    const map = build(frame, (kind, delta, _sigma, i, j) =>
+      (i * 7 + j * 3) % 11 === 0 ? Number.NaN : model(kind, delta) * (1 + ((i + 2 * j) % 5) * 0.1),
+    )
+    const { within, across } = armDecay(map, frame)
+    const expected = armExpected(map, all(frame.n), all(frame.n), frame, 0)
+    const u = armOffsets(frame)
+    for (let i = 0; i < frame.n; i++) {
+      for (let j = 0; j < frame.n; j++) {
+        const delta = Math.abs(Math.abs(u[i]) - Math.abs(u[j]))
+        const curve = u[i] >= 0 === u[j] >= 0 ? within : across
+        expect(curve.mean[delta]).toBeCloseTo(expected[i * frame.n + j], 9)
+      }
+    }
+    // The counts are of cells that had a value.
+    let counted = 0
+    for (let d = 0; d <= within.maxOffset; d++) counted += within.count[d] + across.count[d]
+    expect(counted).toBe([...map].filter((value) => Number.isFinite(value)).length)
   })
 })
 

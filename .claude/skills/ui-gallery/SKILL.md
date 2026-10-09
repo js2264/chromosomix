@@ -15,7 +15,7 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
-node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
+node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png, a table's scatter with its least-squares line at 14b
 node scripts/ui-tour.mjs tour                # the furniture: the landing page in both themes, every dialog, the drawers, the five columns, the deck, the 1D browser, a metagenome's tables, an error page, the embed, a laptop and a narrow window: 01-landing … 73-narrow-landing
 node scripts/ui-audit.mjs                    # no pictures: measures the tour's surfaces for clipped text, overlaps, ragged right edges, captions under the contrast floor and §26.4 punctuation, and prints the findings
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4
@@ -39,7 +39,7 @@ node scripts/ui-fourc.mjs gallery            # the 4C form's exclude anchor regi
 node scripts/ui-deck-cells.mjs gallery       # a tracks cell's axis, both anchors' hairlines, cells renamed, a lane out of a tracks cell, one side of two carried, the Structures eye, a track beside the map in a tracks cell, the height bars: dc1 … dc24
 node scripts/ui-correlation.mjs gallery      # the map's correlation at 4,096, 2,048 and 1,024 bins with its wait printed, the veil, a whole chromosome, the Compartments warning, yeast IV: co1 … co9
 node scripts/ui-compartments.mjs gallery     # the Compartments table under cooltools and under the correlation, each printed: cp1, cp2
-node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed: ia1 … ia6
+node scripts/ui-interarm.mjs gallery         # Inter-arm alignment's form, and its table, the enrichment after detrend beside the enrichment, on E. coli, on P. aeruginosa PAK (read from the zoo) and on B. subtilis 45 min into ParB induction, printed; on PAK the profile after detrend on the measurement's axis and the decay curves; then the ParB time course as one deck, its all-maps table drawn as the reach against the minutes in each map's name with its least-squares line, over every point and over a box drawn across the points under way: ia1 … ia9
 node scripts/ui-arm-baseline.mjs gallery    # the score picker's arm decay on PAK: offered once the first open ticks the circle, both diagonals with arms off, the card, ori keeping it, a hover, expected beside it, the link, unticked and ticked, and not on yeast: ab01 … ab10
 node scripts/ui-peaks.mjs gallery-peaks      # peaks called on a bigWig, alone and with a replicate: p01 … p13
 node scripts/ui-task-segments.mjs gallery-segments  # every called set on the map and as a lane: peaks under ATAC, insulation's boundaries and domains, A/B segments by name, the two switches, a reload, and the 1D browser's lane alone: s01 … s14

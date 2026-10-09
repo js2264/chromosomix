@@ -139,13 +139,27 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
       const derived =
         current.plot.x === null
           ? distributionOfTable(built, current.plot.y, current.plot.mark)
-          : xyOfTable(built, current.plot.x, current.plot.y, current.plot.mark)
+          : xyOfTable(
+              built,
+              current.plot.x,
+              current.plot.y,
+              current.plot.mark,
+              current.plot.fit,
+              current.x.domain,
+            )
       return chartFigure({
         spec: derived,
         // A table drawn as a chart is one series, and a legend naming one
         // series is a column of the figure's width spent on a word already in
         // the axis title — the same rule `defaultStyle` applies to a curve.
-        style: { ...current, mark: current.plot.mark, legend: 'none' },
+        // A fitted line is the exception: its equation is its name, and the
+        // legend is where the name is read — over the picture, where a long
+        // name does not narrow it.
+        style: {
+          ...current,
+          mark: current.plot.mark,
+          legend: derived.series.length > 1 ? (current.legend === 'none' ? 'none' : 'top') : 'none',
+        },
         onStyle: (next) => adopt(next),
         fill,
       })
@@ -155,10 +169,22 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
 
   /** A style the *chart* produced: already applied, so only stored and echoed. */
   function adopt(next: FigureStyle): void {
+    const before = style
     style = next
     rememberStyle(props.uri, props.task, spec.id, style)
     settings?.refresh()
     paintStrip()
+    // A fitted line is fitted to the points in the window, so a zoom or a box
+    // that moves the window refits it — after the gesture that moved it has
+    // finished with the chart it is replacing.
+    // The head's PNG and PDF hold the figure they export, so they are painted
+    // again with the new one, as every other rebuild paints them.
+    if (refits(spec, before, style)) {
+      setTimeout(() => {
+        swap()
+        paintHead()
+      }, 0)
+    }
   }
 
   /** A style a *control* produced: applied, stored, and the figure told. */
@@ -393,9 +419,25 @@ function sameFigure(spec: FigureSpec, before: FigureStyle, after: FigureStyle): 
   if (spec.kind === 'matrix') return true
   if (spec.kind === 'table') {
     if (before.plot === null || after.plot === null) return before.plot === after.plot
-    return before.plot.x === after.plot.x && before.plot.y === after.plot.y
+    return (
+      before.plot.x === after.plot.x &&
+      before.plot.y === after.plot.y &&
+      before.plot.fit === after.plot.fit &&
+      !refits(spec, before, after)
+    )
   }
   return true
+}
+
+/**
+ * Whether a change of style moves a fitted line: a table drawn with its
+ * least-squares line, whose abscissa's window changed.
+ */
+function refits(spec: FigureSpec, before: FigureStyle, after: FigureStyle): boolean {
+  if (spec.kind !== 'table' || after.plot === null || !after.plot.fit || after.plot.x === null) return false
+  const a = before.x.domain
+  const b = after.x.domain
+  return a === null || b === null ? a !== b : a[0] !== b[0] || a[1] !== b[1]
 }
 
 /** The matrix's colours, offered inline; the full list is in the dialog. */

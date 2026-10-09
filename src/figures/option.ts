@@ -289,6 +289,66 @@ interface Entry {
   hidden: boolean
 }
 
+/**
+ * The bounds an axis needs so that its window can reach past the data.
+ *
+ * The window is the zoom's, and a zoom lives inside the axis: ECharts clamps a
+ * window to the extent of what is drawn, so a window wider than the data — one
+ * a task opens two figures on so that they share an ordinate, or a range typed
+ * to match another figure — came out as the data's own. Where the window does
+ * reach past the data, the axis is stretched to it on that side and no
+ * further; where it does not, nothing is set and the axis fits the data as it
+ * always has, so the zoom still answers for every window inside it. The labels
+ * are the window's ends', printed where they are round and left off where not.
+ */
+function reachOf(
+  domain: [number, number] | null,
+  values: number[],
+  log: boolean,
+): { bounds: ChartOption; labels: ChartOption } {
+  if (domain === null) return { bounds: {}, labels: {} }
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  for (const value of values) {
+    if (!Number.isFinite(value) || (log && value <= 0)) continue
+    if (value < low) low = value
+    if (value > high) high = value
+  }
+  const below = low > high || domain[0] < low
+  const above = low > high || domain[1] > high
+  // An end of the window is a tick of the axis, labelled with the end itself —
+  // which is wherever the window put it: `8.00215` after a box drawn by hand,
+  // printed over the `10` beside it. So an end is labelled only when it is a
+  // number a reader would write, inside the data or past it, and otherwise the
+  // ticks inside it are.
+  const span = domain[1] - domain[0]
+  const bare = (end: number): boolean => !roundEnd(end, span, log)
+  return {
+    bounds: { ...(below ? { min: domain[0] } : {}), ...(above ? { max: domain[1] } : {}) },
+    labels: {
+      ...(bare(domain[0]) ? { showMinLabel: false } : {}),
+      ...(bare(domain[1]) ? { showMaxLabel: false } : {}),
+    },
+  }
+}
+
+/**
+ * Whether the end of a window is a number to print at the end of its axis: a
+ * whole power of ten on a log axis, and on a linear one a whole tenth of the
+ * decade its span is in — `10` or `-2` on a span of 40 or 6, `0.15` on a span
+ * of 0.7, never `8.00215`.
+ */
+function roundEnd(end: number, span: number, log: boolean): boolean {
+  if (log) {
+    if (!(end > 0)) return false
+    const power = Math.log10(end)
+    return Math.abs(power - Math.round(power)) < 1e-9
+  }
+  if (!Number.isFinite(end) || !(span > 0)) return false
+  const steps = end / 10 ** (Math.floor(Math.log10(span)) - 1)
+  return Math.abs(steps - Math.round(steps)) < 1e-6 * Math.max(1, Math.abs(steps))
+}
+
 /** A figure of (x, y) pairs: lines, areas, steps, points, bars, histograms. */
 function xyOption(
   spec: XyFigureSpec,
@@ -330,6 +390,12 @@ function xyOption(
   // neither axis.
   const xSpelling = histo ? undefined : xFormatter(spec)
   const ySpelling = histo ? undefined : yFormatter(spec)
+  // A histogram's axes are a quantity and a count, neither of them a series' x
+  // or y, so its windows stay the zoom's alone.
+  const drawn = shown.filter((entry) => !entry.hidden).map((entry) => entry.series)
+  const none = { bounds: {}, labels: {} }
+  const xReach = histo ? none : reachOf(style.x.domain, drawn.flatMap((line) => line.x), style.x.scale === 'log')
+  const yReach = histo ? none : reachOf(style.y.domain, drawn.flatMap((line) => line.y), style.y.scale === 'log')
 
   return {
     xAxis: {
@@ -342,10 +408,12 @@ function xyOption(
       // numbers, and as many of them as fit without one name printing over the
       // next.
       ...(spec.xTicks !== undefined && !histo ? { minInterval: 1 } : {}),
+      ...xReach.bounds,
       ...axisBase(theme, style, style.x.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.x.grid).axisLabel as object),
         ...(spec.xTicks !== undefined && !histo ? { hideOverlap: true } : {}),
+        ...xReach.labels,
         formatter:
           xSpelling ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
       },
@@ -360,9 +428,11 @@ function xyOption(
       // whole height on empty space. `scale: true` is ECharts for "fit the
       // data", which is right for everything but the bars.
       scale: style.mark !== 'histogram' && style.mark !== 'bars',
+      ...yReach.bounds,
       ...axisBase(theme, style, style.y.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
+        ...yReach.labels,
         formatter:
           ySpelling ?? ((value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear')),
       },

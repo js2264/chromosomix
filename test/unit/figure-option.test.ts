@@ -114,6 +114,56 @@ describe('optionOf', () => {
     expect(zooms[1]['end']).toBe(100)
   })
 
+  it('stretches an axis to a window wider than the data, on that side alone', () => {
+    // The task opens two figures on one ordinate; the zoom alone would clamp the
+    // window to this figure's own data.
+    const { option } = build(curve(), (style) => {
+      style.y.domain = [-10, 2]
+    })
+    const axis = option['yAxis'] as Record<string, unknown>
+    expect(axis['min']).toBe(-10)
+    // The data reach past 2 on the top, so that side is the data's own.
+    expect(axis['max']).toBeUndefined()
+    // Both ends are numbers a reader would write, and are labelled.
+    const labels = axis['axisLabel'] as Record<string, unknown>
+    expect(labels['showMinLabel']).toBeUndefined()
+    expect(labels['showMaxLabel']).toBeUndefined()
+    const zooms = option['dataZoom'] as Array<Record<string, unknown>>
+    expect(zooms[1]['startValue']).toBe(-10)
+    expect(zooms[1]['endValue']).toBe(2)
+  })
+
+  it('leaves an end where a box put it unlabelled, inside the data or past it', () => {
+    // A box drawn by hand from just inside the first point to past the last:
+    // its ends would print as `1.0372` and `3.4518` over the ticks beside them.
+    const { option } = build(curve(), (style) => {
+      style.x.domain = [1.0372, 3.4518]
+    })
+    const axis = option['xAxis'] as Record<string, unknown>
+    expect(axis['min']).toBeUndefined()
+    expect(axis['max']).toBe(3.4518)
+    const labels = axis['axisLabel'] as Record<string, unknown>
+    expect(labels['showMinLabel']).toBe(false)
+    expect(labels['showMaxLabel']).toBe(false)
+  })
+
+  it('labels the round ends of a window, a tenth of its span or a whole decade', () => {
+    const typed = build(curve(), (style) => {
+      style.x.domain = [1.5, 3.5]
+    }).option['xAxis'] as Record<string, unknown>
+    expect(typed['max']).toBe(3.5)
+    expect((typed['axisLabel'] as Record<string, unknown>)['showMinLabel']).toBeUndefined()
+    expect((typed['axisLabel'] as Record<string, unknown>)['showMaxLabel']).toBeUndefined()
+    // On a log axis only a power of ten is round: 0.5 is a stretch, 10 a decade.
+    const log = build(curve({ xScale: 'log' }), (style) => {
+      style.x.domain = [0.5, 10]
+    }).option['xAxis'] as Record<string, unknown>
+    expect(log['min']).toBe(0.5)
+    expect(log['max']).toBe(10)
+    expect((log['axisLabel'] as Record<string, unknown>)['showMinLabel']).toBe(false)
+    expect((log['axisLabel'] as Record<string, unknown>)['showMaxLabel']).toBeUndefined()
+  })
+
   it('draws each mark as the chart type it is', () => {
     const kinds = (mark: FigureStyle['mark']): string[] =>
       seriesOf(build(curve(), (style) => (style.mark = mark)).option).map(

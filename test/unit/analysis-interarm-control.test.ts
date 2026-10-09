@@ -91,7 +91,9 @@ async function run(params: Params) {
   const outputs: TaskOutput[] = await runInterArm(context)
   const table = outputs.find((output): output is TableOutput => output.kind === 'table')!
   const curve = outputs.find((output): output is CurveOutput => output.kind === 'curve')!
-  return { table, curve, measured: table.rows[0], notes }
+  const curveOf = (id: string) =>
+    outputs.find((output): output is CurveOutput => output.kind === 'curve' && output.id === id)!
+  return { table, curve, curveOf, outputs, measured: table.rows[0], notes }
 }
 
 describe('inter-arm alignment’s control column', () => {
@@ -142,5 +144,60 @@ describe('inter-arm alignment’s control column', () => {
     const log = (value: unknown) => Math.log2(Number(value))
     expect(Math.abs(log(measured.detrended))).toBeLessThan(0.1 * log(measured.enrichment))
     expect(notes.join(' ')).toMatch(/after detrend is the same cells over the decay along both arms, within 5 bins/)
+  })
+})
+
+describe('inter-arm alignment’s curves', () => {
+  it('draws the control as a curve of its own, on the measurement’s axis', async () => {
+    const { curve, curveOf, outputs, measured } = await run({ armWindow: 5 })
+    // The measurement is still the first curve, and the control comes right after it.
+    const ids = outputs.map((output) => output.id)
+    expect(ids.indexOf('interarm-detrended-curve')).toBe(ids.indexOf('interarm-curve') + 1)
+    const control = curveOf('interarm-detrended-curve')
+    expect(control.series.map((series) => series.name)).toEqual(['chr'])
+    expect([...control.series[0].x]).toEqual([...curve.series[0].x])
+    // One window for both, in whole log2 steps, which holds every value either has.
+    expect(control.yDomain).toEqual(curve.yDomain)
+    const [low, high] = curve.yDomain!
+    expect(Number.isInteger(low) && Number.isInteger(high)).toBe(true)
+    // In base pairs, which the axis spells as the app's units.
+    expect(control.xLabel).toBe('Distance from the origin (bp)')
+    for (const value of [...curve.series[0].y, ...control.series[0].y]) {
+      if (Number.isFinite(value)) expect(value >= low && value <= high).toBe(true)
+    }
+    // Out to the reach, the control is near nothing where the measurement is enriched.
+    const last = Math.floor(Number(measured.reach) / BINSIZE)
+    const mean = (values: Float64Array) => {
+      let total = 0
+      let counted = 0
+      for (let d = 0; d <= last; d++) {
+        if (!Number.isFinite(values[d])) continue
+        total += values[d]
+        counted++
+      }
+      return total / counted
+    }
+    expect(Math.abs(mean(control.series[0].y))).toBeLessThan(0.1 * mean(curve.series[0].y))
+  })
+
+  it('gives the decay along the diagonal and along both arms, log-binned as P(s) is', async () => {
+    const { curveOf, notes } = await run({})
+    const decay = curveOf('interarm-decay')
+    expect(decay.series.map((series) => series.name)).toEqual([
+      'chr · along the diagonal',
+      'chr · within an arm',
+      'chr · across the arms',
+    ])
+    expect(decay.xScale).toBe('log')
+    expect(decay.yScale).toBe('log')
+    const [diagonal, within, across] = decay.series
+    // From one bin away from each diagonal, in base pairs.
+    for (const series of decay.series) expect(series.x[0]).toBe(BINSIZE)
+    // One bin along the DNA is the same pair either way it is counted.
+    expect(within.y[0]).toBeCloseTo(diagonal.y[0], 0)
+    // The mirror images touch three times as often within two bins of the
+    // secondary diagonal, and the curve across the arms falls away from it.
+    expect(across.y[0] / across.y[2]).toBeGreaterThan(2)
+    expect(notes.join(' ')).toMatch(/The decay curves are the two expectations/)
   })
 })

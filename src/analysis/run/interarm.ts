@@ -10,13 +10,16 @@
  * And the control: the same square over the decay along both arms, the
  * expectation that takes the secondary diagonal in, read over the same stretch
  * as a column beside the enrichment — what is left of the alignment once the
- * map's arms or Compartments have divided it out.
+ * map's arms or Compartments have divided it out — and drawn as a curve of its
+ * own beside the measurement's, on the same axis. Last, the two expectations
+ * themselves, as decay curves: the ordinary one along the diagonal, and the one
+ * along both arms, within an arm and across the two.
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { cisSeparation } from '../compartments'
-import { ExpectedAccumulator, expectedAt } from '../expected'
-import { armExpected, interArmProfile, interArmSummary, type ArmFrame } from '../arms'
+import { ExpectedAccumulator, expectedAt, logBinCurve, type ExpectedCurve } from '../expected'
+import { armDecay, armExpected, interArmProfile, interArmSummary, type ArmFrame } from '../arms'
 import {
   boolParam,
   numParam,
@@ -45,13 +48,17 @@ async function squareFor(
   return dense.values
 }
 
-/** Observed over this sequence's own distance decay, measured as it is read. */
-function observedOverDecay(values: Float32Array, n: number, lap: number): Float64Array {
+/** This sequence's own distance decay, measured as it is read: the short way round on a circle. */
+function decayOf(values: Float32Array, n: number, lap: number): ExpectedCurve {
   const accumulator = new ExpectedAccumulator(lap > 0 ? Math.floor(n / 2) : Math.max(0, n - 1), lap)
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) accumulator.add(cisSeparation(Math.abs(c - r), lap), values[r * n + c])
   }
-  const curve = accumulator.finish()
+  return accumulator.finish()
+}
+
+/** Observed over this sequence's own distance decay. */
+function observedOverDecay(values: Float32Array, n: number, lap: number, curve: ExpectedCurve): Float64Array {
   const out = new Float64Array(n * n)
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -84,6 +91,56 @@ function observedOverArms(values: Float32Array, n: number, frame: ArmFrame, wind
 }
 
 
+/**
+ * Log bins per step for the decay curves: P(s)'s own default, so the curves read
+ * as that task's `expected (cooltools)` curve does.
+ */
+const DECAY_FACTOR = 1.1
+
+/** Log2 of a profile by distance from the origin, at its distances in base pairs. */
+function logProfile(name: string, byDistance: Float64Array, binsize: number): CurveSeries {
+  const x = new Float64Array(byDistance.length)
+  const y = new Float64Array(byDistance.length)
+  for (let d = 0; d < byDistance.length; d++) {
+    x[d] = d * binsize
+    y[d] = byDistance[d] > 0 ? Math.log2(byDistance[d]) : Number.NaN
+  }
+  return { name, x, y }
+}
+
+/** A decay curve log-binned as P(s) bins one, from one bin away from its diagonal. */
+function decaySeries(name: string, curve: ExpectedCurve, binsize: number): CurveSeries | null {
+  const binned = logBinCurve(curve, binsize, DECAY_FACTOR, 1)
+  if (binned.x.length === 0) return null
+  let cells = 0
+  for (const count of binned.n) cells += count
+  return { name, x: binned.x, y: binned.y, n: cells }
+}
+
+/**
+ * The finite range of every series' ordinate, out to the whole numbers either
+ * side — whole `log2` steps, so the axis two figures share opens on a doubling
+ * at each end rather than on whatever the noise reached — or `undefined` where
+ * there is none.
+ */
+function rangeOf(...groups: CurveSeries[][]): [number, number] | undefined {
+  let low = Number.POSITIVE_INFINITY
+  let high = Number.NEGATIVE_INFINITY
+  for (const group of groups) {
+    for (const series of group) {
+      for (const value of series.y) {
+        if (!Number.isFinite(value)) continue
+        low = Math.min(low, value)
+        high = Math.max(high, value)
+      }
+    }
+  }
+  if (!(low <= high)) return undefined
+  const floor = Math.floor(low)
+  const ceiling = Math.ceil(high)
+  return floor < ceiling ? [floor, ceiling] : [floor - 1, ceiling + 1]
+}
+
 export const runInterArm: TaskRunner = async (job) => {
   const { ids, missing } = tickedContigIds(job.mc, tickedSequences(job.params, 'sequences'))
   const said = missingSequencesNote(job.mc, missing, ids.length)
@@ -96,6 +153,8 @@ export const runInterArm: TaskRunner = async (job) => {
   const binsize = job.mc.binsize
   const track = new Float32Array(job.mc.nBins).fill(Number.NaN)
   const series: CurveSeries[] = []
+  const detrendedSeries: CurveSeries[] = []
+  const decays: CurveSeries[] = []
   const rows: Array<Record<string, string | number>> = []
 
   for (let k = 0; k < ids.length; k++) {
@@ -129,29 +188,36 @@ export const runInterArm: TaskRunner = async (job) => {
 
     const values = await squareFor(job, from, to, balance)
     job.throwIfCancelled()
+    const lap = circular ? n : 0
+    const decay = decayOf(values, n, lap)
     // Each ratio is let go once it is profiled, so the two squares of doubles
     // are not held at once.
-    const { byDistance, byBin } = interArmProfile(observedOverDecay(values, n, circular ? n : 0), frame, band)
+    const { byDistance, byBin } = interArmProfile(observedOverDecay(values, n, lap, decay), frame, band)
     const summary = interArmSummary(byDistance)
 
     for (let i = 0; i < n; i++) track[from + i] = byBin[i] > 0 ? Math.log2(byBin[i]) : Number.NaN
-    const x = new Float64Array(byDistance.length)
-    const y = new Float64Array(byDistance.length)
-    for (let d = 0; d < byDistance.length; d++) {
-      x[d] = d * binsize
-      y[d] = byDistance[d] > 0 ? Math.log2(byDistance[d]) : Number.NaN
-    }
-    series.push({ name, x, y })
+    series.push(logProfile(name, byDistance, binsize))
 
     // The control: the same cells over the decay along both arms, which has the
     // secondary diagonal in it — so what the enrichment measured should be gone.
     // Read over the measurement's stretch, so the two average the same distances.
     await job.breathe()
     job.throwIfCancelled()
-    const detrended = interArmSummary(
-      interArmProfile(observedOverArms(values, n, frame, armWindow), frame, band).byDistance,
-      summary.reach,
-    )
+    const control = interArmProfile(observedOverArms(values, n, frame, armWindow), frame, band).byDistance
+    const detrended = interArmSummary(control, summary.reach)
+    detrendedSeries.push(logProfile(name, control, binsize))
+
+    // The two expectations, as curves: the ordinary decay the enrichment is read
+    // over, and the decay along both arms the control is read over — at the
+    // whole sequence's window, by separation alone.
+    const { within, across } = armDecay(values, frame)
+    for (const line of [
+      decaySeries(`${name} · along the diagonal`, decay, binsize),
+      decaySeries(`${name} · within an arm`, within, binsize),
+      decaySeries(`${name} · across the arms`, across, binsize),
+    ]) {
+      if (line !== null) decays.push(line)
+    }
 
     // Folds over expected on the table's linear scale — two to the `log2` means
     // the summaries are read in, so enrichment and depletion still weigh alike in
@@ -190,6 +256,17 @@ export const runInterArm: TaskRunner = async (job) => {
       'it is a control on the detrending, not a second measure of the alignment.',
   )
 
+  job.note(
+    'The decay curves are the two expectations: along the diagonal, the one the enrichment is read ' +
+      'over; within an arm and across the arms, the decay along both arms averaged over the whole of ' +
+      'them, which the window follows along the arms. Log-binned as P(s)’s expected curve is, from ' +
+      'one bin away from each diagonal.',
+  )
+
+  // The control is drawn on the measurement's own axis: a flat line read on a
+  // window fitted to its noise looks like a profile, which is the one thing it
+  // is there to show it is not.
+  const shared = rangeOf(series, detrendedSeries)
   const outputs: TaskOutput[] = [
     {
       kind: 'profile',
@@ -205,10 +282,32 @@ export const runInterArm: TaskRunner = async (job) => {
       id: 'interarm-curve',
       label: 'Inter-arm alignment by distance from the origin',
       series,
-      xLabel: 'Distance from the origin',
+      xLabel: 'Distance from the origin (bp)',
       yLabel: 'Secondary-diagonal enrichment (log2 O/E)',
       xScale: 'linear',
       yScale: 'linear',
+      ...(shared === undefined ? {} : { yDomain: shared }),
+    } satisfies CurveOutput,
+    {
+      kind: 'curve',
+      id: 'interarm-detrended-curve',
+      label: 'Inter-arm alignment after detrend, by distance from the origin',
+      series: detrendedSeries,
+      xLabel: 'Distance from the origin (bp)',
+      yLabel: 'Enrichment over the decay along both arms (log2 O/E)',
+      xScale: 'linear',
+      yScale: 'linear',
+      ...(shared === undefined ? {} : { yDomain: shared }),
+    } satisfies CurveOutput,
+    {
+      kind: 'curve',
+      id: 'interarm-decay',
+      label: 'Contact decay along the diagonal and along both arms',
+      series: decays,
+      xLabel: 'Separation from the main or the secondary diagonal (bp)',
+      yLabel: 'Mean contact per bin pair',
+      xScale: 'log',
+      yScale: 'log',
     } satisfies CurveOutput,
     {
       kind: 'table',

@@ -7807,8 +7807,18 @@ where nothing reaches, the enrichment is the whole arm's. Beside it is the **enr
 detrend**: the same cells over the decay along both arms — the expectation the map's arms and
 Compartments divide by (§8.15), within `armWindow` bins along them, 50 as theirs is — which takes the
 secondary diagonal into itself, read over the same stretch so that both average the same distances: a
-control on that detrending, not a second measure. The peak the reach is read from is not a column, and
-neither is what each cell was divided by, since one row says both readings. It separates what it
+control on that detrending, not a second measure. It is drawn too: the **profile after detrend** is a
+curve of its own beside the measurement's, the same cells by distance from the origin over the decay
+along both arms, and the two open on **one ordinate** — the range that holds both — since a flat line
+read on a window fitted to its own noise looks like a profile, which is the one thing it is there to
+show it is not. The peak the reach is read from is not a column, and neither is what each cell was
+divided by, since one row says both readings; what each cell was divided by is a figure instead — the
+**decay curves**, the two expectations side by side on log–log axes, each log-binned as P(s)'s
+`expected (cooltools)` curve is (1.1 a step, from one bin away from its diagonal): the ordinary decay
+**along the diagonal**, the short way round a circle, which the enrichment is read over, and the
+decay along both arms, **within an arm** by the separation along it and **across the arms** by the
+distance from the secondary diagonal, which the control is read over — averaged over the whole of the
+arms, the window `0` reading of the expectation `armWindow` follows along them. It separates what it
 should: 3.1–3.2× on *P. aeruginosa* PAK from 2 to 16 kb, reaching 3.0 of its 3.2 Mb arms, against 1.20–1.22× on
 *E. coli* MG1655 from 2 to 20 kb, whose arms are not aligned; and after detrend PAK's is 0.93–0.97×.
 Each square is read whole, so a sequence past Compartments' 8,192-bin gate is left out and named. Absent on a metacool,
@@ -8750,7 +8760,15 @@ reader zoomed to is the window the export draws.
 **The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
 the sidebar are the same change to the same place, and the export draws whichever happened last —
 which is what §18.7's *what you export is what you see* means once a figure can be panned. The wheel
-zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate.
+zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordinate. **A window
+wider than the data is honoured**: the chart's zoom lives inside its axis and clamps a window to what
+is drawn, so where a window reaches past the data — a range typed to match another figure, or two
+figures a task opens on one ordinate (§18.8's inter-arm control) — the axis is stretched to it on
+that side, and nowhere else. **An end of a window is labelled only when it is round** — a whole
+tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
+one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
+`8.00215` over the `10` beside it, inside the data or past it. Where an end is not round it is left
+bare and the ticks inside it carry the axis.
 
 **A box drawn on a figure is how a reader arrives somewhere.** Hold ⌘ (or Ctrl, the same key on the
 other platforms) and drag a marquee over any chart, and the axes come back holding what was in it.
@@ -8784,7 +8802,24 @@ unless one is typed, Tukey's whiskers stopping at the furthest *observed* value 
 a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled
 by the same peak, because two violins each normalised to their own width say the two samples are
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
-one against another as a scatter. A task whose every series is a sample rather than a function says
+one against another as a scatter.
+
+**A column of names can be the abscissa, read at the number each name writes.** A time course is
+named rather than numbered — a deck's maps are `+parB 15 min` and `+parB 30 min`, and the all-maps
+table (§18.7) carries those names in its `Map` column — so a text column is offered beside the
+number columns once two of its rows carry a number, each row placed at the **first number in its
+cell**, unsigned, since a hyphen in a name is a separator far more often than a minus (`rep-2`). A
+row whose name writes none — `WT` beside the time points — is left out, as a row with no number in
+a number column is. The axis says what it is: `number in Map`. A name can be changed to be the
+number meant (§16.10). **And a scatter can carry its least-squares line** — *least squares* in the
+table's rows card, under the abscissa — drawn from the first abscissa to the last as a series of
+its own, named by its equation, r² and n (`least squares: y = 2·x + 5 · r² = 1.000 · n = 3`), so
+its legend, which opens over the picture once there are two series, carries the numbers into
+the PNG and the PDF; its id is `least-squares`, hidden or recoloured like any other series. **The
+line is fitted to the points in the abscissa's window** where it has one, and refitted when the
+window moves: a box drawn across the time points whose alignment is under way, leaving out the one
+taken before anything started, is the fit of those points — the line is what is drawn, as the
+export is. A task whose every series is a sample rather than a function says
 so (`CurveSeries.mark = 'violin'`), and its figure opens as violins, one per series — *Signal by
 group*'s groups — which the mark control turns into boxes or a histogram like any other. A box or a
 violin names its series along the abscissa, so it has **no legend and keeps no room for one**, whatever

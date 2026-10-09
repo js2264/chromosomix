@@ -14,6 +14,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Inter-arm alignment draws what its detrending leaves, and the two decays it divides by
+  (§18.8).** The profile after detrend — the same cells over the decay along both arms — is a curve
+  beside the measurement's, the two opening on one ordinate so a flat control reads as flat; and a
+  log–log figure gives the two expectations, the ordinary decay along the diagonal and the decay
+  along both arms within an arm and across them from the secondary diagonal, log-binned as P(s)'s
+  expected curve is (task version 7).
+
+- **A table's names can be a scatter's abscissa, and the scatter its least-squares line (§18.13).**
+  A text column whose cells write numbers — the all-maps table's `Map`, where the maps are
+  `+parB 15 min`, `+parB 30 min` — is offered as the abscissa, each row at the first number in its
+  name and a name with none left out; *least squares* draws the fitted line, named in the legend by
+  its equation, r² and n, so the slope of a time course goes out in its PNG and PDF. The line is
+  fitted to the points in the abscissa's window and refitted as it moves, so a box drawn across the
+  points that are under way fits those alone.
+
 - **Half a window upstream and downstream, beside `go` on a region (§5.4).** Two arrows straight
   after the locus box's `go` move the window half its own width along the sequence, re-read as a
   navigation, so a reader at a locus can walk the chromosome without retyping it. They slide in to
@@ -2028,6 +2043,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A figure's window wider than its data is the window drawn (§18.13).** The chart's zoom clamped
+  a window to what was drawn, so a range typed past the data — or a figure opened on another's
+  ordinate — came out as the data's own; the axis is now stretched to the window on the side it
+  reaches past. And an end of a window is labelled only when it is a round number, so a box drawn
+  by hand no longer prints its edge, `8.00215`, over the tick beside it.
 
 - **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
   sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has
