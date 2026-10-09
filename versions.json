@@ -214,13 +214,6 @@
   ],
   "pulls": [
     {
-      "number": 101,
-      "commit": "5ea2082",
-      "title": "Track colouring: white-to-colour scale and editable key range",
-      "branch": "js/exciting-bardeen-fhr25o",
-      "date": "2026-10-09T20:12:06Z"
-    },
-    {
       "number": 97,
       "commit": "981a083",
       "title": "Add RSG lab demo store and Figure 1 manuscript materials",
