@@ -42,7 +42,7 @@ import {
 } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { ManualStore } from '../annotations/manual'
-import { describeMark, mintMarkId, type ManualMark } from '../annotations/manual'
+import { describeMark, isShown, mintMarkId, type ManualMark } from '../annotations/manual'
 import type { BookmarkStore } from '../annotations/bookmarks'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { SampleCache } from '../annotations/samples'
@@ -143,6 +143,7 @@ import {
   type ExportFormat,
 } from '../ui/export'
 import { openMenu } from '../ui/Menu'
+import { marksMenu } from '../ui/marksMenu'
 import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
@@ -844,9 +845,10 @@ export class StructurePanel implements DeckCell {
 
   /**
    * The cell's right-click menu: *copy this* — the model alone, as it is
-   * drawn here, onto the clipboard (§7.2).
+   * drawn here, onto the clipboard (§7.2) — and the reader's marks, the ones
+   * on the bead under the pointer and all of them (§8.1).
    */
-  private showMenu(x: number, y: number): void {
+  private showMenu(x: number, y: number, bead: number): void {
     openMenu(x, y, [
       { label: 'This model' },
       {
@@ -857,7 +859,31 @@ export class StructurePanel implements DeckCell {
           'onto the clipboard as a PNG, at the screen’s resolution',
         run: () => copyPicture('model', this.modelImage()),
       },
+      ...marksMenu(this.props.manual?.(), this.marksOnBead(bead)),
     ])
+  }
+
+  /**
+   * The drawn marks a bead carries, for the menu: a line at its place, an
+   * arrowhead with an end there — each drawn on this bead, as a bigger bead or
+   * a chord's end — and a box whose span takes it in, the smallest first, as
+   * a box colours its run of beads. None for a press on the air.
+   */
+  private marksOnBead(bead: number): ManualMark[] {
+    const structure = this.structure
+    const manual = this.props.manual?.()
+    if (structure === null || manual === undefined || bead < 0) return []
+    const at = (point: { contig: string; bp: number }): boolean => beadsAt(structure, point.contig, point.bp).includes(bead)
+    const over = (span: { contig: string; from: number; to: number }): boolean =>
+      beadsIn(structure, span.contig, span.from, span.to).includes(bead)
+    const width = (mark: ManualMark): number =>
+      mark.kind === 'rect' ? mark.a.to - mark.a.from + (mark.b.to - mark.b.from) : 0
+    const rank: Record<ManualMark['kind'], number> = { line: 0, arrowhead: 1, rect: 2 }
+    return manual.shown
+      .filter((mark) =>
+        mark.kind === 'line' ? at(mark.at) : mark.kind === 'arrowhead' ? at(mark.a) || at(mark.b) : over(mark.a) || over(mark.b),
+      )
+      .sort((one, two) => rank[one.kind] - rank[two.kind] || width(one) - width(two))
   }
 
   /**
@@ -1930,7 +1956,8 @@ export class StructurePanel implements DeckCell {
       // press — and a right drag pans the model, so the menu can only know it
       // was asked for once the hand has let go where it began.
       if (event.button === 2) {
-        this.showMenu(event.clientX, event.clientY)
+        const at = local(event)
+        this.showMenu(event.clientX, event.clientY, this.aimAt(at.x, at.y))
         return
       }
       // A press that did not travel is a click: pin the bead, or with Shift
@@ -2239,7 +2266,7 @@ export class StructurePanel implements DeckCell {
     if (this.camera.projection !== 'orthographic') this.camera = { ...this.camera, projection: 'orthographic' }
     // Keyed on the reader's own sequence colours too: a swatch changed on
     // the key is a colouring changed.
-    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}|${style.marksHidden.join(',')}`
+    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}`
     if (this.colours === null || this.colouredBy !== colourKey) {
       this.colours = resolveColours(structure, style, this.colourSource(structure, style.colourBy))
       this.colouredBy = colourKey
@@ -2293,7 +2320,8 @@ export class StructurePanel implements DeckCell {
    * the colouring says the other.
    */
   private markedBeads(structure: Structure, style: StructureStyle): ReadonlyArray<{ bead: number; colour: string }> {
-    const marks = this.props.manual?.()?.marks ?? []
+    // The drawn ones: a mark put away is off the model as it is off every map.
+    const marks = this.props.manual?.()?.shown ?? []
     const out: Array<{ bead: number; colour: string }> = []
     // The telomeres first, so a place the reader marked themselves is drawn
     // over one this found: their own mark is the one they are looking for.
@@ -2438,7 +2466,7 @@ export class StructurePanel implements DeckCell {
       return nameSource(structure, payload.data, entry.label, featuresOf(entry.style, entry.kind).nameColours ?? {})
     }
     if (by === STRUCTURE_COLOUR_MARKS) {
-      return marksSource(structure, this.props.manual?.()?.marks ?? [], new Set(this.style().marksHidden))
+      return marksSource(structure, this.props.manual?.()?.marks ?? [])
     }
     if (by === STRUCTURE_COLOUR_DISPLACEMENT) {
       // The overlay first, so the alignment exists; then each bead's distance
@@ -2486,7 +2514,9 @@ export class StructurePanel implements DeckCell {
   private loopsOf(structure: Structure, loops: string): ReadonlyArray<readonly [number, number]> {
     if (loops === '') return NO_CHORDS
     if (loops === MANUAL_CHORDS) {
-      const marks = this.props.manual?.()?.marks ?? []
+      // The drawn arrowheads, so the key below changes — and the cage is built
+      // again — when one is hidden or shown, as well as when one is added.
+      const marks = this.props.manual?.()?.shown ?? []
       const key = `${MANUAL_CHORDS}:${marks.length}:${marks.map((mark) => mark.id).join(',')}`
       if (this.chords === null || this.chords.key !== key) {
         const list: Array<readonly [number, number]> = []
@@ -2683,14 +2713,16 @@ export class StructurePanel implements DeckCell {
   /**
    * The key of *colour by manual annotations* (§25.5): a row per mark, as the
    * sequence key has a row per sequence, with the same three gestures — the
-   * swatch is the mark's colour, a click on its name takes it off the model's
-   * colouring, a double-click shows it alone.
+   * swatch is the mark's colour, a click on its name hides it, a double-click
+   * shows it alone.
    *
-   * The colour is the **mark's**, written to the marks' own store: the Manual
-   * annotations card lists the same marks and repaints from the same store, so
-   * a colour picked here is the colour there, and on every map. What a click
-   * hides is the model's colouring only, kept in its style — the mark is still
-   * drawn wherever it was put, and a key that deleted it would be a second ×.
+   * Both are the **mark's**, written to the marks' own store, which the Manual
+   * annotations card lists and every map, lane and model draws from: a colour
+   * picked here is the colour there, and a mark hidden here is hidden there —
+   * the row's eye on the card goes dark with it (§8.1). It used to hide the
+   * model's colouring only, kept in the model's style, which was a second
+   * meaning of *hidden* for the one mark: off the model and still on every map,
+   * with nothing on the card to say so.
    */
   private paintMarksKey(marks: readonly ManualMark[]): void {
     this.keyEl.classList.remove('hidden')
@@ -2704,15 +2736,13 @@ export class StructurePanel implements DeckCell {
       )
       return
     }
-    const style = this.style()
-    const hidden = new Set(style.marksHidden)
-    for (const mark of marks.slice(0, 48)) this.keyEl.append(this.markChip(mark, marks, hidden))
+    for (const mark of marks.slice(0, 48)) this.keyEl.append(this.markChip(mark))
   }
 
   /** One mark's row on the key — see {@link paintMarksKey}. */
-  private markChip(mark: ManualMark, marks: readonly ManualMark[], hidden: ReadonlySet<string>): HTMLElement {
+  private markChip(mark: ManualMark): HTMLElement {
     const name = describeMark(mark)
-    const off = hidden.has(mark.id)
+    const off = !isShown(mark)
     const swatch = el('input', {
       class: 'structure-key-swatch',
       type: 'color',
@@ -2726,26 +2756,25 @@ export class StructurePanel implements DeckCell {
       type: 'button',
       text: name,
       title: off
-        ? `${name} is off the model: click to colour it again; double-click to show it alone`
-        : `Click to take ${name} off the model's colouring; double-click to show it alone`,
+        ? `${name} is hidden: click to show it again, here and on every map; double-click to show it alone`
+        : `Click to hide ${name} here and on every map; double-click to show it alone`,
     })
+    // A click waits out a double-click's interval, as the sequence key's does:
+    // the key is painted again on every frame, so a first click that hid the
+    // mark would hand the second to a row that is no longer there.
     button.addEventListener('click', () => {
       if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
       this.keyClickTimer = window.setTimeout(() => {
         this.keyClickTimer = null
-        const next = new Set(hidden)
-        if (next.has(mark.id)) next.delete(mark.id)
-        else next.add(mark.id)
-        this.restyle({ marksHidden: [...next] })
+        this.props.manual?.()?.setShown(mark.id, off)
       }, 220)
     })
     button.addEventListener('dblclick', () => {
       if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
       this.keyClickTimer = null
-      const others = marks.filter((other) => other.id !== mark.id).map((other) => other.id)
-      const alreadySolo = others.length > 0 && others.every((id) => hidden.has(id)) && !hidden.has(mark.id)
-      // Alone again is "all back", as on the sequence key.
-      this.restyle({ marksHidden: alreadySolo ? [] : others })
+      // Alone again is every mark back, as on the sequence key — the store
+      // knows which ones the first double-click put away.
+      this.props.manual?.()?.showAlone(mark.id)
     })
     return el(
       'span',

@@ -9372,6 +9372,47 @@ body.is-carrying-card * {
   flex: none;
 }
 
+/* The list's heading (§8.1): `MARKS`, how many are hidden, and the eye for all
+   of them. A row in everything but its frame — the same padding, the same
+   border, made invisible — so its eye stands exactly over the column of the
+   rows' eyes, which is what says which eyes it speaks for. */
+.manual-list-head {
+  border-color: transparent;
+  background: none;
+  padding-top: 0;
+  padding-bottom: 0;
+  /* Flush left with the card's other sub-heads; only the right-hand side has
+     to match a row's, which is where the eyes are. */
+  padding-left: 0;
+  border-left-width: 0;
+}
+
+.manual-list-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 0.4rem;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}
+
+/* The room a row's × takes, kept empty after the heading's eye. */
+.manual-list-room {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* A mark's eye swaps its glyph on every press, so the glyph is never what the
+   pointer is on: a double-click's last event goes to the target of its second
+   press, and that was a glyph the second press had already replaced — taken out
+   of the page, it carried the double-click nowhere. The button is the target. */
+.manual-mark .ann-eye > .icon,
+.manual-all-eye > .icon {
+  pointer-events: none;
+}
+
 /* --- bookmarks --------------------------------------------------------- */
 
 /* The whole row is the button, and the arrow is its sign.

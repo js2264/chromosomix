@@ -94,7 +94,7 @@ import {
   type PixelProfile,
   laneNote,
 } from '../render/tracks'
-import type { ManualPoint, ManualStore } from '../annotations/manual'
+import type { ManualMark, ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
@@ -398,10 +398,11 @@ const EMPTY_MARKS = { lines: [], arrowheads: [], rects: [] } as LaneMarks
  * per mark: two boxes that happen to share an edge are two marks about it, and
  * collapsing them would take a triangle away from one of them.
  */
-function anchorsOf(manual: LaneMarks): Array<{ colour: string; at: ManualPoint[] }> {
+function anchorsOf(manual: LaneMarks): Array<{ mark: ManualMark; colour: string; at: ManualPoint[] }> {
   return [
-    ...manual.arrowheads.map((mark) => ({ colour: mark.colour, at: [mark.a, mark.b] })),
+    ...manual.arrowheads.map((mark) => ({ mark, colour: mark.colour, at: [mark.a, mark.b] })),
     ...manual.rects.map((mark) => ({
+      mark,
       colour: mark.colour,
       at: [
         { contig: mark.a.contig, bp: mark.a.from },
@@ -411,6 +412,35 @@ function anchorsOf(manual: LaneMarks): Array<{ colour: string; at: ManualPoint[]
       ],
     })),
   ]
+}
+
+/**
+ * How a stack's long axis maps units to pixels: the map's own scale on the axis
+ * the stack runs along, so a lane and the map it is beside cannot place one
+ * coordinate in two places (§8.4). Every lane of an edge shares it; what a
+ * lane adds is where it stands across.
+ */
+function alongOf(
+  edge: LaneEdge,
+  geometry: LaneGeometry,
+): Pick<LaneFrame, 'toPixel' | 'toUnit' | 'domain' | 'alongFrom' | 'alongTo'> {
+  const { plot, data, colScale, rowScale } = geometry
+  if (laneIsHorizontal(edge)) {
+    return {
+      toPixel: (unit) => plot.x + colScale.toPixel(unit),
+      toUnit: (pixel) => colScale.toUnit(pixel - plot.x),
+      domain: colScale.domain,
+      alongFrom: data.x,
+      alongTo: data.x + data.width,
+    }
+  }
+  return {
+    toPixel: (unit) => plot.y + rowScale.toPixel(unit),
+    toUnit: (pixel) => rowScale.toUnit(pixel - plot.y),
+    domain: rowScale.domain,
+    alongFrom: data.y,
+    alongTo: data.y + data.height,
+  }
 }
 
 export class AnnotationLanes {
@@ -949,6 +979,42 @@ export class AnnotationLanes {
   }
 
   /**
+   * The drawn marks whose ink on this stack is at a point, nearest first —
+   * what a lane's right-click menu offers to hide (§8.1).
+   *
+   * Measured along the stack only, because that is how {@link paintEdge} puts
+   * them there: a line's hairline crosses every lane of an edge that measures
+   * it, and an arrowhead's or a box's anchors stand at their coordinates on the
+   * stack's outer edge. The place along it is the whole of where each one is,
+   * and the same rules decide which lines an edge carries — the ones it
+   * measures, or every one under a turned map.
+   */
+  marksAt(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry, reach: number): ManualMark[] {
+    const axis = this.axisFor(edge)
+    if (axis === null) return []
+    const frame = alongOf(edge, geometry)
+    const along = laneIsHorizontal(edge) ? x : y
+    const nearest = new Map<ManualMark, number>()
+    const consider = (mark: ManualMark, at: ManualPoint): void => {
+      for (const unit of axis.locusToUnits(at.contig, at.bp)) {
+        const distance = Math.abs(frame.toPixel(unit) - along)
+        if (distance <= reach && distance < (nearest.get(mark) ?? Number.POSITIVE_INFINITY)) {
+          nearest.set(mark, distance)
+        }
+      }
+    }
+    const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
+    const everyLine = this.turned && laneIsHorizontal(edge)
+    for (const line of this.manual.lines) {
+      if (everyLine || line.axis === 'both' || line.axis === measures) consider(line, line.at)
+    }
+    for (const { mark, at } of anchorsOf(this.manual)) {
+      for (const anchor of at) consider(mark, anchor)
+    }
+    return [...nearest.entries()].sort((one, two) => one[1] - two[1]).map(([mark]) => mark)
+  }
+
+  /**
    * The pair a track's axis was last drawn with, group included.
    *
    * The twin of the browser's own `shownLimits`, and what the limit editor seeds
@@ -1176,30 +1242,11 @@ export class AnnotationLanes {
   }
 
   private frameOf(edge: LaneEdge, slot: Slot, geometry: LaneGeometry): LaneFrame {
-    const { plot, data, colScale, rowScale } = geometry
-    const acrossFrom = this.nearEdgeOf(edge, slot)
-    const thickness = slot.thickness
-    if (laneIsHorizontal(edge)) {
-      return {
-        orientation: edge,
-        toPixel: (unit) => plot.x + colScale.toPixel(unit),
-        toUnit: (pixel) => colScale.toUnit(pixel - plot.x),
-        domain: colScale.domain,
-        alongFrom: data.x,
-        alongTo: data.x + data.width,
-        acrossFrom,
-        thickness,
-      }
-    }
     return {
       orientation: edge,
-      toPixel: (unit) => plot.y + rowScale.toPixel(unit),
-      toUnit: (pixel) => rowScale.toUnit(pixel - plot.y),
-      domain: rowScale.domain,
-      alongFrom: data.y,
-      alongTo: data.y + data.height,
-      acrossFrom,
-      thickness,
+      ...alongOf(edge, geometry),
+      acrossFrom: this.nearEdgeOf(edge, slot),
+      thickness: slot.thickness,
     }
   }
 

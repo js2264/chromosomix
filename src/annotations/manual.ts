@@ -42,12 +42,35 @@ export function orderedSpan(contig: string, one: number, two: number): ManualSpa
 /** Which guide lines a {@link ManualLine} draws. */
 export type LineAxis = 'vertical' | 'horizontal' | 'both'
 
+/**
+ * Why a mark is not drawn, where it is not (§8.1).
+ *
+ * A mark is drawn by default and carries nothing; a hidden one says which of
+ * two hands put it away, because the two are taken back differently:
+ *
+ * - `own` — its own eye: the card's row, the model's key, *Hide this line* on a
+ *   picture's menu. It stays hidden until that mark is shown again.
+ * - `all` — with the rest: the eye over the list, `A`, *Hide every mark*, or
+ *   another mark shown alone. *Show the marks* brings back exactly these.
+ *
+ * So hiding everything to look at the pixels under them and showing them again
+ * puts back the picture as it was — the one mark a reader had put away for a
+ * figure stays put away, where a single flag would have shown it with the rest.
+ *
+ * Kept on the mark, not beside the list, so it goes wherever the mark goes —
+ * the tab's memory, a saved session, a link, a reopen at another resolution —
+ * with no field of its own to forget to carry.
+ */
+export type MarkHidden = 'own' | 'all'
+
 export interface ManualLine {
   id: string
   kind: 'line'
   axis: LineAxis
   at: ManualPoint
   colour: string
+  /** Absent while it is drawn — see {@link MarkHidden}. */
+  hidden?: MarkHidden
 }
 
 /**
@@ -67,6 +90,8 @@ export interface ManualArrowhead {
   /** Where it sits on the column axis. */
   b: ManualPoint
   colour: string
+  /** Absent while it is drawn — see {@link MarkHidden}. */
+  hidden?: MarkHidden
 }
 
 /**
@@ -94,9 +119,23 @@ export interface ManualRect {
   /** Its extent across the column axis. */
   b: ManualSpan
   colour: string
+  /** Absent while it is drawn — see {@link MarkHidden}. */
+  hidden?: MarkHidden
 }
 
 export type ManualMark = ManualLine | ManualArrowhead | ManualRect
+
+/** Whether a mark is drawn: hidden by neither hand ({@link MarkHidden}). */
+export function isShown(mark: ManualMark): boolean {
+  return mark.hidden === undefined
+}
+
+/** A mark with no reason to be hidden, as a new one is: the field gone, not `undefined`. */
+function shownMark(mark: ManualMark): ManualMark {
+  if (mark.hidden === undefined) return mark
+  const { hidden: _hidden, ...rest } = mark
+  return rest as ManualMark
+}
 
 /** The palette hand-drawn marks cycle through: strong, and not the track set. */
 export const MANUAL_PALETTE = ['#111318', '#c0392b', '#1f5fa9', '#0f8a5f'] as const
@@ -130,20 +169,48 @@ export class ManualStore {
     }
   }
 
+  /**
+   * Every mark, drawn or not: what the card lists, the export writes and a
+   * reopen carries. A picture reads {@link shown}, or the three below.
+   */
   get marks(): readonly ManualMark[] {
     return this.items
   }
 
+  /** The marks a picture draws: every one a reader has not put away (§8.1). */
+  get shown(): ManualMark[] {
+    return this.items.filter(isShown)
+  }
+
+  /**
+   * The drawn lines, arrowheads and rectangles, kind by kind.
+   *
+   * **Drawn**, not every one held: these three are what the map, the lanes, a
+   * tracks cell and the 1D browser paint from, so a hidden mark leaves every
+   * one of those pictures by one rule, here, rather than by a filter each
+   * surface would have to remember — and a figure saved with a mark hidden is
+   * the figure with no such mark, down to the band the lanes keep for anchors.
+   */
   get lines(): ManualLine[] {
-    return this.items.filter((mark): mark is ManualLine => mark.kind === 'line')
+    return this.items.filter((mark): mark is ManualLine => mark.kind === 'line' && isShown(mark))
   }
 
   get arrowheads(): ManualArrowhead[] {
-    return this.items.filter((mark): mark is ManualArrowhead => mark.kind === 'arrowhead')
+    return this.items.filter((mark): mark is ManualArrowhead => mark.kind === 'arrowhead' && isShown(mark))
   }
 
   get rects(): ManualRect[] {
-    return this.items.filter((mark): mark is ManualRect => mark.kind === 'rect')
+    return this.items.filter((mark): mark is ManualRect => mark.kind === 'rect' && isShown(mark))
+  }
+
+  /** Whether any mark is drawn — what the eye over the list and `A` are lit by. */
+  get anyShown(): boolean {
+    return this.items.some(isShown)
+  }
+
+  /** How many are put away, by either hand. */
+  get hiddenCount(): number {
+    return this.items.length - this.shown.length
   }
 
   /** The colour the next mark gets: the palette, cycled by how many exist. */
@@ -212,7 +279,94 @@ export class ManualStore {
   reshape(next: ManualMark): void {
     const held = this.items.find((mark) => mark.id === next.id)
     if (held === undefined || held.kind !== next.kind) return
-    this.items = this.items.map((mark) => (mark.id === next.id ? { ...next, colour: held.colour } : mark))
+    // Its colour and whether it is drawn are the held mark's, not the editor's
+    // copy of them: where a mark is and whether it is shown are two questions,
+    // and a row typed over is answering the first.
+    const moved = shownMark({ ...next, colour: held.colour } as ManualMark)
+    const kept = held.hidden === undefined ? moved : ({ ...moved, hidden: held.hidden } as ManualMark)
+    this.items = this.items.map((mark) => (mark.id === next.id ? kept : mark))
+    this.changed()
+  }
+
+  // -------------------------------------------------------------------------
+  // Drawn or not (§8.1)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Show or hide one mark by its own hand — its row's eye, its row on the
+   * model's key, a picture's menu ({@link MarkHidden}'s `own`).
+   *
+   * Every other mark is left as it was, so a press on one row changes every
+   * picture by that one mark. Shown, a mark loses either reason: one put away
+   * with the rest and then shown from its own row is simply shown.
+   */
+  setShown(id: string, shown: boolean): void {
+    this.restate((mark) => {
+      if (mark.id !== id) return mark
+      if (shown) return shownMark(mark)
+      return mark.hidden === 'own' ? mark : ({ ...mark, hidden: 'own' } as ManualMark)
+    })
+  }
+
+  /** Put every drawn mark away together (`all`), leaving the ones already away as they are. */
+  hideAll(): void {
+    this.restate((mark) => (mark.hidden === undefined ? ({ ...mark, hidden: 'all' } as ManualMark) : mark))
+  }
+
+  /**
+   * Bring back the marks put away together — and only those, so a mark hidden
+   * from its own row before stays hidden. Where none was put away that way,
+   * every mark comes back: hidden one by one, *show the marks* is all of them.
+   */
+  showAll(): void {
+    const together = this.items.some((mark) => mark.hidden === 'all')
+    this.restate((mark) => (!together || mark.hidden === 'all' ? shownMark(mark) : mark))
+  }
+
+  /**
+   * The eye over the list and `A`: hide what is drawn, or bring back what that
+   * hid. Whether any mark is drawn afterwards.
+   *
+   * *Any* drawn mark makes it a hide, as the Groups card's eye does: a reader
+   * who has put one mark away by hand and presses the eye for all of them means
+   * the rest, not that one back.
+   */
+  toggleAll(): boolean {
+    if (this.anyShown) this.hideAll()
+    else this.showAll()
+    return this.anyShown
+  }
+
+  /**
+   * This mark alone: it is drawn and every other drawn mark is put away with
+   * the rest — so *show the marks* undoes it. Asked of the one mark already
+   * drawn alone, it is that undoing: the others come back, as a second
+   * double-click on a sequence's key brings every sequence back (§25.5).
+   */
+  showAlone(id: string): void {
+    const target = this.items.find((mark) => mark.id === id)
+    if (target === undefined) return
+    const alone = isShown(target) && this.items.every((mark) => mark.id === id || !isShown(mark))
+    if (alone) {
+      this.showAll()
+      return
+    }
+    this.restate((mark) => {
+      if (mark.id === id) return shownMark(mark)
+      return mark.hidden === undefined ? ({ ...mark, hidden: 'all' } as ManualMark) : mark
+    })
+  }
+
+  /** Write a change made mark by mark, and say so once — or not at all, where nothing moved. */
+  private restate(next: (mark: ManualMark) => ManualMark): void {
+    let moved = false
+    const items = this.items.map((mark) => {
+      const after = next(mark)
+      if (after !== mark) moved = true
+      return after
+    })
+    if (!moved) return
+    this.items = items
     this.changed()
   }
 
@@ -242,7 +396,7 @@ export class ManualStore {
   static stored(uri: string): ManualMark[] {
     const raw = recall<unknown>(uri, SCOPE)
     if (!Array.isArray(raw)) return []
-    return raw.filter(isMark)
+    return raw.filter(isMark).map(knownVisibility)
   }
 }
 
@@ -283,6 +437,15 @@ function isMark(value: unknown): value is ManualMark {
   }
   if (mark['kind'] === 'rect') return isSpan(mark['a']) && isSpan(mark['b'])
   return mark['kind'] === 'arrowhead' && isPoint(mark['a']) && isPoint(mark['b'])
+}
+
+/**
+ * A stored mark's reason to be hidden, where it is one this build knows — and
+ * drawn otherwise. A mark nobody can show again is worse than one shown.
+ */
+function knownVisibility(mark: ManualMark): ManualMark {
+  const hidden: unknown = mark.hidden
+  return hidden === 'own' || hidden === 'all' ? mark : shownMark(mark)
 }
 
 /**

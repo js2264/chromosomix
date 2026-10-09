@@ -1448,6 +1448,35 @@ export class Session {
   // -------------------------------------------------------------------------
 
   /**
+   * The reader's marks, off and back on (§8.1): `A`, the eye over the Manual
+   * annotations card's list from anywhere — on a map, in the 1D browser, over
+   * a model. One command in both lists, because the marks are one set drawn by
+   * every picture, and a key that hid them beside the map and did nothing in
+   * the browser would be saying they were two.
+   *
+   * A switch, titled by its noun and wearing its state (§26.4); greyed with no
+   * mark to hide, as a control with nothing to act on is (§26.3).
+   */
+  private marksCommand(): Command {
+    const manual = this.annotations?.manual
+    const any = manual !== undefined && manual.marks.length > 0
+    return {
+      id: 'marks-toggle',
+      group: 'View',
+      title: 'Manual annotations',
+      hint:
+        'Every line, arrowhead and rectangle drawn by hand, on every map, track and model. ' +
+        'Off hides them; on brings back the ones it hid.',
+      keys: KEYS.marks,
+      ...(any ? { state: manual.anyShown ? ('on' as const) : ('off' as const) } : {}),
+      enabled: any,
+      run: () => {
+        manual?.toggleAll()
+      },
+    }
+  }
+
+  /**
    * The actions that are about *this file*, for the shell to merge with its own.
    *
    * Rebuilt on demand so `enabled` reflects the state the user is actually in;
@@ -1455,7 +1484,10 @@ export class Session {
    */
   commands(): Command[] {
     // The cells' own, after the session's: a structure cell's keys (§25.3).
-    return [...this.ownCommands(), ...(this.deck?.cellCommands() ?? [])]
+    // The marks' switch after both, map or browser alike: an enlarged model
+    // binds `a` to the whole model, and the first binding matched is the one a
+    // key runs, so it keeps the letter there as it keeps `f`, `l` and `r`.
+    return [...this.ownCommands(), ...(this.deck?.cellCommands() ?? []), this.marksCommand()]
   }
 
   private ownCommands(): Command[] {

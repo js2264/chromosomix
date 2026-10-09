@@ -16,7 +16,7 @@
  * a bigWig agrees with the lane at every value.
  */
 
-import type { ManualMark } from '../annotations/manual'
+import { isShown, type ManualMark } from '../annotations/manual'
 import type { FeatureSet, Limits, PairSet, TrackSampleSet } from '../annotations/types'
 import { featureRange } from '../annotations/featureset'
 import { LocusAxis, type LocusSegment } from '../render/locus'
@@ -205,17 +205,13 @@ export function nameSource(
  * The reader's marks on the model: a line colours the beads at its place, a
  * rectangle the beads of its two spans. Later marks paint over earlier ones.
  */
-export function marksSource(
-  structure: Structure,
-  marks: readonly ManualMark[],
-  hidden: ReadonlySet<string> = new Set(),
-): ColourSource {
+export function marksSource(structure: Structure, marks: readonly ManualMark[]): ColourSource {
   const n = structure.set.length
   const colours = new Array<string | null>(n).fill(null)
   for (const mark of marks) {
-    // Taken off the colouring from its key (§25.5), and nothing else: its
-    // beads are drawn as unmarked, and the mark stays where it was made.
-    if (hidden.has(mark.id)) continue
+    // A mark the reader has put away colours nothing, here as on every map
+    // (§8.1): its beads are drawn as unmarked until it is shown again.
+    if (!isShown(mark)) continue
     if (mark.kind === 'line') {
       for (const bead of beadsAt(structure, mark.at.contig, mark.at.bp)) colours[bead] = mark.colour
     } else if (mark.kind === 'arrowhead') {

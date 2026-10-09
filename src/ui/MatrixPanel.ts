@@ -73,6 +73,8 @@ import {
   drawDiagonalFeatures,
   drawManualLines,
   drawManualRects,
+  MARK_REACH,
+  manualMarksAt,
   drawPairs,
   type OverlayAxes,
   type OverlayFrame,
@@ -227,6 +229,7 @@ import {
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
+import { marksMenu } from './marksMenu'
 import {
   endCarry,
   landingAt,
@@ -4503,6 +4506,21 @@ export class MatrixPanel {
    * Files first and marks second, because a mark is what the reader put there
    * and it must not end up underneath a circle from a loop table.
    */
+  /**
+   * The frame the overlays are painted against on screen, as it stands: what
+   * the heatmap hands {@link paintOverlays}, for a point under the pointer to
+   * be measured in the same pixels the marks were drawn in.
+   */
+  private overlayFrame(): OverlayFrame {
+    return {
+      plot: this.heatmap.plotRect,
+      data: this.heatmap.dataRect,
+      rowScale: this.heatmap.scaleY,
+      colScale: this.heatmap.scaleX,
+      dpr: this.heatmap.devicePixelRatio,
+    }
+  }
+
   private paintOverlays(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
     const context = this.options.annotations
     if (context === undefined) return
@@ -4737,6 +4755,16 @@ export class MatrixPanel {
           hint: `a loop at ${formatPosition(at.rows.contig, at.rows.bp)} × ${formatPosition(at.cols.contig, at.cols.bp)}`,
           run: () => add({ kind: 'arrowhead', a: at.rows, b: at.cols }),
         },
+        // The marks the hand is on, and all of them (§8.1): measured on the
+        // ink as it is drawn here, square or turned, so what the menu names is
+        // what the pointer is over.
+        ...marksMenu(
+          manual,
+          manualMarksAt(this.overlayFrame(), this.locusAxes, manual, {
+            x: event.clientX - box.left,
+            y: event.clientY - box.top,
+          }),
+        ),
         { label: 'This cell' },
         {
           label: 'Copy coordinates',
@@ -5522,7 +5550,17 @@ export class MatrixPanel {
       // The lane under the pointer, alone, as this stack draws it (§7.2).
       const copy = (): void =>
         copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.laneGeometry(), readPageBackground()))
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId, feature, copy)
+      openLaneMenu(
+        event.clientX,
+        event.clientY,
+        hit.entry,
+        store,
+        edge,
+        this.mapId,
+        feature,
+        copy,
+        marksMenu(this.options.annotations?.manual, lanes.marksAt(edge, x, y, this.laneGeometry(), MARK_REACH)),
+      )
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -10238,6 +10276,13 @@ export function openLaneMenu(
    * one lane by itself.
    */
   copy: (() => void) | null = null,
+  /**
+   * The *Marks* group (`ui/marksMenu.ts`): the reader's marks drawn across
+   * this lane, under the pointer and all of them. Last, after the track's own
+   * rows, since the menu was opened on a track — and there, rather than
+   * nowhere, since a mark's rule runs through every lane it crosses.
+   */
+  marks: readonly MenuItem[] = [],
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = []
@@ -10372,6 +10417,7 @@ export function openLaneMenu(
       run: () => store.update(entry.id, { visible: !entry.visible }),
     },
     { label: 'Remove', run: (): void => store.remove(entry.id) },
+    ...marks,
   )
   openMenu(x, y, items)
 }

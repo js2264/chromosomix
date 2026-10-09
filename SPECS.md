@@ -2711,6 +2711,46 @@ to the axes: the mark is anchored at the cell's centre, so a diagonal gap alone 
 not the corner, and at any zoom where a bin is a handful of pixels the tip landed on the last row and
 column of the cell it was pointing at.
 
+**A mark is put away without being removed.** Every row carries an **eye**, between its place and
+its ×, as a track's row does: pressed, the mark leaves every picture at once — the map, square or
+turned, the lanes beside it and the band their anchors take, a tracks cell, the 1D browser, and the
+model, whose bead, chord or colouring it was — and stays on the card, its eye shut, to be pressed
+back. A figure saved with a mark hidden is the figure with no such mark. Over the rows the list has
+a heading, `MARKS`, which says how many are hidden, and **one eye for all of them**, standing at the
+head of the column the rows' eyes stand in, so which eyes it speaks for is read off the card rather
+than off a label. `A` is that eye from the keyboard, and the palette lists it as a switch, *Manual
+annotations*, wearing its state (§26.4). It is lit while **any** mark is drawn, as a group's eye is
+on the Groups card, so a press then hides every mark, and with none drawn a press brings them back.
+
+**What the eye over the list brings back is what it hid.** A mark carries why it is hidden — **on
+its own**, from its row, its row on the model's key or a picture's menu; or **with the rest**, from
+that eye, `A` or *Hide every mark* — so a reader who put one mark away for a figure and then hid
+everything to look at the pixels under them gets the figure back, and not every mark; where nothing
+was hidden together, *show* is every mark. A **double-click** on a row's eye shows that mark alone,
+the others put away together, and a second brings back exactly those: the sequence key's gesture on
+the model (§25.5), and its row-by-row twin. A mark placed while the rest are hidden is drawn, since
+what a reader places is what they are looking at, and a mark imported is drawn. Kept on the mark,
+the reason travels wherever the mark does — the tab's memory, a saved workspace, a link, a reopen at
+another resolution — and one this build does not know reads as drawn rather than as a mark nobody
+can show. Hiding is about what is drawn, not about what the marks are: the BED and BEDPE the card
+writes carry every mark, and the button's tooltip says how many of them are hidden.
+
+**Every picture's right-click menu names the marks under the pointer.** The map's, a lane's beside
+it, the 1D browser's — and so a tracks cell's — and the model's carry a *Marks* group: *Hide this
+line*, *Hide this arrowhead* or *Hide this rectangle* for each drawn mark the pointer is on, nearest
+first and at most three, the hint naming it as its row does; then *Hide every mark*, or *Show the
+marks* once none is drawn, with `A` in the hint column where every menu on a reader's machine prints
+its key. On the map what the pointer is on is measured **on the ink**: each mark is drawn again,
+alone, into a context that keeps the path rather than painting it, so a rule within six pixels, an
+arrowhead's glyph and the cell it names, a box's outline — and its inside, after any mark whose line
+the pointer is on, the smaller of two boxes first — are found on a turned map exactly as on a square
+one, on the V, the triangle and the leaning lobes the turn draws them as. Beside the map it is a
+hairline or an anchor along the stack; in the browser the rule, the anchor or the wash; on the model
+a line at the bead's place, an arrowhead with an end there or a box over it. A hidden mark is under
+no pointer, so the rows only hide. Off the browser's lanes — on the ruler, or in the room under the
+last track the marks run down to — the group is the whole menu where there are marks, and the page's
+own menu where there are none.
+
 ### 8.2 bigWig
 
 bigWig via `@gmod/bbi` v10 (the JBrowse 2 parser, MIT). Local files take a `generic-filehandle2`
@@ -10785,7 +10825,9 @@ others come round to it, since any other reading depends on which cell is touche
 *in the frame of* (§25.5) under it, this is how two models are compared without either being drawn
 over the other — each turned into one frame, side by side, turning as one. The cell's actions are **commands** in the palette with keys —
 `f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
-**bound only while the model is enlarged**, and listed in the palette either way; the three modes
+**bound only while the model is enlarged**, and listed in the palette either way; there they come
+before the app's own, so `a` is the whole model in the dialog and the reader's marks everywhere else
+(§8.1); the three modes
 have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
 the new tab and the Aesthetics panel that each already had one of them (the panel has since moved to
 `3`, `e` to the O/E and the breaks to `m`). They are single keys and so are the app's own (`1` `2`
@@ -10968,12 +11010,15 @@ window's: a ghosted sequence stays ghosted whatever the maps look at.
 **And under *colour by manual annotations* the key lists the marks**, a row each, named as the
 Manual annotations card names them (`│ IV:1,200,000`, `▭ IV:1,100,000-1,150,000`), with the same
 three gestures: the swatch is **the mark's own colour**, written to the marks' store, so a colour
-picked on the model is the colour on the card and on every map; a **click** takes that mark off the
-model's colouring, and a **double-click shows it alone** (a second brings all back). What is hidden is
-held in the model's style by the mark's id and hides the colouring only — the mark stays drawn
-wherever it was put, since a key that removed it would be a second ×. With no marks yet the key
-says where they are made. This colouring used to have no key at all, so a model coloured by six
-marks was six colours nobody could name.
+picked on the model is the colour on the card and on every map; a **click** hides that mark, and a
+**double-click shows it alone** (a second brings back the ones it put away). Both are the mark's own
+eye on the card (§8.1), so the mark goes from the model and from every map, lane and track at once,
+and its row's eye on the card goes dark with it; a hidden mark stays listed on the key, faded, to be
+clicked back. A click used to take the mark off the model's colouring alone, held in the model's
+style, which was a second meaning of *hidden* for one mark — off the model and still on every map,
+with nothing on the card to say so; a style saved with that list reads without it. With no marks yet
+the key says where they are made. This colouring used to have no key at all, so a model coloured by
+six marks was six colours nobody could name.
 
 **A feature set's names are a colouring of their own.** Every interval set whose features carry a
 name — a BED4 or wider, a bigBed, a task's segments — is offered twice in the picker: *· features*,
