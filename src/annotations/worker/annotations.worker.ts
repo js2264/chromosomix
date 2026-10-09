@@ -256,19 +256,36 @@ async function residuesOf(
   if (held !== undefined && held.start <= from && held.start + held.bases.length >= to) {
     return held.bases.subarray(from - held.start, to - held.start)
   }
+  const bases = await readResidues(store, record, from, to, report)
+  store.held.set(record.name, { start: from, bases })
+  return bases
+}
+
+/**
+ * The residues `[from, to)` of one record, read and not kept.
+ *
+ * {@link residuesOf} without the slab, which is what a motif search over a
+ * ranged store reads through: it walks a genome a piece at a time, and a piece
+ * left in the slab would be one per sequence for the rest of the session —
+ * and would push out the window the lane is drawing from. `from` and `to` are
+ * already clamped to the record.
+ */
+async function readResidues(
+  store: RangedSequences,
+  record: FaiRecord | TwoBitRecord,
+  from: number,
+  to: number,
+  report?: Report,
+): Promise<Uint8Array> {
   const options = report === undefined ? {} : { onProgress: report }
-  let bases: Uint8Array
   if (isTwoBit(store)) {
     const packed = record as TwoBitRecord
     const range = dnaByteRange(packed, from, to)
     const raw = await store.handle.read(range.to - range.from, range.from, options)
-    bases = unpackDna(raw, range.firstBase, packed, from, to)
-  } else {
-    const range = byteRange(record as FaiRecord, from, to)
-    bases = residuesIn(await store.handle.read(range.to - range.from, range.from, options))
+    return unpackDna(raw, range.firstBase, packed, from, to)
   }
-  store.held.set(record.name, { start: from, bases })
-  return bases
+  const range = byteRange(record as FaiRecord, from, to)
+  return residuesIn(await store.handle.read(range.to - range.from, range.from, options))
 }
 
 /** Just the names, for the two helpers that ask about spelling and not size. */
@@ -841,18 +858,29 @@ async function runTask(
       const store = sequences.get(entry)
       if (store === undefined) return undefined
       if (isRanged(store)) {
-        // Not held, so not searchable here — and reading it whole for the
-        // search would be the download it was indexed to avoid (§8.8, §8.21).
+        // Not held, so not here whole — and reading it whole for a task would
+        // be the download it was indexed to avoid (§8.8, §8.21). What it can
+        // give is a window at a time, which is all a motif search needs: it
+        // reads a piece, scans it and lets it go, and a Stop is seen between
+        // two pieces, each read handing the thread back.
         return {
           contigs: store.contigs,
           bases: () => undefined,
+          read: async (contig, start, end) => {
+            const record = recordOf<FaiRecord | TwoBitRecord>(store, contig)
+            if (record === undefined) return undefined
+            const from = Math.max(0, Math.floor(start))
+            const to = Math.min(record.length, Math.ceil(end))
+            if (!(to > from)) return new Uint8Array(0)
+            return readResidues(store, record, from, to)
+          },
           refusal: isTwoBit(store)
-            ? 'This .2bit is read by range rather than held, so its sequences are not here to ' +
-              `search. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held whole and can be ` +
-              'searched (`twoBitToFa`).'
+            ? 'This .2bit is read by range rather than held, so its sequences are not here whole ' +
+              `to read. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
+              '(`twoBitToFa`).'
             : 'This FASTA is read by range from its index rather than held, so its sequences are ' +
-              `not here to search. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
-              'and can be searched.',
+              `not here whole to read. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held ` +
+              'whole.',
         }
       }
       return {
@@ -2128,7 +2156,28 @@ function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[])
         : isIndexed(store)
           ? ' · read by range from its index'
           : ''),
+    ...(isRanged(store) ? { byRange: { bases: store.total, bytesPerBase: bytesPerBase(store) } } : {}),
   }
+}
+
+/**
+ * What a ranged store spends on a residue, on average over the file.
+ *
+ * The figure a motif search's estimate multiplies by, because reading a
+ * reference by range to search it reads *every* base of what it searches
+ * (§18.8): a quarter of a byte in a `.2bit`, and a FASTA's line arithmetic —
+ * 61 bytes for 60 residues, under the usual wrapping — weighted by length,
+ * since one assembly can wrap its records differently.
+ */
+function bytesPerBase(store: RangedSequences): number {
+  if (isTwoBit(store)) return 0.25
+  let bytes = 0
+  let residues = 0
+  for (const record of store.records.values()) {
+    bytes += (record.length * record.lineWidth) / record.lineBases
+    residues += record.length
+  }
+  return residues > 0 ? bytes / residues : 1
 }
 
 /**

@@ -459,12 +459,27 @@ export interface SequenceReader {
   /** One sequence's residues, one ASCII byte each; `undefined` for a name it has not got. */
   bases(contig: string): Uint8Array | undefined
   /**
-   * Why the residues cannot be read here, when they cannot.
+   * The residues `[start, end)` of one sequence, read where they lie — present
+   * only on a reference that is read by range (§8.8, §8.21).
+   *
+   * The second way in, for the one task that can take a genome a piece at a
+   * time: a motif search reads a window, scans it and lets it go, so a
+   * reference too large to hold is still one it can search — at the price of
+   * reading every base it searches, which its estimate states. Nothing read
+   * here is kept, by the reader or by the lane's slab: a search that left
+   * each sequence's last piece behind would be holding a genome a piece per
+   * chromosome. `undefined` for a name the reference has not got, exactly as
+   * {@link bases}.
+   */
+  read?(contig: string, start: number, end: number): Promise<Uint8Array | undefined>
+  /**
+   * Why the residues cannot be read **whole** here, when they cannot.
    *
    * A FASTA read by range from its index (§8.8) is not held anywhere, and a
-   * search over it would be the download it was indexed to avoid — so the
-   * reader answers with a sentence instead of a sequence, and the runner
-   * reports it as a note rather than as a run that found nothing.
+   * task that needs a whole sequence in memory would be the download it was
+   * indexed to avoid — so the reader answers with a sentence instead of a
+   * sequence, and the runner reports it as a note rather than as a run that
+   * found nothing. A runner that can work through {@link read} reads past it.
    */
   readonly refusal?: string
 }

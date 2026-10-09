@@ -125,10 +125,9 @@ import { parseVcf, sniffVcf } from '../annotations/vcf'
 import { formatIntervals } from '../annotations/export'
 import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annotations/g3d'
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
-import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
+import { openReference, type Reference } from './reference'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
-import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
 import { contactsText, depthPhrase, parseContacts, type DrawnDepth } from '../contacts'
@@ -483,7 +482,7 @@ interface RunOptions {
    * deliberately never sends anywhere (`analysis/job.ts`, {@link SequenceReader}).
    * Here it does not have to: the store and the runner are on one stack.
    */
-  sequences: Map<string, SequenceStore>
+  sequences: Map<string, Reference>
   /**
    * Tracks named with `--tracks` or `--track`, by the string the reader typed.
    *
@@ -965,7 +964,7 @@ async function vectorsFor(
 
 /** A loaded reference as the GC track the session would have sampled it as. */
 function gcTrackFor(
-  held: Map<string, SequenceStore>,
+  held: Map<string, Reference>,
   entry: string,
 ): LoadedTrack | undefined {
   const found = storeFor(held, entry)
@@ -1214,30 +1213,28 @@ function trackJobOf(
  * `analysis/run/motif.ts` turns into a sentence rather than a guess.
  */
 function readerFor(
-  held: Map<string, SequenceStore>,
+  held: Map<string, Reference>,
   entry: string,
 ): SequenceReader | undefined {
   const store = storeFor(held, entry)?.[1]
   if (store === undefined) return undefined
+  // The worker's reader, step for step: `bases` by the §5.9 ladder, because a
+  // FASTA writes `chrI` where a `.hic` beside it writes `I` and a search under
+  // the map's spelling has to reach the reference's — and `read` beside it for
+  // a reference opened by range, which the motif search walks a piece at a
+  // time (`cli/reference.ts`).
   return {
     contigs: store.contigs,
-    // The worker's `basesOf`, step for step: exact first, then the §5.9 ladder,
-    // because a FASTA writes `chrI` where a `.hic` beside it writes `I` and a
-    // search under the map's spelling has to reach the reference's.
-    bases: (contig) => {
-      const direct = store.bases.get(contig)
-      if (direct !== undefined) return direct
-      const at = contigIndexOf(store.contigs, contig)
-      return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
-    },
+    bases: (contig) => store.bases(contig),
+    ...(store.read === undefined ? {} : { read: store.read.bind(store) }),
   }
 }
 
 /** The loaded reference an entry names, with the path it was filed under. */
 function storeFor(
-  held: Map<string, SequenceStore>,
+  held: Map<string, Reference>,
   entry: string,
-): [string, SequenceStore] | undefined {
+): [string, Reference] | undefined {
   const direct = held.get(entry)
   if (direct !== undefined) return [entry, direct]
   return (
@@ -1437,37 +1434,24 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
 }
 
 /**
- * References named with `--sequence`, parsed where they lie.
+ * References named with `--sequence`, opened where they lie.
  *
  * {@link SequenceReader} is declared optional on its context precisely because
  * the hosts that can answer it are *"the annotations worker"* and not *"a test
  * harness, a future venue, or a session that has never opened a FASTA"*
- * (`analysis/job.ts`). This is that future venue, and it is the cheap half of
- * it: `parseFasta` is the same parser the worker runs, over bytes read from the
- * disk the file is already on, with no thread to cross and therefore none of
- * the reason for the cap that keeps a genome inside that worker.
+ * (`analysis/job.ts`). This is that future venue: the same parser the worker
+ * runs, over bytes read from the disk the file is already on — and, for a
+ * FASTA with its `.fai` beside it or a `.2bit`, the same arithmetic the worker
+ * reads by range with, so a mammalian genome is a reference here as it is in
+ * the browser (`cli/reference.ts`).
  *
  * Keyed by the string the reader typed, because that string is what comes back
  * out of `params.sequence` — there is no entry store here to allocate an id
  * from, which is the same absence `bindInputs` argues about at length.
- *
- * Through `decodeAnnotationBytes` rather than `readFile` alone, so a `.fa.gz`
- * is a reference and not a parse error: every other path into this command
- * already accepts one, and a reference is the file most likely to be big enough
- * that somebody kept it compressed.
  */
-async function loadSequences(args: Args): Promise<Map<string, SequenceStore>> {
-  const held = new Map<string, SequenceStore>()
-  for (const path of all(args, 'sequence')) {
-    const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(path)))
-    if (!looksLikeFasta(bytes)) {
-      throw new Error(
-        `${basename(path)} is not a FASTA: a reference begins with a > line naming its first ` +
-          'sequence, and this one does not.',
-      )
-    }
-    held.set(path, parseFasta(bytes))
-  }
+async function loadSequences(args: Args): Promise<Map<string, Reference>> {
+  const held = new Map<string, Reference>()
+  for (const path of all(args, 'sequence')) held.set(path, await openReference(path))
   return held
 }
 
@@ -1554,7 +1538,7 @@ function withTrackLabels(inputs: TaskInputs, tracks: ReadonlyMap<string, LoadedT
  */
 function withSequenceLabels(
   inputs: TaskInputs,
-  sequences: ReadonlyMap<string, SequenceStore>,
+  sequences: ReadonlyMap<string, Reference>,
 ): TaskInputs {
   if (sequences.size === 0) return inputs
   const labels: Record<string, string> = { ...inputs.labels }
@@ -1619,7 +1603,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            cytoBand, barChart, junctions, bedpe, interact,
                            longrange
       --sequence <ref.fa>  a reference, for a task that reads residues (motif)
-                           or phases by GC content (compartments). Gzipped or not
+                           or phases by GC content (compartments). Gzipped or not;
+                           read by range where its .fai is beside it, or a .2bit
       --pairs <file>       a BEDPE, interact or longrange, for an off-diagonal
                            pileup. Note this is a *feature* table and not a
                            contact list — a .pairs file to bin is a positional
@@ -1719,7 +1704,7 @@ async function runCommand(args: Args): Promise<number> {
   // spends an hour being wrong two hundred times.
   let params: Params
   let inputs: TaskInputs
-  let sequences: Map<string, SequenceStore>
+  let sequences: Map<string, Reference>
   let tracks: Map<string, LoadedTrack>
   try {
     params = paramsFor(task, args)

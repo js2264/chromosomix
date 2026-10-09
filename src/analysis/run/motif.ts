@@ -37,7 +37,14 @@
  * it is the most informative thing a restriction map has to say.
  */
 
-import { compileMotif, findMotif, isMotifRefusal, type Motif } from '../../annotations/motif'
+import {
+  compileMotif,
+  findMotif,
+  isMotifRefusal,
+  motifOverlap,
+  type Motif,
+  type MotifHit,
+} from '../../annotations/motif'
 import {
   motifDensity,
   motifFeatures,
@@ -46,16 +53,39 @@ import {
   type MotifScanResult,
 } from '../../annotations/motifTrack'
 import type { Contig } from '../../genome/assembly'
+import { contigIndexOf } from '../../genome/naming'
 import {
   boolParam,
   idParam,
   numParam,
+  tickedSequences,
   type SequenceReader,
   type TrackJobContext,
   type TrackTaskRunner,
 } from '../job'
-import { MOTIF_SITE_LIMIT, motifPattern } from '../tasks/motif'
+import { MOTIF_PIECE, MOTIF_SITE_LIMIT, motifPattern } from '../tasks/motif'
 import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
+
+/** What {@link scanMotif} is asked: the search, and where it may report its progress. */
+export interface MotifScanOptions {
+  bothStrands: boolean
+  limit: number
+  mismatches?: number
+  /**
+   * The reference's sequences to search, in its own order; every one where
+   * absent (see {@link searchedContigs}).
+   */
+  contigs?: readonly Contig[]
+  /** Residues searched so far out of all there are to search, after each piece. */
+  progress?: (done: number, total: number, contig: string) => void
+  /** Called between two pieces, so a Stop is seen without waiting for the end. */
+  throwIfCancelled?: () => void
+  /**
+   * Residues per piece, {@link MOTIF_PIECE} where absent: a test's way to put
+   * seams where it can see them without carrying sixteen megabases to do it.
+   */
+  piece?: number
+}
 
 /**
  * Every occurrence of a motif in one loaded reference.
@@ -76,12 +106,19 @@ import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
  * order is the reference's own; `bases` then resolves the spelling, which is
  * what searches a FASTA renamed into the map's vocabulary under the names the
  * rest of the application uses (§5.9).
+ *
+ * **A reference read by range is searched through `read`**, in pieces of
+ * {@link MOTIF_PIECE} residues that overlap by `motifOverlap` — one base short
+ * of the motif, which is exactly enough for a site straddling a seam to lie
+ * whole in one piece, and never in both: a piece reading `[a, b + overlap)`
+ * holds every site starting in `[a, b)` and no other. So the answer is the
+ * one a held reference gives, site for site, and only the memory differs.
  */
-export function scanMotif(
+export async function scanMotif(
   reader: SequenceReader,
   motif: Motif,
-  options: { bothStrands: boolean; limit: number; mismatches?: number },
-): MotifScanResult {
+  options: MotifScanOptions,
+): Promise<MotifScanResult> {
   // The same ceiling {@link MOTIF_SITE_LIMIT} names and `runMotif` has already
   // applied, kept here as the last line of defence for a caller that reaches
   // this function directly. It must not be the *only* place it is applied: when
@@ -89,36 +126,68 @@ export function scanMotif(
   // and then reported the two million back, which is the one thing a truncation
   // note must never do.
   const cap = Math.max(1, Math.min(options.limit, MOTIF_SITE_LIMIT))
+  const budget = options.mismatches ?? 0
+  const contigs = options.contigs ?? reader.contigs
+  const overlap = motifOverlap(motif)
+  const read = reader.read?.bind(reader)
+  const step = Math.max(1, Math.floor(options.piece ?? MOTIF_PIECE))
   const hits: MotifHits[] = []
   let total = 0
   let truncated = false
+  const all = contigs.reduce((sum, contig) => sum + contig.length, 0)
+  let done = 0
 
-  for (const contig of reader.contigs) {
+  for (const contig of contigs) {
     if (total >= cap) {
       // Stopped with sequences left unread, which is a truncated answer even
       // though the last contig searched finished cleanly.
       truncated = true
       break
     }
-    const bases = reader.bases(contig.name)
-    if (bases === undefined) continue
+    const found: MotifHit[] = []
+    let full = false
     // One more than there is room for, and then the extra is dropped. Asking for
     // exactly the remaining budget cannot tell "the cap fell on the last site
     // there was" from "the cap cut the answer short" — `findMotif` stops on the
     // site that fills the budget and has no way to know whether another follows
     // without looking. Looking costs one more site's worth of scan and buys the
     // difference between a complete answer and a claim of truncation on one.
-    const room = cap - total
-    const budget = options.mismatches ?? 0
-    const found = findMotif(bases, motif, {
-      bothStrands: options.bothStrands,
-      limit: room + 1,
-      mismatches: budget,
-    })
-    const kept = Math.min(found.hits.length, room)
-    if (found.truncated || found.hits.length > room) truncated = true
-    if (kept === 0) continue
+    const search = (bases: Uint8Array, offset: number): void => {
+      const room = cap - total - found.length
+      const piece = findMotif(bases, motif, {
+        bothStrands: options.bothStrands,
+        limit: room + 1,
+        mismatches: budget,
+        offset,
+      })
+      for (let at = 0; at < Math.min(piece.hits.length, room); at++) found.push(piece.hits[at])
+      if (piece.truncated || piece.hits.length > room) full = true
+    }
 
+    if (read === undefined) {
+      const bases = reader.bases(contig.name)
+      if (bases === undefined) continue
+      search(bases, 0)
+      done += contig.length
+      options.progress?.(done, all, contig.name)
+    } else {
+      for (let from = 0; from < contig.length && !full; from += step) {
+        options.throwIfCancelled?.()
+        const to = Math.min(contig.length, from + step)
+        const bases = await read(contig.name, from, Math.min(contig.length, to + overlap))
+        if (bases === undefined) break
+        search(bases, from)
+        done += to - from
+        options.progress?.(done, all, contig.name)
+      }
+    }
+    if (full) truncated = true
+
+    const kept = found.length
+    if (kept === 0) {
+      if (full) break
+      continue
+    }
     const starts = new Int32Array(kept)
     const ends = new Int32Array(kept)
     const strands = new Int8Array(kept)
@@ -126,7 +195,7 @@ export function scanMotif(
     // keep the empty score column `motifFeatures` argues for.
     const wrong = budget > 0 ? new Uint8Array(kept) : undefined
     for (let at = 0; at < kept; at++) {
-      const hit = found.hits[at]
+      const hit = found[at]
       starts[at] = hit.start
       ends[at] = hit.end
       strands[at] = hit.strand
@@ -140,8 +209,37 @@ export function scanMotif(
       ...(wrong === undefined ? {} : { mismatches: wrong }),
     })
     total += kept
+    if (full) break
   }
   return { hits, total, truncated }
+}
+
+/**
+ * The reference's sequences a run searches, in the reference's own order.
+ *
+ * The `sequences` parameter names them in the session's vocabulary, and the
+ * reference is reached through `contigIndexOf`, so a FASTA that writes `chr1`
+ * is searched for a map that writes `1` (§5.9). **Every sequence of the session
+ * ticked is the whole reference**, sequences the map has not got included —
+ * which is what the search did before it had a list, and what *all of them*
+ * means to a reader who has not unticked a box; a list short of that is exactly
+ * the sequences on it. Unanswered (`null`, a job that never met a form) is the
+ * whole reference too.
+ */
+export function searchedContigs(
+  reader: SequenceReader,
+  ticked: readonly string[] | null,
+  session: readonly string[],
+): Contig[] {
+  if (ticked === null) return [...reader.contigs]
+  const chosen = new Set(ticked)
+  if (session.length > 0 && session.every((name) => chosen.has(name))) return [...reader.contigs]
+  const wanted = new Set<number>()
+  for (const name of ticked) {
+    const at = contigIndexOf(reader.contigs, name)
+    if (at >= 0) wanted.add(at)
+  }
+  return reader.contigs.filter((_, at) => wanted.has(at))
 }
 
 export const runMotif: TrackTaskRunner = async (job) => {
@@ -164,10 +262,31 @@ export const runMotif: TrackTaskRunner = async (job) => {
     job.note('The reference chosen is no longer loaded. Drop the FASTA again, or pick another.')
     return []
   }
-  if (reader.refusal !== undefined) {
+  // A reference read by range refuses to be read *whole*, and a search does not
+  // need it whole: it reads a piece at a time through `read`. The refusal is
+  // for a host that offers neither.
+  if (reader.read === undefined && reader.refusal !== undefined) {
     job.note(reader.refusal)
     return []
   }
+
+  // Unanswered is every sequence and an empty list is nothing (§18.2), as for
+  // every task with this list; the estimate refuses the second before it is
+  // sent, and this is what one that arrives anyway hears.
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to search.')
+    return []
+  }
+  const session = Object.entries(job.inputs.contigLengths ?? {})
+    .filter(([, length]) => length > 0)
+    .map(([name]) => name)
+  const searched = searchedContigs(reader, ticked, session)
+  if (searched.length === 0) {
+    job.note('None of the ticked sequences is in this reference, so there is nothing to search.')
+    return []
+  }
+  const whole = searched.length === reader.contigs.length
 
   const pattern = motifPattern(job.params)
   const compiled = compileMotif(pattern)
@@ -204,13 +323,37 @@ export const runMotif: TrackTaskRunner = async (job) => {
     Math.min(compiled.length - 1, Math.round(numParam(job.params, 'mismatches', 0))),
   )
 
-  job.progress(0, 1, `searching ${reader.contigs.length.toLocaleString()} sequences`)
-  const result = scanMotif(reader, compiled, { bothStrands, limit, mismatches })
+  job.progress(
+    0,
+    1,
+    searched.length === 1
+      ? `searching ${searched[0].name}`
+      : `searching ${searched.length.toLocaleString()} sequences`,
+  )
+  const result = await scanMotif(reader, compiled, {
+    bothStrands,
+    limit,
+    mismatches,
+    contigs: searched,
+    // Only a reference read by range reports as it goes: a held one is one
+    // pass over memory, done before a bar could be drawn.
+    ...(reader.read === undefined
+      ? {}
+      : {
+          progress: (done: number, total: number, contig: string) =>
+            job.progress(done, total, `searching ${contig}`),
+          throwIfCancelled: () => job.throwIfCancelled(),
+        }),
+  })
   job.progress(1, 1, 'done')
 
-  const label = motifLabel(pattern, bothStrands, mismatches)
+  const label = scopedLabel(motifLabel(pattern, bothStrands, mismatches), searched, whole)
   if (result.total === 0) {
-    job.note(`No match for ${label} anywhere in this reference.`)
+    job.note(
+      whole
+        ? `No match for ${label} anywhere in this reference.`
+        : `No match for ${label}.`,
+    )
     return []
   }
   const sites = `${result.total.toLocaleString()} site${result.total === 1 ? '' : 's'}`
@@ -227,7 +370,9 @@ export const runMotif: TrackTaskRunner = async (job) => {
           'more. ' +
           (limit < MOTIF_SITE_LIMIT
             ? 'Raise “Most sites”, or narrow the pattern.'
-            : 'That is the most one run reports, so narrow the pattern.')
+            : searched.length > 1
+              ? 'That is the most one run reports, so narrow the pattern or tick fewer sequences.'
+              : 'That is the most one run reports, so narrow the pattern.')
       : `${sites}, on ${result.hits.length.toLocaleString()} ` +
           `${result.hits.length === 1 ? 'sequence' : 'sequences'}.`,
   )
@@ -239,12 +384,45 @@ export const runMotif: TrackTaskRunner = async (job) => {
   // lands on the rows it made last time, which is what a reader refining a
   // pattern wants and what **Recompute** depends on. Letters and digits only by
   // construction: `motifPattern` dropped the whitespace and upper-cased it, and
-  // `compileMotif` accepted every character that is left.
-  const id = `motif-${pattern}${bothStrands ? '-both' : ''}${mismatches > 0 ? `-mm${mismatches}` : ''}`
+  // `compileMotif` accepted every character that is left. A search over some of
+  // the sequences carries them too, for the same reason: chr1 searched and then
+  // chr2 are two answers, and the second must not take the first one's rows.
+  const id =
+    `motif-${pattern}${bothStrands ? '-both' : ''}${mismatches > 0 ? `-mm${mismatches}` : ''}` +
+    (whole ? '' : scopeId(searched))
   const outputs: TaskOutput[] = [sitesOutput(result, pattern, label, id)]
   const density = densityOutput(job, result, label, id)
   if (density !== null) outputs.push(density)
   return outputs
+}
+
+/**
+ * A run's label, with the sequences it searched where they were not all of them.
+ *
+ * Named outright up to three — *GATC (both strands) on chr1* is the row a
+ * reader searching chromosome by chromosome needs to tell from the next one —
+ * and counted past that, where a list would be longer than the lane's name.
+ */
+function scopedLabel(label: string, searched: readonly Contig[], whole: boolean): string {
+  if (whole) return label
+  return searched.length <= 3
+    ? `${label} on ${searched.map((contig) => contig.name).join(', ')}`
+    : `${label} on ${searched.length.toLocaleString()} sequences`
+}
+
+/**
+ * The sequences a narrowed search covered, as a suffix of its output id.
+ *
+ * Letters and digits from each name up to three, as the label names them, and
+ * past that the count and a checksum of the list — two different sets of five
+ * sequences are two answers, and the count alone would file them as one.
+ */
+function scopeId(searched: readonly Contig[]): string {
+  const names = searched.map((contig) => contig.name)
+  if (names.length <= 3) return `-on-${names.map((name) => name.replace(/[^A-Za-z0-9]/g, '')).join('-')}`
+  let sum = 5381
+  for (const char of names.join('\n')) sum = ((sum * 33) ^ char.charCodeAt(0)) >>> 0
+  return `-on${names.length}-${sum.toString(36)}`
 }
 
 /**
