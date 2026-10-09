@@ -33,7 +33,7 @@ import { plotTheme, type PlotFigure } from '../ui/analysisPlots'
 import { subscribeTextScale } from '../ui/textScale'
 import { paintSvgString } from './svgPaint'
 import { attachMarquee, windowOf, type Marquee, type MarqueeAxes, type MarqueeBox } from './marquee'
-import { optionOf, type ChartOption, type FigureTheme } from './option'
+import { optionOf, paperOption, type ChartOption, type FigureTheme } from './option'
 import { matrixOptionOf } from './matrixOption'
 import type { MatrixFigureSpec, XyFigureSpec } from './spec'
 import type { FigureStyle } from './style'
@@ -379,7 +379,7 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
         height: box.height,
       })
       try {
-        off.setOption(build(box), true)
+        off.setOption(paperOption(build(box)), true)
         paintSvgString(off.renderToSVGString(), ctx, box)
       } finally {
         off.dispose()

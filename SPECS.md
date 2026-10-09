@@ -8740,6 +8740,12 @@ these charts draw is a raster; and `<style>` is ignored, because what the render
 bar was found to be one: every exported pileup's key was a single orange rectangle beside a picture
 in a hundred colours.
 
+**What an export leaves out is the hidden series' names.** On screen a hidden series stays in the
+legend, greyed, because that entry is the control that brings it back; on paper there is nothing to
+click, and a grey name beside no line is a series the figure says it has and does not show. So the
+offscreen option drops them from the legend (`paperOption`) and draws everything else as the screen
+does.
+
 **The library arrives in a chunk of its own**, fetched when the first figure is built, exactly as
 three.js is for the 3D cell (§25.3) — a reader who never runs an analysis never downloads a chart
 library. Only the charts these figures draw are registered, named statically in one module so the

@@ -188,6 +188,24 @@ function zoomWindow(domain: [number, number] | null): ChartOption {
     : { startValue: domain[0], endValue: domain[1] }
 }
 
+/**
+ * The option an export draws: the screen's, less the hidden series' names in
+ * its legend.
+ *
+ * On screen a hidden series stays in the legend, greyed, because that entry is
+ * the control that brings it back. On paper there is nothing to click, and a
+ * grey name beside no line is a series the figure says it has and does not show.
+ */
+export function paperOption(option: ChartOption): ChartOption {
+  const legend = option['legend'] as { data?: unknown; selected?: Record<string, boolean> } | undefined
+  if (legend === undefined || !Array.isArray(legend.data) || legend.selected === undefined) return option
+  const selected = legend.selected
+  return {
+    ...option,
+    legend: { ...legend, data: legend.data.filter((name) => selected[String(name)] !== false) },
+  }
+}
+
 /** How much room a legend down one side or along an edge takes, in pixels. */
 const LEGEND_WIDTH = 132
 const LEGEND_HEIGHT = 28

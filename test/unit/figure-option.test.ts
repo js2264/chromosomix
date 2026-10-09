@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { markOf, optionOf, seriesColour, type FigureTheme } from '@/figures/option'
+import { markOf, optionOf, paperOption, seriesColour, type FigureTheme } from '@/figures/option'
 import { boxSummary, density, histogram, quantile, sorted } from '@/figures/stats'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle, type FigureStyle } from '@/figures/style'
@@ -90,6 +90,22 @@ describe('optionOf', () => {
     const legend = option['legend'] as { selected: Record<string, boolean> }
     expect(legend.selected).toEqual({ a: true, b: false })
     expect(seriesOf(option).map((entry) => entry['name'])).toContain('b')
+  })
+
+  it('leaves a hidden series out of the legend an export draws', () => {
+    const { option } = build(curve(), (style) => {
+      style.hidden = ['b']
+    })
+    // On screen the greyed name is the control that brings the series back.
+    expect((option['legend'] as { data: string[] }).data).toEqual(['a', 'b'])
+    expect((paperOption(option)['legend'] as { data: string[] }).data).toEqual(['a'])
+    // The rest of the option is the screen's.
+    expect(paperOption(option)['series']).toBe(option['series'])
+    // No legend, nothing to leave out.
+    const bare = build(curve(), (style) => {
+      style.legend = 'none'
+    }).option
+    expect(paperOption(bare)).toBe(bare)
   })
 
   it('drops a non-positive value on a log axis rather than clamping it', () => {

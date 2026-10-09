@@ -2050,6 +2050,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   reaches past. And an end of a window is labelled only when it is a round number, so a box drawn
   by hand no longer prints its edge, `8.00215`, over the tick beside it.
 
+- **A figure's PNG and PDF leave its hidden series out of the legend (§18.13).** On screen a hidden
+  series keeps its greyed entry, the control that brings it back; an export carried that grey name
+  beside no line.
+
 - **The circularity check reads each sequence where the file puts it (§8.15).** It placed each
   sequence by `ceil(length / bin size)`, and a level that floors its sequences' last part-bins has
   one bin fewer for every sequence that does not end on a bin, so each sequence after the first was
