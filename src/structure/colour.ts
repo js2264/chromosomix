@@ -45,6 +45,28 @@ import type { Structure } from './scene'
 export const STRUCTURE_RAMP = 'viridis'
 
 /**
+ * The colour scale that runs from white to **the track's own colour** (§25.5),
+ * as `StructureStyle.colormap` names it: a model coloured by H3K27ac in the
+ * orange its lane is drawn in. Not a colormap of `render/colormaps.ts`, since
+ * its top end is the row's and not the table's; a colouring with no colour of
+ * its own (`ColourSource.tint`) draws it on `STRUCTURE_RAMP`.
+ */
+export const TRACK_TINT_RAMP = 'track'
+
+/**
+ * A ramp's colour at `t` in `0..1`: a colormap's, or white to `tint` under
+ * {@link TRACK_TINT_RAMP}. One function for the beads and the key, so the two
+ * cannot be drawn on two ramps.
+ */
+export function rampCss(colormap: string, t: number, tint?: string): string {
+  if (colormap !== TRACK_TINT_RAMP) return colormapCss(colormap, t)
+  const [r, g, b] = parseColour(tint ?? '#000000')
+  const u = Math.max(0, Math.min(1, t))
+  const mix = (end: number): number => Math.round(255 + (end * 255 - 255) * u)
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
+}
+
+/**
  * A value per bead from somewhere outside the row: a track sampled over each
  * bead's interval, a feature set's colour where a bead overlaps one, the
  * distance to the pinned bead. `NaN` is *no value* and draws as the ghost
@@ -60,6 +82,8 @@ export interface ColourSource {
   range?: { min: number; max: number }
   /** The ramp, where `values` are given. */
   colormap?: string
+  /** The row's own colour, the top of {@link TRACK_TINT_RAMP} — a track's lane colour. */
+  tint?: string
   /**
    * The categories `colours` are drawn from, where they are categories — a
    * feature set's names (§25.5). Without them a colour per bead has no key.
@@ -113,7 +137,7 @@ export interface BeadColours {
 /** The legend for a colouring, in the shapes the corner key can draw. */
 export type StructureKey =
   | { kind: 'levels'; title: string; levels: StructureLevel[] }
-  | { kind: 'ramp'; title: string; colormap: string; min: number; max: number }
+  | { kind: 'ramp'; title: string; colormap: string; min: number; max: number; tint?: string }
   | { kind: 'none'; title: string }
 
 /** What a bead with nothing to say is drawn in — the grey a `not set` feature takes. */
@@ -220,7 +244,7 @@ function byHaplotype(structure: Structure): BeadColours {
 /** A ramp from each chain's first bead to its last. */
 function byPosition(structure: Structure, ramp: string | null = null): BeadColours {
   const set = structure.set
-  const colormap = ramp ?? STRUCTURE_RAMP
+  const colormap = ramp === null || ramp === TRACK_TINT_RAMP ? STRUCTURE_RAMP : ramp
   const css = new Array<string>(set.length).fill(UNSET_COLOUR)
   for (const chain of structure.chains) {
     const n = chain.beads.length
@@ -265,19 +289,23 @@ function bySource(structure: Structure, source: ColourSource, ramp: string | nul
   const values = source.values ?? new Float32Array(n).fill(Number.NaN)
   // The reader's choice first, then the source's own — a track's lane scale,
   // the map's colormap for contacts — and `STRUCTURE_RAMP` for the rest.
-  const colormap = ramp ?? source.colormap ?? STRUCTURE_RAMP
+  // White to the row's own colour asks for one; a colouring with none (a
+  // distance, the contacts) stays on its own ramp rather than on black.
+  const asked = ramp === TRACK_TINT_RAMP && source.tint === undefined ? null : ramp
+  const colormap = asked ?? source.colormap ?? STRUCTURE_RAMP
+  const tint = colormap === TRACK_TINT_RAMP ? source.tint : undefined
   const range = source.range ?? robustRangeOf(values)
   const span = range.max - range.min
   for (let i = 0; i < n; i++) {
     const value = values[i]
     if (!Number.isFinite(value)) continue
     const t = span > 0 ? (value - range.min) / span : 0.5
-    css[i] = colormapCss(colormap, Math.max(0, Math.min(1, t)))
+    css[i] = rampCss(colormap, Math.max(0, Math.min(1, t)), tint)
   }
   return {
     rgb: rgbOf(css),
     css,
-    key: { kind: 'ramp', title: source.label, colormap, min: range.min, max: range.max },
+    key: { kind: 'ramp', title: source.label, colormap, min: range.min, max: range.max, ...(tint === undefined ? {} : { tint }) },
   }
 }
 

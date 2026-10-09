@@ -10644,6 +10644,55 @@ span.deck-name {
   font-variant-numeric: tabular-nums;
 }
 
+/* A track's scale on the key (§25.5): each end a number to click and type
+   into, as a lane's own range is, and the arrow back to autoscale. Buttons in
+   the key's small print, ringed only under the pointer. */
+.structure-key-limits {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 3px;
+}
+
+.structure-key-limit {
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.structure-key-limit:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.structure-key-auto {
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.input.structure-key-edit {
+  min-width: 3ch;
+  padding: 0 2px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  pointer-events: auto;
+}
+
+.input.structure-key-edit.is-bad {
+  border-color: var(--danger);
+  outline-color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .structure-key-level {
   display: flex;
   flex-wrap: wrap;

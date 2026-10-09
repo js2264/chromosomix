@@ -14,7 +14,7 @@ import { parseG3d } from '@/annotations/g3d'
 import { defaultStructureStyle } from '@/annotations/types'
 import { CATEGORY_PALETTE } from '@/render/meta'
 import { featureColouring } from '@/render/featureInk'
-import { hexOf, lightness, parseColour, rangeOf, resolveColours, rgbOf } from '@/structure/colour'
+import { hexOf, lightness, parseColour, rampCss, rangeOf, resolveColours, rgbOf, TRACK_TINT_RAMP } from '@/structure/colour'
 import { buildStructure } from '@/structure/scene'
 
 function rows(lines: string[]): string {
@@ -179,5 +179,40 @@ describe('the colour scale', () => {
     const asked = resolveColours(s, { ...defaultStructureStyle(), colormap: 'magma' })
     expect(asked.key.kind).toBe('levels')
     expect(asked.css).toEqual(plain.css)
+  })
+})
+
+describe('white to the track’s colour (§25.5)', () => {
+  it('runs from white at the bottom to the tint at the top', () => {
+    expect(parseColour(rampCss(TRACK_TINT_RAMP, 0, '#d95f02'))).toEqual([1, 1, 1])
+    expect(rampCss(TRACK_TINT_RAMP, 1, '#d95f02')).toBe('rgb(217, 95, 2)')
+    expect(rampCss(TRACK_TINT_RAMP, 2, '#d95f02')).toBe('rgb(217, 95, 2)')
+  })
+
+  it('draws a track’s beads and its key on the lane’s colour', () => {
+    const structure = scene()
+    const n = structure.set.length
+    const values = Float32Array.from({ length: n }, (_, i) => i)
+    const style = { ...defaultStructureStyle(), colourBy: 'track:x', colormap: TRACK_TINT_RAMP }
+    const colours = resolveColours(structure, style, {
+      label: 'H3K27ac',
+      values,
+      range: { min: 0, max: n - 1 },
+      tint: '#d95f02',
+    })
+    expect(colours.css[0]).toBe('rgb(255, 255, 255)')
+    expect(colours.css[n - 1]).toBe('rgb(217, 95, 2)')
+    expect(colours.key).toMatchObject({ kind: 'ramp', colormap: TRACK_TINT_RAMP, tint: '#d95f02', min: 0, max: n - 1 })
+  })
+
+  it('leaves a colouring with no colour of its own on its own ramp', () => {
+    const structure = scene()
+    const style = { ...defaultStructureStyle(), colourBy: 'distance', colormap: TRACK_TINT_RAMP }
+    const colours = resolveColours(structure, style, {
+      label: 'distance',
+      values: new Float32Array(structure.set.length).fill(1),
+      colormap: 'magma',
+    })
+    expect(colours.key).toMatchObject({ kind: 'ramp', colormap: 'magma' })
   })
 })
