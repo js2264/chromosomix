@@ -1,6 +1,13 @@
 {
-  "latest": "b9eda86",
+  "latest": "2beda15",
   "versions": [
+    {
+      "commit": "2beda15",
+      "version": "0.13.0",
+      "date": "2026-10-09T22:17:03+02:00",
+      "subject": "Colour a model by a track from white to the track's colour, and type the key's ends (§25.5) (#101)",
+      "tag": ""
+    },
     {
       "commit": "b9eda86",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-09-27T11:07:00+02:00",
       "subject": "Add peak calling task with yapc and IDR implementations (#75)",
-      "tag": ""
-    },
-    {
-      "commit": "de7985a",
-      "version": "0.13.0",
-      "date": "2026-09-26T22:40:50+02:00",
-      "subject": "Inter-arm alignment's table gives the enrichment, as a fold (#76)",
       "tag": ""
     },
     {
