@@ -221,6 +221,13 @@
       "date": "2026-10-08T09:33:00Z"
     },
     {
+      "number": 100,
+      "commit": "42715b9",
+      "title": "Draw a called set as one row, a 1D track or on the map as its display says; boundaries as points or short diagonal markers, domains as corners (§8.1, §18.5, §18.7, §18.8)",
+      "branch": "js/dazzling-bardeen-dcv7i7",
+      "date": "2026-10-09T18:53:52Z"
+    },
+    {
       "number": 97,
       "commit": "981a083",
       "title": "Add RSG lab demo store and Figure 1 manuscript materials",
