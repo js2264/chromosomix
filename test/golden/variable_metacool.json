@@ -55,7 +55,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{}"
+   "value": "{\"qc\": {\"distance_threshold\": 10000, \"inter_contig\": 39320, \"inter_contig_intra_genome\": 30179, \"inter_contig_intra_genome_fraction\": 0.60358, \"inter_genome\": 9141, \"inter_genome_fraction\": 0.18282, \"intra_contig\": 10680, \"intra_contig_long\": 1338, \"intra_contig_long_fraction\": 0.02676, \"intra_contig_short\": 9342, \"intra_contig_short_fraction\": 0.18684, \"intra_genome\": 40859, \"intra_genome_fraction\": 0.81718, \"n_contacts\": 50000, \"n_pairs_discarded\": 0, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.7864, \"version\": 1}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -141,6 +141,31 @@
    "name": {
     "dtype": "|S12",
     "kind": "S",
+    "length": 11
+   },
+   "qc_inter_contig_intra_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_inter_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_long": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_short": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_genome_ratio": {
+    "dtype": "<f8",
+    "kind": "f",
     "length": 11
    }
   },

@@ -56,7 +56,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{\"assembly\": {\"assembler\": \"MEGAHIT v1.2.9\", \"assembly_date\": \"2024-06-01\", \"assembly_stats\": {\"n50\": \"50000\", \"n_contigs\": \"120\", \"total_length\": \"3500000\"}, \"description\": \"metagenome assembly for the gut microbiome sample at time point 0\", \"name\": \"gut_microbiome_T0_assembly.fa\"}, \"sample\": {\"description\": \"This is a gut microbiome sample at time point 0\", \"enzyme\": \"HpaII\", \"enzyme_site\": \"C^CGG\", \"name\": \"gut_microbiome_T0\", \"organism\": \"human gut metagenome\"}, \"sequencing\": {\"n_read_pairs\": \"245000000\", \"n_valid_pairs\": \"180000000\", \"platform\": \"Illumina NovaSeq 6000\", \"read_length\": \"150\"}}"
+   "value": "{\"assembly\": {\"assembler\": \"MEGAHIT v1.2.9\", \"assembly_date\": \"2024-06-01\", \"assembly_stats\": {\"n50\": \"50000\", \"n_contigs\": \"120\", \"total_length\": \"3500000\"}, \"description\": \"metagenome assembly for the gut microbiome sample at time point 0\", \"name\": \"gut_microbiome_T0_assembly.fa\"}, \"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 39320, \"inter_contig_intra_genome\": 30179, \"inter_contig_intra_genome_fraction\": 0.60358, \"inter_genome\": 9141, \"inter_genome_fraction\": 0.18282, \"intra_contig\": 10680, \"intra_contig_long\": 1338, \"intra_contig_long_fraction\": 0.02676, \"intra_contig_short\": 9342, \"intra_contig_short_fraction\": 0.18684, \"intra_genome\": 40859, \"intra_genome_fraction\": 0.81718, \"n_contacts\": 50000, \"n_pairs_discarded\": 0, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.7864, \"version\": 1}, \"sample\": {\"description\": \"This is a gut microbiome sample at time point 0\", \"enzyme\": \"HpaII\", \"enzyme_site\": \"C^CGG\", \"name\": \"gut_microbiome_T0\", \"organism\": \"human gut metagenome\"}, \"sequencing\": {\"n_read_pairs\": \"245000000\", \"n_valid_pairs\": \"180000000\", \"platform\": \"Illumina NovaSeq 6000\", \"read_length\": \"150\"}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -710,6 +710,31 @@
     "kind": "S",
     "length": 11
    },
+   "qc_inter_contig_intra_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_inter_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_long": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_short": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_genome_ratio": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
+   },
    "quality": {
     "dtype": "|S6",
     "kind": "S",
@@ -815,7 +840,12 @@
    "quality",
    "taxonomy",
    "checkm_quality",
-   "n_markers"
+   "n_markers",
+   "qc_intra_contig_short",
+   "qc_intra_contig_long",
+   "qc_inter_contig_intra_genome",
+   "qc_inter_genome",
+   "qc_intra_genome_ratio"
   ],
   "dtypes": {
    "checkm_quality": "<f8",
@@ -827,6 +857,11 @@
    "n_markers": "<f8",
    "name": "|S12",
    "phylum": "|S14",
+   "qc_inter_contig_intra_genome": "<i8",
+   "qc_inter_genome": "<i8",
+   "qc_intra_contig_long": "<i8",
+   "qc_intra_contig_short": "<i8",
+   "qc_intra_genome_ratio": "<f8",
    "quality": "|S6",
    "taxonomy": "|S77"
   },
@@ -842,6 +877,11 @@
     "n_markers": null,
     "name": "__unbinned__",
     "phylum": "",
+    "qc_inter_contig_intra_genome": 3097,
+    "qc_inter_genome": 1991,
+    "qc_intra_contig_long": 1,
+    "qc_intra_contig_short": 752,
+    "qc_intra_genome_ratio": 0.6591337099811676,
     "quality": "",
     "taxonomy": ""
    },
@@ -855,6 +895,11 @@
     "n_markers": 46.0,
     "name": "MAG_01",
     "phylum": "Bacteroidetes",
+    "qc_inter_contig_intra_genome": 2353,
+    "qc_inter_genome": 1269,
+    "qc_intra_contig_long": 293,
+    "qc_intra_contig_short": 911,
+    "qc_intra_genome_ratio": 0.7370493162038956,
     "quality": "high",
     "taxonomy": "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales"
    },
@@ -868,6 +913,11 @@
     "n_markers": 40.0,
     "name": "MAG_02",
     "phylum": "Firmicutes",
+    "qc_inter_contig_intra_genome": 2718,
+    "qc_inter_genome": 1682,
+    "qc_intra_contig_long": 292,
+    "qc_intra_contig_short": 632,
+    "qc_intra_genome_ratio": 0.6840721262208865,
     "quality": "low",
     "taxonomy": "d__Bacteria;p__Firmicutes;c__Clostridia;o__Eubacteriales;f__Lachnospiraceae"
    },
@@ -881,6 +931,11 @@
     "n_markers": 43.0,
     "name": "MAG_03",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2990,
+    "qc_inter_genome": 2014,
+    "qc_intra_contig_long": 115,
+    "qc_intra_contig_short": 633,
+    "qc_intra_genome_ratio": 0.6498609179415855,
     "quality": "low",
     "taxonomy": "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Bacteroidales;f__Bacteroidaceae"
    },
@@ -894,6 +949,11 @@
     "n_markers": 49.0,
     "name": "MAG_04",
     "phylum": "Firmicutes",
+    "qc_inter_contig_intra_genome": 2501,
+    "qc_inter_genome": 1314,
+    "qc_intra_contig_long": 87,
+    "qc_intra_contig_short": 1178,
+    "qc_intra_genome_ratio": 0.7413385826771653,
     "quality": "medium",
     "taxonomy": "d__Bacteria;p__Firmicutes;c__Clostridia;o__Eubacteriales;f__Lachnospiraceae"
    },
@@ -907,6 +967,11 @@
     "n_markers": 67.0,
     "name": "MAG_05",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2927,
+    "qc_inter_genome": 1720,
+    "qc_intra_contig_long": 61,
+    "qc_intra_contig_short": 859,
+    "qc_intra_genome_ratio": 0.6910364648823424,
     "quality": "high",
     "taxonomy": "d__Bacteria;p__Firmicutes;c__Clostridia;o__Eubacteriales;f__Lachnospiraceae"
    },
@@ -920,6 +985,11 @@
     "n_markers": 52.0,
     "name": "MAG_06",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2964,
+    "qc_inter_genome": 1973,
+    "qc_intra_contig_long": 115,
+    "qc_intra_contig_short": 648,
+    "qc_intra_genome_ratio": 0.653859649122807,
     "quality": "high",
     "taxonomy": "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Bacteroidales;f__Bacteroidaceae"
    },
@@ -933,6 +1003,11 @@
     "n_markers": 58.0,
     "name": "MAG_07",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2420,
+    "qc_inter_genome": 1330,
+    "qc_intra_contig_long": 56,
+    "qc_intra_contig_short": 1113,
+    "qc_intra_genome_ratio": 0.7296198414311852,
     "quality": "high",
     "taxonomy": "d__Bacteria;p__Firmicutes;c__Clostridia;o__Eubacteriales;f__Lachnospiraceae"
    },
@@ -946,6 +1021,11 @@
     "n_markers": 61.0,
     "name": "MAG_08",
     "phylum": "Firmicutes",
+    "qc_inter_contig_intra_genome": 2800,
+    "qc_inter_genome": 1596,
+    "qc_intra_contig_long": 61,
+    "qc_intra_contig_short": 843,
+    "qc_intra_genome_ratio": 0.6988679245283019,
     "quality": "high",
     "taxonomy": "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Bacteroidales;f__Bacteroidaceae"
    },
@@ -959,6 +1039,11 @@
     "n_markers": 64.0,
     "name": "MAG_09",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2992,
+    "qc_inter_genome": 2092,
+    "qc_intra_contig_long": 178,
+    "qc_intra_contig_short": 595,
+    "qc_intra_genome_ratio": 0.6428205565989414,
     "quality": "low",
     "taxonomy": "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales"
    },
@@ -972,6 +1057,11 @@
     "n_markers": 55.0,
     "name": "MAG_10",
     "phylum": "Proteobacteria",
+    "qc_inter_contig_intra_genome": 2417,
+    "qc_inter_genome": 1301,
+    "qc_intra_contig_long": 79,
+    "qc_intra_contig_short": 1178,
+    "qc_intra_genome_ratio": 0.7384924623115577,
     "quality": "medium",
     "taxonomy": "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales"
    }
@@ -13715,6 +13805,28 @@
    },
    "description": "metagenome assembly for the gut microbiome sample at time point 0",
    "name": "gut_microbiome_T0_assembly.fa"
+  },
+  "qc": {
+   "binsize": 1000,
+   "distance_threshold": 10000,
+   "inter_contig": 39320,
+   "inter_contig_intra_genome": 30179,
+   "inter_contig_intra_genome_fraction": 0.60358,
+   "inter_genome": 9141,
+   "inter_genome_fraction": 0.18282,
+   "intra_contig": 10680,
+   "intra_contig_long": 1338,
+   "intra_contig_long_fraction": 0.02676,
+   "intra_contig_short": 9342,
+   "intra_contig_short_fraction": 0.18684,
+   "intra_genome": 40859,
+   "intra_genome_fraction": 0.81718,
+   "n_contacts": 50000,
+   "n_pairs_discarded": 0,
+   "n_pairs_read": 50000,
+   "source": "pairs",
+   "trans_contig_ratio": 0.7864,
+   "version": 1
   },
   "sample": {
    "description": "This is a gut microbiome sample at time point 0",

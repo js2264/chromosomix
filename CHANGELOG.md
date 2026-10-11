@@ -2187,6 +2187,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The golden job compares the reader with Python on every run, with or without metacooler.**
+  It installed `metacooler` from PyPI, where there is no such package, and its fixture script
+  defaulted to one cluster path, so it built no fixture on any run and reported green with a
+  warning. Its public half now needs no credential:
+  - the four published demo maps — a `.metacool` and an `.mmetacool` metacooler wrote, a yeast
+    `.cool`, an E. coli `.mcool` — are fetched from the lab's bucket (`npm run fixtures:demo`) and
+    read against oracles the public `cooler` package recorded (`npm run fixtures:demo-golden`,
+    rebuilt on every run to prove it still reads them the same);
+  - the `.scool`, HiC-Pro, `.pairs` and binary `.g3d` fixtures, which `cooler` and `g3dtools` alone
+    can write, are built and their eight suites run.
+
+  The full suite over `make_fixtures.py`'s output runs when the `METACOOLER_REPO_TOKEN` secret can
+  read metacooler's repository, whose `tests/data` the script now finds through `--data`,
+  `$METACOOLER_TEST_DATA` or a checkout beside this one. Every install, fetch and build step may
+  still fail without failing the build, and the job's summary names what did not run. The demo maps
+  also run in the always-on job, copied from `demo/`. The metacool goldens are rebuilt from
+  metacooler's current `devel`, which records QC statistics the old ones did not.
+
+- **The request budgets run on every push, and the one that had gone red is green (§12).** The
+  fixture-free run excluded all of `test/budgets/`, though only `requests.test.ts` needs fixtures,
+  and the BAM budget had been failing unseen since the annotations worker began reporting progress
+  under the request's own id: the test took that report for the answer. HiC-Pro's suite, which no
+  CI run had built the fixture for, still expected h5wasm's own words for a text file the open path
+  now refuses by name (`not-hdf5`).
+
 - **An archived build survives the site moving (§21).** Every build on the archive branch carries
   the base it was built for in each asset URL, so the day the site's base changes every one of them,
   the releases included, would be a blank page at its new address. The deploy now rewrites each

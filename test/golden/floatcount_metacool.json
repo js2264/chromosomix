@@ -56,7 +56,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{}"
+   "value": "{\"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 48428.0, \"inter_contig_intra_genome\": 35006.5, \"inter_contig_intra_genome_fraction\": 0.575609, \"inter_genome\": 13421.5, \"inter_genome_fraction\": 0.220688, \"intra_contig\": 12388.5, \"intra_contig_long\": 1902.0, \"intra_contig_long_fraction\": 0.031274, \"intra_contig_short\": 10486.5, \"intra_contig_short_fraction\": 0.172429, \"intra_genome\": 47395.0, \"intra_genome_fraction\": 0.779312, \"n_contacts\": 60816.5, \"source\": \"pixels\", \"trans_contig_ratio\": 0.796297, \"version\": 1}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -582,6 +582,31 @@
     "dtype": "|S12",
     "kind": "S",
     "length": 11
+   },
+   "qc_inter_contig_intra_genome": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
+   },
+   "qc_inter_genome": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
+   },
+   "qc_intra_contig_long": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
+   },
+   "qc_intra_contig_short": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
+   },
+   "qc_intra_genome_ratio": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
    }
   },
   "indexes": {
@@ -671,13 +696,23 @@
    "name",
    "length",
    "n_contigs",
-   "n_bins"
+   "n_bins",
+   "qc_intra_contig_short",
+   "qc_intra_contig_long",
+   "qc_inter_contig_intra_genome",
+   "qc_inter_genome",
+   "qc_intra_genome_ratio"
   ],
   "dtypes": {
    "length": "<i8",
    "n_bins": "<i8",
    "n_contigs": "<i4",
-   "name": "|S12"
+   "name": "|S12",
+   "qc_inter_contig_intra_genome": "<f8",
+   "qc_inter_genome": "<f8",
+   "qc_intra_contig_long": "<f8",
+   "qc_intra_contig_short": "<f8",
+   "qc_intra_genome_ratio": "<f8"
   },
   "length": 11,
   "rows": [
@@ -685,67 +720,122 @@
     "length": 42000,
     "n_bins": 42,
     "n_contigs": 5,
-    "name": "__unbinned__"
+    "name": "__unbinned__",
+    "qc_inter_contig_intra_genome": 3435.5,
+    "qc_inter_genome": 2913.5,
+    "qc_intra_contig_long": 3.0,
+    "qc_intra_contig_short": 845.0,
+    "qc_intra_genome_ratio": 0.5951785466166458
    },
    {
     "length": 60000,
     "n_bins": 60,
     "n_contigs": 3,
-    "name": "MAG_01"
+    "name": "MAG_01",
+    "qc_inter_contig_intra_genome": 2839.0,
+    "qc_inter_genome": 1884.5,
+    "qc_intra_contig_long": 396.0,
+    "qc_intra_contig_short": 1073.5,
+    "qc_intra_genome_ratio": 0.6957048280316487
    },
    {
     "length": 124000,
     "n_bins": 124,
     "n_contigs": 4,
-    "name": "MAG_02"
+    "name": "MAG_02",
+    "qc_inter_contig_intra_genome": 3627.5,
+    "qc_inter_genome": 2492.0,
+    "qc_intra_contig_long": 433.0,
+    "qc_intra_contig_short": 767.0,
+    "qc_intra_genome_ratio": 0.6595395860372977
    },
    {
     "length": 80000,
     "n_bins": 80,
     "n_contigs": 5,
-    "name": "MAG_03"
+    "name": "MAG_03",
+    "qc_inter_contig_intra_genome": 3781.5,
+    "qc_inter_genome": 2980.0,
+    "qc_intra_contig_long": 174.0,
+    "qc_intra_contig_short": 778.5,
+    "qc_intra_genome_ratio": 0.613689395903552
    },
    {
     "length": 24000,
     "n_bins": 24,
     "n_contigs": 3,
-    "name": "MAG_04"
+    "name": "MAG_04",
+    "qc_inter_contig_intra_genome": 2559.5,
+    "qc_inter_genome": 1897.0,
+    "qc_intra_contig_long": 108.0,
+    "qc_intra_contig_short": 1240.0,
+    "qc_intra_genome_ratio": 0.6731845981566026
    },
    {
     "length": 41000,
     "n_bins": 41,
     "n_contigs": 4,
-    "name": "MAG_05"
+    "name": "MAG_05",
+    "qc_inter_contig_intra_genome": 3208.5,
+    "qc_inter_genome": 2524.5,
+    "qc_intra_contig_long": 81.5,
+    "qc_intra_contig_short": 947.0,
+    "qc_intra_genome_ratio": 0.6266361014567774
    },
    {
     "length": 83000,
     "n_bins": 83,
     "n_contigs": 5,
-    "name": "MAG_06"
+    "name": "MAG_06",
+    "qc_inter_contig_intra_genome": 3540.5,
+    "qc_inter_genome": 2886.0,
+    "qc_intra_contig_long": 179.5,
+    "qc_intra_contig_short": 744.0,
+    "qc_intra_genome_ratio": 0.6073469387755102
    },
    {
     "length": 30000,
     "n_bins": 30,
     "n_contigs": 3,
-    "name": "MAG_07"
+    "name": "MAG_07",
+    "qc_inter_contig_intra_genome": 2554.5,
+    "qc_inter_genome": 1937.0,
+    "qc_intra_contig_long": 71.5,
+    "qc_intra_contig_short": 1190.5,
+    "qc_intra_genome_ratio": 0.6633353610845573
    },
    {
     "length": 49000,
     "n_bins": 49,
     "n_contigs": 4,
-    "name": "MAG_08"
+    "name": "MAG_08",
+    "qc_inter_contig_intra_genome": 3201.5,
+    "qc_inter_genome": 2349.5,
+    "qc_intra_contig_long": 87.5,
+    "qc_intra_contig_short": 959.5,
+    "qc_intra_genome_ratio": 0.6439072446195817
    },
    {
     "length": 103000,
     "n_bins": 103,
     "n_contigs": 5,
-    "name": "MAG_09"
+    "name": "MAG_09",
+    "qc_inter_contig_intra_genome": 3766.0,
+    "qc_inter_genome": 3087.0,
+    "qc_intra_contig_long": 268.0,
+    "qc_intra_contig_short": 704.0,
+    "qc_intra_genome_ratio": 0.6054952076677317
    },
    {
     "length": 25000,
     "n_bins": 25,
     "n_contigs": 3,
-    "name": "MAG_10"
+    "name": "MAG_10",
+    "qc_inter_contig_intra_genome": 2492.5,
+    "qc_inter_genome": 1892.0,
+    "qc_intra_contig_long": 100.0,
+    "qc_intra_contig_short": 1237.5,
+    "qc_intra_genome_ratio": 0.6693463823837819
    }
   ]
  },
@@ -13476,7 +13566,28 @@
    ]
   }
  ],
- "metadata": {},
+ "metadata": {
+  "qc": {
+   "binsize": 1000,
+   "distance_threshold": 10000,
+   "inter_contig": 48428.0,
+   "inter_contig_intra_genome": 35006.5,
+   "inter_contig_intra_genome_fraction": 0.575609,
+   "inter_genome": 13421.5,
+   "inter_genome_fraction": 0.220688,
+   "intra_contig": 12388.5,
+   "intra_contig_long": 1902.0,
+   "intra_contig_long_fraction": 0.031274,
+   "intra_contig_short": 10486.5,
+   "intra_contig_short_fraction": 0.172429,
+   "intra_genome": 47395.0,
+   "intra_genome_fraction": 0.779312,
+   "n_contacts": 60816.5,
+   "source": "pixels",
+   "trans_contig_ratio": 0.796297,
+   "version": 1
+  }
+ },
  "metadata_volatile_keys": [
   "commands"
  ],

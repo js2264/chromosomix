@@ -4,8 +4,7 @@
 Run with the interpreter that has metacooler installed, *after*
 ``make_fixtures.py``::
 
-    /pasteur/helix/users/jaseriza/repos/metacooler/.venv/bin/python \
-        scripts/make_golden.py
+    python scripts/make_golden.py
 
 One JSON per fixture in ``test/golden/``, plus ``test/golden/_manifest.json``
 so the JS suite can iterate without hard-coding the fixture list.

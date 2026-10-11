@@ -186,10 +186,13 @@ describe.skipIf(!present)('the road both workers open a file by', () => {
   it('opens a HiC-Pro pair, where the plain HDF5 road cannot', async () => {
     const [, matrixName, binsName] = VARIANTS[0]
     // The failure this test exists for, stated first so it cannot silently stop
-    // being one: HDF5 does not recognise a text file, and says so unhelpfully.
+    // being one: the HDF5 road does not take a text file. It used to say so
+    // unhelpfully, in h5wasm's own words; the open path now checks the signature
+    // first and refuses by name, which this asserted as the old message for as
+    // long as CI never built the fixture that runs it.
     await expect(
       MetaCooler.open(`${FIXTURES}${matrixName}`, await LocalFileSource.fromPath(`${FIXTURES}${matrixName}`)),
-    ).rejects.toThrow(/name not defined/)
+    ).rejects.toMatchObject({ code: 'not-hdf5' })
 
     const { mc } = await openMap(`${FIXTURES}${matrixName}`, {
       ...specOf(matrixName),
