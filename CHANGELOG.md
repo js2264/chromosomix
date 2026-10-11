@@ -2187,6 +2187,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A place left before it was drawn is never drawn, and a colour changed while a region opened no
+  longer leaves the previous view on screen (§5.5).** Every change of view starts a render nobody
+  waits for, and two ran side by side whenever the reader was quicker than the file. A colour change
+  arriving while a region still waited on its contigs table repainted the view being replaced and
+  called itself mounted, and the region's own mount, overtaken, never drew — so the address named the
+  region over the old picture. A second render of the same state, which a remount, a tab coming back
+  and a closed comparison all start, ran to the end beside the first. Each render now calls off the
+  one before it, which stops at its next step, and a repaint waits for the view it would paint to have
+  finished mounting. A workspace, link or `?config=` file naming a view this build does not have lands
+  on the file's first table, where it left the tab on *Opening…* for ever.
+
 - **The golden job compares the reader with Python on every run, with or without metacooler.**
   It installed `metacooler` from PyPI, where there is no such package, and its fixture script
   defaulted to one cluster path, so it built no fixture on any run and reported green with a

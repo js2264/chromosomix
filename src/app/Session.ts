@@ -814,6 +814,31 @@ export class Session {
    * view object; this is what it was built from.
    */
   private mounted: ViewState | null = null
+  /**
+   * The render in progress, as something the next one calls off (§5.5).
+   *
+   * Every change to the store starts a `render` that nobody awaits, and a render
+   * awaits — the source, the open, the deck, the cells, the contigs table — so
+   * two of them interleave whenever the reader is quicker than the file. Each
+   * render aborts this one and installs its own, and every step after an await
+   * asks {@link stale} whether it is still the newest before it touches the
+   * view. The store comparison alone missed the case that matters most: a
+   * second render of the *same* state object, which four callers start, ran to
+   * the end beside the first and mounted the view twice.
+   */
+  private rendering = new AbortController()
+  /**
+   * The state whose view a render began to mount and has not finished.
+   *
+   * `mounted` is written before the mount, because the mount reads it, so it
+   * cannot say whether the view on screen was built for it. While this is set
+   * the repaint shortcuts in `render` are not taken: a colour change arriving
+   * while a region still waits on its contigs table repainted the *outgoing*
+   * view, called itself mounted, and the region's own mount — superseded —
+   * never drew. The newer render mounts in full instead, and clears this once a
+   * mount has finished as the newest.
+   */
+  private mounting: ViewState | null = null
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
   /**
@@ -7951,8 +7976,24 @@ export class Session {
   // Routing
   // -------------------------------------------------------------------------
 
+  /**
+   * Whether a render of *state* that held *signal* has been overtaken.
+   *
+   * Three ways, and every step after an await asks all of them: the session is
+   * gone; a newer render has started, which aborts the signal; or the store
+   * moved on without starting one, which is what the comparison alone used to
+   * catch and still does.
+   */
+  private stale(state: ViewState, signal: AbortSignal): boolean {
+    return this.destroyed || signal.aborted || this.store.state !== state
+  }
+
   private async render(state: ViewState | null): Promise<void> {
     if (this.destroyed) return
+    this.rendering.abort()
+    const run = new AbortController()
+    this.rendering = run
+    const signal = run.signal
     this.painted = true
     this.host.sessionChanged(this)
     // What this session said is about the file it had open, and a state naming
@@ -8035,7 +8076,7 @@ export class Session {
       }
       if (this.opening !== null || this.resolving !== null) return
       const source = await this.sourceFor(state.uri)
-      if (this.destroyed || this.store.state !== state) return
+      if (this.stale(state, signal)) return
       if (source === null) {
         this.showContent(this.pickerWithNote(state.uri))
         return
@@ -8076,7 +8117,7 @@ export class Session {
     if (this.file === null || this.file.uri !== state.uri) {
       if (this.opening !== null || this.resolving !== null) return
       const source = await this.sourceFor(state.uri)
-      if (this.destroyed || this.store.state !== state) return
+      if (this.stale(state, signal)) return
       if (source === null) {
         this.showContent(this.pickerWithNote(state.uri))
         return
@@ -8229,6 +8270,9 @@ export class Session {
     // still a view its panels have to be handed — a link that pins `vmax` and
     // nothing else must not leave four maps unreconciled.
     await this.syncDeck(state)
+    // Nothing below may act on the view for a render that has been overtaken
+    // while the deck was reconciled: the newer one reconciles again and paints.
+    if (this.stale(state, signal)) return
 
     // A colour change is a repaint, not a navigation.
     //
@@ -8258,12 +8302,14 @@ export class Session {
     // file balanced by default is the same one; the picker is pointed at the
     // choice, which a link or the back button can make as well as the picker.
     const scoreOnly =
+      this.mounting === null &&
       this.mounted !== null &&
       this.current?.panel !== undefined &&
       differsOnlyInPresentationOrScore(this.mounted, state) &&
       this.valueOf(this.mounted) === this.valueOf(state) &&
       this.balanceOf(this.mounted) === this.balanceOf(state)
     if (
+      this.mounting === null &&
       this.mounted !== null &&
       this.current !== null &&
       (differsOnlyInPresentation(this.mounted, state) || scoreOnly)
@@ -8294,6 +8340,7 @@ export class Session {
     // diagonal to stand a locus on falls through to the rebuild and lands
     // wherever the hash actually says.
     if (
+      this.mounting === null &&
       this.mounted !== null &&
       this.current?.showFocus !== undefined &&
       differsOnlyInFocus(this.mounted, state)
@@ -8310,12 +8357,13 @@ export class Session {
     // Before the view mounts, because the view is what issues the reads and a
     // block drawn from the previous set would be a picture of the wrong cells.
     await this.syncCells(state)
-    if (this.destroyed || this.store.state !== state) return
+    if (this.stale(state, signal)) return
     // …and the total the maps are drawn to (§6.5), for the same reason. Told,
     // not awaited: the view's reads queue behind the census in the worker, under
     // the view's own veil, and the answer arrives for the box and the captions.
     this.syncContacts(state)
     this.mounted = state
+    this.mounting = state
 
     switch (state.view) {
       case 'genomes':
@@ -8345,7 +8393,21 @@ export class Session {
       case 'selection':
         await this.mountSelection(state)
         break
+      default:
+        // Every view the address can name has a case above, and `satisfies`
+        // keeps the compiler holding the list to that. What reaches here came
+        // by another road — a stored workspace, a share link, a `?config=` file —
+        // naming a view this build does not have; it matched nothing and left the
+        // tab on "Opening…" for ever. It lands on the file's first table instead.
+        void (state.view satisfies never)
+        this.mounting = null
+        this.navigate({ uri: state.uri, view: this.file.info.hasGenomes ? 'genomes' : 'contigs' }, { replace: true })
+        return
     }
+    // A mount overtaken while it awaited leaves the marker up, so the newer
+    // render mounts in full rather than repainting a view nobody finished.
+    if (this.stale(state, signal)) return
+    this.mounting = null
     // After the switch, not before: a region view reads the contigs table on the
     // way in, and there is no row to show until it has arrived.
     this.infoPanel?.setRecords(this.recordsFor(state))
@@ -8708,10 +8770,11 @@ export class Session {
   }
 
   private async mountCells(state: ViewState): Promise<void> {
+    const signal = this.rendering.signal
     const file = this.file
     if (file === null) return
     const data = await this.cells()
-    if (this.destroyed || this.store.state !== state) return
+    if (this.stale(state, signal)) return
     const total = data.table.length
     const show = (names: readonly string[] | null): void => {
       this.navigate({
@@ -8801,10 +8864,11 @@ export class Session {
   }
 
   private async mountContigs(state: ViewState): Promise<void> {
+    const signal = this.rendering.signal
     const file = this.file
     if (file === null) return
     const data = await this.contigs()
-    if (this.destroyed || this.store.state !== state) return
+    if (this.stale(state, signal)) return
     // A plain cooler is opened as itself: no genome layer, no genome_id column,
     // and the chrom table is the landing view rather than a consolation prize.
     const cooler = !file.info.hasGenomes
@@ -8965,6 +9029,7 @@ export class Session {
    * exactly what should survive.
    */
   private async mountSelection(state: ViewState): Promise<void> {
+    const signal = this.rendering.signal
     const file = this.file
     if (file === null) return
     const selection = selectionOf(state)
@@ -8979,7 +9044,7 @@ export class Session {
     // costs a read once per file.
     if (selection.kind === 'contig' && this.file?.contigs == null) {
       await this.contigs().catch(() => null)
-      if (this.destroyed || this.store.state !== state) return
+      if (this.stale(state, signal)) return
     }
     const bins = this.binsOfSelection(selection)
     const contigs = this.contigsOfSelection(selection)
@@ -9168,6 +9233,7 @@ export class Session {
   }
 
   private async mountRegion(state: ViewState): Promise<void> {
+    const signal = this.rendering.signal
     if (state.region === undefined) {
       this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
@@ -9176,7 +9242,7 @@ export class Session {
     // per file and cached, so this costs a read on the first region view and
     // nothing afterwards.
     if (this.file?.contigs == null) await this.contigs().catch(() => null)
-    if (this.destroyed || this.store.state !== state) return
+    if (this.stale(state, signal)) return
     const keep = this.bookmarkButton()
     const view = new RegionView({
       client: this.clientOf(),

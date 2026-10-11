@@ -1086,6 +1086,16 @@ being looked at, so its `locus` is in the hash — written in the display form o
 settled, in place of the current history entry rather than as a new one, so a link names the window
 and the back button still walks navigations.
 
+**The newest navigation wins.** A view state that arrives while the previous one is still being drawn
+— its file opened, its deck reconciled, its contigs table read — supersedes it: the earlier one stops
+at its next step and draws nothing, so a reader quicker than the file never sees a picture of a place
+already left, and one place asked for twice is drawn once. A change of colour, score or saved place is
+a repaint of the view on screen only once that view has finished mounting; arriving earlier, it is
+drawn as the navigation it then is, rather than painted onto the view being replaced. And a state
+naming a view this build does not have — which only a stored workspace, a share link or a `?config=`
+file can carry — lands on the file's first table, as a link to a view the file cannot answer does,
+rather than leaving the tab opening.
+
 ### 5.6 Sessions
 
 Several files may be open at once, as tabs — twelve at most (`MAX_SESSIONS`), a ceiling on memory
