@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { markOf, optionOf, seriesColour, type FigureTheme } from '@/figures/option'
+import { markOf, optionOf, paperOption, seriesColour, type FigureTheme } from '@/figures/option'
 import { boxSummary, density, histogram, quantile, sorted } from '@/figures/stats'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle, type FigureStyle } from '@/figures/style'
@@ -92,6 +92,34 @@ describe('optionOf', () => {
     expect(seriesOf(option).map((entry) => entry['name'])).toContain('b')
   })
 
+  it('keeps a hidden series hidden with the legend off', () => {
+    // The chart hides a series through its legend's selection; a legend that is
+    // switched off drew every hidden series again.
+    const { option } = build(curve(), (style) => {
+      style.hidden = ['b']
+      style.legend = 'none'
+    })
+    const legend = option['legend'] as { show: boolean; selected: Record<string, boolean> }
+    expect(legend.show).toBe(false)
+    expect(legend.selected).toEqual({ a: true, b: false })
+  })
+
+  it('leaves a hidden series out of the legend an export draws', () => {
+    const { option } = build(curve(), (style) => {
+      style.hidden = ['b']
+    })
+    // On screen the greyed name is the control that brings the series back.
+    expect((option['legend'] as { data: string[] }).data).toEqual(['a', 'b'])
+    expect((paperOption(option)['legend'] as { data: string[] }).data).toEqual(['a'])
+    // The rest of the option is the screen's.
+    expect(paperOption(option)['series']).toBe(option['series'])
+    // No legend, nothing to leave out.
+    const bare = build(curve(), (style) => {
+      style.legend = 'none'
+    }).option
+    expect(paperOption(bare)).toBe(bare)
+  })
+
   it('drops a non-positive value on a log axis rather than clamping it', () => {
     const { option } = build(curve(), (style) => {
       style.y.scale = 'log'
@@ -112,6 +140,68 @@ describe('optionOf', () => {
     // The ordinate, untouched, is the whole of the data.
     expect(zooms[1]['start']).toBe(0)
     expect(zooms[1]['end']).toBe(100)
+  })
+
+  it('stretches an axis to a window wider than the data, on that side alone', () => {
+    // The task opens two figures on one ordinate; the zoom alone would clamp the
+    // window to this figure's own data.
+    const { option } = build(curve(), (style) => {
+      style.y.domain = [-10, 2]
+    })
+    const axis = option['yAxis'] as Record<string, unknown>
+    expect(axis['min']).toBe(-10)
+    // The data reach past 2 on the top, so that side is the data's own.
+    expect(axis['max']).toBeUndefined()
+    // Both ends are numbers a reader would write, and are labelled.
+    const labels = axis['axisLabel'] as Record<string, unknown>
+    expect(labels['showMinLabel']).toBeUndefined()
+    expect(labels['showMaxLabel']).toBeUndefined()
+    const zooms = option['dataZoom'] as Array<Record<string, unknown>>
+    expect(zooms[1]['startValue']).toBe(-10)
+    expect(zooms[1]['endValue']).toBe(2)
+  })
+
+  it('thins tick labels that would print over each other, on both axes', () => {
+    // A distance spelled `300.0 kb` at a type size raised for print ran into the
+    // next one; only a named axis was thinned.
+    const { option } = build(curve(), (style) => {
+      style.fontSize = 22
+    })
+    const x = (option['xAxis'] as Record<string, unknown>)['axisLabel'] as Record<string, unknown>
+    const y = (option['yAxis'] as Record<string, unknown>)['axisLabel'] as Record<string, unknown>
+    expect(x['hideOverlap']).toBe(true)
+    expect(y['hideOverlap']).toBe(true)
+  })
+
+  it('leaves an end where a box put it unlabelled, inside the data or past it', () => {
+    // A box drawn by hand from just inside the first point to past the last:
+    // its ends would print as `1.0372` and `3.4518` over the ticks beside them.
+    const { option } = build(curve(), (style) => {
+      style.x.domain = [1.0372, 3.4518]
+    })
+    const axis = option['xAxis'] as Record<string, unknown>
+    expect(axis['min']).toBeUndefined()
+    expect(axis['max']).toBe(3.4518)
+    const labels = axis['axisLabel'] as Record<string, unknown>
+    expect(labels['showMinLabel']).toBe(false)
+    expect(labels['showMaxLabel']).toBe(false)
+  })
+
+  it('labels the round ends of a window, a tenth of its span or a whole decade', () => {
+    const typed = build(curve(), (style) => {
+      style.x.domain = [1.5, 3.5]
+    }).option['xAxis'] as Record<string, unknown>
+    expect(typed['max']).toBe(3.5)
+    expect((typed['axisLabel'] as Record<string, unknown>)['showMinLabel']).toBeUndefined()
+    expect((typed['axisLabel'] as Record<string, unknown>)['showMaxLabel']).toBeUndefined()
+    // On a log axis only a power of ten is round: 0.5 is a stretch, 10 a decade.
+    const log = build(curve({ xScale: 'log' }), (style) => {
+      style.x.domain = [0.5, 10]
+    }).option['xAxis'] as Record<string, unknown>
+    expect(log['min']).toBe(0.5)
+    expect(log['max']).toBe(10)
+    expect((log['axisLabel'] as Record<string, unknown>)['showMinLabel']).toBe(false)
+    expect((log['axisLabel'] as Record<string, unknown>)['showMaxLabel']).toBeUndefined()
   })
 
   it('draws each mark as the chart type it is', () => {

@@ -179,6 +179,65 @@ export function armExpected(
   return out
 }
 
+/** A decay curve per separation, in the shape `analysis/expected.ts`'s curves have. */
+export interface ArmDecayCurve {
+  maxOffset: number
+  sum: Float64Array
+  count: Float64Array
+  mean: Float64Array
+}
+
+/**
+ * The decay along both arms, averaged over the whole of them: for each kind of
+ * pair — **within an arm**, or **across the arms** — the mean cell at each
+ * longitudinal separation `Δ`.
+ *
+ * Within an arm, `Δ` is the ordinary separation along the DNA and the curve is
+ * the main diagonal's decay with the secondary diagonal left out of it; across
+ * the arms, `Δ` is the distance from the secondary diagonal and the curve is how
+ * the inter-arm contacts fall away from it. These are {@link armExpected}'s two
+ * tables at a window of `0`, by `Δ` alone, so a figure of them is a figure of
+ * the expectation that whole-sequence detrending divides by; the windowed one
+ * follows them along the arms. Pure, and `NaN` where no cell of that kind and
+ * separation had a value.
+ */
+export function armDecay(
+  values: ArrayLike<number>,
+  frame: ArmFrame,
+): { within: ArmDecayCurve; across: ArmDecayCurve } {
+  const { n } = frame
+  const offsets = armOffsets(frame)
+  const maxOffset = longestArm(offsets)
+  const curve = (): ArmDecayCurve => ({
+    maxOffset,
+    sum: new Float64Array(maxOffset + 1),
+    count: new Float64Array(maxOffset + 1),
+    mean: new Float64Array(maxOffset + 1),
+  })
+  const within = curve()
+  const across = curve()
+  for (let r = 0; r < n; r++) {
+    const ur = offsets[r]
+    const ar = Math.abs(ur)
+    for (let c = 0; c < n; c++) {
+      const value = values[r * n + c]
+      if (!Number.isFinite(value)) continue
+      const uc = offsets[c]
+      // The origin bin is on the first arm, as `armExpected` reads it.
+      const kind = ur >= 0 === uc >= 0 ? within : across
+      const delta = Math.abs(ar - Math.abs(uc))
+      kind.sum[delta] += value
+      kind.count[delta] += 1
+    }
+  }
+  for (const kind of [within, across]) {
+    for (let d = 0; d <= maxOffset; d++) {
+      kind.mean[d] = kind.count[d] > 0 ? kind.sum[d] / kind.count[d] : Number.NaN
+    }
+  }
+  return { within, across }
+}
+
 /**
  * How strongly the two arms are aligned, along their length.
  *
