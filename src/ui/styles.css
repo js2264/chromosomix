@@ -3786,7 +3786,7 @@ p {
 
    The ceiling is a `max-height` on the wrap instead, and it is the same number:
    a band taller than the height a square map would have claimed has stopped
-   being a band, and it is also the number `MatrixPanel.measureRoom` reads back
+   being a band, and it is also the number `MapBox.measureRoom` reads back
    to bound the handle — which is why it is a *length* on an element rather than
    the custom property it is written from. A custom property comes back from
    `getComputedStyle` as the `clamp()` that was written, unresolved. */
@@ -3818,7 +3818,7 @@ p {
      the handles existed — laid out exactly as it was. */
   width: var(--map-size, var(--map-budget));
   /* The ceiling both presentations are bounded by, and the number
-     `MatrixPanel.measureRoom` reads back to bound the handles: a *length* on an
+     `MapBox.measureRoom` reads back to bound the handles: a *length* on an
      element, because a custom property comes back from `getComputedStyle` as the
      unresolved `clamp()` it was written from. The panel clamps `--map-size` to it,
      so this never fights the aspect ratio above. */
