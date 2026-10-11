@@ -744,7 +744,7 @@ def chr19(source, target):
 
 for source, target in zip(ATAC, REPS):
     chr19(source, target)
-mr('peaks', '--signal', REPS[0], '--replicate', REPS[1], '--perPeak', 'true', '--width', 150, '--times', 3,
+mr('peaks', '--signal', REPS[0], '--replicate', REPS[1], '--perPeak', '--width', 150, '--times', 3,
    '--minWidth', 75, '--truncate', 100000, '--idr', 0.05, out=YP / 'app', name='peaks',
    analysis='Peak calling (yapc, IDR)')
 YAPC_SCRIPT = script('yapc_idr')

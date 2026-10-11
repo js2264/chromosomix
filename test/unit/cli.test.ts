@@ -12,17 +12,28 @@
  * CLI reads whatever the app reads: nothing here mentions the container.
  */
 
-import { mkdtemp, readFile, readdir, rm, truncate, writeFile } from 'node:fs/promises'
+import { existsSync, readdirSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, readdir, rm, truncate, writeFile } from 'node:fs/promises'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { MIN_JUNCTION_SEQUENCE_BINS, measureJunctions } from '@/analysis/circularity'
 import { cliCommandFor } from '@/analysis/cliCommand'
-import { taskById } from '@/analysis/registry'
-import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
+import { TASKS, taskById } from '@/analysis/registry'
+import { paramDerived, type AnalysisContext, type AnalysisTask, type Params } from '@/analysis/types'
 import { writeBigWig } from '@/analysis/write/bigwig'
-import { main, readFeatureText, readPairText, recordedTasks, stemOf } from '@/cli/main'
+import {
+  main,
+  parseCommandLine,
+  readFeatureText,
+  readPairText,
+  recordedTasks,
+  stemOf,
+  stemsOf,
+} from '@/cli/main'
 import { typedLocusToRegion } from '@/genome/assembly'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { LocalFileSource } from '@/sources/LocalFileSource'
@@ -90,6 +101,25 @@ const complained = (): string => errors.join('')
 function reset(): void {
   written.length = 0
   errors.length = 0
+}
+
+/** A small `.hic` of its own at `path`, so two inputs of one command hold different maps. */
+async function mapAt(path: string, seed: number): Promise<string> {
+  const fixture = await writeHic({
+    version: 9,
+    chroms: [{ name: 'chrI', length: 60_000 }],
+    resolutions: [1000],
+    records: { '1_1': records(60, 60, true, seed) },
+    blockBinCount: 32,
+  })
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, fixture.bytes)
+  return path
+}
+
+/** The rows of a written table, without its provenance. */
+async function rowsIn(path: string): Promise<string[]> {
+  return (await readFile(path, 'utf8')).split('\n').filter((line) => line !== '' && !line.startsWith('#'))
 }
 
 describe('the surface', () => {
@@ -280,8 +310,10 @@ describe('running a task', () => {
 
   it('passes a parameter through, typed the way the descriptor says', async () => {
     reset()
+    // A switch's value after `=`: a switch never takes the word after it, so
+    // `--derivative false` is refused (see "the line, typed by the command").
     expect(
-      await main(['expected', sample, '--out', out, '--quiet', '--factor', '1.5', '--derivative', 'false']),
+      await main(['expected', sample, '--out', out, '--quiet', '--factor', '1.5', '--derivative=false']),
     ).toBe(0)
     const text = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
     // A number, not the string "1.5"; a boolean, not the string "false" — which
@@ -1185,11 +1217,14 @@ describe('compartments by either method', () => {
       await main(['compartments', checkered, '--order', 'phasing', '--out', out, '--quiet']),
     ).toBe(2)
     expect(complained()).toMatch(/has no parameter --order/)
+    // Refused before the file is opened now, with the values there are: the
+    // choice is checked against the descriptor's options, as the form offers
+    // them, rather than by the runner once per file.
     reset()
     expect(
       await main(['compartments', checkered, '--method', 'cooltool', '--out', out, '--quiet']),
-    ).toBe(1)
-    expect(complained()).toMatch(/There is no method “cooltool”/)
+    ).toBe(2)
+    expect(complained()).toMatch(/There is no --method “cooltool”\. It is cooltools or correlation\./)
   })
 })
 
@@ -1605,6 +1640,45 @@ describe('replaying a workspace', () => {
     expect(await main(['replay', path, '--over', sample])).toBe(2)
     expect(complained()).toMatch(/records no analysis parameters/)
   })
+
+  /**
+   * `--over data/*.hic`, as a shell expands it, is `--over` and one file and
+   * then the rest as words of their own — which replay never read, so it
+   * replayed the first file alone and exited 0.
+   */
+  it('replays every file the shell expanded --over to', async () => {
+    reset()
+    const path = await sessionAt({
+      expected: { scope: 'contig', factor: 1.1, derivative: true, minSeparation: 0, balance: false },
+    })
+    const other = await mapAt(join(directory, 'replay-many', 'other.hic'), 21)
+    const where = join(directory, 'replayed-many')
+    expect(await main(['replay', path, '--over', sample, other, '--out', where, '--quiet'])).toBe(0)
+    expect(complained()).toMatch(/over 2 files/)
+    const files = await readdir(where)
+    expect(files).toContain('sample.expected.ps.tsv')
+    expect(files).toContain('other.expected.ps.tsv')
+  })
+
+  /**
+   * The runners read a recorded value with a fallback, so a workspace naming
+   * an option this build has not got ran the default under the recorded name.
+   * Checked as a typed value is, before any file is opened.
+   */
+  it('refuses a recorded value this build cannot run, before any file', async () => {
+    reset()
+    const where = join(directory, 'replay-refused')
+    const path = await sessionAt({ expected: { scope: 'contig', quantity: 'expectd', factor: 1.1 } })
+    expect(await main(['replay', path, '--over', sample, '--out', where, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/recorded expected with a value this build cannot run/)
+    expect(complained()).toMatch(/There is no --quantity “expectd”\. It is density or expected\./)
+    expect(existsSync(where)).toBe(false)
+    // The text `"false"` is not `false`, and `boolParam` reads it as neither.
+    reset()
+    const typed = await sessionAt({ expected: { derivative: 'false' } })
+    expect(await main(['replay', typed, '--over', sample, '--out', where, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--derivative is true or false, not the text “false”/)
+  })
 })
 
 describe('the small pieces', () => {
@@ -1710,5 +1784,476 @@ describe('what a file named for a task is read as', () => {
     // contig is called `1` — is still a bedpe here, as the flag says it is.
     const ensembl = readPairText('1\t1000\t2000\t1\t19000\t20000', 'loops.txt')
     expect([ensembl.start1[0], ensembl.start2[0]]).toEqual([1000, 19000])
+  })
+})
+
+/**
+ * The line, typed by what the command takes (§23.1).
+ *
+ * A flag took the next word as its value unless that word began with `--`, so a
+ * switch swallowed the file after it: `coverage a.cool --no-balance b.hic` ran
+ * over `a.cool` alone and exited 0, and `coverage --quiet a.cool` refused
+ * itself for having no file. What a flag takes comes from the command now — a
+ * task's descriptor says which of its parameters are switches, and the CLI's
+ * own flags are known.
+ */
+describe('the line, typed by the command', () => {
+  let first = ''
+  let second = ''
+  beforeAll(async () => {
+    first = await mapAt(join(directory, 'typed', 'first.hic'), 7)
+    second = await mapAt(join(directory, 'typed', 'second.hic'), 8)
+  })
+
+  it('never lets a switch take the file after it', async () => {
+    reset()
+    const where = join(directory, 'typed-swallow')
+    expect(await main(['coverage', first, '--no-balance', second, '--out', where, '--quiet'])).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('first.coverage.coverage-total.tsv')
+    expect(files).toContain('second.coverage.coverage-total.tsv')
+  })
+
+  it('reads --quiet before the file as a switch, and is quiet', async () => {
+    reset()
+    const where = join(directory, 'typed-quiet')
+    expect(await main(['coverage', '--quiet', first, '--out', where])).toBe(0)
+    expect(await readdir(where)).toContain('first.coverage.coverage-total.tsv')
+    expect(complained()).not.toMatch(/wrote|first\.hic\n/)
+  })
+
+  it('takes the command line’s own flags before the task, and refuses a task’s there', async () => {
+    reset()
+    const where = join(directory, 'typed-before')
+    expect(await main(['--quiet', 'coverage', first, '--out', where])).toBe(0)
+    expect(await readdir(where)).toContain('first.coverage.coverage-total.tsv')
+    reset()
+    expect(await main(['--factor', '1.5', 'expected', first])).toBe(2)
+    expect(complained()).toMatch(/a task's flags come after the task/)
+  })
+
+  it('turns a switch off by =false or --no-, and refuses a word after it', async () => {
+    reset()
+    const where = join(directory, 'typed-off')
+    expect(await main(['expected', first, '--no-derivative', '--out', where, '--quiet'])).toBe(0)
+    expect(await readFile(join(where, 'first.expected.ps.tsv'), 'utf8')).toMatch(
+      /^# param derivative: false$/m,
+    )
+    // The old spelling, a file called `false` to a typed parser: refused, and
+    // told what to write, before anything is opened or written.
+    reset()
+    const refused = join(directory, 'typed-refused')
+    expect(await main(['expected', first, '--derivative', 'false', '--out', refused, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--derivative is a switch and takes nothing after it/)
+    expect(complained()).toMatch(/--derivative=false or --no-derivative/)
+    expect(existsSync(refused)).toBe(false)
+    reset()
+    expect(await main(['expected', first, '--derivative=maybe', '--out', refused, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/a switch is true or false/)
+  })
+
+  it('refuses a flag that takes a value and was given none', async () => {
+    // `--out --quiet` wrote into a directory called `true`.
+    reset()
+    expect(await main(['expected', first, '--out', '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--out needs a value after it/)
+    reset()
+    expect(await main(['expected', first, '--quiet', '--out'])).toBe(2)
+    expect(complained()).toMatch(/--out needs a value after it/)
+  })
+
+  it('refuses a flag replay and circular do not take, as it refuses a task’s', async () => {
+    reset()
+    expect(await main(['circular', first, '--factor', '2'])).toBe(2)
+    expect(complained()).toMatch(/circular has no flag --factor/)
+  })
+})
+
+/**
+ * A value the form could have held (§23.1). The runners read a choice with a
+ * fallback, and the form never reaches it; a shell did, and ran the default
+ * under a provenance naming the value typed.
+ */
+describe('a value the form could have held', () => {
+  it('refuses a choice that is none of its values, and names the values there are', async () => {
+    reset()
+    const where = join(directory, 'choice-refused')
+    expect(await main(['expected', sample, '--quantity', 'expectd', '--out', where, '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/There is no --quantity “expectd”\. It is density or expected\./)
+    // Before anything is opened, so nothing went out under a record of a run
+    // that never happened.
+    expect(existsSync(where)).toBe(false)
+  })
+
+  it('takes every descriptor’s own default, which a run given no flag is handed', () => {
+    // The check reads the options, so a default that is none of them would
+    // refuse every run of its task before a file was opened.
+    for (const task of TASKS) {
+      for (const spec of task.params) {
+        if (spec.kind !== 'choice') continue
+        expect(spec.options.map((option) => option.value), `${task.id} --${spec.key}`).toContain(spec.default)
+      }
+    }
+  })
+
+  it('writes a value with a space in it as a shell takes it', async () => {
+    reset()
+    expect(await main(['dotplot', '--streaks', 'one'])).toBe(2)
+    expect(complained()).toMatch(/It is 'one to one' or 'every one'\./)
+  })
+
+  it('refuses a number that does not parse, an empty one included', async () => {
+    for (const bad of [['--factor', 'abc'], ['--factor='], ['--factor', '0x10']]) {
+      reset()
+      expect(await main(['expected', sample, ...bad, '--quiet']), bad.join(' ')).toBe(2)
+      expect(complained()).toMatch(/--factor needs a number/)
+    }
+  })
+
+  it('refuses a --bin-size or --rungs that is not a whole number, for any input', async () => {
+    reset()
+    expect(await main(['coverage', sample, '--bin-size', '5000', '--rungs', 'abc', '--quiet'])).toBe(2)
+    expect(complained()).toMatch(/--rungs needs a number/)
+    reset()
+    expect(await main(['circular', sample, '--bin-size', '0'])).toBe(2)
+    expect(complained()).toMatch(/--bin-size is a whole number of base pairs/)
+  })
+})
+
+/**
+ * What a command names its outputs (§23.1). The stem was the name up to its
+ * first dot and nothing else, so two files that shared one were written under
+ * one name, the second over the first, with exit 0.
+ */
+describe('the outputs of one command, one name each', () => {
+  it('keeps more of two names that share a stem, and both results', async () => {
+    const one = await mapAt(join(directory, 'stems', 'HCT116.rep1.hic'), 11)
+    const two = await mapAt(join(directory, 'stems', 'HCT116.rep2.hic'), 12)
+    reset()
+    const where = join(directory, 'stems-reps')
+    expect(await main(['coverage', one, two, '--out', where, '--quiet'])).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('HCT116.rep1.coverage.coverage-total.tsv')
+    expect(files).toContain('HCT116.rep2.coverage.coverage-total.tsv')
+    expect(files.some((name) => name.startsWith('HCT116.coverage'))).toBe(false)
+    // Two maps, two answers: neither run's table is the other's.
+    expect(await rowsIn(join(where, 'HCT116.rep1.coverage.coverage-total.tsv'))).not.toEqual(
+      await rowsIn(join(where, 'HCT116.rep2.coverage.coverage-total.tsv')),
+    )
+  })
+
+  it('tells two files of one name apart by the directories they are in', async () => {
+    const a = await mapAt(join(directory, 'stems', 'dirA', 'sample.hic'), 13)
+    const b = await mapAt(join(directory, 'stems', 'dirB', 'sample.hic'), 14)
+    reset()
+    const where = join(directory, 'stems-dirs')
+    expect(await main(['coverage', a, b, '--out', where, '--quiet'])).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('dirA_sample.coverage.coverage-total.tsv')
+    expect(files).toContain('dirB_sample.coverage.coverage-total.tsv')
+  })
+
+  it('names the batch before its first run, and a file that names nothing fails alone', async () => {
+    // The stems are made before any file is opened, so a positional the run
+    // refuses must not refuse the batch: `::x` names a group of no file.
+    reset()
+    const where = join(directory, 'stems-empty')
+    expect(await main(['coverage', '::x', sample, '--out', where, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/failed:/)
+    expect(await readdir(where)).toContain('sample.coverage.coverage-total.tsv')
+  })
+
+  it('names the outputs of one file as it always has', async () => {
+    const one = await mapAt(join(directory, 'stems', 'HCT116.rep1.hic'), 11)
+    reset()
+    const where = join(directory, 'stems-alone')
+    expect(await main(['coverage', one, '--out', where, '--quiet'])).toBe(0)
+    expect(await readdir(where)).toContain('HCT116.coverage.coverage-total.tsv')
+  })
+
+  it('gives every input of one command its own stem, the same way every time', () => {
+    expect(stemsOf(['/d/HCT116.rep1.cool', '/d/HCT116.rep2.cool'])).toEqual(['HCT116.rep1', 'HCT116.rep2'])
+    expect(stemsOf(['/a/sample.mcool', '/b/sample.mcool'])).toEqual(['a_sample', 'b_sample'])
+    expect(stemsOf(['/d/x.cool', '/d/x.hic'])).toEqual(['x.cool', 'x.hic'])
+    expect(stemsOf(['/d/x.pairs.gz', '/d/x.mcool'])).toEqual(['x.pairs.gz', 'x.mcool'])
+    // Two resolutions of one file were two stems already.
+    expect(stemsOf(['/d/x.mcool::/resolutions/1000', '/d/x.mcool::/resolutions/5000'])).toEqual([
+      'x_1000',
+      'x_5000',
+    ])
+    // Only the two that met keep more of their names.
+    expect(stemsOf(['/d/a.cool', '/d/HCT116.rep1.cool', '/d/HCT116.rep2.cool'])).toEqual([
+      'a',
+      'HCT116.rep1',
+      'HCT116.rep2',
+    ])
+    // One file twice, and two names that are one file on a Mac's disk: no more
+    // of the name tells them apart, so the second is numbered.
+    expect(stemsOf(['/d/x.cool', '/d/x.cool'])).toEqual(['x', 'x_2'])
+    expect(stemsOf(['/d/Sample.cool', '/d/sample.cool'])).toEqual(['Sample', 'sample_2'])
+    expect(stemsOf(['/d/a/x.cool', '/d/a/x.cool', '/d/b/x.cool'])).toEqual(['a_x', 'a_x_2', 'b_x'])
+    // An address, by its path's directories and with its query left off.
+    expect(
+      stemsOf(['https://data.org/run1/s.mcool?sig=1', 'https://data.org/run2/s.mcool?sig=2']),
+    ).toEqual(['run1_s', 'run2_s'])
+    expect(stemOf('https://data.org/run1/s.mcool?sig=1::/resolutions/1000')).toBe('s_1000')
+  })
+})
+
+/**
+ * A file named by its address (§23.1). The README said a remote file is
+ * fetched first, and the command handed the address to `stat` instead: *cannot
+ * stat /cwd/https:/example.org/x.cool*. Served here by a server of the test's
+ * own on the loopback, so nothing leaves the machine.
+ */
+describe('a file named by its address', () => {
+  let server: Server
+  let base = ''
+  let served = ''
+  const asked: Array<{ path: string; encoding: string | undefined }> = []
+  /** Where downloads are to go, looked into while a request is being answered. */
+  let watched: string | null = null
+  let seen: string[] = []
+
+  beforeAll(async () => {
+    served = join(directory, 'served')
+    await mkdir(served, { recursive: true })
+    await writeFile(join(served, 'sample.hic'), await readFile(sample))
+    // A reference with the `.fai` `samtools faidx` writes beside it, unwrapped.
+    const fasta = `>chrI\n${'GC'.repeat(60_000)}\n>chrII\n${'AT'.repeat(30_000)}\n`
+    await writeFile(join(served, 'genome.fa'), fasta)
+    await writeFile(
+      join(served, 'genome.fa.fai'),
+      `chrI\t120000\t6\t120000\t120001\nchrII\t60000\t${6 + 120_001 + 7}\t60000\t60001\n`,
+    )
+    const rows = ['## pairs format v1.0', '#chromsize: chrI 120000', '#chromsize: chrII 60000',
+      '#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2']
+    for (let i = 0; i < 400; i++) {
+      const pos1 = 1 + ((i * 271) % 110_000)
+      const pos2 = Math.min(120_000, pos1 + 500 + ((i * 37) % 20_000))
+      rows.push(`r${i}\tchrI\t${pos1}\tchrI\t${pos2}\t${'+-'[i % 2]}\t${'+-'[(i >> 1) % 2]}`)
+    }
+    await writeFile(join(served, 'named.pairs'), `${rows.join('\n')}\n`)
+
+    server = createServer((request, response) => {
+      const url = new URL(request.url ?? '/', 'http://localhost')
+      const encoding = request.headers['accept-encoding']
+      asked.push({ path: url.pathname, encoding: Array.isArray(encoding) ? encoding.join(',') : encoding })
+      if (watched !== null) seen = readdirSync(watched)
+      readFile(join(served, decodeURIComponent(url.pathname.replace(/^\/data\//, '')))).then(
+        (bytes) => {
+          response.writeHead(200, { 'content-length': bytes.length })
+          response.end(bytes)
+        },
+        () => {
+          response.writeHead(404, 'Not Found')
+          response.end()
+        },
+      )
+    })
+    await new Promise<void>((listening) => server.listen(0, '127.0.0.1', listening))
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/data`
+  })
+
+  afterAll(async () => {
+    await new Promise<void>((closed) => server.close(() => closed()))
+  })
+
+  it('fetches a map named by its address, and names its outputs and its record after it', async () => {
+    reset()
+    const where = join(directory, 'remote-map')
+    const address = `${base}/sample.hic?token=abc`
+    expect(await main(['coverage', address, '--out', where, '--quiet']), complained()).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('sample.coverage.coverage-total.tsv')
+    const text = await readFile(join(where, 'sample.coverage.coverage-total.tsv'), 'utf8')
+    // The address the reader typed, not the temporary copy it was read from.
+    expect(text.split('\n')).toContain(`# file: ${address}`)
+    // The bytes as the file holds them, never a compressed rendering of them.
+    expect(asked.find((request) => request.path === '/data/sample.hic')?.encoding).toBe('identity')
+  })
+
+  it('says how far a download has got, and leaves nothing behind', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'chromosomix-tmpdir-'))
+    const before = process.env.TMPDIR
+    process.env.TMPDIR = scratch
+    watched = scratch
+    try {
+      reset()
+      const where = join(directory, 'remote-progress')
+      expect(await main(['coverage', `${base}/sample.hic`, '--out', where])).toBe(0)
+      expect(complained()).toMatch(/downloading sample\.hic: \d+% of \d+ kB/)
+      expect(complained()).toMatch(/downloaded sample\.hic, \d+ kB/)
+      // Into $TMPDIR while it was read, and gone once the command had ended.
+      expect(seen.some((name) => name.startsWith('chromosomix-'))).toBe(true)
+      expect(await readdir(scratch)).toEqual([])
+    } finally {
+      watched = null
+      if (before === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = before
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('names an address it could not fetch, and carries on past it', async () => {
+    reset()
+    const where = join(directory, 'remote-missing')
+    const signed = `${base}/absent.hic?X-Amz-Signature=secret`
+    expect(await main(['coverage', signed, sample, '--out', where, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/failed: http:\/\/127\.0\.0\.1:\d+\/data\/absent\.hic\?… answered 404/)
+    // A presigned link's query is its signature, and stays out of the log.
+    expect(complained()).not.toMatch(/secret/)
+    expect(await readdir(where)).toContain('sample.coverage.coverage-total.tsv')
+  })
+
+  it('fetches a reference with the index beside it, before any map, or refuses the command', async () => {
+    reset()
+    const where = join(directory, 'remote-reference')
+    expect(await main(['composition', '--sequence', `${base}/genome.fa`, '--out', where, '--quiet'])).toBe(0)
+    expect(asked.map((request) => request.path)).toContain('/data/genome.fa.fai')
+    expect(await rowsIn(join(where, 'genome.composition.composition-gc.bedGraph'))).toHaveLength(12 + 6)
+    // What every run reads is fetched before the first, so an address that
+    // cannot be had is a fault in the command: exit 2, and no file opened.
+    reset()
+    expect(
+      await main(['motif', sample, '--sequence', `${base}/absent.fa`, '--pattern', 'GGTCA', '--quiet']),
+    ).toBe(2)
+    expect(complained()).toMatch(/absent\.fa answered 404/)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('compares a map with one named by its address', async () => {
+    reset()
+    const where = join(directory, 'remote-against')
+    expect(
+      await main(['hicrep', sample, '--against', `${base}/sample.hic`, '--out', where, '--quiet']),
+      complained(),
+    ).toBe(0)
+    const text = await readFile(join(where, 'sample.hicrep.hicrep-pairs.tsv'), 'utf8')
+    expect(text).toMatch(/sample\.hic\tsample\.hic\t/)
+  })
+
+  it('reads the orientations of a .pairs named by its address', async () => {
+    reset()
+    const where = join(directory, 'remote-stranded')
+    const named = `${base}/named.pairs`
+    expect(
+      await main(['expected', sample, '--stranded', '--pairsUri', named, '--out', where, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/needs a venue that can fetch an address/)
+    expect(await readdir(where)).toContain('sample.expected.ps-orientation.tsv')
+  })
+
+  it('refuses an address by a scheme it does not fetch, by name', async () => {
+    reset()
+    const where = join(directory, 'remote-s3')
+    expect(await main(['coverage', 's3://bucket/x.cool', '--out', where, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/fetches http and https addresses, and s3:\/\/ is neither/)
+  })
+})
+
+/**
+ * The console's lines, read back by the parser that has to take them (§23.1).
+ * The builder writes a switch as itself or as `--key=false`, which is the one
+ * spelling a typed parser and the untyped one before it both read the same way.
+ */
+describe('the console’s lines, read back', () => {
+  /** A line split as a POSIX shell splits what `quote` writes. */
+  function words(line: string): string[] {
+    const out: string[] = []
+    let word = ''
+    let started = false
+    let quoted = false
+    for (let at = 0; at < line.length; at++) {
+      const char = line[at]
+      if (quoted) {
+        if (char === "'") quoted = false
+        else word += char
+      } else if (char === "'") {
+        quoted = true
+        started = true
+      } else if (char === '\\') {
+        at += 1
+        word += line[at]
+        started = true
+      } else if (char === ' ') {
+        if (started) out.push(word)
+        word = ''
+        started = false
+      } else {
+        word += char
+        started = true
+      }
+    }
+    if (started) out.push(word)
+    return out
+  }
+
+  const context: AnalysisContext = {
+    uri: 'sample.hic',
+    layout: 'cool',
+    hasMap: true,
+    hasGenomes: false,
+    hasWeights: true,
+    scoreColumns: [],
+    binsize: 1000,
+    nBins: 180,
+    contigs: [
+      { name: 'chrI', length: 120_000, startBin: 0, bins: 120, genome: -1 },
+      { name: 'chrII', length: 60_000, startBin: 120, bins: 60, genome: -1 },
+    ],
+    genomes: null,
+    entries: [],
+    framing: null,
+    blockLoaded: false,
+    blockBytes: 0,
+  }
+
+  it('reads every task’s line with every switch as it was recorded, on or off', () => {
+    for (const task of TASKS) {
+      // Each switch the other way from its default, so both spellings are written.
+      const params: Record<string, Params[string]> = {}
+      for (const spec of task.params) {
+        const fallback = (spec as { default?: unknown }).default
+        if (fallback === undefined) continue
+        params[spec.key] =
+          spec.kind === 'toggle' && !paramDerived(spec) ? !fallback : (fallback as Params[string])
+      }
+      const line =
+        cliCommandFor({
+          task,
+          provenance: {
+            task: task.id,
+            taskVersion: 1,
+            params,
+            framing: {
+              uri: 'sample.hic',
+              rows: [0, 180],
+              cols: [0, 180],
+              binsize: 1000,
+              binsPerCell: 1,
+              balance: true,
+              value: 'count',
+              normalise: null,
+              level: 'bin',
+              label: 'whole file at 1000 bp',
+            },
+            app: 'test',
+            createdAt: '2026-10-11T00:00:00Z',
+          },
+          context,
+        })
+          .text.split('\n')
+          .find((row) => !row.startsWith('#')) ?? ''
+      const parsed = parseCommandLine(words(line).slice(1))
+      expect(parsed.command, line).toBe(task.id)
+      expect(parsed.positional, line).toEqual(['sample.hic'])
+      for (const spec of task.params) {
+        if (spec.kind !== 'toggle' || paramDerived(spec)) continue
+        expect(parsed.flags.get(spec.key)?.at(-1), `${task.id} --${spec.key}`).toBe(
+          String(params[spec.key]),
+        )
+      }
+    }
   })
 })

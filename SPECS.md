@@ -9688,6 +9688,65 @@ hyphen are nothing to a shell, and quotes a list of loci, which has a space in i
 cooler's 0-based numbers, `chrIV:100000-200000`, which the shell read as written: right in the shell,
 and the one locus in the console a base away from the same window everywhere else on the screen.
 
+**The line is read by what the command takes.** A task's descriptor says which of its parameters
+are switches, and the shell's own flags are known — `--quiet`, `--no-balance` and `--help` are
+switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
+the word after it: `--stranded` turns one on, and `--stranded=false` or `--no-stranded` turns it off
+(`--no-balance` stays the shell's own, the raw counts, and is never coverage's `--balance=false`). A
+flag took the next word unless that word began with `--`, so `coverage a.cool --no-balance b.hic` ran
+over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file, and
+`--out --quiet` wrote into a directory called `true`. A word a switch's value used to be written as,
+`--stranded false`, is refused rather than read as a file of that name, and the refusal says what to
+write; a flag that takes a value is refused without one; only the shell's own flags may come before
+the task; and a flag the command does not take is refused by name, for `replay` and `circular` as for
+a task. `replay` takes the files named after the workspace as it takes those after `--over`, so
+`--over data/*.hic` as a shell expands it replays every file rather than the first alone. The console
+writes a switch as itself or as `--key=false`, the one spelling read alike before and after, and a
+test reads every task's line back through the parser.
+
+**A value is one the form could have held.** A choice is one of the options its descriptor lists, a
+switch is on or off — `true`, `yes`, `on` or `1`, or their opposites, after an `=` — and a number is
+digits, a point and an exponent. Anything else is refused before a file is opened, with exit 2 — the
+shell's code for a fault in the command, against 1 for a file that failed — and a sentence naming the
+values there are: *There is no --quantity “expectd”. It is density or expected.* The runners read a
+choice with a fallback, so that a stored session from a later build cannot change what the numbers on
+screen mean, and the form never reaches it: it moves a held value onto an option it offers before any
+run (`resolveChoiceDefaults`). The shell did reach it. `expected --quantity expectd` ran the density
+and wrote `# param quantity: expectd` above it — a provenance naming a computation nobody performed —
+`--factor=` ran at nought, and `--rungs abc` built one rung. What a workspace recorded is checked the
+same way before `replay` opens a file. Which options a *file* is offered — a per-genome P(s) needs a `/genomes` table — is the
+runner's to refuse, by name, once the file is open.
+
+**Each input of a command is written under a name of its own.** An output is
+`<stem>.<task>.<output>.<format>`, and the stem is the file's name up to its first dot with a group's
+last segment after it — `sample` for `sample.mcool`, `sample_1000` for
+`sample.mcool::/resolutions/1000` — as it always was, so a command over one file names its outputs as
+it did and a script that reads them keeps working. Where two inputs of one command would share a
+stem, those two keep more of their names, a step at a time, until they differ: the name less its
+format extension and a `.gz` (`HCT116.rep1`, `HCT116.rep2`), the whole name (`sample.cool`,
+`sample.hic`), then the directories they are in, nearest first (`dirA_sample`, `dirB_sample`); one
+file named twice, or two names a Mac's disk holds as one, is numbered (`sample_2`). Nothing a command
+has written is written over by the same command. `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
+`HCT116.coverage.*` twice, the second run's files over the first's, with exit 0.
+
+**An address is fetched first, whole.** The app reads a remote file by range, through a reader that
+is synchronous (§11), which a worker has and Node does not, so a shell cannot read one that way. An
+http or https address — the map, an `--against`, a `--sequence`, `--tracks`, `--features` or
+`--pairs`, a `.pairs` named for P(s)'s orientations, the workspace `replay` reads — is downloaded
+instead, streamed to disk with its progress on stderr unless `--quiet`, into one directory per
+command under `$TMPDIR` that is removed when the command ends, Ctrl-C included; and with the sidecar
+its format reads beside itself, where the server has one: a FASTA's `.fai`, a HiC-Pro matrix's bin
+file. A batch lets each map go once its run is done, so it holds one at a time. What every run reads
+— a `--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is fetched
+before the first, so an address there that cannot be had is exit 2; a map that cannot be is that
+file's failure, named, and the batch goes on; and a `.pairs` a parameter names is fetched when the
+task asks for it, and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address, so the
+framing, the provenance and every sentence about it name the URL that was typed, and its outputs are
+named after its file, the query left off. Any other scheme is refused by name: an `s3://` address
+needs credentials the command has not got. An address went to `stat` as a path until now — *cannot
+stat /cwd/https:/example.org/x.cool* — under a README that said it was fetched, and the console said a
+shell reads local files only; its note now says what the line costs instead (§23.3).
+
 ### 23.2 What else is on it, and what is not
 
 A day is not only its runs, so three more things are recorded — each at the one place every road to
@@ -9734,12 +9793,14 @@ words are dimmed, on §26.3's rule from the other side: a copy and a save of not
 file, and a clear forgot nothing.
 
 The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'s notes about what a
-shell cannot be told — a remote file, a window across several sequences or off the diagonal, a
-parameter naming a set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared
-against where the record does not name them, a map drawn balanced and read raw or the reverse, which
-the one `--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a
-command that runs and answers a slightly different question is worse than one that says what it left
-out.
+shell cannot be told — a window across several sequences or off the diagonal, a parameter naming a
+set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared against where the
+record does not name them, a map drawn balanced and read raw or the reverse, which the one
+`--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a command that
+runs and answers a slightly different question is worse than one that says what it left out. And
+about the one thing a shell is told at a price: a remote file, which the line names and the shell
+downloads whole before reading it (§23.1), where the app reads only what it draws — so the note says
+so, and that a reader running several lines over one file should fetch it once and name the copy.
 
 They sit **above a command and below anything else**, which is one rule read twice: a caveat
 qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is

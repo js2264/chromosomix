@@ -96,10 +96,10 @@ describe('a run the shell can take', () => {
     expect(draft.line.split('\n')).toHaveLength(1)
   })
 
-  it('keeps the caveats a shell cannot be told, apart from the command', () => {
+  it('keeps the caveats about a line apart from the command', () => {
     const insulation = task('insulation')
-    // A remote file: the command names the URL because that is what the reader
-    // needs next, and says outright that it cannot be read from a shell.
+    // A remote file: the command names the URL, which the shell fetches, and
+    // says outright what that costs — the whole file, where the app read ranges.
     const record = provenance('insulation', {
       framing: { ...framing(), uri: 'https://example.org/yeast.mcool::resolutions/1000' },
     })

@@ -59,16 +59,21 @@
  * picture and adjusting until it is right; and then applies exactly those, with
  * no retyping and no transcription error, to the other hundred and ninety-nine.
  *
- * ## The two things it cannot do, and why
+ * ## The two things it does differently, and why
  *
- * **No remote files.** `RemoteRangeSource` reads through synchronous
- * `XMLHttpRequest`, which exists in a worker and not in Node. A CLI is on a
- * machine that has the file; `curl` is the missing half and is better at it than
- * anything this could contain.
+ * **A remote file is fetched first, whole.** `RemoteRangeSource` reads through
+ * synchronous `XMLHttpRequest`, which exists in a worker and not in Node, so an
+ * address cannot be read by range from here. It is downloaded to a temporary
+ * directory instead and read where it lies (`cli/remote.ts`) — which is what the
+ * README always said happened, and for a while did not: the address went to
+ * `stat` as a path.
  *
  * **No dependencies beyond the app's own.** Argument parsing, colouring and
  * table formatting are here rather than depended on, which is the same rule
- * `package.json` already applies to the bundle. It is about forty lines.
+ * `package.json` already applies to the bundle. The parser is typed by the
+ * task descriptors (`parseArgs`), which is the one thing no general-purpose
+ * parser could have done for it: whether `--stranded` takes the word after it
+ * is a fact about the task.
  */
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
@@ -127,6 +132,8 @@ import { parseBed3d, parseG3d, sniffBed3d, sniffG3d, writeBed3d } from '../annot
 import type { FeatureSet, PairSet, StoredEntry } from '../annotations/types'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { openReference, type Reference } from './reference'
+import { Downloads, addressDirectories, displayOf, fileNameOf, isAddress } from './remote'
+import { quote } from '../analysis/cliCommand'
 import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { parseBins } from '../hicpro/parse'
 import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
@@ -139,6 +146,8 @@ import {
   paramDerived,
   type AnalysisFraming,
   type AnalysisTask,
+  type ParamSpec,
+  type ParamValue,
   type Params,
   type TaskOutput,
   type TaskResult,
@@ -163,20 +172,148 @@ const APP = `${VERSION} cli`
 // Arguments
 // ---------------------------------------------------------------------------
 
-interface Args {
+export interface Args {
   command: string
   positional: string[]
   flags: Map<string, string[]>
 }
 
 /**
- * `--key value`, `--key=value`, `--flag`, and everything else positional.
+ * A fault in the command line itself — a flag nothing takes, a value that is
+ * not one, a switch handed a word.
+ *
+ * Exit 2 with the sentence, before any file is opened, against 1 for a file
+ * that failed: a command that is wrong should say so before it spends an hour
+ * being wrong two hundred times.
+ */
+class UsageError extends Error {}
+
+/** One flag a command takes, as the parser needs it. */
+interface FlagSpec {
+  /** A switch takes nothing after it; a value flag takes the word after it. */
+  arity: 'switch' | 'value'
+  /** Where it is filed: `--no-stranded` files `false` under `stranded`. */
+  key: string
+  /** `--no-x`, the switch that turns `x` off. */
+  negates: boolean
+}
+
+/**
+ * The words a switch's value may be written as, and what each means.
+ *
+ * Only after `=`: `--stranded=false`. The same words written *after* a switch,
+ * as a word of their own, are refused (`parseArgs`), since that was how a
+ * switch was turned off when switches took the word after them.
+ */
+const SWITCH_WORDS: ReadonlyMap<string, boolean> = new Map([
+  ['true', true],
+  ['false', false],
+  ['yes', true],
+  ['no', false],
+  ['on', true],
+  ['off', false],
+  ['1', true],
+  ['0', false],
+])
+
+/** Whether a parameter is on or off — the rule `coerce` reads it by. */
+function isSwitch(param: ParamSpec): boolean {
+  return param.kind === 'toggle' || typeof (param as { default?: unknown }).default === 'boolean'
+}
+
+/**
+ * Every flag `command` takes, and what each takes after it.
+ *
+ * The CLI's own first, and then the task's, from its descriptor — which is what
+ * makes the parse typed: a toggle is a switch, `--no-` before its key turns it
+ * off, and anything else takes a value. The task's are entered last, so a name
+ * both use — coverage's `--balance`, apa's `--window` — has the task's meaning,
+ * which is `paramsFor`'s rule as well. `--no-balance` stays the CLI's: it reads
+ * the raw counts, framing and parameter alike, and is never the negation of
+ * coverage's own `--balance`.
+ */
+function flagsFor(command: string): Map<string, FlagSpec> {
+  const table = new Map<string, FlagSpec>()
+  for (const key of RESERVED) {
+    table.set(key, { arity: SWITCHES.has(key) ? 'switch' : 'value', key, negates: false })
+  }
+  // A switch wherever it is written, so that `main` refuses it by name — it is
+  // the default now — rather than the file after it being taken as its value.
+  table.set('balance', { arity: 'switch', key: 'balance', negates: false })
+  if (command === 'replay') table.set('tab', { arity: 'value', key: 'tab', negates: false })
+  for (const param of taskById(command)?.params ?? []) {
+    const on = isSwitch(param)
+    table.set(param.key, { arity: on ? 'switch' : 'value', key: param.key, negates: false })
+    const off = `no-${param.key}`
+    if (on && !RESERVED.has(off)) table.set(off, { arity: 'switch', key: param.key, negates: true })
+  }
+  return table
+}
+
+/** The sentence for a flag `command` does not take. */
+function unknownFlag(command: string, name: string): string {
+  const task = taskById(command)
+  if (task !== undefined) {
+    return (
+      `${task.id} has no parameter --${name}. Its parameters are: ` +
+      `${task.params.map((entry) => `--${entry.key}`).join(', ') || '(none)'}.`
+    )
+  }
+  return `${command} has no flag --${name}. \`chromosomix help\` lists the ones it takes.`
+}
+
+/**
+ * The command: the first word that is neither a flag nor the value of one.
+ *
+ * Only the CLI's own flags may come before it, because only theirs are known
+ * before the command is — what a task's `--x` takes is a fact about the task.
+ * A task's flag ahead of its task is refused rather than guessed at, unless the
+ * line holds no command at all (`chromosomix --version`), which is the usage.
+ */
+function commandOf(argv: readonly string[]): string {
+  const own = flagsFor('')
+  for (let at = 0; at < argv.length; at++) {
+    const token = argv[at]
+    if (!token.startsWith('--')) return token
+    const body = token.slice(2)
+    if (body.includes('=')) continue
+    const spec = own.get(body)
+    if (spec === undefined) {
+      if (argv.slice(at + 1).every((rest) => rest.startsWith('--'))) return ''
+      throw new UsageError(
+        `--${body} is not one of the command line's own flags, and a task's flags come after the ` +
+          `task: chromosomix <task> <file> --${body} …`,
+      )
+    }
+    if (spec.arity === 'value') at += 1
+  }
+  return ''
+}
+
+/**
+ * `--key value`, `--key=value`, `--switch`, `--no-switch`, and every other word
+ * positional — typed by what `command` takes.
+ *
+ * It was untyped: a flag took the next word as its value unless that word began
+ * with `--`. So `coverage a.cool --no-balance b.hic --out d` read `b.hic` as the
+ * value of `--no-balance`, ran over `a.cool` alone and exited 0;
+ * `coverage --quiet a.cool` read the file as `--quiet`'s value and refused
+ * itself for having none; and `--out --quiet` wrote into a directory called
+ * `true`. Now a switch never takes the word after it, a flag that takes a value
+ * is refused without one, and a flag nothing takes is refused by name — for
+ * `replay` and `circular` as for a task, since a typo in a batch that runs for
+ * an hour must not quietly run the default.
+ *
+ * A switch's old value written as a word, `--stranded false`, is refused rather
+ * than read as a file called `false`: the script that wrote it meant something
+ * else by it, and is told what to write instead.
  *
  * Repeated keys accumulate, because `--features a.bed --features b.bed` is a
  * question a reader will ask and silently keeping the last one is the wrong
  * answer to it.
  */
-function parseArgs(argv: readonly string[]): Args {
+function parseArgs(argv: readonly string[], command: string): Args {
+  const table = flagsFor(command)
   const positional: string[] = []
   const flags = new Map<string, string[]>()
   const push = (key: string, value: string): void => {
@@ -192,18 +329,82 @@ function parseArgs(argv: readonly string[]): Args {
     }
     const body = token.slice(2)
     const eq = body.indexOf('=')
+    const name = eq >= 0 ? body.slice(0, eq) : body
+    const spec = table.get(name)
+    if (spec === undefined) throw new UsageError(unknownFlag(command, name))
+    if (spec.arity === 'value') {
+      if (eq >= 0) {
+        push(spec.key, body.slice(eq + 1))
+        continue
+      }
+      const next = argv[at + 1]
+      if (next === undefined || next.startsWith('--')) {
+        throw new UsageError(`--${name} needs a value after it: --${name} <value>.`)
+      }
+      push(spec.key, next)
+      at += 1
+      continue
+    }
     if (eq >= 0) {
-      push(body.slice(0, eq), body.slice(eq + 1))
+      if (spec.negates) {
+        throw new UsageError(`--${name} takes no value: it is --${spec.key}=false already.`)
+      }
+      push(spec.key, String(switchValue(name, body.slice(eq + 1))))
       continue
     }
     const next = argv[at + 1]
-    if (next === undefined || next.startsWith('--')) push(body, 'true')
-    else {
-      push(body, next)
-      at += 1
+    const meant = next === undefined ? undefined : SWITCH_WORDS.get(next.toLowerCase())
+    if (meant !== undefined) {
+      throw new UsageError(
+        `--${name} is a switch and takes nothing after it, so “${next}” would be read as a file. ` +
+          `Write ${switchAdvice(table, name, spec, meant)} — or ./${next}, if it is a file.`,
+      )
     }
+    push(spec.key, spec.negates ? 'false' : 'true')
   }
+  // The command is the first positional by construction: before it, only the
+  // CLI's own flags can stand, and they take here what `commandOf` took.
   return { command: positional[0] ?? '', positional: positional.slice(1), flags }
+}
+
+/**
+ * A line as `main` reads it — its command, its files and its flags — or the
+ * refusal `main` would print, thrown. Exported so that the lines the console
+ * writes (`analysis/cliCommand.ts`) can be held to the parser that has to take
+ * them, which is the one place the two meet.
+ */
+export function parseCommandLine(argv: readonly string[]): Args {
+  return parseArgs(argv, commandOf(argv))
+}
+
+/**
+ * What to write for `--name <word>`, where the word meant `meant`: the switch
+ * alone to say yes, and its `=false` — or its `--no-` — to say no.
+ */
+function switchAdvice(
+  table: ReadonlyMap<string, FlagSpec>,
+  name: string,
+  spec: FlagSpec,
+  meant: boolean,
+): string {
+  // `--no-stranded false` is a double negative, and the switch it negates is
+  // the plain way to say what it means.
+  if (spec.negates) return meant ? `--${name} alone` : `--${spec.key}`
+  if (meant) return `--${name} alone`
+  return table.get(`no-${spec.key}`)?.negates === true
+    ? `--${name}=false or --no-${spec.key}`
+    : `--${name}=false`
+}
+
+/** An explicit switch value, `--stranded=off`, as the boolean it means. */
+function switchValue(name: string, text: string): boolean {
+  const value = SWITCH_WORDS.get(text.trim().toLowerCase())
+  if (value === undefined) {
+    throw new UsageError(
+      `--${name}=${text}: a switch is true or false, or yes or no, on or off, 1 or 0.`,
+    )
+  }
+  return value
 }
 
 const one = (args: Args, key: string): string | undefined => args.flags.get(key)?.[0]
@@ -215,12 +416,26 @@ const all = (args: Args, key: string): string[] => args.flags.get(key) ?? []
  * Only consulted for a `.pairs`, and harmless everywhere else: a cooler states
  * its own resolutions, so a bin size named on the command line for one would be
  * a second answer to a question the file already answered.
+ *
+ * Read once, before any file is opened, and refused when it is not a whole
+ * number: `--rungs abc` built one rung and said nothing, and `--bin-size 0` was
+ * taken for no bin size at all. `--binsize` is the task's where the task claims
+ * the name — track correlation's window — as `--window` is apa's.
  */
-function pairsBinningOf(args: Args): PairsBinning | undefined {
-  const base = Number(one(args, 'bin-size') ?? one(args, 'binsize') ?? NaN)
-  if (!Number.isFinite(base) || base < 1) return undefined
-  const rungs = Number(one(args, 'rungs') ?? 1)
-  return { base: Math.floor(base), rungs: Number.isFinite(rungs) ? Math.max(1, Math.floor(rungs)) : 1 }
+function pairsBinningOf(args: Args, task?: AnalysisTask): PairsBinning | undefined {
+  const claimed = task?.params.some((param) => param.key === 'binsize') === true
+  const named = one(args, 'bin-size') ?? (claimed ? undefined : one(args, 'binsize'))
+  if (named === undefined) return undefined
+  const base = numberValue('bin-size', named)
+  if (!Number.isInteger(base) || base < 1) {
+    throw new UsageError(`--bin-size is a whole number of base pairs, 1 or more; got “${named}”.`)
+  }
+  const asked = one(args, 'rungs')
+  const rungs = asked === undefined ? 1 : numberValue('rungs', asked)
+  if (!Number.isInteger(rungs) || rungs < 1) {
+    throw new UsageError(`--rungs is how many resolutions to build, 1 or more; got “${asked}”.`)
+  }
+  return { base, rungs }
 }
 /**
  * `--value`, `--circular` and `--cell`: the framing a session sets from the
@@ -304,7 +519,8 @@ const flag = (args: Args, key: string): boolean => {
  * cannot arrive as the string `"100000"` and a boolean cannot arrive as
  * `"false"` — both of which a runner would read as truthy and act on. An unknown
  * key is an error rather than being ignored: a typo in a batch script that runs
- * for an hour must not silently use the default.
+ * for an hour must not silently use the default. And so is a value the form
+ * could not have held ({@link refusalOf}), for the same reason.
  */
 function paramsFor(task: AnalysisTask, args: Args): Params {
   // Built as a mutable record and returned as `Params`, which is readonly: the
@@ -332,12 +548,9 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
     // set the framing and left the task at its default, which is precisely the
     // silent-default failure the unknown-key error below exists to prevent.
     if (param === undefined && RESERVED.has(key)) continue
-    if (param === undefined) {
-      throw new Error(
-        `${task.id} has no parameter --${key}. Its parameters are: ` +
-          `${task.params.map((entry) => `--${entry.key}`).join(', ') || '(none)'}.`,
-      )
-    }
+    // `parseArgs` has refused it already, against the same table; said again
+    // here because this is the function whose silence would cost the hour.
+    if (param === undefined) throw new UsageError(unknownFlag(task.id, key))
     params[key] = coerce(param, values)
   }
   // `--no-balance` answers the parameter the file otherwise would: off, as the
@@ -345,7 +558,79 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
   if (flag(args, 'no-balance')) {
     for (const param of task.params) if (paramDerived(param)) params[param.key] = false
   }
+  for (const param of task.params) {
+    const refused = refusalOf(param, params[param.key])
+    if (refused !== null) throw new UsageError(refused)
+  }
   return params
+}
+
+/**
+ * Why `value` cannot be handed to a runner as `spec`, or `null` when it can.
+ *
+ * The runners read a choice with a fallback — `strParam(params, 'quantity',
+ * 'density') === 'expected'` — so that a stored session from a later build
+ * cannot change what the numbers on screen mean. The form never reaches it: it
+ * moves a held value onto an option it offers before any run
+ * (`resolveChoiceDefaults`). A shell had no such step, so `expected --quantity
+ * expectd` ran the density and wrote `# param quantity: expectd` above it — a
+ * provenance naming a computation nobody performed — and a replayed workspace
+ * naming an option this build has not got did the same. So the shell asks what
+ * the form would have offered, and refuses the rest with the values there are.
+ * A switch and a number the same way, since `boolParam` and `numParam` fall back
+ * too, for anything that is not one.
+ *
+ * Every option the descriptor lists, not only those this file is offered:
+ * which those are is a fact about a file that is not open yet, and the runner
+ * refuses the rest by name — a per-genome P(s) of a cooler is a sentence, not a
+ * fallback.
+ */
+function refusalOf(spec: ParamSpec, value: ParamValue | undefined): string | null {
+  if (value === undefined) return null
+  // The text `"false"` is not `false`, and a sentence saying so has to show
+  // which of the two it was handed.
+  const shown = typeof value === 'string' ? `the text “${value}”` : JSON.stringify(value)
+  switch (spec.kind) {
+    case 'choice': {
+      const values = spec.options.map((option) => option.value)
+      if (typeof value === 'string' && values.includes(value)) return null
+      const named = typeof value === 'string' ? `“${value}”` : shown
+      return `There is no --${spec.key} ${named}. It is ${eitherOf(values.map(quote))}.`
+    }
+    case 'toggle':
+      return typeof value === 'boolean' ? null : `--${spec.key} is true or false, not ${shown}.`
+    case 'number':
+    case 'seed':
+      // `null` is a number the context decides (`NumberParam.seed`), as a
+      // workspace records one the reader never typed.
+      return value === null || (typeof value === 'number' && Number.isFinite(value))
+        ? null
+        : `--${spec.key} is a number, not ${shown}.`
+    default:
+      return null
+  }
+}
+
+/** `a`, `a or b`, `a, b or c`. */
+function eitherOf(values: readonly string[]): string {
+  if (values.length <= 1) return values[0] ?? ''
+  return `${values.slice(0, -1).join(', ')} or ${values[values.length - 1]}`
+}
+
+/**
+ * A number as a reader types one: digits, a point, an exponent.
+ *
+ * Not `Number` alone, which reads `''` as zero — so `--factor=` ran at a factor
+ * of nought and recorded it — and `0x10` as sixteen.
+ */
+const NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i
+
+function numberValue(key: string, text: string): number {
+  const parsed = NUMBER.test(text.trim()) ? Number(text.trim()) : Number.NaN
+  if (!Number.isFinite(parsed)) {
+    throw new UsageError(`--${key} needs a number; got ${JSON.stringify(text)}.`)
+  }
+  return parsed
 }
 
 /**
@@ -438,6 +723,14 @@ const RESERVED = new Set([
   'contacts',
 ])
 
+/**
+ * Of those, the ones that take no value: `--quiet`, and never `--quiet true`.
+ *
+ * What `parseArgs` is typed by, with each task's toggles. The rest take the
+ * word after them, and refuse to be the last word on the line.
+ */
+const SWITCHES = new Set(['no-balance', 'quiet', 'help'])
+
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
   const kind = (param as { kind?: string }).kind
   // `sequences` by name as well as `multi`, and it is not a tidy-up: the runners
@@ -458,15 +751,12 @@ function coerce(param: AnalysisTask['params'][number], values: string[]): Params
     return values.flatMap((value) => value.split(',')).filter((value) => value !== '')
   }
   const value = values[values.length - 1]
-  if (kind === 'toggle' || typeof (param as { default?: unknown }).default === 'boolean') {
-    return value !== 'false' && value !== '0'
-  }
+  // A switch's value is `true` or `false` by the time it is here — `parseArgs`
+  // files `--no-x` and `--x=off` that way — and anything else is refused, where
+  // every word but `false` and `0` used to be read as on: `--x=no` was a yes.
+  if (isSwitch(param)) return switchValue(param.key, value)
   if (kind === 'number' || typeof (param as { default?: unknown }).default === 'number') {
-    const parsed = Number(value)
-    if (!Number.isFinite(parsed)) {
-      throw new Error(`--${param.key} needs a number; got ${JSON.stringify(value)}.`)
-    }
-    return parsed
+    return numberValue(param.key, value)
   }
   return value
 }
@@ -479,6 +769,15 @@ interface RunOptions {
   task: AnalysisTask
   params: Params
   path: string
+  /**
+   * Where `path`'s bytes are when they are not where it says: the copy of an
+   * address (`cli/remote.ts`). The map is still opened *as* `path`, so its
+   * framing, its provenance and every sentence about it name the address the
+   * reader typed rather than a temporary file.
+   */
+  local?: string | undefined
+  /** The command's fetched addresses, for what a run names as it goes: an `--against`, a `.pairs`. */
+  downloads: Downloads
   window?: string | undefined
   balance?: boolean | undefined
   inputs: TaskInputs
@@ -566,13 +865,17 @@ interface PairsBinning {
  * rather than wasteful — it costs a walk over the base pixel table, and it is
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
+ *
+ * `uri` is what the map is called and `path` where its bytes are — one file
+ * for a path, and an address and its downloaded copy for an address.
  */
 async function openForTask(
   uri: string,
   source: ByteSource,
   options: Pick<RunOptions, 'binning' | 'quiet'>,
+  path: string,
 ): Promise<Opened> {
-  const path = parseUri(uri).path
+  const named = parseUri(uri).path
   try {
     return { mc: await MetaCooler.open(uri, source), source, orientation: null }
   } catch (error) {
@@ -581,7 +884,7 @@ async function openForTask(
     if (binning === undefined) {
       throw new ViewerError(
         'pairs-binning-needed',
-        `${basename(path)} is a .pairs file: a list of contacts with no resolution of its own. ` +
+        `${fileNameOf(named)} is a .pairs file: a list of contacts with no resolution of its own. ` +
           'Say what to bin it at, e.g. `--bin-size 5000 --rungs 4`.',
         error.detail,
       )
@@ -612,7 +915,7 @@ async function openForTask(
     const counted = pixels.orientation ?? null
     return {
       mc: MetaCooler.fromPairs({
-        uri: path,
+        uri: named,
         header: imported.header,
         pixels,
         rungs: imported.rungs,
@@ -656,8 +959,17 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * discovery step is genuinely different — a path is `existsSync`, not a `HEAD`
  * — but the parse below is the shared one, so a number computed in a shell and
  * a number computed by clicking come out of the same implementation.
+ *
+ * `local` is where the bytes are when an address named the file: the copy
+ * `cli/remote.ts` fetched, under the address's own file name, so every road
+ * below that reads a name — a HiC-Pro matrix's, the bin file beside it — reads
+ * the one the reader typed.
  */
-async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'quiet'>): Promise<Opened> {
+async function openLocal(
+  uri: string,
+  options: Pick<RunOptions, 'binning' | 'quiet'>,
+  local?: string,
+): Promise<Opened> {
   // **The `::` is addressed to the container, not to the filesystem.** An
   // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
   // with a sentence naming the resolutions and telling the reader to write
@@ -665,12 +977,13 @@ async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'qui
   // because the whole string went to `stat` and there is no such file. So the
   // path is split off for the filesystem and the *uri* is what the container is
   // opened with, which is where `parseUri` reads the group from.
-  const path = parseUri(uri).path
+  const named = parseUri(uri).path
+  const path = local ?? named
   const name = basename(path)
   if (!isHicProMatrix(name)) {
     // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
     const source = await LocalFileSource.fromPath(path)
-    return openForTask(uri, source, options)
+    return openForTask(uri, source, options, path)
   }
   const beside = hicProBinsNames(name)
     .map((n) => join(dirname(path), n))
@@ -686,7 +999,7 @@ async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'qui
   const parsedBins = parseBins(binBytes, basename(beside))
   const matrixBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(path)))
   const opened = await hicProMap(
-    path,
+    named,
     { bytes: matrixBytes, name },
     parsedBins,
     basename(beside),
@@ -706,7 +1019,7 @@ async function openLocal(uri: string, options: Pick<RunOptions, 'binning' | 'qui
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, path } = options
-  const opened = await openLocal(resolve(path), options)
+  const opened = await openLocal(uriOf(path), options, options.local)
   const { mc } = opened
   try {
     // The ticked cells, as the analysis worker selects them before any task
@@ -714,9 +1027,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
     // map" is a task over that sum (§3.8).
     if (options.cells.length > 0) {
       if (mc.cells.length === 0) {
-        throw new Error(
-          `${basename(parseUri(path).path)} has no cells to choose from; --cell is for an .scool.`,
-        )
+        throw new Error(`${fileNameOf(path)} has no cells to choose from; --cell is for an .scool.`)
       }
       mc.selectCells(options.cells)
     }
@@ -726,7 +1037,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
     const value = options.value ?? DEFAULT_COUNT_COLUMN
     if (value !== DEFAULT_COUNT_COLUMN && !mc.scoreColumns.includes(value)) {
       throw new Error(
-        `${basename(parseUri(path).path)} has no score column ${JSON.stringify(value)}. It has: ` +
+        `${fileNameOf(path)} has no score column ${JSON.stringify(value)}. It has: ` +
           `${mc.scoreColumns.join(', ') || DEFAULT_COUNT_COLUMN}.`,
       )
     }
@@ -735,7 +1046,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
     for (const [name, at] of Object.entries(options.origins)) {
       const id = mc.chromnames.indexOf(name)
       if (id < 0) {
-        throw new Error(`--origin ${name}: ${basename(parseUri(path).path)} has no sequence of that name.`)
+        throw new Error(`--origin ${name}: ${fileNameOf(path)} has no sequence of that name.`)
       }
       const length = mc.coords.contigLengths[id]
       if (at >= length) {
@@ -820,14 +1131,15 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       ...(options.peers.length === 0 ? {} : { peers: peersOf(options.peers) }),
       // This map by its base name too, as `peersOf` names the others, so the
       // matrix's axes and the tables name every file the same way.
-      ...(options.peers.length === 0 ? {} : { mapLabel: basename(parseUri(options.path).path) }),
+      ...(options.peers.length === 0 ? {} : { mapLabel: fileNameOf(options.path) }),
     }
 
     /**
      * The job for one step of the chain, built as `analysis.worker.ts` builds
-     * its own — with the three capabilities a shell answers differently from a
-     * worker: `peer` and `openFile` read the filesystem, and `vectors` is
-     * computed here rather than asked of another thread.
+     * its own — with the capabilities a shell answers differently from a
+     * worker: `peer`, `openFile` and `openBytes` read the filesystem, an address
+     * once it is fetched, and `vectors` is computed here rather than asked of
+     * another thread.
      */
     const jobFor = async (
       step: AnalysisTask,
@@ -850,9 +1162,10 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       // A second mount for the length of one run, closed by the runner: the
       // analysis worker's own `peer`, against a filesystem instead of a
       // `SourceSpec`. Mounted through `openLocal`, so a `.pairs` or a HiC-Pro
-      // pair beside the map opens by the same road the map did.
+      // pair beside the map opens by the same road the map did — and an address
+      // from the copy fetched before the first run, under its own name.
       peer: async (map) => {
-        const other = await openLocal(resolve(map.uri), options)
+        const other = await openLocal(uriOf(map.uri), options, await options.downloads.local(map.uri, true))
         // Every map of a comparison at the one depth (§6.5).
         try {
           await drawnTo(other.mc, options.contacts, options.quiet)
@@ -870,14 +1183,22 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         }
       },
       // A file this process can read and does not mount — a `.pairs` named for
-      // its orientation curves. `openBytes` stays unanswered: it is for an
-      // address, and a shell fetches those with `curl`.
+      // its orientation curves.
       openFile: async (file) => {
         // Mounted, because a path-backed source reads through the mount and
         // refuses a range before one exists — and mounted rather than read
         // whole, since a contact list is the one input here that is routinely
         // larger than memory.
         const source = await LocalFileSource.fromPath(resolve(file))
+        await source.mount()
+        return source
+      },
+      // The same, named by an address — which the worker reads by range and a
+      // shell fetches whole first (`cli/remote.ts`), as it fetches a map.
+      openBytes: async (url) => {
+        const at = await options.downloads.local(url, true)
+        if (at === undefined) throw new Error(`${url} is not an address.`)
+        const source = await LocalFileSource.fromPath(at)
         await source.mount()
         return source
       },
@@ -909,16 +1230,28 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
  *
  * A `PeerMap` carries the reader's own name for a panel and a `SourceSpec` for
  * the worker's mount cache; here the name is the file's and the spec is the
- * path spelled as a URL, which `peer` above never reads — it opens `uri`. The
- * label is what the coefficient matrix's axes say, so it is the base name and
- * not the whole path a batch script would have expanded.
+ * path spelled as a URL — or the address, for one — which `peer` above never
+ * reads: it opens `uri`. The label is what the coefficient matrix's axes say,
+ * so it is the file's name and not the whole path a batch script would have
+ * expanded, nor an address's query.
  */
 function peersOf(paths: readonly string[]): PeerMap[] {
-  return paths.map((path) => ({
-    label: basename(parseUri(path).path),
-    uri: path,
-    source: { kind: 'remote', url: pathToFileURL(resolve(parseUri(path).path)).href },
-  }))
+  return paths.map((path) => {
+    const file = parseUri(path).path
+    return {
+      label: fileNameOf(path),
+      uri: path,
+      source: { kind: 'remote', url: isAddress(file) ? file : pathToFileURL(resolve(file)).href },
+    }
+  })
+}
+
+/**
+ * The name a file is opened under: an address as it was typed, and a path
+ * made absolute, as the framing has always recorded one.
+ */
+function uriOf(path: string): string {
+  return isAddress(path) ? path.trim() : resolve(path)
 }
 
 /**
@@ -976,7 +1309,7 @@ function gcTrackFor(
   entry: string,
 ): LoadedTrack | undefined {
   const found = storeFor(held, entry)
-  return found === undefined ? undefined : gcTrack(found[0], basename(found[0]), found[1])
+  return found === undefined ? undefined : gcTrack(found[0], fileNameOf(found[0]), found[1])
 }
 
 /**
@@ -1073,7 +1406,7 @@ async function runTracksOnly(
     normalise: null,
     level: 'bin',
     label:
-      `${basename(named)} · ${task.mapless === true ? 'sequences' : 'loaded tracks'}, no contact map` +
+      `${fileNameOf(named)} · ${task.mapless === true ? 'sequences' : 'loaded tracks'}, no contact map` +
       `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
       `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}`,
     // A task on the sequence reads what the molecules are as surely as one on
@@ -1246,7 +1579,7 @@ function storeFor(
   const direct = held.get(entry)
   if (direct !== undefined) return [entry, direct]
   return (
-    [...held].find(([path]) => basename(path) === basename(entry)) ??
+    [...held].find(([path]) => fileNameOf(path) === fileNameOf(entry)) ??
     (held.size === 1 ? [...held][0] : undefined)
   )
 }
@@ -1264,6 +1597,12 @@ function storeFor(
  * by clicking are byte-identical given the same inputs. That is worth more than
  * it sounds: it means a figure made in the browser and a table made in a batch
  * can be compared without anybody wondering whether the difference is the tool.
+ *
+ * `earlier` is every file this command has written so far, and none of them is
+ * written over. The stems are made unique before the first run ({@link
+ * stemsOf}), so this is the floor under that rather than the rule: a second run
+ * replacing the first one's tables with exit 0 is a batch whose every result
+ * looks fine and half of which is missing.
  */
 async function writeOutputs(
   result: TaskResult,
@@ -1271,12 +1610,19 @@ async function writeOutputs(
   directory: string,
   contigs: readonly BedGraphContig[],
   quiet: boolean,
+  earlier: Set<string>,
 ): Promise<string[]> {
   await mkdir(directory, { recursive: true })
   const written: string[] = []
   const put = async (name: string, body: string | Uint8Array): Promise<void> => {
     const at = join(directory, name)
+    // Without case, as a Mac's disk and Windows' compare names.
+    const key = resolve(at).toLowerCase()
+    if (earlier.has(key)) {
+      throw new Error(`${at} was written earlier by this command, and is not written over.`)
+    }
     await writeFile(at, body)
+    earlier.add(key)
     written.push(at)
     if (!quiet) process.stderr.write(`  wrote ${at}\n`)
   }
@@ -1418,23 +1764,26 @@ export function readPairText(text: string, path: string): PairSet {
  * Keyed by the *file's base name* rather than by an entry id, because there is
  * no store here to allocate one from and a name is what a reader would use to
  * refer to it anyway. The same name goes into `labels`, so a correlation
- * heatmap's axes read as filenames rather than as `a1`.
+ * heatmap's axes read as filenames rather than as `a1`. An address is fetched
+ * first and named by its file, query and all left off.
  */
-async function loadInputs(args: Args): Promise<TaskInputs> {
+async function loadInputs(args: Args, downloads: Downloads): Promise<TaskInputs> {
   const inputs: TaskInputs = {}
   const labels: Record<string, string> = {}
   for (const path of all(args, 'features')) {
-    const text = await decodeAnnotationText(new Uint8Array(await readFile(path)))
-    const id = basename(path)
-    const read = readFeatureText(text, path)
+    const at = (await downloads.local(path, true)) ?? path
+    const text = await decodeAnnotationText(new Uint8Array(await readFile(at)))
+    const id = fileNameOf(path)
+    const read = readFeatureText(text, at)
     if ('pairs' in read) inputs.pairs = { ...inputs.pairs, [id]: read.pairs }
     else inputs.features = { ...inputs.features, [id]: read.features }
     labels[id] = id
   }
   for (const path of all(args, 'pairs')) {
-    const text = await decodeAnnotationText(new Uint8Array(await readFile(path)))
-    const id = basename(path)
-    inputs.pairs = { ...inputs.pairs, [id]: readPairText(text, path) }
+    const at = (await downloads.local(path, true)) ?? path
+    const text = await decodeAnnotationText(new Uint8Array(await readFile(at)))
+    const id = fileNameOf(path)
+    inputs.pairs = { ...inputs.pairs, [id]: readPairText(text, at) }
     labels[id] = id
   }
   if (Object.keys(labels).length > 0) inputs.labels = labels
@@ -1455,11 +1804,15 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
  *
  * Keyed by the string the reader typed, because that string is what comes back
  * out of `params.sequence` — there is no entry store here to allocate an id
- * from, which is the same absence `bindInputs` argues about at length.
+ * from, which is the same absence `bindInputs` argues about at length. An
+ * address is read from its copy, fetched with the `.fai` beside it where the
+ * server has one, so a remote genome is read by range once it is on disk.
  */
-async function loadSequences(args: Args): Promise<Map<string, Reference>> {
+async function loadSequences(args: Args, downloads: Downloads): Promise<Map<string, Reference>> {
   const held = new Map<string, Reference>()
-  for (const path of all(args, 'sequence')) held.set(path, await openReference(path))
+  for (const path of all(args, 'sequence')) {
+    held.set(path, await openReference((await downloads.local(path, true)) ?? path))
+  }
   return held
 }
 
@@ -1477,11 +1830,13 @@ async function loadSequences(args: Args): Promise<Map<string, Reference>> {
  *
  * Opened before any map, so an unreadable track is exit 2 with a sentence
  * rather than the same failure once per file — and so is a name that looks like
- * a path and is not one.
+ * a path and is not one. An address is fetched then too, and read from its copy
+ * under the address it was named by.
  */
 async function loadTrackFiles(
   tasks: readonly { task: AnalysisTask; params: Params }[],
   args: Args,
+  downloads: Downloads,
   stored: readonly StoredEntry[] = [],
 ): Promise<Map<string, LoadedTrack>> {
   const paths: string[] = [...all(args, 'track')]
@@ -1496,17 +1851,17 @@ async function loadTrackFiles(
           ? [chosen]
           : []
       for (const path of named) {
-        if (existsSync(path)) paths.push(path)
+        if (isAddress(path) || existsSync(path)) paths.push(path)
         else unresolved.push(path)
       }
     }
   }
-  const held = await loadTracks(paths)
+  const held = await loadTracks(paths, (path) => downloads.local(path, true))
   // The app's ids, filed against the files they named: `a1` was `signal.bw`
   // when the workspace was saved, and `--track signal.bw` is on the line.
   for (const entry of stored) {
     if (entry.kind !== 'track' || held.has(entry.id)) continue
-    const name = basename(entry.source.url ?? entry.source.name)
+    const name = fileNameOf(entry.source.url ?? entry.source.name)
     const match = [...held.values()].find((track) => track.name === name)
     if (match !== undefined) held.set(entry.id, match)
   }
@@ -1550,7 +1905,7 @@ function withSequenceLabels(
 ): TaskInputs {
   if (sequences.size === 0) return inputs
   const labels: Record<string, string> = { ...inputs.labels }
-  for (const path of sequences.keys()) labels[path] = basename(path)
+  for (const path of sequences.keys()) labels[path] = fileNameOf(path)
   return { ...inputs, labels }
 }
 
@@ -1576,7 +1931,7 @@ function bindInputs(task: AnalysisTask, params: Params, inputs: TaskInputs): Tas
     if (spec.kind !== 'featureSet' && spec.kind !== 'pairSet') continue
     const chosen = params[spec.key]
     if (typeof chosen !== 'string' || chosen === '') continue
-    const name = basename(chosen)
+    const name = fileNameOf(chosen)
     if (spec.kind === 'pairSet') {
       const set = inputs.pairs?.[chosen] ?? inputs.pairs?.[name]
       if (set !== undefined) bound.pairs = { ...bound.pairs, [spec.key]: set }
@@ -1598,7 +1953,11 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       Every task, its id, and the parameters it takes.
 
   chromosomix <task> <file.cool|file.mcool|file.metacool|file.hic|file.pairs.gz> [...]
-      Run one task over one or more files.
+      Run one task over one or more files. Each file's outputs are named after
+      it, up to its first dot: sample.coverage.coverage-total.tsv. Two files
+      that would share a name keep more of theirs — HCT116.rep1 and
+      HCT116.rep2, then dirA_sample and dirB_sample — and nothing one command
+      writes is written over by it.
 
       --out <dir>          where to write (default: .)
       --window <chr:a-b>   a window rather than the whole file, 1-based and
@@ -1639,13 +1998,18 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
-      --<param> <value>    any parameter the task takes; see \`tasks\`. A locus
-                           (fourc's --anchor, the 3D tasks' --region and
-                           --locus) is read as --window is. A task that reads
-                           tracks (metaplot, trackcorr, frip, groupsignal)
-                           takes them as --tracks <file.bw>, repeated or
-                           comma-separated: a bigWig, a bedGraph, a wig, or a
-                           FASTA read as GC content
+      --<param> <value>    any parameter the task takes; see \`tasks\`. A choice
+                           is one of its values and a number is a number: any
+                           other is refused before a file is opened, with the
+                           values it takes. A locus (fourc's --anchor, the 3D
+                           tasks' --region and --locus) is read as --window is.
+                           A task that reads tracks (metaplot, trackcorr, frip,
+                           groupsignal) takes them as --tracks <file.bw>,
+                           repeated or comma-separated: a bigWig, a bedGraph, a
+                           wig, or a FASTA read as GC content
+      --<switch>           a parameter that is on or off, which takes no value
+                           after it: --stranded turns one on, and
+                           --stranded=false or --no-stranded turns it off
 
   chromosomix <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip,
@@ -1661,17 +2025,22 @@ const USAGE = `chromosomix — the Analysis panel, from a shell
 
   chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
-      it recorded, over the files named by --over. The workspace is what the
+      it recorded, over the files named by --over and after the workspace —
+      --over data/*.hic as a shell expands it. The workspace is what the
       app's Save button produces: every open tab in one file. A locus it
-      recorded is read as --window is, as the app's form showed it.
+      recorded is read as --window is, as the app's form showed it; a value
+      it recorded that this build cannot run is refused, before any file is.
       --tab <n>            which tab to replay, 1-based. Default: the one that
                            was in front when the workspace was saved.
       --track <file.bw>    the file behind a track the workspace recorded by
                            the app's own id. Repeat it per track
       --against <file>     the other maps a recorded hicrep compared against
 
-Remote files are not supported: the reader uses synchronous range requests,
-which exist in a worker and not in Node. Fetch it first.
+A file may be an http or https address — a map, or what --against,
+--sequence, --tracks, --features or --pairs names. The app reads one by
+range, and its range requests are synchronous, which a browser worker has and
+Node does not; so the command downloads the whole of it first, into $TMPDIR,
+with its progress on stderr, and removes it when it ends.
 `
 
 function listTasks(): void {
@@ -1700,7 +2069,7 @@ function listTasks(): void {
   }
 }
 
-async function runCommand(args: Args): Promise<number> {
+async function runCommand(args: Args, downloads: Downloads): Promise<number> {
   const task = taskById(args.command)
   if (task === undefined) {
     process.stderr.write(`Unknown task ${JSON.stringify(args.command)}. Try \`tasks\`.\n`)
@@ -1714,12 +2083,20 @@ async function runCommand(args: Args): Promise<number> {
   let inputs: TaskInputs
   let sequences: Map<string, Reference>
   let tracks: Map<string, LoadedTrack>
+  let binning: PairsBinning | undefined
+  let framing: ReturnType<typeof framingFlags>
   try {
     params = paramsFor(task, args)
-    inputs = bindInputs(task, params, await loadInputs(args))
-    sequences = await loadSequences(args)
-    tracks = await loadTrackFiles([{ task, params }], args)
+    binning = pairsBinningOf(args, task)
+    framing = framingFlags(args)
+    inputs = bindInputs(task, params, await loadInputs(args, downloads))
+    sequences = await loadSequences(args, downloads)
+    tracks = await loadTrackFiles([{ task, params }], args, downloads)
     inputs = withSequenceLabels(withTrackLabels(inputs, tracks), sequences)
+    // The other maps, fetched now where they are addresses: every run mounts
+    // them, and one that cannot be had is a fault in the command rather than in
+    // the two hundredth file.
+    for (const peer of all(args, 'against')) await downloads.local(peer, true)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -1736,6 +2113,7 @@ async function runCommand(args: Args): Promise<number> {
   }
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
+  const written = new Set<string>()
 
   if (args.positional.length === 0) {
     // No map, which is the 1D browser's own case (§5.8) and only makes sense
@@ -1753,7 +2131,8 @@ async function runCommand(args: Args): Promise<number> {
         sequences,
         tracks,
         peers,
-        ...framingFlags(args),
+        downloads,
+        ...framing,
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
@@ -1763,6 +2142,7 @@ async function runCommand(args: Args): Promise<number> {
         directory,
         result.contigs,
         quiet,
+        written,
       )
       return 0
     } catch (error) {
@@ -1771,15 +2151,18 @@ async function runCommand(args: Args): Promise<number> {
     }
   }
 
+  const stems = stemsOf(args.positional)
   let failures = 0
-  for (const path of args.positional) {
+  for (const [index, path] of args.positional.entries()) {
     try {
-      if (!quiet) process.stderr.write(`${path}\n`)
+      if (!quiet) process.stderr.write(`${displayOf(path)}\n`)
       const result = await runOne({
         task,
         params,
         path,
-        binning: pairsBinningOf(args),
+        local: await downloads.local(path, false),
+        downloads,
+        binning,
         // Not `one(args, 'window')`. `apa` declares a parameter of that name —
         // a half-width in bins — and `paramsFor` already gives a task's own
         // parameters the flag where the two collide. The framing was reading it
@@ -1794,11 +2177,11 @@ async function runCommand(args: Args): Promise<number> {
         sequences,
         tracks,
         peers,
-        ...framingFlags(args),
+        ...framing,
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
-      await writeOutputs(result, stemOf(path), directory, result.contigs, quiet)
+      await writeOutputs(result, stems[index], directory, result.contigs, quiet, written)
     } catch (error) {
       failures += 1
       // Named and carried on, rather than stopping: a batch of two hundred
@@ -1807,9 +2190,21 @@ async function runCommand(args: Args): Promise<number> {
       process.stderr.write(
         `  failed: ${error instanceof Error ? error.message : String(error)}\n`,
       )
+    } finally {
+      // A fetched map no later file names again is let go here, so a batch over
+      // two hundred addresses holds one of them at a time.
+      if (!namedAgain(args.positional, index)) await downloads.release(path)
     }
   }
   return failures === 0 ? 0 : 1
+}
+
+/** Whether a file after `index` names the same file — another resolution of one `.mcool`. */
+function namedAgain(paths: readonly string[], index: number): boolean {
+  // Split by hand rather than by `parseUri`, which refuses an empty file half:
+  // this runs in a `finally`, and must not throw for a positional that failed.
+  const fileOf = (path: string): string => path.split('::')[0].trim()
+  return paths.slice(index + 1).some((later) => fileOf(later) === fileOf(paths[index]))
 }
 
 /**
@@ -1820,14 +2215,26 @@ async function runCommand(args: Args): Promise<number> {
  * looking at a picture. Nothing is retyped, which is the whole point: a
  * transcription error in a batch of two hundred is two hundred wrong numbers
  * that look right.
+ *
+ * The files are the ones `--over` names and any named after the workspace, so
+ * `--over data/*.hic` replays every file the shell expands it to. Every one
+ * after the first was a positional this command never read, and it replayed the
+ * first alone with exit 0.
  */
-async function replayCommand(args: Args): Promise<number> {
+async function replayCommand(args: Args, downloads: Downloads): Promise<number> {
   const path = args.positional[0]
   if (path === undefined) {
     process.stderr.write('replay needs a workspace file.\n')
     return 2
   }
-  const read = parseWorkspaceFile(await readFile(path, 'utf8'))
+  let text: string
+  try {
+    text = await readFile((await downloads.local(path, true)) ?? path, 'utf8')
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    return 2
+  }
+  const read = parseWorkspaceFile(text)
   if (isRefusal(read)) {
     // The reason rather than one blanket sentence: a workspace from a newer
     // build is a different problem from a file that is not one, and only one of
@@ -1855,28 +2262,69 @@ async function replayCommand(args: Args): Promise<number> {
     )
     return 2
   }
-  const over = all(args, 'over')
+  // What was recorded is checked as a typed value is (`refusalOf`), before any
+  // file is opened: a workspace naming an option this build has not got would
+  // otherwise run the runner's fallback under the recorded name — the false
+  // provenance a direct run is now refused for.
+  for (const entry of recorded) {
+    const task = taskById(entry.task)
+    for (const spec of task?.params ?? []) {
+      const refused = refusalOf(spec, entry.params[spec.key])
+      if (refused === null) continue
+      process.stderr.write(
+        `${fileNameOf(path)} recorded ${entry.task} with a value this build cannot run, so ` +
+          `nothing was replayed. ${refused}\n`,
+      )
+      return 2
+    }
+  }
+  const over = [...all(args, 'over'), ...args.positional.slice(1)]
   const files = over.length > 0 ? over : [config.state.uri]
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
-  const sequences = await loadSequences(args)
-  const tracks = await loadTrackFiles(
-    recorded.flatMap((entry) => {
-      const task = taskById(entry.task)
-      return task === undefined ? [] : [{ task, params: entry.params }]
-    }),
-    args,
-    config.tracks,
-  )
-  const loaded = withSequenceLabels(withTrackLabels(await loadInputs(args), tracks), sequences)
+  let sequences: Map<string, Reference>
+  let tracks: Map<string, LoadedTrack>
+  let loaded: TaskInputs
+  let binning: PairsBinning | undefined
+  let framing: ReturnType<typeof framingFlags>
+  try {
+    binning = pairsBinningOf(args)
+    framing = framingFlags(args)
+    sequences = await loadSequences(args, downloads)
+    tracks = await loadTrackFiles(
+      recorded.flatMap((entry) => {
+        const task = taskById(entry.task)
+        return task === undefined ? [] : [{ task, params: entry.params }]
+      }),
+      args,
+      downloads,
+      config.tracks,
+    )
+    loaded = withSequenceLabels(withTrackLabels(await loadInputs(args, downloads), tracks), sequences)
+    for (const peer of all(args, 'against')) await downloads.local(peer, true)
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    return 2
+  }
   const peers = all(args, 'against')
 
   process.stderr.write(
-    `${recorded.length} task${recorded.length === 1 ? '' : 's'} from ${basename(path)}, ` +
+    `${recorded.length} task${recorded.length === 1 ? '' : 's'} from ${fileNameOf(path)}, ` +
       `over ${files.length} file${files.length === 1 ? '' : 's'}\n`,
   )
+  const stems = stemsOf(files)
+  const written = new Set<string>()
   let failures = 0
-  for (const file of files) {
+  for (const [at, file] of files.entries()) {
+    // Fetched once for every task it is replayed under, and let go after the
+    // last of them; a fetch that fails fails each of them by name.
+    let local: string | undefined
+    let fetched: unknown = null
+    try {
+      local = await downloads.local(file, false)
+    } catch (error) {
+      fetched = error
+    }
     for (const entry of recorded) {
       const task = taskById(entry.task)
       if (task === undefined) {
@@ -1899,23 +2347,26 @@ async function replayCommand(args: Args): Promise<number> {
         continue
       }
       try {
-        if (!quiet) process.stderr.write(`${file} · ${task.title}\n`)
+        if (!quiet) process.stderr.write(`${displayOf(file)} · ${task.title}\n`)
+        if (fetched !== null) throw fetched
         const result = await runOne({
           task,
           params: entry.params,
           path: file,
+          local,
+          downloads,
           balance: undefined,
-          binning: pairsBinningOf(args),
+          binning,
           // Per task, because a replayed workspace can hold several that name
           // different sets under different keys.
           inputs: bindInputs(task, entry.params, loaded),
           sequences,
           tracks,
           peers,
-          ...framingFlags(args),
+          ...framing,
           quiet,
         })
-        await writeOutputs(result, stemOf(file), directory, result.contigs, quiet)
+        await writeOutputs(result, stems[at], directory, result.contigs, quiet, written)
       } catch (error) {
         failures += 1
         process.stderr.write(
@@ -1923,6 +2374,7 @@ async function replayCommand(args: Args): Promise<number> {
         )
       }
     }
+    if (!namedAgain(files, at)) await downloads.release(file)
   }
   return failures === 0 ? 0 : 1
 }
@@ -1945,16 +2397,23 @@ async function replayCommand(args: Args): Promise<number> {
  * with nothing on its diagonal. A batch that wants a small plasmid decided reads
  * the map at a resolution that gives it fifty bins.
  */
-async function circularCommand(args: Args): Promise<number> {
+async function circularCommand(args: Args, downloads: Downloads): Promise<number> {
   if (args.positional.length === 0) {
     process.stderr.write('circular needs at least one file.\n')
     return 2
   }
   const quiet = flag(args, 'quiet')
+  let binning: PairsBinning | undefined
+  try {
+    binning = pairsBinningOf(args)
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    return 2
+  }
   let failures = 0
-  for (const path of args.positional) {
+  for (const [index, path] of args.positional.entries()) {
     try {
-      const { mc } = await openLocal(resolve(path), { binning: pairsBinningOf(args), quiet })
+      const { mc } = await openLocal(uriOf(path), { binning, quiet }, await downloads.local(path, false))
       try {
         const balance = flag(args, 'no-balance') ? false : mc.hasWeights
         const pairs = mc.chromnames.map((name, id) => [name, mc.coords.contigLengths[id]] as const)
@@ -1994,6 +2453,8 @@ async function circularCommand(args: Args): Promise<number> {
     } catch (error) {
       failures += 1
       process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    } finally {
+      if (!namedAgain(args.positional, index)) await downloads.release(path)
     }
   }
   return failures === 0 ? 0 : 1
@@ -2026,23 +2487,153 @@ export function stemOf(path: string): string {
   // group's last segment is kept as a suffix so two resolutions of one file
   // written to one `--out` are two sets of results rather than one overwritten
   // twice.
-  const { path: file, group } = parseUri(path)
-  const name = basename(file)
+  const { path: file, group } = uriParts(path)
+  const name = fileNameOf(file)
   const dot = name.indexOf('.')
   const stem = dot > 0 ? name.slice(0, dot) : (name || 'output')
-  if (group === '/') return stem
+  return `${stem}${groupSuffix(group)}`
+}
+
+/**
+ * `parseUri`, without its refusal of an empty file half: the stems of a batch
+ * are named before its first run, and a positional the run would refuse is
+ * refused there, as that file's failure, rather than here as the batch's.
+ */
+function uriParts(path: string): { path: string; group: string } {
+  try {
+    return parseUri(path)
+  } catch {
+    return { path: '', group: '/' }
+  }
+}
+
+/** `_1000` for `::/resolutions/1000`, and nothing for a file's root. */
+function groupSuffix(group: string): string {
+  if (group === '/') return ''
   const last = group.split('/').filter((part) => part !== '').pop()
-  return last === undefined ? stem : `${stem}_${last}`
+  return last === undefined ? '' : `_${last}`
+}
+
+/**
+ * One stem per input of a command, no two alike: the names its outputs are
+ * written under.
+ *
+ * {@link stemOf} of each wherever that is unique, so a command over one file —
+ * or over files that differ before their first dot — names its outputs as it
+ * always has, and a script reading them back keeps working. It was the only
+ * rule, so `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
+ * `HCT116.coverage.*` twice, the second run's files over the first's, with exit
+ * 0; and `dirA/sample.mcool dirB/sample.mcool` did the same. Where two would
+ * share a stem, those two keep more of their names, a step at a time, until
+ * they differ:
+ *
+ * 1. the whole name less its format extension, and a `.gz` before it:
+ *    `HCT116.rep1` and `HCT116.rep2`;
+ * 2. the whole name: `sample.cool` and `sample.hic`;
+ * 3. the directories it is in, nearest first, joined with `_` — an address's
+ *    path, then its host: `dirA_sample` and `dirB_sample`;
+ * 4. and a file named twice is numbered in the order given: `sample`,
+ *    `sample_2`.
+ *
+ * Compared without case, because two names that differ only in it are one file
+ * on a Mac's disk and on Windows'.
+ */
+export function stemsOf(paths: readonly string[]): string[] {
+  const ladders = paths.map(stemLadder)
+  // What each input *is*: one file named twice, or two names differing only in
+  // case, can never be told apart by more of its name, and climbing for it
+  // would only end at a stem made of every directory up to the root.
+  const identity = paths.map((path) => {
+    const { path: file, group } = uriParts(path)
+    return `${isAddress(file) ? file : resolve(file)}::${group}`.toLowerCase()
+  })
+  const rung = paths.map(() => 0)
+  const stems = ladders.map((ladder) => ladder[0])
+  for (;;) {
+    const holders = new Map<string, number[]>()
+    stems.forEach((stem, index) => {
+      const key = stem.toLowerCase()
+      holders.set(key, [...(holders.get(key) ?? []), index])
+    })
+    const climbing = [...holders.values()].flatMap((held) =>
+      held.filter(
+        (index) =>
+          rung[index] < ladders[index].length - 1 &&
+          held.some((other) => identity[other] !== identity[index]),
+      ),
+    )
+    if (climbing.length === 0) break
+    for (const index of climbing) {
+      rung[index] += 1
+      stems[index] = ladders[index][rung[index]]
+    }
+  }
+  const taken = new Set<string>()
+  return stems.map((stem) => {
+    let named = stem
+    for (let count = 2; taken.has(named.toLowerCase()); count++) named = `${stem}_${count}`
+    taken.add(named.toLowerCase())
+    return named
+  })
+}
+
+/** Every stem {@link stemsOf} may give one input, least specific first. */
+function stemLadder(path: string): string[] {
+  const { path: file, group } = uriParts(path)
+  const name = fileNameOf(file)
+  const suffix = groupSuffix(group)
+  const bare = name.replace(/\.(gz|bgz|bz2|xz|zst)$/i, '')
+  const dot = bare.lastIndexOf('.')
+  const long = `${dot > 0 ? bare.slice(0, dot) : bare || name || 'output'}${suffix}`
+  const ladder = [stemOf(path), long, `${name || 'output'}${suffix}`]
+  const directories = isAddress(file)
+    ? addressDirectories(file)
+    : resolve(file)
+        .split(/[\\/]/)
+        .filter((part) => part !== '')
+        .slice(0, -1)
+        .reverse()
+  let prefix = ''
+  for (const directory of directories) {
+    // `:` and the separators are no part of a file's name: a drive on Windows,
+    // the port of an address's host, a `%2F` an address decoded to.
+    const safe = directory.replace(/[:\\/]/g, '_')
+    prefix = prefix === '' ? safe : `${safe}_${prefix}`
+    ladder.push(`${prefix}_${long}`)
+  }
+  return ladder.filter((stem, at) => ladder.indexOf(stem) === at)
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
-  const args = parseArgs(argv)
-  if (args.command === '' || args.command === 'help' || flag(args, 'help')) {
+  // Asked for anywhere, the help, before the rest is checked: a reader who
+  // types `--help` after half a command wants the usage, not a refusal of the half.
+  if (argv.includes('--help')) {
     process.stdout.write(USAGE)
     return 0
   }
-  if (args.command === 'tasks') {
-    listTasks()
+  let args: Args
+  try {
+    const command = commandOf(argv)
+    if (command === '' || command === 'help') {
+      process.stdout.write(USAGE)
+      return 0
+    }
+    if (command === 'tasks') {
+      listTasks()
+      return 0
+    }
+    if (command !== 'replay' && command !== 'circular' && taskById(command) === undefined) {
+      process.stderr.write(`Unknown task ${JSON.stringify(command)}. Try \`tasks\`.\n`)
+      return 2
+    }
+    args = parseArgs(argv, command)
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error
+    process.stderr.write(`${error.message}\n`)
+    return 2
+  }
+  if (flag(args, 'help')) {
+    process.stdout.write(USAGE)
     return 0
   }
   if (args.flags.has('balance') && !takesBalance(args.command)) {
@@ -2052,9 +2643,16 @@ export async function main(argv: readonly string[]): Promise<number> {
     )
     return 2
   }
-  if (args.command === 'replay') return replayCommand(args)
-  if (args.command === 'circular') return circularCommand(args)
-  return runCommand(args)
+  // One directory of fetched addresses per command, gone when it ends — after
+  // a failure as after a success, which is what the `finally` is for.
+  const downloads = new Downloads({ quiet: flag(args, 'quiet') })
+  try {
+    if (args.command === 'replay') return await replayCommand(args, downloads)
+    if (args.command === 'circular') return await circularCommand(args, downloads)
+    return await runCommand(args, downloads)
+  } finally {
+    await downloads.close()
+  }
 }
 
 // `import.meta.url` against `process.argv[1]` is the ESM spelling of "am I the

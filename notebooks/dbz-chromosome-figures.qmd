@@ -439,7 +439,7 @@ def analyse(card):
         step(d / f'groups-{METHOD}', 'groupsignal',
              '--tracks', one(d / 'composition', '*composition-gc.bw'),
              '--features', one(d / f'compartments-arms-{METHOD}', '*compartment-ab.bed'),
-             '--outside', 'false', '--resolution', RES, *frame)
+             '--outside=false', '--resolution', RES, *frame)
     step(d / 'model', 'reconstruct3d', at, '--region', chrom, '--method', 'nb', '--alpha', 3,
          '--iterations', MODEL_ITERATIONS, *frame)
     model = one(d / 'model', '*reconstructed-model.bed3d')

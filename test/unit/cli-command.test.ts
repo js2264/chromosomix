@@ -16,12 +16,12 @@
  * no `--window` on the task that claimed the name for a parameter of its own, no
  * entry id where a shell needs a path.
  *
- * The other half is the caveats. A browser knows three things a shell cannot be
- * told — a remote file, a window across several sequences, a parameter naming a
- * set the app itself computed — and each has to arrive as a `#` line above the
- * command rather than as a silent omission, because a command that runs and
- * answers a slightly different question is worse than one that says what it
- * left out.
+ * The other half is the caveats. A browser knows two things a shell cannot be
+ * told — a window across several sequences, a parameter naming a set the app
+ * itself computed — and one it is told at a price, a remote file it downloads
+ * whole; each has to arrive as a `#` line above the command rather than as a
+ * silent omission, because a command that runs and answers a slightly
+ * different question is worse than one that says what it left out.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -625,14 +625,22 @@ describe('two sequence sets against each other', () => {
 })
 
 describe('what a shell cannot be given', () => {
-  it('names a remote file and says it has to be fetched first', () => {
+  /**
+   * The shell fetches an address itself now (`cli/remote.ts`), so the line runs
+   * as it stands — and the note is what it costs: the whole file, where the app
+   * read the ranges it drew, once per line that names it.
+   */
+  it('names a remote file, and says the command downloads the whole of it', () => {
     const built = cliCommandFor({
       task: insulation,
       provenance: provenance('insulation', {}, { uri: 'https://example.org/yeast.mcool' }),
       context: context(),
     })
     expect(commandOf(built.text)).toContain('https://example.org/yeast.mcool')
-    expect(notesOf(built.text).join(' ')).toContain('remote')
+    const notes = notesOf(built.text).join(' ')
+    expect(notes).toContain('remote')
+    expect(notes).toContain('downloads the whole of it')
+    expect(notes).not.toContain('local files only')
   })
 
   /**
@@ -685,7 +693,7 @@ describe('what a shell cannot be given', () => {
     const command = commandOf(built.text)
     expect(command).toContain('--against rep2.mcool::resolutions/1000')
     expect(command).toContain('--against https://example.org/rep3.cool')
-    expect(notesOf(built.text).join(' ')).toContain('rep3 is remote')
+    expect(notesOf(built.text).join(' ')).toContain('rep3 is remote, so the command downloads')
   })
 
   it('says what to add when the maps compared against are not in the record', () => {

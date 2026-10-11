@@ -2187,6 +2187,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **`chromosomix` reads its command line by what each command takes (§23.1).** A flag took the word
+  after it as its value unless that word began with `--`, so `coverage a.cool --no-balance b.hic`
+  ran over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file,
+  and `--out --quiet` wrote into a directory called `true`. A task's on-or-off parameters and the
+  command's own `--quiet`, `--no-balance` and `--help` take nothing after them now — `--stranded=false`
+  or `--no-stranded` turns one off — a flag that takes a value is refused without one, and a flag a
+  command does not take is refused for `replay` and `circular` as for a task. `--stranded false`, the
+  old way to turn one off, is refused with what to write instead. `replay` reads the files after the
+  workspace as it reads those after `--over`, so `--over data/*.hic` replays every file rather than
+  the first alone.
+
+- **A value no form could hold is refused before any file is opened (§23.1).** `expected --quantity
+  expectd` ran the density and wrote `# param quantity: expectd` above the table, `--factor=` ran at
+  nought and `--rungs abc` built one rung. Choices are checked against the task's options, switches
+  and numbers against what they can be, and what a replayed workspace recorded the same way — exit 2,
+  with the values there are.
+
+- **Each input of one command is written under a name of its own (§23.1).** `coverage
+  HCT116.rep1.cool HCT116.rep2.cool` wrote `HCT116.coverage.*` twice, the second run's files over the
+  first's, with exit 0. One input's outputs are named as they always were; two that would share a
+  name keep more of theirs (`HCT116.rep1`), then their directories (`dirA_sample`), then a number,
+  and nothing one command writes is written over by it.
+
+- **A remote file is fetched first, as the README said (§23.1, §23.3).** An http or https address
+  went to `stat` as a path. A map, an `--against`, a `--sequence` with its `.fai`, `--tracks`,
+  `--features`, `--pairs`, a `.pairs` for P(s)'s orientations and a replayed workspace are downloaded
+  whole into `$TMPDIR`, with their progress on stderr, and removed when the command ends; the
+  framing, the provenance and the outputs' names are the address's. The console's note on a remote
+  file says what the line costs rather than that a shell cannot read it.
+
 - **A figure's PDF strokes what it fills (§7.2, §18.13).** The PDF page let go of a path at the first
   operator that painted it, where a canvas keeps it until `beginPath`, so a shape filled and then
   stroked printed as its fill and a stroke of nothing: every exported box plot lost its outline,
