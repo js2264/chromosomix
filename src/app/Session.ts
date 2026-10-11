@@ -84,7 +84,7 @@ import {
 } from '../state/ViewState'
 import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
-import { MATRIX_OPTIONS, TRACK_OPTIONS, getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
 import { afterHome, homeParent, hostHolds, removeCard, swapCard } from '../ui/cardLayout'
 import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
@@ -144,7 +144,6 @@ import {
   type AssemblyOrigin,
   type Contig,
 } from '../genome/assembly'
-import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
@@ -157,9 +156,7 @@ import type { Census } from '../metacooler/resample'
 import type { ResampleTarget } from '../analysis/worker/protocol'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, LEAD_ROW } from '../ui/CompareCard'
-import { PanelDeck } from '../panels/PanelDeck'
-import { DeckFrame } from '../panels/DeckFrame'
-import { MAX_PANELS, parseMaps, type DeckLocal, type GrowDirection } from '../panels/deck'
+import { MAX_PANELS, parseMaps } from '../panels/deck'
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
@@ -178,7 +175,6 @@ import type { ProviderId } from '../ui/connectFronts'
 import { embedded } from '../embed'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
-import { offerLanding, type LaneSurface } from '../ui/laneCarry'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
@@ -221,6 +217,7 @@ import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { SessionCompare, withoutSecond } from './SessionCompare'
+import { SessionDeck } from './SessionDeck'
 import { rememberHandle } from '../state/handles'
 import { grantFor } from '../ui/chooseFiles'
 
@@ -650,8 +647,10 @@ export class Session {
   /**
    * The *contacts* box at the end of the breadcrumb (§6.5), built with the bar
    * it sits in and re-seated by it on every render rather than rebuilt.
+   *
+   * @internal SessionDeck re-reads the box when a companion draws.
    */
-  private contactsBox: ContactsBox | null = null
+  contactsBox: ContactsBox | null = null
   /**
    * What each reader this session holds was last told to draw its map to, and
    * what it answered (§6.5). By client: the lead's worker outlives the files it
@@ -716,7 +715,8 @@ export class Session {
    * not yet opening anything and must not be described as busy with a file.
    */
   private resolving: string | null = null
-  private current: {
+  /** @internal The mounted view: SessionDeck leads the deck with its panel. */
+  current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
     /** The view's own controls, for the Aesthetics column. */
@@ -760,14 +760,21 @@ export class Session {
    * every navigation and ten loaded tracks must not be: leaving a region for the
    * contigs table and coming back has to return to the same picture. `null` on
    * a `.metacool`, which is the whole of §8.5's gate.
+   *
+   * @internal SessionDeck draws its structure and tracks cells from it.
    */
-  private annotations: FileAnnotations | null = null
+  annotations: FileAnnotations | null = null
   private manualCard: ManualCard | null = null
   /** The Metadata card (§8.12); rebuilt with the file, like every other card. */
   private metadataCard: MetadataCard | null = null
   private bookmarksCard: BookmarksCard | null = null
-  /** The bookmarks behind the card, for the structure cell to name on the model (§25.5). */
-  private bookmarkStore: BookmarkStore | null = null
+  /**
+   * The bookmarks behind the card, for the structure cell to name on the model
+   * (§25.5).
+   *
+   * @internal SessionDeck hands it to the structure cell.
+   */
+  bookmarkStore: BookmarkStore | null = null
   /**
    * The state the mounted view was built for.
    *
@@ -806,18 +813,10 @@ export class Session {
    * The second file in the lower-left triangle, and everything it takes to
    * hold one: its reader, its gate, its eye, and its carry across a change of
    * resolution (`SessionCompare`).
+   *
+   * @internal SessionDeck opens the second file in a cell, and lists it.
    */
-  private readonly compare = new SessionCompare(this)
-  /**
-   * The maps the eye on a Contact maps row took out of the deck (§16.9): still
-   * this session's, still listed, drawn in no cell until the eye or a drop puts
-   * them back. Held here and not by the deck, because a deck left with nothing
-   * beside the first map puts itself down — and the maps hidden from it are
-   * exactly the ones it no longer has a cell for. The ids are the session's
-   * own, in a namespace the deck's `p1`, `p2`… cannot reach.
-   */
-  private hiddenMaps: Array<{ id: string; picked: PickedFile }> = []
-  private hiddenMapCount = 0
+  readonly compare = new SessionCompare(this)
   /**
    * The Contact maps card: every map this session holds, the second file's row
    * among them.
@@ -827,61 +826,11 @@ export class Session {
    */
   compareCard: CompareCard | null = null
   /**
-   * Further files, each in a panel of its own beside this one (§16).
-   *
-   * The other generalisation of "two files", and orthogonal to {@link compare}
-   * rather than a replacement for it: the triangle is two files in one square,
-   * this is N squares under one navigation, and a session may hold both. Built
-   * on demand and put down when the last companion is closed, so a session with
-   * one map is exactly the session it was before decks existed — no grid, no
-   * lock, no toolbar.
+   * The deck of panels (§16): further files beside this one, the `+` edges
+   * round a map that has none yet, and the maps the eye took out of it
+   * (`SessionDeck`). `grid` is the deck itself, or `null` while there is none.
    */
-  private deck: PanelDeck | null = null
-  /**
-   * The `+` edges round a map that has no deck yet (§16.9).
-   *
-   * The session holds one because the gesture has to exist *before* the feature
-   * does: a reader with one map has nothing on screen telling them this viewer
-   * can put another beside it, and the command palette is not a place anybody
-   * looks for a thing they do not know exists. Once a deck is built it grows its
-   * own edges round its grid and this one goes back to holding nothing — the
-   * same component either way, so pressing `+` on a deck of four is visibly the
-   * same act as pressing it on a map of one.
-   */
-  private readonly deckEdges = new DeckFrame({
-    onGrow: (direction, picked) => this.growDeck(direction, picked),
-    // The map's own row off the Contact maps card, dropped on an edge before
-    // there is a deck: the deck, with a second picture of it in the new cell.
-    onGrowWithMap: (direction, row) => {
-      if (this.deckIsPossible) this.ensureDeck().growWithMap(direction, row)
-    },
-    // A model or a track off the Annotations panel, the same way: the deck,
-    // with that one in the new cell (§16.9).
-    onGrowWithStructure: (direction, id) => {
-      if (this.deckIsPossible) this.ensureDeck().growWithStructure(direction, id)
-    },
-    onGrowWithTrack: (direction, id) => {
-      if (this.deckIsPossible) this.ensureDeck().growWithTrack(direction, id)
-    },
-  })
-  /**
-   * Those edges as places a lane carried off the map by its grip can land
-   * (`ui/laneCarry.ts`): the deck, with the lane moved into its new cell. Only
-   * while they are round a lone map — once there is a deck, its own edges are
-   * the ones on screen, and it answers for them.
-   */
-  private readonly edgeLanding: LaneSurface = {
-    landingAt: (x, y) => {
-      if (this.deck !== null || !this.deckIsPossible) return null
-      const direction = this.deckEdges.edgeAt(x, y)
-      if (direction === null) return null
-      return {
-        light: (on) => this.deckEdges.lightEdge(direction, on),
-        take: (carry) => this.ensureDeck().landLaneGrowing(direction, carry),
-      }
-    },
-  }
-  private readonly stopEdgeLanding = offerLanding(this.edgeLanding)
+  private readonly deck = new SessionDeck(this)
   /**
    * The genome this session is browsing, when there is no contact map.
    *
@@ -895,8 +844,10 @@ export class Session {
    * reader worker is alive, the file is open, and the picture comes back from
    * where it was left. Opening a map from a browser still replaces the assembly
    * outright, and closing one still falls back to it.
+   *
+   * @internal SessionDeck leads a deck beside the 1D browser by it.
    */
-  private assembly: Assembly | null = null
+  assembly: Assembly | null = null
   /** Structure rows already seen, so a new one opens its cell (§25.3); `null` until the watch begins. */
   /**
    * The structure rows seen so far, by id, with the payload each held — so a
@@ -910,8 +861,6 @@ export class Session {
    * first moment a deck can frame it ({@link showStructureAlone}).
    */
   private structureAlone = false
-  /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
-  private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
    * The file {@link assembly} was read from, in the shape a worker opens.
    *
@@ -943,11 +892,20 @@ export class Session {
    * around the picture rather than any part of what the picture is *of*.
    */
   private mapOnly = false
-  /** The map view's Tracks card, told when the lanes are put away (`V`). */
-  private trackCard: AnnotationCard | null = null
-  /** The Structures card (§25), rebuilt with the Tracks card it sits under. */
-  private structureCard: StructureCard | null = null
-  private browser: BrowserView | null = null
+  /**
+   * The map view's Tracks card, told when the lanes are put away (`V`).
+   *
+   * @internal SessionDeck tells it when a tracks cell is renamed.
+   */
+  trackCard: AnnotationCard | null = null
+  /**
+   * The Structures card (§25), rebuilt with the Tracks card it sits under.
+   *
+   * @internal SessionDeck lights its eyes when the deck's models change.
+   */
+  structureCard: StructureCard | null = null
+  /** @internal SessionDeck leads a deck with it in the 1D browser. */
+  browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
   /** Drop the map's listener on that selection; see {@link paintSequences}. */
@@ -1012,8 +970,11 @@ export class Session {
    * created and destroyed together with the file — see `analysis/workspace.ts`
    * for why the wiring lives there rather than adding three hundred lines here.
    * `null` until a file is open, and dropped with it.
+   *
+   * @internal SessionDeck refreshes it when the star or the maps beside it
+   * move.
    */
-  private analysis: AnalysisWorkspace | null = null
+  analysis: AnalysisWorkspace | null = null
   /** Set while the workspace's chunk is in flight, so it is fetched once. */
   private analysisLoading = false
   private generalOn = false
@@ -1044,8 +1005,15 @@ export class Session {
   private primed = false
   /** Whether anything has ever been mounted here; see {@link activate}. */
   private painted = false
+  /**
+   * The window: the one thing a session reports to ({@link SessionHost}).
+   *
+   * @internal The collaborators report through it as the session does.
+   */
+  readonly host: SessionHost
 
-  constructor(private readonly host: SessionHost, id?: string) {
+  constructor(host: SessionHost, id?: string) {
+    this.host = host
     this.id = id ?? `s${nextSessionId++}`
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
@@ -1361,7 +1329,7 @@ export class Session {
    */
   private repaintMetadata(): void {
     this.current?.panel?.repaint()
-    this.deck?.repaint()
+    this.deck.grid?.repaint()
     this.metadataCard?.refresh()
   }
 
@@ -1369,7 +1337,7 @@ export class Session {
   relayout(): void {
     this.current?.panel?.remeasure()
     this.current?.remeasure?.()
-    this.deck?.relayout()
+    this.deck.grid?.relayout()
     this.analysis?.relayout()
   }
 
@@ -1379,7 +1347,6 @@ export class Session {
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
     this.editStage?.close()
-    this.stopEdgeLanding()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
     // navigation back to it.
@@ -1390,8 +1357,7 @@ export class Session {
     this.analysis = null
     this.current?.destroy?.()
     this.current = null
-    this.deck?.destroy()
-    this.deck = null
+    this.deck.destroy()
     this.wholeFile?.view.destroy()
     this.wholeFile = null
     this.annotations?.client.destroy()
@@ -1454,7 +1420,7 @@ export class Session {
     // The marks' switch after both, map or browser alike: an enlarged model
     // binds `a` to the whole model, and the first binding matched is the one a
     // key runs, so it keeps the letter there as it keeps `f`, `l` and `r`.
-    return [...this.ownCommands(), ...(this.deck?.cellCommands() ?? []), this.marksCommand()]
+    return [...this.ownCommands(), ...(this.deck.grid?.cellCommands() ?? []), this.marksCommand()]
   }
 
   private ownCommands(): Command[] {
@@ -1637,8 +1603,8 @@ export class Session {
         // `panels/PanelDeck.ts`, which is where an argument belongs.
         hint: 'Another file, in a panel of its own, moving with this one.',
         enabled:
-          file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deckIsPossible,
-        run: () => this.addMap(),
+          file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deck.possible,
+        run: () => this.deck.addMap(),
       },
       // The stage that edits the reference (§27.3), a dev feature (§29): absent,
       // not greyed, while the switch is off.
@@ -1686,18 +1652,18 @@ export class Session {
         // handing back the first cell of the arrangement is answering a question
         // they did not ask. One command rather than two, because there is only
         // ever one picture in front of them — see `PanelDeck.copyDeck`.
-        title: this.deck === null ? 'Copy this plot to the clipboard' : 'Copy the deck to the clipboard',
+        title: this.deck.grid === null ? 'Copy this plot to the clipboard' : 'Copy the deck to the clipboard',
         hint:
-          this.deck === null
+          this.deck.grid === null
             ? 'The figure as a PNG, at the Export card\'s resolution, ready to paste — though with text ' +
               'selected the same key still copies the text.'
             : 'Every panel as one PNG, laid out as it is on screen, ready to paste — though with text ' +
               'selected the same key still copies the text.',
         keys: KEYS.copyPlot,
         yieldsToText: true,
-        enabled: this.current?.panel !== undefined || this.deck !== null,
+        enabled: this.current?.panel !== undefined || this.deck.grid !== null,
         run: () => {
-          const deck = this.deck
+          const deck = this.deck.grid
           if (deck !== null) void deck.copyDeck()
           else this.current?.panel?.copyPlot()
         },
@@ -2012,8 +1978,12 @@ export class Session {
     else this.navigate({ ...state, region: target })
   }
 
-  /** Contig names, if the contigs table has already been read. */
-  private contigNames(): string[] | null {
+  /**
+   * Contig names, if the contigs table has already been read.
+   *
+   * @internal SessionDeck names the lead's contigs with it.
+   */
+  contigNames(): string[] | null {
     const table = this.file?.contigs
     if (table === undefined || table === null) return null
     const names = table.table.data['name']
@@ -3288,7 +3258,7 @@ export class Session {
 
   /** Every surface a mark could be placed on as things stand. */
   private pickTargets(): Array<Armable<PickHandlers> | null | undefined> {
-    return [this.current?.panel, this.deck, this.browser]
+    return [this.current?.panel, this.deck.grid, this.browser]
   }
 
   /**
@@ -3425,8 +3395,10 @@ export class Session {
    * clicking a sequence the hash already names would do nothing at all — and
    * the hash names it whenever the last thing to report was a click on that
    * same row. `showLocus` reports on its own, so the address bar still follows.
+   *
+   * @internal SessionDeck sends a structure cell's pick through it.
    */
-  private goToLocus(locus: string): void {
+  goToLocus(locus: string): void {
     if (this.browser !== null) this.browser.showLocus(locus)
     else this.store.patch({ locus })
   }
@@ -3867,7 +3839,7 @@ export class Session {
       // The deck's cells follow this view when it is their lead (§25.3);
       // by every road the window moves, a link included, which is why it is
       // not the locus report above.
-      onWindowChange: () => this.deck?.leadMoved(),
+      onWindowChange: () => this.deck.grid?.leadMoved(),
       groups: held.groups,
       // The same store the card writes into and the map draws from. Handed over
       // rather than read back through the session, for the reason the tracks and
@@ -3913,10 +3885,10 @@ export class Session {
     if (!this.structureAlone) return
     this.structureAlone = false
     const store = this.annotations?.store
-    if (store === undefined || !this.deckIsPossible) return
+    if (store === undefined || !this.deck.possible) return
     const models = store.entries.filter((entry) => entry.kind === 'structure')
     if (models.length === 0) return
-    const deck = this.ensureDeck()
+    const deck = this.deck.ensure()
     for (const model of models) deck.showStructure(model.id)
     const drawn = store.entriesOn(LEAD_MAP).some((entry) => entry.kind !== 'structure' && entry.card !== 'overlay')
     if (!drawn) deck.hideLead()
@@ -3959,7 +3931,7 @@ export class Session {
     const maps = files.filter(
       (file) => !looksLikeConfig(file.name) && this.routeOf(file.name) === 'map',
     )
-    // The empty seat, where there is one. `this.file` and not `deckIsPossible`:
+    // The empty seat, where there is one. `this.file` and not `deck.possible`:
     // a session showing a table, an overview or a refusal has a file open all
     // the same, and dropping a cooler on it must not throw that file away
     // because the view it is currently on cannot hold a second panel.
@@ -3992,9 +3964,9 @@ export class Session {
     if (this.file === null) return
     // The third road to a second map, and it takes the same refusal as the
     // other two: a metagenome's axis is its own assembly's contigs, so there is
-    // no deck for a second one to join ({@link deckIsPossible}). Opened instead,
-    // as *this* session's map — the ordinary meaning of dropping a cooler on a
-    // viewer that already has one.
+    // no deck for a second one to join ({@link SessionDeck.possible}). Opened
+    // instead, as *this* session's map — the ordinary meaning of dropping a
+    // cooler on a viewer that already has one.
     //
     // Not through {@link dropped}, which is what this said and which stopped
     // being true the day that method learned to route a map back here: two
@@ -4005,7 +3977,7 @@ export class Session {
       void this.open(file.name, { kind: 'local', file })
       return
     }
-    this.ensureDeck().add({ kind: 'local', uri: file.name }, { kind: 'local', file })
+    this.deck.ensure().add({ kind: 'local', uri: file.name }, { kind: 'local', file })
   }
 
   /**
@@ -4125,7 +4097,7 @@ export class Session {
       // The whole `uri` and not its `path`: `::entries/rep1` names which map
       // inside a collection, and the deck splits the two itself.
       if (this.file !== null && !this.file.info.hasGenomes) {
-        this.ensureDeck().add({ kind: 'remote', uri }, source)
+        this.deck.ensure().add({ kind: 'remote', uri }, source)
         return
       }
       await this.open(uri, source, undefined, undefined, undefined, label)
@@ -4199,7 +4171,8 @@ export class Session {
     for (const { file, index } of pairIndexes(files)) this.dropped(file, placement, map, index)
   }
 
-  private dropped(file: File, placement?: Placement, map?: string, index?: File): void {
+  /** @internal SessionDeck routes a file dropped on a structure cell through it. */
+  dropped(file: File, placement?: Placement, map?: string, index?: File): void {
     // A saved workspace, before anything else looks at it: it is not a track,
     // it is the window it was saved from.
     if (looksLikeConfig(file.name)) {
@@ -4257,12 +4230,12 @@ export class Session {
    * arrives, from {@link watchStructureRows}. A cell **per model**: a new cell
    * draws the model no other cell is drawing, so a second g3d opens beside the
    * first rather than taking its picture. Nothing where this view cannot hold a
-   * deck ({@link deckIsPossible}).
+   * deck ({@link SessionDeck.possible}).
    */
   private openStructureCell(name: string): void {
     if (!isStructureName(name)) return
-    if (!this.deckIsPossible) return
-    this.ensureDeck().add({ kind: 'structure' })
+    if (!this.deck.possible) return
+    this.deck.ensure().add({ kind: 'structure' })
   }
 
   /**
@@ -4302,8 +4275,8 @@ export class Session {
     // see, and it is drawn **beside** whatever was already there rather than
     // over it (§25.3). A run that wiped out the model it was to be compared
     // against was the commonest way to lose a picture in this app.
-    if (fresh.length === 0 || !this.deckIsPossible) return
-    const deck = this.ensureDeck()
+    if (fresh.length === 0 || !this.deck.possible) return
+    const deck = this.deck.ensure()
     for (const id of fresh) deck.showStructure(id)
   }
 
@@ -4513,8 +4486,10 @@ export class Session {
    * One derivation, used by both doors out of a map: `closeMap` builds the
    * genome it falls back to, and {@link hideMap} builds the same one. Two copies
    * would be two answers to "what genome is this file of".
+   *
+   * @internal SessionDeck builds a tracks cell's axis with it.
    */
-  private assemblyOfFile(file: OpenFile): Assembly | null {
+  assemblyOfFile(file: OpenFile): Assembly | null {
     const contigs = contigPairs(file.contigs)
     if (contigs.length === 0) return null
     return assemblyOf({
@@ -4651,21 +4626,21 @@ export class Session {
     const card = new StructureCard({
       store,
       loader,
-      ...(this.deckIsPossible
+      ...(this.deck.possible
         ? {
             onShow: (entry) => {
-              if (!this.deckIsPossible) return
-              this.ensureDeck().showStructure(entry.id)
+              if (!this.deck.possible) return
+              this.deck.ensure().showStructure(entry.id)
               this.structureCard?.refresh()
             },
             // This row's own cell, not every one: each model has a cell of its
             // own (§25.3), so the eye on a row closes that row's picture and
             // leaves the others where they are.
             onHide: (entry) => {
-              this.deck?.hideStructure(entry.id)
+              this.deck.grid?.hideStructure(entry.id)
               this.structureCard?.refresh()
             },
-            shown: (id) => this.deck?.shownStructures().includes(id) ?? false,
+            shown: (id) => this.deck.grid?.shownStructures().includes(id) ?? false,
           }
         : {}),
       onRecompute: (entry) => this.analysis?.recompute(entry),
@@ -4773,83 +4748,43 @@ export class Session {
         }
       },
       isShown: (which) =>
-        which === 1 ? this.parkedMap === null && this.deck?.leadShown !== false : !this.compare.hidden,
+        which === 1 ? this.parkedMap === null && this.deck.grid?.leadShown !== false : !this.compare.hidden,
       primaryInDeck: () => this.leadCellInDeck(),
       onSwap: () => void this.compare.swap(),
       // Every map this session is holding is a row here (§16.9): the deck's
       // other cells after the square's one or two, each with the grip that
       // drags it into another cell.
       deckMaps: () => [
-        ...(this.deck?.companionMaps() ?? []),
-        ...this.hiddenMaps.map(({ id, picked }) => ({
+        ...(this.deck.grid?.companionMaps() ?? []),
+        ...this.deck.hidden.map(({ id, picked }) => ({
           id,
           uri: picked.uri,
           label: this.mapLabel(picked.uri),
           shown: false,
         })),
       ],
-      onToggleDeckMap: (id) => this.toggleDeckMap(id),
-      deckMapsShowable: () => this.deckIsPossible,
+      onToggleDeckMap: (id) => this.deck.toggleMap(id),
+      deckMapsShowable: () => this.deck.possible,
       onCloseDeckMap: (id) => {
-        if (this.takeHiddenMap(id) !== null) this.syncCompareCard()
-        else this.deck?.closeCell(id)
+        if (this.deck.takeHidden(id) !== null) this.syncCompareCard()
+        else this.deck.grid?.closeCell(id)
       },
       onRenameDeckMap: (target, name) => this.renameMap(target, name),
-      onDragMap: (dragging) => this.deck?.showTiling(dragging),
+      onDragMap: (dragging) => this.deck.grid?.showTiling(dragging),
       // The rows follow the grid, the first map's where its cell stands, and a
       // row dragged up or down the card moves its cell (§16.9).
-      leadAt: () => this.deck?.leadMapIndex ?? 0,
+      leadAt: () => this.deck.grid?.leadMapIndex ?? 0,
       onReorderMap: (map, onto, after) =>
-        this.deck?.moveMap(map === LEAD_ROW ? LEAD_MAP : map, onto === LEAD_ROW ? LEAD_MAP : onto, after),
+        this.deck.grid?.moveMap(map === LEAD_ROW ? LEAD_MAP : map, onto === LEAD_ROW ? LEAD_MAP : onto, after),
     })
   }
 
   /**
-   * The eye on a deck map's row (§16.9). A map in a cell leaves it and is held
-   * hidden; a hidden one opens in the deck again — the first empty cell, or a
-   * new one — as a Structures row's eye opens its model's cell (§25.3).
-   */
-  private toggleDeckMap(id: string): void {
-    if (this.hiddenMaps.some((held) => held.id === id)) {
-      if (!this.deckIsPossible) return
-      const picked = this.takeHiddenMap(id)
-      if (picked !== null) this.ensureDeck().showMap(picked)
-    } else {
-      const picked = this.deck?.takeMap(id) ?? null
-      if (picked !== null) this.holdHidden(picked)
-    }
-    this.syncCompareCard()
-  }
-
-  /**
-   * Keep a map the reader put down in the deck, hidden, on the Contact maps
-   * card (§16.9) — from the eye, or from the × on its cell's own heading.
+   * Redraw the Contact maps card's eyes from what this session is showing.
    *
-   * Once per file: a map already held hidden is not listed twice, and one still
-   * on screen — in another cell, as the first map, or in its lower triangle —
-   * is not listed as hidden at all, since the card already lists it as shown
-   * and nothing about it has been lost.
+   * @internal SessionDeck redraws the card when the deck's maps change.
    */
-  private holdHidden(picked: PickedFile): void {
-    const uri = picked.uri
-    const shown =
-      this.file?.uri === uri ||
-      this.compare.second?.uri === uri ||
-      (this.deck?.companionMaps() ?? []).some((map) => map.uri === uri)
-    if (shown || this.hiddenMaps.some((held) => held.picked.uri === uri)) return
-    this.hiddenMaps.push({ id: `hidden-${++this.hiddenMapCount}`, picked })
-  }
-
-  /** Stop holding a hidden map, and hand back what opens it. */
-  private takeHiddenMap(id: string): PickedFile | null {
-    const at = this.hiddenMaps.findIndex((held) => held.id === id)
-    if (at < 0) return null
-    const [held] = this.hiddenMaps.splice(at, 1)
-    return held?.picked ?? null
-  }
-
-  /** Redraw the Contact maps card's eyes from what this session is showing. */
-  private syncCompareCard(): void {
+  syncCompareCard(): void {
     this.compareCard?.sync()
     // Every change that card follows — a map in or out of the deck, a map
     // renamed, the first map hidden — is one the File card's line can name.
@@ -4861,11 +4796,13 @@ export class Session {
    * companion's file, once its panel has opened it, and the session's own file
    * while the star is on the first map or on no map — named under the heading
    * whenever a deck is up, as the Aesthetics column's *Map* card is.
+   *
+   * @internal SessionDeck redraws it when the star moves.
    */
-  private syncFileCard(): void {
+  syncFileCard(): void {
     const panel = this.infoPanel
     if (panel === null) return
-    const deck = this.deck
+    const deck = this.deck.grid
     if (deck === null || deck.isEmpty || this.file === null) {
       panel.setShown(null)
       return
@@ -4895,7 +4832,7 @@ export class Session {
    * cell keeps every map where it is and the session on its file.
    */
   private toggleLeadShown(): void {
-    const deck = this.deck
+    const deck = this.deck.grid
     if (deck !== null && (!deck.leadShown || this.leadCellInDeck())) {
       if (deck.leadShown) deck.hideLead()
       else deck.showLead()
@@ -4906,8 +4843,8 @@ export class Session {
 
   /** Whether the first map stands in a deck beside other cells, where its eye is its cell's. */
   private leadCellInDeck(): boolean {
-    const deck = this.deck
-    return deck !== null && !deck.isEmpty && this.parkedMap === null && this.deckIsPossible
+    const deck = this.deck.grid
+    return deck !== null && !deck.isEmpty && this.parkedMap === null && this.deck.possible
   }
 
   /** The Sequences card a browser steers its axis from. */
@@ -5311,7 +5248,7 @@ export class Session {
       store,
       index: () => this.annotations?.metadata ?? null,
       level: () => this.metadataLevel(),
-      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
+      maps: () => this.deck.grid?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
       onExport: (entry) => this.exportMetadata(entry),
     })
 
@@ -5336,7 +5273,7 @@ export class Session {
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
-        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
+        maps: () => this.deck.grid?.mapList ?? [{ id: LEAD_MAP, label: this.mapLabel(this.file?.uri ?? '') }],
         ...(published.length === 0 || wanted
           ? {}
           : {
@@ -5609,7 +5546,8 @@ export class Session {
   private circularHeld: { key: string; store: CircularStore } | null = null
 
 
-  private circularStore(): CircularStore | null {
+  /** @internal SessionDeck hands the declared circles to the companions. */
+  circularStore(): CircularStore | null {
     const key = this.sessionKey()
     if (key === null) return null
     if (this.circularHeld?.key !== key) this.circularHeld = { key, store: new CircularStore(key) }
@@ -5888,7 +5826,7 @@ export class Session {
         store.set(name, at)
         // The arms on screen and `ori` are read from it — every map's.
         this.rederive()
-        this.deck?.redeclared()
+        this.deck.grid?.redeclared()
       },
       subscribe: (listener) => store.subscribe(listener),
     }
@@ -5910,7 +5848,7 @@ export class Session {
       uri,
     )
     this.rederive()
-    this.deck?.redeclared()
+    this.deck.grid?.redeclared()
   }
 
   /**
@@ -6347,7 +6285,7 @@ export class Session {
     this.rederive()
     // …and every companion's, which reads a window across the origin only where
     // the circle is declared.
-    this.deck?.redeclared()
+    this.deck.grid?.redeclared()
   }
 
   /**
@@ -6420,8 +6358,10 @@ export class Session {
    * patched: the name is on the card, in the heading, in the readout, in the
    * key and in the caption, and a rename that moved four of those and not the
    * fifth is the one way this can be quietly wrong.
+   *
+   * @internal SessionDeck renames a map from its panel's heading through it.
    */
-  private renameMap(uri: string, name: string | null): void {
+  renameMap(uri: string, name: string | null): void {
     const key = this.sessionKey()
     if (key === null) return
     const held = this.mapNames()
@@ -6429,7 +6369,7 @@ export class Session {
     if (mapNameIn(next, uri) === mapNameIn(held, uri)) return
     remember(key, MAP_NAMES_SCOPE, next)
     this.compareCard?.sync()
-    this.deck?.renamed()
+    this.deck.grid?.renamed()
     // The location rows name the maps too (§16.10: one name, everywhere).
     this.trackCard?.renamed()
     // Written into the mounted panel rather than through {@link remount}: a
@@ -6454,465 +6394,21 @@ export class Session {
   // -------------------------------------------------------------------------
 
   /**
-   * What was last handed to {@link showContent}, so a deck built *after* a view
-   * was mounted can frame it without re-reading its block.
-   */
-  private contentNode: HTMLElement | null = null
-
-  /**
-   * Bring the companions in line with the hash, and put the deck down when the
-   * last of them is closed.
+   * Bring the companions in line with the hash — {@link SessionDeck.sync}.
    *
-   * Built lazily and destroyed eagerly, so a session with one map holds no
-   * deck, no lock and no toolbar — it is byte for byte the session it was
-   * before panels existed, which is the property that makes this feature
-   * additive rather than a rewrite of the router.
+   * Kept on the session, and called through it by `render`, because it is a
+   * seam: the DOM tests replace it on the instance to stand the deck aside
+   * (`test/dom/render-cancellation.test.ts`) and call it to reconcile one
+   * (`test/dom/deck-drop-many.test.ts`). A render that went to the deck
+   * directly would step round both.
    */
-  /**
-   * The local companions this session wrote down, still in range of the hash.
-   *
-   * The hash keeps a `~` for each of them (§16.6) and this says which file each
-   * `~` was, so the two have to agree about *how many* cells there are: a
-   * remembered index past the end of the current `maps` is from a deck that has
-   * since shrunk, and promoting it would grow the deck back by a cell the reader
-   * closed. Filtered here rather than in `withLocalCompanions`, which is a pure
-   * function over one list and cannot know which is the newer.
-   */
-  private rememberedCompanions(state: ViewState): Array<{ index: number; uri: string }> {
-    const width = parseMaps(state.maps).length
-    if (width === 0) return []
-    const stored = recall<DeckLocal[]>(this.memoryKey(state.uri), 'deck:locals')
-    if (!Array.isArray(stored)) return []
-    return stored.filter(
-      (local) =>
-        typeof local?.uri === 'string' &&
-        local.uri !== '' &&
-        Number.isInteger(local?.index) &&
-        local.index >= 0 &&
-        local.index < width,
-    )
+  private syncDeck(state: ViewState): Promise<void> {
+    return this.deck.sync(state)
   }
 
-  private async syncDeck(state: ViewState): Promise<void> {
-    // A hash naming companions is not a reason to build a deck the file cannot
-    // have (§16, {@link deckIsPossible}). A link outlives the file it was made
-    // from, and one made against a cooler and opened on a metagenome would
-    // otherwise put five panels round a map none of them can follow.
-    if (this.file?.info.hasGenomes === true) return
-    const remembered = this.rememberedCompanions(state)
-    if (this.deck === null && parseMaps(state.maps).length === 0 && remembered.length === 0) return
-    // Asked *before* the deck is handed the state, because resolving a grant is
-    // asynchronous and nothing inside `PanelDeck` may be. All of them at once:
-    // four companions are four independent files and there is nothing to gain
-    // from asking one after another.
-    const locals = await Promise.all(
-      remembered.map(async (local) => ({
-        ...local,
-        source: await resolveSource(local.uri),
-      })),
-    )
-    if (this.destroyed) return
-    // **Only the state still in force reconciles the deck.** Dropping eight
-    // coolers adds seven companions one after another, and each publish is a
-    // render of its own: `~`, then `~|~`, up to seven. Every one of those waited
-    // here for its grants, and came back after the last map had been added —
-    // so the render of `~` shrank a deck of seven to one, and the renders after
-    // it grew it back from the stored record, which cannot re-open a dropped
-    // file. What a reader got was two maps and six cells reading *this cell
-    // held that file and it could not be re-opened*. A state the store has
-    // since moved past has a render of its own on the way, which is the one
-    // that says what the deck is.
-    if (!viewStateEquals(this.store.state, state)) return
-    const deck = this.ensureDeck()
-    deck.apply(state, locals)
-    // A deck read back from the address does not publish — it *is* what the
-    // address says — so the Contact maps card, which lists its maps (§16.9),
-    // is told here rather than by `onMapsChange`.
-    this.syncCompareCard()
-    if (!deck.isEmpty) return
-    deck.destroy()
-    this.deck = null
-    // Its models went with it, and their eyes on the Structures card go dark.
-    this.structureCard?.refresh()
-    // The frame has gone with it, so the mounted view has to be put back on its
-    // own — back inside the `+` edges, which is where it was before anybody
-    // pressed one. Directly rather than through a re-render: the view is intact
-    // and re-reading its block to change what it is parented into would make
-    // closing the last companion cost a fetch.
-    if (this.contentNode !== null) this.contentEl.replaceChildren(this.framed(this.contentNode))
-  }
-
-  /**
-   * What actually goes in the content area: the view, and one frame round it.
-   *
-   * Exactly one, and which one is the whole of the logic here. A view a
-   * companion cannot answer gets neither — a table or an overview is of *this
-   * file* and nothing else, so framing one put a genomes table into a sixth of
-   * the column beside five rectangles each saying they had nothing to draw
-   * (§16.8), and offering a `+` there would offer to open a cell for a picture
-   * nothing can fill. A view with a **deck** gets the deck, which grows its own
-   * edges round its grid. A view with neither gets the bare edges, so the
-   * gesture that builds the first deck is on screen from the first map.
-   */
-  private framed(node: HTMLElement): HTMLElement {
-    // Released on both of the paths that leave a frame off screen, because
-    // every one of them holds the last view it framed until told otherwise — a
-    // *destroyed* view, whose canvas is still a full-resolution backing store.
-    // Re-parenting into a frame empties the other for free (a node has one
-    // parent); a bare mount does not, so a reader who opens the chromosomes
-    // table pins the map they left.
-    //
-    // Both frames, and that used to be one: the deck was left out, so the whole
-    // argument above applied to it and nothing acted on it. A deck holds its
-    // lead in `leadCell` and the lead's own heading up in its bar, so the
-    // retention was two nodes rather than one — see `PanelDeck.release`, which
-    // is why this is a call rather than an inlined `replaceChildren` here.
-    const deck = this.deck
-    if (!this.deckIsPossible) {
-      this.deckEdges.release()
-      deck?.release()
-      return node
-    }
-    if (deck !== null) {
-      this.deckEdges.release()
-      return deck.frame(node)
-    }
-    return this.deckEdges.hold(node)
-  }
-
-  /**
-   * The deck, built if this session has none yet.
-   *
-   * The build re-frames immediately rather than waiting for the next render,
-   * because the two ways a deck comes into existence are a hash that already
-   * names companions — where a render is about to happen anyway — and the "add
-   * a map" command, where one is not and where a grid that appeared on the next
-   * navigation would read as a bug.
-   */
-  private ensureDeck(): PanelDeck {
-    if (this.deck !== null) return this.deck
-    const deck = new PanelDeck({
-      // `replace`, always. Building a deck one file at a time should leave one
-      // history entry rather than five that each undo a file — the same rule
-      // the colour controls follow, and for the same reason: adding a map to
-      // what is on screen is not a navigation away from it.
-      onDrawn: () => this.contactsBox?.sync(),
-      onMapsChange: (maps) => {
-        this.store.patch({ maps }, { replace: true })
-        // The Contact maps card lists the deck's maps, so it follows the list.
-        this.syncCompareCard()
-        // A structure cell can arrive or go after the view was mounted — a g3d
-        // dropped, a reconstruction landing, the cell's heading closed — and
-        // its card in the Aesthetics column (§25.3) follows the cell, not the
-        // view.
-        this.refreshAesthetics()
-      },
-      memoryKey: () => this.memoryKey(this.file?.uri ?? this.assembly?.uri ?? ''),
-      // The browser as lead is named for its assembly (§25.3); a map for
-      // its file, under whatever the reader called it.
-      leadName: () =>
-        this.store.state?.view === 'browser'
-          ? this.assembly?.name
-          : this.file === null
-            ? undefined
-            : this.mapLabel(this.file.uri),
-      mapsAllowed: () => this.mapsAllowed,
-      // Without the handler: §7.5's controls belong to the lead, and every
-      // companion draws what they say without offering a second copy of them.
-      derive: () => {
-        const state = this.store.state
-        if (state === null) return undefined
-        const { onExpectedChange: _own, arms, ...shared } = this.derivePresentation(state)
-        if (arms === undefined) return shared
-        // The arms go with it (§8.15): the frame is the molecule's — its length
-        // and its origin, placed on each companion's block by base pairs — and
-        // `ori` is the deck's, since the region every map reads is one. The
-        // toggle is each companion's own (`MapPanel.useArms`), as its O/E is.
-        const { onChange: _lead, ...frame } = arms
-        return { ...shared, arms: frame }
-      },
-      // The circles the session declares, for the companions to read a window
-      // across the origin of the same molecule (§8.15).
-      circular: () => this.circularStore()?.list() ?? [],
-      annotations: (map) => this.annotationContext(map),
-      /**
-       * The star moved, or the map it was on finished reading its tables.
-       *
-       * Every answer the Analysis column gives is about one file — what a task
-       * costs, which sequences its form lists, whether a task applies at all —
-       * so a star that has moved invalidates all of them at once. `refresh` is
-       * the same call a navigation makes, for the same reason.
-       */
-      onStarChange: () => {
-        this.analysis?.refresh()
-        // The File card is the starred map's too, and this is also the call
-        // that says its file has opened (`MapPanel.prepareAnalysis`).
-        this.syncFileCard()
-      },
-      // A map of the deck opened, moved rung or left: the maps a comparison
-      // can be made against have changed under the column (§18.1).
-      onPeersChange: () => {
-        this.analysis?.refresh()
-      },
-      // The column's *Map* card is the starred map's (§16.5), so the star
-      // moving, or the starred companion's card being built, changes the card
-      // that column holds — and the session is what puts cards in it.
-      onMapCardChange: () => {
-        this.refreshAesthetics()
-      },
-      // The Structures card's eyes say which models the deck draws, so they
-      // follow every change to that — a cell's × and a row dropped on a `+`
-      // among them, which the card's own eye does not see.
-      onStructuresChange: () => {
-        this.structureCard?.refresh()
-      },
-      // A tracks cell renamed: the location rows name it (§25.3).
-      onCellRenamed: () => this.trackCard?.renamed(),
-      // A track dropped on an empty cell, loaded onto the tracks cell the deck
-      // opened there: the same road a file aimed at a map's edge takes, with
-      // the cell's own id as the map (§16.9).
-      onTrackFile: (picked, map) => {
-        void this.addPicked(picked, placementOn('bottom'), map)
-      },
-      // The two maps of the session's own square, as files a cell can open: a
-      // row of the Contact maps card dropped on a cell names one of them.
-      leadPicked: () => (this.file === null ? null : { uri: this.file.uri, source: this.file.source }),
-      comparePicked: () => {
-        const second = this.compare.second
-        return second === null ? null : { uri: second.uri, source: second.source }
-      },
-      hiddenPicked: (id) => this.takeHiddenMap(id),
-      onMapHidden: (picked) => {
-        this.holdHidden(picked)
-        this.syncCompareCard()
-      },
-      // The session's own cell hidden or put back (§16.9): the eye on its row
-      // of the Contact maps card follows, and the deck's memory has changed
-      // under the durable record.
-      onLeadShownChange: () => {
-        this.syncCompareCard()
-        this.host.sessionChanged(this)
-      },
-      // The *3D structure* card is the starred cell's (§25.3), so the star
-      // moving is the column's card changing under it — and the session is
-      // what puts a card in that column.
-      onStructureStarChange: () => {
-        this.refreshAesthetics()
-      },
-      // Through the memoised index rather than `contextOf` directly: this is
-      // asked once per block read per panel, and recomputing it over a 154 k
-      // contig table is 71 ms of a frame that has a matrix to draw.
-      leadNaming: () => {
-        const names = this.contigNames()
-        return names === null ? undefined : NameIndex.for(names).context
-      },
-      leadLabel: () =>
-        this.store.state?.view === 'browser' && this.assembly !== null
-          ? this.assembly.name
-          : this.mapLabel(this.file?.uri ?? ''),
-      mapLabel: (uri) => this.mapLabel(uri),
-      onRenameMap: (uri, name) => this.renameMap(uri, name),
-      onRenameLead: (name) => {
-        const uri = this.file?.uri
-        if (uri !== undefined) this.renameMap(uri, name)
-      },
-      // With its `onChange`, since the column's *Map* card is a companion's
-      // own while that companion is starred (§16.5) and the turn has to be on
-      // it: the turn is the one setting there that is the deck's rather than
-      // the map's, because the lock's rows are separation on a band and
-      // position on a square. Still one control on screen — the column holds
-      // one card. Without `onAvailable`, which would let a companion whose
-      // block has no diagonal un-turn the whole deck: a fact about that one
-      // file deciding what every other one is drawn as.
-      turn: () => {
-        const state = this.store.state
-        if (state === null) return undefined
-        const { onAvailable: _grey, ...shared } = this.turnPresentation(state)
-        return shared
-      },
-      binsize: () => this.file?.info.binsize ?? undefined,
-      // The two directions "fix all …" needs that the deck cannot take itself.
-      //
-      // A clip written straight onto the lead's panel is one the next render
-      // puts back — the lead's view is rebuilt from the *state*, which is where
-      // its colour lives — so it goes through the store, exactly as the
-      // Aesthetics column's own controls do, and travels in the link with them.
-      onLeadScale: (scale) => this.store.patch(scale, { replace: true }),
-      // And its resolution is the breadcrumb's entry picker from the other end:
-      // changing the first map's rung means reopening the file the session *is*.
-      // Answers whether it *could*, so the deck can name it in the one line it
-      // has for a map with no frame of its own.
-      onLeadBinsize: (binsize) => this.openAtBinsize(binsize),
-      score: () => {
-        const state = this.store.state
-        return state === null ? undefined : this.scoreOf(state).id
-      },
-      // A companion's clip is not a navigation, so nothing on the state road
-      // fires for one — and the durable record and the exported workspace are
-      // both rebuilt from this session's memory on `sessionChanged`. The same
-      // line the annotation store subscribes with, for the same reason.
-      onLooksChange: () => this.host.sessionChanged(this),
-      // What a structure cell draws and where its gestures go (§25). The store
-      // is asked each time rather than captured: a browser session replaces
-      // its annotation machinery when its lengths are, and a cell holding the
-      // old store would draw a row nobody can see in the Tracks card.
-      structure: {
-        store: () => this.annotations?.store,
-        manual: () => this.annotations?.manual,
-        client: () => this.annotations?.client,
-        bookmarks: () => this.bookmarkStore ?? undefined,
-        // The lead map's own block, read in place: the row through the
-        // pinned bead, on the scale the map draws with (§25.5).
-        contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,
-        contactsScale: () => this.current?.panel?.shownScale() ?? null,
-        // What the rest of this column already offers of the shared
-        // preferences (§26.3), so the model's card fills the gap rather than
-        // doubling a control. A view with a **Map card** offers all three the
-        // model reads; the **1D browser** offers the crosshair and the hover
-        // card but has no key of its own to hide, so the model's own key
-        // toggle is the gap. Read at paint time, not captured, because a
-        // session becomes a browser and a browser becomes a map.
-        sharedElsewhere: () =>
-          this.current?.panel?.controlsEl === undefined ? TRACK_OPTIONS : MATRIX_OPTIONS,
-        onGoTo: (range) => this.goToLocus(formatLocus(range)),
-        onDrop: (file) => this.dropped(file),
-        onDropUrl: (url) => {
-          void this.addRemote(url, { kind: 'remote', url })
-        },
-      },
-      // What a tracks cell draws from (§25.3): the lead file's own sequences
-      // as an assembly — the one `closeMap` would build — and the machinery
-      // the session's browser has. The assembly is kept per file, because the
-      // cell rebuilds its browser when the assembly object changes and a fresh
-      // one per call would rebuild it on every pan.
-      tracks: {
-        context: () => {
-          const held = this.annotations
-          const file = this.file
-          if (held === null) return undefined
-          // Beside a browser the axis is the browser's own assembly (§25.3);
-          // beside a map, the map's sequences, kept per file.
-          let assembly: Assembly | null
-          if (this.store.state?.view === 'browser' || file === null) assembly = this.assembly
-          else {
-            if (this.tracksAssembly === null || this.tracksAssembly.file !== file) {
-              const made = this.assemblyOfFile(file)
-              if (made === null) return undefined
-              this.tracksAssembly = { file, assembly: made }
-            }
-            assembly = this.tracksAssembly.assembly
-          }
-          if (assembly === null) return undefined
-          return {
-            assembly,
-            store: held.store,
-            client: held.client,
-            groups: held.groups,
-            manual: held.manual,
-          }
-        },
-      },
-    })
-    this.deck = deck
-    // `isConnected`, because the node this holds may be one a render in
-    // progress is about to replace — and framing a detached view would put the
-    // outgoing picture on screen inside a grid, one frame before the incoming
-    // one arrives through `showContent` and does it properly.
-    if (this.contentNode !== null && this.contentNode.isConnected && this.deckIsPossible) {
-      this.contentEl.replaceChildren(this.framed(this.contentNode))
-      this.syncDeckLead(deck)
-    }
-    return deck
-  }
-
-  /** The "add a map" command: open a deck if there is none, and ask for a file. */
-  private addMap(): void {
-    // The command is already disabled where this is false; the guard is for the
-    // other door into it — a keyboard shortcut fired before a render has
-    // re-read the state (§16, {@link deckIsPossible}).
-    if (this.file === null || !this.deckIsPossible) return
-    this.ensureDeck().promptAdd()
-  }
-
-  /**
-   * The `+` on an edge of the map: draw the deck, or make the one there bigger.
-   *
-   * The entry point §16.9 exists to provide, and it deliberately opens **cells**
-   * rather than maps: what comes back from one press is the arrangement the
-   * reader asked for with their own map in the first cell of it, every other
-   * cell standing empty and taking a drop. A file arriving with the press — one
-   * dropped on the edge rather than a click — goes straight into the first of
-   * them, so the impatient gesture and the deliberate one reach the same deck.
-   */
-  private growDeck(direction: GrowDirection, picked?: PickedFile): void {
-    if (!this.deckIsPossible) return
-    this.ensureDeck().grow(direction, picked)
-  }
-
-  /**
-   * Whether a second panel would have anything to draw.
-   *
-   * The deck answers views that name a *place* — a region, a genome, a pair, a
-   * selection, the whole file — and there are three that name a **file**
-   * instead: the two tables and the whole-metagenome scan. A second file's
-   * genomes table is not this file's genomes table with more in it, it is
-   * another table, so offering a panel there would be offering to put two
-   * unrelated pages side by side. The command is disabled rather than hidden,
-   * so the answer to "can this viewer do that" is *yes, from a map*.
-   *
-   * **And never on a file with a genome layer.** §16 is built on the one thing
-   * a deck's panels must share — a coordinate system — and two metagenomes have
-   * none: their axes are contigs from two independent assemblies, so a region
-   * that names a place in one names nothing in the other, and the lock that
-   * moves five maps together would be moving them to five different places. It
-   * is the same argument §8.5 makes about a track and `compareRefusal` makes
-   * about the lower-left triangle, and it is stronger here because a deck
-   * *navigates*: the reader would not be shown a wrong picture once, they would
-   * drag one about. So the `+` edges are absent rather than disabled, which is
-   * what this predicate decides — see {@link framed}.
-   */
-  private get deckIsPossible(): boolean {
-    if (this.file?.info.hasGenomes === true) return false
-    const view = this.store.state?.view
-    // The browser names a place too (§25.3): a deck beside it holds
-    // tracks and a structure, drawn against the assembly its axis is. What may
-    // *not* join it is a map — {@link mapsAllowed} — since a map beside a
-    // browser has no lead to follow.
-    if (view === 'browser') return this.assembly !== null && this.annotations !== null
-    return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
-  }
-
-  /** Whether a map may join the deck: only beside a map (§25.3). */
-  private get mapsAllowed(): boolean {
-    return this.file !== null && this.store.state?.view !== 'browser'
-  }
-
-  /**
-   * Tell the deck which lead the session just mounted, in whichever shape.
-   *
-   * A map's panel drives the lock; the browser drives the cells by loci
-   * ({@link PanelDeck.setLeadAxis}). Exactly one of the two, and `null` for
-   * the other, so a deck that outlives a navigation from one to the other is
-   * not left following the view that went away.
-   */
-  private syncDeckLead(deck: PanelDeck): void {
-    const panel = this.current?.panel ?? null
-    deck.setLead(panel)
-    const browser = this.browser
-    deck.setLeadAxis(
-      panel === null && browser !== null && this.store.state?.view === 'browser'
-        ? {
-            windows: () => ({ rows: [], cols: browser.framedWindows() }),
-            show: (range) => {
-              browser.showLocus(formatLocus(range))
-              return true
-            },
-            figure: () => browser.deckFigure(),
-            setDeckExport: (hook) => browser.setDeckExport(hook),
-          }
-        : null,
-    )
-  }
+  // -------------------------------------------------------------------------
+  // What a map is drawn with
+  // -------------------------------------------------------------------------
 
   /**
    * The turn, as every panel of the session sees it.
@@ -6921,8 +6417,10 @@ export class Session {
    * handed the same state, so a flip is one key and N pictures. Which way each
    * one grows is the caller's — a lone map and the first file of a comparison
    * grow up, the second grows down so the pair meets at one axis.
+   *
+   * @internal SessionDeck shares the turn with every companion.
    */
-  private turnPresentation(state: ViewState, direction?: RotateDirection): TurnPresentation {
+  turnPresentation(state: ViewState, direction?: RotateDirection): TurnPresentation {
     return {
       // Absent is *off*: a map opens square, and the turn is the reading a reader
       // asks for. It used to be the other way round — see `ViewState.flip` for
@@ -6988,8 +6486,12 @@ export class Session {
     void this.render(state)
   }
 
-  /** The context a heatmap view hands to its panel, or `undefined`. */
-  private annotationContext(map?: string): AnnotationContext | undefined {
+  /**
+   * The context a heatmap view hands to its panel, or `undefined`.
+   *
+   * @internal SessionDeck hands each companion its own.
+   */
+  annotationContext(map?: string): AnnotationContext | undefined {
     const held = this.annotations
     return held === null
       ? undefined
@@ -7054,8 +6556,11 @@ export class Session {
    * the nearest thing would leave two while saying one. `false` is a file that
    * has not got that level, which the deck names in its own line — this map has
    * no frame of its own to be told in.
+   *
+   * @internal SessionDeck's *fix all resolutions* moves the first map through
+   * it.
    */
-  private openAtBinsize(binsize: number): boolean {
+  openAtBinsize(binsize: number): boolean {
     const held = this.file
     if (held === null || !Number.isFinite(binsize) || binsize <= 0) return false
     if (held.info.binsize === binsize) return true
@@ -7278,8 +6783,10 @@ export class Session {
    * while the only two callers wanted a column and a normalisation (neither of
    * which the default touches) and cost a whole quantity the moment a deck
    * asked what score to share.
+   *
+   * @internal SessionDeck shares the first map's score with the companions.
    */
-  private scoreOf(state: ViewState): ScoreChoice {
+  scoreOf(state: ViewState): ScoreChoice {
     const props = this.scoreProps(state)
     return scoreFor(scoreChoices(props), { ...props, balance: this.balanceOf(state) })
   }
@@ -7290,8 +6797,10 @@ export class Session {
    * Built here rather than in each view for the reason the score picker's props
    * are: four views mount the same panel, and a default decided four times is a
    * default that comes to differ in three of them.
+   *
+   * @internal SessionDeck shares it with every companion.
    */
-  private derivePresentation(state: ViewState): DerivePresentation {
+  derivePresentation(state: ViewState): DerivePresentation {
     const normalise = this.normaliseOf(state)
     return {
       ...(normalise === undefined ? {} : { normalise }),
@@ -7641,9 +7150,7 @@ export class Session {
       // file of the same shape. A deck is a picture *beside* this session's
       // file, and there is no longer one for it to be beside — nor for a map
       // hidden from it.
-      this.deck?.destroy()
-      this.deck = null
-      this.hiddenMaps = []
+      this.deck.putDown()
       // For the same reason, and it is the one view the session holds: a cached
       // whole-file matrix is a picture of a file nobody can now navigate to,
       // and the scan that produced it may still be running.
@@ -8224,7 +7731,7 @@ export class Session {
     if (second !== null) {
       out.push({ label: this.mapLabel(second.uri), total: this.totalOf(second.client, second.info.contacts) })
     }
-    for (const { panel } of this.deck?.analysable() ?? []) {
+    for (const { panel } of this.deck.grid?.analysable() ?? []) {
       if (panel.openInfo === null) continue
       out.push({ label: this.mapLabel(panel.uri), total: panel.contactsTotal })
     }
@@ -8238,7 +7745,7 @@ export class Session {
     const second = this.compare.second
     const theirs = second === null ? undefined : this.drawn.get(second.client)
     if (second !== null && theirs?.refusal != null) return `${this.mapLabel(second.uri)}: ${theirs.refusal}`
-    for (const { panel } of this.deck?.analysable() ?? []) {
+    for (const { panel } of this.deck.grid?.analysable() ?? []) {
       const refusal = panel.drawRefusal
       if (refusal !== null) return `${this.mapLabel(panel.uri)}: ${refusal}`
     }
@@ -9150,15 +8657,15 @@ export class Session {
     // mounted: the view's own element is *re-parented* into the first cell of a
     // grid rather than rebuilt, so a session with companions costs the session
     // it would have been plus the companions (§16.1).
-    this.contentNode = node
+    this.deck.contentNode = node
     // …but only for a view the companions can answer. A table or an overview is
     // of *this file* and nothing else, so framing one put a genomes table into
     // one sixth of the column beside five rectangles each saying it has nothing
     // to draw. The deck is kept — navigating back to a map must not cost five
     // files reopened — it simply stops being a frame while there is nothing for
     // it to be a frame around.
-    this.contentEl.replaceChildren(this.framed(node))
-    if (this.deck !== null) this.syncDeckLead(this.deck)
+    this.contentEl.replaceChildren(this.deck.framed(node))
+    if (this.deck.grid !== null) this.deck.syncLead(this.deck.grid)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.
@@ -9339,7 +8846,7 @@ export class Session {
             source: starred.source,
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
-            ...(this.deck?.starredPanel?.resampleTarget() ?? {}),
+            ...(this.deck.grid?.starredPanel?.resampleTarget() ?? {}),
             // What a plain Run names the map it measured (§16.10), as a batch
             // names each of its maps (`readyTargets`).
             label: this.mapLabel(starred.uri),
@@ -9384,7 +8891,7 @@ export class Session {
       // the instant it is pressed, and a cached one would be a record of
       // wherever the reader happened to be when the drawer opened.
       framing: () => {
-        const starred = this.deck?.starredPanel ?? null
+        const starred = this.deck.grid?.starredPanel ?? null
         if (starred !== null) {
           const facts = starred.analysisFacts()
           const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
@@ -9405,7 +8912,7 @@ export class Session {
             )
       },
       block: () => {
-        const starred = this.deck?.starredPanel ?? null
+        const starred = this.deck.grid?.starredPanel ?? null
         if (starred !== null) return starred.map?.analysisBlock() ?? null
         return this.current?.panel?.analysisBlock() ?? null
       },
@@ -9419,10 +8926,10 @@ export class Session {
       // The origins an Origin and terminus run placed, into the declarations.
       originsFound: (uri, origins) => this.adoptOrigins(uri, origins),
       // The star, so a measurement lands on the picture it was measured from.
-      targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
+      targetMap: () => this.deck.grid?.starredMap ?? LEAD_MAP,
       // A deck the reader has left with no map starred has no file for a task
       // to run against, and none is guessed for them (§18.1).
-      blocked: () => (this.deck !== null && this.deck.starredMap === null ? NO_STAR_TASKS : null),
+      blocked: () => (this.deck.grid !== null && this.deck.grid.starredMap === null ? NO_STAR_TASKS : null),
       /**
        * Every map on screen that can be run against **right now**, lead first.
        *
@@ -9454,7 +8961,7 @@ export class Session {
        */
       allTargetsReady: async () => {
         await Promise.all(
-          (this.deck?.analysable() ?? [])
+          (this.deck.grid?.analysable() ?? [])
             .filter(({ panel }) => panel.analysisFacts() === null)
             .map(({ panel }) => panel.prepareAnalysis(() => this.analysis?.refresh())),
         )
@@ -9471,7 +8978,7 @@ export class Session {
        * allTargetsReady} waits for them — so every map in the grid is counted.
        */
       targetCount: () =>
-        (this.file === null ? 0 : 1) + (this.deck?.analysable().length ?? 0),
+        (this.file === null ? 0 : 1) + (this.deck.grid?.analysable().length ?? 0),
       annotations: () => this.annotations?.client ?? null,
       // Taken rather than read: the rows belong to the first workspace built
       // after the switch, and a second one — a later navigation, a reload of the
@@ -9518,7 +9025,7 @@ export class Session {
    * under a star that says otherwise.
    */
   private starredFacts(): AnalysisFacts | null {
-    return this.deck?.starredPanel?.analysisFacts() ?? null
+    return this.deck.grid?.starredPanel?.analysisFacts() ?? null
   }
 
   /**
@@ -9544,7 +9051,7 @@ export class Session {
     if (file !== null && file.uri !== uri) {
       out.push({ label: this.mapLabel(file.uri), uri: file.uri, binsize: file.info.binsize ?? 0 })
     }
-    for (const { panel } of this.deck?.analysable() ?? []) {
+    for (const { panel } of this.deck.grid?.analysable() ?? []) {
       if (panel.analysisFacts() === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
       const info = panel.openInfo ?? panel.analysisFacts()?.info ?? null
       if (info === null || panel.uri === uri) continue
@@ -9581,7 +9088,7 @@ export class Session {
         label: this.mapLabel(file.uri),
       }
     }
-    for (const { map, panel } of this.deck?.analysable() ?? []) {
+    for (const { map, panel } of this.deck.grid?.analysable() ?? []) {
       const facts = panel.analysisFacts()
       if (facts === null) {
         if (options.start) void panel.prepareAnalysis(() => this.analysis?.refresh())
@@ -9604,8 +9111,8 @@ export class Session {
     // companions still reading are left out, and the place is counted among the
     // maps that are in.
     if (lead !== null) {
-      const before = this.deck?.leadMapIndex ?? 0
-      const ahead = (this.deck?.analysable() ?? [])
+      const before = this.deck.grid?.leadMapIndex ?? 0
+      const ahead = (this.deck.grid?.analysable() ?? [])
         .slice(0, before)
         .filter(({ map }) => out.some((target) => target.map === map)).length
       out.splice(ahead, 0, lead)
@@ -9685,7 +9192,7 @@ export class Session {
     // itself the starred map. `entries` stays the session's, because the tracks
     // are the session's however many maps are on screen.
     const starred = this.starredFacts()
-    const starredPanel = this.deck?.starredPanel ?? null
+    const starredPanel = this.deck.grid?.starredPanel ?? null
     const info = starred?.info ?? file.info
     const uri = starred?.uri ?? file.uri
     const binsize = info.binsize
@@ -9764,11 +9271,13 @@ export class Session {
    * the structure cell's card where the deck has one (§25.3). Called when a
    * view is mounted and whenever the deck's cells change, because either can
    * happen after the other.
+   *
+   * @internal SessionDeck calls it when a cell changes what the column holds.
    */
-  private refreshAesthetics(): void {
+  refreshAesthetics(): void {
     const side = this.current?.sideEl
     this.placeMapCard(side)
-    const card = this.deck?.structureSettings() ?? null
+    const card = this.deck.grid?.structureSettings() ?? null
     // A card the enlarged dialog has borrowed stays where it is: the dialog
     // gives it back when it closes.
     // Held by the host where the reader has moved it to another column, too:
@@ -9808,7 +9317,7 @@ export class Session {
    */
   private placeMapCard(side: HTMLElement | undefined): void {
     const lead = this.current?.panel?.controlsEl
-    const wanted = this.deck?.mapCard() ?? null
+    const wanted = this.deck.grid?.mapCard() ?? null
     const held = this.placedMapCard
     // Where each card's builder put it, rather than where it stands: a reader
     // may have moved the Map card to another column, and the swap is still

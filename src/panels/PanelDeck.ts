@@ -194,7 +194,7 @@ function carryBetween(
  * `source: null` is a real answer and not an absence: it means *this cell held a
  * file and the grant did not answer*, which is what earns the vacancy the
  * `remembered` wording and the file's own name. The asking happens in
- * `Session.syncDeck`, before the deck is handed the state, because it is
+ * `SessionDeck.sync`, before the deck is handed the state, because it is
  * asynchronous and nothing inside this class may be.
  */
 export interface ResolvedLocal {
@@ -972,7 +972,7 @@ export class PanelDeck {
    * reason one line up: {@link frame} *re-parents* the mounted view rather than
    * rebuilding it, so the cell goes on holding whatever it was last given. A
    * session navigating to a table takes the bare node instead of a framed one
-   * (`Session.framed`) — and nothing then tells the deck, so `leadCell` kept
+   * (`SessionDeck.framed`) — and nothing then tells the deck, so `leadCell` kept
    * parenting the **previous, already destroyed** view. A heatmap's subtree is
    * a canvas with a full-resolution backing store behind it, so what is
    * retained is not a stale node but tens of megabytes of it, for as long as
@@ -2916,7 +2916,7 @@ export class PanelDeck {
    * edge — a lane, a model, a row of a card — painted and written into the link
    * **once**, filled.
    *
-   * Once because the link is read back a beat later: `Session.syncDeck` awaits
+   * Once because the link is read back a beat later: `SessionDeck.sync` awaits
    * before it hands the deck a state, so two writes in one gesture come back as
    * two states, and the first of them — the cell still empty — is no longer
    * what this deck holds. Read as a link the deck had not written, it rebuilt
@@ -3862,7 +3862,7 @@ export class PanelDeck {
     this.paintGrid()
     for (const picked of putAway) this.props.onMapHidden?.(picked)
     // Which leaves the deck empty, so the session's next render puts it down and
-    // hands the view back its own frame (`app/Session.ts`'s `syncDeck`).
+    // hands the view back its own frame (`app/SessionDeck.ts`'s `sync`).
     this.publish()
   }
 

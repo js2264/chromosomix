@@ -433,7 +433,7 @@ function compareOf(uri: string | null | undefined): { compare?: string } {
  * Untrusted like every other field read here, and with one consequence worth
  * naming: a member that survives this is only *well-formed*, not *current*. An
  * index pointing past the end of the deck it arrives beside is caught where the
- * two lists meet (`Session.rememberedCompanions`), because only there is it
+ * two lists meet (`SessionDeck.rememberedCompanions`), because only there is it
  * knowable which of them is the newer.
  */
 function localsOf(value: unknown): DeckLocal[] {
@@ -1063,7 +1063,7 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
   // lives in `panels/deck.ts`, and its comment says what a second copy costs: a
   // config that resolves to a *different number of maps* than were written, with
   // no error anywhere. Two normalisations come with the reuse and are both
-  // already applied downstream by `Session.syncDeck`: empty segments are
+  // already applied downstream by `SessionDeck.sync`: empty segments are
   // dropped, and the list is capped at `MAX_PANELS - 1`.
   const maps =
     config.state.maps === undefined
