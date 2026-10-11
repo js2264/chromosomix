@@ -963,6 +963,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
+  GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
+  shipped on. Still pinned exactly, for the reason `package.json` gives.
+
 - **A chart's tooltip is the app's own, and spells a coordinate as the axes do (§18.13).** Every
   chart has a formatter now, written in classes rather than the library's `style=` markup, which a
   strict policy refuses — `VII`, `84.3 kb`, `2.24e-7`, as the ticks under it read.

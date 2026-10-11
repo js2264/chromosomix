@@ -79,7 +79,7 @@
     "@gmod/bam": "^9.0.1",
     "@types/node": "^24.0.0",
     "@types/three": "0.186.0",
-    "electron": "43.2.0",
+    "electron": "43.7.9",
     "electron-builder": "26.15.3",
     "g3djs": "2.0.1",
     "hic-straw": "^2.1.4",
