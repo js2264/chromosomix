@@ -1,0 +1,21 @@
+# chromosomix 0.13.0 cli
+# created: 2026-10-11T18:42:59.499Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: compartments v3
+# framing: whole file at 250000 bp, balanced, count
+# param armWindow: 50
+# param balance: true
+# param components: 1
+# param contacts: cis
+# param expected: distance
+# param ignoreDiags: 2
+# param method: cooltools
+# param minR: 0.1
+# param phaseTrack: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFIXE23VC7.bw
+# param quantiles: 50
+# param saddle: true
+# param sequences: chr3
+# output: Components · chr3 · cis
+# columns: sequence, component, eigenvalue, of contacts, r with phasing
+sequence	component	eigenvalue	contacts	r
+chr3	E1	152.447	0.306	0.715

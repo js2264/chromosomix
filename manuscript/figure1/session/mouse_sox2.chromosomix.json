@@ -1,0 +1,50 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-06T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-06T00:00:00.000Z",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/ef0eba47-ada0-42bc-9329-5145b57ff33a/4DNFI5QJNFAT.mcool::/resolutions/5000",
+        "view": "region",
+        "region": "chr3:34200000-35200000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "mm-genes", "card": "linear", "kind": "gtf", "label": "genes",
+          "source": { "kind": "remote", "name": "genes_chr3.gtf", "url": "../build/mouse/genes_chr3.gtf" },
+          "visible": true, "placement": { "bottom": true, "right": true },
+          "style": { "colour": "#5b6169", "size": 62, "mode": "area", "limits": { "auto": true, "min": 0, "max": 1 }, "group": "", "shape": "element", "radius": 7, "opacity": 1, "flip": false },
+          "primary": true
+        },
+        {
+          "id": "mm-ctcf", "card": "linear", "kind": "track", "label": "CTCF",
+          "source": { "kind": "remote", "name": "4DNFIFFXFV82.bw", "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/6dd5c984-eccf-4d2d-8118-38ea2a4d30fb/4DNFIFFXFV82.bw" },
+          "visible": true, "placement": { "bottom": true, "right": false },
+          "style": { "colour": "#e69f00", "size": 60, "mode": "area", "limits": { "auto": true, "min": 0, "max": 1 }, "group": "", "shape": "element", "radius": 7, "opacity": 1, "flip": false }
+        },
+        {
+          "id": "mm-h3k27ac", "card": "linear", "kind": "track", "label": "H3K27ac",
+          "source": { "kind": "remote", "name": "4DNFIXE23VC7.bw", "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8ee59614-5b5f-4c8b-a29e-86d0c8047c30/4DNFIXE23VC7.bw" },
+          "visible": true, "placement": { "bottom": true, "right": false },
+          "style": { "colour": "#009e73", "size": 60, "mode": "area", "limits": { "auto": true, "min": 0, "max": 1 }, "group": "", "shape": "element", "radius": 7, "opacity": 1, "flip": false }
+        },
+        {
+          "id": "mm-h3k4me3", "card": "linear", "kind": "track", "label": "H3K4me3",
+          "source": { "kind": "remote", "name": "4DNFIQYJLKKH.bw", "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/f1ae271a-971a-4611-a6d0-fd971f1e693f/4DNFIQYJLKKH.bw" },
+          "visible": true, "placement": { "bottom": false, "right": true },
+          "style": { "colour": "#56789a", "size": 60, "mode": "area", "limits": { "auto": true, "min": 0, "max": 1 }, "group": "", "shape": "element", "radius": 7, "opacity": 1, "flip": false }
+        }
+      ],
+      "manual": [], "sequences": [], "groups": {}, "scaling": {}, "compareNormalise": false, "tables": {},
+      "plot": { "text": true, "fills": true, "baseline": true, "outline": true, "gutter": false, "crosshair": true, "dividers": true, "breaks": true, "labels": true, "ticks": true }
+    }
+  ]
+}

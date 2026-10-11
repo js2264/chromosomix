@@ -1,0 +1,39 @@
+# chromosomix 0.13.0 cli
+# created: 2026-10-11T18:44:07.014Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: structuremap v1
+# framing: whole file at 250000 bp, balanced, count
+# param alpha: 3
+# param balance: true
+# param region: chr3
+# param structure: 4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d
+# output: The map’s P(s) over the same bins · chr3
+# x: Genomic separation (bp)  y: Mean contact per bin pair
+# n chr3 · map: 641
+Genomic separation (bp)	chr3 · map
+250000	0.125402
+500000	0.0573291
+750000	0.0349339
+1000000	0.0236687
+1250000	0.0172862
+1625000	0.0120403
+2125000	0.00823599
+2625000	0.00621048
+3250000	0.0047302
+4125000	0.00344937
+5125000	0.00268319
+6375000	0.00219366
+8000000	0.00179693
+10000000	0.00149022
+12500000	0.00131625
+15625000	0.00121014
+19500000	0.00103622
+24375000	0.000855549
+30500000	0.00069
+38125000	0.000511705
+47625000	0.000376198
+59500000	0.000238218
+74375000	0.00014568
+93000000	0.0000851074
+116250000	0.000052387
+143000000	0.0000395248

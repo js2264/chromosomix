@@ -1,0 +1,72 @@
+# chromosomix 0.13.0 cli
+# created: 2026-10-11T18:43:46.564Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/5000
+# task: chromosight v1
+# framing: whole file at 5000 bp, balanced, count
+# param balance: true
+# param iterations: 1
+# param maxDist: 1000
+# param maxPercUndetected: 50
+# param maxPercZero: 10
+# param maxQvalue: 1
+# param minDist: 10
+# param minSeparation: 3
+# param nMads: 5
+# param pattern: loops
+# param pearson: 0.3
+# param sequences: chr3
+# param thresholds: preset
+# output: Score spectrum · loops
+# x: Pearson correlation with the template  y: Calls
+# n Calls: 918
+Pearson correlation with the template	Calls
+0.306321	34
+0.316315	66
+0.326308	54
+0.336302	68
+0.346296	62
+0.356289	49
+0.366283	45
+0.376277	33
+0.38627	54
+0.396264	34
+0.406257	29
+0.416251	36
+0.426245	28
+0.436238	21
+0.446232	18
+0.456225	17
+0.466219	22
+0.476213	17
+0.486206	15
+0.4962	19
+0.506193	14
+0.516187	6
+0.526181	14
+0.536174	20
+0.546168	8
+0.556161	12
+0.566155	7
+0.576149	11
+0.586142	11
+0.596136	10
+0.606129	6
+0.616123	13
+0.626117	7
+0.63611	0
+0.646104	9
+0.656098	6
+0.666091	9
+0.676085	4
+0.686078	5
+0.696072	2
+0.706066	6
+0.716059	4
+0.726053	1
+0.736046	2
+0.74604	5
+0.756034	1
+0.766027	1
+0.776021	0
+0.786014	1
+0.796008	2
