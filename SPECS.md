@@ -981,6 +981,18 @@ from the modal's own right edge.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+**Every view state from outside is read by the hash's own reader.** A link is parsed key by key — a
+`view` this build does not have lands on the table, a transform it cannot draw and a clip that is not
+a number are dropped — and so is every state that arrives as an object instead: a workspace file, a
+share link's `#session=`, a published `?config=`, the durable record (§5.6) and an embedding page's
+patch (§21.4) are each laid out as the hash body they would have been and parsed back
+(`viewStateOf`). A workspace's state used to be cast once its `uri` checked out, so one naming
+`view: 'banana'` left its tab on "Opening…" for good, a tab with no `view` did the same, and an
+unknown transform threw from the renderer. Only strings, numbers and booleans are carried into the
+read — an array is not stringified into a name, and a string the URI encoder would throw on drops
+its key rather than the tab — and every state this application writes comes back unchanged, which a
+test holds for every published demo workspace.
+
 **Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
 *undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
 entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
@@ -1116,7 +1128,8 @@ a click reopens it as it would a remote one.
 
 **A closed browser is offered its tabs back, never given them.** Beside the strip, every tab's whole
 config — tracks, marks, filters — is kept in IndexedDB (`state/workspace.ts`) and read only when
-there is no session storage at all, which is what closing the browser leaves. The window then says
+there is no session storage at all, which is what closing the browser leaves. A record outlives the
+build that wrote it, so what each tab was looking at is read by §5.5's reader like a link's. The window then says
 *You had 3 tabs open 2 days ago: …* with *restore*, and its × forgets the record rather than hiding
 the note: reopening a week's files unasked would reverse the reader's own closing of them, and on a
 shared machine would put somebody's unpublished data in front of whoever sat down next.
@@ -9526,7 +9539,7 @@ legitimate thing to embed.
 the embed is published and grows the URL by the size of the session; a pointer is a file on a bucket,
 editable afterwards, of no length, and — because the names inside it resolve against its own URL
 (`state/SessionConfig.ts`'s `resolveConfig`) — self-contained enough to be copied to another bucket with its data. Both are
-read by one parser.
+read by one parser, and the view state in either by the one a `#uri=` link is read by (§5.5).
 
 A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept,
 judged after `canonicalUrl` has made an `s3://` or a `gs://` the address it stands for (§24.5): the

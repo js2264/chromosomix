@@ -22,6 +22,7 @@ import {
   SUBJECT_KEYS,
   ViewStore,
   viewStateEquals,
+  viewStateOf,
 } from '../../src/state/ViewState'
 import { WHOLE_FILE_LEVELS } from '../../src/ui/Overview'
 import type { ViewState } from '../../src/types'
@@ -210,6 +211,71 @@ describe('the total the maps are drawn to (§6.5)', () => {
 
   it('outlives a navigation of the same file, as the cell set does', () => {
     expect(SUBJECT_KEYS).toContain('contacts')
+  })
+})
+
+/**
+ * The same reader, for a state that arrives as an *object* — a workspace file,
+ * a share link, a `?config=`, the durable record, an embedding page's patch.
+ * Each was a cast once its `uri` checked out, so a file naming a view this
+ * build does not have reached the session as it was written.
+ */
+describe('viewStateOf', () => {
+  for (const state of CASES) {
+    it(`reads ${JSON.stringify(state)} unchanged`, () => {
+      // Through JSON, which is how every one of these roads carries it.
+      expect(viewStateOf(JSON.parse(JSON.stringify(state)))).toStrictEqual(state)
+    })
+  }
+
+  it('reads a hostile state as a link would be read: the table, and nothing it cannot draw', () => {
+    // `view: 'banana'` left a tab on "Opening…" for good; `transform: 'banana'`
+    // threw a RangeError from `render/scale.ts`. `oe` takes any value but `1`
+    // and `true` as *off*, which is what `oe=yes` in a link has always meant.
+    expect(
+      viewStateOf({ uri: 'a.cool', view: 'banana', transform: 'banana', vmax: 'abc', oe: 'yes' }),
+    ).toStrictEqual({ uri: 'a.cool', view: 'genomes', oe: false })
+  })
+
+  it('lands a state with no view on the table', () => {
+    expect(viewStateOf({ uri: 'a.cool', region: 'II' })).toStrictEqual({
+      uri: 'a.cool',
+      view: 'genomes',
+      region: 'II',
+    })
+  })
+
+  it('drops what is not a view-state value rather than stringifying it', () => {
+    // `[object Object]` and `1,2` are legal strings in keys that take any
+    // string; nothing downstream would refuse them.
+    const read = viewStateOf({ uri: 'a.cool', view: 'region', region: [1, 2], genome: { x: 1 }, vmin: null })
+    expect(read).toStrictEqual({ uri: 'a.cool', view: 'region' })
+  })
+
+  it('drops a string the URI encoder would throw on, and only that key', () => {
+    // JSON can spell a lone surrogate, and `encodeURIComponent` refuses one: a
+    // throw here would have ended the whole read over one key.
+    expect(viewStateOf({ uri: 'a.cool', view: 'region', region: '\uD800', locus: 'II:1-9' })).toStrictEqual({
+      uri: 'a.cool',
+      view: 'region',
+      locus: 'II:1-9',
+    })
+  })
+
+  it('carries no key this build does not have, and none off the prototype', () => {
+    const hostile = JSON.parse('{"uri":"a.cool","view":"genomes","__proto__":{"view":"pair"},"evil":"1"}')
+    const read = viewStateOf(hostile)
+    expect(read).toStrictEqual({ uri: 'a.cool', view: 'genomes' })
+    expect(Object.getPrototypeOf(read)).toBe(Object.prototype)
+  })
+
+  it('is null for what names no file, as a hash with no uri is', () => {
+    for (const value of [null, 'a.cool', [], {}, { view: 'region' }, { uri: ['a.cool'] }, { uri: '\uDC00' }]) {
+      expect(viewStateOf(value)).toBeNull()
+    }
+    // A number is read as the string a link would carry, `#uri=7`; the file
+    // readers refuse a `uri` that is not a string before this is asked.
+    expect(viewStateOf({ uri: 7 })).toStrictEqual({ uri: '7', view: 'genomes' })
   })
 })
 

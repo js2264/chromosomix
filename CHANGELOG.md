@@ -2191,6 +2191,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A workspace, link, `?config=`, embed message or saved tab naming an unknown view or transform
+  opens (§5.5, §5.6, §21.1).** The address was read by an allow-list and everything else was not: a
+  state arriving as an object — a workspace, a share link, a `?config=` file, an embed's `navigate`,
+  the durable record of a tab — was cast as it came, so `view: 'banana'` sat on *Opening…* for ever
+  and `transform: 'banana'` threw on the first paint. Every one of them is now read by the hash's own
+  reader, which keeps what it knows and drops the rest; the twelve demo workspaces restore key for
+  key.
+
 - **Desktop: a chart's tooltip is styled (§15, §18.13).** The desktop's policy refused the chart
   library's `style=` markup on every hover — seven hundred refusals over one P(s) — and left a box of
   bare text with its colour swatches gone.
@@ -2255,8 +2263,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   region over the old picture. A second render of the same state, which a remount, a tab coming back
   and a closed comparison all start, ran to the end beside the first. Each render now calls off the
   one before it, which stops at its next step, and a repaint waits for the view it would paint to have
-  finished mounting. A workspace, link or `?config=` file naming a view this build does not have lands
-  on the file's first table, where it left the tab on *Opening…* for ever.
+  finished mounting.
 
 - **The golden job compares the reader with Python on every run, with or without metacooler.**
   It installed `metacooler` from PyPI, where there is no such package, and its fixture script
