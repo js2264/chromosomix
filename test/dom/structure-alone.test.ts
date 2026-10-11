@@ -17,7 +17,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import type { AnnotationStore } from '@/annotations/store'
+import { AnnotationStore } from '@/annotations/store'
 import { assemblyOf, type Assembly } from '@/genome/assembly'
 import type { PanelDeck } from '@/panels/PanelDeck'
 import { Session, type SessionHost } from '@/app/Session'
@@ -140,5 +140,39 @@ describe('a structure file opened on its own', () => {
     inside.deck?.showLead()
     inside.mountBrowser({ uri: 'yeast.bed3d', view: 'browser' })
     expect(inside.deck?.leadShown).toBe(true)
+  })
+})
+
+describe('a session coming back with its models', () => {
+  it('opens no cell for any of them: a restored session names its own deck (§25.3)', () => {
+    // The watch on the store notes what is there when it begins, and it begins
+    // at the store's first change — which, in a restore, is the first row back.
+    // A track first and two models after it, and the models were taken for new
+    // arrivals: each opened a cell, and publishing that deck wrote its models
+    // over the maps the link names.
+    const session = new Session(host)
+    built.push(session)
+    document.body.append(session.contentEl)
+    const inside = session as unknown as Innards & { memoryKey(uri: string): string }
+    const uri = 'yeast.bed3d'
+    const assembly = assemblyOf({ uri, name: uri, contigs: [{ name: 'I', length: 230_000 }], origin: 'features' })
+    // What the first visit left in this session's memory.
+    const earlier = new AnnotationStore(inside.memoryKey(uri))
+    const remote = (name: string) => ({ kind: 'remote', url: `https://lab.example.org/${name}`, name }) as never
+    // Remembered once read: a row still loading is not written down.
+    for (const [card, kind, name] of [
+      ['linear', 'track', 'atac.bw'],
+      ['structure', 'structure', 'genome.bed3d'],
+      ['structure', 'structure', 'locus.bed3d'],
+    ] as const) {
+      const row = earlier.begin({ card, kind, source: remote(name), label: name })
+      earlier.update(row.id, { status: 'ready' })
+    }
+    session.store.adopt({ uri, view: 'browser', maps: 'tracks' } as ViewState)
+    inside.assembly = assembly
+    inside.setUpBrowserAnnotations(assembly)
+    expect(inside.annotations?.store.entries.filter((entry) => entry.kind === 'structure')).toHaveLength(2)
+    expect(inside.deck).toBeNull()
+    expect(session.store.state?.maps).toBe('tracks')
   })
 })

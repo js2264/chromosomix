@@ -305,6 +305,22 @@ describe('a structure cell in the deck', () => {
     expect(structureCells(deck)).toHaveLength(2)
   })
 
+  it('comes back from a link drawing the models in the order the session lists them (§25.3)', () => {
+    // Every cell of a deck built from a link used to fall to the first model —
+    // its neighbours, built in the same pass, were not in the deck yet — and the
+    // next change to the store moved each to the first one its neighbours were
+    // not drawing: the models came back a seat to the left, the first in the last.
+    const model = (id: string, label: string): AnnotationEntry => ({ ...structureEntry(), id, label })
+    const store = fakeStore([model('m1', 'genome'), model('m2', 'chromosome'), model('m3', 'locus')])
+    const { deck } = make(store)
+    deck.apply(state('3d|3d|3d'))
+    const names = (): Array<string | undefined> =>
+      structureCells(deck).map((cell) => cell.querySelector<HTMLInputElement>('.deck-name')?.value)
+    expect(names()).toEqual(['genome', 'chromosome', 'locus'])
+    store.notify()
+    expect(names()).toEqual(['genome', 'chromosome', 'locus'])
+  })
+
   it('draws one model in two cells when a row is dropped on the second', () => {
     // The gesture that says *where* as well as *which* (§25.3): the Structures
     // card's grip, dropped on the cell that is to hold it. A cell already

@@ -1093,6 +1093,13 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
     ...(held.looks === undefined
       ? {}
       : { looks: held.looks.map((look) => ({ ...look, uri: at(look.uri) })) }),
+    // Arrangement, like the columns, and naming no file to resolve: where the
+    // session's own cell stands, whether it is hidden and whether its chain is
+    // open (§16.9). It was missing from this list when the lead became movable,
+    // so a workspace opened from its address arrived with the first map back in
+    // the first cell, on screen and chained, while the same file dropped on the
+    // window — which skips this step — came back as it was saved.
+    ...(held.lead === undefined ? {} : { lead: held.lead }),
   }
 
   const resolved: SessionConfig = {

@@ -777,6 +777,18 @@ export class PanelDeck {
   private looks: DeckLook[] = []
 
   /**
+   * The cells {@link adopt} has built or kept so far in one pass, which the
+   * slots list does not hold until the pass is over.
+   *
+   * What a structure cell asks before it falls to a model (`taken`, §25.3):
+   * without them, every cell of a deck rebuilt from a link fell to the first
+   * model, and the next change to the store moved each to the first one its
+   * neighbours were not drawing — the models came back one seat to the left
+   * of the order they were saved in, the first of them in the last cell.
+   */
+  private placed: readonly Slot[] = []
+
+  /**
    * The bin size the session's own map was last seen at.
    *
    * Watched rather than told, because there is no one place to be told from: a
@@ -1690,6 +1702,7 @@ export class PanelDeck {
     }
     const reused = new Set<Slot>()
     const next: Slot[] = []
+    this.placed = next
     for (const [index, ref] of wanted.slice(0, MAX_PANELS - 1).entries()) {
       if (isMapRef(ref)) {
         const existing = spare.get(ref.uri)?.shift()
@@ -1740,6 +1753,7 @@ export class PanelDeck {
       slot.cell?.destroy()
     }
     this.slots = next
+    this.placed = []
     // A tracks cell built here takes the name and the height its seat was left
     // with — before `paintGrid`, whose publish writes both back from the live
     // cells and would otherwise write this deck's plain ones over the memory it
@@ -1829,7 +1843,7 @@ export class PanelDeck {
         // who picks the same model in two cells gets it in two cells (§25.3),
         // and this is about which model a cell nobody has chosen for opens at.
         taken: () =>
-          this.slots
+          [...new Set([...this.slots, ...this.placed])]
             .filter((held) => held !== slot && held.ref.kind === 'structure')
             .map((held) => held.cell?.shownModel?.() ?? null)
             .filter((id): id is string => id !== null),

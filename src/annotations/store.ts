@@ -457,12 +457,18 @@ export class AnnotationStore {
    */
   adoptHome(map: MapId, uri: string): void {
     if (map === LEAD_MAP || this.homes.length === 0) return
-    const coming = this.homes.filter((home) => home.uri === uri)
+    // Only the lanes whose track has a row yet. A workspace's rows are restored
+    // beside its deck rather than before it, so a companion can be on screen —
+    // and this run — while the track it holds a lane for is still to come; the
+    // lane used to be taken out of the parking anyway and dropped, and the track
+    // arrived to be drawn nowhere. Left parked, it is taken up by the render
+    // after its row arrives. A lane whose track has *gone* is not kept waiting
+    // for ever: {@link remove} takes it out with the track.
+    const coming = this.homes.filter((home) => home.uri === uri && this.items.some((row) => row.id === home.track))
     if (coming.length === 0) return
-    this.homes = this.homes.filter((home) => home.uri !== uri)
+    this.homes = this.homes.filter((home) => !coming.includes(home))
     let moved = false
     for (const home of coming) {
-      if (!this.items.some((row) => row.id === home.track)) continue
       this.lanes = place(this.lanes, home.track, map, home.placement)
       if (home.style !== undefined) {
         const held = laneOf(this.lanes, home.track, map)
@@ -1031,8 +1037,10 @@ export class AnnotationStore {
           : entry,
       )
     // A lane naming a track that has gone would draw nothing and hold a slot in
-    // every stack it was in, so the placements go with the import.
+    // every stack it was in, so the placements go with the import — the parked
+    // ones too, which {@link adoptHome} would otherwise keep waiting for a row.
     this.lanes = this.lanes.filter((lane) => !gone.has(lane.track))
+    this.homes = this.homes.filter((home) => !gone.has(home.track))
     if (this.items.length !== before) this.changed()
   }
 
@@ -1095,6 +1103,7 @@ export class AnnotationStore {
     if (this.items.length === 0) return
     this.items = []
     this.lanes = []
+    this.homes = []
     this.changed()
   }
 
@@ -1193,6 +1202,22 @@ export class AnnotationStore {
       ...this.homes,
       ...homes.filter((home) => !held.has(`${home.uri} ${home.track}`)),
     ]
+  }
+
+  /**
+   * Bring back what a previous visit left — the rows, and where on the deck they
+   * were drawn — in the one order that keeps both.
+   *
+   * The arrangement is read **first**. Restoring a row persists the store, and
+   * the store writes its own lanes, none yet, over the record: read afterwards
+   * it is `[]`, and a workspace's deck arrived with every companion bare and the
+   * tracks it had put there drawn nowhere. `rows` is the loader's restore, which
+   * seats each row and fetches its bytes.
+   */
+  static restore(store: AnnotationStore, uri: string, rows: (stored: StoredEntry[]) => void): void {
+    const lanes = AnnotationStore.storedLanes(uri)
+    rows(AnnotationStore.stored(uri))
+    store.seedHomes(lanes)
   }
 
   /** What a previous visit remembered about where the tracks were drawn. */
