@@ -3037,7 +3037,7 @@ export class PanelDeck {
     for (const id of carry.ids) {
       // That edge only: a track on two sides of a map, one of them carried to a
       // cell of its own, is still on the other (§16.9). Taken off first, as
-      // `MatrixPanel.takeLane` does and for its reason: what stays behind may
+      // `LaneGestures.takeLane` does and for its reason: what stays behind may
       // turn, and the lane here must not turn with it.
       if (carry.from !== to) store.unplaceEdge(id, carry.from, carry.edge)
       store.placeAt(id, to, placementOn('bottom'))

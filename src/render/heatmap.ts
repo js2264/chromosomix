@@ -3139,7 +3139,7 @@ export class HeatmapView {
     // the next line is the mode this gesture has just left, and every pick
     // zoomed the picture the reader was pointing at out from under them. The
     // lane's copy of this gesture already took the reading first
-    // (`MatrixPanel.bandOnLane`); this is the map's own half of the same rule.
+    // (`LaneGestures.bandOnLane`); this is the map's own half of the same rule.
     const zooming = this.bandMode === 'zoom'
     const span = this.bandAt(axis, a, b)
     if (span !== null) this.onBand?.(axis, span)
