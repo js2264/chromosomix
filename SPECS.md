@@ -9695,7 +9695,14 @@ the word after it: `--stranded` turns one on, and `--stranded=false` or `--no-st
 (`--no-balance` stays the shell's own, the raw counts, and is never coverage's `--balance=false`). A
 flag took the next word unless that word began with `--`, so `coverage a.cool --no-balance b.hic` ran
 over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file, and
-`--out --quiet` wrote into a directory called `true`. A word a switch's value used to be written as,
+`--out --quiet` wrote into a directory called `true`. Where a task's parameter shares a name with
+one of the shell's own flags the task has it — apa's `--window` is its half-width and never a locus,
+coverage's `--balance` its own switch — with one exception, because both meanings are needed on one
+line: `--contacts` is the total a map is drawn to (§6.5) on every task and also Compartments' own
+choice of contacts, and the console writes both, `--contacts cis --contacts 10000000`. A choice is
+one of a few words and a total a number, so the words among the task's options are the task's and
+every other is the shell's; given wholly to the shell, `cis` was read as a total and every
+compartments line the console had written was refused. A word a switch's value used to be written as,
 `--stranded false`, is refused rather than read as a file of that name, and the refusal says what to
 write; a flag that takes a value is refused without one; only the shell's own flags may come before
 the task; and a flag the command does not take is refused by name, for `replay` and `circular` as for

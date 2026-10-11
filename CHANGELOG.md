@@ -2198,6 +2198,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   workspace as it reads those after `--over`, so `--over data/*.hic` replays every file rather than
   the first alone.
 
+- **Every compartments line the console writes runs in a shell (§23.1).** `--contacts` is both the
+  total a map is drawn to (§6.5) and Compartments' own choice of contacts, and the console writes
+  both — `--contacts cis --contacts 10000000` — so the shell read `cis` as a total and refused the
+  line. A word among the task's options is the task's and any other the total's, so both are read
+  from one line, and a word that is neither is refused naming the two.
+
 - **A value no form could hold is refused before any file is opened (§23.1).** `expected --quantity
   expectd` ran the density and wrote `# param quantity: expectd` above the table, `--factor=` ran at
   nought and `--rungs abc` built one rung. Choices are checked against the task's options, switches

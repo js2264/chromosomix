@@ -1226,6 +1226,48 @@ describe('compartments by either method', () => {
     ).toBe(2)
     expect(complained()).toMatch(/There is no --method “cooltool”\. It is cooltools or correlation\./)
   })
+
+  // `--contacts` is both this task's own choice and the total a map is drawn to
+  // (§6.5), and the console writes both on one line. Every compartments line it
+  // had written was refused, `cis` read as a total.
+  it('runs the console’s own line, whose --contacts cis is its choice and not a total', async () => {
+    reset()
+    const where = join(directory, 'console-line')
+    expect(
+      await main(['compartments', checkered, '--contacts', 'cis', '--out', where, '--quiet']),
+    ).toBe(0)
+    const { text } = await components(where, 'sequence\tcomponent\teigenvalue\tcontacts\tr')
+    expect(text).toMatch(/^# param contacts: cis$/m)
+  })
+
+  it('draws the map to a total written beside the choice, and reads the choice as the task’s', async () => {
+    reset()
+    const plain = join(directory, 'undrawn')
+    const drawn = join(directory, 'drawn')
+    expect(
+      await main(['compartments', checkered, '--contacts', 'both', '--out', plain, '--quiet']),
+    ).toBe(0)
+    expect(
+      await main([
+        'compartments', checkered, '--contacts', 'both', '--contacts', '20k', '--out', drawn, '--quiet',
+      ]),
+    ).toBe(0)
+    const before = (await components(plain, 'sequence\tcomponent\teigenvalue\tcontacts\tr')).text
+    const after = (await components(drawn, 'sequence\tcomponent\teigenvalue\tcontacts\tr')).text
+    expect(after).toMatch(/^# param contacts: both$/m)
+    // The total is the framing's, so it is in the record and in the numbers:
+    // a map drawn to twenty thousand contacts is not the map as stored.
+    expect(after).toMatch(/20,000/)
+    expect(before).not.toMatch(/20,000/)
+  })
+
+  it('refuses a word that is neither one of its contacts nor a total, naming both', async () => {
+    reset()
+    expect(
+      await main(['compartments', checkered, '--contacts', 'cs', '--out', out, '--quiet']),
+    ).toBe(2)
+    expect(complained()).toMatch(/--contacts cs is neither a choice of compartments \(cis, both, trans\) nor a number/)
+  })
 })
 
 /**

@@ -443,9 +443,10 @@ function pairsBinningOf(args: Args, task?: AnalysisTask): PairsBinning | undefin
  */
 function framingFlags(
   args: Args,
+  task?: AnalysisTask,
 ): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts'> {
   const value = one(args, 'value')
-  const contacts = contactsOf(args)
+  const contacts = contactsOf(args, task)
   return {
     ...(value === undefined || value === '' ? {} : { value }),
     ...(contacts === undefined ? {} : { contacts }),
@@ -459,12 +460,24 @@ function framingFlags(
  * `--contacts N`: the total to draw the map to (§6.5), typed as the breadcrumb's
  * box takes it — `10M`, `23,000,000`, `2.5e7`.
  */
-function contactsOf(args: Args): number | undefined {
-  const text = one(args, 'contacts')
+function contactsOf(args: Args, task?: AnalysisTask): number | undefined {
+  // Only the words the task does not claim: Compartments' `--contacts cis` is
+  // its own choice, and the total beside it on the same line is this (`shareOf`).
+  const text = shareOf(task, 'contacts', all(args, 'contacts')).own[0]
   if (text === undefined) return undefined
   const parsed = parseContacts(text)
   if (parsed === null) return undefined
-  if (typeof parsed !== 'number') throw new Error(`--contacts: ${parsed.refused}`)
+  if (typeof parsed !== 'number') {
+    const param = task?.params.find((entry) => entry.key === 'contacts')
+    if (param?.kind === 'choice') {
+      const choices = param.options.map((option) => option.value).join(', ')
+      throw new UsageError(
+        `--contacts ${text} is neither a choice of ${task?.id} (${choices}) nor a number of ` +
+          'contacts to draw the map to: type one like 10M or 23,000,000.',
+      )
+    }
+    throw new UsageError(`--contacts: ${parsed.refused}`)
+  }
   return parsed
 }
 
@@ -522,6 +535,40 @@ const flag = (args: Args, key: string): boolean => {
  * for an hour must not silently use the default. And so is a value the form
  * could not have held ({@link refusalOf}), for the same reason.
  */
+/**
+ * The words of a flag the command line and the task both use, shared out by what
+ * each can mean (§23.1).
+ *
+ * The rule elsewhere is one name, one meaning, decided by whether the task
+ * claims it: apa's `--window` is its half-width and never the locus, coverage's
+ * `--balance` its own switch. `--contacts` is the exception that rule cannot
+ * serve. It is the total a map is drawn to (§6.5) on every task, and it is also
+ * Compartments' own choice of which contacts to correlate — and the console
+ * writes both on one line, `--contacts cis --contacts 10000000`. Given wholly to
+ * the task, the total of a drawn map was lost from every compartments line;
+ * given wholly to the command line, `cis` was read as a total and refused, which
+ * is what every compartments line the console had ever written did.
+ *
+ * The two meanings never meet: a choice is one of a handful of words and a total
+ * is a number. So where the task's parameter of that name is a choice, its
+ * options are the task's and every other word is the command line's; where it is
+ * anything else, the task has the name outright, as it always had.
+ */
+function shareOf(
+  task: AnalysisTask | undefined,
+  key: string,
+  values: readonly string[],
+): { task: string[]; own: string[] } {
+  const param = task?.params.find((entry) => entry.key === key)
+  if (param === undefined) return { task: [], own: [...values] }
+  if (param.kind !== 'choice') return { task: [...values], own: [] }
+  const options = new Set(param.options.map((option) => option.value))
+  return {
+    task: values.filter((value) => options.has(value)),
+    own: values.filter((value) => !options.has(value)),
+  }
+}
+
 function paramsFor(task: AnalysisTask, args: Args): Params {
   // Built as a mutable record and returned as `Params`, which is readonly: the
   // type is a promise to the *runners* that nothing edits their parameters mid
@@ -551,7 +598,10 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
     // `parseArgs` has refused it already, against the same table; said again
     // here because this is the function whose silence would cost the hour.
     if (param === undefined) throw new UsageError(unknownFlag(task.id, key))
-    params[key] = coerce(param, values)
+    // Of a flag the command line shares, only the task's own words (`shareOf`).
+    const share = RESERVED.has(key) ? shareOf(task, key, values).task : values
+    if (share.length === 0) continue
+    params[key] = coerce(param, share)
   }
   // `--no-balance` answers the parameter the file otherwise would: off, as the
   // framing then is.
@@ -2088,7 +2138,7 @@ async function runCommand(args: Args, downloads: Downloads): Promise<number> {
   try {
     params = paramsFor(task, args)
     binning = pairsBinningOf(args, task)
-    framing = framingFlags(args)
+    framing = framingFlags(args, task)
     inputs = bindInputs(task, params, await loadInputs(args, downloads))
     sequences = await loadSequences(args, downloads)
     tracks = await loadTrackFiles([{ task, params }], args, downloads)
