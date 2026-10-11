@@ -570,7 +570,7 @@ export class BrowserView {
    * known the instant it moves, the size only after the card has been laid out.
    * Placing on the first and correcting on the second is what lets the box be
    * *flipped* away from an edge without reading layout on every pointer move —
-   * the same arrangement `MatrixPanel.placeTooltip` uses, for the same reason.
+   * the same arrangement `MapReadout.placeTooltip` uses, for the same reason.
    */
   private tipAt: { x: number; y: number } | null = null
   private tipSize = { width: 0, height: 0 }
