@@ -5307,6 +5307,32 @@ own private bucket, Drive or Dropbox, read from the browser with their own crede
 accounts, no storage, no hosting cost and no GDPR review. Stated prominently in the UI and in the
 paper.
 
+**Every web build carries a Content-Security-Policy, in its page.** The site, every archived pin and
+the package (§22) write one string (`scripts/csp.mjs`) into `index.html` as a `<meta>` right after
+the charset, ahead of everything it governs, and their builds check the page they emit against it. A
+meta because GitHub Pages, a registry CDN and a lab's static server send no header anybody here
+chooses; the desktop sends the same policy as a header and records what a meta costs (§15), and
+both costs are taken knowingly: **it does not reach the workers**, which are files and take their
+policy from their own responses, so what it polices is the document — everything parsed into it,
+every script it loads and every request it makes itself, a `?config=` workspace, a store's catalog, a
+folder listing; and **it cannot say `frame-ancestors`**, which these builds must not say anyway,
+since an embed is a frame in somebody else's page (§21). It allows what the app does and nothing
+else: scripts from its own origin, with `'wasm-unsafe-eval'` for h5wasm and the correlation kernel;
+styles from its own origin, with no `'unsafe-inline'`, because nothing in the tree writes `style=` —
+the chart tooltips, which showed the library's styled markup, now carry markup of their own (§18.13);
+images from itself, `data:` and `blob:`; connections to itself, to any `https:` host — remote files
+are the remote half of the app — and over plain HTTP to `localhost`, where a dev server or a local
+object store answers; workers, the service worker and the manifest from itself; and Google Identity
+Services by exactly the sources Google documents — its client script, fetched on a sign-in click
+and never on load (§24.7), its stylesheet, its frames and its endpoints. When that script loads it
+writes an inline `<style>` of button styles, which the policy refuses with one console line and
+loses nothing by refusing: the token client this app uses draws no button. Everything else falls to
+`default-src 'none'`, and no plugin, `<base>` or form submission is allowed. The dev server carries
+no policy, since it injects every stylesheet as a `<style>` and talks to the page over a websocket;
+`vite preview` serves a build, policy and all. `scripts/ui-csp.mjs` drives a built page under it
+— a map, a figure hovered, the 1D browser from a second origin — and fails on any refusal the page
+did not ask for, and on a map or a lane left without its data.
+
 ---
 
 ## 12. Performance budgets
@@ -9120,7 +9146,8 @@ written, and each is absolute rather than a degradation:
 2. **A sibling `.js` cannot be fetched** — the same refusal that blocks a dynamic import.
    `inlineDynamicImports` collapses the graph to one chunk, at both the app and the worker level,
    and the build's own plugin folds that chunk into the HTML.
-3. **No network at all.** The origin is opaque, so every remote read fails before it is sent.
+3. **No network at all.** The origin is opaque, so every remote read fails before it is sent — and
+   the page's own policy says so, so that it is a rule rather than a circumstance (below).
 4. **No service worker.** Registration is refused. `pwa.ts` needs no change: it already treats a
    refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
 
@@ -9146,12 +9173,28 @@ where the site loads each as a chunk of its own. Most of the size is the price o
 reducible without dropping it. It gzips to about a quarter in transit and costs roughly a second of
 parsing on each open, with no HTTP cache behind it.
 
+**It carries a policy of its own, computed over itself.** A file can be sent no header, and the
+site's `'self'` policy (§11) would refuse every script and stylesheet this build inlines, so the
+build writes a `<meta>` CSP after inlining them: `script-src` and `style-src` name the SHA-256 of each
+inline element and nothing else — over the text as the parser hands it over, CR LF folded to LF —
+`'wasm-unsafe-eval'` keeps h5wasm, workers come only from `blob:`, which is how they are built here,
+and images only from `data:` and `blob:`. `connect-src` names `data:` alone, which makes (3) a rule
+the browser enforces rather than a property of an opaque origin, and a worker built from a blob
+inherits its page's policy, so here — unlike on the site — the workers are policed too: a fetch to
+any host is refused in the page and in a worker alike. `data:` is there for a worker and reaches
+nothing: the bigWig and bigBed reader carries its inflate wasm as a `data:` URL and fetches it before
+its first read, and under `'none'` that was refused inside the annotations worker, where the page
+hears nothing of it — every bigWig lane said *fetching…* for good. The hashes are written last,
+because any edit to the page after them names a script it no longer holds, and the browser answers
+that by refusing the app's one script.
+
 **Every way this build can fail is silent, so the shape is a rule the build enforces.** A page that
 kept one `<script src>` paints its shell and stops, with nothing on a console nobody is looking at;
 a page that kept the module worker format looks completely normal until a file is dropped on it.
 `scripts/standalone-shape.mjs` holds the rules — one file, within a size band (4 MB to 24 MB), no
 external script or stylesheet, no root-absolute reference, no PWA tag, no `{type:"module"}` worker
-construction, the blob-URL construction present and the target's own name in the page — and
+construction, the blob-URL construction present, the target's own name in the page, and a policy
+naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads — and
 `check-standalone-build.mjs` runs them over the directory as the last step of
 `npm run build:standalone`. The lower size bound is as load-bearing as the upper: a build whose
 inlining silently did nothing produces a small, tidy, entirely broken file.
@@ -9159,7 +9202,10 @@ inlining silently did nothing produces a small, tidy, entirely broken file.
 **And the rules can all pass on a page that does not run**, so `scripts/smoke-standalone.mjs` drives
 a real Chromium at a real `file://` URL, mounts the app and opens the contact map named on its
 command line through a real worker. It skips with a named message where the browser or
-`playwright-core` is absent, in the same way the fixture-dependent tests do.
+`playwright-core` is absent, in the same way the fixture-dependent tests do. `scripts/ui-csp.mjs
+standalone` drives it under its policy — the yeast map and a bigWig dropped on it, two tasks run and
+every chart hovered — and fails on a lane or a map left without its data, and on any refusal, in the
+page or in one of its workers, but the ones it provokes to show the policy is there.
 
 **Every release carries it.** The release workflow's `standalone` job builds it from the tag and
 attaches it to the release as `chromosomix-<tag>.html` — a name that says what it is and
@@ -9456,6 +9502,10 @@ and each is load-bearing:
   asset URL; when the base changes — the site's own domain, `chromosomix.app`, puts it at the root —
   the deploy rewrites each archived build and preview for the new base, once
   (`scripts/archive-rebase.mjs`), and `…/v/<commit>/` goes on opening the same build there.
+- **No `frame-ancestors`.** The web builds' policy (§11) is a `<meta>`, which cannot carry the
+  directive, and would leave it out if it could: a policy deciding who may frame the viewer is a
+  policy against this surface. The desktop's header says `frame-ancestors 'none'`, which is right
+  for an application window and is the one clause the two policies do not share.
 
 The data host needs no new CORS entry per embedding site: a frame's requests carry the **frame's**
 origin, which is the viewer's, so §11's hosting requirements are exactly as they were.
@@ -9652,9 +9702,10 @@ why publishing happens from CI, on a clean checkout, where the directory does no
 moment rather than shipping whatever was there — and `dist-cli/` too, which `build:package` builds
 first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html` or
 `icon-192.png`, no module script under `./assets/`, a root-absolute reference, a service worker or a
-web manifest, a source map, a data file, or more than 12 MB in all — and the rules are held by a
-test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement §15 and §21's
-archived build both use.
+web manifest, a source map, a data file, more than 12 MB in all, or a page without the site's
+policy (§11), which a copy carries in the page because no server it lands on will send it — and the
+rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement
+§15 and §21's archived build both use.
 
 That check earns its place twice over here. `dist/` is written by **two** builds — the site's and this
 one — and only one of them may be published; a tarball packed over a site build would carry absolute

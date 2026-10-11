@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { WEB_CSP, cspMetaTag } from '../../scripts/csp.mjs'
 import { SIZE_LIMIT, pinnedFileProblems, pinnedIndexProblems } from '../../scripts/pinned-shape.mjs'
 
 const BASE = '/chromosomix/v/a1b2c3d/'
@@ -83,7 +84,7 @@ describe('pinnedFileProblems', () => {
 })
 
 const INDEX =
-  `<!doctype html><html><head>` +
+  `<!doctype html><html><head><meta charset="utf-8" />${cspMetaTag(WEB_CSP)}` +
   `<link rel="icon" href="data:image/svg+xml,%3Csvg%3E"/>` +
   `<script type="module" crossorigin src="${BASE}assets/index-C15U3eta.js"></script>` +
   `<link rel="stylesheet" crossorigin href="${BASE}assets/index-BlXroeTc.css">` +
@@ -125,5 +126,15 @@ describe('pinnedIndexProblems', () => {
   it('keeps the favicon, which is a data URI and needs no file', () => {
     expect(pinnedIndexProblems(INDEX, BASE)).toEqual([])
     expect(INDEX).toContain('rel="icon" href="data:')
+  })
+
+  it('refuses a copy that lost the site’s policy, or carries another', () => {
+    // The same page on the same origin, so the same policy — and an archived
+    // copy is the build nobody looks at for months.
+    expect(pinnedIndexProblems(INDEX.replace(cspMetaTag(WEB_CSP), ''), BASE)).toEqual([
+      'index.html carries no Content-Security-Policy',
+    ])
+    const looser = INDEX.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+    expect(pinnedIndexProblems(looser, BASE).join(' ')).toContain("other than the web builds' own")
   })
 })

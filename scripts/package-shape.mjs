@@ -33,12 +33,17 @@
  * 4. **A budget**, which is the tripwire under all three — one number that fails
  *    if any of the reasons for it is quietly removed, including reasons nobody
  *    has thought of yet.
+ * 5. **The site's Content-Security-Policy**, as a meta ahead of everything it
+ *    governs (`csp.mjs`). The servers a tarball is unpacked onto are exactly
+ *    the ones whose headers nobody here can know, so the policy travels inside
+ *    the page or not at all.
  *
  * Pure predicates over names, sizes and strings: the caller reads, this decides.
  * Each returns a list of human-readable problems, empty when there are none — a
  * boolean would say that something is wrong and not what.
  */
 
+import { webCspProblems } from './csp.mjs'
 import { isDataFile } from './desktop-shape.mjs'
 
 /**
@@ -132,5 +137,6 @@ export function packageIndexProblems(html) {
       problems.push(`index.html references ${url}, which is root-absolute and cannot be vendored`)
     }
   }
+  problems.push(...webCspProblems(html))
   return problems
 }

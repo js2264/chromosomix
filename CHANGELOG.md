@@ -3248,6 +3248,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Security
 
+- **Every web build carries a Content-Security-Policy (§11, §21, §22).** The site, each pinned build
+  and the package write one policy into `index.html` as a `<meta>`: scripts and styles from the page's
+  own origin and Google sign-in's documented sources, no inline script and no `style=`, connections to
+  `https:`, the loopback and `data:`, and no `frame-ancestors`, so an embed stays frameable. The build
+  fails if its page holds anything the policy would refuse. A script injected through a name in a
+  file would have run with the reader's S3 key in reach; it would be refused now.
+
+- **The single file carries a policy computed over itself (§19).** It names the hash of each inline
+  script and stylesheet, and reaches no host: `connect-src` admits only `data:` — where the bigWig
+  reader keeps its own wasm — and the blob workers inherit the policy.
+
 - **A chart's tooltip shows a file's names as text (§18.13).** A sequence, sample or series name was
   written into the tooltip as HTML, which the chart library parses on every hover, so a file with a
   sequence called `<img src=x onerror=…>` ran its script when the pointer crossed a Cis/trans or

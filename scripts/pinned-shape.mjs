@@ -30,12 +30,17 @@
  *    the size itself is asserted too — one number that fails if any of the
  *    reasons for it is quietly removed, including reasons nobody has thought of
  *    yet.
+ * 5. **The site's Content-Security-Policy**, ahead of everything it governs
+ *    (`csp.mjs`). An archived copy is the same page on the same origin, so it
+ *    carries the same policy — and a copy that lost it is the one build nobody
+ *    would think to look at.
  *
  * Pure predicates over names, sizes and strings: the caller reads, this
  * decides. Each returns a list of human-readable problems, empty when there are
  * none — a boolean would say that something is wrong and not what.
  */
 
+import { webCspProblems } from './csp.mjs'
 import { isDataFile } from './desktop-shape.mjs'
 
 /**
@@ -126,5 +131,6 @@ export function pinnedIndexProblems(html, base) {
       problems.push(`index.html references ${url}, which is outside this build's base ${base}`)
     }
   }
+  problems.push(...webCspProblems(html))
   return problems
 }

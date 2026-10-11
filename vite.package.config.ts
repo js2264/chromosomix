@@ -61,6 +61,7 @@
 import { defineConfig } from 'vite'
 
 import base from './vite.config'
+import { cspMeta } from './scripts/csp.mjs'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
 import { shellIcon } from './scripts/shell-icon.mjs'
 
@@ -71,7 +72,9 @@ export default defineConfig({
   // every mount that is not the site root, which is all of them.
   base: './',
   publicDir: false,
-  plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon')],
+  // The site's policy too. A copy on somebody else's server is the copy whose
+  // headers we cannot know, which is the case a meta is for (`scripts/csp.mjs`).
+  plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon'), cspMeta()],
   build: {
     ...base.build,
     emptyOutDir: true,

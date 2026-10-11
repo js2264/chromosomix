@@ -25,7 +25,12 @@
  *    dynamic import. `inlineDynamicImports` collapses the graph to one chunk and
  *    {@link singleFile} folds that chunk into the HTML.
  * 3. **No network at all.** The origin is opaque, so every remote read fails.
- *    `__STANDALONE__` is how the interface knows not to offer one.
+ *    `__STANDALONE__` is how the interface knows not to offer one, and the
+ *    page's own policy (`connect-src data:` and nothing else, computed by
+ *    {@link singleFile} over what it inlined) makes it a rule the browser
+ *    enforces on the page and on its blob workers alike, rather than a
+ *    circumstance. `data:` is the bigWig reader's: it fetches its own wasm
+ *    from one, and a `data:` URL has no host behind it.
  * 4. **No service worker.** Registration is refused; `pwa.ts` already treats a
  *    refusal as "this page has no cache" and needs no change.
  *
@@ -47,6 +52,7 @@ import { execSync } from 'node:child_process'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 
+import { withStandaloneCsp } from './scripts/csp.mjs'
 import { standaloneIndexProblems } from './scripts/standalone-shape.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
@@ -151,6 +157,14 @@ function singleFile(): Plugin {
         .replace(/\s*<link rel="manifest"[^>]*>/g, '')
         .replace(/\s*<link rel="apple-touch-icon"[^>]*>/g, '')
         .replace(/\s*<meta name="theme-color"[^>]*>/g, '')
+
+      // The policy, **last**, because it is computed over the page: it names
+      // the hash of each script and stylesheet just inlined, and any edit after
+      // this line would leave it naming something the page no longer holds —
+      // which the browser answers by refusing the app's one script. A file
+      // can be sent no header, and the site's `'self'` policy would refuse
+      // every inlined element, so this page carries its own (`scripts/csp.mjs`).
+      html = withStandaloneCsp(html)
 
       writeFileSync(indexPath, html)
       for (const file of consumed) rmSync(file, { force: true })
