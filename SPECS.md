@@ -5584,7 +5584,10 @@ hundreds of frames from the cause — and `mountTarget()` starts writing tens of
 worker at all, and cannot express `frame-ancestors`. It keeps `'wasm-unsafe-eval'` — verified in both
 directions; without it h5wasm fails to instantiate in both document and worker — and needs no
 `'unsafe-inline'` for styles, because `el()` assigns through the CSSOM and the tree contains no
-`innerHTML`, no `<style>` creation and no `style=` attribute.
+`innerHTML`, no `<style>` creation and no `style=` attribute. The one markup it hands a library is a
+chart's tooltip, which ECharts parses with `innerHTML`, and it carries classes rather than `style=`
+(§18.13) — the library's own tooltip markup did not, so under this policy every hover over a figure had
+its styling refused until the charts had formatters of their own.
 
 **One request header is rewritten, and it is the target's only capability.** `Accept-Encoding` is a
 forbidden header name in Fetch, so no page may set it; the main process may. Every http(s) request
@@ -8991,6 +8994,23 @@ typed none — which is a second bookmark and not a second window: the single so
 holds. The gesture is taken in the capture phase, because the chart pans on a drag and a picture
 sliding under the box being drawn on it is the one thing this must not do; ECharts' own brush is not
 used, since it arrives with a toolbox of buttons over the picture and zooms both axes always.
+
+**What the pointer says is the file's words as text, in this application's markup.** ECharts writes a
+tooltip with `innerHTML`, and what a tooltip names comes out of the file: a cis/trans square's ticks are
+its sequences' names, a track correlation's are its tracks', a curve is named after either. So every
+chart has a formatter of its own, and every name, number and colour reaches its markup through one
+escape (`figures/tooltip.ts`) — interpolated as it came, a sequence named `<img src=x onerror=…>` ran
+its script on hover. The library's own markup, which a chart with no formatter shows, escapes its text
+but styles every margin and swatch with `style=` attributes, which a policy without `'unsafe-inline'`
+refuses (§11, §15): one pass of the pointer over P(s) raised seven hundred violations and left a box
+of bare text with its swatches gone. The formatters' markup carries classes instead, and a series'
+swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
+over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
+`6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
+run of zeros. Over a point, a histogram's bar, a box or a violin the series comes first, then the
+pair, the count, the five numbers the box is drawn from, or, for a violin, nothing more: the shape is
+the answer. Tick labels, legends and titles are not markup — the SVG draws them as text — and are not
+escaped.
 
 **A boolean is one of two shapes, and a tick box is neither.** A *named parameter* — smooth, fill
 under, the grid, the tooltip — is a label and an `on`/`off` button on one row, which is what every

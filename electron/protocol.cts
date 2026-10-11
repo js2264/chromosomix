@@ -50,6 +50,12 @@ export const APP_INDEX = 'app://viewer/index.html'
  * through the CSSOM, which CSP does not govern. Adding any of the three later
  * means this line has to change, and the symptom will be unstyled elements.
  *
+ * The one markup `src/` hands to somebody else's `innerHTML` is a chart's
+ * tooltip, which ECharts writes that way, and `figures/tooltip.ts` builds it
+ * with classes for exactly this reason. The library's *own* tooltip markup is
+ * styled with `style=` attributes, which this policy refuses on every hover,
+ * and that is why no chart is left without a formatter (SPECS §18.13).
+ *
  * `connect-src` keeps `https:` because remote files are the whole remote half of
  * the app, and localhost so that a file served from a local dev server or a
  * local object store can be opened — which is a normal thing to want and is not

@@ -30,6 +30,7 @@ import {
   type XyFigureSpec,
 } from './spec'
 import type { FigureStyle } from './style'
+import { tipHead, tipRow } from './tooltip'
 
 /** The colours and the type a figure borrows from the page it is drawn on. */
 export interface FigureTheme {
@@ -167,6 +168,113 @@ function yFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined
   }
 }
 
+// ---------------------------------------------------------------------------
+// The pointer
+// ---------------------------------------------------------------------------
+
+/**
+ * The part of the library's tooltip parameters a formatter reads.
+ *
+ * Written out here rather than imported, for the reason {@link ChartOption} is:
+ * this module does not drag the library's types in.
+ */
+interface TipParams {
+  seriesName?: string
+  seriesType?: string
+  /** The category under the pointer: for a box, the series it summarises. */
+  name?: string
+  value?: unknown
+  color?: unknown
+  /** The abscissa under the pointer, on an `axis` trigger. */
+  axisValue?: unknown
+}
+
+/** The five numbers a box is drawn from, top down, as the eye reads it. */
+const BOX_ROWS = ['high', 'upper quartile', 'median', 'lower quartile', 'low'] as const
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/** The ordinate of a datum, which is a `[x, y]` pair everywhere this draws one. */
+function ordinateOf(value: unknown): number | null {
+  const y = Array.isArray(value) ? (value as unknown[])[1] : value
+  return isFiniteNumber(y) ? y : null
+}
+
+/**
+ * What the pointer says over an xy figure.
+ *
+ * Built here rather than left to the library, for the two reasons
+ * `figures/tooltip.ts` gives: the names in it are the file's own, and the
+ * library's markup styles itself with attributes the site's policy refuses.
+ * Every string reaches the page through that module, so this decides only
+ * *what* is said:
+ *
+ * - **Along a curve, the abscissa first**, then a row per series under the
+ *   pointer. A sequence's name over its bar and `84.3 kb` along a P(s), where
+ *   the library printed the raw number under the pointer — `6.00` for the
+ *   seventh sequence, `84,281.00` for a separation.
+ * - **Each coordinate as its own axis spells it**: base pairs, a list's names,
+ *   per cent, and otherwise `axisNumber` on the axis's own scale — so a P(s)
+ *   reads `2.24e-7` under ticks of `1e-7` rather than `0.000000224`, and a
+ *   reader matching the number to the picture is never translating between two
+ *   notations.
+ * - **Over a point, a histogram's bar, a box or a violin**, the series first
+ *   and then what the mark stands for: the pair a point is, the count a bar
+ *   holds, the five numbers a box is drawn from. A violin is its own answer,
+ *   and names itself.
+ */
+function tooltipOf(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+): (params: TipParams | TipParams[]) => string {
+  const histo = style.mark === 'histogram'
+  const xScale = style.x.scale === 'log' ? 'log' : 'linear'
+  const yScale = style.y.scale === 'log' ? 'log' : 'linear'
+  // A histogram's abscissa is the ordinate's quantity and its ordinate a count,
+  // so neither keeps the figure's own spelling — the rule its axes follow.
+  const xSpelling = histo ? undefined : xFormatter(spec)
+  const ySpelling = histo ? undefined : yFormatter(spec)
+  // A name is drawn only where the pointer stands *on* a member of the list;
+  // between two, the number is still an answer.
+  const spellX = (value: number): string => {
+    const spelled = xSpelling?.(value) ?? ''
+    return spelled !== '' ? spelled : axisNumber(value, xScale)
+  }
+  const spellY = ySpelling ?? ((value: number) => axisNumber(value, yScale))
+
+  return (params) => {
+    if (Array.isArray(params)) {
+      const at = params[0]
+      if (at === undefined) return ''
+      const rows = params.flatMap((one) => {
+        const y = ordinateOf(one.value)
+        return y === null ? [] : [tipRow(one.color, one.seriesName ?? '', spellY(y))]
+      })
+      return tipHead(isFiniteNumber(at.axisValue) ? spellX(at.axisValue) : '') + rows.join('')
+    }
+    if (params.seriesType === 'boxplot') {
+      // The library may put the category's index in front of the five, so the
+      // box is the last five; the header is the category, which is the series
+      // the box summarises — the boxplot series itself is called `box`.
+      const box = Array.isArray(params.value) ? (params.value as unknown[]).slice(-5) : []
+      const head = tipHead(params.name ?? '')
+      if (box.length !== 5 || !box.every(isFiniteNumber)) return head
+      // Spelled as the box's own ordinate is (`distributionOption`), which
+      // knows no unit: it is the sample's axis, not the curve's.
+      const down = [...box].reverse()
+      return head + BOX_ROWS.map((label, at) => tipRow(null, label, axisNumber(down[at], yScale))).join('')
+    }
+    const head = tipHead(params.seriesName ?? '')
+    if (params.seriesType === 'custom') return head
+    const pair = Array.isArray(params.value) ? (params.value as unknown[]) : []
+    const [x, y] = pair
+    if (!isFiniteNumber(x) || !isFiniteNumber(y)) return head
+    return head + (histo ? tipRow(params.color, spellX(x), fmt.int(y)) : tipRow(params.color, spellX(x), spellY(y)))
+  }
+}
+
 function axisBase(theme: FigureTheme, style: FigureStyle, grid: boolean): ChartOption {
   return {
     axisLine: { lineStyle: { color: theme.grid } },
@@ -292,7 +400,7 @@ export function optionOf(
     legend,
     tooltip: style.tooltip
       ? {
-              trigger:
+          trigger:
             categorical || style.mark === 'points' || style.mark === 'histogram'
               ? 'item'
               : 'axis',
@@ -300,6 +408,9 @@ export function optionOf(
           backgroundColor: theme.background,
           borderColor: theme.grid,
           textStyle: { color: theme.ink, fontSize: style.fontSize },
+          // Never the library's own markup, which styles itself with `style=`
+          // attributes the site's policy refuses: see {@link tooltipOf}.
+          formatter: tooltipOf(spec, style),
         }
       : { show: false },
     ...built,
@@ -412,6 +523,11 @@ function xyOption(
   // has none. Neither on a histogram: there the abscissa is the *ordinate's*
   // quantity and the ordinate is a count, so the figure's own units are on
   // neither axis.
+  //
+  // **Text, not markup**, and that is why these two are not escaped where the
+  // tooltip's strings are (`figures/tooltip.ts`): a tick label is drawn as an
+  // SVG `<text>` whose content is set as text, so a sequence's name reaches the
+  // page inert — and escaped, `a<b` would be printed as `a&lt;b`.
   const xSpelling = histo ? undefined : xFormatter(spec)
   const ySpelling = histo ? undefined : yFormatter(spec)
   // A histogram's axes are a quantity and a count, neither of them a series' x

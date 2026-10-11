@@ -11660,6 +11660,37 @@ span.deck-name {
   border-radius: 2px;
 }
 
+/* What a chart's tooltip says (`figures/tooltip.ts`). The library places the
+   box and paints it through the CSSOM; what is inside is our markup, and it is
+   styled here rather than by `style=` attributes, because the site's policy
+   refuses those (§11) — the library's own markup carried nothing else, and on
+   a page that enforces the policy it arrived as bare text with its swatches
+   gone. The type size and the ink are inherited from the box, which takes them
+   from the figure's own text size. */
+.figure-tip-head {
+  margin-bottom: 0.3em;
+}
+
+.figure-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  line-height: 1.5;
+}
+
+.figure-tip-swatch {
+  flex: none;
+  width: 0.75em;
+  height: 0.75em;
+}
+
+.figure-tip-value {
+  margin-left: auto;
+  padding-left: 1.5em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 /* In the dialog the chart takes the room it is given rather than choosing a
    height from its width. */
 .figure-chart-fill {

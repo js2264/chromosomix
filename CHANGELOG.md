@@ -963,6 +963,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A chart's tooltip is the app's own, and spells a coordinate as the axes do (§18.13).** Every
+  chart has a formatter now, written in classes rather than the library's `style=` markup, which a
+  strict policy refuses — `VII`, `84.3 kb`, `2.24e-7`, as the ticks under it read.
+
 - **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
   deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
   the README, the package's `homepage` — which the desktop and single-file builds read the generated
@@ -2187,6 +2191,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Desktop: a chart's tooltip is styled (§15, §18.13).** The desktop's policy refused the chart
+  library's `style=` markup on every hover — seven hundred refusals over one P(s) — and left a box of
+  bare text with its colour swatches gone.
+
 - **A `.hic` block larger than the block cache is handed back and not kept (§3.6).** The eviction
   skipped the block just stored, so one oversize block stayed over the 48 MiB budget until the next
   was decoded.
@@ -3239,6 +3247,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 
 ### Security
+
+- **A chart's tooltip shows a file's names as text (§18.13).** A sequence, sample or series name was
+  written into the tooltip as HTML, which the chart library parses on every hover, so a file with a
+  sequence called `<img src=x onerror=…>` ran its script when the pointer crossed a Cis/trans or
+  track-correlation cell. Every formatter now escapes what it prints, through one helper — the names,
+  the numbers and a series' colour, which a workspace file carries as surely as a name.
 
 - **A binary file is held to its own size, whatever its counts claim (§10, §12).** A `.hic`, a
   BAM's BAI or CSI, a `.2bit` and a binary g3d with its MessagePack header were read on the strength
