@@ -2134,9 +2134,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A tab with maps beside two or more 3D models keeps its maps when it is restored (§25.3).** The
+  watch that opens a cell for every model that arrives began at the store's first change, which in a
+  restore is the first row back, so every model after it opened a cell; publishing those cells wrote
+  them over the maps the link was putting back, and a workspace tab of five maps and five models came
+  back as five models. The models a restore brings back are now noted before the first of them lands.
+
+- **Structure cells built together draw the models in the order the session lists them (§25.3).**
+  Each cell of a deck rebuilt from a link fell to the first model, its neighbours not being in the
+  deck yet, and the next change to the store moved each one along: the models came back a seat to the
+  left, the first in the last cell.
+
 - **A lane's *colour by* picker stays inside the card.** A select is as wide as its longest option,
   and a set whose rows carry a long column — insulation's domains name *weaker boundary prominence* —
   pushed the picker a few pixels past the Tracks card's edge.
+
+- **A workspace opened from its address puts the first map where it was saved (§16.9).** A published
+  figure or a `?config=` link whose deck had its first map moved, hidden or unchained opened with it
+  back in the first cell, on screen and chained: resolving the workspace's names rebuilt the deck
+  from its other fields and dropped the lead's. A dropped workspace file was not affected.
+
+- **A workspace's tracks come back under the companions they were drawn under (§16.6).** Restoring
+  the tracks wrote the session's lanes, none yet, over the record of where they were drawn before it
+  was read, and a lane whose map opened before its track had been read was dropped: a deck with
+  MNase under each of three maps opened with every companion bare and MNase on the first map only.
 
 - **A table's scatter has an axes card (§18.13).** Its scales, windows and names, the columns'
   names (`number in Map`) as placeholders, so a time course's axes can say what they are.

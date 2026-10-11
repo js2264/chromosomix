@@ -1327,6 +1327,74 @@ describe('remembering which panel a track was drawn on', () => {
     expect(next.drawnOnMap('slot-41', 'top')).toHaveLength(1)
   })
 
+  it('reads the arrangement back before the rows that would write over it', () => {
+    // Restoring a row persists the store, and the store writes its own lanes —
+    // none yet — over the record. Read back after the rows, a workspace's deck
+    // arrived with every companion bare: the three-map deck of the lab's store
+    // opened with all six of its tracks under the first map.
+    const uri = `lanes-${Math.random()}.cool`
+    const first = freshStore(uri)
+    const id = loaded(first, 'companion.bw', placementOn('bottom'))
+    first.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
+    first.placeOn(id, 'slot-2', placementOn('top'))
+    first.unplaceFrom(id, LEAD_MAP)
+    expect(AnnotationStore.storedLanes(uri)).toHaveLength(1)
+
+    // A new page load over the same session memory, its rows seated the way the
+    // loader seats them — each one a `begin`, each one a write.
+    const next = new AnnotationStore(uri)
+    AnnotationStore.restore(next, uri, (rows) => {
+      for (const row of rows) {
+        const seated = next.begin({
+          card: row.card,
+          kind: row.kind,
+          source: { kind: 'local', file: new File([], 'companion.bw'), name: 'companion.bw' },
+          id: row.id,
+        })
+        next.update(seated.id, { status: 'ready' })
+      }
+    })
+    next.noteMapFiles(new Map([['slot-41', 'rep2.cool']]))
+    next.adoptHome('slot-41', 'rep2.cool')
+    expect(next.drawnOnMap('slot-41', 'top')).toHaveLength(1)
+  })
+
+  it('keeps a lane parked until its track has arrived', () => {
+    // A workspace restores its rows beside its deck rather than before it, so
+    // the companion can be on screen — and `adoptHome` run — before the track
+    // it holds a lane for has a row. The lane used to be taken out of the
+    // parking then and dropped, and the track arrived to be drawn nowhere: the
+    // published three-map deck opened with its companions bare.
+    const uri = `lanes-${Math.random()}.cool`
+    const store = freshStore(uri)
+    store.seedHomes([{ track: 'early', uri: 'rep2.cool', placement: placementOn('top'), borrowedLead: true }])
+    store.noteMapFiles(new Map([['slot-7', 'rep2.cool']]))
+    store.adoptHome('slot-7', 'rep2.cool')
+    expect(store.drawnOnMap('slot-7', 'top')).toHaveLength(0)
+
+    const row = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { kind: 'local', file: new File([], 'early.bw'), name: 'early.bw' },
+      id: 'early',
+    })
+    store.update(row.id, { status: 'ready' })
+    // The next render of the deck, now that the row is here.
+    store.adoptHome('slot-7', 'rep2.cool')
+    expect(store.drawnOnMap('slot-7', 'top')).toHaveLength(1)
+  })
+
+  it('forgets a parked lane with its track', () => {
+    // The other half of keeping a lane waiting: a track that is closed must not
+    // leave its lane parked for ever, to be written into every save after it.
+    const uri = `lanes-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = loaded(store, 'gone.bw', placementOn('bottom'))
+    store.seedHomes([{ track: id, uri: 'rep2.cool', placement: placementOn('top'), borrowedLead: true }])
+    store.remove(id)
+    expect(store.parkedFor()).toEqual([])
+  })
+
   it('leaves the track on the lead when the companion does not come back', () => {
     // The old decision, still in force wherever its premise still holds.
     const uri = `lanes-${Math.random()}.cool`

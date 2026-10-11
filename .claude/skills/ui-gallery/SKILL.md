@@ -29,7 +29,7 @@ node scripts/ui-captions.mjs gallery         # figures saved with their caption 
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
-node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back: l1 … l4, m1 … m5
+node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back, and a workspace opened from its address with its first map second: l1 … l4, m1 … m6
 node scripts/ui-copy-this.mjs gallery        # Copy this on every right-click menu, and the PNG each put on the clipboard: cp1 … cp9
 node scripts/ui-stack-bar.mjs gallery       # the bar under the 1D browser's tracks on the yeast tracks demo: at rest and hovered, dragged down with every height printed and its ratio to the first, Escape mid-drag, a double click fitting the stack to the column, gone with the browser as a deck's lead, beside a map and in a deck: sb01 … sb07, sb05b
 node scripts/ui-reframe-hint.mjs gallery    # how to zoom into a region, in the map's corner on hover: away and over, under the key, the legend off, the diagonal lock's one line, a turned map's stretch, the 1D browser under its ruler, the dark theme: rh01 … rh08

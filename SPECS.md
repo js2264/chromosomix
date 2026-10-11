@@ -6000,6 +6000,14 @@ beside its place (`deck:lead`, written only while it is open). So a reload, a re
 a deck built again all bring back every map that was moving on its own, the first included — whose
 chain used to come back closed, driving the deck, whatever the reader had left it.
 
+The lanes drawn on companions are kept the same way, each against its companion's file
+(`deck:lanes`, a workspace's `lanes`), and come back as the maps do: parked until a cell opens that
+file, then put under it at the edge they were on. Two things decide that they do come back. The
+record is **read before the tracks are restored**, because restoring a track writes the session's
+lanes — none yet — over it; and a lane waits **for its track as well as for its map**, since a cell
+can open before the track it carries has been read. Either wrong, and a workspace whose MNase was
+drawn under each of three maps opened with every companion bare and the track on the first map only.
+
 ### 16.7 Cost
 
 `checkBrowserDenseSize` budgets **one** block against a share of what the device reports, and has no
@@ -6224,7 +6232,10 @@ frame, which it must not reach hidden; *close deck* is that too. While it is hid
 stand on a map nobody can see — the *Map* card would be setting a picture off the screen — and moves
 to the first map still on screen, where there is one; the deck's count says the maps on screen, and
 its figure, its copy and the Export card's save are of the cells on screen. Hidden or not, it is
-remembered with its place, in this session's memory and in a saved workspace (§8.6).
+remembered with its place, in this session's memory and in a saved workspace (§8.6) — which brings
+both back whether it is dropped on the window or opened from its address, a published figure or a
+`?config=` link, whose names are resolved against it on the way in (§21.1). The second road used to
+lose them: resolving rebuilt the deck from the fields it knew, and the lead's was not among them.
 
 Every row has a **grip**, the Tracks card's own, and a row dragged onto a cell **puts that map
 there**: a companion's row onto another cell exchanges the two, exactly as its cell's own grip
@@ -10804,7 +10815,14 @@ and the tracks give it the screen — hidden rather than closed (§16.9), so the
 still steers which stretch of the model is lit and `show the 1D browser` in the deck's bar puts them
 back. With nothing beside it the cell takes the height a map would, where a cell of a row with no map
 in it had the 16 rem floor. Where something is already drawn on the tracks they stay on screen, and a
-link or a restored session names its own deck. A
+link or a restored session names its own deck: **every model a restore brings back is noted before
+the first of them lands**, so none opens a cell the link did not name. The watch used to begin at the
+store's first change, which in a restore is the first row back, so every model after it was taken for
+an arrival and opened a cell — and publishing those cells wrote them over the maps the link was
+putting back, so a tab of five maps and five models came back as five models. **Cells built together
+draw the models in the order the session lists them**, each the first no cell before it is drawing:
+they used to fall to the first model all at once, and the next change to the store moved each one
+along, so the models came back a seat to the left, the first in the last cell. A
 row dropped on a cell still swaps that cell's model **in place**, which is the other question: the
 eye is a model asking for a cell, the drop is a cell being given a model. **The eye follows the
 deck, however the deck changed**: a cell closed from its own heading darkens its row's eye, and a
