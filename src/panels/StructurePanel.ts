@@ -113,7 +113,7 @@ import {
 import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { STRUCTURE_DRAG_TYPE, button, dragHasStructure, el, fmt, trimNumber } from '../ui/dom'
 import { cardTitle, icon, iconButton } from '../ui/icons'
-import { readCanvasPalette } from '../ui/MatrixPanel'
+import { readCanvasPalette } from '../ui/canvasPalette'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
 import { cellHeightOf, heightBar } from './cellHeight'
