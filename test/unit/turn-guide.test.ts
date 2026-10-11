@@ -28,7 +28,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { CROSSHAIR_COLOR, HeatmapView, type DrawnBox } from '@/render/heatmap'
-import { alongAxis } from '@/ui/MatrixPanel'
+import { alongAxis } from '@/render/turnGeometry'
 import { BIN_FRACTION } from '@/render/rotate'
 import type { DenseMatrix } from '@/types'
 

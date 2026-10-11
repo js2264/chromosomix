@@ -44,16 +44,13 @@ import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
   LANE_EDGES,
-  drawsAProfile,
   hasAMovableAxis,
-  hasFeatureRows,
   overlayShapeOf,
   placementOn,
   type AnnotationEntry,
   type AnnotationKind,
   type FeatureSet,
 } from '../annotations/types'
-import { FEATURE_DISPLAYS, featuresOf } from '../annotations/fields'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import {
@@ -63,8 +60,8 @@ import {
   keyTitle,
   type KeyContent,
 } from '../render/legend'
-import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
-import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from '../render/locus'
+import { laneIsHorizontal } from '../render/lane'
+import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
 import { axisThroughEdit, originalOf } from '../edit/axis'
 import { stretchInFile } from '../edit/places'
 import type { EditedAssembly } from '../genome/edit'
@@ -129,6 +126,7 @@ import {
   type RotateDirection,
   type RotatedBlock,
 } from '../render/rotate'
+import { alongAxis, anchorFor, turnedDense } from '../render/turnGeometry'
 import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
@@ -141,18 +139,14 @@ import {
   DEFAULT_LABEL_FONT,
   HeatmapView,
   type AxisCoordSet,
-  type AxisSpan,
   type AxisSpanSet,
   type AxisCoords,
   type Cell,
   type PlotOptions,
-  type VerticalAnchor,
   type DrawnBox,
   type SelectionBox,
   type SelectionText,
-  type SeparatorSet,
 } from '../render/heatmap'
-import { rasterStride } from '../render/heatmap'
 import {
   refineEnabled,
   setRefineEnabled,
@@ -162,10 +156,23 @@ import {
 import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './diagonalLock'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, type Scale } from '../render/scale'
-import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
+import type { ColorScale, DenseMatrix, Extent, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
+import { DEFAULT_ARM_WINDOW, armsFor, armsInForce, armsKey, originInMiddle } from './armFrame'
+import {
+  axisCoordsFor,
+  axisSpansFor,
+  binsOf,
+  bpWithin,
+  groupAt,
+  separationOf,
+  separatorsFor,
+  slidesAlongDiagonal,
+  spanOnAxis,
+  toDense,
+} from './blockAxes'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
@@ -178,16 +185,11 @@ import {
   type PickedLocus,
   type PickHandlers,
 } from './mapPick'
+import { bandRegion, onDiagonal, spanText, type SelectedAxis, type SelectedRegion } from './mapSelection'
+import { framedPhrase, resolutionNote } from './mapSummary'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
-import {
-  CEILING_LABEL,
-  CEILING_MODIFIER,
-  CEILING_STEP,
-  DRAG_SLACK,
-  LaneControls,
-  colourInput,
-} from './LaneControls'
+import { CEILING_MODIFIER, CEILING_STEP, DRAG_SLACK, LaneControls } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
 import {
   fieldPair,
@@ -241,14 +243,11 @@ import {
   type LaneLanding,
   type LaneSurface,
 } from './laneCarry'
-import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
+import { EDGE_WORDS, laneMenuFeature, openLaneMenu } from './laneMenu'
 import { VectorPage } from './vector'
 import type { CellFigure } from '../panels/deckFigure'
 import { setReadout } from './readout'
-import { setHoverPlace, type HoverPlace } from './hoverLocus'
-
-/** What a contact map calls itself when it publishes the place under its pointer. */
-export const HOVER_SOURCE_MAP = 'map'
+import { HOVER_SOURCE_MAP, setHoverPlace, type HoverPlace } from './hoverLocus'
 import { revealTrack } from './revealTrack'
 import {
   MATRIX_OPTIONS,
@@ -352,20 +351,6 @@ const diagonalHint = (): string =>
   'is the columns alone. Greyed on a block that has no diagonal, and while the map is turned, ' +
   'where the picture already is one.'
 
-/** The band, as an ordinary dense block the renderer can be handed. */
-function turnedDense(turned: RotatedBlock): DenseMatrix {
-  return {
-    nrows: turned.nrows,
-    ncols: turned.ncols,
-    values: turned.values,
-    // The band's own extents, in the half-bin units its columns are counted in,
-    // so anything downstream that measures a span in cells measures it in the
-    // grid actually on screen.
-    rowExtent: [0, turned.nrows],
-    colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
-  }
-}
-
 /** One end of the turned band's box, as a bar a hand can take hold of. */
 /** One edge of the picture; see {@link MatrixPanel.grips}. */
 type PlotEdge = 'top' | 'bottom' | 'left' | 'right'
@@ -411,46 +396,6 @@ const ARM_BASELINE_HINT =
 
 const ARMS_ON_ARM_BASELINE_HINT =
   'The cells already are the expected along both arms. Choose another score to get the toggle back.'
-
-/**
- * What a dragged box resolves to: one block, and how much of it.
- *
- * *One* block, not the rectangle the box covers, because that is the view a
- * selection is asking for. A square drawn across the corner of two chromosomes
- * on a whole-genome map is asking to look at a chromosome — it cannot be asking
- * for a region that spans two of them, since no such region exists — so it
- * resolves to the one the drag began in, ending at the edge of the box or at
- * the end of that chromosome, whichever comes first.
- *
- * `range` is absent above bin level, where a cell *is* a contig or a genome and
- * there is no position inside one to name.
- */
-export interface SelectedAxis {
-  /** The block this axis of the box falls in: a contig, or a genome. */
-  label: string
-  /** Base pairs within that block, clamped to it; absent above bin level. */
-  range?: [number, number]
-}
-
-export interface SelectedRegion {
-  rows: SelectedAxis
-  cols: SelectedAxis
-  /**
-   * `true` when the box lies *on* the diagonal: the same block on both axes,
-   * covering the same stretch of it.
-   *
-   * Not "the same block" — that was the first version of this and it is the
-   * wrong question. A box in the top-right corner of one chromosome is two
-   * different windows of the same sequence, and answering it with the row's
-   * window alone hands back a square centred on the diagonal: the one place the
-   * reader was deliberately not looking. Only when both windows coincide is
-   * there a single region to open.
-   */
-  diagonal: boolean
-  level: 'bin' | 'contig' | 'genome'
-  /** The cell the drag began on, for a view that resolves blocks its own way. */
-  anchor: Cell
-}
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -762,9 +707,6 @@ const CENTRE_HINT =
 const UNCENTRE_HINT =
   'The origin is in the middle of the view. Press to frame the sequence from its first base again.'
 
-/** The window the arms control turns on at, in bins — the compartments task's default. */
-export const DEFAULT_ARM_WINDOW = 50
-
 const ARMS_HINT =
   'Divide by the decay along both arms of a bacterial chromosome — its secondary diagonal ' +
   'through the origin as well as the main one — so what is left is its compartments. Reads the ' +
@@ -905,96 +847,6 @@ export interface DerivePresentation {
  * and the square is read for it rather than being a block already on screen.
  */
 export const MAP_CORRELATION_BINS = 4096
-
-/** What identifies an arms setting, for the caches a derivation is keyed on. */
-function armsKey(arms: ArmsPresentation | undefined): string {
-  if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
-  const { startBin, n, origin, circular } = arms.frame
-  return `${arms.window}:${startBin}:${n}:${origin}:${circular ? 'o' : '-'}`
-}
-
-/**
- * The arms a derivation is read against: the presentation's own, and under
- * `arm decay` the same frame at the window `arms` turns on at while the toggle
- * is off — that baseline is read along the arms whatever the toggle says
- * (§8.15).
- *
- * One function for the read and for every key it is cached on, so an origin
- * moved under that baseline with the toggle off is a change of what is drawn:
- * keyed on the presentation's own arms, it was `''` before and after, and the
- * map kept the arms of the old origin.
- */
-function armsInForce(derive: DerivePresentation | undefined): ArmsPresentation | undefined {
-  const arms = derive?.arms
-  if (arms === undefined || derive?.baseline !== true || derive.alongArms !== true) return arms
-  return arms.window === undefined ? { ...arms, window: DEFAULT_ARM_WINDOW } : arms
-}
-
-/**
- * Whether a circle's origin is in the middle of the picture, to within
- * `tolerance` base pairs — what lights `ori` (§8.15).
- *
- * `middle` is the locus at the centre of the visible domain, read off the scale
- * rather than off the window the view note prints: that window is widened to
- * whole bins at both ends, which moves its middle by up to a bin however exactly
- * the picture is centred. Measured round the circle, so an origin a few
- * kilobases before the sequence's first base is in the middle of a view that
- * crosses the junction there.
- */
-export function originInMiddle(
-  middle: { contig: string; bp: number } | null,
-  frame: { circular: boolean; length: number; originBp: number },
-  tolerance: number,
-): boolean {
-  if (middle === null || !frame.circular || !(frame.length > 0)) return false
-  const apart = Math.abs(middle.bp - frame.originBp) % frame.length
-  return Math.min(apart, frame.length - apart) <= tolerance
-}
-
-/**
- * The arm frame for this block, where the arms are on and there is one.
- *
- * **In the block's own cells**, which are not the open map's bins in general: a
- * pooled read sums several of them, and a read from a sibling rung of an
- * `.mcool` is on another grid altogether, with extents in that grid's bins.
- * Each row is placed by where it is *in base pairs* — through the same axis
- * runs the ticks are placed by, which is also what folds a block read round a
- * circle (`worker/wrap.ts`) back onto the sequence — and the frame and its
- * window are carried over to the block's resolution. A frame kept at the open
- * rung placed a coarse block's rows as the first stretch of a longer sequence,
- * all on one arm, and sized its tables for a resolution nobody was drawing.
- */
-export function armsFor(
-  data: MatrixResult,
-  arms: ArmsPresentation | undefined,
-  bpPerCell: number,
-): Derivation['arms'] | undefined {
-  if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
-  if (arms.refusal !== null || data.level !== 'bin') return undefined
-  const { n, origin, circular, binsize, length } = arms.frame
-  if (!(n > 0) || !(binsize > 0) || !(bpPerCell > 0) || !(length > 0)) return undefined
-  const cells = Math.max(1, Math.ceil(length / bpPerCell))
-  const originCell = Math.min(cells - 1, Math.floor(((origin + 0.5) * binsize) / bpPerCell))
-  const place = (runs: AxisGroup[], blockStart: number, count: number): Int32Array => {
-    const axis = locusAxisFrom({ runs, blockStart, level: 'bin', binsize: bpPerCell, contigLength: () => length })
-    const out = new Int32Array(count)
-    for (const segment of axis?.segments ?? []) {
-      for (let i = Math.max(0, segment.unitStart); i < Math.min(count, segment.unitEnd); i++) {
-        const bp = bpAt(segment, i + 0.5)
-        const cell = Math.floor(bp / bpPerCell)
-        out[i] = ((cell % cells) + cells) % cells
-      }
-    }
-    return out
-  }
-  return {
-    frame: { n: cells, origin: originCell, circular },
-    rowBins: place(data.rowGroups, data.rowExtent[0], data.nrows),
-    colBins: place(data.colGroups, data.colExtent[0], data.ncols),
-    // The same stretch of the arms, counted in the block's cells.
-    window: arms.window > 0 ? Math.max(1, Math.round((arms.window * binsize) / bpPerCell)) : 0,
-  }
-}
 
 const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
@@ -9213,257 +9065,6 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
   )
 }
 
-/** Which group covers a block-local offset. Absent list, absent answer. */
-/**
- * Which edge of its box a turned block is pinned to — see the caller for why it
- * is pinned at all.
- *
- * `middle` for a square map, which is centred like any picture, and for a
- * **mirrored pair**, whose diagonal is the line down the middle of it rather
- * than either edge. `end` and `start` are the one-band cases, standing on
- * whichever edge their own diagonal is.
- *
- * Exported for the test: the whole of the bug it fixes is invisible until a
- * band is deeper than its box, which is two zooms away from any state a test
- * can set up directly.
- */
-export function anchorFor(turned: RotatedBlock | null): VerticalAnchor {
-  if (turned === null || turned.fold !== undefined) return 'middle'
-  return turned.direction === 'down' ? 'start' : 'end'
-}
-
-/**
- * Where a cell of a turned map stands on the genomic axis, in cells of the
- * square block it was turned out of.
- *
- * The **midpoint** of the pair it is a contact between, which is what a turned
- * column is: the rotation puts the cell for `(i, j)` over `(i + j) / 2` and its
- * height carries the rest (`render/rotate.ts`). Half-integers are the ordinary
- * case rather than an edge one — a column is half a bin — and are passed on
- * rather than rounded, since the arithmetic below them is linear and the reader
- * is being told a position, not a bin.
- */
-export function alongAxis(square: { row: number; col: number }): number {
-  return (square.row + square.col) / 2
-}
-
-export function groupAt(
-  groups: AxisGroup[] | undefined,
-  offset: number,
-): AxisGroup | undefined {
-  if (groups === undefined) return undefined
-  let lo = 0
-  let hi = groups.length - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const group = groups[mid]
-    if (offset < group.start) hi = mid - 1
-    else if (offset >= group.end) lo = mid + 1
-    else return group
-  }
-  return undefined
-}
-
-/**
- * Base pairs from the start of the **contig** to the start of a cell.
- *
- * `group.start` is block-local, so `(offset - group.start) * binsize` measures
- * from the left edge of the picture rather than from the contig — the same
- * number only when the block begins on a contig boundary. A region view of
- * `contig:139005-199005` begins at bin 139, and the readout used to call that
- * cell 0 bp when it is 139 kb into the contig. `unitStart` is where the contig
- * itself begins, so the absolute bin `blockStart + offset` resolves correctly
- * (§3.3 arithmetic throughout; `/bins` is never consulted).
- */
-/**
- * A cell window on one axis, as absolute bins of the file.
- *
- * Outward on both ends, and **clamped to the block**, because a window naming
- * bins the block does not hold is not a window — at fit zoom the plot is wider
- * than the picture and the raw cell window runs off both sides into the margins.
- *
- * Leaving it unclamped, briefly, was a bug with real teeth: a *fitted* view then
- * reported a window wider than its own block, the ladder read that as "the
- * reader has gone outside what they have", and every view that opened fitted
- * immediately asked for a widening read of its own whole domain. On a small file
- * that is a wasted read nobody notices. On a 660 MB mouse cooler it is minutes
- * of scanning, with the map frozen for the duration, before the reader has
- * touched anything.
- *
- * The signal it was standing in for — *the reader wants to go past this block* —
- * is `BlockLadder.atEdge`'s to give, and it gives it from the block and the
- * ceiling rather than from a window that has been allowed to lie.
- *
- * `binsPerCell` may be fractional — a turned column is half a bin — which is why
- * the rounding is done after the multiply rather than on the cell index.
- */
-export function binsOf(
-  window: readonly [number, number],
-  extent: Extent,
-  binsPerCell: number,
-): Extent {
-  const lo = extent[0] + Math.floor(window[0] * binsPerCell)
-  const hi = extent[0] + Math.ceil(window[1] * binsPerCell)
-  return [
-    Math.max(extent[0], Math.min(lo, extent[1])),
-    Math.min(extent[1], Math.max(hi, extent[0])),
-  ]
-}
-
-/**
- * Two loci, as a cell interval on a given axis — the second half of a regrid.
- *
- * `null` where the axis cannot answer: no locus at all, a contig it does not
- * cover, or an interval that came back inverted. Every one of those is a reason
- * to leave the picture alone rather than to place it approximately, because a
- * map drawn over the wrong stretch of genome looks exactly like a map drawn over
- * the right one.
- *
- * Clamped to the block, since the incoming window is padded beyond the view and
- * its edges can fall outside a block that stopped at a sequence end.
- *
- * **Every landing of each end, not the first**, and that is what makes a
- * circular slide work at all. A block read across a sequence's own junction
- * carries that sequence *twice* — the tail of it, then the head (SPECS §8.15) —
- * so a window running from 2.95 Mb to 50 kb is a perfectly ordinary window whose
- * two ends are on different stretches of the same name. Resolved by name alone,
- * the second end came back on the first stretch, landed before the first end,
- * and the regrid was refused: the ladder had read the block the reader was
- * sliding towards and the panel declined to install it, leaving them against a
- * wall with the way past it already in memory.
- *
- * The pair chosen is the **narrowest ordered one**, which on every axis that
- * carries a contig once is the only one there is.
- */
-export function spanOnAxis(
-  axis: LocusAxis | null,
-  want: { from: { contig: string; bp: number }; to: { contig: string; bp: number } } | null,
-  cells: number,
-): readonly [number, number] | null {
-  if (axis === null || want === null) return null
-  // `locusToUnits` answers only where the position genuinely falls on a stretch,
-  // which is what a mark wants and is one case short of what this wants: a
-  // *padded* window runs past the end of the sequence on purpose, and the old
-  // behaviour — extrapolate off the one stretch, then clamp to the block — is
-  // right for it. So the strict answer first, and the extrapolation as the
-  // fallback where there is no stretch to land on.
-  const landings = (contig: string, bp: number): number[] => {
-    const inside = axis.locusToUnits(contig, bp)
-    if (inside.length > 0) return inside
-    const outside = axis.locusToUnit(contig, bp)
-    return outside === null ? [] : [outside]
-  }
-  const lows = landings(want.from.contig, want.from.bp)
-  const highs = landings(want.to.contig, want.to.bp)
-  if (lows.length === 0 || highs.length === 0) return null
-  let best: readonly [number, number] | null = null
-  for (const lo of lows) {
-    for (const hi of highs) {
-      const from = Math.max(0, Math.min(lo, cells))
-      const to = Math.min(cells, Math.max(hi, from))
-      if (!(to > from)) continue
-      if (best === null || to - from < best[1] - best[0]) best = [from, to]
-    }
-  }
-  return best
-}
-
-export function bpWithin(
-  group: AxisGroup,
-  offset: number,
-  blockStart: number,
-  binsize: number,
-): number {
-  const first = group.unitStart ?? blockStart + group.start
-  return (blockStart + offset - first) * binsize
-}
-
-/**
- * What one axis measures in base pairs, or `null` when it measures nothing a
- * position could be expressed in.
- *
- * Both refusals are the ones `_bin_axis` makes in `ops/show.py`. Above bin
- * level a cell *is* a contig or a genome, so a position inside one would be an
- * invention. Across more than one contig there is no single coordinate system:
- * the ticks are the contig names there, and they already are.
- *
- * The line itself is {@link bpWithin} at offset 0, from the same `unitStart`,
- * so a tick and the readout under the pointer cannot disagree.
- *
- * @param fraction How much of a bin one **cell** spans — a half under a turn,
- * where the rotated lattice counts in half bins (`render/rotate.ts`), and one
- * everywhere else. It scales the ruler's step and nothing else: where the block
- * *starts* is a distance from the contig's first bin, measured in whole bins by
- * everything that reads it, and folding the cell size into that offset put the
- * turned map's ruler half of the way into the block behind the picture on it.
- */
-export function axisCoordsFor(
-  groups: AxisGroup[],
-  extent: readonly [number, number],
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-  fraction = 1,
-): AxisCoords | null {
-  if (level !== 'bin' || groups.length !== 1 || !(binsize > 0)) return null
-  const group = groups[0]
-  const first = group.unitStart ?? extent[0] + group.start
-  return { bpPerCell: binsize * fraction, bpAtOrigin: (extent[0] - first) * binsize }
-}
-
-/**
- * A ruler per sequence, for an axis that has no single one.
- *
- * {@link axisCoordsFor}'s complement, and its refusals inverted: it answers for
- * an axis of *one* contig at bin level, this answers for an axis of several,
- * and above bin level neither answers at all — a cell there *is* a contig or a
- * genome, and a position inside one would be an invention.
- *
- * Each stretch's line is stated in the **block's** coordinate frame, which is
- * `axisCoordsFor`'s own arithmetic applied per group: `bpAtOrigin` is what this
- * contig's ruler would read at cell zero of the block, negative for every
- * contig but the first, so a tick's `unit` needs no offsetting to be a matrix
- * coordinate like any other.
- *
- * A cell that several short sequences share is skipped, on {@link describeAxis}'s
- * rule: the pixel is all of them, and a coordinate inside one of them names a
- * place the picture does not show.
- *
- * And nothing at all past {@link MAX_RULED_SPANS}. A metagenome's axis is
- * thousands of contigs, each a pixel or less: there is no room for a position on
- * any of them, the names are already elided for the same reason, and building
- * the list would cost more than the ruler it cannot draw.
- */
-export function axisSpansFor(
-  groups: AxisGroup[],
-  extent: readonly [number, number],
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-): AxisSpan[] {
-  if (level !== 'bin' || !(binsize > 0)) return []
-  if (groups.length < 2 || groups.length > MAX_RULED_SPANS) return []
-  const out: AxisSpan[] = []
-  for (const group of groups) {
-    if ((group.merged?.length ?? 1) > 1) continue
-    if (!(group.end > group.start)) continue
-    const first = group.unitStart ?? extent[0] + group.start
-    out.push({
-      from: group.start,
-      to: group.end,
-      coords: { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize },
-    })
-  }
-  return out
-}
-
-/**
- * How many sequences an axis may carry and still be ruled one at a time.
- *
- * A genome's worth, generously: sixteen chromosomes, or a few hundred scaffolds.
- * Past that the stretches are narrower than a label and the answer is the same
- * one the block names give — none — so the list is not built at all.
- */
-const MAX_RULED_SPANS = 512
-
 /**
  * One side of the hover readout. At bin level the position inside the contig is
  * exact arithmetic from the bin size (§3.3) — `/bins` is never consulted.
@@ -9493,96 +9094,6 @@ function describeAxis(
   // from the same pixel said `1,162,001` and the browser cell agreed with the
   // drag — the app off by a base on the one number a reader writes down.
   return formatPosition(group.label, bpWithin(group, offset, blockStart, binsize))
-}
-
-/**
- * One axis of the cell under the pointer, as {@link separationOf} needs it.
- *
- * The block's own origin is in it because a *coarsened* axis is measured in
- * cells while its extent is measured in bins, and the only arithmetic that gets
- * both right is {@link bpWithin}'s — which needs the origin. Subtracting the two
- * absolute indices instead is exact on a dense block and wrong by the pooling
- * factor on every other, which is how the line went quiet on the views that are
- * always pooled: anything larger than the picture.
- */
-export interface AxisSide {
-  group: AxisGroup | undefined
-  /** Block-local offset of the cell on this axis — `cell.row` or `cell.col`. */
-  offset: number
-  /** Where the block starts on this axis — `rowExtent[0]` or `colExtent[0]`. */
-  blockStart: number
-  /** The genome this sequence belongs to, where the axis names one. */
-  genome?: string | undefined
-}
-
-/**
- * How far apart the two ends of a cell are along the sequence, in base pairs.
- *
- * The genomic distance is what a cis contact *means* — a Hi-C map is read by
- * how the signal falls off with separation, and without this the tooltip makes
- * you subtract two coordinates to get it. `null` where the question has no
- * answer, and each of those is a refusal rather than a gap:
- *
- * - **above bin level**, where a cell is a whole contig or genome and its two
- *   ends have no positions to subtract;
- * - **across two sequences**, where the contact is trans and a distance along
- *   the sequence does not exist — not a large one, none;
- * - **on a cell several sequences share**, which has no position in any one of
- *   them; the readout says so in words there and must not say it in numbers
- *   here;
- * - **on the diagonal**, where it is zero and saying so is noise on the line
- *   that matters least.
- *
- * The two positions come from {@link bpWithin}, the same function the tooltip's
- * own coordinates come from, so the difference on screen and the difference
- * quoted here cannot disagree — and both are right whether the block is the
- * file's own grid or a coarsened one.
- */
-export function separationOf(
-  row: AxisSide,
-  col: AxisSide,
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-): number | null {
-  if (level !== 'bin' || !(binsize > 0)) return null
-  const { group: rowGroup } = row
-  const { group: colGroup } = col
-  if (rowGroup === undefined || colGroup === undefined) return null
-  if ((rowGroup.merged?.length ?? 1) > 1 || (colGroup.merged?.length ?? 1) > 1) return null
-  if (!sameSequence(row, col)) return null
-  const apart = Math.abs(
-    bpWithin(rowGroup, row.offset, row.blockStart, binsize) -
-      bpWithin(colGroup, col.offset, col.blockStart, binsize),
-  )
-  return apart === 0 ? null : apart
-}
-
-/**
- * Whether two axis runs are the same sequence.
- *
- * `unitBin` first, because it is the only member that is an *identity*: the
- * absolute bin the sequence itself begins at, the same number on both axes
- * however each axis's block opens. It tells two windows of one contig apart
- * from two contigs without trusting a string, which matters on a metagenome
- * where two MAGs may each have a `contig_1`.
- *
- * `unitStart` is an arithmetic *origin* and only coincides with the identity on
- * a dense block: a coarsened axis is anchored to the contig, so its origin
- * depends on where that axis's own window starts, and `contig × the same contig`
- * over two different windows gets two different numbers for one sequence. It is
- * kept as the second test for a block that carries no identity — an older
- * worker answering a newer page.
- *
- * The name, the length and the genome together are the last resort, and as
- * close to identity as a run with neither number can get.
- */
-function sameSequence(row: AxisSide, col: AxisSide): boolean {
-  const a = row.group
-  const b = col.group
-  if (a === undefined || b === undefined) return false
-  if (a.unitBin !== undefined && b.unitBin !== undefined) return a.unitBin === b.unitBin
-  if (a.unitStart !== undefined && b.unitStart !== undefined) return a.unitStart === b.unitStart
-  return a.label === b.label && a.unitLength === b.unitLength && row.genome === col.genome
 }
 
 /**
@@ -9790,637 +9301,4 @@ function watchTheme(onChange: () => void): () => void {
     observer?.disconnect()
     media?.removeEventListener?.('change', listener)
   }
-}
-
-/**
- * Separator positions: the first row/column of every group after the first.
- *
- * The genome runs become the drawn boundaries only where the reader says so
- * (`genomeBoundaries`): the whole-metagenome overview, and a selection of
- * several genomes, which are the two pictures whose subject *is* genomes.
- * Elsewhere they are a fact the tooltip reports and not a line — a whole-genome
- * view of a metacool is still read contig by contig, and so is a handful of
- * ticked contigs, and moving those separators out to the genomes would coarsen
- * a picture nobody asked to have coarsened.
- */
-/**
- * Whether a sideways scroll over a block slides along its diagonal while the
- * view is held on it (see `HeatmapView.setDiagonalSlide` and the diagonal
- * lock): wherever the block is **cis** and square, not turned into a band whose
- * diagonal already runs across the screen.
- *
- * Cis is two things, and both slide. The diagonal is in the picture where the
- * rows and the columns share a stretch of bins. And a block of **two stretches
- * of one sequence** — `chrI:1-100,000 × chrI:400,001-500,000`, what an
- * Option-drag off the diagonal opens — has its diagonal off the picture but is
- * read the same way, by separation: moving rows and columns together keeps
- * every band parallel to the diagonal, one distance apart, where it is under
- * the pointer, where a slide of the columns alone carried the reader across
- * separations they had not asked to leave. It used to take the columns alone,
- * as a trans block does.
- *
- * Trans stays as it was — two sequences, two genomes, where there is no
- * separation to keep — and so does every picture above bin level, whose cells
- * are whole sequences or genomes and slide along the diagonal exactly where
- * their axes share cells.
- */
-export function slidesAlongDiagonal(
-  data: Pick<MatrixResult, 'rowExtent' | 'colExtent' | 'level' | 'rowGroups' | 'colGroups'> &
-    Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
-  turned: RotatedBlock | null,
-): boolean {
-  if (turned !== null) return false
-  const [r0, r1] = data.rowExtent
-  const [c0, c1] = data.colExtent
-  if (Math.max(r0, c0) < Math.min(r1, c1)) return true
-  return data.level === 'bin' && oneSequence(data)
-}
-
-/**
- * Whether every run on both axes of a block is one and the same sequence.
- *
- * By {@link sameSequence}, the test the readout's distance already makes —
- * `unitBin` first, the identity that tells two windows of one contig from two
- * contigs that share a name in two MAGs — so the slide and the separation the
- * tooltip prints cannot disagree about whether a block is cis. A run holding
- * several small sequences is none of them.
- */
-function oneSequence(
-  data: Pick<MatrixResult, 'rowGroups' | 'colGroups'> & Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
-): boolean {
-  const sides = [
-    ...data.rowGroups.map((group) => ({ group, genomes: data.rowGenomes })),
-    ...data.colGroups.map((group) => ({ group, genomes: data.colGenomes })),
-  ].map(({ group, genomes }): AxisSide => ({
-    group,
-    offset: group.start,
-    blockStart: 0,
-    genome: groupAt(genomes, group.start)?.label,
-  }))
-  const first = sides[0]
-  if (first === undefined || data.rowGroups.length === 0 || data.colGroups.length === 0) return false
-  return sides.every((side) => (side.group?.merged?.length ?? 1) <= 1 && sameSequence(first, side))
-}
-
-export function separatorsFor(data: MatrixResult): SeparatorSet {
-  const toSeparators = (groups: AxisGroup[]): Separator[] =>
-    groups.map((group) => ({ at: group.start, label: group.label }))
-
-  // A whole-metagenome view — or a map of several ticked MAGs — is a picture of
-  // *genomes*. Where the reader marks its genome runs as the boundaries, those
-  // are the only ones drawn: 20,000 contig hairlines over 4,000 genome blocks
-  // is a grey wash, and it hides the block structure the view exists to show.
-  // They go in both sets so the axis is also *labelled* by genome — the fine
-  // set is what `labelBlocks` reads — while the heavier stroke, drawn at the
-  // same coordinates, is what the eye lands on.
-  const draw = data.genomeBoundaries === true
-  const rowUnits = (draw ? data.rowGenomes : undefined) ?? data.rowGroups
-  const colUnits = (draw ? data.colGenomes : undefined) ?? data.colGroups
-  const set: SeparatorSet = {
-    rows: toSeparators(rowUnits),
-    cols: toSeparators(colUnits),
-  }
-  // The *same array*, not a second copy of it. Where the genome runs are the
-  // boundaries they are both sets, and the renderer skips the fine pass when it
-  // recognises the identity — otherwise it stroked several thousand hairlines
-  // and then stroked the heavier line over exactly the same coordinates.
-  if (draw && data.rowGenomes !== undefined) set.groupRows = set.rows
-  if (draw && data.colGenomes !== undefined) set.groupCols = set.cols
-  return set
-}
-
-/**
- * Whether a box straddles the diagonal, in cells.
- *
- * Compared in cells rather than in base pairs because that is where the
- * question is exact, and with a bin of slack at each end because the marquee is
- * square in *pixels*: the two axes convert those pixels through their own
- * scales, and a plot whose gutters differ by a pixel turns a square on the
- * diagonal into ranges that differ by one cell. A whole bin of tolerance is
- * still far tighter than any box a hand can draw off the diagonal.
- */
-export function onDiagonal(box: SelectionBox): boolean {
-  return Math.abs(box.rows[0] - box.cols[0]) <= 1 && Math.abs(box.rows[1] - box.cols[1]) <= 1
-}
-
-/**
- * A dragged band of one axis, as a locus on the sequence it began in.
- *
- * **Clamped to that sequence, and that is the whole of this function.** A drag
- * is free to run across several — on a whole-metagenome view a cell is a contig
- * or two, so a band of five crosses four boundaries — and the reading used to
- * take the *name* from where the hand went down and the *end* from where it
- * came up, which is one contig's name against another contig's coordinate. On
- * the mock community that produced `NODE_…:1-260,000` for a 200 kb sequence,
- * and the range parser refused it: `Genomic region out of bounds`. The 4C
- * task's anchor, unusable from the picture it was picked on, and a clipboard
- * copy of the same gesture that pasted back as an error.
- *
- * The anchor is where the hand went down — the same rule a marquee follows, for
- * the same reason (`axisSelection`) — and what it names is however much of that
- * sequence the gesture covered. The end never passes the sequence's length,
- * because a contig's last bin is partial in general and a whole-contig drag
- * would otherwise name a coordinate a bin beyond the end of it.
- *
- * Exported for the test that pins those two clamps, beside the three selection
- * helpers below it and for the same reason: the panel needs a canvas and the
- * arithmetic does not.
- */
-export function bandRegion(axis: LocusAxis, span: [number, number]): PickedLocus | null {
-  const segment = axis.segmentAt(span[0])
-  if (segment === null) return null
-  // The band's far edge: a cell on from where the hand went down at the least,
-  // and never past the stretch it went down in.
-  const far = Math.min(Math.max(span[0] + 1, span[1]), segment.unitEnd)
-  // Low and high, whichever way the stretch reads — a piece of an edited
-  // sequence turned round names its stretch from its right edge (§27.2).
-  const a = bpAt(segment, span[0])
-  const b = bpAt(segment, far)
-  const [low, high] = stretchOf(segment)
-  return {
-    contig: segment.contig,
-    start: Math.max(low, Math.round(Math.min(a, b))),
-    end: Math.min(high, Math.round(Math.max(a, b))),
-  }
-}
-
-/**
- * One axis of a selection as a region string, in the grammar the region box
- * takes.
- *
- * Rounded to whole base pairs and written without separators, so it is both a
- * legal range (§5.4) and something that can be pasted back. Above bin level
- * there is no range to write and the block's own name is the answer.
- */
-export function axisRegion(axis: SelectedAxis): string {
-  if (axis.range === undefined) return axis.label
-  const [start, end] = axis.range
-  return `${axis.label}:${Math.round(start)}-${Math.round(end)}`
-}
-
-/**
- * The window one axis currently shows, in the grammar the region box takes.
- *
- * `formatLocus` rather than a fourth hand-rolled `contig:start-end`: what the
- * line shows has to be what the box would accept, or copying a coordinate out of
- * the subtitle and into the box moves the picture by a base.
- *
- * A whole-genome axis is several sequences at once and naming sixteen of them is
- * a paragraph, so past two they are counted instead — the same choice
- * `BrowserView.zoomPhrase` makes with "4 of 16 sequences", and for the same
- * reason: the line has to stay a line.
- */
-export function windowPhrase(windows: readonly LocusWindow[]): string {
-  if (windows.length === 0) return ''
-  const span = windows.reduce((total, window) => total + (window.end - window.start), 0)
-  const where =
-    windows.length === 1
-      ? formatLocus(windows[0])
-      : windows.length === 2
-        ? `${formatLocus(windows[0])} + ${formatLocus(windows[1])}`
-        : `${fmt.int(windows.length)} sequences`
-  return `${where} · ${fmt.bp(span)}`
-}
-
-/**
- * Both axes of what is on screen, said once when they agree.
- *
- * On the diagonal the two windows are one window, and printing it twice says the
- * picture is of two things when it is of one. Off it — a genome pair, a
- * `contig × contig` block, a region against a second region — they are genuinely
- * different and both are named.
- */
-export function framedPhrase(
-  rows: readonly LocusWindow[],
-  cols: readonly LocusWindow[],
-): string {
-  const rowText = windowPhrase(rows)
-  const colText = windowPhrase(cols)
-  if (rowText === '') return colText
-  if (colText === '' || rowText === colText) return rowText
-  return `${rowText} × ${colText}`
-}
-
-/**
- * One axis of a dragged box, as the three numbers written *beside* it.
- *
- * Not {@link axisRegion}, and the difference is the audience: that one is a
- * region string, half-open and separator-free because it is pasted back into a
- * box; this one is read, so both ends are 1-based positions and the width is in
- * the reader's units. The wording is the 1D browser's marquee, word for word —
- * one gesture described in two dialects is two gestures as far as anybody can
- * tell.
- *
- * Above bin level there is no range and the block's own name is the answer.
- */
-export function spanText(axis: SelectedAxis): { start: string; end: string; span: string } {
-  if (axis.range === undefined) return { start: axis.label, end: axis.label, span: '' }
-  const [start, end] = axis.range
-  // The first base and the last, each through the one helper that writes a
-  // base (§26.1): the last of a half-open range is the one before its end.
-  return {
-    start: formatPosition(axis.label, Math.round(start)),
-    end: formatPosition(axis.label, Math.round(end) - 1),
-    span: fmt.bp(end - start),
-  }
-}
-
-/**
- * What to say when the picture is coarser than the data.
- *
- * A block wider than {@link RASTER_MAX_DIM} is drawn through a pooled raster:
- * one pixel per `stride x stride` block of cells, carrying the strongest value
- * under it. That is the right trade — a 12,975-bin genome at one pixel per bin
- * is 585 MB of RGBA for an image no screen can show, and the *maximum* is what
- * keeps a sparse map's bright cell from being averaged into its empty
- * neighbours — but until now nothing said it was happening. The summary claimed
- * "12,975 x 12,975 cells rendered", the crosshair then reported four different
- * coordinates and four different values inside one visible square, and there
- * was no way to tell which of the two was lying.
- *
- * Two things a reader needs and cannot deduce: that the picture is pooled, and
- * what that means for zooming into it.
- *
- * The second half used to be flat — *zooming does not sharpen it, so the answer
- * is to open a smaller block* — and for a long time that was the truth. It is
- * now a question about a setting: with refinement on (`ui/refine.ts`) a settled
- * zoom reads the window again at a finer grid and the picture does sharpen, down
- * to the file's own bins; with it off, the old sentence holds exactly. So the
- * note says which, rather than asserting one of them at a reader who is looking
- * at the other.
- *
- * `null` when every cell has its own pixel, which is every region and nearly
- * every MAG.
- */
-export function poolingNote(
-  nrows: number,
-  ncols: number,
-  refining = refineEnabled(),
-): { phrase: string } | null {
-  const strideY = rasterStride(nrows)
-  const strideX = rasterStride(ncols)
-  if (strideX === 1 && strideY === 1) return null
-  return {
-    phrase: `aggregated ${strideX} × ${strideY} bins to a pixel${
-      refining ? ' · zoom in to sharpen' : ' · open a smaller block to sharpen'
-    }`,
-  }
-}
-
-/**
- * What one cell of the picture is worth, in the reader's units.
- *
- * The grid a block is read on is rarely the file's own — anything larger than a
- * picture is summed into coarser cells on the way through — and "30 bins each"
- * asks the reader to do the multiplication. The resolution is the number they
- * would quote in a methods section, so it is the number said here, and the bin
- * count is left to the summary that already gives it.
- *
- * There are two ways for a cell to stop being a bin, and neither has a width to
- * quote. Above one sequence per cell the sequences in it have different lengths
- * and the cell is their sum. Above bin *level* a cell is a whole sequence by
- * construction, and `1 contig per cell` is not news — the axis already says so.
- * Both come back empty and the caller says nothing rather than something false.
- */
-export function resolutionNote(
-  binsize: number,
-  result: {
-    binsPerCell?: number
-    contigsPerCell?: number
-    level?: MatrixResult['level']
-    /**
-     * The bin size of the map that actually answered, where a read came from a
-     * sibling rung (`worker/protocol.ts`). It wins over the caller's, which is
-     * the *open* map's — a caller passing its own would caption a block read at
-     * 2 kb with the 1 kb the session was opened at, and this is the one number
-     * on the line that changes what the picture means.
-     */
-    binsize?: number
-  },
-  noun = 'sequence',
-): string {
-  binsize = result.binsize ?? binsize
-  if ((result.level ?? 'bin') !== 'bin') {
-    const per = result.contigsPerCell ?? 1
-    return per > 1 ? `${fmt.int(per)} ${noun}s per cell, summed` : ''
-  }
-  // A cell is a capacity of bins, so it has a width even where several small
-  // sequences share it — the cell spans that many base pairs of sequence, in
-  // more than one piece. Which sequences those are is the readout's to say, and
-  // the list beside the map's; it is not a second resolution.
-  return `effective resolution: ${resolutionLabel(binsize * (result.binsPerCell ?? 1))}`
-}
-
-/**
- * The line under a map: how large the picture is, and what one cell of it is
- * worth.
- *
- * Two facts and no third, in one place, because four views draw this line and
- * four wordings of one fact is how they drift. Which sequences are on the axes
- * is the title's job; whether the values are balanced is the colourbar's, which
- * is titled in the units it is drawn in and sits beside the numbers it applies
- * to.
- *
- * **The count is the cells, and they are called bins.** That is the honest
- * pairing: a cell of the picture *is* a bin of the effective resolution, so
- * `4,046 × 4,046 bins` at `3.0 kb` multiplies out to the 12.1 Mb that is on
- * screen. Counting the file's own bins instead would put `5,769 bins` beside
- * `200 bp` for a 577 kb chromosome, and the two numbers on one line would
- * describe something twice its size. Above one sequence per cell there is no bin
- * to speak of and they are cells again.
- */
-export function blockSummary(
-  binsize: number,
-  result: MatrixResult,
-  noun = 'sequence',
-): Array<string | HTMLElement> {
-  // What the cells *are*. At bin level they are bins of the effective
-  // resolution, which is the pairing that multiplies out to what is on screen.
-  // Above it they are the unit the axis is already drawn in, and a roll-up that
-  // had to merge them is cells.
-  const unit =
-    result.level === 'bin'
-      ? 'bins'
-      : (result.contigsPerCell ?? 1) > 1
-      ? 'cells'
-      : `${noun}s`
-  const resolution = resolutionNote(binsize, result, noun)
-  const parts: Array<string | HTMLElement> = [
-    `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit}`,
-  ]
-  if (resolution !== '') {
-    parts.push(' · ')
-    // Bold because it is the one number here that changes what the picture
-    // *means*: the same map at 200 bp and at 3 kb are different figures, and a
-    // reader scanning the line is looking for that.
-    parts.push(el('strong', { text: resolution }))
-  }
-  return parts
-}
-
-/** Adapt a worker result to the renderer's {@link DenseMatrix}. */
-export function toDense(data: MatrixResult): DenseMatrix {
-  return {
-    nrows: data.nrows,
-    ncols: data.ncols,
-    values: data.values,
-    rowExtent: data.rowExtent,
-    colExtent: data.colExtent,
-  }
-}
-
-
-/**
- * A feature a lane's menu was opened on, and what may be done with it from there.
- *
- * Built by the surface that owns the pointer, because it is the one that knows
- * what *opening* and *framing* a feature mean on it: the 1D browser frames one
- * on its single axis, and a map has no such gesture — its view is a region on
- * two axes, and framing the gene on one would leave the other wherever it was.
- */
-export interface LaneMenuFeature {
-  /** What the feature is called, or its accession where it has no name. */
-  name: string
-  /** Where it is, as the locus box writes a window, so it can be pasted into one. */
-  locus: string
-  /** Open its card — what a click on it does. */
-  open: () => void
-  /** Frame it, on a surface with one axis to frame it on. */
-  zoom?: () => void
-}
-
-/**
- * What a lane's menu says about the feature at an index of a set.
- *
- * The name a reader searches for — the symbol, else the accession, else the
- * place itself — and the window `formatLocus` writes, which is what the locus
- * box accepts back.
- */
-export function laneMenuFeature(
-  set: FeatureSet,
-  index: number,
-  actions: { open: () => void; zoom?: () => void },
-): LaneMenuFeature {
-  const locus = formatLocus({
-    contig: set.contigs[set.contig[index]] ?? '',
-    start: set.start[index],
-    end: set.end[index],
-  })
-  const name = set.name[index] !== '' ? set.name[index] : set.id[index] !== '' ? set.id[index] : locus
-  return { name, locus, ...actions }
-}
-
-/** The first letter up, for a menu row built from a word the card writes lower-case. */
-function capitalised(word: string): string {
-  return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1)
-}
-
-/**
- * Put text on the clipboard, or — where the browser will not allow it, as in an
- * insecure context — hand it to the reader to copy by hand: a menu row that
- * silently did nothing would be a row that lied.
- */
-function copyOrShow(text: string): void {
-  void copyTextToClipboard(text).catch(() => {
-    window.prompt('This browser would not copy it. Here it is to copy by hand:', text)
-  })
-}
-
-/** What each edge is called, wherever one has to be named to a reader. */
-const EDGE_WORDS: Record<LaneEdge, string> = {
-  top: 'above the map',
-  right: 'beside the map',
-  bottom: 'below the map',
-  left: 'left of the map',
-}
-
-/**
- * The right-click menu on a lane: its colour, its axis, and where it is drawn.
- *
- * The things the side panel offers for a track that a reader beside the map
- * actually reaches for, brought to where the track is. Colour opens the
- * browser's own picker — the same control the card uses, so the two cannot drift
- * — and the range is offered as the choices worth having rather than as two
- * boxes: auto, and the round steps around what is on screen. A number box in a
- * context menu is a form in a menu.
- *
- * The location block and the flip are here because a lane is where a reader is
- * looking when they want them: which edge a track is drawn on and which way its
- * signal grows are both decisions about the *picture*, and sending someone to a
- * list in the sidebar to make one is sending them away from the thing they are
- * deciding about.
- */
-export function openLaneMenu(
-  x: number,
-  y: number,
-  entry: AnnotationEntry,
-  store: AnnotationStore,
-  /**
-   * The stack the menu was opened from — what "towards the map" is measured
-   * against, and what the location block moves the lane *off*.
-   *
-   * `null` on a surface with no map to have edges: the 1D browser draws every
-   * lane the same way up and its placement means nothing until the reader goes
-   * back to a map, so offering four edges there would be offering a control
-   * with no visible effect.
-   */
-  edge: LaneEdge | null,
-  /**
-   * Which map the stack belongs to, so the location block moves *that* map's
-   * lane. The lead when nothing says otherwise, which is every surface with no
-   * deck behind it — see `annotations/store.ts`'s `placeAt`.
-   */
-  map: MapId = LEAD_MAP,
-  /** The feature under the pointer, where there is one (§8.16). */
-  feature: LaneMenuFeature | null = null,
-  /**
-   * *Copy this* (§7.2): this lane's track alone onto the clipboard, as the
-   * surface it was opened on draws it. Absent where the surface cannot draw
-   * one lane by itself.
-   */
-  copy: (() => void) | null = null,
-  /**
-   * The *Marks* group (`ui/marksMenu.ts`): the reader's marks drawn across
-   * this lane, under the pointer and all of them. Last, after the track's own
-   * rows, since the menu was opened on a track — and there, rather than
-   * nowhere, since a mark's rule runs through every lane it crosses.
-   */
-  marks: readonly MenuItem[] = [],
-): void {
-  const limits = entry.style.limits
-  const items: MenuItem[] = []
-  // The thing under the pointer first, and the track it is on after it: a menu
-  // opened on a gene is most often about the gene.
-  if (feature !== null) {
-    items.push(
-      { label: feature.name },
-      { label: 'About it…', run: feature.open },
-      ...(feature.zoom === undefined
-        ? []
-        : [{ label: 'Zoom to it', hint: feature.locus, run: feature.zoom }]),
-      { label: 'Copy its name', hint: feature.name, run: () => copyOrShow(feature.name) },
-      { label: 'Copy its position', hint: feature.locus, run: () => copyOrShow(feature.locus) },
-    )
-  }
-  items.push(
-    { label: entry.label },
-    ...(copy === null
-      ? []
-      : [
-          {
-            label: 'Copy this',
-            hint: 'PNG',
-            title:
-              'The track as it is drawn here — the track alone, with no name, range, handle or ' +
-              'pointer — onto the clipboard as a PNG, at the screen’s resolution',
-            run: copy,
-          },
-        ]),
-    {
-      label: 'Colour…',
-      hint: entry.style.colour,
-      // The same control the lane's own chip is and the side panel's swatch is,
-      // through one builder, so the three cannot come to disagree about what a
-      // colour is. Built here rather than up front because a menu that is opened
-      // and dismissed should leave nothing behind, and taken away again on the
-      // commit *or* on the window coming back, which is what a cancelled picker
-      // looks like from this side.
-      run: () => {
-        const swatch = colourInput(entry, store, { class: 'hidden-input' })
-        const done = (): void => swatch.remove()
-        swatch.addEventListener('change', done, { once: true })
-        window.addEventListener('focus', done, { once: true })
-        document.body.appendChild(swatch)
-        swatch.click()
-      },
-    },
-  )
-
-  // How the rows are spent, and whether a feature points the way it runs
-  // (§8.16) — the two things a reader changes about a gene track while looking
-  // at it, and both as a tick on the one in force rather than as a toggle that
-  // names the state it would leave.
-  if (hasFeatureRows(entry.kind)) {
-    const features = featuresOf(entry.style, entry.kind)
-    items.push(
-      { label: 'Rows' },
-      ...FEATURE_DISPLAYS.map((display) => ({
-        label: capitalised(FEATURE_DISPLAY_WORDS[display].label),
-        title: FEATURE_DISPLAY_WORDS[display].hint,
-        checked: features.display === display,
-        run: () => patchFeatures(store, entry, { display }),
-      })),
-    )
-    // On every lane that has rows, a call set's included, as the card offers it
-    // (`laneSettings.arrowsToggle`): the switch changes nothing on a feature
-    // the file gives no strand, and the menu leaving it off one kind of lane
-    // the card kept it on was two answers to one question.
-    items.push({
-      label: 'Point the way each runs',
-      checked: features.arrows,
-      run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
-    })
-  }
-
-  if (hasAMovableAxis(entry.kind)) {
-    items.push(
-      { label: 'Range' },
-      {
-        label: 'Auto',
-        hint: 'this view',
-        disabled: limits.auto,
-        run: () => store.restyle(entry.id, { limits: { ...limits, auto: true } }),
-      },
-      // Not a step, and not a control: the two ways the range is moved *on the
-      // lane itself*, said once where a reader who opened this menu looking for
-      // them will find them. Both are gestures with nothing on screen to
-      // announce them, which is exactly what a menu is for.
-      { label: `${CEILING_LABEL} on the lane moves the ceiling; click a limit to type one` },
-      ...[1, 5, 10, 50, 100].map((max) => ({
-        label: `0 – ${max}`,
-        disabled: !limits.auto && limits.min === 0 && limits.max === max,
-        run: () => store.restyle(entry.id, { limits: { auto: false, min: 0, max } }),
-      })),
-    )
-  }
-
-  // Where the lane goes, as words. The same field the row's `location` control
-  // writes and the same call the drag onto a rectangle makes, so a lane moved
-  // three different ways is moved once — including the axis turning to keep
-  // facing the map, which is `place`'s and not any caller's.
-  if (edge !== null) {
-    items.push(
-      { label: 'Draw it' },
-      ...LANE_EDGES.map((side) => ({
-        label: EDGE_WORDS[side],
-        disabled:
-          entry.placement[side] && LANE_EDGES.filter((each) => entry.placement[each]).length === 1,
-        run: () => store.placeAt(entry.id, map, placementOn(side)),
-      })),
-    )
-  }
-
-  if (drawsAProfile(entry.kind)) {
-    // Which way the signal currently grows, which is the edge's own reading
-    // turned round by the flip — not the flip on its own. A lane above the map
-    // and one below it with the same `flip` grow in opposite directions
-    // relative to the picture, and "flip" is not a word about a picture.
-    const towards = laneGrowsInward(edge ?? 'bottom') !== entry.style.flip
-    items.push({
-      label: towards ? 'Grow away from the map' : 'Grow towards the map',
-      hint: towards ? 'now towards' : 'now away',
-      run: () => store.restyle(entry.id, { flip: !entry.style.flip }),
-    })
-  }
-
-  items.push(
-    { label: 'This track' },
-    {
-      label: entry.visible ? 'Hide' : 'Show',
-      run: () => store.update(entry.id, { visible: !entry.visible }),
-    },
-    { label: 'Remove', run: (): void => store.remove(entry.id) },
-    ...marks,
-  )
-  openMenu(x, y, items)
 }

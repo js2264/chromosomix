@@ -22,7 +22,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { locusAxisFrom, type AxisRun } from '@/render/locus'
-import { spanOnAxis } from '@/ui/MatrixPanel'
+import { spanOnAxis } from '@/ui/blockAxes'
 
 const IV_LENGTH = 1_531_933
 const lengthOf = (name: string): number | undefined => (name === 'IV' ? IV_LENGTH : undefined)

@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest'
 
 import { HeatmapView, bpTicks, chooseBpStep, formatBpTick } from '@/render/heatmap'
 import { separationCoords } from '@/render/rotate'
-import { axisCoordsFor, axisSpansFor } from '@/ui/MatrixPanel'
+import { axisCoordsFor, axisSpansFor } from '@/ui/blockAxes'
 import type { DenseMatrix } from '@/types'
 import type { AxisGroup } from '@/worker/protocol'
 

@@ -59,16 +59,15 @@ import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
-import {
-  HOVER_SOURCE_MAP,
-  type AnnotationContext,
-  type DeckExport,
-  type DerivePresentation,
-  type MatrixPanel,
-  type PanelGeometry,
-  type SelectedRegion,
-  type TurnPresentation,
+import type {
+  AnnotationContext,
+  DeckExport,
+  DerivePresentation,
+  MatrixPanel,
+  PanelGeometry,
+  TurnPresentation,
 } from '../ui/MatrixPanel'
+import type { SelectedRegion } from '../ui/mapSelection'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, dragHasMapRow, el, fmt, readMapRow, type MapRow } from '../ui/dom'
 import { resolutionLabel } from '../units'
@@ -91,7 +90,7 @@ import { StructurePanel, type StructureCellProps } from './StructurePanel'
 import { TRACKS_CELL_NAME, TracksPanel, type TracksCellProps } from './TracksPanel'
 import { cellHeightOf } from './cellHeight'
 import type { LaneEdge } from '../annotations/types'
-import { subscribeHoverPlace } from '../ui/hoverLocus'
+import { HOVER_SOURCE_MAP, subscribeHoverPlace } from '../ui/hoverLocus'
 import { isStructureName } from '../annotations/g3d'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {

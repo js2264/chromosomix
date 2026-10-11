@@ -249,7 +249,8 @@ import {
   SELECTION_PAD,
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { laneMenuFeature, openLaneMenu, readCanvasPalette, type DeckExport } from './MatrixPanel'
+import { laneMenuFeature, openLaneMenu } from './laneMenu'
+import { readCanvasPalette, type DeckExport } from './MatrixPanel'
 import { marksMenu } from './marksMenu'
 import { openMenu } from './Menu'
 import { endCarry, landingAt, startCarry, type LaneCarry, type LaneLanding } from './laneCarry'

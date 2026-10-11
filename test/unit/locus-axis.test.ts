@@ -2,7 +2,7 @@
  * The matrix-coordinate ↔ (contig, base pair) map (spec §8.4).
  *
  * The property that matters is that it agrees with the readout, which is a
- * different implementation of the same arithmetic (`MatrixPanel.bpWithin`): if
+ * different implementation of the same arithmetic (`blockAxes.bpWithin`): if
  * these two ever disagree, a track and the tooltip above it disagree, and
  * neither is obviously the wrong one. So the numbers here are checked against
  * that formula rather than against what this module happens to return.
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { locusAxisFrom, type AxisRun } from '../../src/render/locus'
 
-/** `MatrixPanel.bpWithin`, restated: the readout's own arithmetic. */
+/** `blockAxes.bpWithin`, restated: the readout's own arithmetic. */
 function bpWithin(run: AxisRun, offset: number, blockStart: number, binsize: number): number {
   const first = run.unitStart ?? blockStart + run.start
   return (blockStart + offset - first) * binsize

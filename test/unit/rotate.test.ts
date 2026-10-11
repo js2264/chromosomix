@@ -48,7 +48,7 @@ import {
   type RotatableBlock,
 } from '@/render/rotate'
 import { bpTicks } from '@/render/heatmap'
-import { anchorFor } from '@/ui/MatrixPanel'
+import { anchorFor } from '@/render/turnGeometry'
 
 function block(
   n: number,

@@ -14,7 +14,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { axisRegion, bpWithin, onDiagonal, spanText, type SelectedAxis } from '@/ui/MatrixPanel'
+import { bpWithin } from '@/ui/blockAxes'
+import { axisRegion, onDiagonal, spanText, type SelectedAxis } from '@/ui/mapSelection'
 import type { Cell } from '@/render/heatmap'
 import type { AxisGroup } from '@/worker/protocol'
 

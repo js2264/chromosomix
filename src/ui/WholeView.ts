@@ -44,13 +44,12 @@ import { resolutionLabel } from '../units'
 import type { ScaleState } from './GenomeView'
 import {
   MatrixPanel,
-  axisRegion,
-  poolingNote,
-  blockSummary,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
+import { axisRegion } from './mapSelection'
+import { blockSummary, poolingNote } from './mapSummary'
 import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'

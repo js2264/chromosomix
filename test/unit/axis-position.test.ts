@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { bpWithin, separationOf, separatorsFor } from '@/ui/MatrixPanel'
+import { bpWithin, separationOf, separatorsFor } from '@/ui/blockAxes'
 import { idRuns } from '@/worker/groups'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 

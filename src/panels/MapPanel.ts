@@ -60,12 +60,11 @@ import type { LaneEdge } from '../annotations/types'
 import type { PickHandlers } from '../ui/mapPick'
 import {
   MatrixPanel,
-  axisRegion,
   type AnnotationContext,
   type DerivePresentation,
-  type SelectedRegion,
   type TurnPresentation,
 } from '../ui/MatrixPanel'
+import { axisRegion, type SelectedRegion } from '../ui/mapSelection'
 import { zoomedRegion } from '../ui/RegionView'
 import { regionLabel } from '../genome/assembly'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
@@ -1116,7 +1115,7 @@ export class MapPanel {
     const normalise = choice === null ? shared.normalise : choice.normalise
     // The arms are the first map's frame — the sequence, its length and its
     // origin, which are facts about the molecule and so this map's too, placed
-    // on each block by base pairs (`MatrixPanel.armsFor`) — read with this map's
+    // on each block by base pairs (`ui/armFrame.armsFor`) — read with this map's
     // own window, and its own control. `ori` stays the deck's: the region is
     // shared, so framing it on the origin frames every map there.
     const lead = shared.arms

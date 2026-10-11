@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { partitionAxis, runStarts } from '@/metacooler/pooling'
-import { bpWithin } from '@/ui/MatrixPanel'
+import { bpWithin } from '@/ui/blockAxes'
 import type { AxisGroup } from '@/worker/protocol'
 
 /**
