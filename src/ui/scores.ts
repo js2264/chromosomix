@@ -101,7 +101,7 @@ export interface ScoreChoice {
    *
    * The only entry that is a *pipeline* rather than a reading, and the only one
    * that can be refused: it needs a square block of one file, and it is cubic in
-   * the bins, so `ui/MatrixPanel.ts` gates it and says so in the caption when it
+   * the bins, so `ui/MapDerivation.ts` gates it and says so in the caption when it
    * cannot be drawn. Carried here rather than as a key of its own so that
    * picking it is one act — see this module's header.
    */

@@ -66,7 +66,7 @@
  * real block that shows it, not from a spike put in on purpose.
  *
  * **Where it sits matters more than the kernel does.** This is applied per file,
- * before two files are combined (`render/derive.ts`, `ui/MatrixPanel.ts`), so a
+ * before two files are combined (`render/derive.ts`, `ui/MapDerivation.ts`), so a
  * ratio is `smooth(A) / smooth(B)` and never `smooth(A / B)`. The two are not
  * variations on one idea. Smoothing the ratio has to average `Infinity` and `0`
  * — the answers `x / 0` and `0 / x` give — and one infinite cell poisons every

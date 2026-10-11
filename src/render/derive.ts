@@ -887,7 +887,7 @@ interface Smoothed {
  * real picture on screen meanwhile. When the answer arrives the caller derives
  * again with {@link Derivation.smoothed} supplied and the step is a lookup.
  *
- * That is the correlation's arrangement (`ui/MatrixPanel.ts`) and it is here for
+ * That is the correlation's arrangement (`ui/MapDerivation.ts`) and it is here for
  * the correlation's reason: every other step in `deriveBlock` is synchronous, and
  * a function that returned a promise for the sake of one of them would make every
  * caller wait on arithmetic that was already finished.
@@ -1161,7 +1161,7 @@ export function deriveBlock(
  *
  * That is the whole of the flag's effect, and only where the derivation divides
  * — so the map's correlation derives its block once, sends it, and draws this
- * under the veil, rather than deriving the same block twice (`ui/MatrixPanel.ts`).
+ * under the veil, rather than deriving the same block twice (`ui/MapDerivation.ts`).
  * Elsewhere a zero is a count and is left alone, and the array is returned as it
  * came.
  */
