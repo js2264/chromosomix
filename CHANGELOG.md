@@ -2187,6 +2187,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A figure's PDF strokes what it fills (§7.2, §18.13).** The PDF page let go of a path at the first
+  operator that painted it, where a canvas keeps it until `beginPath`, so a shape filled and then
+  stroked printed as its fill and a stroke of nothing: every exported box plot lost its outline,
+  whiskers and median, the reader's arrowheads came out as white halos with nothing inside, and a bar
+  track's outline and the 1D browser's chips lost their borders. The page now keeps the path and
+  writes it in front of every fill, stroke and clip, `fillRect` and `strokeRect` leave it alone, and
+  each cell of a deck's figure starts on an empty one.
+
 - **A place left before it was drawn is never drawn, and a colour changed while a region opened no
   longer leaves the previous view on screen (§5.5).** Every change of view starts a render nobody
   waits for, and two ran side by side whenever the reader was quicker than the file. A colour change

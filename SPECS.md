@@ -2048,6 +2048,19 @@ takes a PNG whatever the format beside it says, so while the select is away **it
 resolution it will use**: a slide-maker was pasting a raster rasterised at a number they could no
 longer see or change.
 
+**The page keeps its path as a canvas does.** The context is the same drawing only if it answers
+every call as a canvas would, and the path is where a canvas and a PDF part: a canvas's `fill`,
+`stroke` and `clip` each read the current path and leave it for the next, until `beginPath` empties
+it, while in a PDF the operator that paints a path ends it. So the page holds the path itself and
+writes it out again in front of every operator that paints it — its points where the transform put
+them as they were added, a stroke's width as the transform scales it when it is stroked, as on a
+canvas — and `fillRect` and `strokeRect` paint a rectangle of their own without disturbing it. Each
+cell of a deck's figure (§16.5) starts on an empty path, as its own canvas does on screen. An empty
+path paints nothing, and a clip to it clips everything away. The page used to write a path once and
+let it go, so a shape filled and then stroked was printed as its fill and a stroke of nothing: every
+exported box plot lost its outline, whiskers and median, the reader's arrowheads came out as white
+halos with nothing inside, and a bar track's outline and the 1D browser's chips lost their borders.
+
 **The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
 what it shows: the region on the first line, then the file, the bins, the score, the colour range
 and when it was made; a 1D browser figure names its genome, its window and the date on one line.
@@ -8852,7 +8865,9 @@ and `figures/svgPaint.ts` replays it as canvas calls onto whatever context the c
 paths and text into a `VectorPage`, pixels onto a canvas. One implementation, two destinations,
 and no way for them to differ. `VectorPage` gained `bezierCurveTo` (a chart's curves are cubics),
 `transform` (a `<g transform>` composes with the caller's placement rather than replacing it) and
-`lineCap` for this.
+`lineCap` for this. It keeps a path through a fill and the stroke after it, as a canvas does (§7.2),
+which a chart needs as much as any track: `zrender` draws a box plot's box, whiskers and median as
+one path, filled and then stroked.
 
 Three limits of the replay are stated rather than hidden: a **linear gradient fill is drawn as
 bands** — a hundred strips across its line, each the colour the gradient has at its middle, clipped
