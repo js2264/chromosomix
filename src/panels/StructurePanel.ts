@@ -444,7 +444,7 @@ export class StructurePanel implements DeckCell {
    * The card is rebuilt from the row's style whenever anything changes, so a
    * resolution kept in the row's own select would go back to its default the
    * next time a slider moved. The Export card's pair are the same two fields
-   * for the same reason (`ui/MatrixPanel.ts`).
+   * for the same reason (`ui/MapFigure.ts`).
    */
   private exportDpi = 300
   private exportFormat: ExportFormat = 'png'
