@@ -276,7 +276,7 @@ export interface MapPanelProps {
    * fallback and the deck's own gate says so if the blocks then disagree.
    *
    * The same rule, from the same function, as the second file of a blend
-   * (`Session.openCompare`) and as a collection dropped on the picker.
+   * (`SessionCompare.open`) and as a collection dropped on the picker.
    */
   preferBinsize(): number | undefined
   /**
