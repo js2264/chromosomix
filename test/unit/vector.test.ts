@@ -76,7 +76,7 @@ describe('parseFont', () => {
 
 describe('escapeText', () => {
   it('escapes what would close the string early', () => {
-    expect(escapeText('(meta)cooler')).toBe('\\(meta\\)cooler')
+    expect(escapeText('P(s) of IV')).toBe('P\\(s\\) of IV')
     expect(escapeText('a\\b')).toBe('a\\\\b')
   })
 

@@ -60,7 +60,7 @@ export interface StructureCardOptions {
   onRecompute?(entry: AnnotationEntry): void
   /**
    * When a computed row's run was made — the date its bed3d's `#` line carries,
-   * as the drawer's button and `metacooler-run` write it (§25.7). The analysis
+   * as the drawer's button and `chromosomix` write it (§25.7). The analysis
    * workspace holds the run and the row does not, so the card asks. Absent, or
    * `undefined` for a row, and the line names no date: a model loaded from a
    * file was not made here.

@@ -111,7 +111,7 @@ describe('inferSource — the addresses the rewrite table reaches', () => {
     // region — or which service — the bucket is on, and a stored entry is this
     // browser's only statement of it.
     window.localStorage.setItem(
-      'metacooler-viewer:buckets',
+      'chromosomix:buckets',
       JSON.stringify([
         { id: 'b0', label: 'lab', base: 'https://lab-data.s3.eu-west-3.amazonaws.com/collections/' },
       ]),

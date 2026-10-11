@@ -135,7 +135,7 @@ describe('the stored scopes', () => {
   it('drops a row missing anything the signature needs', () => {
     const good = scope({ id: 'keep' })
     installStorage().set(
-      'metacooler-viewer:buckets',
+      'chromosomix:buckets',
       JSON.stringify([
         good,
         { ...scope({ id: 'no-secret' }), secretAccessKey: '' },
@@ -161,7 +161,7 @@ describe('the stored scopes', () => {
    */
   it('keeps a row with no key at all, and still drops a half-filled one', () => {
     installStorage().set(
-      'metacooler-viewer:buckets',
+      'chromosomix:buckets',
       JSON.stringify([
         { id: 'public', label: 'demos', base: 'https://b.s3.amazonaws.com/demo/' },
         { id: 'half', label: 'oops', base: 'https://b.s3.amazonaws.com/x/', region: 'eu-west-3' },
@@ -181,13 +181,13 @@ describe('the stored scopes', () => {
   })
 
   it('survives storage holding something that is not JSON', () => {
-    installStorage().set('metacooler-viewer:buckets', '{oh no')
+    installStorage().set('chromosomix:buckets', '{oh no')
     expect(readScopes()).toEqual([])
   })
 
   it('keeps only the first of two rows sharing an id', () => {
     installStorage().set(
-      'metacooler-viewer:buckets',
+      'chromosomix:buckets',
       JSON.stringify([scope({ label: 'first' }), scope({ label: 'second' })]),
     )
     expect(readScopes().map((entry) => entry.label)).toEqual(['first'])

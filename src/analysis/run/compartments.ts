@@ -653,7 +653,7 @@ async function runSquare(
 export const runCompartments: TaskRunner = async (job) => {
   // **Unanswered is every sequence, and `[]` is none of them** (§18.2). The two
   // used to be one: `listParam` reads anything that is not an array as `[]`, so
-  // a job that never met a form — `metacooler-run compartments file.cool` — was
+  // a job that never met a form — `chromosomix compartments file.cool` — was
   // told to tick a box in a drawer it has not got.
   const ticked = tickedSequences(job.params, 'sequences')
   const names =

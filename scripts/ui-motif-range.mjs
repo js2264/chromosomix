@@ -81,7 +81,7 @@ if (!existsSync(`${FASTA}.fai`)) {
 /** A 1D browser session holding a sequence row and nothing else. */
 function session(url, name, locus) {
   return {
-    kind: 'metacooler.workspace',
+    kind: 'chromosomix.workspace',
     version: 1,
     createdAt: '2026-10-07T00:00:00.000Z',
     active: 0,
@@ -114,10 +114,10 @@ function sequenceRow(id, name, url) {
 }
 
 const LARGE = `${BASE}/${DATA}/large-genome.fa`
-writeFileSync(join(DATA, 'large.metacooler.json'), JSON.stringify(session(LARGE, 'large-genome.fa', 'chr2:10,000,001-10,060,000'), null, 1))
+writeFileSync(join(DATA, 'large.chromosomix.json'), JSON.stringify(session(LARGE, 'large-genome.fa', 'chr2:10,000,001-10,060,000'), null, 1))
 
 // The yeast tracks demo, with the `.2bit` of the same sequence as a second row.
-const yeast = JSON.parse(execSync('cat demo/yeast/Yeast_tracks.metacooler.json').toString())
+const yeast = JSON.parse(execSync('cat demo/yeast/Yeast_tracks.chromosomix.json').toString())
 for (const track of yeast.tabs[0].tracks) {
   if (track.source?.url !== undefined && !/^https?:/.test(track.source.url)) {
     track.source.url = `${BASE}/demo/yeast/${track.source.url}`
@@ -126,7 +126,7 @@ for (const track of yeast.tabs[0].tracks) {
 yeast.tabs[0].state.uri = `${BASE}/demo/yeast/${yeast.tabs[0].state.uri}`
 yeast.tabs[0].tracks.splice(1, 0, sequenceRow('demo-twobit', 'Yeast_reference.2bit', `${BASE}/demo/yeast/Yeast_reference.2bit`))
 yeast.tabs[0].tracks[1].label = '.2bit'
-writeFileSync(join(DATA, 'yeast.metacooler.json'), JSON.stringify(yeast, null, 1))
+writeFileSync(join(DATA, 'yeast.chromosomix.json'), JSON.stringify(yeast, null, 1))
 
 // ---------------------------------------------------------------------------
 // The browser
@@ -215,7 +215,7 @@ const rows = () => page.evaluate(() =>
 
 try {
   // --- A genome too large to hold --------------------------------------------
-  await page.goto(`${BASE}/?config=${BASE}/${DATA}/large.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/${DATA}/large.chromosomix.json`)
   await page.waitForFunction(
     () => [...document.querySelectorAll('.annotation-card .ann-row')].some((row) => /read by range/.test(row.textContent ?? '')),
     null,
@@ -262,7 +262,7 @@ try {
 
   // --- The yeast demo's .2bit -------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/${DATA}/yeast.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/${DATA}/yeast.chromosomix.json`)
   await page.waitForFunction(() => (document.body.innerText ?? '').includes('Yeast, no map'), null, { timeout: 180000 })
   await sleep(6000)
   const heightBox = page.locator('xpath=//*[normalize-space(text())="track height"]/following::input[1]').first()

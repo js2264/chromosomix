@@ -18,7 +18,7 @@ store's folder for it, and ``index`` reads that folder as it stands::
       store.json                                   the store (SPECS §24.1): written here
       <sample>/<sample>.mcool                      the map every result came from
       <sample>/<species>.fa                        its reference
-      <sample>/<sample>.metacooler.json            its session: written here
+      <sample>/<sample>.chromosomix.json           its session: written here
       <sample>/framing.tsv                         the circles and origins every step ran with
       <sample>/<step>/<sample>_<bp>.<task>.<output>.bw|bed|bedpe|bed3d|tsv
 
@@ -134,7 +134,7 @@ def read_species(path: Path) -> list[tuple[str, str]]:
 
 
 def provenance(path: Path) -> dict[str, str]:
-    """The ``# key: value`` lines at the head of a metacooler-run TSV."""
+    """The ``# key: value`` lines at the head of a TSV the ``chromosomix`` command wrote."""
     held: dict[str, str] = {}
     if not path.exists():
         return held
@@ -145,8 +145,8 @@ def provenance(path: Path) -> dict[str, str]:
             match = re.match(r"# ([\w ]+?): (.*)$", line.rstrip("\n"))
             if match:
                 held.setdefault(match.group(1), match.group(2))
-            elif line.startswith("# metacooler "):
-                held.setdefault("producer", line[len("# metacooler "):].strip())
+            elif line.startswith("# chromosomix "):
+                held.setdefault("producer", line[len("# "):].strip())
     return held
 
 
@@ -354,7 +354,7 @@ def index(store_dir: Path, species_table: Path, resolution: int) -> int:
         if framing:
             tab["circular"] = declared
             tab["origins"] = {name: at - 1 for name, at in called_at.items()}
-        session_path = out / f"{sample}.metacooler.json"
+        session_path = out / f"{sample}.chromosomix.json"
         session_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
         arms = ", ".join(f"{name}:{at:,}" for name, at in called_at.items())
@@ -395,7 +395,7 @@ def index(store_dir: Path, species_table: Path, resolution: int) -> int:
     if samples == 0:
         print(f"Nothing to index: no sample of {species_table.name} has a map in {store_dir}.", file=sys.stderr)
         return 2
-    producer = ", ".join(sorted(p for p in producers if p)) or "metacooler-run"
+    producer = ", ".join(sorted(p for p in producers if p)) or "chromosomix"
     store = {
         "kind": make_store.STORE_KIND,
         "version": make_store.STORE_VERSION,
@@ -433,7 +433,7 @@ def index(store_dir: Path, species_table: Path, resolution: int) -> int:
         for problem in make_store.check_store(written)
         if "sorts before the entry above it" not in problem
     ]
-    for session in sorted(store_dir.glob("*/*.metacooler.json")):
+    for session in sorted(store_dir.glob("*/*.chromosomix.json")):
         problems += [
             f"{session.name}: {problem}"
             for problem in make_store.check_session(session)
@@ -533,7 +533,7 @@ def serve(folder: Path, host: str, port: int) -> int:
     url = f"http://{host}:{port}/store.json"
     quoted = urllib.parse.quote(url, safe="")
     print(f"Serving {folder} at {url}")
-    print(f"  deployed viewer   https://js2264.github.io/metacooler.js/?store={quoted}")
+    print(f"  deployed viewer   https://js2264.github.io/chromosomix/?store={quoted}")
     print(f"  npm run dev       http://localhost:5173/?store={quoted}")
     print("  or paste the URL under Add a custom store. Ctrl-C stops.")
     try:

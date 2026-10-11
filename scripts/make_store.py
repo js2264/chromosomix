@@ -112,7 +112,7 @@ road as ``?config=`` (SPECS §24.1).  That is the right shape for "a genome and
 everything published with it" — IGV's hg38 is a FASTA, its index and a gene
 track, and offering those as three rows asks the reader to assemble what IGV had
 already assembled.  So a front end may also write **session files**: one
-``.metacooler.json`` per genome or per experiment set, with the tracks placed,
+``.chromosomix.json`` per genome or per experiment set, with the tracks placed,
 and a store of its own listing them (``--sessions-dir``/``--sessions-out``).  The
 viewer needs no new code for this — a workspace row is a road it already has.
 
@@ -172,21 +172,21 @@ log = logging.getLogger("make_hub")
 
 #: `src/state/store.ts` refuses anything else, and refuses a newer major version
 #: the way it refuses a newer workspace. Bump both together or not at all.
-STORE_KIND = "metacooler.store"
+STORE_KIND = "chromosomix.store"
 STORE_VERSION = 1
 
 #: `src/state/workspace.ts` and `src/state/SessionConfig.ts`, for the sessions
 #: this script writes. Same rule: bump with the reader or not at all.
-WORKSPACE_KIND = "metacooler.workspace"
+WORKSPACE_KIND = "chromosomix.workspace"
 CONFIG_VERSION = 1
 
 #: What a generated session says wrote it. `SessionConfig.producer` is "which
 #: build wrote this", and the honest answer for these is not a viewer build.
-PRODUCER = "metacooler.js make_store.py"
+PRODUCER = "chromosomix make_store.py"
 
 #: Named, because a portal that rate-limits or blocks has to be able to tell who
 #: this is and where to complain. `urllib`'s default identifies only Python.
-USER_AGENT = "metacooler.js make_store.py (+https://github.com/js2264/metacooler.js)"
+USER_AGENT = "chromosomix make_store.py (+https://github.com/js2264/chromosomix)"
 
 #: Seconds. A portal answering `limit=all` is doing real work — 4DN's set query
 #: is thousands of embedded files — so this is generous; it exists to stop a
@@ -354,7 +354,7 @@ COLUMNS_SESSIONS = [
 #: copied with its source named, and the cost of them drifting is bounded — a
 #: store row the viewer greys out, or an openable file missing from a catalogue,
 #: neither of which is silent. Keep them in step.
-ROUTE_WORKSPACE = re.compile(r"\.metacooler\.json$", re.I)
+ROUTE_WORKSPACE = re.compile(r"\.chromosomix\.json$", re.I)
 ROUTE_MAP = re.compile(
     r"(\.([ms]?cool|m?metacool|hic|h5|hdf5)|\.pairs(\.gz)?|\.matrix(\.gz)?)$", re.I
 )
@@ -2733,7 +2733,7 @@ def write_sessions(sessions: list[dict], directory: Path) -> list[Path]:
     directory.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for session in sessions:
-        path = directory / f"{session['id']}.metacooler.json"
+        path = directory / f"{session['id']}.chromosomix.json"
         path.write_text(
             json.dumps(session["document"], indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
@@ -2753,7 +2753,7 @@ def session_entries(sessions: list[dict], folder: str) -> list[dict]:
     return [
         {
             "label": session["label"],
-            "url": f"{folder}/{session['id']}.metacooler.json",
+            "url": f"{folder}/{session['id']}.chromosomix.json",
             "kind": "workspace",
             "size": None,
             "note": session["note"],

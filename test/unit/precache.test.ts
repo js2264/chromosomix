@@ -81,12 +81,12 @@ describe('precacheUrls', () => {
   })
 
   it('writes every URL under the base the site is served from', () => {
-    const urls = precacheUrls(BUNDLE, '/metacooler.js/')
-    expect(urls[0]).toBe('/metacooler.js/')
-    expect(urls).toContain('/metacooler.js/assets/index-CAiSlBsc.js')
+    const urls = precacheUrls(BUNDLE, '/chromosomix/')
+    expect(urls[0]).toBe('/chromosomix/')
+    expect(urls).toContain('/chromosomix/assets/index-CAiSlBsc.js')
     // The sub-path case is the one that fails silently: a worker asking for
     // `/assets/…` on a project site installs against four 404s.
-    expect(urls.every((url) => url.startsWith('/metacooler.js/'))).toBe(true)
+    expect(urls.every((url) => url.startsWith('/chromosomix/'))).toBe(true)
   })
 
   it('tolerates a base with no trailing slash', () => {
@@ -111,10 +111,10 @@ describe('precacheUrls', () => {
     // Found by cutting the network and reloading: everything worked except a
     // failed request for the manifest, because it is copied rather than built
     // and so was never in the list the bundle could offer.
-    const urls = precacheUrls(BUNDLE, '/metacooler.js/')
-    expect(urls).toContain('/metacooler.js/manifest.webmanifest')
-    expect(urls).toContain('/metacooler.js/icon-192.png')
-    expect(urls).toContain('/metacooler.js/icon-512.png')
-    expect(urls).toContain('/metacooler.js/apple-touch-icon.png')
+    const urls = precacheUrls(BUNDLE, '/chromosomix/')
+    expect(urls).toContain('/chromosomix/manifest.webmanifest')
+    expect(urls).toContain('/chromosomix/icon-192.png')
+    expect(urls).toContain('/chromosomix/icon-512.png')
+    expect(urls).toContain('/chromosomix/apple-touch-icon.png')
   })
 })

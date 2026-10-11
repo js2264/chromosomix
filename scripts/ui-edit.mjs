@@ -181,11 +181,11 @@ async function openStage(reading = null) {
 // ── The map, with the dev features on ────────────────────────────────────────
 await page.goto(`${BASE}/`)
 await page.evaluate(() => {
-  localStorage.setItem('metacooler-viewer:dev-features', 'on')
+  localStorage.setItem('chromosomix:dev-features', 'on')
   sessionStorage.clear()
   for (const key of Object.keys(localStorage)) if (key.includes(':map:edit')) localStorage.removeItem(key)
 })
-await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
+await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
 await page.reload()
 await sleep(8000)
 console.log('heading says:', (await text('.crumb-reference'))?.trim())
@@ -485,7 +485,7 @@ else {
 }
 
 // The dev features off: no word on the reference, no command.
-await page.evaluate(() => localStorage.removeItem('metacooler-viewer:dev-features'))
+await page.evaluate(() => localStorage.removeItem('chromosomix:dev-features'))
 await page.reload()
 await sleep(7000)
 console.log('dev off · heading has the reference:', (await page.$('.crumb-reference')) !== null)

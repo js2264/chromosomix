@@ -48,7 +48,7 @@ export interface ArrangedColumn {
 /** The stored arrangement: each rearranged column's cards, by name, in order. */
 export type CardOrder = Record<string, string[]>
 
-const KEY = 'metacooler-viewer:card-layout'
+const KEY = 'chromosomix:card-layout'
 
 /** The comment a moved card leaves at home, and the card it stands for. */
 const cardOfAnchor = new WeakMap<Comment, HTMLElement>()

@@ -7,7 +7,7 @@
  * HTML. That is exactly the kind of thing that keeps working until somebody
  * reformats the file — and when it stops working nothing fails: the desktop
  * build ships a link to a manifest it does not contain, and an archived build
- * quietly offers to install itself as "(meta)cooler" over the real one.
+ * quietly offers to install itself as "chromosomix" over the real one.
  *
  * `scripts/check-desktop-build.mjs` catches the desktop half after a build.
  * This catches both halves before one, against the real `index.html` rather

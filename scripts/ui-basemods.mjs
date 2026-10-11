@@ -159,11 +159,11 @@ async function colourBy(value) {
 
 // A session of the yeast demo with its sequence and genes and nothing else, so
 // the reads have the height.
-const session = JSON.parse(readFileSync('demo/yeast/Yeast_tracks.metacooler.json', 'utf8'))
+const session = JSON.parse(readFileSync('demo/yeast/Yeast_tracks.chromosomix.json', 'utf8'))
 const tab = session.tabs[0]
 tab.tracks = tab.tracks.filter((track) => track.id === 'demo-sequence' || track.id === 'demo-genes')
 tab.state.locus = 'IV:1,266,001-1,274,000'
-const probe = 'demo/yeast/_gallery-basemods.metacooler.json'
+const probe = 'demo/yeast/_gallery-basemods.chromosomix.json'
 writeFileSync(probe, JSON.stringify(session))
 const CONFIG = `${BASE}/?config=${BASE}/${probe}`
 

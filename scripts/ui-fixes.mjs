@@ -46,7 +46,7 @@ const hashRegions = (tab) =>
   })
 
 // ---- the shortcuts dialog --------------------------------------------------
-await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(6000)
 await page.keyboard.press('?')
@@ -185,7 +185,7 @@ await save(hic, 'fx08-hic-file-card')
 await hic.context().close()
 
 // ---- the single map closed into the 1D browser ------------------------------
-const closing = await fresh(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+const closing = await fresh(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await closing.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(5000)
 await closing.click('button[title^="Show the Annotations panel"]').catch(() => {})
@@ -207,7 +207,7 @@ await save(closing, 'fx09-closed-into-browser')
 await closing.context().close()
 
 // ---- three tasks' forms: what each says it will read ------------------------
-const tasks = await fresh(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+const tasks = await fresh(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await tasks.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(5000)
 await tasks.click('button[title^="Show the Analysis panel"]').catch(() => {})
@@ -241,8 +241,8 @@ await tasks.context().close()
 
 // ---- the palette's Annotations row on a metacool --------------------------------
 const metacool = await fresh(`${g.base}/`)
-await metacool.evaluate(() => localStorage.setItem('metacooler-viewer:dev-features', 'on'))
-await metacool.goto(`${g.base}/?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.metacooler.json`)
+await metacool.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
+await metacool.goto(`${g.base}/?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
 await metacool.waitForSelector('.view-genomes .tr', { timeout: 120000 }).catch(() => console.log('no genomes table'))
 await sleep(2500)
 await metacool.keyboard.press('Control+p')

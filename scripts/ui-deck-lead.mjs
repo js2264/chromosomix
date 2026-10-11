@@ -133,7 +133,7 @@ try {
   // The yeast deck: the first map moved, hidden, and put back by its eye.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(5000)
   await fold('Show the Annotations panel')

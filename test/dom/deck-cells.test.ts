@@ -317,7 +317,7 @@ describe('a structure cell in the deck', () => {
     expect(cells).toHaveLength(2)
     // jsdom has no `DataTransfer`, so the drag carries the same two methods
     // the code reads off one — the pattern `files-panel.test.ts` uses.
-    const data = new Map<string, string>([['application/x-metacooler-structure', 'a1']])
+    const data = new Map<string, string>([['application/x-chromosomix-structure', 'a1']])
     const transfer = {
       getData: (type: string) => data.get(type) ?? '',
       types: [...data.keys()],
@@ -1624,7 +1624,7 @@ describe('an empty cell', () => {
     deck.grow('beside')
     const zone = deck.el.querySelector('.deck-vacant')
     if (zone === null) throw new Error('no empty cell')
-    dropOn(zone, new Map([['application/x-metacooler-track', 't1']]))
+    dropOn(zone, new Map([['application/x-chromosomix-track', 't1']]))
     expect(all(deck.el, '.deck-grid > .deck-tracks')).toHaveLength(1)
     expect(all(deck.el, '.deck-vacant')).toHaveLength(0)
     // Placed on the cell that opened there, which is the map id its lanes
@@ -1642,7 +1642,7 @@ describe('an empty cell', () => {
     const zone = deck.el.querySelector('.deck-vacant')
     if (zone === null) throw new Error('no empty cell')
     const transfer = {
-      types: ['application/x-metacooler-track'],
+      types: ['application/x-chromosomix-track'],
       effectAllowed: 'move',
       dropEffect: 'none',
       getData: () => '',

@@ -83,7 +83,7 @@ export function dragHasFiles(event: DragEvent): boolean {
  * dragged a word across them. Lowercase, because a browser lowercases every
  * type it stores and a comparison against a capital would never match.
  */
-export const TRACK_DRAG_TYPE = 'application/x-metacooler-track'
+export const TRACK_DRAG_TYPE = 'application/x-chromosomix-track'
 
 /** Whether a drag is carrying one of the Tracks card's rows. */
 export function dragHasTrack(event: DragEvent): boolean {
@@ -98,7 +98,7 @@ export function dragHasTrack(event: DragEvent): boolean {
  * would each mean the same thing. Which row is in the air cannot be read until
  * it lands; its types can, so the kind travels as one.
  */
-export const OVERLAY_DRAG_TYPE = 'application/x-metacooler-overlay'
+export const OVERLAY_DRAG_TYPE = 'application/x-chromosomix-overlay'
 
 /** Whether a drag is carrying a row of the Tracks card that is an overlay. */
 export function dragHasOverlay(event: DragEvent): boolean {
@@ -137,7 +137,7 @@ export function dropEffectFor(
  * guessing which it had caught from an id alone, and only `types` is readable
  * while the drag is still in the air.
  */
-export const STRUCTURE_DRAG_TYPE = 'application/x-metacooler-structure'
+export const STRUCTURE_DRAG_TYPE = 'application/x-chromosomix-structure'
 
 /** Whether a drag is carrying one of the Structures card's rows. */
 export function dragHasStructure(event: DragEvent): boolean {
@@ -181,7 +181,7 @@ export function titleWhenCut(node: HTMLElement): void {
  * triangle (`compare`), a companion already in a cell, by the deck's id, or one
  * the reader's eye took out of the deck (`hidden`), by the session's id for it.
  */
-export const MAP_ROW_DRAG_TYPE = 'application/x-metacooler-map'
+export const MAP_ROW_DRAG_TYPE = 'application/x-chromosomix-map'
 
 export type MapRow =
   | { kind: 'lead' }

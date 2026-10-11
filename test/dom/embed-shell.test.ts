@@ -216,7 +216,7 @@ describe('the bar an embed has instead of a header', () => {
     const { root } = windowAt('?embed=1')
     const bar = root.querySelector('.embed-bar')
     expect(bar).not.toBeNull()
-    expect(bar?.querySelector('.embed-brand-name')?.textContent).toBe('(meta)cooler')
+    expect(bar?.querySelector('.embed-brand-name')?.textContent).toBe('chromosomix')
     // The breadcrumb moved *into* the bar rather than being duplicated: one
     // slot, which the session fills exactly as it does in a window.
     expect(bar?.querySelector('.breadcrumb-slot')).not.toBeNull()
@@ -305,16 +305,16 @@ describe('a session named in the address', () => {
 
   it('opens the workspace the page named, resolved against the page', async () => {
     const server = serving('{}')
-    windowAt('?embed=1&config=figures/one.metacooler.json')
+    windowAt('?embed=1&config=figures/one.chromosomix.json')
     await settle()
     server.stop()
     expect(server.asked).toHaveLength(1)
-    expect(server.asked[0]).toMatch(/\/figures\/one\.metacooler\.json$/)
+    expect(server.asked[0]).toMatch(/\/figures\/one\.chromosomix\.json$/)
   })
 
   it('works in a window of its own, which is what makes a session linkable', async () => {
     const server = serving('{}')
-    windowAt('?config=figures/one.metacooler.json')
+    windowAt('?config=figures/one.chromosomix.json')
     await settle()
     server.stop()
     expect(server.asked).toHaveLength(1)
@@ -324,7 +324,7 @@ describe('a session named in the address', () => {
     // The alternative is the picker, silently — which reads as the embed simply
     // not working, and is the one report nobody can act on.
     const server = serving('{}')
-    windowAt('?embed=1&config=figures/one.metacooler.json')
+    windowAt('?embed=1&config=figures/one.chromosomix.json')
     await settle()
     server.stop()
     expect(document.body.textContent).toContain('not a saved workspace')
@@ -335,7 +335,7 @@ describe('a session named in the address', () => {
     // A reload inside the frame has to keep the second, or every reload would
     // undo the last click — and would open a second tab on top of it.
     const server = serving('{}')
-    windowAt('?embed=1&config=figures/one.metacooler.json#uri=f.mcool&view=genomes')
+    windowAt('?embed=1&config=figures/one.chromosomix.json#uri=f.mcool&view=genomes')
     await settle()
     server.stop()
     expect(server.asked).toHaveLength(0)
@@ -346,12 +346,12 @@ describe('what an embed remembers', () => {
   it('writes no tab strip, so a reload shows what the page asked for', () => {
     const { app } = windowAt('?embed=1')
     navigate(app, AT)
-    expect(window.sessionStorage.getItem('metacooler-viewer:sessions')).toBeNull()
+    expect(window.sessionStorage.getItem('chromosomix:sessions')).toBeNull()
   })
 
   it('writes one in a window of its own', () => {
     const { app } = windowAt('')
     navigate(app, AT)
-    expect(window.sessionStorage.getItem('metacooler-viewer:sessions')).not.toBeNull()
+    expect(window.sessionStorage.getItem('chromosomix:sessions')).not.toBeNull()
   })
 })

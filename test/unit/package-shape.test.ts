@@ -110,7 +110,7 @@ describe('packageIndexProblems', () => {
     // The single most expensive regression available here, and the one that is
     // invisible to whoever makes it: an absolute base is correct on the site,
     // which is the only place a maintainer ever loads it.
-    const problems = packageIndexProblems(HTML.replaceAll('./assets/', '/metacooler.js/assets/'))
+    const problems = packageIndexProblems(HTML.replaceAll('./assets/', '/chromosomix/assets/'))
     expect(problems).toHaveLength(3)
     expect(problems[0]).toContain('relative')
     expect(problems.slice(1).join(' ')).toContain('root-absolute')

@@ -92,7 +92,7 @@ describe('a run the shell can take', () => {
     expect(draft.shell).toBe(true)
     // The same text, split where the command begins: one function, called twice.
     expect([...(draft.notes ?? []), draft.line].join('\n')).toBe(command.text)
-    expect(draft.line.startsWith('metacooler-run insulation ')).toBe(true)
+    expect(draft.line.startsWith('chromosomix insulation ')).toBe(true)
     expect(draft.line.split('\n')).toHaveLength(1)
   })
 
@@ -115,7 +115,7 @@ describe('a run the shell can take', () => {
       provenance: provenance('insulation'),
       context: CONTEXT,
     })
-    expect(draft.detail?.[0]).toBe('# metacooler test 1234abc')
+    expect(draft.detail?.[0]).toBe('# chromosomix test 1234abc')
     expect(draft.detail).toContain('# task: insulation v1')
     expect(draft.detail?.some((line) => line.startsWith('# param window:'))).toBe(true)
   })
@@ -172,7 +172,7 @@ describe('a run of a task that reads a track', () => {
       },
     })
     expect(draft.shell).toBe(true)
-    expect(draft.line.startsWith('metacooler-run metaplot ')).toBe(true)
+    expect(draft.line.startsWith('chromosomix metaplot ')).toBe(true)
     expect(draft.line).toContain('--tracks Yeast_ATAC.bw')
     expect(draft.line).toContain('--features peaks.bed')
     expect(draft.detail).toContain('# task: metaplot v1')

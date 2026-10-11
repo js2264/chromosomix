@@ -90,7 +90,7 @@ function git(args: string[]): string {
 function singleFile(): Plugin {
   let outDir = 'dist-standalone'
   return {
-    name: 'metacooler-single-file',
+    name: 'chromosomix-single-file',
     enforce: 'post',
     configResolved(config) {
       outDir = config.build.outDir

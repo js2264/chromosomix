@@ -105,7 +105,7 @@ const box = async (selector, from, to) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(4000)
   // Every column open, so the centre is as narrow as a laptop makes it.
@@ -177,7 +177,7 @@ try {
     const zone = document.querySelector('.deck-vacant')
     if (zone === null) throw new Error('no empty cell')
     const transfer = new DataTransfer()
-    transfer.setData('application/x-metacooler-map', JSON.stringify({ kind: 'lead' }))
+    transfer.setData('application/x-chromosomix-map', JSON.stringify({ kind: 'lead' }))
     for (const kind of ['dragenter', 'dragover', 'drop']) {
       zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
     }
@@ -244,7 +244,7 @@ try {
     const zone = Array.from(document.querySelectorAll('.deck-grid > .deck-panel:not(.is-lead) .lane-drop-right'))[0]
     if (zone === undefined) throw new Error('no edge to drop on')
     const transfer = new DataTransfer()
-    transfer.setData('application/x-metacooler-track', id)
+    transfer.setData('application/x-chromosomix-track', id)
     for (const kind of ['dragenter', 'dragover', 'drop']) zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
   }, trackId)
   await sleep(2500)

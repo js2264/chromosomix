@@ -15,7 +15,7 @@
 import { gallery, sleep } from './gallery-lib.mjs'
 
 const OUT = process.argv[2] ?? 'gallery'
-const CONFIG = process.env.DOTPLOT_CONFIG ?? '/out/reasm/Dotplot.metacooler.json'
+const CONFIG = process.env.DOTPLOT_CONFIG ?? '/out/reasm/Dotplot.chromosomix.json'
 const g = await gallery(OUT)
 const { page, shot, text, openStage, openWithDev, settled } = g
 

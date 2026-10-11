@@ -59,7 +59,7 @@ import { looksLikeConfig, type ConfigRefusal } from './SessionConfig'
 import { hasGenomeStanzas, looksLikeHub, parseHubHeader, readHub } from './hub'
 
 /** What a store file must call itself. */
-export const STORE_KIND = 'metacooler.store'
+export const STORE_KIND = 'chromosomix.store'
 
 /**
  * The format version this build reads.

@@ -20,7 +20,7 @@
 
 import { splitUri } from '../ui/labels'
 
-const PREFIX = 'metacooler-viewer:ui:'
+const PREFIX = 'chromosomix:ui:'
 
 /**
  * The key one session's memory of one *file* hangs on.

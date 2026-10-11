@@ -207,7 +207,7 @@ try {
 
   // No circle, and not offered: the yeast demo, in a tab of its own.
   page = await fresh()
-  await page.goto(`${BASE}/?config=${encodeURIComponent('/demo/yeast/Yeast_microC.metacooler.json')}`)
+  await page.goto(`${BASE}/?config=${encodeURIComponent('/demo/yeast/Yeast_microC.chromosomix.json')}`)
   await page.waitForFunction(() => [...document.querySelectorAll('select')].some((s) => [...s.options].some((o) => o.value === 'baseline')), null, { timeout: 120000 })
   await scoreSelect().waitFor({ timeout: 60000 })
   await sleep(4000)

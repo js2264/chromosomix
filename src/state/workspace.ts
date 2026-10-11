@@ -25,7 +25,7 @@
  * whatever tab imports it (`state/SessionConfig.ts`), which is what lets a
  * session exported from tab 3 open in tab 7 without dragging tab 3's memory
  * with it. Folding the session id into the config would put a tab identity into
- * every exported `.metacooler.json` and every share link, for the benefit of one
+ * every exported `.chromosomix.json` and every share link, for the benefit of one
  * consumer. So the id travels here, in the wrapper, where it is needed for
  * `reserveSessionIds` and for the `UiMemory` keys and nowhere else.
  *
@@ -305,7 +305,7 @@ export function summariseWorkspace(workspace: Workspace): WorkspaceSummary {
 // ---------------------------------------------------------------------------
 
 /** What the file says it is, so a stray `.json` is not read as one. */
-export const WORKSPACE_KIND = 'metacooler.workspace'
+export const WORKSPACE_KIND = 'chromosomix.workspace'
 
 /**
  * A workspace written out: every tab in the window, and which was in front.
@@ -421,12 +421,12 @@ export function parseWorkspaceFile(text: string): WorkspaceFile | ConfigRefusal 
  *
  * The tab **count is deliberately not in the name**. It would be wrong the
  * moment anybody edits the file, and nothing routes on the name anyway — the
- * `kind` inside is what decides. The `.metacooler.json` suffix stays so the
+ * `kind` inside is what decides. The `.chromosomix.json` suffix stays so the
  * family is recognisable and so `looksLikeConfig` and any future file
  * association keep working.
  */
 export function workspaceFileName(stamp: string): string {
-  return `workspace-${stamp}.metacooler.json`
+  return `workspace-${stamp}.chromosomix.json`
 }
 
 /**

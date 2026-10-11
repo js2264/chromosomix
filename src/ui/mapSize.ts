@@ -26,7 +26,7 @@
 /** The smallest map worth drawing in, in CSS pixels. */
 export const MIN_MAP_SIZE = 160
 
-const KEY = 'metacooler-viewer:map-size'
+const KEY = 'chromosomix:map-size'
 
 /**
  * The side a panel with this much room draws, in CSS pixels.

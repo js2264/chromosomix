@@ -51,7 +51,7 @@
  * It is called **provenance**, which is what it shows and the word the Analysis
  * drawer's *copy provenance* already uses for the same block. It read *output*,
  * which beside a log of commands is the one thing it is not — a reader looks at
- * a column of `metacooler-run` lines, sees a box marked *output*, and reasonably
+ * a column of `chromosomix` lines, sees a box marked *output*, and reasonably
  * expects the numbers the runs produced. And it is a `btn-toggle` rather than a
  * checkbox: a tick is for choosing rows in a list, a toggle is for a setting,
  * and this is the only setting in the header (§26.3).
@@ -87,9 +87,9 @@ import {
  * they keep it open and whether they read the provenance with it are
  * preferences about *this window*, not a train of thought about a file.
  */
-const HEIGHT_KEY = 'metacooler-viewer:console:height'
-const OPEN_KEY = 'metacooler-viewer:console:open'
-const OUTPUT_KEY = 'metacooler-viewer:console:output'
+const HEIGHT_KEY = 'chromosomix:console:height'
+const OPEN_KEY = 'chromosomix:console:open'
+const OUTPUT_KEY = 'chromosomix:console:output'
 
 /** Below this the header and one row do not both fit. */
 const MIN_HEIGHT = 140
@@ -694,11 +694,11 @@ export class ConsolePanel {
       return
     }
     const head =
-      `#!/bin/sh\n# metacooler.js console, saved ${new Date().toISOString()}\n` +
+      `#!/bin/sh\n# chromosomix console, saved ${new Date().toISOString()}\n` +
       '# Commands are bare; everything else is a comment.\n\n'
     void downloadBlob(
       new Blob([head, text], { type: 'text/x-shellscript' }),
-      `metacooler-console-${fileStamp(new Date())}.sh`,
+      `chromosomix-console-${fileStamp(new Date())}.sh`,
     )
   }
 

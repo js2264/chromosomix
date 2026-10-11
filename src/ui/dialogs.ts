@@ -224,9 +224,8 @@ export function openAbout(
   onClose?: () => void,
 ): Modal {
   return new Modal({
-    // Titled for what it is, like every other dialog. It was the brand, which
-    // `.modal-title` uppercases — and the mark is written *(meta)cooler*
-    // everywhere else, so shouted in caps it read as a different word.
+    // Titled for what it is, like every other dialog, rather than for the
+    // brand, which `.modal-title` would shout in capitals.
     title: 'About this viewer',
     ...(onClose === undefined ? {} : { onClose }),
     body: () =>

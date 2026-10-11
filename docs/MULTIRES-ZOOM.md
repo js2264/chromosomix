@@ -1,6 +1,6 @@
 # MULTIRES-ZOOM — zoom that refines
 
-*A feasibility study and an implementation plan for progressive refinement in `metacooler-viewer`.*
+*A feasibility study and an implementation plan for progressive refinement in `chromosomix`.*
 
 Status: **built.** This document was written as a feasibility study, and what it proposed is now on
 disk — with four of its five v1 exclusions overruled, which is the largest change between the plan
@@ -41,7 +41,7 @@ at the file's own bin size.
 
 ### 1.1 What the app is
 
-`metacooler-viewer` is a browser-only viewer for `.metacool` metagenomic Hi-C contact maps, and
+`chromosomix` is a browser-only viewer for `.metacool` metagenomic Hi-C contact maps, and
 natively for `.cool` / `.mcool` / `.mmetacool`. Three constraints generate the whole design
 (`SPECS.md:10-24`): **no backend of any kind**, **nothing is uploaded**, and **no preprocessing and
 no required companion file**. There is no tile server because there is no server; a published file

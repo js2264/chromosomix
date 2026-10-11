@@ -330,7 +330,7 @@ function guidanceFor(code: ErrorCode): Guidance {
 /**
  * A total the *contacts* box asked for that this map cannot be drawn to (§6.5).
  *
- * `unsupported` by code, and not by advice: `metacooler-run --contacts` refuses
+ * `unsupported` by code, and not by advice: `chromosomix --contacts` refuses
  * the same total in the same words, so *run it locally* would send a reader to
  * the same refusal, and the fix is in the box they just typed in.
  */

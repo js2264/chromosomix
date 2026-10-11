@@ -171,13 +171,13 @@ The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered
 
 | file | opens |
 | --- | --- |
-| `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
-| `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
-| `Yeast_deck.metacooler.json` | the micro-C `.cool` beside a Juicer `.hic` of the same locus, in two locked columns |
-| `Human_chrX_RNA.metacooler.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads as depth with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
-| `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
+| `Yeast_microC.chromosomix.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
+| `Yeast_tracks.chromosomix.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
+| `Yeast_deck.chromosomix.json` | the micro-C `.cool` beside a Juicer `.hic` of the same locus, in two locked columns |
+| `Human_chrX_RNA.chromosomix.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads as depth with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
+| `Mock_microbial_community.chromosomix.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
 
-They are ordinary `metacooler.workspace` files — the exact format the save button in the top bar
+They are ordinary `chromosomix.workspace` files — the exact format the save button in the top bar
 writes (`state/workspace.ts`) — so choosing one from the list and dropping one somebody sent you are
 the same gesture, through the same code. A `.json` on a URL is fetched, parsed and applied;
 everything it names is then opened by the ordinary paths.
@@ -200,7 +200,7 @@ files a published workspace names are resolved against its own URL (`resolveConf
 makes a dataset folder self-contained: `demo/yeast/` holds two workspaces and everything they name,
 and it opens from the bucket, from a copy on another bucket, or from `python3 -m http.server` over
 the directory. It is also why moving 250 MB from Pages to S3 changed no line of any
-`.metacooler.json`. A *saved* workspace names absolute URLs and is left untouched by that step, so
+`.chromosomix.json`. A *saved* workspace names absolute URLs and is left untouched by that step, so
 the two kinds can be mixed in one file.
 
 Resolution covers **everything a tab names**, not only its map and its tracks: the second file of a

@@ -14,7 +14,7 @@
  * and the side panels' own widths make.
  */
 
-const KEY = 'metacooler-viewer:name-column'
+const KEY = 'chromosomix:name-column'
 
 /** Narrower than this and it is a stripe rather than a column. */
 export const NAME_COLUMN_MIN = 40

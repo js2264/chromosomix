@@ -29,7 +29,7 @@ code disagree, the code is right and this file is a bug.
 - [Editing the reference](#editing-the-reference) — original, edit, piece, lens, breakpoint, corner, suggestion, the stage, the dot plot
 - [Machinery](#machinery) — workers, sources, budgets, dev features, buckets, the console
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, package, CLI, embed
-- [Overloaded words](#overloaded-words) — session, workspace, panel, tab, browser, entry, origin, cell, junction, reader, bin
+- [Overloaded words](#overloaded-words) — session, workspace, panel, tab, browser, entry, origin, cell, junction, reader, bin, metacooler
 - [Doctrines](#doctrines) — the rules cited by number everywhere
 
 ---
@@ -161,8 +161,8 @@ compared file and a local deck companion.
 
 ### workspace file
 
-A [workspace](#workspace) as bytes: `workspace-<stamp>.metacooler.json`, `kind:
-"metacooler.workspace"`, holding every open tab as a [session config](#session-config) and naming the
+A [workspace](#workspace) as bytes: `workspace-<stamp>.chromosomix.json`, `kind:
+"chromosomix.workspace"`, holding every open tab as a [session config](#session-config) and naming the
 active one by **index** (`src/state/workspace.ts`). Written by the save button in the header; drop it
 back and its tabs are *added* beside whatever is open.
 
@@ -331,7 +331,7 @@ the metagenomic sense, not a matrix bin. Matched by name, never by index, and ne
 
 ### store
 
-A shelf of named data somebody published: one JSON file (`kind: "metacooler.store"`, §24) listing
+A shelf of named data somebody published: one JSON file (`kind: "chromosomix.store"`, §24) listing
 maps, genome files and workspaces with columns to filter on, so a reader chooses without opening
 anything. The app ships seven — the lab's own figures, its DNA Bacterial Zoo, IGV's genomes, 4DN,
 ENCODE, DNA Zoo and the Roadmap hub (`src/ui/stores/registry.ts`) — and a reader connects any other
@@ -953,7 +953,7 @@ leaves the session drawn through the edit (§27.7).
 
 The stage's three modes, and three answers to one question — **who presses accept** (§27.6). In
 *manual* the suggestions are guides; in *review* they are a queue the reader answers; in *auto* the
-task applies every one above a threshold. *Auto* from a shell, `metacooler-run edit`, is specified
+task applies every one above a threshold. *Auto* from a shell, `chromosomix edit`, is specified
 and not built: the command line has no such command yet.
 
 ### the stage's picture
@@ -1053,7 +1053,7 @@ the same entry that decides which key signs a read is the one the Files panel br
 
 What this window has done, written as the commands that would do it again (§23,
 `src/state/actions.ts`, `src/ui/ConsolePanel.ts`): a line per **job** a runner ran — a batch over six
-maps is six lines, each its own `metacooler-run` command, a failure and a Stop included — and,
+maps is six lines, each its own `chromosomix` command, a failure and a Stop included — and,
 commented, the files opened, the tracks loaded and the files written. What it hands over is a shell
 script; its **provenance** toggle puts each run's whole provenance block above its command, and is
 off by default. Window furniture, opened with `` ` `` and outliving every tab; kept in `localStorage`
@@ -1065,12 +1065,12 @@ for seven days and 500 lines, and listed with what the browser is remembering; n
 
 | Target | What it is |
 |---|---|
-| **web** | the default: the site at `js2264.github.io/metacooler.js/` |
+| **web** | the default: the site at `js2264.github.io/chromosomix/` |
 | **desktop** | the Electron build (`IS_DESKTOP`), with a native menu that ends in the same command list |
 | **standalone** | the whole viewer as **one HTML file** (`IS_STANDALONE`). It has an opaque origin, so every remote read fails before a byte moves — the URL box is therefore *absent*, not disabled (§8.5, §19) |
 | **pinned** | one archived commit of the site, served from `…/v/<commit>/`, which is what the version dropdown points at |
 | **package** | the copy that goes to npm: the web build with a relative base, a built directory for anybody to serve rather than a library to import (§22) |
-| **CLI** | `metacooler-run`: the analysis panel, from a shell |
+| **CLI** | `chromosomix`: the analysis panel, from a shell |
 
 `web`, `desktop` and `standalone` are the values of `TARGET`; `pinned` and `package` are the web
 build under another base URL — the package's `./`, so one published version serves from anywhere.
@@ -1088,7 +1088,7 @@ shows no dev feature; a page that will not depend on this site mounts the [packa
 
 ## Overloaded words
 
-Eleven words carry more than one meaning. Where the second meaning is avoidable it is being retired;
+Twelve words carry more than one meaning. Where the second meaning is avoidable it is being retired;
 where it is not, the qualifier is always present.
 
 ### session
@@ -1100,7 +1100,7 @@ where it is not, the qualifier is always present.
 4. **a shared session** — one tab serialised into a link.
 
 Sense 4 is a tab serialised; senses 3 and 4 are what the durable and saved
-[workspaces](#workspace) exist for. There is **no such thing as a session file**: a `.metacooler.json`
+[workspaces](#workspace) exist for. There is **no such thing as a session file**: a `.chromosomix.json`
 is a [workspace file](#workspace-file) and holds every tab. The demo catalogue entries are
 **published workspaces**, each of one tab. And the reader never sees the word: every string on screen
 says *tab* (§5.6, §26.4).
@@ -1178,6 +1178,26 @@ Both are permanent. The qualifier is load-bearing.
    [bin space](#bin-space) counts in.
 2. **a bin of an assembly** — a MAG, the output of *binning* a metagenome's contigs: the sense of
    `__unbinned__`, of the Binning QC card and of the contig → MAG table (§7.4, §27.10).
+
+### metacooler
+
+The app is **chromosomix**. Until the rename it was metacooler.js, with the mark *(meta)cooler*, and
+the word has kept two senses, neither of them the app:
+
+1. **metacooler** — a separate project: the Python package and CLI that write `.metacool` files
+   (`metacooler create`, `metacooler show`, `metacooler.schema`). Every `metacooler` in prose, in an
+   error's advice or in a test is this one. `METACOOLER_PYTHON` is the interpreter that has it
+   installed, for the fixtures.
+2. **`MetaCooler`** — the reader's class (`src/metacooler/MetaCooler.ts`), with
+   `parseMetacoolerRange` and `MetaCoolerFormatError` beside it: named for sense 1 because they
+   mirror its API name for name (§6), and they read every contact map — a `.cool`, a `.hic`, a
+   `.pairs` — not only a metacool.
+
+**metacool** is the format alone — `.metacool` and `.mmetacool`, a dev feature (§29) — and the
+`metacooler-format` attributes are the format's own, written into every such file. The app's own
+names are `chromosomix` — in code type, the command line (§23), which shares the app's name —
+`.chromosomix.json`, `chromosomix.workspace`, `chromosomix.store` and the `chromosomix:` storage
+keys; each was spelled `metacooler…` before the rename, and nothing reads the old spellings.
 
 ---
 

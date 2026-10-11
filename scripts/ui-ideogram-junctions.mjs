@@ -38,7 +38,7 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const HUMAN = `${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.metacooler.json`
+const HUMAN = `${BASE}/?config=${BASE}/demo/human/Human_chrX_RNA.chromosomix.json`
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
@@ -293,7 +293,7 @@ try {
   // -------------------------------------------------------------------------
   // Yeast: the karyotype and the junctions beside a map
   // -------------------------------------------------------------------------
-  const session = JSON.parse(readFileSync('demo/yeast/Yeast_microC.metacooler.json', 'utf8'))
+  const session = JSON.parse(readFileSync('demo/yeast/Yeast_microC.chromosomix.json', 'utf8'))
   const tab = session.tabs[0]
   const lane = (id, kind, label, file, colour, size, placement) => ({
     id, card: 'linear', kind, label,
@@ -307,7 +307,7 @@ try {
     lane('gallery-junctions', 'junctions', 'junctions', 'Yeast_RNA_junctions.SJ.out.tab', '#0072b2', 70, { top: false, right: true, bottom: true, left: false }),
   ]
   tab.state.region = 'IV:250000-650000'
-  const probe = 'demo/yeast/_gallery-ideogram.metacooler.json'
+  const probe = 'demo/yeast/_gallery-ideogram.chromosomix.json'
   writeFileSync(probe, JSON.stringify(session))
   try {
     page = await fresh()

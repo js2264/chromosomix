@@ -395,7 +395,7 @@ export class LocalFileSource implements ByteSource {
 
   private mountTarget(): string {
     const safe = this.id.replace(/[^A-Za-z0-9._-]+/g, '_').slice(-100)
-    const leaf = `metacooler-viewer-${nextId()}-${safe}`
+    const leaf = `chromosomix-${nextId()}-${safe}`
     if (!isNodeRuntime()) return `/${leaf}`
     // Under NODERAWFS a "mount" is a real file, so it needs a real writable
     // directory; MEMFS's root does not exist on the host filesystem.

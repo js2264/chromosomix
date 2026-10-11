@@ -15,7 +15,7 @@ const OUT = process.argv[2] ?? 'gallery'
 const g = await gallery(OUT)
 const { page, shot, text, history, mapBox, at, cellsOf, drag, openStage, openWithDev } = g
 
-await openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await sleep(8000)
 
 // A stretch of IV turned on the stage, and the stage closed on it.
@@ -48,7 +48,7 @@ const other = await g.browser.newContext({ viewport: { width: 1600, height: 1000
 const recipient = await other.newPage()
 recipient.on('pageerror', (e) => console.log('recipient error:', String(e)))
 await recipient.goto(`${g.base}/`)
-await recipient.evaluate(() => localStorage.setItem('metacooler-viewer:dev-features', 'on'))
+await recipient.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
 await recipient.goto(link)
 for (let i = 0; i < 60; i++) {
   await sleep(500)

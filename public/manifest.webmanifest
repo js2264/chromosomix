@@ -1,6 +1,6 @@
 {
-  "name": "(meta)cooler — cool files, in the browser",
-  "short_name": "(meta)cooler",
+  "name": "chromosomix — cool files, in the browser",
+  "short_name": "chromosomix",
   "description": "Browse Hi-C contact maps, genome tracks and 3D models. No backend, no upload, no preprocessing: files are read in place.",
   "start_url": "./",
   "scope": "./",

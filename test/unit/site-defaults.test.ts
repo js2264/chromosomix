@@ -40,9 +40,9 @@ describe('the site’s registrations', () => {
   })
 
   it('are not read from this browser’s storage, whatever an older build left there', () => {
-    window.localStorage.setItem('metacooler-viewer:google', '{"clientId":"mine.apps.googleusercontent.com"}')
-    window.localStorage.setItem('metacooler-viewer:dropbox', '{"appKey":"minekey"}')
-    window.localStorage.setItem('metacooler-viewer:access', '[{"id":"google-api-key","kind":"google-api-key","key":"AIzaMine"}]')
+    window.localStorage.setItem('chromosomix:google', '{"clientId":"mine.apps.googleusercontent.com"}')
+    window.localStorage.setItem('chromosomix:dropbox', '{"appKey":"minekey"}')
+    window.localStorage.setItem('chromosomix:access', '[{"id":"google-api-key","kind":"google-api-key","key":"AIzaMine"}]')
     expect(readClientId()).toBe('site-123.apps.googleusercontent.com')
     expect(readAppKey()).toBe('sitekey')
     expect(readApiKey()).toBe('AIzaSite')

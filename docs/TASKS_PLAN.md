@@ -33,7 +33,7 @@ already data rather than code:
 
 ```ts
 export const ANALYSIS_PANEL: SidePanelSpec = {
-  key: 'metacooler-viewer:analysis-collapsed',
+  key: 'chromosomix:analysis-collapsed',
   title: 'Analysis',
   side: 'right',
   order: 2,             // outside Aesthetics, which is 1

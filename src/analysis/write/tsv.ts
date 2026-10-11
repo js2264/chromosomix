@@ -164,7 +164,7 @@ function paramText(value: ParamValue): string {
 export function provenanceLines(provenance: Provenance): string[] {
   const { framing, params } = provenance
   const lines = [
-    `# metacooler ${cell(provenance.app)}`,
+    `# chromosomix ${cell(provenance.app)}`,
     `# created: ${cell(provenance.createdAt)}`,
     `# file: ${cell(framing.uri)}`,
     `# task: ${cell(provenance.task)} v${tsvNumber(provenance.taskVersion)}`,
@@ -549,7 +549,7 @@ export function combinedProvenanceLines(
 ): string[] {
   const head: string[] = []
   const app = maps[0]?.provenance.app
-  if (app !== undefined) head.push(`# metacooler ${cell(app)}`)
+  if (app !== undefined) head.push(`# chromosomix ${cell(app)}`)
   head.push(`# maps: ${tsvNumber(maps.length)}`)
   for (const map of maps) {
     head.push(`# map: ${cell(map.label)}`)

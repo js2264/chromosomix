@@ -20,7 +20,7 @@ const { page, shot, text, history } = g
 const files = join(OUT, 'files')
 mkdirSync(files, { recursive: true })
 
-await g.openWithDev(`?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.metacooler.json`)
+await g.openWithDev(`?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
 await sleep(9000)
 await shot('g01-genomes')
 

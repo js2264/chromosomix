@@ -288,10 +288,10 @@ async function look(label, go, { width = 1920, height = 1100, dark = false } = {
   await context.close()
 }
 
-const YEAST = `${BASE}/demo/yeast/Yeast_microC.metacooler.json`
-const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.metacooler.json`
-const DECK = `${BASE}/demo/yeast/Yeast_deck.metacooler.json`
-const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.metacooler.json`
+const YEAST = `${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
+const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`
+const DECK = `${BASE}/demo/yeast/Yeast_deck.chromosomix.json`
+const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`
 const openAll = async (page) => {
   for (const t of ['Fold or show the General', 'Fold or show the Annotations', 'Fold or show the Aesthetics', 'Fold or show the Analysis']) {
     for (const b of await page.$$(`button[title^="${t}"]`)) {

@@ -3,7 +3,7 @@
  * `copy CLI command`, beside `copy provenance`, on the run that just finished.
  *
  * `cli/main.ts` exists because clicking stops being the interface at the second
- * file. What it was missing was a way in: `metacooler-run tasks` prints the
+ * file. What it was missing was a way in: `chromosomix tasks` prints the
  * flags a task *takes*, which is a different question from what the reader just
  * did — so the twenty minutes of moving a window and nudging four numbers ended
  * in transcribing those numbers into a shell by eye, once per task. That is the
@@ -268,7 +268,7 @@ describe('the button', () => {
     await Promise.resolve()
     expect(copied).toHaveLength(1)
     const command = commandOf(copied[0])
-    expect(command).toContain('metacooler-run insulation yeast.mcool::resolutions/1000')
+    expect(command).toContain('chromosomix insulation yeast.mcool::resolutions/1000')
     expect(command).toContain('--window 10')
     // `--sequences`, where this read `--region chrIV`: insulation asks which
     // sequences to run on with the same tick boxes as compartments, and a list
@@ -322,7 +322,7 @@ describe('a task that reads a track', () => {
     await Promise.resolve()
     expect(copied).toHaveLength(1)
     const command = commandOf(copied[0])
-    expect(command.startsWith('metacooler-run metaplot yeast.mcool')).toBe(true)
+    expect(command.startsWith('chromosomix metaplot yeast.mcool')).toBe(true)
     expect(command).toContain('--tracks Yeast_ATAC.bw')
     expect(command).toContain('--features peaks.bed')
     view.destroy()
@@ -334,7 +334,7 @@ describe('a run with no contact map behind it', () => {
    * A 1D browser session (§5.8) has the bigWigs and not the map, so a result
    * there is framed against the assembly over a zero-wide extent. The command
    * used to open a contact map as its first argument and there was none here to
-   * name, so the button was greyed. `metacooler-run` runs a track task with no
+   * name, so the button was greyed. `chromosomix` runs a track task with no
    * positional now, and the line says so by having none.
    */
   const overlap = taskById('overlap') as AnalysisTask
@@ -346,7 +346,7 @@ describe('a run with no contact map behind it', () => {
     await Promise.resolve()
     expect(copied).toHaveLength(1)
     const command = commandOf(copied[0])
-    expect(command.startsWith('metacooler-run overlap')).toBe(true)
+    expect(command.startsWith('chromosomix overlap')).toBe(true)
     expect(command).not.toContain('yeast.mcool')
     view.destroy()
   })

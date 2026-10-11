@@ -59,7 +59,7 @@ export function registerServiceWorker(): void {
 
   window.addEventListener('load', () => {
     // Relative to the app's base, not to the origin: a site served from
-    // `/metacooler.js/` has its worker there too, and a worker registered at
+    // `/chromosomix/` has its worker there too, and a worker registered at
     // the root would claim a scope it has no business in.
     const url = `${import.meta.env.BASE_URL}sw.js`
     // `updateViaCache: 'none'` is what makes an update ever arrive. The browser
@@ -173,7 +173,7 @@ export async function takeNewestBuild(stuck: boolean): Promise<boolean> {
 }
 
 /** Where the one recovery attempt is remembered, so it cannot become a loop. */
-const RECOVERED = 'metacooler-viewer:unpinned'
+const RECOVERED = 'chromosomix:unpinned'
 
 /**
  * Undo a worker that answered an archived build's URL with the site's shell.

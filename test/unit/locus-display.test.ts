@@ -163,7 +163,7 @@ describe('the round trip', () => {
 })
 
 describe('a locus parameter, on its way to a runner (§18.2)', () => {
-  // The form, a result's provenance, a workspace and a `metacooler-run` line all
+  // The form, a result's provenance, a workspace and a `chromosomix` line all
   // hold the typed form; `runnerParams` is the one place it becomes cooler's
   // grammar. So the round trip for an analysis box is: the display form the box
   // is seeded or picked with, read as typed, handed over as the machine form —

@@ -55,7 +55,7 @@ import { landingRung } from '../metacooler/detect'
  * furniture. The About dialog states the same thing permanently, so dismissing
  * this removes the repetition rather than the disclosure.
  */
-const PRIVACY_DISMISSED = 'metacooler-viewer:privacy-dismissed'
+const PRIVACY_DISMISSED = 'chromosomix:privacy-dismissed'
 
 function privacyDismissed(): boolean {
   try {
@@ -147,7 +147,7 @@ export class FilePicker {
       el(
         'div',
         { class: 'picker-brand' },
-        el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: '(meta)cooler' })),
+        el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: 'chromosomix' })),
       ),
       el(
         'section',

@@ -27,7 +27,7 @@
 import { el } from './dom'
 import { icon } from './icons'
 
-const KEY = 'metacooler-viewer:recent-colours'
+const KEY = 'chromosomix:recent-colours'
 
 /** How many recent colours a picker offers — two rows of the popup's width. */
 export const RECENT_LIMIT = 16

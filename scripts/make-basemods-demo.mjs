@@ -305,7 +305,7 @@ const headerText =
   '@HD\tVN:1.6\tSO:coordinate\n' +
   refs.map((ref) => `@SQ\tSN:${ref.name}\tLN:${ref.length}\n`).join('') +
   '@RG\tID:sim\tSM:yeast_sim\tPL:ONT\n' +
-  '@PG\tID:make-basemods-demo\tPN:metacooler\tCL:node scripts/make-basemods-demo.mjs\n' +
+  '@PG\tID:make-basemods-demo\tPN:chromosomix\tCL:node scripts/make-basemods-demo.mjs\n' +
   '@CO\tSIMULATED reads and modification calls over S288c chrIV, for the base-modification demo only.\n'
 const head = [Buffer.from('BAM\x01', 'latin1')]
 {

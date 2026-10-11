@@ -21,7 +21,7 @@
 import { el } from './dom'
 import { iconButton } from './icons'
 
-const KEY = 'metacooler-viewer:text-scale'
+const KEY = 'chromosomix:text-scale'
 
 /**
  * The rungs, coarse enough that one press is a visible change.

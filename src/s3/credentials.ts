@@ -58,7 +58,7 @@
 import { forgetSigningKey, type S3Credential } from './sigv4'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 
-const KEY = 'metacooler-viewer:buckets'
+const KEY = 'chromosomix:buckets'
 
 /** One bucket prefix, and the credential that reads it. */
 export interface BucketScope {

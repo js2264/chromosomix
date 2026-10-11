@@ -36,7 +36,7 @@ export interface TurnBox {
   height: number | null
 }
 
-const KEY = 'metacooler-viewer:turn-box'
+const KEY = 'chromosomix:turn-box'
 
 const EMPTY: TurnBox = { width: null, height: null }
 

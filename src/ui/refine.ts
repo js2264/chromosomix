@@ -640,7 +640,7 @@ function isAbort(err: unknown): boolean {
  * that. Two people following one link see the same data; one of them may see it
  * sharpen.
  */
-const REFINE_KEY = 'metacooler-viewer:refine'
+const REFINE_KEY = 'chromosomix:refine'
 
 /**
  * Off.

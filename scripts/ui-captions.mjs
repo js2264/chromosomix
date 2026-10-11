@@ -86,7 +86,7 @@ const saveAs = async (name) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(4000)
   await fold('Fold the General panel')
@@ -143,7 +143,7 @@ try {
   await page.close()
   page = await context.newPage()
   page.on('pageerror', (e) => errors.push(String(e)))
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelector('.browser-canvas') !== null, null, { timeout: 120000 })
   await sleep(5000)
   await fold('Show the Aesthetics panel')

@@ -46,7 +46,7 @@ const crop = async (name) => {
 
 const swatch = (label) => page.locator(`.ann-swatch[title="Colour for ${label}"]`).first()
 
-await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(9000)
 await page.locator('button[title^="Show the Annotations panel"]').first().click()

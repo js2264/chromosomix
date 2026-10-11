@@ -18,8 +18,8 @@
  *
  * **The base is relative.** An archived build knows exactly where it will be
  * served from — its base contains a commit hash — and bakes absolute asset URLs
- * accordingly. This build knows nothing: `/vendor/metacooler/0.12.0/` on one
- * site, `/npm/metacooler-viewer@0.12.0/dist/` on a CDN, `/viewer/` on the next.
+ * accordingly. This build knows nothing: `/vendor/chromosomix/0.12.0/` on one
+ * site, `/npm/chromosomix@0.12.0/dist/` on a CDN, `/viewer/` on the next.
  * `./` is the honest answer, and it is also the *only* one that lets one
  * published tarball serve all three without a rebuild per host.
  *
@@ -71,7 +71,7 @@ export default defineConfig({
   // every mount that is not the site root, which is all of them.
   base: './',
   publicDir: false,
-  plugins: [stripPwaTags(), shellIcon('metacooler-package-shell-icon')],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-package-shell-icon')],
   build: {
     ...base.build,
     emptyOutDir: true,

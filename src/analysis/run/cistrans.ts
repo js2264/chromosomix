@@ -48,7 +48,7 @@ export const runCisTrans: TaskRunner = async (job) => {
   const accumulator = new SequenceContactAccumulator(mc.nContigs)
 
   // Unanswered is every sequence and an empty list is nothing (§18.2): a run
-  // that never met a form — a stored session, a `metacooler-run` line with no
+  // that never met a form — a stored session, a `chromosomix` line with no
   // `--sequences` — is the whole file, and a reader who pressed **none** is
   // told so rather than handed a whole-file answer. The estimate refuses that
   // run before it is sent; this is what one that arrives anyway hears, and it

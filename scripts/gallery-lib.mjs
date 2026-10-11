@@ -104,7 +104,7 @@ export async function gallery(out, { width = 1600, height = 1000 } = {}) {
   async function openWithDev(path) {
     await page.goto(`${base}/`)
     await page.evaluate(() => {
-      localStorage.setItem('metacooler-viewer:dev-features', 'on')
+      localStorage.setItem('chromosomix:dev-features', 'on')
       sessionStorage.clear()
       for (const key of Object.keys(localStorage)) if (key.includes(':map:edit')) localStorage.removeItem(key)
     })

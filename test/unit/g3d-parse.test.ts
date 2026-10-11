@@ -574,7 +574,7 @@ describe('a structure written out (§25.7)', () => {
     expect(set.model?.haplotypes).toEqual(['shared'])
     const text = writeBed3d(set, { label: '3D model · chrI', file: 'chrI at 5 kb' })
     const lines = text.trimEnd().split('\n')
-    expect(lines[0]).toMatch(/^# metacooler 3D model · chrI from chrI at 5 kb · bed3d: chrom start end x y z$/)
+    expect(lines[0]).toMatch(/^# chromosomix 3D model · chrI from chrI at 5 kb · bed3d: chrom start end x y z$/)
     expect(lines).toHaveLength(4)
     expect(lines.slice(1)).toEqual([
       'chrII\t0\t5000\t0.5\t-1.25\t2',

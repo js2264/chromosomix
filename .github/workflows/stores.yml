@@ -19,7 +19,7 @@ name: Stores
 # each; `test/dom/builtin-stores.test.ts` checks the two lists still agree.
 #
 # Three session stores come with them. A pre-configured session is a store row of
-# `kind: "workspace"` (§24.1) pointing at a `.metacooler.json` this workflow
+# `kind: "workspace"` (§24.1) pointing at a `.chromosomix.json` this workflow
 # also writes — IGV's hg38 as its FASTA with its tracks placed, a 4DN
 # experiment set as its map with its bigWigs on it — which is the *one click
 # and it is on screen* answer that three rows in a table is not.
@@ -66,7 +66,7 @@ name: Stores
 #   dnazoo.json                DNA Zoo's assemblies and maps, a directory a species
 #   encode-<assembly>-<kind>.json   twelve ENCODE shards
 #   <front>-sessions.json      the three session shelves
-#   sessions/*.metacooler.json the sessions those shelves name
+#   sessions/*.chromosomix.json the sessions those shelves name
 #   index.json                 what is there, how many rows each has, and when
 #   archive/                   dated copies of index.json and the small stores
 on:
@@ -183,7 +183,7 @@ jobs:
                   # `4dn-20260914.json` would be the same shelf listed twice.
                   continue
               store = json.loads(path.read_text(encoding="utf-8"))
-              if store.get("kind") != "metacooler.store":
+              if store.get("kind") != "chromosomix.store":
                   continue
               stores.append({
                   "id": path.stem,
@@ -193,7 +193,7 @@ jobs:
                   "bytes": path.stat().st_size,
                   "generatedAt": store["generatedAt"],
               })
-          sessions = sorted((out / "sessions").glob("*.metacooler.json"))
+          sessions = sorted((out / "sessions").glob("*.chromosomix.json"))
           now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
           index = {
               "generatedAt": now.isoformat().replace("+00:00", "Z"),
@@ -314,7 +314,7 @@ jobs:
             -not -name .git -not -name archive -exec rm -rf {} +
           cp out/*.json published/
           mkdir -p published/sessions
-          cp out/sessions/*.metacooler.json published/sessions/
+          cp out/sessions/*.chromosomix.json published/sessions/
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

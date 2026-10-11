@@ -10,7 +10,7 @@ The viewer, packaged as an installable application for macOS and Linux.
 
 **It is a delivery channel, not a second feature set.** It is the same bundle the website serves,
 running the same reader over the same files, and it opens exactly what the web app opens — no more.
-If you can reach <https://js2264.github.io/metacooler.js/>, you do not need this: the web app is
+If you can reach <https://js2264.github.io/chromosomix/>, you do not need this: the web app is
 complete on its own and requires no installation. This exists for machines that cannot reach it, or
 for people who would rather have an icon than a bookmark.
 
@@ -18,8 +18,8 @@ for people who would rather have an icon than a bookmark.
 
 ## What to download
 
-Artifacts are attached to each [release](https://github.com/js2264/metacooler.js/releases), named
-`metacooler-viewer-<version>-<os>-<arch>.<ext>`. They are built by CI from the release's own tag
+Artifacts are attached to each [release](https://github.com/js2264/chromosomix/releases), named
+`chromosomix-<version>-<os>-<arch>.<ext>`. They are built by CI from the release's own tag
 when the release is created, so what you download is what that tag builds — not something uploaded
 by hand from somebody's laptop.
 
@@ -46,7 +46,7 @@ developer account with Apple and a certificate authority for Windows, and neithe
 
 ### macOS
 
-> **"metacooler-viewer" cannot be opened because the developer cannot be verified.**
+> **"chromosomix" cannot be opened because the developer cannot be verified.**
 
 Either:
 
@@ -56,7 +56,7 @@ Either:
 - or, in a terminal:
 
   ```bash
-  xattr -d com.apple.quarantine /Applications/metacooler-viewer.app
+  xattr -d com.apple.quarantine /Applications/chromosomix.app
   ```
 
 ### Windows

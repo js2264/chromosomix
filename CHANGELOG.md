@@ -6,7 +6,7 @@ Notable changes to the viewer, newest first. The format follows
 contract** rather than a code API: a major bump is a `.metacool` the previous version could open and
 this one cannot, or a `#`-hash link that no longer resolves to the same view.
 
-The deployed site at <https://js2264.github.io/metacooler.js/> is built from `main` on every push, so
+The deployed site at <https://js2264.github.io/chromosomix/> is built from `main` on every push, so
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
@@ -30,10 +30,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **Run** prices the read — every base of the ticked sequences, in bytes, and over a network in
   requests — and a Stop is seen between two pieces.
 
-- **`metacooler-run` opens a `--sequence` by its index (§23.1, §8.21).** A FASTA with its `.fai`
-  beside it, or a `.2bit`, is read by range as the browser reads it, so a mammalian reference is a
-  reference from a shell: Node's `readFile` refuses a file past 2 GiB, which was every plain mouse
-  or human FASTA. One past it with no index is refused by a sentence naming `samtools faidx`.
+- **The `chromosomix` command opens a `--sequence` by its index (§23.1, §8.21).** A FASTA with its
+  `.fai` beside it, or a `.2bit`, is read by range as the browser reads it, so a mammalian reference
+  is a reference from a shell: Node's `readFile` refuses a file past 2 GiB, which was every plain
+  mouse or human FASTA. One past it with no index is refused by a sentence naming `samtools faidx`.
 
 - **Marks hidden and shown, one or all of them, on every map, track and model at once (§8.1).**
   Each row of the Manual annotations card has an eye, as a track's row does, and the list a heading,
@@ -143,7 +143,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   contact kept, and `N − T` more drawn from the boosted map within each sequence and from the file's
   own pixels between them. Every picture, pooled read and task reads the drawn map, balanced values
   stay on the file's scale, and the total is in the link (`contacts=`) and survives a navigation. A
-  task's framing and its console command say it (`--contacts N`, which `metacooler-run` takes with
+  task's framing and its console command say it (`--contacts N`, which `chromosomix` takes with
   the same parser and the same seed), and so does an exported figure's caption:
   `subsampled to 10,000,000 contacts (of 179,175,551)`. With two maps or more on screen — a deck,
   or a second file under the diagonal — two chevrons follow the box: down draws every map to the
@@ -166,7 +166,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a line. At 0.2 or above the Chromosomes table's box is ticked and a banner says so; the box's
   tooltip quotes the score. Once per file, and it only ever adds a tick, so an untick stands. A
   map opened over a 1D browser is marked on the Sequences card too, which read the tracks' file.
-  A shell asks the same with `metacooler-run circular <map>`: every sequence's length, score and
+  A shell asks the same with `chromosomix circular <map>`: every sequence's length, score and
   verdict as a table, the names to hand each later run of a batch as `--circular`.
 
   Each sequence is measured at the coarsest rung that still gives it a hundred bins, so on a large
@@ -174,7 +174,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Declared origins (§8.15).** A sequence's replication origin is kept per file like its circle,
   shown 1-based in a column of the Chromosomes table, carried in a workspace and in a run's
-  framing, and written as `--origin NAME:POS` on a `metacooler-run` line. It is typed into the
+  framing, and written as `--origin NAME:POS` on a `chromosomix` line. It is typed into the
   column as well as set by the task, and a task never overwrites one a reader brought. Every
   sequence has one: its first base, shown greyed, until another is set — so `arms` and every task
   that reads the arms read from it rather than refusing.
@@ -256,7 +256,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   *Signal by group* can split a track over light and dark bands. **A cytoBand declares the genome**:
   its bands tile every chromosome, so the file alone opens a browser at exact lengths (`lengths: the
   cytoBand's bands` on the Genome card), and one that does not tile gives the lower bound any feature
-  file does. Beside a map on any edge, in the browser, and read by `metacooler-run`.
+  file does. Beside a map on any edge, in the browser, and read by the `chromosomix` command.
 
 - **Bands in the locus box (§8.22).** Typing a band's ISCN name — `Xq13`, `chr8q24` — lists the bands
   of every loaded ideogram that start with it, under the gene model's hits, and Enter opens one, padded
@@ -329,7 +329,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   every candidate's curvature shows where the two populations part. Out come the peaks with their
   summits (BED on export), a table per sequence, the six thresholds with the peaks each keeps, and a
   row per peak on request. Reads every base in windows of 256 kb, so a genome is never held whole,
-  with no map needed, and runs from `metacooler-run peaks --signal … [--replicate …]`. Held to
+  with no map needed, and runs from `chromosomix peaks --signal … [--replicate …]`. Held to
   yapc's and IDR's own output on the demo data, region for region and cut for cut
   (`npm run fixtures:analysis -- --only yapc yapc_idr idr`, in the environment its script describes).
 
@@ -337,7 +337,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   feature set's intervals split by name, strand or score (A against B on a compartment call, with
   the rest of the genome as a group), or a track's bins cut by sign or into quantiles. Per group a
   summary and a violin; between groups Mann–Whitney and Kruskal–Wallis with effect sizes and
-  q-values; a row per feature on request. Runs with no map, and from `metacooler-run`.
+  q-values; a row per feature on request. Runs with no map, and from the `chromosomix` command.
 
   P and q are written in scientific notation where four places would print a zero, in the drawer and
   in an exported TSV alike (`6.5319e-22`).
@@ -348,7 +348,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **Lieberman-Aiden 2009**, the correlation of observed/expected decomposed, which is what every
   earlier version computed. cooltools' agrees with `cooltools.eigs_cis` to |r| = 1.000 on the zoo's
   maps, and skips the correlation, so a fine map takes seconds rather than minutes. A run by the
-  correlation says so in its label. `metacooler-run compartments --method correlation`;
+  correlation says so in its label. `chromosomix compartments --method correlation`;
   `scripts/dbz-store.sh` takes `COMPARTMENTS_METHOD`, the DBZ notebook `METHOD`.
 
 - **A `.pairs` for P(s)'s four orientations is dropped on the form, or chosen through it (§18.8).**
@@ -357,7 +357,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a map, behind the binning dialog. The *.pairs file* row is now the Tracks card's drop area, and
   pressing it opens the file picker; it takes a row dragged out of the Files column as well, and keeps
   the drop for itself. The file is read in the analysis worker for its records alone — nothing is
-  binned and no map changes — and its name is what the run records and what `metacooler-run
+  binned and no map changes — and its name is what the run records and what `chromosomix
   --pairsUri` is written with. The address box stays under the area for a file that is not on this
   computer, and replaces a dropped file when one is typed; a word that is not an address is refused
   under it rather than failing the run. A file is kept for the session, across the drawer's tasks,
@@ -677,7 +677,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   suite over every map straight into the folder that is published — framing each first by the
   junction test and, where a reference is found beside it, by its base composition and its origin —
   and `scripts/DBZ_store.py index` lists that folder in place; `notebooks/dbz-chromosome-figures.qmd`,
-  rendered with Quarto, draws one figure per species from the same `metacooler-run` commands and
+  rendered with Quarto, draws one figure per species from the same `chromosomix` commands and
   tabulates the numbers behind them, each with its test. It lives beside its data on the lab's
   bucket, so until it is uploaded the tile says that, not *run the workflow*. Its mark is drawn by the
   script that draws RSG's, over a bacterial map — a circle whose far corners are warm, with the X of
@@ -739,7 +739,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a table and as pairs. It reads no map, and says so where the drawer names what a result was run
   on. On the long-read assembly of the yeast whose chromosome XVI carries the *M. mycoides* genome,
   against the genome it was built to be, it draws the fused chromosome's four stretches as the
-  contigs that make them, in several seconds. `metacooler-run dotplot --sequence a.fa --sequence
+  contigs that make them, in several seconds. `chromosomix dotplot --sequence a.fa --sequence
   b.fa --x a.fa --y b.fa` runs the same. Not yet: a view of its own in the link, with the maps'
   tracks on its edges.
 
@@ -926,6 +926,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The app is chromosomix (§1, §23, §29.5).** It was metacooler.js, with the mark *(meta)cooler* —
+  named after metacooler, the Python CLI that writes `.metacool` files, which is a separate project
+  and whose format is a dev feature here (§29). The header, the landing page, the tab's title, the
+  install prompt, the desktop app's window and menu, and the producer a PDF, a workspace and an
+  exported edit record say **chromosomix**, and every name the app gives its own things moves with
+  it. None of the old spellings is read any more:
+  - **The command line is `chromosomix`, the app's own name**, where it was `metacooler-run`
+    (`dist-cli/chromosomix.mjs`, `npx chromosomix`), and the console writes its lines under that
+    name. Every table, BED, bed3d and console script the app or the command writes heads itself
+    `# chromosomix`, then the build: the version and the commit from the app, the version and
+    `cli` from the command.
+  - **A workspace is `workspace-<stamp>.chromosomix.json`, of `kind: "chromosomix.workspace"`, and a
+    store is `kind: "chromosomix.store"`.** A workspace, a store, a session file or a `#session=`
+    link written before is refused as not one. The demo workspaces are
+    `demo/**/*.chromosomix.json`, so the lab's bucket needs `scripts/publish-demo.sh` again, the DNA
+    Bacterial Zoo `scripts/dbz-store.sh`, and the 4DN and ENCODE shelves a run of the stores workflow.
+  - **What the browser keeps is under `chromosomix:`**, and in the IndexedDB database
+    `chromosomix`: the theme, the columns, connected folders and buckets, recent colours and every
+    other remembered setting start afresh.
+  - **An embedding page hears `chromosomix:ready` and `chromosomix:state`, and sends
+    `chromosomix:where` and `chromosomix:navigate` (§21.4).** A drag between the app's surfaces
+    carries `application/x-chromosomix-*`, and the desktop bridge is `window.chromosomixDesktop`.
+  - **The package is `chromosomix`**, the desktop app `chromosomix.app` (`io.github.js2264.chromosomix`),
+    the single file `chromosomix-<tag>.html`, and the site and repository
+    `js2264.github.io/chromosomix/` and `github.com/js2264/chromosomix`.
+
+  *metacooler* keeps its own meaning: the Python CLI and API (`metacooler create`, `metacooler show`),
+  the `metacooler-format` attributes a `.metacool` carries, and the reader that mirrors that API name
+  for name, `MetaCooler` (§6). `METACOOLER_PYTHON` still names the interpreter the fixtures are built
+  with.
+
 - **A called set is one row, and its display says where it is drawn (§18.7, §18.8).** Insulation's
   boundaries and domains — and every other set a task calls: DI's borders and domains, peaks, A/B
   segments, sites, origins, flagged contigs, loops — arrived as two rows each, an overlay on the map
@@ -1023,7 +1054,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Micro-C GSE151553 from GEO, two mouse ATAC-seq replicates (4DNFIIY4QW2D, 4DNFITBRHVZE) from 4DN, and
   UCSC's mm10 for GC phasing. Peak calling runs yapc's whole pipeline, IDR included, on the two
   replicates (chr19); HiCRep is held to `hicrep` alone; the 3D model runs its default 150 steps;
-  compartments leave chrY out of the comparison. The times table gives each `metacooler-run` command
+  compartments leave chrY out of the comparison. The times table gives each `chromosomix` command
   as a fold faster than its reference, and the text the mean of those folds. The prose is cut to what
   a reader of the results needs. Its reference scripts are files of their own in `notebooks/scripts/`,
   rather than strings it wrote out at render time.
@@ -1061,15 +1092,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   stop naming the format and its commands; *About* describes the viewer without it; the lab's store
   drops the mock community's figure and its two files; and the genomes table, the genome views and
   the metagenome tasks go with it, since only such a file reaches them. The page's description and
-  the install prompt's no longer name it. The name stays (meta)cooler. A `.metacool` 0.13.0 opened,
+  the install prompt's no longer name it. A `.metacool` 0.13.0 opened,
   or a link to one, now opens only in a browser with the switch on.
 
-- **`metacooler-run` reads a map balanced by default (§23.1).** Wherever the file carries weights,
-  as the app does — the framing and every task's *use balancing weights* alike — and `--no-balance`
-  reads the raw counts. `--balance` is refused with a pointer, since it asked for the default and a
-  command that forgot it ran on raw counts under a framing line that said *balanced*; coverage keeps
-  its own `--balance`, off by default. A copied command says `--no-balance` for an unbalanced run
-  and nothing for a balanced one.
+- **The `chromosomix` command reads a map balanced by default (§23.1).** Wherever the file carries
+  weights, as the app does — the framing and every task's *use balancing weights* alike — and
+  `--no-balance` reads the raw counts. `--balance` is refused with a pointer, since it asked for the
+  default and a command that forgot it ran on raw counts under a framing line that said *balanced*;
+  coverage keeps its own `--balance`, off by default. A copied command says `--no-balance` for an
+  unbalanced run and nothing for a balanced one.
 
 - **A file with several resolutions opens a third of the way up them, not at its finest (§3.6, §9).**
   An `.mcool` addressed at its root, a `.hic` named with no resolution and a zoomify ladder in an
@@ -1168,7 +1199,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The tasks are called *Compartments* and *Reproducibility* (§18.8).** The words in brackets,
   *eigenvectors* and *HiCRep*, named a method where every other title in the column names what is
-  measured, and §18 already called the two tasks so; `metacooler-run --help` lists them the same.
+  measured, and §18 already called the two tasks so; `chromosomix --help` lists them the same.
 
 - **Diamond insulation is cooltools' own, to the pixel (§18.8).** A bin's score is the mean of the
   valid cells of the square cornered on its diagonal pixel, over the median of its sequence, in log2 —
@@ -1668,7 +1699,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shared view still means what it meant.
 
 - **A locus on the command line is 1-based and inclusive, as every box in the app reads one (§26.1,
-  §23.1).** `metacooler-run --window`, every locus a task takes (`--anchor`, `--region`, `--locus`)
+  §23.1).** `chromosomix --window`, every locus a task takes (`--anchor`, `--region`, `--locus`)
   and a locus a workspace recorded that `replay` runs again are read as the display form and every
   spelling of it, digits grouped or not — `--window IV:1,000,001-1,400,000` — and the console and
   *copy CLI command* write `--window` that way, so a line copied out of the console names the window
@@ -1967,7 +1998,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   last crumb is now the window alone under the sequence's own crumb, instead of repeating the
   sequence name in a row that already had it and above a heading and a box printing the same string.
 
-- **The brand no longer empties the tab you press it from.** *(meta)cooler* is the way home and reads
+- **The brand no longer empties the tab you press it from.** *chromosomix* is the way home and reads
   as one, and it called the picker over the open session: the file let go of, the annotation worker
   stopped, a two-map deck and a comparison destroyed, with no confirmation and — for a dropped local
   file — no way back (§11, §21.3). It opens the picker in a **new tab**; a tab that is already empty
@@ -2021,7 +2052,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   defaults, labels, keys, refusals, cross-references, and what is built and what is not — and
   GLOSSARY.md gained the words this release brought: *circular*, *origin* and *arms*, *drawn to a
   total*, *eye* and *grip*, *ideogram*, *splice junction*, *the stage*, *the console* and more. The
-  README lists the command line's thirty-one tasks as `metacooler-run tasks` prints them, the stores
+  README lists the command line's thirty-one tasks as `chromosomix tasks` prints them, the stores
   this build ships, and the desktop builds a release attaches.
 
 - **The unassigned statistic states both of its numbers whole.** It read `unassigned: 12,818 contigs /
@@ -2097,7 +2128,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   one bin fewer for every sequence that does not end on a bin, so each sequence after the first was
   read a bin further out for each one before it. On the yeast and *M. pneumoniae* demo at 2 kb the
   mitochondrion was read five bins out, its tail and corner from the next sequence, and
-  `metacooler-run circular` failed on the file, its last sequence running past the end of the map.
+  `chromosomix circular` failed on the file, its last sequence running past the end of the map.
   Seven of thirty-two maps tried have levels written that way. Each sequence is now read at the
   extent the reader gives it.
 
@@ -2110,7 +2141,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rung read — over thirty-two maps no linear chromosome read with more was ticked — and a smaller
   circle read coarsely is left undecided, for the reader to tick: the yeast mitochondrion of the
   yeast and *M. pneumoniae* demo at its landing rung (43 bins at 2 kb), *E. coli* opened at
-  100 kb, and in `metacooler-run circular` at the zoo's 4 kb, a plasmid under 200 kb.
+  100 kb, and in `chromosomix circular` at the zoo's 4 kb, a plasmid under 200 kb.
 
 - **A linear chromosome is no longer read as circular on one stray read (§8.15).** The junction
   test took the median of three separations, and where the balancer had dropped an end it was the
@@ -2119,7 +2150,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   end with nothing on its own diagonal, and the map opened under *chrY reads as circular*. A
   separation now counts only where the junction has a cell and the diagonal has contacts at both
   ends, and a score needs two of the three; with fewer the sequence is left undecided, and
-  `metacooler-run circular` leaves its row empty. Over thirty-two maps the rule changes no
+  `chromosomix circular` leaves its row empty. Over thirty-two maps the rule changes no
   bacterial chromosome's or plasmid's verdict at any rung.
 
 - **A tab's note goes with its file (§5.6).** The bar under the tabs said what a tab had found out
@@ -2128,15 +2159,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   when the tab opens another file, goes back to the picker or closes, and waits while another tab
   is in front; another resolution of the same file keeps it, and the window's own notes stay.
 
-- **Both notebooks render again against this `metacooler-run` (§18.8, §18.10, §23.1).** The DBZ
-  figures read the inter-arm table's log2 `score`, which has since become its *enrichment*, a fold,
-  with *enrichment after detrend* beside it, and E1's share from a column cooltools' method now
-  writes as *of contacts*; and they handed compartments `--contacts cis`, which a shell reads as the
-  number of contacts to draw the map to, and refuses. Their check on the secondary diagonal is the
-  task's reading again — each distance's mean, in log2, from the origin out to the reach — and lands
-  on the table's two folds to the three decimals they are written to. The validation notebook took
-  one from the peak list's starts and summits, which are written 0-based now as yapc writes them,
-  and read the BED's `#` line as a peak, so no region matched yapc's.
+- **Both notebooks render again against this checkout's `chromosomix` command (§18.8, §18.10,
+  §23.1).** The DBZ figures read the inter-arm table's log2 `score`, which has since become its
+  *enrichment*, a fold, with *enrichment after detrend* beside it, and E1's share from a column
+  cooltools' method now writes as *of contacts*; and they handed compartments `--contacts cis`,
+  which a shell reads as the number of contacts to draw the map to, and refuses. Their check on the
+  secondary diagonal is the task's reading again — each distance's mean, in log2, from the origin
+  out to the reach — and lands on the table's two folds to the three decimals they are written to.
+  The validation notebook took one from the peak list's starts and summits, which are written
+  0-based now as yapc writes them, and read the BED's `#` line as a peak, so no region matched
+  yapc's.
 
 - **A bedMethyl lane names `e`, `g` and `b` as the SAM spec does (§8.20).** They were called 4mC,
   8oxoG and 4hmC; SAMtags §1.7 has them as 5fU, 5hmU and 5caU (8oxoG is `o`, and 4mC is ChEBI
@@ -2281,16 +2313,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   are skipped.
 
 - **A model's bed3d from the Structures card says when it was made (§25.7).** The card's button wrote
-  the model's name and framing and left the date off, where the drawer's button and `metacooler-run`
+  the model's name and framing and left the date off, where the drawer's button and `chromosomix`
   write the run's. It now asks the analysis workspace, which holds the run; a model loaded from a
   file was not made here and still carries no date.
 
-- **`metacooler-run` reads a genePred, an interact, a longrange, a GTF and a VCF as the app does
-  (§8.18, §8.19, §23.1).** `--features` asked four of the loader's sniffers and read everything else
-  as a BED: a genePred, a GTF and a VCF came out as no features at all, an interact as one box over
-  both anchors or a bedpe of the wrong columns, a longrange as a BED4 whose names were its arcs. It
-  now runs the loader's own sniffers and parsers in its order, and `--pairs` reads an interact or a
-  longrange as well as a bedpe.
+- **The `chromosomix` command reads a genePred, an interact, a longrange, a GTF and a VCF as the app
+  does (§8.18, §8.19, §23.1).** `--features` asked four of the loader's sniffers and read everything
+  else as a BED: a genePred, a GTF and a VCF came out as no features at all, an interact as one box
+  over both anchors or a bedpe of the wrong columns, a longrange as a BED4 whose names were its
+  arcs. It now runs the loader's own sniffers and parsers in its order, and `--pairs` reads an
+  interact or a longrange as well as a bedpe.
 
 - **A plain Run on a map binned from a `.pairs` is no longer refused (§3.7, §18.3).** The analysis
   worker opens the map for itself, and a contact list opened without the grid the reader chose is
@@ -2645,22 +2677,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   two hundred pixels short of the eight store tiles — with an accent bar down its edge making the
   ragged end unmissable. The sentence keeps its measure.
 
-- **`metacooler-run` reads a model back in as a structure.** A bed3d or text g3d under `--features`
-  is the structure *Spatial tracks* and *Model versus map* read, so a model the shell wrote can be
-  read as tracks in the same batch; it was read as a BED and refused as *not a structure*.
+- **The `chromosomix` command reads a model back in as a structure.** A bed3d or text g3d under
+  `--features` is the structure *Spatial tracks* and *Model versus map* read, so a model the shell
+  wrote can be read as tracks in the same batch; it was read as a BED and refused as *not a
+  structure*.
 
-- **`metacooler-run` names what it reads from a reference after the file.** *GC content · PAK.fa*
-  and *Origin and terminus · PAK.fa*, as the app names them after its entry; a reference named with
-  `--sequence` had no label, and every output read from one said *reference*.
+- **The `chromosomix` command names what it reads from a reference after the file.** *GC content ·
+  PAK.fa* and *Origin and terminus · PAK.fa*, as the app names them after its entry; a reference
+  named with `--sequence` had no label, and every output read from one said *reference*.
 
 - **An analysis run that was never asked which sequences reads every one of them.** Unanswered and
-  *none ticked* were one value, and on the command line only the first of them exists: `metacooler-run
+  *none ticked* were one value, and on the command line only the first of them exists: `chromosomix
   compartments sample.cool` — the README's own example — refused itself with *tick at least one
   sequence*, naming a control a shell has not got. Unanswered is now the whole file, which is the
   genome-wide compartment call that task exists for, and an empty list is still a reader who pressed
   **none** and is still refused.
 
-- **`metacooler-run reconstruct3d` writes the model rather than an empty BED (§25.7).** A model is
+- **`chromosomix reconstruct3d` writes the model rather than an empty BED (§25.7).** A model is
   an interval set whose rows carry three coordinates each, and the shell wrote every interval set as
   a BED6 — so a reconstruction run over a batch came out as `chrom start end region_1 0 .` per bin,
   which is the assembly handed back with the one thing the run computed dropped for want of a column

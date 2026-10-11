@@ -60,8 +60,8 @@ export function isShellAsset(fileName) {
 /**
  * The precache list, as URLs the browser will actually request.
  *
- * `base` is Vite's, so a site served from `/metacooler.js/` precaches
- * `/metacooler.js/assets/…` and not `/assets/…` — the second is what a
+ * `base` is Vite's, so a site served from `/chromosomix/` precaches
+ * `/chromosomix/assets/…` and not `/assets/…` — the second is what a
  * sub-path deployment 404s on, and a service worker that fails to install is
  * silent about it.
  *

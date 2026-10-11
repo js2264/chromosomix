@@ -26,7 +26,7 @@ import type { StoreRef } from './store'
 
 export type { StoreRef } from './store'
 
-const KEY = 'metacooler-viewer:stores'
+const KEY = 'chromosomix:stores'
 
 /** One remembered store: what to call it, and where it is. */
 export interface StoreRow {

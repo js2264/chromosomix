@@ -54,7 +54,7 @@ export default defineConfig({
   // before this one shipped. The pinned config had solved the same problem
   // privately; the plugin now lives in one place so the next config to switch
   // `publicDir` off inherits the fix instead of the bug.
-  plugins: [stripPwaTags(), shellIcon('metacooler-desktop-shell-icon')],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-desktop-shell-icon')],
   define: {
     ...base.define,
     __APP_TARGET__: JSON.stringify('desktop'),

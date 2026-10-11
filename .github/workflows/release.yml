@@ -186,7 +186,7 @@ jobs:
         with:
           # v4 refuses duplicate artifact names within one run, so the matrix id
           # is part of the name rather than a suffix someone might drop.
-          name: metacooler-viewer-${{ matrix.id }}
+          name: chromosomix-${{ matrix.id }}
           path: |
             release/*.dmg
             release/*.zip
@@ -239,11 +239,11 @@ jobs:
       - name: Name it for a download directory
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
-        run: mv dist-standalone/index.html "dist-standalone/metacooler-viewer-${TAG}.html"
+        run: mv dist-standalone/index.html "dist-standalone/chromosomix-${TAG}.html"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: metacooler-viewer-standalone
+          name: chromosomix-standalone
           path: dist-standalone/*.html
           if-no-files-found: error
           # The default is 9, and this one file compresses to about a fifth of
@@ -377,13 +377,13 @@ jobs:
           the exact click that gets past it. A signature says who published a
           build, not whether it works.
 
-          `metacooler-viewer-*.html` is the whole viewer as **one page you
+          `chromosomix-*.html` is the whole viewer as **one page you
           double-click** — no install, no server, nothing to trust. It opens
           files from your own disk only; remote URLs and the example datasets
           need the hosted app, because a page opened from a disk has no origin
           it is allowed to fetch from.
 
-          The web app at https://js2264.github.io/metacooler.js/ is the same
+          The web app at https://js2264.github.io/chromosomix/ is the same
           viewer and needs no installation.
           NOTE
 

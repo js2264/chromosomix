@@ -16,7 +16,7 @@ const OUT = process.argv[2] ?? 'gallery'
 const g = await gallery(OUT)
 const { page, shot, text, history, mapBox, cellsOf, openStage, openWithDev } = g
 
-await openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await sleep(8000)
 await openStage()
 

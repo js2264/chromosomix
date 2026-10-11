@@ -95,7 +95,7 @@ async function labStore() {
 
 // ── Off ────────────────────────────────────────────────────────────────────
 await page.goto(`${BASE}/`)
-await page.evaluate(() => localStorage.removeItem('metacooler-viewer:dev-features'))
+await page.evaluate(() => localStorage.removeItem('chromosomix:dev-features'))
 await landing()
 await labStore()
 let text = await words()
@@ -105,7 +105,6 @@ await landing()
 
 await about()
 text = await page.evaluate(() => document.querySelector('.about-body')?.innerText ?? '')
-// The repository's own address, `metacooler.js`, is the app's name, not the format's.
 console.log('off · About names .metacool:', /\.m?metacool\b|multi-genome/i.test(text))
 console.log('off · switch pressed:', await page.getAttribute('.about-dev .btn-switch', 'aria-pressed'))
 await shot('d02-about-off')
@@ -151,7 +150,7 @@ await landing()
 await about()
 await Promise.all([page.waitForEvent('load'), page.click('.about-dev .btn-switch')])
 await sleep(1500)
-console.log('back off · switch:', await page.evaluate(() => localStorage.getItem('metacooler-viewer:dev-features')))
+console.log('back off · switch:', await page.evaluate(() => localStorage.getItem('chromosomix:dev-features')))
 await shot('d08-landing-off-again')
 
 if (errors.length > 0) console.log('page errors:', errors)

@@ -105,7 +105,7 @@ export interface LoggedAction {
    * Whether {@link line} is a command a shell would take.
    *
    * `false` for everything that is a record of something the app did rather than
-   * something `metacooler-run` can be asked to do — an open, a track, an export.
+   * something the `chromosomix` command can be asked to do — an open, a track, an export.
    * Those lines are copied out as `#` comments, so a day pasted into a file is a
    * script that runs, with the rest of the afternoon around it as context.
    * Every run is `true`: the CLI takes every task in the catalogue
@@ -168,7 +168,7 @@ export interface ActionOutcome {
   detail?: readonly string[]
 }
 
-const KEY = 'metacooler-viewer:actions'
+const KEY = 'chromosomix:actions'
 const VERSION = 1
 
 /**

@@ -122,7 +122,7 @@ function aliasPage(tag, commit) {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>(meta)cooler ${tag}</title>
+    <title>chromosomix ${tag}</title>
     <meta name="robots" content="noindex" />
     <!--
       Written by scripts/archive-versions.mjs — do not edit, and do not expect

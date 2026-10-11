@@ -1,10 +1,10 @@
 ## Store
 
 ```sh
-repo=~/Documents/Koszul/__Bioinfo/repos/metacooler.js
+repo=~/Documents/Koszul/__Bioinfo/repos/chromosomix
 cd ${repo}
 
-# The metacooler-run the suite drives, built from this checkout.
+# The chromosomix command the suite drives, built from this checkout.
 npm run build:cli
 
 # Every map of scripts/DBZ_species.tsv, and its reference, found at any depth under
@@ -31,7 +31,7 @@ aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delet
 
 `notebooks/dbz-chromosome-figures.qmd` draws one figure per species of the store — the longest
 chromosome from its origin to its compartments, with the inter-arm alignment of every species beside
-it — running `metacooler-run` over each map and parsing what it writes, and writes the numbers the
+it — running `chromosomix` over each map and parsing what it writes, and writes the numbers the
 text quotes, each with its test, to `notebooks/figures/numbers.tsv`. It reads the published store by
 default; set `STORE` in its settings chunk to `~/Downloads/metacooler/data/dbz/store` to read the
 folder the suite wrote instead.

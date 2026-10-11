@@ -1,6 +1,6 @@
 # IMPLEMENTATION.md
 
-Build plan for `metacooler-viewer`, implementing `metacooler-web-app-spec.md`.
+Build plan for `chromosomix`, implementing `metacooler-web-app-spec.md`.
 
 ---
 
@@ -65,7 +65,7 @@ Carried from the spec's constraints; every one of these is a review criterion, n
 ## 2. Repository layout
 
 ```
-metacooler-viewer/
+chromosomix/
 ├── src/
 │   ├── uri.ts                   # parseUri — mirrors metacooler.uri
 │   ├── sources/

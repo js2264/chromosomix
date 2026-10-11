@@ -29,7 +29,7 @@ const state = () =>
     return `${window || '?'} · lock ${toggle?.getAttribute('aria-pressed') ?? 'none'}`
   })
 
-await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(8000)
 const box = await page.locator('.heatmap-canvas').first().boundingBox()

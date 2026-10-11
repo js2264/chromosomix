@@ -283,7 +283,7 @@ describe('the scope it writes to', () => {
 describe('what comes out of storage is untrusted', () => {
   it('reads nothing at all out of a value that is not a record of records', () => {
     window.sessionStorage.setItem(
-      `metacooler-viewer:ui:${URI}:${ANALYSIS_SCOPE}`,
+      `chromosomix:ui:${URI}:${ANALYSIS_SCOPE}`,
       JSON.stringify([1, 2, 3]),
     )
     expect(readAnalysisMemory(URI)).toEqual({})
@@ -294,7 +294,7 @@ describe('what comes out of storage is untrusted', () => {
 
   it('keeps the entries that are records and drops the ones that are not', () => {
     window.sessionStorage.setItem(
-      `metacooler-viewer:ui:${URI}:${ANALYSIS_SCOPE}`,
+      `chromosomix:ui:${URI}:${ANALYSIS_SCOPE}`,
       JSON.stringify({ insulation: { window: 7000 }, ps: 'nonsense' }),
     )
     expect(Object.keys(readAnalysisMemory(URI))).toEqual(['insulation'])

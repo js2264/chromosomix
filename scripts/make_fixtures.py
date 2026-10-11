@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build the metacooler-viewer test fixtures.
+"""Build the chromosomix test fixtures.
 
 Run with the interpreter that has metacooler installed::
 

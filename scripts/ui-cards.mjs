@@ -111,9 +111,9 @@ const openDemo = async (config) => {
 }
 
 try {
-  await openDemo('Yeast_microC.metacooler.json')
-  await page.evaluate(() => localStorage.removeItem('metacooler-viewer:card-layout'))
-  await openDemo('Yeast_microC.metacooler.json')
+  await openDemo('Yeast_microC.chromosomix.json')
+  await page.evaluate(() => localStorage.removeItem('chromosomix:card-layout'))
+  await openDemo('Yeast_microC.chromosomix.json')
   await fold('Show the Annotations panel')
   await log('as built')
 
@@ -133,7 +133,7 @@ try {
   await page.locator('button', { hasText: /3×/ }).first().click()
   await sleep(3500)
   await log('after a zoom')
-  await openDemo('Yeast_microC.metacooler.json')
+  await openDemo('Yeast_microC.chromosomix.json')
   await log('after a reload')
   await shot('c4-after-reload')
 
@@ -184,7 +184,7 @@ try {
   await page.keyboard.press('Enter')
   await sleep(1200)
   await log('reset')
-  console.log('stored after reset:', await page.evaluate(() => localStorage.getItem('metacooler-viewer:card-layout')))
+  console.log('stored after reset:', await page.evaluate(() => localStorage.getItem('chromosomix:card-layout')))
   await shot('c7-reset')
 
   // Two maps: the Map card carried to General, then the companion starred —
@@ -192,7 +192,7 @@ try {
   // page of its own: a config opened over a window with tabs asks where it goes.
   await page.close()
   page = watch(await context.newPage())
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(4000)
   const mapCard = () =>
@@ -210,7 +210,7 @@ try {
   await page.locator('.deck-grid > .deck-panel.is-lead .deck-star').first().click()
   await sleep(1500)
   console.log('first map starred again:', JSON.stringify(await mapCard()))
-  await page.evaluate(() => localStorage.removeItem('metacooler-viewer:card-layout'))
+  await page.evaluate(() => localStorage.removeItem('chromosomix:card-layout'))
 
   console.log(errors.length === 0 ? 'no page errors' : `page errors:\n${errors.join('\n')}`)
 } finally {

@@ -17,7 +17,7 @@ const OUT = process.argv[2] ?? 'gallery'
 const g = await gallery(OUT)
 const { page, shot, text, openStage, openWithDev, settled, suggestions } = g
 
-await openWithDev(`?config=${g.base}/out/scrambled/Scrambled.metacooler.json`)
+await openWithDev(`?config=${g.base}/out/scrambled/Scrambled.chromosomix.json`)
 await sleep(6000)
 await openStage()
 

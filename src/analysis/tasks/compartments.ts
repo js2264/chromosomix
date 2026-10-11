@@ -77,7 +77,7 @@ function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
  * anything that was not an array read as *nothing ticked*, which is right for
  * the form — it ticks every box on the way in, so `[]` there is a reader who
  * pressed **none** — and wrong for everything that does not go through a form.
- * `metacooler-run compartments file.cool` with no `--sequences` refused itself,
+ * `chromosomix compartments file.cool` with no `--sequences` refused itself,
  * naming a control the shell has not got, and the README's own example did it.
  * Unanswered is every sequence (§18.2), which is the genome-wide call this task
  * exists for.

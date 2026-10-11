@@ -18,12 +18,12 @@
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'io.github.js2264.metacooler-viewer',
-  // Not the manifest's parenthesised, em-dashed PWA name. This string becomes
+  appId: 'io.github.js2264.chromosomix',
+  // Not the manifest's em-dashed PWA name. This string becomes
   // the macOS `.app` bundle name and part of every artifact filename, and a
   // filename with an em dash in it is one users cannot type and shells quote
   // wrongly.
-  productName: 'metacooler-viewer',
+  productName: 'chromosomix',
   copyright: 'Copyright © 2026 Jacques Serizay',
 
   directories: {

@@ -153,7 +153,7 @@ const LUCIDE = [
   'arrow-up-right',
   // The console (§23), on the header and on its own heading. A prompt with a
   // caret and a line beside it, because what that panel holds is the commands
-  // that would repeat the day — the same thing `metacooler-run` is typed into,
+  // that would repeat the day — the same thing a `chromosomix` command is typed into,
   // which is the association the mark has to make in one glance at 15 px.
   'terminal',
   // The stores (§24): the header's toggle for the drawer, and the matrix mode

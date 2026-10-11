@@ -109,7 +109,7 @@ const goTo = async (locus) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`)
   // The lanes are drawn on a canvas, so what the page says in text is the tab's
   // name and the sequences card, and the lanes are given time to draw.
   await page.waitForFunction(() => (document.body.innerText ?? '').includes('Yeast, no map'), null, { timeout: 180000 })

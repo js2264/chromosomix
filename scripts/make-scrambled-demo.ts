@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   }
   const bytes = await writeMcool(
     { header, rungs: RUNGS, tables, indexed: false, declaredRecords: null },
-    { about: { generatedBy: 'metacooler scripts/make-scrambled-demo', metadata: () => ({ scrambled: SCRAMBLE }) } },
+    { about: { generatedBy: 'chromosomix scripts/make-scrambled-demo', metadata: () => ({ scrambled: SCRAMBLE }) } },
   )
   if (bytes === null) throw new Error('cancelled')
   const data = new URL('../data/scrambled/', import.meta.url).pathname
@@ -70,10 +70,10 @@ async function main(): Promise<void> {
   const out = new URL('../out/scrambled/', import.meta.url).pathname
   mkdirSync(out, { recursive: true })
   writeFileSync(
-    `${out}Scrambled.metacooler.json`,
+    `${out}Scrambled.chromosomix.json`,
     JSON.stringify(
       {
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 1,
         createdAt: '2026-09-30T00:00:00.000Z',
         active: 0,

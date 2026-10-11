@@ -28,7 +28,7 @@ import { icon, type IconName } from './icons'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 
-const KEY = 'metacooler-viewer:theme'
+const KEY = 'chromosomix:theme'
 
 const ICON: Record<ThemeChoice, IconName> = {
   system: 'monitor',

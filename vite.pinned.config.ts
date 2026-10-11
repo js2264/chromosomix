@@ -85,7 +85,7 @@ export default defineConfig({
   ...base,
   base: PINNED_BASE,
   publicDir: false,
-  plugins: [stripPwaTags(), shellIcon('metacooler-pinned-shell-icon')],
+  plugins: [stripPwaTags(), shellIcon('chromosomix-pinned-shell-icon')],
   define: {
     ...base.define,
     // `__DEMO_BASE__` is deliberately *not* overridden. It used to be

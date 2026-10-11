@@ -183,7 +183,7 @@ export interface SidePanelSpec {
  * says so is the one with the branches on it.
  */
 export const FILES_PANEL: SidePanelSpec = {
-  key: 'metacooler-viewer:files-collapsed',
+  key: 'chromosomix:files-collapsed',
   title: 'Files',
   side: 'left',
   order: -3,
@@ -211,7 +211,7 @@ export const FILES_PANEL: SidePanelSpec = {
 export const GENERAL_PANEL: SidePanelSpec = {
   // The key predates the rename from "file info sidebar"; a stored fold is not
   // worth losing to make a string match a heading.
-  key: 'metacooler-viewer:sidebar-collapsed',
+  key: 'chromosomix:sidebar-collapsed',
   title: 'General',
   side: 'left',
   order: -2,
@@ -240,7 +240,7 @@ export const GENERAL_PANEL: SidePanelSpec = {
  * panel" to the reader but their tracks and overlays.
  */
 export const ANNOTATION_PANEL: SidePanelSpec = {
-  key: 'metacooler-viewer:annotations-collapsed',
+  key: 'chromosomix:annotations-collapsed',
   title: 'Annotations',
   side: 'left',
   order: -1,
@@ -271,7 +271,7 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
  * least while a reader is driving the picture.
  */
 export const ANALYSIS_PANEL: SidePanelSpec = {
-  key: 'metacooler-viewer:analysis-collapsed',
+  key: 'chromosomix:analysis-collapsed',
   title: 'Analysis',
   side: 'right',
   order: 2,
@@ -296,7 +296,7 @@ export const ANALYSIS_PANEL: SidePanelSpec = {
  * controls, so the mark is the picture.
  */
 export const AESTHETICS_PANEL: SidePanelSpec = {
-  key: 'metacooler-viewer:aesthetics-collapsed',
+  key: 'chromosomix:aesthetics-collapsed',
   title: 'Aesthetics',
   side: 'right',
   order: 1,

@@ -189,7 +189,7 @@ describe('the stanza format', () => {
 describe('reading the three files', () => {
   it('recognises a hub by its content, not its name', () => {
     expect(looksLikeHub(HUB_TXT)).toBe(true)
-    expect(looksLikeHub('{"kind":"metacooler.store"}')).toBe(false)
+    expect(looksLikeHub('{"kind":"chromosomix.store"}')).toBe(false)
     expect(looksLikeHub(HG38_TRACKDB)).toBe(false)
     expect(looksLikeHubUrl(HUB_URL)).toBe(true)
     expect(looksLikeHubUrl('https://lab.example.org/store.json')).toBe(false)
@@ -715,7 +715,7 @@ describe('the demo hub', () => {
   it('reads as an assembly hub over the demo data', async () => {
     const store = await readHub(at, await read(at) as string, read)
     expect(store).not.toBeNull()
-    expect(store!.name).toBe('metacooler demo')
+    expect(store!.name).toBe('chromosomix demo')
     expect(store!.description).toContain('1 assembly')
     // Nothing refused: every track in it is a type this viewer draws.
     expect(store!.description).not.toContain('not offered')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Export golden oracles for the metacooler-viewer test suite.
+"""Export golden oracles for the chromosomix test suite.
 
 Run with the interpreter that has metacooler installed, *after*
 ``make_fixtures.py``::

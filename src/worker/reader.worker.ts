@@ -527,9 +527,9 @@ async function handleExportLifted(id: number, edit: ReferenceEdit): Promise<Lift
     {
       ...hooks,
       about: {
-        generatedBy: `metacooler-viewer ${VERSION} (lifted through an edit of the reference; unbalanced)`,
+        generatedBy: `chromosomix ${VERSION} (lifted through an edit of the reference; unbalanced)`,
         metadata: (table) => ({
-          'generated-by': `metacooler-viewer ${VERSION}`,
+          'generated-by': `chromosomix ${VERSION}`,
           'lifted-from': active.mc.uri,
           'lifted-through': edit.history.slice(0, edit.cursor).map((entry) => entry.step),
           'contacts-written': table.sum,

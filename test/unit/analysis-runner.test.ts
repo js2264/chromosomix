@@ -1262,7 +1262,7 @@ describe('the console record of a job', () => {
     expect(lines()[0].error).toContain('contact map')
     // The command is still there, written from the parameters the job was
     // queued with — which is the whole reason a failure is recorded at all.
-    expect(lines()[0].line).toContain('metacooler-run coverage')
+    expect(lines()[0].line).toContain('chromosomix coverage')
     runner.destroy()
   })
 
@@ -1309,12 +1309,12 @@ describe('the console record of a job', () => {
     runner.run(tracks, {})
     await settle()
     expect(lines()).toHaveLength(1)
-    // A command, with no map to open as its first argument: `metacooler-run`
+    // A command, with no map to open as its first argument: `chromosomix`
     // runs a track task with no positional, over what the tracks declare — so
     // the address is nowhere on the line, and the file's name is where the
     // framing is recorded.
     expect(lines()[0].shell).toBe(true)
-    expect(lines()[0].line.startsWith('metacooler-run trackcorr')).toBe(true)
+    expect(lines()[0].line.startsWith('chromosomix trackcorr')).toBe(true)
     expect(lines()[0].line).not.toContain('amazonaws.com')
     expect(lines()[0].line).not.toContain('Yeast_ATAC.bw')
     expect(lines()[0].detail.join('\n')).toContain(

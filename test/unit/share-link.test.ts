@@ -211,8 +211,8 @@ describe('reading a link', () => {
   })
 
   it('builds a link onto a page address, replacing any fragment already there', () => {
-    expect(shareUrl('https://js2264.github.io/metacooler.js/', 'PAY')).toBe(
-      'https://js2264.github.io/metacooler.js/#session=PAY',
+    expect(shareUrl('https://js2264.github.io/chromosomix/', 'PAY')).toBe(
+      'https://js2264.github.io/chromosomix/#session=PAY',
     )
     expect(shareUrl('https://x/y#uri=old', 'PAY')).toBe('https://x/y#session=PAY')
   })

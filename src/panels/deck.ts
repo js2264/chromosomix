@@ -570,7 +570,7 @@ export type GrowDirection = 'beside' | 'below'
  * different things, and a `dragover` that cannot tell them apart either
  * highlights a drop target for a track or refuses one for a map.
  */
-export const DECK_DRAG_TYPE = 'application/x-metacooler-deck-panel'
+export const DECK_DRAG_TYPE = 'application/x-chromosomix-deck-panel'
 
 /**
  * A deck's shape: how many cells it has, and how many of them are in a row.

@@ -34,7 +34,7 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const TRACKS = `${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`
+const TRACKS = `${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined

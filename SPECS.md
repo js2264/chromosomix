@@ -1,4 +1,4 @@
-# metacooler web viewer — specification
+# chromosomix — specification
 
 A viewer for Hi-C contact maps — `.cool`, `.mcool`, `.hic`, `.pairs`, `.scool` and HiC-Pro (§3, §9),
 and the `.metacool` it was first written for, now a dev feature (§29) — in a browser and as an
@@ -6,6 +6,12 @@ optional desktop application. No backend, no preprocessing, no additions to the 
 Nothing has to be installed to use it: the web app is complete on its own, and the desktop build is
 the same bundle packaged for machines that cannot reach it — it adds a distribution channel, never a
 requirement.
+
+**chromosomix** is this app, and `chromosomix` in code type is its command line, which shares the
+name. **metacooler** is another project — the Python package and CLI that write `.metacool` files —
+and every `metacooler` in this document is that one: its API, its commands (`metacooler create`,
+`metacooler show`) and its format attributes. The reader is a mirror of that API (§6), which is why
+its class keeps the name `MetaCooler` while it reads every container in §3.
 
 ---
 
@@ -741,7 +747,7 @@ cannot block a pan (§18.3) — and the two have to agree about what a file *is*
 reader grew this road and the analysis worker went on calling `MetaCooler.open`, so every task on a
 HiC-Pro pair reached HDF5 with a `.matrix` and failed inside it with `error - name not defined!`.
 The roads into a map now live in one module (`worker/open.ts`) that all three callers use — both
-workers and the `metacooler-run` CLI — so a third container cannot be added to one and forgotten in
+workers and the `chromosomix` CLI — so a third container cannot be added to one and forgotten in
 the others.
 
 **Correctness.** The fixtures are written *from a cooler* and the manifest carries cooler's own dense
@@ -1762,7 +1768,7 @@ without knowing. The analysis worker opens its own mount drawn to the same total
 reader's census rather than walking the file again, and a block the view holds is lent to a task
 only when the two were drawn alike (§18.3). A task's framing says the depth —
 `subsampled to 10,000,000 contacts (of 179,175,551)` — and its line in the console carries
-`--contacts 10000000`, which `metacooler-run` takes with the same parser and the same seed (§23). A
+`--contacts 10000000`, which `chromosomix` takes with the same parser and the same seed (§23). A
 figure says it in its caption (§7.2).
 
 **Two maps or more are drawn map by map**, each to the one total, each subsampled or oversampled as
@@ -4041,7 +4047,7 @@ separations to compare, it is left alone. **It only ever adds a tick, and
 only once per file**: the scores are kept with the declarations — the box's own
 tooltip quotes its sequence's — so a reader who unticks one is not overruled by
 the next open, and a file whose declarations arrived in a workspace is not
-measured at all. A shell asks the same question with `metacooler-run circular <map>` — the same
+measured at all. A shell asks the same question with `chromosomix circular <map>` — the same
 fifty sequences, three blocks, two of three separations, threshold and balancing, each read at the
 resolution the map is opened at rather than at a rung of its own — and is answered with a table of every
 sequence's length, score and verdict, whose `yes` rows are the names each later run of a batch is
@@ -4223,7 +4229,7 @@ ones. **Two hands write it and the difference is kept.** The *Origin and
 terminus* task (§18.8) fills it in for every sequence it places, and says so; a
 reader's own is **typed into the column** — 1-based, digits grouped or not, and
 emptied (or `0`) to go back to the first base — or comes in with a workspace or on
-a `metacooler-run` line's `--origin`, and a task never overwrites it — a reader
+a `chromosomix` line's `--origin`, and a task never overwrites it — a reader
 who has corrected a call knows something the skew did not — while a task's is
 replaced by the next run of the task, which is what running it again with other
 sites is for. A position past the sequence's end is refused in the box, which
@@ -6877,13 +6883,13 @@ a figure is opening the session and pressing Run.
 is the open map's resolution until the reader types another, and 10 kb where no map is open (§18.8).
 The form shows what that comes to on the file in front of it and follows a change of resolution,
 because the answer is still *the map's*; the run is handed the number itself, and its record, its
-command line and a replay carry that number. A `metacooler-run` line with no such flag gets the same
+command line and a replay carry that number. A `chromosomix` line with no such flag gets the same
 rule from the map it names, or 10 kb with none.
 
 **A locus parameter is in the typed form of §26.1** — 1-based and inclusive, digits grouped or not,
 `IV:1,000,001-1,400,000` — wherever it is held: in the form, in a result's provenance and the
 `# param` line above every export, in a workspace, in the line the console writes and on a
-`metacooler-run` command line, whether it was typed, seeded from the framing, picked off the map or
+`chromosomix` command line, whether it was typed, seeded from the framing, picked off the map or
 recorded in a run. It is read as every other locus box in the application reads one, by the same
 reader a few centimetres away, and its title says so in their words — *Coordinates are 1-based and
 inclusive, as IGV and samtools write them*, after *A sequence, or a sequence and a span* (and, with
@@ -6926,7 +6932,7 @@ tick boxes gives and *these three* is a third that a dropdown cannot express at 
 sit above the boxes, beside a count of how many are ticked, so every sequence is one press and one
 sequence is two. So every task whose question is *which sequences* takes the list, the answer is the
 names written out, and three answers are three answers — **unanswered is every sequence** (the form
-ticks them all, and a stored session or a `metacooler-run` line with no `--sequences` means the whole
+ticks them all, and a stored session or a `chromosomix` line with no `--sequences` means the whole
 file), **a subset is that subset**, and **nothing ticked is nothing to read**, which the estimate
 refuses rather than widening back into a genome-wide run. A ticked sequence this file has not got is
 named and left out, never silently dropped (§5.9). What stays a **locus** is what a list of names
@@ -6952,7 +6958,7 @@ an address is refused under the box, since no browser can open a bare name and t
 afterwards. A drop on the area is the area's: let through, the app would open the file as a map. A
 `File` is not a parameter value — a parameter set is posted, stored and printed, and a `File` survives
 only the first — so the value is the file's **name**, which is what the record, a table's header and the
-`metacooler-run` line carry, and the file itself is held beside the form for the session, across the
+`chromosomix` line carry, and the file itself is held beside the form for the session, across the
 drawer's tasks, and handed to the run while the value still names it. A name recalled after a reload,
 whose file is gone, empties the area rather than reaching the worker.
 
@@ -7490,7 +7496,7 @@ because a reader with no structure loaded has exactly one thing to do in it; *fi
 *peak calling* open the 1D card for the same reason, one making an interval set from the sequence and
 the other from a track. Five tasks are **dev features** (§29.3), absent rather than greyed while the
 switch is off and in every embed: the four metagenome tasks (`metacool`), and their card with them,
-and the 1D card's last, *Two sequences against each other* (`dotplot`); `metacooler-run` lists and
+and the 1D card's last, *Two sequences against each other* (`dotplot`); `chromosomix` lists and
 runs all thirty-one (§29.5). The 3D card's three — *Model from the map*, *Model versus map* and
 *Spatial tracks* — are specified beside the structures they make and read (§25.6), and the dot plot
 beside the view it draws (§28); every other task is below.
@@ -7993,7 +7999,7 @@ as a count of bins. A task nobody could run, whose settings did not work, duplic
 answer to*; anything with one right answer per file belongs to the file. **Balancing** is the case that
 settles the rule: a balanced cooler should be read balanced and a raw one has no weights to apply, so
 the tasks that read the matrix derive it from `hasWeights` and show no control (`--no-balance` on a
-`metacooler-run` line reads the raw counts) — it is still a parameter in every other sense, so the
+`chromosomix` line reads the raw counts) — it is still a parameter in every other sense, so the
 runners are unchanged and an exported TSV still says what the numbers were computed with.
 *Coverage and marginals* is the one exception and keeps *use balancing weights* as a tickbox,
 off: a balanced file should have a flat total, so the marginal drawn balanced is how a reader checks
@@ -8011,7 +8017,7 @@ run with nothing ticked, and — for the directionality index and the HiC score,
 a whole window or line — refuses one whose ticked sequences are all too short for it rather than
 reading them and reporting a column of gaps, where insulation scores even a sequence shorter than its
 window, from partial diamonds. **Unanswered** is every sequence, which is what a job that never met
-a form means — a stored session, or a `metacooler-run` line with no `--sequences`. *Cis and trans
+a form means — a stored session, or a `chromosomix` line with no `--sequences`. *Cis and trans
 per sequence* and *Reproducibility* take the same list and refuse an empty one in the same words,
 though the first reads the whole pixel table whatever is ticked and the list only narrows what it
 reports: both used to answer *none* with every sequence, which is the whole-file run nothing ticked
@@ -8491,7 +8497,7 @@ unit tests; the seeded grid that would report every scramble recovered or not is
 reports no variant, and the paragraph above stands for anything that would.
 
 **And, restating C1 because this is the section most likely to erode it:** no analysis runs anywhere but
-on the reader's own machine — in their browser, or in `metacooler-run` from their own shell, which
+on the reader's own machine — in their browser, or in `chromosomix` from their own shell, which
 runs the same tasks' own code. There is no compute service, no offloading of the expensive cases, and
 no "upload it and we'll do the scan". A task that could only be done on a server is a task this app
 does not have.
@@ -8646,12 +8652,12 @@ the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, a notebook at full size.** `notebooks/validation.qmd`, rendered with
 Quarto, runs eight analyses twice over public data, each file named by its accession (4DN, GEO) —
-once through `metacooler-run`, once through the package each reproduces, called as it is meant to be
+once through `chromosomix`, once through the package each reproduces, called as it is meant to be
 called and never re-implemented — and lines the two up bin by bin or call by call: insulation,
 compartments and P(s) against cooltools, the directionality index against `domaincaller`, peak
 calling with IDR on two replicates against yapc 0.1, loops against chromosight 1.6.3,
 reproducibility against `hicrep` 0.2.6, and the 3D model against pastis; and it times every command,
-giving each `metacooler-run` command's speed as a fold over its reference. It is a document, not a
+giving each `chromosomix` command's speed as a fold over its reference. It is a document, not a
 test: it needs the data (about 6 GB), the reference packages and yapc's own environment, and nothing
 in the suite runs it.
 
@@ -8986,7 +8992,7 @@ command line through a real worker. It skips with a named message where the brow
 `playwright-core` is absent, in the same way the fixture-dependent tests do.
 
 **Every release carries it.** The release workflow's `standalone` job builds it from the tag and
-attaches it to the release as `metacooler-viewer-<tag>.html` — a name that says what it is and
+attaches it to the release as `chromosomix-<tag>.html` — a name that says what it is and
 which version, in a downloads directory that already holds several `index.html`s.
 
 **Storage is shared with every other `file://` page on the machine**, because they are all one
@@ -9286,7 +9292,7 @@ Three seeds, in the order they override one another, and each is reached only be
 it said nothing: a **shared session** in the fragment (`#session=`, a workspace of one tab deflated
 into the URL); a **view state** in the fragment (`#uri=…`, which is what a navigation leaves behind,
 so it has to beat the `src=` or every reload would undo the reader's last click); and
-**`?config=<url>`**, a published `.metacooler.json` fetched and opened through
+**`?config=<url>`**, a published `.chromosomix.json` fetched and opened through
 `Session.openConfigUrl` — the same road the picker's own URL box takes, so a seeded session and a
 chosen one differ in nothing after the fetch.
 With none of the three, an embed is the file picker — its *Load files* alone (§21.2) — which is a
@@ -9389,9 +9395,9 @@ those four things would be asking a reader to trust a picture with no provenance
 ### 21.4 The channel
 
 An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
-messages (`app/EmbedChannel.ts`). Out: `metacooler:ready`, once, carrying the protocol version and
-the build and **nothing about the session**; and `metacooler:state`, the view state as the hash is
-written from. In: `metacooler:where`, answered with the state; and `metacooler:navigate`, a **patch**
+messages (`app/EmbedChannel.ts`). Out: `chromosomix:ready`, once, carrying the protocol version and
+the build and **nothing about the session**; and `chromosomix:state`, the view state as the hash is
+written from. In: `chromosomix:where`, answered with the state; and `chromosomix:navigate`, a **patch**
 laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
 in the state, a key sent as `null` is removed, and `state: null` is the picker.
 
@@ -9456,7 +9462,7 @@ is ~6 MB unpacked, 1.7 MB compressed.
 
 `files` is `dist/` and `dist-cli/`, and it is the whole of what stands between a publish and 250 MB of
 demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
-resolves inside the package — `npx metacooler-run` then works against a published version with no
+resolves inside the package — `npx chromosomix` then works against a published version with no
 clone, which is what makes `h5wasm`, `@gmod/bbi` and `generic-filehandle2` — the three the CLI's
 bundle leaves external — runtime dependencies rather than dev ones.
 
@@ -9528,7 +9534,7 @@ it. One function, two callers: a line in the console and a line on the clipboard
 **Every run is a command, and the shell takes every task.** For a while the CLI refused by name — the
 three tasks that read a bigWig, whose reader lived in the annotations worker alone; the one that reads
 a second map, which the deck supplies and a shell has no concept of; and any run made in a session
-with **no contact map**, since `metacooler-run` opened its first argument as one and a 1D browser
+with **no contact map**, since `chromosomix` opened its first argument as one and a 1D browser
 (§5.8) has none to name. Each refusal was honest, and each was recorded here as a sentence with the
 refusal under it, which is a record with holes in it exactly where the reader is least likely to
 look. So the shell gained what it was said not to have, each as the code the worker already runs:
@@ -9731,14 +9737,14 @@ one thing on this road that would need a server — a CORS proxy for a portal th
 
 ### 24.1 What a store is
 
-A **store** is a JSON file, `kind: "metacooler.store"`, on any CORS-enabled host: a catalogue of maps,
+A **store** is a JSON file, `kind: "chromosomix.store"`, on any CORS-enabled host: a catalogue of maps,
 genome files and workspaces with enough metadata to choose one **without opening any of them**,
 which is what §11 promised under the name "catalog" and GAPS G10 recorded as unbuilt.
 `state/store.ts` owns the shape, the parser and the resolver.
 
 ```json
 {
-  "kind": "metacooler.store", "version": 1,
+  "kind": "chromosomix.store", "version": 1,
   "name": "4DN open data", "description": "…", "generatedAt": "…", "source": "…",
   "base": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/",
   "columns": [{ "key": "assembly", "label": "Assembly" }, { "key": "biosource", "label": "Biosource" }],
@@ -9760,7 +9766,7 @@ Four rules carry most of the design:
   pushing it through `ConnectedFolder.list()` (§20), which would draw the flat folder of opaque
   accessions juicebox deliberately does not show. The two meet only at the exit: a picked row is a
   URI and a source, the same thing a folder row or the URL box hands over.
-- **A row may be a workspace.** `kind: "workspace"` names a `.metacooler.json`, opened through the
+- **A row may be a workspace.** `kind: "workspace"` names a `.chromosomix.json`, opened through the
   road `?config=` already takes (§21.1, `Session.openConfigUrl`), so a store can offer a *composed
   figure* — tracks placed, a group, a colour scale, the window the paper used — and not only a bare
   file. This is the difference between matching juicebox and passing it, and it costs the format one
@@ -10001,7 +10007,7 @@ why one table for all of them was the wrong shape and is gone:
   once a store has been read from it the portal front over it, headed by the store's own `name` and
   `description`, and *remember this store*. A remembered store is a tile of its own, drawn the
   same way, with *forget this store* on its page. Kept in `localStorage` under
-  `metacooler-viewer:stores`, named in the stored-data screen and swept by *forget everything*,
+  `chromosomix:stores`, named in the stored-data screen and swept by *forget everything*,
   exactly as a bucket entry is.
   A store whose file asks for cards (§24.1) gets the **genome gallery's cards** instead of the
   portal, from the file already read: one per value of its `group`, in the store's own order. The
@@ -10184,7 +10190,7 @@ would report it as *Nothing has been published for … yet*, which is the one fa
 a normal state. An unnamed assembly lands in `other`: a new assembly appearing at a portal must
 widen a shard, never vanish.
 
-**Pre-configured sessions.** A front end may also write session files — one `.metacooler.json` per
+**Pre-configured sessions.** A front end may also write session files — one `.chromosomix.json` per
 genome or per dataset, with the tracks placed — and a store of its own listing them as
 `kind: "workspace"` rows (§24.1), each naming its group (`dataset`). IGV's hg38 is a FASTA and a
 gene track, and offering those as two rows asks the reader to assemble what IGV had already
@@ -11454,7 +11460,7 @@ the analysis workspace, which holds the run, and a model loaded from a file, whi
 here, is written with no date. It is the file §25.2 reads, so it reads straight back here and in
 `g3dtools`.
 
-**That road includes the shell.** `metacooler-run reconstruct3d --out` writes the bed3d beside the
+**That road includes the shell.** `chromosomix reconstruct3d --out` writes the bed3d beside the
 TSV every output carries (§18.7), through this same writer — because the batch is where a model
 whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
 one task whose whole result is the three columns BED has nowhere to put.
@@ -11497,8 +11503,8 @@ confused:
 | Form | Grammar | Where it lives |
 |---|---|---|
 | **Machine** | cooler's: 0-based, half-open, ungrouped — `IV:1000000-1400000` | The session state, a map's `region` and `focus` in a `#`-hash link, `metacooler show --range`, every worker message, what a runner is handed, every file format that is 0-based by definition (BED, bedGraph, BEDPE) |
-| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips, the lines the console and `metacooler-run` write |
-| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box — a locus box, an analysis parameter (§18.2), a bookmark, a mark — or on a `metacooler-run` command line |
+| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips, the lines the console and `chromosomix` write |
+| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box — a locus box, an analysis parameter (§18.2), a bookmark, a mark — or on a `chromosomix` command line |
 
 One hash key is the exception: the 1D browser's `locus` is written in the display form — it is the
 browser's own box, carried in the address bar — and read back through the parser a typed locus goes
@@ -11515,7 +11521,7 @@ Ensembl and every paper print, and a viewer that showed a locus a base off from 
 `bedtools` output names would be wrong in the way that is hardest to notice and worst to find.
 
 **A command line is a box, and so is an analysis parameter.** Everything a reader types is read the
-same way, wherever they type it: `metacooler-run --window`, every locus a task takes on the command
+same way, wherever they type it: `chromosomix --window`, every locus a task takes on the command
 line (`--anchor`, `--region`, `--locus`), a locus a workspace recorded that `replay` runs again, and
 the analysis form's own locus boxes are the typed form, 1-based and inclusive with digits grouped or
 not; `--origin` already was. They are turned into the machine form at one boundary each — the shell's
@@ -12399,7 +12405,7 @@ The three modes are three answers to one question, **who presses accept**, on on
   touched, until none is left above it; a last pass tries each remaining stretch in every candidate
   position. Every application is a step marked `auto` with its evidence, undoable like any other.
 
-**`metacooler-run edit`** is auto mode from a shell — the same runner, the same threshold, `--weights`
+**`chromosomix edit`** is auto mode from a shell — the same runner, the same threshold, `--weights`
 for what review mode learned, `--from` for an AGP to start from — writing everything §27.8 lists to
 `--out`, and the console writes that line for every auto run on the stage.
 
@@ -12477,7 +12483,7 @@ it (`IV_e1:1,150,001 ← IV:1,250,000, turned`), or says the place is in a gap.
 
 ### 27.8 What comes out
 
-From the stage's export section and from `metacooler-run edit`, each a new file through the save
+From the stage's export section and from `chromosomix edit`, each a new file through the save
 dialog (§26.6), none of them touching the file that was opened:
 
 | File | From | Notes |
@@ -12674,7 +12680,7 @@ duplications, stretches set aside, sizes log-uniform from five bins to a fifth o
 the contacts re-binned exactly through it, and auto mode is run on the scramble. What it recovers is
 scored against the scramble's inverse: junction precision and recall, the distance of each breakpoint
 from the truth in bases, orientation, the N50 of correctly assembled stretches, and the steps a reader
-would still need. `metacooler-run edit --simulate` runs one scramble; `notebooks/validation.qmd`
+would still need. `chromosomix edit --simulate` runs one scramble; `notebooks/validation.qmd`
 runs the grid. A fixed small scramble of the yeast demo, recovered exactly, is a unit test.
 
 *Built*: maps simulated from a chosen law with Poisson noise, read through the picture's own pass and
@@ -12827,7 +12833,7 @@ under the plot along x, to its left along y, cut short with an ellipsis where it
 set's name along its axis. It is exported like every figure (§18.13), and always painted, never the
 chart of a small matrix, since a category axis cannot mark sequences end to end. The streaks it draws
 come out as a table (TSV) and as pairs (BEDPE, the way round in the name column), which the app reads
-back as an overlay. The command line runs the same task through the same runner — `metacooler-run
+back as an overlay. The command line runs the same task through the same runner — `chromosomix
 dotplot --sequence a.fa --sequence b.fa --x a.fa --y b.fa --out results/`, which is what the drawer's
 *copy CLI command* writes — and writes the density, the streaks and the pairs, their provenance of the
 sequences and not of a map.
@@ -12910,9 +12916,9 @@ never the reason a session is lost.
 
 - **Never in an embed** (§21): an embedded page has no *About*, and a host page is not a developer's
   browser.
-- **Not on the command line**: `metacooler-run` is a developer's tool, lists every task and runs every
+- **Not on the command line**: `chromosomix` is a developer's tool, lists every task and runs every
   one.
 - **Not in the static text** around the app — the page's title and description, the install
   prompt's name and description — which cannot follow a switch, so it names nothing that is dev:
-  *(meta)cooler – cool files, in the browser*, where both titles said *(multi-genome) cool files*.
-  The name stays **(meta)cooler**.
+  *chromosomix – cool files, in the browser*, where both titles once said *(multi-genome) cool
+  files*. The name is **chromosomix**.

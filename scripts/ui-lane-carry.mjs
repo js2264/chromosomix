@@ -139,7 +139,7 @@ const middle = async (selector) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .lane-canvas:not(.hidden)').length >= 1, null, { timeout: 120000 })
   await sleep(6000)
@@ -195,7 +195,7 @@ try {
     const zone = cell?.querySelector('.lane-drop-bottom')
     if (zone === null || zone === undefined) throw new Error('no bottom edge on the first map')
     const transfer = new DataTransfer()
-    transfer.setData('application/x-metacooler-track', 'demo-atac')
+    transfer.setData('application/x-chromosomix-track', 'demo-atac')
     for (const kind of ['dragenter', 'dragover', 'drop']) zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
   })
   await fold('Fold the Annotations panel')
@@ -215,7 +215,7 @@ try {
   // A row of the Structures card, dropped on a `+`.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(5000)
   await fold('Show the Annotations panel')
@@ -237,7 +237,7 @@ try {
     const id = row?.getAttribute('data-id') ?? ''
     if (grow === null || id === '') return ''
     const transfer = new DataTransfer()
-    transfer.setData('application/x-metacooler-structure', id)
+    transfer.setData('application/x-chromosomix-structure', id)
     for (const kind of ['dragenter', 'dragover', 'drop']) grow.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
     return id
   })
@@ -255,7 +255,7 @@ try {
   // tracks cell drawing it — the session's own edges, before there are cells.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.lane-canvas:not(.hidden)').length > 0, null, { timeout: 120000 })
   await sleep(6000)

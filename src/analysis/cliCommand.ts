@@ -6,7 +6,7 @@
  * `cli/main.ts` opens with the argument this file finishes: the panel computes
  * sixteen goldened things, and the moment a reader has two hundred files rather
  * than one, clicking stops being the interface. What that command needed was a
- * way in. `metacooler-run tasks` prints every flag a task takes, which answers
+ * way in. `chromosomix tasks` prints every flag a task takes, which answers
  * *what is possible* and not *what did I just do* — so the reader who has spent
  * twenty minutes moving a window and nudging four numbers until the picture is
  * right still has to transcribe those four numbers into a shell, from memory, by
@@ -102,7 +102,7 @@ export interface CliCommand {
  * Read rather than flagged because the flag would be a second way of saying the
  * same thing, and the two would eventually disagree about a framing neither of
  * them made. What it decides here is the **subject** of the line: a map is the
- * first argument, and a run with no map has none — `metacooler-run` takes a
+ * first argument, and a run with no map has none — `chromosomix` takes a
  * track task with no positional and runs it over what the tracks declare.
  */
 export function coversNoMatrix(framing: AnalysisFraming): boolean {
@@ -129,7 +129,7 @@ export interface CliCommandInput {
 }
 
 /** The command name, as `package.json` puts it on the PATH. */
-const COMMAND = 'metacooler-run'
+const COMMAND = 'chromosomix'
 
 /**
  * The score column a shell reads unless told otherwise.

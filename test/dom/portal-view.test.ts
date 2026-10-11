@@ -78,7 +78,7 @@ const FILE: StoreFile = {
 
 const SESSION: StoreEntry = {
   label: 'SET1 with its tracks',
-  uri: 'https://data.example/sessions/set1.metacooler.json',
+  uri: 'https://data.example/sessions/set1.chromosomix.json',
   kind: 'workspace',
   fields: { assembly: 'GRCh38', dataset: 'SET1', tracks: '2' },
 }

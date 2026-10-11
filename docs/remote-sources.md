@@ -6,7 +6,7 @@ with sessions ready to open. Everything measured here was measured on 2026-09-11
 hosts; the commands are in the [appendix](#appendix-how-the-measurements-were-taken).
 
 This is the design note the build was made from. **Since: built.** SPECS §24 is the specification
-that came out of it — the *hub* below, which shipped under the name **store** (`metacooler.store`,
+that came out of it — the *hub* below, which shipped under the name **store** (`chromosomix.store`,
 `?store=`) and with a drawer of its own (§24.2) in place of the table this note puts in the picker;
 the rewrite table; links that expire; credentials that are not a bucket key; live portal search
 (built, then withdrawn — see B below); Google sign-in; and past this note's own scope a Drive
@@ -345,7 +345,7 @@ what `DEMO` in `examples.ts` is, made into a file:
 
 ```json
 {
-  "kind": "metacooler.hub",
+  "kind": "chromosomix.hub",
   "version": 1,
   "name": "4DN open data — Hi-C and micro-C",
   "base": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/",
@@ -358,7 +358,7 @@ what `DEMO` in `examples.ts` is, made into a file:
       "size": 2191787975,
       "fields": { "assembly": "GRCh38", "biosource": "GM12878", "assay": "in situ Hi-C", "lab": "Dekker" },
       "note": "4DNESVKLYDOL",
-      "session": "sessions/4DNFIOKRZ21H.metacooler.json",
+      "session": "sessions/4DNFIOKRZ21H.chromosomix.json",
       "tracks": [{ "label": "CTCF ChIP", "url": "…/4DNFIK9NBYGJ.bw" }]
     }
   ]
@@ -377,7 +377,7 @@ what `DEMO` in `examples.ts` is, made into a file:
   rather than after the `HEAD`, and a table can warn about the 5 GB row before it is clicked.
 - **Entries carry relative names resolved against `base`**, as workspaces already do against their
   own URL, so a hub can be copied with its data.
-- **A hub entry may point at a session**, not only a file: `session` is a `.metacooler.json`,
+- **A hub entry may point at a session**, not only a file: `session` is a `.chromosomix.json`,
   opened through the `?config=` path that already exists. That is the "pre-configured session".
 - **Cost:** small-to-medium. A parser with a `ConfigRefusal`-style result, a picker section, a
   `?hub=` mounting parameter beside `?config=`, a `localStorage` row kind, tests. No worker
@@ -418,7 +418,7 @@ from the browser, shows the hits as a table (cell line, assay, lab, assembly), a
 The join that shape A needs — accession to cell line, assay, assembly, lab — is a script's job,
 not the browser's: a `scripts/make_hub.py` (the `make_catalog.py` M8 already promises, aimed at a
 portal rather than a bucket) that queries the portal API once, writes the hub of shape A, and
-optionally a `.metacooler.json` per map with a sensible landing view and the bigWigs the same
+optionally a `.chromosomix.json` per map with a sensible landing view and the bigWigs the same
 experiment set published beside it. Published to the lab bucket, it is a hub anybody can point
 `?hub=` at, and it needs no CORS from the portal at all.
 

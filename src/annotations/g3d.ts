@@ -561,7 +561,7 @@ export function writeBed3d(
   const what = context.label === undefined ? 'structure' : context.label
   const from = context.file === undefined ? '' : ` from ${context.file}`
   const when = context.created === undefined ? '' : ` on ${context.created}`
-  const lines = [`# metacooler ${what}${from}${when} · bed3d: chrom start end x y z${model !== undefined && model.haplotypes.length > 1 ? ' haplotype' : ''}`]
+  const lines = [`# chromosomix ${what}${from}${when} · bed3d: chrom start end x y z${model !== undefined && model.haplotypes.length > 1 ? ' haplotype' : ''}`]
   if (model === undefined) return lines.join('\n') + '\n'
   const phased = model.haplotypes.length > 1
   for (let i = 0; i < set.length; i++) {

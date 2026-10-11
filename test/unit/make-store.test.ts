@@ -192,7 +192,7 @@ function row(store: RawHub, accession: string): Record<string, unknown> | undefi
 
 beforeAll(() => {
   if (!havePython) return
-  out = mkdtempSync(join(tmpdir(), 'metacooler-store-'))
+  out = mkdtempSync(join(tmpdir(), 'chromosomix-store-'))
 })
 
 afterAll(() => {
@@ -207,7 +207,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
   })
 
   it('writes the Contract-1 envelope, with both sources in its provenance', () => {
-    expect(store.kind).toBe('metacooler.store')
+    expect(store.kind).toBe('chromosomix.store')
     expect(store.version).toBe(1)
     expect(store.name).toBe('4DN open data')
     expect(typeof store.description).toBe('string')
@@ -731,7 +731,7 @@ describe.skipIf(!havePython)('the IGV front end', () => {
   })
 
   it('writes the Contract-1 envelope and its own columns', () => {
-    expect(store.kind).toBe('metacooler.store')
+    expect(store.kind).toBe('chromosomix.store')
     expect(store.name).toBe('IGV genomes')
     expect(String(store.source)).toContain('igv.org.genomes/genomes.json')
     expect(store.columns?.map((column) => column.key)).toEqual([
@@ -920,13 +920,13 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // resolves them against each other rather than against the deployed site.
     expect(store.base).toBeUndefined()
     for (const entry of store.entries ?? []) {
-      expect(String(entry.uri)).toMatch(/^sessions\/[a-z0-9._-]+\.metacooler\.json$/)
+      expect(String(entry.uri)).toMatch(/^sessions\/[a-z0-9._-]+\.chromosomix\.json$/)
     }
   })
 
   it('places the sequence and every track of the genome, in IGV’s order', () => {
-    const pombe = session('igv-asm294v2.metacooler.json')
-    expect(pombe.kind).toBe('metacooler.workspace')
+    const pombe = session('igv-asm294v2.chromosomix.json')
+    expect(pombe.kind).toBe('chromosomix.workspace')
     expect(pombe.version).toBe(1)
     expect(pombe.active).toBe(0)
     expect(pombe.tabs).toHaveLength(1)
@@ -948,7 +948,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // `readTab` hands `tracks` through as `StoredEntry[]` without defaulting
     // anything, so a field left out here is a field the lane draws without.
     // The third lane: after the sequence and the karyotype, IGV's first track.
-    const track = session('igv-hs1.metacooler.json').tabs?.[0]?.tracks?.[2]
+    const track = session('igv-hs1.chromosomix.json').tabs?.[0]?.tracks?.[2]
     expect(track).toMatchObject({
       card: 'linear',
       kind: 'segments',
@@ -974,7 +974,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // `#index=` is the URL box's spelling and `source.index` is the session's
     // (`annotations/types.ts`): a session names its sidecar in the field the
     // loader reads, so the pair survives a resolution change.
-    const track = session('igv-saccer3_fixture.metacooler.json').tabs?.[0]?.tracks?.[1]
+    const track = session('igv-saccer3_fixture.chromosomix.json').tabs?.[0]?.tracks?.[1]
     expect((track?.source as Record<string, unknown>).index).toBe(
       'https://s3.amazonaws.com/igv.org.genomes/sacCer3/index/genes.tbi',
     )
@@ -985,7 +985,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // hg38's is UCSC's `cytoBandIdeo.txt.gz`; T2T's is a `.bed`, which read by
     // its name alone would be placed as a lane of peaks. The format IGV gives
     // it travels with the track, so both open as the lane they are (§8.22).
-    for (const name of ['igv-hg38.metacooler.json', 'igv-hs1.metacooler.json']) {
+    for (const name of ['igv-hg38.chromosomix.json', 'igv-hs1.chromosomix.json']) {
       const tracks = session(name).tabs?.[0]?.tracks ?? []
       expect(tracks.map((track) => track.kind).slice(0, 2), name).toEqual(['sequence', 'ideogram'])
       expect(tracks[1], name).toMatchObject({
@@ -995,7 +995,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
       })
     }
     // And a genome IGV gives no karyotype has none placed.
-    const pombe = session('igv-asm294v2.metacooler.json').tabs?.[0]?.tracks ?? []
+    const pombe = session('igv-asm294v2.chromosomix.json').tabs?.[0]?.tracks ?? []
     expect(pombe.map((track) => track.kind)).not.toContain('ideogram')
   })
 
@@ -1003,7 +1003,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // A session names its sidecar in the field the loader reads; for the
     // sequence that index is what the assembly is answered from (§8.8) —
     // without it a mammalian genome is read whole before the browser appears.
-    for (const name of ['igv-asm294v2.metacooler.json', 'igv-hg38.metacooler.json']) {
+    for (const name of ['igv-asm294v2.chromosomix.json', 'igv-hg38.chromosomix.json']) {
       const sequence = session(name).tabs?.[0]?.tracks?.[0]
       expect(sequence?.kind).toBe('sequence')
       const source = sequence?.source as Record<string, unknown>
@@ -1032,7 +1032,7 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // picking an experiment set means.
     expect(sessions.entries).toHaveLength(2)
     const held = JSON.parse(
-      readFileSync(join(out, 'sessions-4dn', '4dn-4dnesnmaan97-grch38.metacooler.json'), 'utf8'),
+      readFileSync(join(out, 'sessions-4dn', '4dn-4dnesnmaan97-grch38.chromosomix.json'), 'utf8'),
     ) as RawSession
     const tab = held.tabs?.[0]
     // A contact map opens on its genome list, which is the one view of a map
@@ -1389,7 +1389,7 @@ describe.skipIf(!havePython)('the bucket front end', () => {
       ['Yeast_hic.hic', 'map', 'Yeast_hic.hic'],
       ['Yeast_microC.pairs.gz', 'map', 'reads/Yeast_microC.pairs.gz'],
       ['Yeast_microC_G2M_1kb.mcool', 'map', 'Yeast_microC_G2M_1kb.mcool'],
-      ['Yeast_tracks.metacooler.json', 'workspace', 'Yeast_tracks.metacooler.json'],
+      ['Yeast_tracks.chromosomix.json', 'workspace', 'Yeast_tracks.chromosomix.json'],
     ])
     const text = JSON.stringify(store)
     // Two pairix indexes and the zero-byte key a console calls a folder.
@@ -1527,7 +1527,7 @@ describe.skipIf(!havePython)('--check', () => {
     const entries = [{ label: 'a', uri: 'a.mcool', kind: 'map', fields: { species: 'E_coli' } }]
     const write = (name: string, extra: Record<string, unknown>): string => {
       const target = join(out, name)
-      writeFileSync(target, JSON.stringify({ kind: 'metacooler.store', version: 1, name, columns: [], entries, ...extra }), 'utf8')
+      writeFileSync(target, JSON.stringify({ kind: 'chromosomix.store', version: 1, name, columns: [], entries, ...extra }), 'utf8')
       return target
     }
     const carousel = make('check', write('carousel.json', { layout: 'carousel' }))
@@ -1545,11 +1545,11 @@ describe.skipIf(!havePython)('--check', () => {
   })
 
   it('refuses a session the viewer would open with no lanes, or refuse outright', () => {
-    const path = join(out, 'broken.metacooler.json')
+    const path = join(out, 'broken.chromosomix.json')
     writeFileSync(
       path,
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 1,
         active: 4,
         tabs: [

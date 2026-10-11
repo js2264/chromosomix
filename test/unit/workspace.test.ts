@@ -318,7 +318,7 @@ describe('the workspace file', () => {
 
   it('carries every tab and remembers which was in front', () => {
     const file = written()
-    expect(file.kind).toBe('metacooler.workspace')
+    expect(file.kind).toBe('chromosomix.workspace')
     expect(file.tabs).toHaveLength(3)
     expect(file.tabs.map((tab) => tab.state.uri)).toEqual(['one.cool', 'two.cool', 'three.cool'])
     expect(file.active).toBe(1)
@@ -383,16 +383,16 @@ describe('the workspace file', () => {
 
     const newer = parseWorkspaceFile(
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: CONFIG_VERSION + 1,
-        producer: '(meta)cooler 9.9.9',
+        producer: 'chromosomix 9.9.9',
         active: 0,
         tabs: [{ state: { uri: 'a.cool' } }],
       }),
     )
     expect(newer).toMatchObject({ reason: 'newer', version: CONFIG_VERSION + 1 })
-    const message = refusalMessage(newer as ConfigRefusal, 'figure3.metacooler.json')
-    expect(message).toContain('(meta)cooler 9.9.9')
+    const message = refusalMessage(newer as ConfigRefusal, 'figure3.chromosomix.json')
+    expect(message).toContain('chromosomix 9.9.9')
     expect(message).toContain('Update the viewer')
   })
 
@@ -401,7 +401,7 @@ describe('the workspace file', () => {
     // reader loses what was actually lost and nothing more.
     const read = parseWorkspaceFile(
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: CONFIG_VERSION,
         active: 2,
         tabs: [{ state: { uri: 'good.cool' } }, { name: 'my-package' }, null, 'nope'],
@@ -420,7 +420,7 @@ describe('the workspace file', () => {
     // it would fill with a picker, which looks like the file having worked.
     expect(
       parseWorkspaceFile(
-        JSON.stringify({ kind: 'metacooler.workspace', version: 1, active: 0, tabs: [] }),
+        JSON.stringify({ kind: 'chromosomix.workspace', version: 1, active: 0, tabs: [] }),
       ),
     ).toEqual({ reason: 'not-a-workspace' })
   })
@@ -428,8 +428,8 @@ describe('the workspace file', () => {
   it('is named for what it is, without claiming how many tabs are in it', () => {
     // The count would be wrong the moment anybody edits the file, and nothing
     // routes on the name anyway — the `kind` inside is what decides. The
-    // `.metacooler.json` suffix stays so the family stays recognisable.
-    expect(workspaceFileName('2026-08-13-0900')).toBe('workspace-2026-08-13-0900.metacooler.json')
+    // `.chromosomix.json` suffix stays so the family stays recognisable.
+    expect(workspaceFileName('2026-08-13-0900')).toBe('workspace-2026-08-13-0900.chromosomix.json')
   })
 })
 

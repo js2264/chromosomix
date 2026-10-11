@@ -29,36 +29,36 @@ import {
 
 describe('splitBase', () => {
   it('reads the commit and the site out of an archived base', () => {
-    expect(splitBase('/metacooler.js/v/a1b2c3d/')).toEqual({
-      site: '/metacooler.js/',
+    expect(splitBase('/chromosomix/v/a1b2c3d/')).toEqual({
+      site: '/chromosomix/',
       commit: 'a1b2c3d',
       pull: null,
     })
     // A user or org site, served from the root.
     expect(splitBase('/v/a1b2c3d/')).toEqual({ site: '/', commit: 'a1b2c3d', pull: null })
     // A repository big enough that `--short` gives more than seven.
-    expect(splitBase('/metacooler.js/v/a1b2c3d4e5/')).toEqual({
-      site: '/metacooler.js/',
+    expect(splitBase('/chromosomix/v/a1b2c3d4e5/')).toEqual({
+      site: '/chromosomix/',
       commit: 'a1b2c3d4e5',
       pull: null,
     })
   })
 
   it('reads the pull request out of a preview base, and the site with it', () => {
-    expect(splitBase('/metacooler.js/pr/12/')).toEqual({
-      site: '/metacooler.js/',
+    expect(splitBase('/chromosomix/pr/12/')).toEqual({
+      site: '/chromosomix/',
       commit: null,
       pull: 12,
     })
     expect(splitBase('/pr/7/')).toEqual({ site: '/', commit: null, pull: 7 })
     // Not a directory a preview is ever published in.
-    for (const base of ['/metacooler.js/pr/0/', '/metacooler.js/pr/012/', '/metacooler.js/pr/x/', '/metacooler.js/pr/12']) {
+    for (const base of ['/chromosomix/pr/0/', '/chromosomix/pr/012/', '/chromosomix/pr/x/', '/chromosomix/pr/12']) {
       expect(splitBase(base).pull).toBeNull()
     }
   })
 
   it('says a plain base is pinned to nothing', () => {
-    for (const base of ['/', '/metacooler.js/', './']) {
+    for (const base of ['/', '/chromosomix/', './']) {
       expect(splitBase(base)).toEqual({ site: base, commit: null, pull: null })
     }
   })
@@ -67,11 +67,11 @@ describe('splitBase', () => {
     // Each of these would, if matched, stop the *site* registering a service
     // worker and make its about dialog claim to be an archived build.
     for (const base of [
-      '/metacooler.js/versions/', // starts with v
-      '/metacooler.js/v/main/', // not a hash
-      '/metacooler.js/v/a1b2c3/', // too short for `git rev-parse --short`
-      '/metacooler.js/v/A1B2C3D/', // git writes lower case
-      '/metacooler.js/v/a1b2c3d', // no trailing slash: not a base
+      '/chromosomix/versions/', // starts with v
+      '/chromosomix/v/main/', // not a hash
+      '/chromosomix/v/a1b2c3/', // too short for `git rev-parse --short`
+      '/chromosomix/v/A1B2C3D/', // git writes lower case
+      '/chromosomix/v/a1b2c3d', // no trailing slash: not a base
     ]) {
       expect(splitBase(base).commit).toBeNull()
     }
@@ -80,7 +80,7 @@ describe('splitBase', () => {
 
 describe('pullPath', () => {
   it('sends a preview to its own directory, and round-trips with splitBase', () => {
-    expect(pullPath('/metacooler.js/', 12)).toBe('/metacooler.js/pr/12/')
+    expect(pullPath('/chromosomix/', 12)).toBe('/chromosomix/pr/12/')
     expect(splitBase(pullPath('/', 3))).toEqual({ site: '/', commit: null, pull: 3 })
   })
 })
@@ -119,16 +119,16 @@ describe('the previews in a manifest', () => {
 
 describe('versionPath', () => {
   it('sends the newest build to the site root, where the worker is', () => {
-    expect(versionPath('/metacooler.js/', null)).toBe('/metacooler.js/')
+    expect(versionPath('/chromosomix/', null)).toBe('/chromosomix/')
   })
 
   it('sends every other build to its own directory', () => {
-    expect(versionPath('/metacooler.js/', 'a1b2c3d')).toBe('/metacooler.js/v/a1b2c3d/')
+    expect(versionPath('/chromosomix/', 'a1b2c3d')).toBe('/chromosomix/v/a1b2c3d/')
   })
 
   it('round-trips with splitBase, which is the property that matters', () => {
-    const path = versionPath('/metacooler.js/', 'a1b2c3d')
-    expect(splitBase(path)).toEqual({ site: '/metacooler.js/', commit: 'a1b2c3d', pull: null })
+    const path = versionPath('/chromosomix/', 'a1b2c3d')
+    expect(splitBase(path)).toEqual({ site: '/chromosomix/', commit: 'a1b2c3d', pull: null })
   })
 })
 

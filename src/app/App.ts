@@ -112,10 +112,10 @@ import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
 
 /** Where "source" points, from the about dialog and the header. */
-const REPO_URL = 'https://github.com/js2264/metacooler.js'
+const REPO_URL = 'https://github.com/js2264/chromosomix'
 
 /** The document title with nothing open; the file name is prefixed to it. */
-const APP_TITLE = '(meta)cooler'
+const APP_TITLE = 'chromosomix'
 
 /**
  * What the header's `+` promises, read by its tooltip and by its command.
@@ -478,7 +478,7 @@ export class App implements SessionHost {
     // by losing an afternoon's tracks. An empty tab *is* the picker, so the
     // new tab is the whole answer; a tab that is already empty has nothing to
     // lose and goes straight there.
-    const home = button('(meta)cooler', () => this.goHome(), {
+    const home = button('chromosomix', () => this.goHome(), {
       class: 'brand-name brand-home',
       title: 'The file picker — in a new tab, so this one is kept',
     })

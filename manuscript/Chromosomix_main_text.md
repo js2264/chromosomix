@@ -1,4 +1,4 @@
-# Chromatlas — main text with the rewritten Fig. 2 section (draft, v4)
+# Chromosomix — main text with the rewritten Fig. 2 section (draft, v4)
 
 Notes for the authors:
 
@@ -23,7 +23,7 @@ Notes for the authors:
     only by local transcription.
 - **The transcription test is still a placeholder.** It is the direct link to their result. They
   used the RNA-seq of Chevallereau et al. (2016), GEO GSE76513, which I could not download here
-  (GEO and ENA are blocked from this environment). Load it in Chromatlas with the A/B call and run
+  (GEO and ENA are blocked from this environment). Load it in Chromosomix with the A/B call and run
   *Signal by group*; the numbers slot into paragraph 5.
 - **Check the 3D result against their Discussion.** They cite work showing that transcribed DNA
   moves to the nucleoid periphery in *E. coli* (their refs 16 and 40: Bignaud et al. 2024 *NSMB*;
@@ -69,7 +69,7 @@ services organised around consortium data collections. On the other hand, quanti
 happens separately with command-line tools, so comparing features on a contact map to a linear track
 or a 3D model often means leaving the browser and writing code.
 
-Chromatlas is a genome browser in which quantitative analysis across 1D, 2D and 3D data is part of
+Chromosomix is a genome browser in which quantitative analysis across 1D, 2D and 3D data is part of
 browsing itself (Fig. 1). It runs entirely in the user's web browser, with no installation, account or
 server. Files are opened from a local disk, private or public cloud storage, or public resources such
 as 4DN, ENCODE and UCSC track hubs, and are read in place, so unpublished or clinical data never leave
@@ -78,7 +78,7 @@ the machine. The browser accepts any combination of file formats, including most
 bedGraph, BED, GTF, FASTA, bedMethyl and others) and 3D models (g3d, 3dg and bed3d; Supplementary
 Table 2), by aligning them to a shared abstract genomic coordinate system. Each map can be browsed
 across its full range of scales, from compartments spanning a whole genome to the finest bins the file
-holds, with linear tracks and the 3D model following the region in view (Fig. 1a). Because Chromatlas
+holds, with linear tracks and the 3D model following the region in view (Fig. 1a). Because Chromosomix
 reads only the region and resolution a view requires, interactive browsing on a laptop is possible for
 genomes of any size and at any resolution: a 300-million-contact map of mouse chromosome 1 at 10-kb
 resolution displays in under 3 s, and a 100-million-contact map of the whole Saccharomyces cerevisiae
@@ -86,7 +86,7 @@ genome at subnucleosome-scale resolution (50-bp) in about 10 s (Supplementary Ta
 offer multiple genomic facets side-by-side (displaying contact maps and/or tracks or structures), with
 synchronised or uncoupled navigation (Fig. 1a).
 
-Importantly, Chromatlas fills the existing gap between interactive browsing and quantitative analysis.
+Importantly, Chromosomix fills the existing gap between interactive browsing and quantitative analysis.
 Data can be analysed directly in the browser, where they are displayed, within and across dimensions
 (Fig. 1b and Supplementary Table 4). On contact maps, analyses include contact decay with genomic
 distance, diamond insulation and directionality profiles, compartments with saddle plots, loop and
@@ -113,7 +113,7 @@ same distance from ori on opposite arms contact each other (Le et al. 2013; Wang
 al. 2020). This inter-arm alignment draws a secondary diagonal across the contact map, perpendicular
 to the main one, and can mask other features. In *Pseudomonas aeruginosa* strain PAK, for instance,
 Bignaud et al. (2026) observed a plaid-like pattern reminiscent of eukaryotic compartments, detectable
-in the third eigenvector of the map, with transcription enriched in one of its two compartments. We implemented two new analyses in Chromatlas to measure inter-arm alignment
+in the third eigenvector of the map, with transcription enriched in one of its two compartments. We implemented two new analyses in Chromosomix to measure inter-arm alignment
 and to remove it (Fig. 2a; Methods). The first locates ori from the sequence (cumulative GC skew, parS
 and matS sites) and centres the map on it. It then compares the contacts between each locus and its
 mirror image on the opposite arm with the contact decay, yielding an alignment profile from ori to
@@ -146,14 +146,14 @@ MvaU, which bind AT-rich DNA in *P. aeruginosa* (Castang et al. 2008).
 
 <!-- Closing paragraph: yours, verbatim. -->
 
-By making quantitative analysis an integrated part of interactive data exploration, Chromatlas lets
+By making quantitative analysis an integrated part of interactive data exploration, Chromosomix lets
 biologists test what they see in chromosome folding data without leaving the view in which they saw
 it, from a bacterial genome to a mammalian one. Running entirely inside a browser tab also imposes
 practical limits: the total working memory is necessarily bounded by both the device's reported
 capacity and the browser's own ceiling. However, we have carefully optimized the data parsers, and a
 standard portable machine can run ten concurrent sessions without experiencing any slowdown. The
 genome browser is available as a web application, a desktop app or a standalone HTML page, and can be
-embedded in any static HTML page. We envision that the flexibility of Chromatlas will allow to
+embedded in any static HTML page. We envision that the flexibility of Chromosomix will allow to
 seamlessly integrate new file formats, for example data containers dedicated to metagenomics contact
 maps.
 
@@ -271,12 +271,12 @@ when there are three groups or more. Both are corrected for ties, and P values a
 Benjamini–Hochberg across all tests of a run.
 
 **Analysis of bacterial genomes (Fig. 2)**
-Maps were read at 8 kb with their balancing weights, Chromatlas' default, for every step. The ori/ter
+Maps were read at 8 kb with their balancing weights, Chromosomix's default, for every step. The ori/ter
 call also used the raw (unbalanced) total Hi-C coverage at 500 bp; the origin it placed in *E. coli*
 MG1655, 3,924,501, lies 1.4 kb from the annotated *oriC* at 3,925,860.
 
 - **Inter-arm survey.** The circularity test, the ori/ter call and the inter-arm alignment were
-  replayed with `chromatlas-run` on each of the 76 maps [sources, Supplementary Table X], and on the
+  replayed with the `chromosomix` command line on each of the 76 maps [sources, Supplementary Table X], and on the
   [*smc*/*parB*] mutant and wild-type maps of [refs]. The inter-arm score varied by less than 0.05
   between 4, 8 and 16 kb.
 - **PAK compartments.** Compartments were called twice, once with the distance-decay expected and
@@ -291,13 +291,13 @@ MG1655, 3,924,501, lies 1.4 kb from the annotated *oriC* at 3,925,860.
   the centroid of the model.
 - **Statistics.** GC content [and transcription] were compared between A and B over 8-kb stretches
   with the group comparison above. Correlations used all bins with finite values (*n* = 800) and
-  were computed with SciPy (v1.17) on tracks exported by Chromatlas:
+  were computed with SciPy (v1.17) on tracks exported by Chromosomix:
   - Pearson's r of each eigenvector with GC content;
   - Spearman's ρ with radial position;
   - Spearman's ρ with the distance from ori, measured the short way round the circle and reported
     as |ρ|, since an eigenvector's sign is arbitrary where GC content cannot set it.
 
-Every step was run with `chromatlas-run` from a Quarto notebook distributed with Chromatlas, which
+Every step was run with the `chromosomix` command line from a Quarto notebook distributed with Chromosomix, which
 also draws the figure panels and writes every number reported here with its test.
 
 **Command-line interface and reproducibility** *(addition to the existing paragraph)*

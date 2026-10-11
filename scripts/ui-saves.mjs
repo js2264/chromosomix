@@ -102,7 +102,7 @@ const exportCard = () => page.locator('.controls-card').filter({ has: page.locat
 const exportSave = () => exportCard().locator('.export-acts button').first()
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(4000)
   await fold('Fold the General panel')
@@ -179,7 +179,7 @@ try {
   const bare = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true })
   await bare.addInitScript(() => { window.showSaveFilePicker = undefined })
   const plain = await bare.newPage()
-  await plain.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await plain.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await plain.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(4000)
   const arriving = plain.waitForEvent('download', { timeout: 60000 })

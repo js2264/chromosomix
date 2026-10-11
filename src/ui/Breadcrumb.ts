@@ -225,7 +225,7 @@ export function rootTable(
  * down behind the one in front — sharing a group name would let a radio in the
  * old one unset the checked radio in the new.
  */
-const GROUP_PREFIX = 'metacooler-resolution-'
+const GROUP_PREFIX = 'chromosomix-resolution-'
 let groups = 0
 
 /**

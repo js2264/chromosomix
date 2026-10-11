@@ -22,7 +22,7 @@
  * single-file bundle cannot carry; `generic-filehandle2`, which `@gmod/bbi`
  * reads through, goes with them. That is also why the three are `dependencies`
  * rather than dev ones in `package.json`: the package is published with this
- * bundle under `bin` and `dist-cli/` in its `files`, so `npx metacooler-run`
+ * bundle under `bin` and `dist-cli/` in its `files`, so `npx chromosomix`
  * works with no clone, and npm has to have installed them by the time the
  * command runs (SPECS §22.2).
  */
@@ -55,23 +55,23 @@ function gitCommit(): string {
  * Set the executable bit Rollup never does — it writes a file, not a program.
  *
  * `bin`'s whole point is `npm link`/`npm install -g` handing back a
- * `metacooler-run` a shell can run directly, with no `.mjs` and no explicit
+ * `chromosomix` command a shell can run directly, with no `.mjs` and no explicit
  * `node`. npm chmods the target the moment it creates that link, but every
  * `vite build` afterwards writes a fresh file at the same path with the
  * default `0644` and quietly takes the bit back — the symlink still resolves,
- * `node dist-cli/metacooler-run.mjs` still runs it by naming the interpreter,
+ * `node dist-cli/chromosomix.mjs` still runs it by naming the interpreter,
  * and only the one form the whole feature is for starts failing with
  * "permission denied".
  */
 function executable(): Plugin {
   let outDir = 'dist-cli'
   return {
-    name: 'metacooler-cli-executable',
+    name: 'chromosomix-cli-executable',
     configResolved(config) {
       outDir = config.build.outDir
     },
     closeBundle() {
-      chmodSync(joinPath(outDir, 'metacooler-run.mjs'), 0o755)
+      chmodSync(joinPath(outDir, 'chromosomix.mjs'), 0o755)
     },
   }
 }
@@ -106,14 +106,14 @@ export default defineConfig({
     lib: {
       entry: new URL('./src/cli/main.ts', import.meta.url).pathname,
       formats: ['es'],
-      fileName: () => 'metacooler-run.mjs',
+      fileName: () => 'chromosomix.mjs',
     },
     rollupOptions: {
       // `lib.fileName` is not consulted under `ssr: true`, which names the
       // output after the entry instead — so the command would have been
       // `dist-cli/main.js`. Said here as well, where it is obeyed.
       output: {
-        entryFileNames: 'metacooler-run.mjs',
+        entryFileNames: 'chromosomix.mjs',
         banner: '#!/usr/bin/env node',
       },
       external: [

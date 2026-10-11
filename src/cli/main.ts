@@ -151,6 +151,14 @@ import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
 import { VERSION } from '../version'
 
+/**
+ * Which build wrote a file, after the `# chromosomix` every export opens with:
+ * the version and `cli`, as the app's own exports give its version and commit.
+ * The command shares the app's name, so naming it here as well would print it
+ * twice.
+ */
+const APP = `${VERSION} cli`
+
 // ---------------------------------------------------------------------------
 // Arguments
 // ---------------------------------------------------------------------------
@@ -885,7 +893,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         taskVersion: task.version ?? 0,
         params,
         framing,
-        app: `metacooler-run ${VERSION}`,
+        app: APP,
         createdAt: new Date().toISOString(),
       },
       notes,
@@ -1023,7 +1031,7 @@ async function runChain(
           taskVersion: required.version ?? 0,
           params: requiredParams,
           framing,
-          app: `metacooler-run ${VERSION}`,
+          app: APP,
           createdAt: new Date().toISOString(),
         },
         notes: [],
@@ -1122,7 +1130,7 @@ async function runTracksOnly(
       taskVersion: task.version ?? 0,
       params,
       framing,
-      app: `metacooler-run ${VERSION}`,
+      app: APP,
       createdAt: new Date().toISOString(),
     },
     notes,
@@ -1584,12 +1592,12 @@ function bindInputs(task: AnalysisTask, params: Params, inputs: TaskInputs): Tas
 // Commands
 // ---------------------------------------------------------------------------
 
-const USAGE = `metacooler-run — the Analysis panel, from a shell
+const USAGE = `chromosomix — the Analysis panel, from a shell
 
-  metacooler-run tasks
+  chromosomix tasks
       Every task, its id, and the parameters it takes.
 
-  metacooler-run <task> <file.cool|file.mcool|file.metacool|file.hic|file.pairs.gz> [...]
+  chromosomix <task> <file.cool|file.mcool|file.metacool|file.hic|file.pairs.gz> [...]
       Run one task over one or more files.
 
       --out <dir>          where to write (default: .)
@@ -1639,19 +1647,19 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            comma-separated: a bigWig, a bedGraph, a wig, or a
                            FASTA read as GC content
 
-  metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
+  chromosomix <task> --tracks <file.bw> --features <file.bed> [...]
       A task that reads tracks and no matrix (metaplot, trackcorr, frip,
       groupsignal, overlap, motif, composition, oriter), run with no contact map
       at all — what a 1D browser session runs. The assembly is what the tracks
       and references declare.
 
-  metacooler-run circular <file.mcool::/resolutions/<bp>> [...]
+  chromosomix circular <file.mcool::/resolutions/<bp>> [...]
       Which sequences join their own ends: the junction test the app runs when
       a map is first opened, as a table on stdout — sequence, length, score,
       and yes or no where it could be decided: a sequence needs 50 bins at the
       resolution read. The names to hand every other run as --circular.
 
-  metacooler-run replay <workspace.metacooler.json> --over <file> [...]
+  chromosomix replay <workspace.chromosomix.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
       it recorded, over the files named by --over. The workspace is what the
       app's Save button produces: every open tab in one file. A locus it
@@ -1960,7 +1968,7 @@ async function circularCommand(args: Args): Promise<number> {
           async (rows, cols) => (await mc.matrix({ rows, cols, balance })).values,
         )
         const lines = [
-          `# metacooler metacooler-run ${VERSION}`,
+          `# chromosomix ${APP}`,
           `# file: ${path}`,
           `# test: contacts across each sequence's ends over the diagonal's at ${JUNCTION_BINS} bins ` +
             `or fewer, at ${junctionQuorum()} of them at least, on sequences of ` +
@@ -2054,7 +2062,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 // by realpath rather than by name: Node resolves the entry file's own symlinks
 // before it becomes `import.meta.url`, so an extensionless `bin` link — the
 // whole point of `package.json`'s `bin` field — has `argv[1]` end in
-// `metacooler-run` while the module it loaded ends in `metacooler-run.mjs`.
+// `chromosomix` while the module it loaded ends in `chromosomix.mjs`.
 // A name or suffix comparison never matches there; realpath resolves both
 // sides to the same file underneath the symlink.
 function isEntryPoint(argv1: string | undefined): boolean {

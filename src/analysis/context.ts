@@ -235,7 +235,7 @@ function genomesOf(input: ContextInput, contigs: ContextContig[]): ContextGenome
  * `SequencesParam` states and the one the runners already read with
  * `Array.isArray`: the form ticks them all on the way in, so a value that is not
  * an array is a job that never went through a form — a stored session, or a
- * `metacooler-run` line with no `--sequences` — and what those mean is the whole
+ * `chromosomix` line with no `--sequences` — and what those mean is the whole
  * file. An **empty array** is a different answer and not a narrower one: it is a
  * reader who pressed *None*, and it prices as nothing to read.
  *

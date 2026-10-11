@@ -41,7 +41,7 @@ import {
   timeOf,
 } from '@/state/actions'
 
-const KEY = 'metacooler-viewer:actions'
+const KEY = 'chromosomix:actions'
 
 /** What a stored log looks like, so a test can plant one and reload it. */
 function plant(entries: unknown[]): void {
@@ -70,7 +70,7 @@ describe('recording', () => {
   it('opens a run and closes it with the account the result carried', () => {
     const id = logAction({
       kind: 'run',
-      line: 'metacooler-run insulation a.cool --window 10',
+      line: 'chromosomix insulation a.cool --window 10',
       shell: true,
       detail: ['# task: insulation v1'],
       status: 'running',
@@ -81,7 +81,7 @@ describe('recording', () => {
     endAction(id, {
       status: 'ok',
       ms: 1234,
-      line: 'metacooler-run insulation a.cool --window 10 --balance',
+      line: 'chromosomix insulation a.cool --window 10 --balance',
       detail: ['# task: insulation v1', '# param window: 10'],
     })
 
@@ -90,7 +90,7 @@ describe('recording', () => {
     expect(entry.ms).toBe(1234)
     // Replaced, not appended beside the first: two accounts of one run is how
     // they come to disagree, and the result's own provenance is the true one.
-    expect(entry.line).toBe('metacooler-run insulation a.cool --window 10 --balance')
+    expect(entry.line).toBe('chromosomix insulation a.cool --window 10 --balance')
     expect(entry.detail).toEqual(['# task: insulation v1', '# param window: 10'])
     expect(entry.where).toBe('a.cool')
   })
@@ -99,7 +99,7 @@ describe('recording', () => {
     for (const map of ['rep1', 'rep2', 'rep3', 'rep4', 'rep5', 'rep6']) {
       const id = logAction({
         kind: 'run',
-        line: `metacooler-run insulation ${map}.cool`,
+        line: `chromosomix insulation ${map}.cool`,
         shell: true,
         status: 'running',
         where: `${map}.cool`,
@@ -152,7 +152,7 @@ describe('the text it hands over', () => {
     logAction({ kind: 'open', line: 'opened a.cool', detail: ['# file: /data/a.cool'] })
     logAction({
       kind: 'run',
-      line: 'metacooler-run insulation a.cool --window 10',
+      line: 'chromosomix insulation a.cool --window 10',
       shell: true,
       notes: ['# This file is remote, and the command reads local files only.'],
       detail: ['# task: insulation v1'],
@@ -163,7 +163,7 @@ describe('the text it hands over', () => {
     // A day heading, the open as a comment, the caveat, the command.
     expect(lines[0]).toBe(`# ${dayOf(Date.now())}`)
     expect(lines.filter((line) => !line.startsWith('#'))).toEqual([
-      'metacooler-run insulation a.cool --window 10',
+      'chromosomix insulation a.cool --window 10',
     ])
     expect(lines.some((line) => line.includes('opened a.cool'))).toBe(true)
     // The caveat rides with the command whether or not the output is asked for:
@@ -183,7 +183,7 @@ describe('the text it hands over', () => {
     // never there — which is how it read in the field.
     logAction({
       kind: 'run',
-      line: 'metacooler-run insulation a.cool',
+      line: 'chromosomix insulation a.cool',
       shell: true,
       notes: ['# This file is remote.'],
     })
@@ -195,7 +195,7 @@ describe('the text it hands over', () => {
     })
     const lines = actionsText({ detail: false }).trimEnd().split('\n')
     const caveat = lines.findIndex((line) => line.includes('This file is remote'))
-    const command = lines.findIndex((line) => line.startsWith('metacooler-run'))
+    const command = lines.findIndex((line) => line.startsWith('chromosomix '))
     expect(caveat).toBeLessThan(command)
     const prose = lines.findIndex((line) => line.includes('ran Track correlation'))
     const refusal = lines.findIndex((line) => line.includes('run it in the app'))
@@ -203,7 +203,7 @@ describe('the text it hands over', () => {
   })
 
   it('writes a failure as a comment under the command it belongs to', () => {
-    const id = logAction({ kind: 'run', line: 'metacooler-run apa a.cool', shell: true })
+    const id = logAction({ kind: 'run', line: 'chromosomix apa a.cool', shell: true })
     endAction(id, { status: 'failed', error: 'No loop set was chosen.' })
     const lines = actionsText({ detail: false }).trimEnd().split('\n')
     expect(lines[lines.length - 1]).toBe('# failed: No loop set was chosen.')
@@ -217,7 +217,7 @@ describe('the text it hands over', () => {
         id: 'old',
         at: midnight.getTime() - 26 * 60 * 60 * 1000,
         kind: 'run',
-        line: 'metacooler-run coverage a.cool',
+        line: 'chromosomix coverage a.cool',
         shell: true,
         status: 'ok',
       },
@@ -225,7 +225,7 @@ describe('the text it hands over', () => {
         id: 'new',
         at: Date.now(),
         kind: 'run',
-        line: 'metacooler-run insulation a.cool',
+        line: 'chromosomix insulation a.cool',
         shell: true,
         status: 'ok',
       },
@@ -265,7 +265,7 @@ describe('what is kept', () => {
         id: 'a',
         at: Date.now(),
         kind: 'run',
-        line: 'metacooler-run compartments a.cool',
+        line: 'chromosomix compartments a.cool',
         shell: true,
         status: 'running',
       },
@@ -340,7 +340,7 @@ describe('two windows', () => {
         JSON.stringify({
           version: 1,
           entries: [
-            { id: 'theirs', at: Date.now() - 60_000, kind: 'run', line: 'metacooler-run coverage b.cool', shell: true, status: 'ok' },
+            { id: 'theirs', at: Date.now() - 60_000, kind: 'run', line: 'chromosomix coverage b.cool', shell: true, status: 'ok' },
             ...held,
           ],
         }),
@@ -349,7 +349,7 @@ describe('two windows', () => {
       logAction({ kind: 'write', line: 'wrote a.tsv' })
       vi.advanceTimersByTime(500)
       expect(stored().entries.map((row) => row['line'])).toEqual([
-        'metacooler-run coverage b.cool',
+        'chromosomix coverage b.cool',
         'opened mine.cool',
         'wrote a.tsv',
       ])
