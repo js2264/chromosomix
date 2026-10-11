@@ -135,7 +135,7 @@ const pick = async (suffix, field, value) => {
 
 try {
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(6000)
 
@@ -253,7 +253,7 @@ try {
   // -------------------------------------------------------------------------
   if (ONLY !== 'map') {
     page = await fresh()
-    await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`)
+    await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`)
     await page.waitForFunction(() => (document.body.innerText ?? '').includes('Yeast, no map'), null, { timeout: 180000 })
     await sleep(6000)
     await openTask('Peak calling')

@@ -150,7 +150,7 @@ try {
   // A map with its coverage: peaks as a track under ATAC.
   // ---------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(6000)
 
@@ -254,7 +254,7 @@ try {
   // No map: the 1D browser demo, where the peaks are a lane alone.
   // ---------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`)
   await page.waitForFunction(() => (document.body.innerText ?? '').includes('Yeast, no map'), null, { timeout: 180000 })
   await sleep(6000)
   const heightBox = page.locator('xpath=//*[normalize-space(text())="track height"]/following::input[1]').first()

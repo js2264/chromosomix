@@ -68,10 +68,10 @@ Every line below was put to the author as a question on 2026-09-29 and is their 
 | What learning remembers | **Per file**, saved with the session and workspace, replayable by the CLI |
 | Metagenomes | **Membership and scaffolds**: contigs moved between MAGs, ordered and joined within one |
 | Validation | **Simulated rearrangements** |
-| Command line | **Full auto mode** in `metacooler-run` |
+| Command line | **Full auto mode** in `chromosomix` |
 | Dot plot | **Computed in the browser**; **its own map-like view** and **a figure in the drawer** |
 | Dev features | A new app-wide mechanism: dev features are **invisible** except for a switch in *About*. The editor, the dot plot and **everything `.metacool`** are dev features |
-| The app's name | **Stays (meta)cooler** |
+| The app's name | **Stays (meta)cooler** — since renamed **chromosomix** |
 | A `.metacool` with dev off | **Refused like an unknown file** |
 | The CLI and dev features | **No gate**: the CLI shows everything |
 
@@ -366,7 +366,7 @@ The modes are not three tools. They are three answers to *who presses accept*:
   until none is left above it, and lists what it did. Every application is a step in the history,
   marked `auto` with its evidence, and undoable like any other.
 
-`metacooler-run edit` is auto mode from a shell (§5).
+`chromosomix edit` is auto mode from a shell (§5).
 
 ### 3.7 The whole-genome picture
 
@@ -575,7 +575,7 @@ initial ones by a prior strong enough that three answers cannot overturn the map
 thirty can teach it that, on this file, coverage dips at the rDNA are not breaks. The remaining
 suggestions are re-ranked at once. The weights and the answers are kept **per file**, with the
 edit (§2.7), shown in Settings with the answers they came from, and forgotten by *forget*;
-`metacooler-run edit --weights` replays them, so a curation taught by hand can be re-run by a shell and
+`chromosomix edit --weights` replays them, so a curation taught by hand can be re-run by a shell and
 come out the same.
 
 ### 4.9 To the base
@@ -606,7 +606,7 @@ assembly scored all-against-all, which is why partners come from the sparse cont
 ## 5. The command line
 
 ```
-metacooler-run edit map.mcool --sequence ref.fa [--tracks cov.bw] [--reads aln.bam]
+chromosomix edit map.mcool --sequence ref.fa [--tracks cov.bw] [--reads aln.bam]
                  [--pairs contacts.pairs] [--from start.agp] [--weights learned.json]
                  [--threshold 0.5] [--contacts] [--lift a.bw,b.bed] --out results/
 ```
@@ -634,7 +634,7 @@ All through the save dialog (§26.6), each a new file, none touching the one ope
   the `.pairs` import writes: exact from a `.pairs`, bins-whole from a stored map, the approximated
   junctions and duplicated stretches counted in the provenance. The writer is `pairs/write.ts`'s, which
   holds the file in memory (MEMFS); a lifted map above the wasm heap is refused with the size and the
-  way out — a coarser rung here, or `metacooler-run edit --contacts`, which writes to disk.
+  way out — a coarser rung here, or `chromosomix edit --contacts`, which writes to disk.
 - **Lifted tracks** — a signal as bigWig or bedGraph, features as BED (strands flipped, features
   across a cut split in two), pairs as BEDPE, marks as the Manual card writes them.
 - **A metagenome's**: the contig → MAG table `metacooler create` takes, and a FASTA and AGP per MAG.
@@ -658,7 +658,7 @@ another tool's output. The harness **uses the lens against itself**:
 
 Scored as: junction precision and recall (the set of adjacencies recovered against the truth);
 the distance from each recovered breakpoint to the true one, in bases; orientation accuracy; the N50
-of correctly assembled stretches; and the number of steps a reader would still need. `metacooler-run
+of correctly assembled stretches; and the number of steps a reader would still need. `chromosomix
 edit --simulate` runs one scramble; `notebooks/validation.qmd` runs the grid and draws it. The same
 harness is a regression test: a fixed small scramble of the yeast demo, recovered exactly, is a unit
 test.
@@ -715,7 +715,7 @@ A mechanism the app did not have: a feature on `main`, built and tested like any
   back.
 - **Never in an embed.** An embedded page has no *About*, and a host page is not a dev's browser.
 - **The command line has no gate**: it is a developer's tool, and it shows every task.
-- The name stays **(meta)cooler**; the static text around the app — the page's description, the
+- The name stayed **(meta)cooler** (the app is **chromosomix** since); the static text around the app — the page's description, the
   install prompt's — stops naming `.metacool`, since it cannot follow a switch.
 
 ---
@@ -737,7 +737,7 @@ since every one of them is on screen — its gallery (`scripts/ui-edit.mjs`).
    exact; stored maps bins-whole).
 5. **The method.** Expected model, `S`, breakpoints, corner detector, suggestions, the rail, snapping
    to them, the simulation harness and its unit test.
-6. **Review and auto**, learning, and `metacooler-run edit`.
+6. **Review and auto**, learning, and `chromosomix edit`.
 7. **Evidence**: sequence (gaps, telomeres, skew), tracks, reads.
 8. **Metagenomes** (§27.10).
 9. **The dot plot** (SPECS §28).

@@ -44,7 +44,7 @@ import type { PickedFile } from '../browse/folder'
  * against a capital would never match — the note `TRACK_DRAG_TYPE` carries, for
  * the same reason.
  */
-export const FILE_DRAG_TYPE = 'application/x-metacooler-file'
+export const FILE_DRAG_TYPE = 'application/x-chromosomix-file'
 
 /** Whether a drag is carrying a row out of the Files panel. */
 export function dragHasFileRow(event: DragEvent): boolean {

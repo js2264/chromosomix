@@ -1,5 +1,5 @@
 {
-  "name": "metacooler-viewer",
+  "name": "chromosomix",
   "version": "0.13.0",
   "type": "module",
   "description": "Browser-based viewer for Hi-C contact maps, genome tracks and 3D models. No backend, no preprocessing.",
@@ -7,19 +7,19 @@
     "hi-c",
     "metagenomics",
     "cooler",
-    "metacooler",
+    "metacool",
     "hdf5",
     "contact-map",
     "genome-browser",
     "viewer"
   ],
-  "homepage": "https://js2264.github.io/metacooler.js/",
+  "homepage": "https://js2264.github.io/chromosomix/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/js2264/metacooler.js.git"
+    "url": "git+https://github.com/js2264/chromosomix.git"
   },
   "bugs": {
-    "url": "https://github.com/js2264/metacooler.js/issues"
+    "url": "https://github.com/js2264/chromosomix/issues"
   },
   "author": "Jacques Serizay",
   "license": "MIT",
@@ -60,7 +60,7 @@
     "preversion": "npm run typecheck && npm run test:nofixtures",
     "version": "node scripts/changelog-check.mjs",
     "build:cli": "npm run typecheck && vite build --config vite.cli.config.ts",
-    "cli": "node dist-cli/metacooler-run.mjs",
+    "cli": "node dist-cli/chromosomix.mjs",
     "build:standalone": "npm run typecheck && vite build --config vite.standalone.config.ts && node scripts/check-standalone-build.mjs",
     "build:package": "npm run build:cli && vite build --config vite.package.config.ts && node scripts/check-package-build.mjs",
     "prepack": "npm run build:package"
@@ -112,8 +112,8 @@
     "fixtures:scool": "The single-cell containers, and the only fixture command that needs nothing but `cooler` — `make_fixtures` drives the private metacooler CLI over a test-data directory only a metacooler checkout has, and none of the scool fixtures want it. Split out so a contributor with `pip install cooler` alone can build and run the scool suite; `fixtures` runs it too. The standard container comes from `cooler.create_scool`, the flat one is restructured from that output because no maintained tool writes that layout any more — see the script's docstring, which records what it was checked against.",
     "fixtures:hicpro": "The HiC-Pro pairs, and like `fixtures:scool` it needs only `cooler`. It writes them *from* a cooler — HiC-Pro is a pipeline that starts at FASTQ and cannot be driven here, and the format it outputs is four lines of documentation — which makes the test stronger rather than weaker: the manifest carries cooler's own dense matrix, so the JS suite asserts that the two text files mean exactly the matrix they were written from. All four `MATRIX_FORMAT` variants are written, because all four must land on the same picture and only one of them is the common case.",
     "fixtures:analysis": "The oracles the Analysis tasks are checked against (SPECS §18.10), from cooltools and friends over the published demo data rather than from the synthetic fixtures. A second command and not a flag on `fixtures`: the two prove different layers, against different references, to different bars, and they need different packages — folding them together would mean a run that half-succeeds on a machine missing one of them. Needs `pip install cooler cooltools coolpuppy pyBigWig` (chromosight, and R with HiContacts, for the goldens that ask for them); every golden it cannot build is named in its manifest rather than quietly omitted, because an absent golden and an unwritten one look identical from the JS side. The peak caller's three — yapc, its pipeline with IDR, and IDR alone — are the exception to one environment: yapc 0.1 and IDR 2.0.3 install only under numpy < 1.24 and Cython < 3, so they are built in a venv of their own, which the script's section on them sets out, with `npm run fixtures:analysis -- --only yapc yapc_idr idr`, and every other golden is left as it was.",
-    "build:cli": "The Analysis panel as a shell command (GAPS G4). A fourth invocation of the same bundler over the same source, never an edit to the first: `RUNNERS`, `MetaCooler` and the writers are imported, so a number computed in a batch and a number computed by clicking come out of one implementation with one set of goldens behind it. `h5wasm` and `@gmod/bbi` stay external because both ship assets a single file cannot carry, which is why they are `dependencies` rather than dev ones: a published package installs them, and `npx metacooler-run` then works from a registry the way it works from a clone.",
-    "bin": "Declared so `npm link` and a workspace install put `metacooler-run` on the PATH, and — since `files` includes `dist-cli/` — so that `npx metacooler-run` works against a published version with no clone at all. `h5wasm` and `@gmod/bbi` are `dependencies` rather than dev ones for exactly this reason: the bundle keeps them external, so npm has to have installed them by the time the command runs.",
+    "build:cli": "The Analysis panel as a shell command (GAPS G4). A fourth invocation of the same bundler over the same source, never an edit to the first: `RUNNERS`, `MetaCooler` and the writers are imported, so a number computed in a batch and a number computed by clicking come out of one implementation with one set of goldens behind it. `h5wasm` and `@gmod/bbi` stay external because both ship assets a single file cannot carry, which is why they are `dependencies` rather than dev ones: a published package installs them, and `npx chromosomix` then works from a registry the way it works from a clone.",
+    "bin": "Declared so `npm link` and a workspace install put `chromosomix` on the PATH, and — since `files` includes `dist-cli/` — so that `npx chromosomix` works against a published version with no clone at all. `h5wasm` and `@gmod/bbi` are `dependencies` rather than dev ones for exactly this reason: the bundle keeps them external, so npm has to have installed them by the time the command runs.",
     "build:standalone": "One HTML file that opens from a disk and works — for an air-gapped machine, a reviewer who will not install anything, and a locked-down laptop holding unpublished data. A fifth reading of the same source, never an edit to the first. Four things a file:// page forbids decide the whole config: no module workers, no sibling fetch, no network, no service worker. Then the shape is asserted, because a build that kept module workers looks completely normal until somebody drops a file on it.",
     "build:package": "The sixth reading of the same source, and the only one built for a path it does not know. Everything else this repository emits is served from somewhere decided in advance — the site root, `/v/<commit>/`, an asar, a disk — and bakes absolute asset URLs accordingly. A tarball is unpacked into a lab site, a course page, an institutional server or a registry CDN, so its base is `./` and one published version serves all of them with no rebuild. Then the shape is asserted, because `dist/` is written by two builds and only one of them may be published, and because a wrong tarball cannot be taken back the way a wrong deploy can.",
     "prepack": "Runs before `npm pack` and before `npm publish`, so what is packed is built from source at that moment rather than being whatever happened to be in `dist/`. Not belt and braces: `npm run build` writes to the same directory for the *site*, with absolute asset URLs and 20 MB of source maps, and a tarball packed over one of those would 404 on every mount that is not the site root. `prepack` rather than `prepublishOnly`, because `npm pack` has to produce the identical tarball — it is how anybody checks what a publish would send.",
@@ -126,6 +126,6 @@
     "rollup": "npm:@rollup/wasm-node@^4.62.0"
   },
   "bin": {
-    "metacooler-run": "dist-cli/metacooler-run.mjs"
+    "chromosomix": "dist-cli/chromosomix.mjs"
   }
 }

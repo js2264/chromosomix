@@ -187,7 +187,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
-            const marker = '<!-- metacooler-preview -->'
+            const marker = '<!-- chromosomix-preview -->'
             const { PREVIEW_URL, ACTION, HEAD } = process.env
             const short = HEAD.slice(0, 7)
             const body = ACTION === 'closed'

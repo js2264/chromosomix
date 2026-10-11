@@ -103,7 +103,7 @@ describe('the lab’s gallery', () => {
     expect(cards[0].querySelector('.gallery-card-line')?.textContent).toContain('One map, with the sequence')
     open.click()
     expect(opened[0]?.kind).toBe('workspace')
-    expect(opened[0]?.uri).toMatch(/Yeast_microC\.metacooler\.json$/)
+    expect(opened[0]?.uri).toMatch(/Yeast_microC\.chromosomix\.json$/)
     // The figure's own files, each a store row with the two verbs.
     const fold = cards[0].querySelector('.gallery-card-more') as HTMLElement
     expect(fold.querySelector('summary')?.textContent).toBe('8 files')
@@ -140,7 +140,7 @@ describe('IGV’s genomes', () => {
       'igv-sessions.json': store('IGV genome sessions', [
         {
           label: 'hg38 and its 1 track',
-          uri: 'sessions/igv-hg38.metacooler.json',
+          uri: 'sessions/igv-hg38.chromosomix.json',
           kind: 'workspace',
           note: 'hg38 · s3.amazonaws.com',
           fields: { assembly: 'hg38', subject: 'Human (GRCh38/hg38)', tracks: '2', dataset: 'hg38' },
@@ -220,7 +220,7 @@ describe('the DNA Bacterial Zoo', () => {
         entries: [
           {
             label: 'V_cholerae — map with 8 tracks',
-            uri: 'V/V.metacooler.json',
+            uri: 'V/V.chromosomix.json',
             kind: 'workspace',
             fields: { species: 'V_cholerae', id: 'CC340', sequences: '2 sequences', tracks: '8' },
           },
@@ -311,7 +311,7 @@ describe('a store by URL', () => {
         entries: [
           {
             label: 'B_subtilis — map with 2 tracks',
-            uri: 'bsub/bsub.metacooler.json',
+            uri: 'bsub/bsub.chromosomix.json',
             kind: 'workspace',
             note: 'Coverage, Insulation',
             fields: { species: 'B_subtilis', id: 'CC339', sequences: '1 sequence', tracks: '2' },
@@ -437,7 +437,7 @@ describe('a store by URL', () => {
   })
 
   it('says which kind of file it got when it was not a store', async () => {
-    serving({ 'store.json': '{"kind":"metacooler.workspace","tabs":[]}' })
+    serving({ 'store.json': '{"kind":"chromosomix.workspace","tabs":[]}' })
     const view = new CustomView({ front: customStore(), host: host([]), view: EMPTY_VIEW, onView: () => undefined })
     document.body.appendChild(view.el)
     const box = view.el.querySelector('.custom-url') as HTMLInputElement

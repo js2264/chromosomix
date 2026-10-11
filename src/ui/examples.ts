@@ -22,7 +22,7 @@
  * meet is the application doing its job — a window worth looking at, tracks on
  * both edges of the map, a group of two strands sharing a lane — and all of
  * that is exactly what `state/workspace.ts` writes down. So the figures are
- * four `.metacooler.json` files that live next to the data they name, and
+ * four `.chromosomix.json` files that live next to the data they name, and
  * choosing one is the same gesture as dropping a workspace somebody sent you.
  * The data files are listed too, under the figures, for the reader who wants
  * the `.cool` alone — as rows, with the two verbs every store row has.
@@ -35,7 +35,7 @@
  * is the one that needs the other three to be legible.
  *
  * A note on the format, because it is what made every one of these stop
- * opening once: `App.openWorkspaceFile` reads `kind: "metacooler.workspace"`
+ * opening once: `App.openWorkspaceFile` reads `kind: "chromosomix.workspace"`
  * and refuses anything else, so a published file still written in the older
  * single-session shape is a card that fails on click with "not a workspace".
  * The four files in `demo/` are the current shape; the copies on the bucket are
@@ -47,7 +47,7 @@
  * way in (`resolveConfig`). That is what keeps a dataset folder a
  * self-contained thing: `demo/yeast/` can be copied to another bucket, or
  * served off a laptop, and both of its workspaces still open. It is also why
- * moving the data to S3 changed no line of any `.metacooler.json`.
+ * moving the data to S3 changed no line of any `.chromosomix.json`.
  */
 
 import { splitUri } from './labels'
@@ -110,7 +110,7 @@ const DEMO: Array<{
 }> = [
   {
     folder: 'yeast',
-    file: 'Yeast_microC.metacooler.json',
+    file: 'Yeast_microC.chromosomix.json',
     title: 'Yeast micro-C, G2/M',
     line: 'One map, with the sequence, genes, ATAC, Pol II and 1,506 loop calls on its edges.',
     assembly: 'S288C (syn XIII-40)',
@@ -133,7 +133,7 @@ const DEMO: Array<{
   },
   {
     folder: 'yeast',
-    file: 'Yeast_tracks.metacooler.json',
+    file: 'Yeast_tracks.chromosomix.json',
     title: 'Yeast chromatin and transcription',
     line: 'The 1D browser with no map: eleven lanes over 50 kb of chromosome IV.',
     assembly: 'S288C (syn XIII-40)',
@@ -160,7 +160,7 @@ const DEMO: Array<{
   },
   {
     folder: 'yeast',
-    file: 'Yeast_deck.metacooler.json',
+    file: 'Yeast_deck.chromosomix.json',
     title: 'Micro-C beside Hi-C',
     line: 'Two maps of one locus in two formats, a .cool and a .hic, locked side by side.',
     assembly: 'S288C (syn XIII-40)',
@@ -174,7 +174,7 @@ const DEMO: Array<{
   },
   {
     folder: 'human',
-    file: 'Human_chrX_RNA.metacooler.json',
+    file: 'Human_chrX_RNA.chromosomix.json',
     title: 'Splicing on human chrX',
     line: 'The 1D browser over hg19’s karyotype: a sashimi plot from reads, and two samples’ junctions on one axis.',
     assembly: 'hg19 (GRCh37)',
@@ -196,7 +196,7 @@ const DEMO: Array<{
   },
   {
     folder: 'metagenomics/mock-community',
-    file: 'Mock_microbial_community.metacooler.json',
+    file: 'Mock_microbial_community.chromosomix.json',
     title: 'Mock microbial community',
     line: '49 MAGs over 20,566 contigs in one .metacool — the multi-genome file this viewer exists for.',
     assembly: 'mock community',

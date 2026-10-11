@@ -1,6 +1,6 @@
 /**
  * A number of contacts as a reader types it into the breadcrumb's box, or after
- * `metacooler-run --contacts` — one parser for both (§6.5).
+ * `chromosomix --contacts` — one parser for both (§6.5).
  */
 
 import { describe, expect, it } from 'vitest'

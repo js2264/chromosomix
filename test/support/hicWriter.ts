@@ -567,7 +567,7 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
     w.int64(0)
     w.int64(0)
   }
-  const attributes = options.attributes ?? { software: 'metacooler.js test fixture' }
+  const attributes = options.attributes ?? { software: 'chromosomix test fixture' }
   w.int32(Object.keys(attributes).length)
   for (const [key, value] of Object.entries(attributes)) {
     w.string(key)

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # The DNA Bacterial Zoo: the main Hi-C operations over every map of the lab's
-# bacteria, with metacooler-run, written straight into the store the viewer's
-# "DNA Bacterial Zoo" tile reads — there is no results/ to gather it from.
+# bacteria, run by the chromosomix command and written straight into the store
+# the viewer's "DNA Bacterial Zoo" tile reads — there is no results/ to gather
+# it from.
 #
 #   scripts/dbz-store.sh                         every sample of scripts/DBZ_species.tsv
 #   scripts/dbz-store.sh PAK_MM142 PAO1_v3_MM38  two of them
@@ -12,13 +13,13 @@
 # The maps (<sample>.mcool) and the references (<species>.fa, .fna or .fasta,
 # gzipped or not) are found wherever they are under $DATA, and the store is
 #
-#   $STORE/store.json                         every file of every species (SPECS §24.1)
-#   $STORE/<sample>/<sample>.mcool            the map: a hard link to the one in $DATA
-#   $STORE/<sample>/<species>.fa              its reference, likewise
-#   $STORE/<sample>/<sample>.metacooler.json  the session: the map, and under it its HiC
-#                                             score, insulation and E1 — nothing else
-#   $STORE/<sample>/framing.tsv               what every step ran with: which sequences
-#                                             are circles, and where each origin is
+#   $STORE/store.json                          every file of every species (SPECS §24.1)
+#   $STORE/<sample>/<sample>.mcool             the map: a hard link to the one in $DATA
+#   $STORE/<sample>/<species>.fa               its reference, likewise
+#   $STORE/<sample>/<sample>.chromosomix.json  the session: the map, and under it its HiC
+#                                              score, insulation and E1 — nothing else
+#   $STORE/<sample>/framing.tsv                what every step ran with: which sequences
+#                                              are circles, and where each origin is
 #   $STORE/<sample>/<step>/<sample>_<bp>.<task>.<output>.bw|bed|bedpe|bed3d|tsv
 #
 # One sub-directory per analysis — because output names carry the task and not
@@ -75,16 +76,16 @@ STORE=${STORE:-$DATA/store}
 SPECIES=${SPECIES:-$HERE/DBZ_species.tsv}
 
 # This checkout's own build, which has every task the steps below name — `npm
-# run build:cli` makes it; or `npm i -g metacooler-viewer`'s on the PATH:
-# MR=metacooler-run
-if [ -n "${MR:-}" ]; then
-  mr () { $MR "$@"; }
-elif [ -f "$REPO/dist-cli/metacooler-run.mjs" ]; then
-  MR="node $REPO/dist-cli/metacooler-run.mjs"
-  mr () { node "$REPO/dist-cli/metacooler-run.mjs" "$@"; }
+# run build:cli` makes it; or `npm i -g chromosomix`'s on the PATH:
+# CLI=chromosomix
+if [ -n "${CLI:-}" ]; then
+  cli () { $CLI "$@"; }
+elif [ -f "$REPO/dist-cli/chromosomix.mjs" ]; then
+  CLI="node $REPO/dist-cli/chromosomix.mjs"
+  cli () { node "$REPO/dist-cli/chromosomix.mjs" "$@"; }
 else
-  MR=metacooler-run
-  mr () { metacooler-run "$@"; }
+  CLI=chromosomix
+  cli () { chromosomix "$@"; }
 fi
 
 # One place for the resolutions. A file that does not carry one has the steps
@@ -102,7 +103,7 @@ RES_MODEL=${RES_MODEL:-2000}       # the 3D reconstruction
 
 # A bacterial chromosome and a plasmid join their own ends, and no contact map
 # has a field that says so — the reader declares it. `auto` asks each map: the
-# junction test the viewer runs when it first opens one (`metacooler-run
+# junction test the viewer runs when it first opens one (`chromosomix
 # circular`, SPECS §8.15) declares the sequences whose two ends are neighbours,
 # so the zoo's linear chromosomes (Borrelia, Streptomyces) stay lines. `all`
 # declares every sequence of every file circular, `none` none. It changes the
@@ -145,7 +146,7 @@ usage: scripts/dbz-store.sh [<sample> ...]
   COMPARTMENTS_METHOD=cooltools|correlation
                      what the eigenvectors are taken of (default: cooltools;
                      correlation is Lieberman-Aiden 2009's)
-  MR=<command>       metacooler-run (default: this checkout's dist-cli build)
+  CLI=<command>      the chromosomix command (default: this checkout's dist-cli build)
   RES_COVERAGE, RES_CISTRANS, RES_PS, RES_DOMAINS, RES_PATTERNS, RES_COMPOSITION, RES_MODEL
 TEXT
 }
@@ -159,16 +160,16 @@ case "$COMPARTMENTS_METHOD" in
 esac
 [ -d "$DATA" ] || { printf '%s: no such folder. Set DATA to where the maps are.\n' "$DATA" >&2; exit 2; }
 [ -f "$SPECIES" ] || { printf '%s: no such table. Set SPECIES.\n' "$SPECIES" >&2; exit 2; }
-command -v "${MR%% *}" > /dev/null 2>&1 || {
-  printf '%s is not on the PATH. Install it, or set MR to a build of it.\n' "${MR%% *}" >&2
+command -v "${CLI%% *}" > /dev/null 2>&1 || {
+  printf '%s is not on the PATH. Install it, or set CLI to a build of it.\n' "${CLI%% *}" >&2
   exit 2
 }
 # The junction test is newer than some builds of the command, and a store built
 # without it would declare nothing circular without saying why.
-case "$(mr circular < /dev/null 2>&1)" in
+case "$(cli circular < /dev/null 2>&1)" in
   *'needs at least one file'*) ;;
   *)
-    printf '%s has no `circular` command. Build this checkout'"'"'s with `npm run build:cli`, or set MR.\n' "$MR" >&2
+    printf '%s has no `circular` command. Build this checkout'"'"'s with `npm run build:cli`, or set CLI.\n' "$CLI" >&2
     exit 2
     ;;
 esac
@@ -205,9 +206,9 @@ run_step () {
   # A step owns its directory, so a re-run replaces its own outputs rather than
   # leaving last week's beside this week's under one name.
   rm -f "$out"/*
-  printf '\n$ %s %s --out %s\n' "$MR" "$*" "$out" >> "$log"
+  printf '\n$ %s %s --out %s\n' "$CLI" "$*" "$out" >> "$log"
   local status=0
-  mr "$@" --out "$out" --quiet < /dev/null >> "$log" 2>&1 || status=$?
+  cli "$@" --out "$out" --quiet < /dev/null >> "$log" 2>&1 || status=$?
   # The bigWig beside it says the same, indexed, and the TSV says it with its
   # provenance: the store keeps those two.
   rm -f "$out"/*.bedGraph
@@ -238,7 +239,7 @@ rungs () {
     *.mcool) ;;
     *) return 0 ;;
   esac
-  mr coverage "$1" --quiet < /dev/null 2>&1 |
+  cli coverage "$1" --quiet < /dev/null 2>&1 |
     sed -n 's/.*Resolutions found: \[\([^]]*\)\].*/\1/p' |
     tr -d " '" | tr ',' '\n' | sed 's#^/*resolutions/##'
 }
@@ -406,8 +407,8 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
   names=''; tested=''
   if have "$RES_PATTERNS"; then
     mkdir -p "$dir/circular"
-    printf '\n$ %s circular %s\n' "$MR" "$file::/resolutions/$RES_PATTERNS" >> "$log"
-    if mr circular "$file::/resolutions/$RES_PATTERNS" --quiet < /dev/null > "$junctions" 2>> "$log"; then
+    printf '\n$ %s circular %s\n' "$CLI" "$file::/resolutions/$RES_PATTERNS" >> "$log"
+    if cli circular "$file::/resolutions/$RES_PATTERNS" --quiet < /dev/null > "$junctions" 2>> "$log"; then
       names=$(awk -F'\t' '!/^#/ && $1 != "sequence" { print $1 }' "$junctions" | paste -sd, -)
       tested=$(awk -F'\t' '!/^#/ && $4 == "yes" { print $1 }' "$junctions" | paste -sd, -)
     else

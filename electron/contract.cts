@@ -14,7 +14,7 @@
  */
 
 /** The single IPC channel. Main sends, renderer listens. */
-export const CHANNEL_COMMAND = 'metacooler:command'
+export const CHANNEL_COMMAND = 'chromosomix:command'
 
 /**
  * Every command a menu item is allowed to trigger.

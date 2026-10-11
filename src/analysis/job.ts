@@ -181,7 +181,7 @@ export function listParam(params: Params, key: string): string[] {
  * `null` and an empty array are **two answers**, which is why this does not
  * reach for {@link listParam}: unanswered means the whole file — the form ticks
  * every box on the way in, so a value that is not a list is a job that never met
- * a form, a stored session or a `metacooler-run` line with no `--sequences` —
+ * a form, a stored session or a `chromosomix` line with no `--sequences` —
  * and `[]` is a reader who pressed *None*, which is a run over nothing and is
  * said out loud rather than widened into a genome-wide one.
  *

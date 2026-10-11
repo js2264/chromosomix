@@ -86,7 +86,7 @@ const press = async (on, title) => {
   }
 }
 
-await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_tracks.metacooler.json`)
+await page.goto(`${g.base}/?config=${g.base}/demo/yeast/Yeast_tracks.chromosomix.json`)
 await page.waitForSelector('.browser-canvas', { timeout: 120000 })
 await sleep(8000)
 await show('at rest')
@@ -156,7 +156,7 @@ async function fresh(config) {
 
 // Beside a map there is no such bar: the lanes are the map's. Shot at the
 // foot of the lanes under it.
-const map = await fresh('Yeast_microC.metacooler.json')
+const map = await fresh('Yeast_microC.chromosomix.json')
 await toFoot(map.other)
 console.log('beside a map  ', await barsShown(map.other), '·', await map.other.locator('.browser-stack-resize').count(), 'built')
 await map.other.screenshot({ path: `${OUT}/sb06-map-no-bar.png` })
@@ -165,7 +165,7 @@ await map.context.close()
 
 // …nor in a deck's tracks cell, which has the cell's own bar under it: one
 // added to the two maps' deck, with two of the session's tracks on it.
-const deck = await fresh('Yeast_deck.metacooler.json')
+const deck = await fresh('Yeast_deck.chromosomix.json')
 await deck.other.click('.deck-add-toggle')
 await deck.other.click('.deck-add-tracks')
 await deck.other.waitForSelector('.deck-tracks', { timeout: 20000 })

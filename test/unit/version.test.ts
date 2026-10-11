@@ -74,7 +74,7 @@ describe('the package', () => {
   })
 
   it('says where it lives and what it needs', () => {
-    expect(pkg.repository?.url).toContain('github.com/js2264/metacooler.js')
+    expect(pkg.repository?.url).toContain('github.com/js2264/chromosomix')
     expect(pkg.engines?.node).toBeTruthy()
   })
 })
@@ -104,7 +104,7 @@ describe('the build stamp', () => {
   })
 
   it('names the producer for anything that has to say what made it', () => {
-    expect(PRODUCER).toBe('(meta)cooler 0.0.0-dev')
+    expect(PRODUCER).toBe('chromosomix 0.0.0-dev')
   })
 
   it('omits the parts it does not know instead of writing empty ones', () => {

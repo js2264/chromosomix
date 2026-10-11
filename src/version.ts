@@ -81,14 +81,14 @@ export const TARGET: 'web' | 'desktop' | 'standalone' =
 export const IS_STANDALONE = TARGET === 'standalone'
 
 /**
- * `(meta)cooler 0.2.0`, or `(meta)cooler 0.2.0 desktop` — the name and version,
+ * `chromosomix 0.2.0`, or `chromosomix 0.2.0 desktop` — the name and version,
  * for anywhere a figure or a file has to say what produced it.
  *
  * The target is part of the answer because this string ends up in every
  * exported PDF's `/Producer` field, and "which build made this figure" is the
  * first question asked when one came out wrong.
  */
-export const PRODUCER = `(meta)cooler ${VERSION}${TARGET === 'web' ? '' : ` ${TARGET}`}`
+export const PRODUCER = `chromosomix ${VERSION}${TARGET === 'web' ? '' : ` ${TARGET}`}`
 
 /**
  * The full build line: `0.2.0 · a1b2c3d · 2026-08-03`, with `· desktop` when

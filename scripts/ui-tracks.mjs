@@ -40,7 +40,7 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const CONFIG = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`
+const CONFIG = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
 const COOL = `${BASE}/demo/yeast/Yeast_microC_G2M_1kb.cool`
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH

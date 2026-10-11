@@ -7,7 +7,7 @@
  * nothing that is a dev feature. The title and the manifest's name said
  * *(multi-genome) cool files* while the multi-genome format was off by default,
  * which is the one feature a reader of the static text could not then find.
- * The name stays (meta)cooler.
+ * The name is chromosomix.
  */
 
 import { readFileSync } from 'node:fs'
@@ -36,9 +36,9 @@ describe('the static text', () => {
     }
   })
 
-  it('keeps the name (meta)cooler', () => {
-    expect(title.startsWith('(meta)cooler')).toBe(true)
-    expect(manifest.name.startsWith('(meta)cooler')).toBe(true)
-    expect(manifest.short_name).toBe('(meta)cooler')
+  it('names the app chromosomix', () => {
+    expect(title.startsWith('chromosomix')).toBe(true)
+    expect(manifest.name.startsWith('chromosomix')).toBe(true)
+    expect(manifest.short_name).toBe('chromosomix')
   })
 })

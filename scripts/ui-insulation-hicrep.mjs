@@ -78,7 +78,7 @@ const run = async (wait) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`)
   await page.waitForFunction(
     () => !document.body.textContent.includes('Opening ') && document.querySelectorAll('.heatmap-canvas').length >= 2,
     null,

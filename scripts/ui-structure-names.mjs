@@ -69,7 +69,7 @@ for (const [contig, end] of ends) {
     states.push(`${contig}\t${s}\t${Math.min(end, s + 25000)}\tstate${1 + Math.floor(random() * 30)}`)
   }
 }
-const dir = join(tmpdir(), 'metacooler-structure-names')
+const dir = join(tmpdir(), 'chromosomix-structure-names')
 mkdirSync(dir, { recursive: true })
 const abPath = join(dir, 'Yeast_compartments.bed')
 const statesPath = join(dir, 'Yeast_states.bed')
@@ -134,7 +134,7 @@ const addBed = async (path) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await sleep(4000)
   await fold('Fold the General panel')

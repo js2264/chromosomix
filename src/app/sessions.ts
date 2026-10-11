@@ -19,7 +19,7 @@
  * had.
  */
 
-const KEY = 'metacooler-viewer:sessions'
+const KEY = 'chromosomix:sessions'
 
 export interface SessionSnapshot {
   id: string

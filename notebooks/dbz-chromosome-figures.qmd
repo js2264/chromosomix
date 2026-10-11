@@ -1,6 +1,6 @@
 ---
 title: "One bacterial chromosome, from its origin to its compartments"
-subtitle: "The DNA Bacterial Zoo, one figure per species, every number from metacooler-run"
+subtitle: "The DNA Bacterial Zoo, one figure per species, every number from chromosomix"
 format:
   html:
     toc: true
@@ -25,7 +25,7 @@ A figure per species of the **DNA Bacterial Zoo** store, over each one's **longe
 | i | E1 against radial position in the 3D model | `reconstruct3d`, `spatialtracks` |
 | j | the 3D model, its first two principal components, coloured by E1 | `reconstruct3d` |
 
-Every number comes from **`metacooler-run`** — the Analysis panel from a shell, the same code the
+Every number comes from **`chromosomix`** — the Analysis panel from a shell, the same code the
 viewer runs — whose outputs this notebook parses: which sequences are circles (`circular`), the
 origin (`oriter`), the base composition, the inter-arm alignment, E1 by distance and along the arms,
 the model and each bin's radial position in it. The CLI writes tracks, curves and tables but not
@@ -41,7 +41,7 @@ chooses among them, so comparing the GC content of the A and B compartments (pan
 comparing GC content with itself.
 
 **Before rendering:** `npm run build:cli` at the repository root (this checkout's
-`metacooler-run`), and a Python with `numpy`, `scipy`, `matplotlib`, `h5py` and `jupyter`. Then
+`chromosomix`), and a Python with `numpy`, `scipy`, `matplotlib`, `h5py` and `jupyter`. Then
 
 ```bash
 quarto render notebooks/dbz-chromosome-figures.qmd
@@ -50,7 +50,7 @@ quarto render notebooks/dbz-chromosome-figures.qmd
 or run the chunks one by one from an editor that knows Quarto (VS Code, Positron, RStudio). The
 maps and references are fetched from the store once into `notebooks/work/`, which also holds every
 command's outputs; the figures go to `notebooks/figures/`, with `numbers.tsv` beside them. Both
-folders are ignored by git. Every map is read balanced, which is `metacooler-run`'s default wherever
+folders are ignored by git. Every map is read balanced, which is `chromosomix`'s default wherever
 the file carries weights; the raw coverage the origin call reads is asked for with `--no-balance`.
 
 ```{python}
@@ -78,12 +78,12 @@ REDO = False
 
 HERE = Path.cwd().resolve()
 REPO = HERE.parent if HERE.name == 'notebooks' else HERE
-CLI = REPO / 'dist-cli' / 'metacooler-run.mjs'
+CLI = REPO / 'dist-cli' / 'chromosomix.mjs'
 WORK = REPO / 'notebooks' / 'work'
 FIGURES = REPO / 'notebooks' / 'figures'
 ```
 
-## Running `metacooler-run`, and reading what it writes
+## Running `chromosomix`, and reading what it writes
 
 Each step writes into a directory of its own under `work/<sample>/`, and is skipped when that
 directory already holds its outputs (`REDO` above). Every command is printed as it runs, so a cell's
@@ -111,19 +111,19 @@ WORK.mkdir(parents=True, exist_ok=True)
 FIGURES.mkdir(parents=True, exist_ok=True)
 
 
-#: Seconds of metacooler-run per sample, over the commands this render actually ran.
+#: Seconds of chromosomix per sample, over the commands this render actually ran.
 SECONDS = {}
 
 
 def mr(*args, out=None):
-    # One metacooler-run command, printed, run and timed; its notes back, a failure an error.
+    # One chromosomix command, printed, run and timed; its notes back, a failure an error.
     argv = [str(arg) for arg in args] + ([] if out is None else ['--out', str(out)])
-    print('$ metacooler-run ' + ' '.join(shlex.quote(arg) for arg in argv))
+    print('$ chromosomix ' + ' '.join(shlex.quote(arg) for arg in argv))
     started = time.perf_counter()
     done = subprocess.run(['node', str(CLI), *argv, '--quiet'], capture_output=True, text=True)
     seconds = time.perf_counter() - started
     if done.returncode != 0:
-        raise RuntimeError(f'metacooler-run {argv[0]} failed:\n{done.stderr}')
+        raise RuntimeError(f'chromosomix {argv[0]} failed:\n{done.stderr}')
     notes = [line.strip()[6:] for line in done.stderr.splitlines() if line.strip().startswith('note: ')]
     for note in notes:
         print('    note:', note)
@@ -157,7 +157,7 @@ def fmt(value, spec):
 
 
 def rows_of(text):
-    # A metacooler-run table: `#` lines are its provenance, the first other line its header.
+    # A chromosomix table: `#` lines are its provenance, the first other line its header.
     lines = [line for line in text.splitlines() if line and not line.startswith('#')]
     header = lines[0].split('\t')
     return [dict(zip(header, line.split('\t'))) for line in lines[1:]]
@@ -199,7 +199,7 @@ def beads(path, chrom, n):
 ## The store's cards
 
 One card per species: its sample, its map and its reference, read from `store.json` and fetched
-once where the store is a URL — `metacooler-run` reads files, not addresses.
+once where the store is a URL — `chromosomix` reads files, not addresses.
 
 ```{python}
 def read_store(store):
@@ -381,7 +381,7 @@ def agreement(c, e1):
 
 ## One species
 
-The chain for one card, each step a `metacooler-run` command: the junction test names the longest
+The chain for one card, each step a `chromosomix` command: the junction test names the longest
 chromosome and says whether it is a circle; *Origin and terminus* places the origin, from the GC
 skew, the parS and matS sites and the coverage; every later step is framed by both. Then the maps.
 
@@ -708,7 +708,7 @@ bins to the main diagonal, averaged at each distance from the origin and taken i
 task's reach — over O/E by distance, which is the task's enrichment recomputed here
 (`inter-arm log2`), and along both arms: what the detrending leaves of it, the task's enrichment
 after detrend. **A** is where E1 (arms) is positive once GC content has signed it, **B** where it is
-negative; the P values are two-sided. The seconds are the `metacooler-run` commands this render ran —
+negative; the P values are two-sided. The seconds are the `chromosomix` commands this render ran —
 0 where every step was kept from an earlier one, so set `REDO = True` to time a whole chain. The same
 table is written to `figures/numbers.tsv`.
 

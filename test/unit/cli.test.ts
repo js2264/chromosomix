@@ -51,7 +51,7 @@ function records(nx: number, ny: number, intra: boolean, seed: number, boundary 
 }
 
 beforeAll(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'metacooler-cli-'))
+  directory = await mkdtemp(join(tmpdir(), 'chromosomix-cli-'))
   sample = join(directory, 'sample.hic')
   out = join(directory, 'out')
   const fixture = await writeHic({
@@ -96,7 +96,7 @@ describe('the surface', () => {
   it('prints usage with no arguments, and exits cleanly', async () => {
     reset()
     expect(await main([])).toBe(0)
-    expect(said()).toMatch(/metacooler-run/)
+    expect(said()).toMatch(/chromosomix/)
     expect(said()).toMatch(/replay/)
   })
 
@@ -125,7 +125,7 @@ describe('the surface', () => {
   it('offers the junction test beside the tasks', async () => {
     reset()
     expect(await main([])).toBe(0)
-    expect(said()).toMatch(/metacooler-run circular/)
+    expect(said()).toMatch(/chromosomix circular/)
   })
 })
 
@@ -257,8 +257,9 @@ describe('running a task', () => {
     const text = await readFile(join(out, 'sample.expected.ps.tsv'), 'utf8')
     // The same `#` header the browser's export carries — same writer, so a file
     // made in a batch and a file made by clicking are comparable without anybody
-    // wondering whether the difference is the tool.
-    expect(text).toMatch(/^# metacooler metacooler-run/m)
+    // wondering whether the difference is the tool. Its build is the version and
+    // `cli`, where the browser's is the version and the commit.
+    expect(text).toMatch(/^# chromosomix \S+ cli$/m)
     expect(text).toMatch(/^# task: expected/m)
     expect(text).toMatch(/^# framing: whole file at 1000 bp/m)
     expect(text).toMatch(/^# param factor: 1\.1$/m)
@@ -408,7 +409,7 @@ describe('running a task', () => {
       join(out, 'sample.reconstruct3d.reconstructed-model.bed3d'),
       'utf8',
     )
-    expect(text).toMatch(/^# metacooler .*bed3d: chrom start end x y z/m)
+    expect(text).toMatch(/^# chromosomix .*bed3d: chrom start end x y z/m)
     const rows = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
     expect(rows.length).toBeGreaterThan(0)
     let moved = 0
@@ -905,11 +906,11 @@ describe('the annotations venue', () => {
 
   it('replays a recorded track task, with the files named by --track', async () => {
     reset()
-    const path = join(directory, 'trackcorr.metacooler.json')
+    const path = join(directory, 'trackcorr.chromosomix.json')
     await writeFile(
       path,
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 1,
         createdAt: '2026-08-12T00:00:00.000Z',
         active: 0,
@@ -1412,11 +1413,11 @@ describe('a locus on the command line (§26.1)', () => {
 
   it('replays a recorded locus with the same reading', async () => {
     reset()
-    const path = join(directory, 'anchored.metacooler.json')
+    const path = join(directory, 'anchored.chromosomix.json')
     await writeFile(
       path,
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 1,
         createdAt: '2026-10-01T00:00:00.000Z',
         active: 0,
@@ -1462,13 +1463,13 @@ describe('replaying a workspace', () => {
   const workspaceAt = async (
     tabs: unknown[],
     active = 0,
-    name = 'workspace.metacooler.json',
+    name = 'workspace.chromosomix.json',
   ): Promise<string> => {
     const path = join(directory, name)
     await writeFile(
       path,
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 1,
         createdAt: '2026-08-12T00:00:00.000Z',
         active,
@@ -1501,7 +1502,7 @@ describe('replaying a workspace', () => {
       coverage: { total: true, cis: false, fraction: false, trans: false, balance: false },
     })
     await main(['replay', path, '--over', sample, '--out', join(directory, 'r2'), '--quiet'])
-    expect(complained()).toMatch(/2 tasks from workspace\.metacooler\.json, over 1 file/)
+    expect(complained()).toMatch(/2 tasks from workspace\.chromosomix\.json, over 1 file/)
   })
 
   /**
@@ -1578,16 +1579,16 @@ describe('replaying a workspace', () => {
   it('refuses a workspace from a newer build without blaming the file', async () => {
     // The reason the message is no longer one blanket sentence. A workspace this
     // build cannot read is a fact about the build, and telling somebody their
-    // file is "not a metacooler workspace file" sends them to inspect a file
+    // file is "not a chromosomix workspace file" sends them to inspect a file
     // that is perfectly good.
     reset()
     const path = join(directory, 'future.json')
     await writeFile(
       path,
       JSON.stringify({
-        kind: 'metacooler.workspace',
+        kind: 'chromosomix.workspace',
         version: 99,
-        producer: '(meta)cooler 9.9.9',
+        producer: 'chromosomix 9.9.9',
         active: 0,
         tabs: [{ state: { uri: 'a.cool', view: 'region' } }],
       }),

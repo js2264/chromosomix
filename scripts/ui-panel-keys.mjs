@@ -43,7 +43,7 @@ const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const YEAST = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`
+const YEAST = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
 const ECOLI = `${BASE}/#uri=${BASE}/demo/ecoli/Ecoli.mcool::/resolutions/1000&view=region&region=NC_000913.3:1000000-2000000&transform=log10`
 
 /** What an AZERTY PC's layout map says, as Chromium would return it: each key bare. */

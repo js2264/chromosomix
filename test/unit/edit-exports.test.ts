@@ -12,7 +12,7 @@ import { agpOf, assemblyObjects, chainOf, chromSizesOf, juiceboxAssemblyOf, read
 import { EditedAssembly, emptyEdit, withStep, type EditStep, type ReferenceEdit } from '../../src/genome/edit'
 
 const ORIGINAL = { names: ['I', 'II', 'III'], lengths: [1000, 600, 300] }
-const CONTEXT = { file: 'test.cool', by: 'metacooler-viewer test', created: '2026-09-30', steps: [] as string[] }
+const CONTEXT = { file: 'test.cool', by: 'chromosomix test', created: '2026-09-30', steps: [] as string[] }
 
 function editOf(...steps: EditStep[]): ReferenceEdit {
   let edit: ReferenceEdit = emptyEdit(ORIGINAL)

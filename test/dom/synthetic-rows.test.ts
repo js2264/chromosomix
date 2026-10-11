@@ -402,7 +402,7 @@ describe('dragging a row by its grip', () => {
     Object.defineProperty(start, 'dataTransfer', { value: transfer })
     grip.dispatchEvent(start)
     expect(transfer.effectAllowed).toBe('copyMove')
-    expect(data.get('application/x-metacooler-track')).toBe('ATAC')
+    expect(data.get('application/x-chromosomix-track')).toBe('ATAC')
   })
 
   it('says in its tooltip where it can be let go: any edge of any map, a + or an empty cell', () => {

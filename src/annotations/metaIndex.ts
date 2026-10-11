@@ -302,7 +302,7 @@ export class MetadataIndex implements MetaRowIndex {
     const total =
       values.kind === 'quantitative' ? values.values.length : values.codes.length
     const lines = [
-      `# metacooler.js — a column of the map's own tables`,
+      `# chromosomix — a column of the map's own tables`,
       `# file: ${uri}`,
       `# table: /${table}`,
       `# column: ${column} (${descriptor.kind})`,

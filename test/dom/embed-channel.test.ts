@@ -246,7 +246,7 @@ describe('who is allowed to speak', () => {
   it('ignores a message that is not one of ours', () => {
     const { channel, parent, events } = channelOn()
     channel.start()
-    for (const data of [null, 'metacooler:where', 42, { type: 'other:where' }, { state: A }]) {
+    for (const data of [null, 'chromosomix:where', 42, { type: 'other:where' }, { state: A }]) {
       events.deliver(message(data, { from: parent }))
     }
     expect(parent.seen).toHaveLength(1)

@@ -11,7 +11,7 @@
  *
  * Two hands write it, and the difference is kept. The *Origin and terminus*
  * task fills in every sequence it places; a reader's own arrives in a workspace
- * they exported, or on a `metacooler-run` line's `--origin`, and the Chromosomes
+ * they exported, or on a `chromosomix` line's `--origin`, and the Chromosomes
  * table shows whichever is held. A reader's origin is **never** overwritten by
  * a task — a reader who has corrected a call knows something the skew did not —
  * while a task's is replaced by the next run of the task, which is what

@@ -19,7 +19,7 @@ const { page, shot, text, history } = g
 const files = join(OUT, 'files')
 mkdirSync(files, { recursive: true })
 
-await g.openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.metacooler.json`)
+await g.openWithDev(`?config=${g.base}/demo/yeast/Yeast_microC.chromosomix.json`)
 await sleep(8000)
 await g.openStage()
 await g.settled()

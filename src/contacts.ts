@@ -1,7 +1,7 @@
 /**
  * A number of contacts, as a reader types it and as the app says it (§6.5).
  *
- * One parser for the breadcrumb's *contacts* box and for `metacooler-run
+ * One parser for the breadcrumb's *contacts* box and for `chromosomix
  * --contacts`, so a number that works in one works in the other: `10M`,
  * `23,000,000`, `2.5e7`, `500k`, `1.2G` — the forms a methods section and a
  * `cooler info` print. And one phrase for what a resampled map is, so the

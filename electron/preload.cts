@@ -38,7 +38,7 @@ const platform: DesktopPlatform = {
   signed: false,
 }
 
-contextBridge.exposeInMainWorld('metacoolerDesktop', {
+contextBridge.exposeInMainWorld('chromosomixDesktop', {
   platform,
 
   /**

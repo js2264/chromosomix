@@ -1,6 +1,6 @@
 """A pastis-NB structure with pastis' own functions, from one MDS seed (validation.qmd § 8).
 
-The beads are the bins with a balancing weight and a contact, as metacooler-run models them; the
+The beads are the bins with a balancing weight and a contact, as chromosomix models them; the
 biases are the inverse weights. Writes the coordinates, one row per bead, as a .npy.
 
 usage: python pastis_nb.py MAP_URI OUT_NPY SEED

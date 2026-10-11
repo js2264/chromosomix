@@ -41,7 +41,7 @@ import type { MenuItemConstructorOptions } from 'electron'
 
 import { CHANNEL_COMMAND, type MenuCommandId } from './contract.cjs'
 
-const REPO_URL = 'https://github.com/js2264/metacooler.js'
+const REPO_URL = 'https://github.com/js2264/chromosomix'
 
 /** Send a command id to the focused window's page. */
 function send(id: MenuCommandId): void {
@@ -76,7 +76,7 @@ export function buildMenu(): Menu {
     template.push({
       label: app.name,
       submenu: [
-        { label: 'About (meta)cooler', click: () => send('about') },
+        { label: 'About chromosomix', click: () => send('about') },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -169,7 +169,7 @@ export function buildMenu(): Menu {
     label: '&Help',
     submenu: [
       mirror('Keyboard shortcuts', 'shortcuts', '?'),
-      { label: 'About (meta)cooler', click: () => send('about') },
+      { label: 'About chromosomix', click: () => send('about') },
       { type: 'separator' },
       {
         label: 'Source and issues on GitHub',

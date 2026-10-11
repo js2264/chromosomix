@@ -63,7 +63,7 @@ const COMMIT = git(['rev-parse', '--short', 'HEAD'])
  */
 function gzippedAsIs(): Plugin {
   return {
-    name: 'metacooler-gz-as-is',
+    name: 'chromosomix-gz-as-is',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -81,7 +81,7 @@ function gzippedAsIs(): Plugin {
 
 function serviceWorker(base: string): Plugin {
   return {
-    name: 'metacooler-service-worker',
+    name: 'chromosomix-service-worker',
     apply: 'build',
     generateBundle(_options, bundle) {
       const source = readFileSync(new URL('./src/sw.js', import.meta.url), 'utf8')
@@ -89,7 +89,7 @@ function serviceWorker(base: string): Plugin {
       // the time this runs; the public/ directory is copied separately and is
       // therefore absent, which is exactly the line the precache wants drawn.
       const urls = precacheUrls(Object.keys(bundle), base)
-      const cacheName = ['metacooler', VERSION, COMMIT].filter(Boolean).join('-')
+      const cacheName = ['chromosomix', VERSION, COMMIT].filter(Boolean).join('-')
       // Each placeholder must appear exactly once. It is a text substitution,
       // so a second mention — in a comment, say — silently takes the value and
       // leaves the code holding an identifier that is not defined: a worker

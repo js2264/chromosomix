@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CardArranger, cardsIn, homeParent, swapCard, type ArrangedColumn } from '@/ui/cardLayout'
 import { cardTitle } from '@/ui/icons'
 
-const KEY = 'metacooler-viewer:card-layout'
+const KEY = 'chromosomix:card-layout'
 
 /** A column as `SidePanel` makes one: a body, a session's host in it, a zone after. */
 function column(id: string): ArrangedColumn & { host: HTMLElement; inner: HTMLElement } {

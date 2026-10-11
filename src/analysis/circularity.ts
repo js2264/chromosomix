@@ -237,7 +237,7 @@ export type JunctionReader = (rows: [number, number], cols: [number, number]) =>
  * sequences at or above {@link CIRCULAR_SCORE}. Three reads a sequence — the
  * diagonal at each end and the corner joining them — through whichever host
  * holds the map: the session's reader worker on a first open, the file itself
- * in `metacooler-run circular`. `null` when `alive` says the answer is no
+ * in `chromosomix circular`. `null` when `alive` says the answer is no
  * longer wanted.
  */
 export async function measureJunctions(

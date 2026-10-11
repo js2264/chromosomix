@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-metacooler.js — app icon generator.
+chromosomix — app icon generator.
 
 Draws the "Field" mark (a block-diagonal contact map with long-range contacts)
 on a macOS-style plate: continuous-curvature squircle, hairline border, subtle

@@ -2,7 +2,7 @@
 
 > **Status, 2026-08-12.** Six of the eleven items below are built and on
 > `claude/feature-gap-analysis-ri17pl`: **G1** (`.hic`), **G3** (per-map results,
-> the overlay, interactive figures), **G4** (`metacooler-run`, as a CLI rather
+> the overlay, interactive figures), **G4** (`chromosomix`, as a CLI rather
 > than as emitted snippets), **G5** (found already landed; the equivalence suite
 > it was waiting on is now written), **G6** (tabix) and **G8** (bedGraph and
 > wig). A Share button was built in place of G7's embed mode. What remained
@@ -264,7 +264,7 @@ none of them.
 - **An embed never pushes history.** This was the one real defect the exercise turned up rather than
   a feature it added: a frame's `pushState` writes into the joint session history, so an embedded
   figure was going to take over the reader's Back button on any page that used one.
-- `?config=<url>` opens a published `.metacooler.json` named in the address — the pointer form of
+- `?config=<url>` opens a published `.chromosomix.json` named in the address — the pointer form of
   what `#session=` carries as a payload, through the fetch, the signing and the resolving that
   `Session.openConfigUrl` already did for the picker's URL box.
 - Four messages over `postMessage`: `ready`, `state`, `where`, `navigate`. Only the framing window

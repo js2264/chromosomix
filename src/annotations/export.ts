@@ -55,7 +55,7 @@ export function formatMarks(
     format === 'bed'
       ? marksFor(marks, 'bed').map((mark) => bedRow(mark as ManualLine))
       : marksFor(marks, 'bedpe').map((mark) => bedpeRow(mark as ManualArrowhead | ManualRect))
-  return [`# metacooler manual annotations${from}${when}`, ...rows, ''].join('\n')
+  return [`# chromosomix manual annotations${from}${when}`, ...rows, ''].join('\n')
 }
 
 /**
@@ -130,7 +130,7 @@ export function formatIntervals(
   const what = context.label === undefined ? 'intervals' : context.label
   const from = context.file === undefined ? '' : ` from ${context.file}`
   const when = context.created === undefined ? '' : ` on ${context.created}`
-  const head = `# metacooler ${what}${from}${when}`
+  const head = `# chromosomix ${what}${from}${when}`
 
   if (payload.kind === 'pairs') {
     const set = payload.data

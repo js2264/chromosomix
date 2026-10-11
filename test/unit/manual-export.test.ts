@@ -86,13 +86,13 @@ describe('formatMarks', () => {
   it('carries where it came from, as a comment every reader skips', () => {
     const text = formatMarks(MARKS, 'bed', { file: 'yeast.cool', created: '20260804-160000' })
     expect(text.split('\n')[0]).toBe(
-      '# metacooler manual annotations from yeast.cool on 20260804-160000',
+      '# chromosomix manual annotations from yeast.cool on 20260804-160000',
     )
   })
 
   it('writes a header and no rows rather than nothing at all', () => {
     const text = formatMarks([], 'bed')
-    expect(text.trim().split('\n')).toEqual(['# metacooler manual annotations'])
+    expect(text.trim().split('\n')).toEqual(['# chromosomix manual annotations'])
   })
 })
 

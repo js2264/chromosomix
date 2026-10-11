@@ -243,10 +243,10 @@ describe('every map the session holds, each with a grip (§16.9)', () => {
       const start = new window.Event('dragstart', { bubbles: true }) as DragEvent
       Object.defineProperty(start, 'dataTransfer', { value: transfer })
       grip.dispatchEvent(start)
-      expect(data.has('application/x-metacooler-map')).toBe(true)
+      expect(data.has('application/x-chromosomix-map')).toBe(true)
     }
     // The last one written is the companion's, by the deck's id for it.
-    expect(JSON.parse(data.get('application/x-metacooler-map') ?? '{}')).toEqual({ kind: 'companion', id: 'p1' })
+    expect(JSON.parse(data.get('application/x-chromosomix-map') ?? '{}')).toEqual({ kind: 'companion', id: 'p1' })
     expect(dragging).toEqual([true, true])
   })
 
@@ -278,7 +278,7 @@ describe('every map the session holds, each with a grip (§16.9)', () => {
     const start = new window.Event('dragstart', { bubbles: true }) as DragEvent
     Object.defineProperty(start, 'dataTransfer', { value: transfer })
     grip?.dispatchEvent(start)
-    expect(JSON.parse(data.get('application/x-metacooler-map') ?? '{}')).toEqual({ kind: 'hidden', id: 'hidden-1' })
+    expect(JSON.parse(data.get('application/x-chromosomix-map') ?? '{}')).toEqual({ kind: 'hidden', id: 'hidden-1' })
     // Both effects allowed, so the grid's move and an empty cell's copy both take it.
     expect(transfer.effectAllowed).toBe('copyMove')
   })

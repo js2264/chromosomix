@@ -10,17 +10,17 @@
  *
  * Out, from the frame:
  *
- * - `{ type: 'metacooler:ready', protocol, version, commit }` — once, when the
+ * - `{ type: 'chromosomix:ready', protocol, version, commit }` — once, when the
  *   window is mounted. It carries **nothing about the reader's session**, which
  *   is what lets it be the one message posted before anybody has identified
  *   themselves.
- * - `{ type: 'metacooler:state', state }` — the view state (§5.5), as the same
+ * - `{ type: 'chromosomix:state', state }` — the view state (§5.5), as the same
  *   object the URL hash is written from, or `null` for the file picker.
  *
  * In, from the host:
  *
- * - `{ type: 'metacooler:where' }` — answered with `state`.
- * - `{ type: 'metacooler:navigate', state }` — go here. A **patch**: the keys
+ * - `{ type: 'chromosomix:where' }` — answered with `state`.
+ * - `{ type: 'chromosomix:navigate', state }` — go here. A **patch**: the keys
  *   given are laid over the view state that is on screen, so `{ locus: … }` moves
  *   the browser without the host having to know what else is in the state, a key
  *   set to `null` is *removed*, and `state: null` is the picker.
@@ -61,13 +61,13 @@ import type { ViewState } from '../types'
 import { COMMIT, VERSION } from '../version'
 
 /** The frame is mounted and listening. Carries nothing about the session. */
-export const EMBED_READY = 'metacooler:ready'
+export const EMBED_READY = 'chromosomix:ready'
 /** Where the view is now, in answer or unprompted. */
-export const EMBED_STATE = 'metacooler:state'
+export const EMBED_STATE = 'chromosomix:state'
 /** Ask where the view is. */
-export const EMBED_WHERE = 'metacooler:where'
+export const EMBED_WHERE = 'chromosomix:where'
 /** Move the view. */
-export const EMBED_NAVIGATE = 'metacooler:navigate'
+export const EMBED_NAVIGATE = 'chromosomix:navigate'
 
 /**
  * The protocol's own version, carried by `ready`.

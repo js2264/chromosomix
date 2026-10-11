@@ -67,7 +67,7 @@ const style = (colour, size, opacity) => ({
   flip: false,
 })
 const workspace = {
-  kind: 'metacooler.workspace',
+  kind: 'chromosomix.workspace',
   version: 1,
   createdAt: '2026-09-28T00:00:00.000Z',
   active: 0,
@@ -118,7 +118,7 @@ const workspace = {
     },
   ],
 }
-writeFileSync('gallery/_overlay-deck.metacooler.json', JSON.stringify(workspace, null, 1))
+writeFileSync('gallery/_overlay-deck.chromosomix.json', JSON.stringify(workspace, null, 1))
 
 // ---------------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ const litZones = (at) =>
   }, at)
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/gallery/_overlay-deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/gallery/_overlay-deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(
     () => !document.body.textContent.includes('Opening ') && document.querySelectorAll('.heatmap-canvas').length >= 3,
     null,

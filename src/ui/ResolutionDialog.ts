@@ -90,7 +90,7 @@ function dialogBody(
     attrs: { min: '1', step: 'any', 'aria-label': 'Resolution' },
   }) as HTMLInputElement
 
-  const group = `metacooler-res-unit-${groups++}`
+  const group = `chromosomix-res-unit-${groups++}`
   const units = el('div', { class: 'res-units', attrs: { role: 'radiogroup', 'aria-label': 'Unit' } })
   const radios: HTMLInputElement[] = []
   for (const [index, unit] of UNITS.entries()) {

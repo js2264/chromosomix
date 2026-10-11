@@ -13,7 +13,7 @@
 import { gallery, sleep } from './gallery-lib.mjs'
 
 const OUT = process.argv[2] ?? 'gallery'
-const CONFIG = process.env.REASSEMBLY_CONFIG ?? '/out/reasm/Reassembly.metacooler.json'
+const CONFIG = process.env.REASSEMBLY_CONFIG ?? '/out/reasm/Reassembly.chromosomix.json'
 const g = await gallery(OUT)
 const { page, shot, text, openStage, openWithDev } = g
 

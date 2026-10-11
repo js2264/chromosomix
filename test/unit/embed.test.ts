@@ -40,13 +40,13 @@ describe('reading a mount', () => {
   })
 
   it('resolves a relative config against the page it was named on', () => {
-    expect(readMounting('?config=figure.metacooler.json', AT).config).toBe(
-      'https://viewer.example/app/figure.metacooler.json',
+    expect(readMounting('?config=figure.chromosomix.json', AT).config).toBe(
+      'https://viewer.example/app/figure.chromosomix.json',
     )
   })
 
   it('keeps an absolute config as it was written', () => {
-    const url = 'https://data.example/demo/yeast/Yeast_tracks.metacooler.json'
+    const url = 'https://data.example/demo/yeast/Yeast_tracks.chromosomix.json'
     expect(readMounting(`?config=${encodeURIComponent(url)}`, AT).config).toBe(url)
   })
 
@@ -92,7 +92,7 @@ describe('reading a mount', () => {
    */
   it('resolves a store against the page it was named on', () => {
     expect(readMounting('?store=shelf.json', AT).store).toBe('https://viewer.example/app/shelf.json')
-    const url = 'https://raw.githubusercontent.com/js2264/metacooler.js/stores/4dn.json'
+    const url = 'https://raw.githubusercontent.com/js2264/chromosomix/stores/4dn.json'
     expect(readMounting(`?store=${encodeURIComponent(url)}`, AT).store).toBe(url)
   })
 

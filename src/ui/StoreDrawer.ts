@@ -64,8 +64,8 @@ import type { StoreHost } from './stores/host'
  * what makes a reload land where the reader was without a drawer opening over
  * every fresh visit.
  */
-const WIDTH_KEY = 'metacooler-viewer:store-drawer:width'
-const LAST_KEY = 'metacooler-viewer:store-drawer:last'
+const WIDTH_KEY = 'chromosomix:store-drawer:width'
+const LAST_KEY = 'chromosomix:store-drawer:last'
 
 /** Below this the rail and the rows do not both fit. */
 const MIN_WIDTH = 440

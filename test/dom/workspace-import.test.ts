@@ -116,7 +116,7 @@ describe('a window with no room left', () => {
     const file = JSON.stringify(
       buildWorkspaceFile([tabOf('https://sender.example/theirs.mcool', false, true, true)], 0, new Date()),
     )
-    app['openWorkspaceFile'](file, 'workspace-2026-09-09.metacooler.json')
+    app['openWorkspaceFile'](file, 'workspace-2026-09-09.chromosomix.json')
 
     // Nothing came in — which the reader is told — and nothing else moved. The
     // failure was `{active: 0, crosshair: false, labels: true, folded: true}`:
@@ -147,7 +147,7 @@ describe('a window with room for some of it', () => {
         new Date(),
       ),
     )
-    app['openWorkspaceFile'](file, 'workspace-2026-09-09.metacooler.json')
+    app['openWorkspaceFile'](file, 'workspace-2026-09-09.chromosomix.json')
 
     const after = windowState(app)
     expect(after.tabs).toBe(12)

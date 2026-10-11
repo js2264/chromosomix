@@ -119,7 +119,7 @@ const PROVENANCE: Provenance = {
   taskVersion: 1,
   params: { bars: 'both' },
   framing: FRAMING,
-  app: 'metacooler 0.9.0 (abc1234)',
+  app: 'chromosomix 0.9.0 (abc1234)',
   createdAt: '2026-08-08T14:52:33',
 }
 

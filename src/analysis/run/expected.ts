@@ -688,7 +688,7 @@ async function openNamed(
             'files only. Fetch it first and name the file, or run it in the app.'
         : `“${uri}” is not an address this can fetch, and the file is no longer in hand — a ` +
             'dropped file is kept for the session it was dropped in. Drop it on the form again, ' +
-            'or name it in a `metacooler-run` line, which reads it from disk.',
+            'or name it on a `chromosomix` command line, which reads it from disk.',
     )
     return null
   }

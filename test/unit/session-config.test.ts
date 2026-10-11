@@ -156,7 +156,7 @@ describe('buildConfig', () => {
    * Which build wrote it.
    *
    * Asserted against the **imported** constant and never against a literal like
-   * `'(meta)cooler 0.10.0'`. `version.ts` reads its values from a `define`
+   * `'chromosomix 0.10.0'`. `version.ts` reads its values from a `define`
    * substitution that vitest does not apply, so the test runtime takes the
    * fallback path — a literal would pass here and fail in a real build, or the
    * reverse, and either way it would be testing the test.
@@ -404,7 +404,7 @@ describe('the round trip', () => {
       now: new Date(0),
     })
     expect('kind' in config).toBe(false)
-    expect(JSON.stringify(config)).not.toContain('metacooler.workspace')
+    expect(JSON.stringify(config)).not.toContain('chromosomix.workspace')
   })
 })
 
@@ -543,8 +543,8 @@ describe('what a tab carries beyond its tracks', () => {
 
   it('carries which columns were folded, and how wide they were', () => {
     const panels = {
-      'metacooler-viewer:annotations-collapsed': { folded: false, width: 460 },
-      'metacooler-viewer:analysis-collapsed': { folded: true },
+      'chromosomix:annotations-collapsed': { folded: false, width: 460 },
+      'chromosomix:analysis-collapsed': { folded: true },
     }
     const config = buildConfig({
       state: STATE,
@@ -635,7 +635,7 @@ function uriOf(ref: PanelRef | undefined): string | undefined {
 }
 
 describe('resolveConfig', () => {
-  const base = 'https://example.org/app/demo/workspace.metacooler.json'
+  const base = 'https://example.org/app/demo/workspace.chromosomix.json'
   const relative = parseTab({
     state: { uri: 'yeast.cool', view: 'region', region: 'IV' },
     tracks: [
@@ -807,20 +807,20 @@ describe('the version gate', () => {
   })
 
   it('refuses a session from a newer build, and says what it is', () => {
-    const read = readTab(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
+    const read = readTab(at(CONFIG_VERSION + 1, { producer: 'chromosomix 9.9.9' }))
     expect(isRefusal(read)).toBe(true)
     expect(read).toMatchObject({
       reason: 'newer',
       version: CONFIG_VERSION + 1,
-      producer: '(meta)cooler 9.9.9',
+      producer: 'chromosomix 9.9.9',
     })
   })
 
   it('names both formats and the build, rather than blaming the file', () => {
-    const read = readTab(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
-    const message = refusalMessage(read as ConfigRefusal, 'figure3.metacooler.json')
-    expect(message).toContain('figure3.metacooler.json')
-    expect(message).toContain('(meta)cooler 9.9.9')
+    const read = readTab(at(CONFIG_VERSION + 1, { producer: 'chromosomix 9.9.9' }))
+    const message = refusalMessage(read as ConfigRefusal, 'figure3.chromosomix.json')
+    expect(message).toContain('figure3.chromosomix.json')
+    expect(message).toContain('chromosomix 9.9.9')
     expect(message).toContain(`format ${CONFIG_VERSION + 1}`)
     expect(message).toContain(`format ${CONFIG_VERSION}`)
     // The fix is to the viewer, not to the file — so the sentence must not send
@@ -866,7 +866,7 @@ describe('the version gate', () => {
 
 describe('looksLikeConfig', () => {
   it('is a hint about which files are worth opening, and nothing stronger', () => {
-    expect(looksLikeConfig('workspace-2026-08-05-1000.metacooler.json')).toBe(true)
+    expect(looksLikeConfig('workspace-2026-08-05-1000.chromosomix.json')).toBe(true)
     // Any JSON is worth *reading* — `parseWorkspaceFile` is what refuses it —
     // because a reader who renames the file should still be able to open it.
     expect(looksLikeConfig('whatever.json')).toBe(true)

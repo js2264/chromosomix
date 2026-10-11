@@ -202,7 +202,7 @@ function writeCoolerGroup(
   group.create_attribute('nbins', table.nBins)
   group.create_attribute('nnz', table.nnz)
   group.create_attribute('sum', table.sum)
-  group.create_attribute('generated-by', about?.generatedBy ?? `metacooler-viewer ${VERSION} (pairs import; unbalanced)`)
+  group.create_attribute('generated-by', about?.generatedBy ?? `chromosomix ${VERSION} (pairs import; unbalanced)`)
   group.create_attribute('creation-date', new Date().toISOString())
   if (imported.header.assembly !== null) {
     // `genome-assembly` is the name cooler writes and the one its readers look
@@ -344,7 +344,7 @@ function toBig(source: Int32Array, from: number, to: number): BigInt64Array {
 function provenance(imported: PairsImport, table: BinnedPixels): Record<string, unknown> {
   const header: PairsHeader = imported.header
   return {
-    'generated-by': `metacooler-viewer ${VERSION}`,
+    'generated-by': `chromosomix ${VERSION}`,
     'imported-from': 'pairs',
     'pairs-format': header.version,
     'pairs-sorted': header.sorted,

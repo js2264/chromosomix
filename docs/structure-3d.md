@@ -681,7 +681,7 @@ row.
 | representation, colour-by, radii, opacity, others, gaps, labels, projection | `AnnotationStyle.structure`, stored with the row | `reads`, `features` |
 | the camera | **per-file session memory** (`UiMemory`, `structure:camera`), not the hash | the lock, the column count: "the hash has never carried a pan or a zoom" |
 | the pinned bead | nowhere | `lastPick()` |
-| a `.metacooler.json` | all of the above except the camera, through `buildConfig`/`applyConfig`, no new field | `tracks`, `deck.looks` |
+| a `.chromosomix.json` | all of the above except the camera, through `buildConfig`/`applyConfig`, no new field | `tracks`, `deck.looks` |
 
 The `maps` key keeps its name for link compatibility; the glossary's *deck* entry changes from
 *N maps side by side* to *N cells of one place*, and says why the key is still called `maps`.

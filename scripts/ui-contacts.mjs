@@ -5,7 +5,7 @@
  * grey, `10M` typed and the map redrawn from ten million contacts, a figure
  * saved with the caption that says so (through a stand-in save dialog that keeps
  * the bytes, as `ui-captions.mjs` does), P(s) run on the drawn map with its
- * framing line and the console's `metacooler-run … --contacts` printed, a total
+ * framing line and the console's `chromosomix … --contacts` printed, a total
  * that is not one refused in the box, and the box emptied again. Then the deck
  * demo, a cooler beside a `.hic`: the two chevrons, pressed down (every map at
  * the shallower one's total) and up (every map at the deeper one's, through
@@ -154,7 +154,7 @@ const open = async (url, cells = 1) => {
 try {
   if (ONLY === '' || ONLY === 'map') {
     // ---- one map --------------------------------------------------------
-    await open(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
+    await open(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
     await fold('Fold the Annotations panel')
     await said('the file as stored')
     await crumb('ct01-crumb-as-stored')
@@ -222,7 +222,7 @@ try {
 
   if (ONLY === '' || ONLY === 'deck') {
     // ---- a deck: a cooler beside a .hic ---------------------------------
-    await open(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, 2)
+    await open(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, 2)
     await fold('Fold the Annotations panel')
     // The .hic says nothing exact about its total, and is counted.
     await page

@@ -102,7 +102,7 @@ const pickOnCard = async (label, value) => {
 }
 
 try {
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(4000)
   await fold('Fold the General panel')
@@ -185,7 +185,7 @@ try {
     const id = row?.getAttribute('data-id') ?? ''
     if (zone === null || id === '') return ''
     const transfer = new DataTransfer()
-    transfer.setData('application/x-metacooler-track', id)
+    transfer.setData('application/x-chromosomix-track', id)
     for (const kind of ['dragenter', 'dragover', 'drop']) {
       zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
     }

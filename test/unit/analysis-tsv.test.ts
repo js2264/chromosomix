@@ -36,7 +36,7 @@ const PROVENANCE: Provenance = {
     level: 'bin',
     label: 'chrIV:1–1,531,933 at 1 kb, balanced, count',
   },
-  app: 'metacooler 0.9.0 (abc1234)',
+  app: 'chromosomix 0.9.0 (abc1234)',
   createdAt: '2026-08-08T14:52:33',
 }
 
@@ -57,7 +57,7 @@ describe('provenanceLines', () => {
 
   it('names the build, the file, the task version, the framing and each parameter', () => {
     const text = provenanceLines(PROVENANCE).join('\n')
-    expect(text).toContain('metacooler 0.9.0 (abc1234)')
+    expect(text).toContain('chromosomix 0.9.0 (abc1234)')
     expect(text).toContain('demo/yeast/micro-c.cool')
     expect(text).toContain('insulation v3')
     expect(text).toContain('chrIV:1–1,531,933 at 1 kb, balanced, count')

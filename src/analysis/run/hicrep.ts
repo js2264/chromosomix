@@ -59,7 +59,7 @@ export const runHicrep: TaskRunner = async (job) => {
   if (job.peer === undefined) {
     throw new Error(
       'Reproducibility reads a second file, and this venue cannot open one. Run it in the app, ' +
-        'or with `metacooler-run hicrep <file> --against <other>`.',
+        'or with `chromosomix hicrep <file> --against <other>`.',
     )
   }
   // Unanswered is every sequence and an empty list is nothing (§18.2): a reader

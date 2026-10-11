@@ -97,7 +97,7 @@ describe('parsing a store', () => {
     // `.json`, both are this app's, and only a distinct reason can say which of
     // the two the reader is holding.
     for (const text of [
-      '{"kind":"metacooler.workspace","version":1,"tabs":[]}',
+      '{"kind":"chromosomix.workspace","version":1,"tabs":[]}',
       '{"name":"dependencies"}',
       '[1, 2, 3]',
       '"a string"',
@@ -109,23 +109,23 @@ describe('parsing a store', () => {
   })
 
   it('says what a file that is not a store is missing, and names the fix', () => {
-    const read = parseStore('{"kind":"metacooler.workspace","version":1}')
+    const read = parseStore('{"kind":"chromosomix.workspace","version":1}')
     const said = refusalMessage(read as { reason: 'not-a-store' }, 'lab.json')
     expect(said).toContain('lab.json')
-    expect(said).toContain('metacooler.store')
+    expect(said).toContain('chromosomix.store')
     // A reason with no fix in it is a reason a reader can do nothing with.
     expect(said).toContain('make_store.py')
   })
 
   it('refuses a store from a newer build rather than half-reading it', () => {
     const read = parseStore(
-      storeText({ version: STORE_VERSION + 1, producer: '(meta)cooler 9.0.0', entries: [] }),
+      storeText({ version: STORE_VERSION + 1, producer: 'chromosomix 9.0.0', entries: [] }),
     )
     expect(isRefusal(read)).toBe(true)
     expect(read).toMatchObject({
       reason: 'newer',
       version: STORE_VERSION + 1,
-      producer: '(meta)cooler 9.0.0',
+      producer: 'chromosomix 9.0.0',
     })
     expect(refusalMessage(read as never, 'store.json')).toContain('newer version')
   })
@@ -165,7 +165,7 @@ describe('parsing a store', () => {
     const store = parsed(
       storeText({
         entries: [
-          { label: 'a', uri: 'figure.metacooler.json' },
+          { label: 'a', uri: 'figure.chromosomix.json' },
           { label: 'b', uri: 'sample.mcool' },
           { label: 'c', uri: 'reads.bw' },
           { label: 'd', uri: 'x.mcool::resolutions/1000' },
@@ -270,7 +270,7 @@ describe('parsing a store', () => {
 
 describe('kindOf', () => {
   it('is the app’s one routing table, plus the workspace name', () => {
-    expect(kindOf('x.metacooler.json')).toBe('workspace')
+    expect(kindOf('x.chromosomix.json')).toBe('workspace')
     expect(kindOf('https://h/x.json?v=2')).toBe('workspace')
     expect(kindOf('x.hic')).toBe('map')
     expect(kindOf('x.pairs.gz')).toBe('map')

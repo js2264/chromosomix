@@ -130,8 +130,8 @@ function dragged(kind: string, data: Record<string, string>, files: File[] = [])
   return event
 }
 
-const TRACK = 'application/x-metacooler-track'
-const OVERLAY = 'application/x-metacooler-overlay'
+const TRACK = 'application/x-chromosomix-track'
+const OVERLAY = 'application/x-chromosomix-overlay'
 
 describe('the middle of a map', () => {
   it('is a target of its own, named for what it does', () => {

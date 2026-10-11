@@ -338,7 +338,7 @@ export interface TextParam extends ParamBase {
  *
  * **The value is a string, and a `File` is not one.** An address is its own
  * value. A local file's value is its **name**, which is what the provenance, a
- * table's header and the `metacooler-run` line can say about it; the `File`
+ * table's header and the `chromosomix` line can say about it; the `File`
  * itself is held beside the form by the runner (`AnalysisRunner.holdFile`),
  * since a parameter set is posted, stored and printed and a `File` survives only
  * the first of those. A name whose file is no longer held — a form recalled
@@ -364,7 +364,7 @@ export function isAddress(value: string): boolean {
  *
  * **The typed form of §26.1** — 1-based and inclusive, digits grouped or not —
  * wherever the value lives: in the form, in a result's provenance, in a
- * workspace, on a `metacooler-run` line. It becomes cooler's 0-based half-open
+ * workspace, on a `chromosomix` line. It becomes cooler's 0-based half-open
  * grammar in one place, `analysis/job.ts`'s `runnerParams`, as a job is handed
  * to its runner, so no runner reads it any other way and no record holds the
  * machine form.
@@ -446,7 +446,7 @@ export interface RegionParam extends ParamBase {
  * resolves it to every name on the way in, so a task with one of these starts
  * genome-wide, and a job that never met a form keeps the `null` and is read the
  * same way. That last half was the half that was missing: the runners took
- * anything that was not an array as `[]`, so `metacooler-run compartments
+ * anything that was not an array as `[]`, so `chromosomix compartments
  * file.cool` refused itself for not having ticked a box in a drawer a shell has
  * not got. `analysis/context.ts`'s `tickedContigs` and `analysis/job.ts`'s
  * `tickedSequences` are the two readings of this value, one per side of the
@@ -1382,7 +1382,7 @@ export interface AnalysisContext {
   /**
    * The ticked cells by name, only when they are **fewer than all of them**.
    *
-   * What a `metacooler-run` line needs that the two counts above cannot give
+   * What a `chromosomix` line needs that the two counts above cannot give
    * it: a task over an `.scool` is a task over the sum of the ticked cells
    * (§3.8), so a command that named the file and not the cells would repeat a
    * different run. Absent when every cell is ticked, which is the default a

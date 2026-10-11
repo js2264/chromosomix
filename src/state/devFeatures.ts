@@ -42,7 +42,7 @@ export const DEV_FEATURES = {
 export type DevFeature = keyof typeof DEV_FEATURES
 
 /** The `localStorage` key, named like the theme's. */
-export const DEV_FEATURES_KEY = 'metacooler-viewer:dev-features'
+export const DEV_FEATURES_KEY = 'chromosomix:dev-features'
 
 let cached: boolean | null = null
 

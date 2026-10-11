@@ -3,7 +3,7 @@
 
 for i in Hum53 Hum66; do
 
-    cd ~/repos/metacooler.js/data/
+    cd ~/repos/chromosomix/data/
     cp ~/rsg_fast/mmarbout/projets/MetaG/metacool/contigs_data/"$i"_contig_data_final.txt .
     cp ~/rsg_fast/mmarbout/projets/MetaG/metacool/metadata/"$i"_metadata.yaml .
     cp ~/rsg_fast/mmarbout/projets/MetaG/metacool/MAGs_data/"$i"_genome_table.tsv .

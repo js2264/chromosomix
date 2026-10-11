@@ -19,7 +19,7 @@
  * about in it is not that.
  */
 
-const KEY = 'metacooler-viewer:diagonal-lock'
+const KEY = 'chromosomix:diagonal-lock'
 
 let locked: boolean | null = null
 const listeners = new Set<(on: boolean) => void>()

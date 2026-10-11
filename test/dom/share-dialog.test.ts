@@ -46,7 +46,7 @@ afterEach(() => {
   teardown()
 })
 
-const BASE = 'https://js2264.github.io/metacooler.js/'
+const BASE = 'https://js2264.github.io/chromosomix/'
 
 function configOf(): SessionConfig {
   return {

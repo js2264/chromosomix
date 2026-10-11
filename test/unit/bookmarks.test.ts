@@ -258,7 +258,7 @@ describe('the store', () => {
 
   it('is not fooled by rubbish in storage', () => {
     window.sessionStorage.setItem(
-      'metacooler-viewer:ui:k:bookmarks',
+      'chromosomix:ui:k:bookmarks',
       JSON.stringify([
         { id: 'b1', label: '', contig: 'II', start: 1, end: 2 },
         { id: 'b2', label: '', contig: '', start: 1, end: 2 },
@@ -274,7 +274,7 @@ describe('the store', () => {
 
   it('does not mint an id a restored row already holds', () => {
     window.sessionStorage.setItem(
-      'metacooler-viewer:ui:k:bookmarks',
+      'chromosomix:ui:k:bookmarks',
       JSON.stringify([{ id: 'b900', label: '', contig: 'II', start: 1, end: 2 }]),
     )
     const store = new BookmarkStore('k')

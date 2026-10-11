@@ -45,7 +45,7 @@ const executablePath = browsers !== undefined && existsSync(join(browsers, 'chro
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Yeast Micro-C on IV:1.0–1.4 Mb, with its tracks: III before it, V after. */
-const YEAST = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`
+const YEAST = `${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
 
 /** A French PC's layout map, as Chromium would return it: each key bare. */
 const AZERTY_PC = {

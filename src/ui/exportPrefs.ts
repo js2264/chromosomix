@@ -17,7 +17,7 @@
 
 import { el } from './dom'
 
-const KEY = 'metacooler-viewer:export'
+const KEY = 'chromosomix:export'
 
 export interface ExportPrefs {
   /**

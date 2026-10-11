@@ -144,7 +144,7 @@ describe('the picker examples', () => {
   it('offers workspaces and nothing else', () => {
     for (const file of DEMO_FILES) {
       expect(file, 'the picker offers published workspaces, not data files').toMatch(
-        /\.metacooler\.json$/,
+        /\.chromosomix\.json$/,
       )
     }
   })
@@ -400,7 +400,7 @@ describe('the lab’s store', () => {
       expect(workspaces).toHaveLength(DEMO_FILES.length)
       for (const entry of workspaces) {
         expect(entry.uri, `${entry.label} is a workspace row that does not name a .json`).toMatch(
-          /\.metacooler\.json$/,
+          /\.chromosomix\.json$/,
         )
       }
       const files = demosStore().entries.filter((entry) => entry.kind !== 'workspace')
@@ -416,7 +416,7 @@ describe('the lab’s store', () => {
       const entries = demosStore().entries
       for (const entry of entries) {
         expect(entry.uri, `${entry.label} is a dev feature's row`).not.toMatch(/metacool$|mock-community/)
-        // `.metacooler.json` is the app's own workspace file, named after the
+        // `.chromosomix.json` is the app's own workspace file, named after the
         // app, and stays; the containers and their genomes are what go.
         expect(JSON.stringify(entry), `${entry.label} names the multi-genome format`).not.toMatch(
           /\.m?metacool(?!er)|\bMAGs?\b/,

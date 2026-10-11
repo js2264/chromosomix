@@ -261,7 +261,7 @@ describe('the theme toggle', () => {
   })
 
   it('reads an unknown stored value as system rather than writing it out', () => {
-    window.localStorage.setItem('metacooler-viewer:theme', 'sepia')
+    window.localStorage.setItem('chromosomix:theme', 'sepia')
     expect(initTheme()).toBe('system')
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
@@ -274,7 +274,7 @@ describe('the theme toggle, embedded', () => {
   })
 
   it('is fixed to light on startup, over a stored dark preference and the system one', () => {
-    window.localStorage.setItem('metacooler-viewer:theme', 'dark')
+    window.localStorage.setItem('chromosomix:theme', 'dark')
     window.history.replaceState(null, '', '/?embed=1')
     resetMounting()
     expect(initTheme()).toBe('light')

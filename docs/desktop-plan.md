@@ -93,7 +93,7 @@ Each of these was checked rather than assumed, and each one silently breaks some
 | `'wasm-unsafe-eval'` in the CSP is load-bearing | Verified both ways: with it, wasm instantiates in document and worker; without it both fail with `CompileError`. |
 | A CSP delivered as a **response header** reaches the module worker; a `<meta>` tag does not | And a meta tag cannot express `frame-ancestors` at all. |
 | The CSP does **not** need `'unsafe-inline'` for styles | There is no `innerHTML`, no `<style>` creation and no `style=` in `src/`; `el()` assigns via CSSOM, which CSP does not govern. |
-| `https://js2264.github.io/metacooler.js/demo/` answers **301** to `jserizay.com` with **no** `Access-Control-Allow-Origin` on the redirect | The fetch is blocked before the redirect is followed. Defaulting the demo base to `pkg.homepage` ships a picker where every example errors. |
+| `https://js2264.github.io/chromosomix/demo/` answers **301** to `jserizay.com` with **no** `Access-Control-Allow-Origin` on the redirect | The fetch is blocked before the redirect is followed. Defaulting the demo base to `pkg.homepage` ships a picker where every example errors. |
 | `mac.identity: '-'` is ad-hoc signing; `null` skips signing entirely | Apple Silicon refuses to execute an unsigned arm64 binary, so the `null` recipe builds, installs, and never launches. |
 | `win.signExecutable: false` is the right key | `signAndEditExecutable: false` also disables resedit, losing the icon and version metadata. |
 | `net.fetch` **throws** `ERR_FILE_NOT_FOUND` rather than returning `!ok` | A try/catch is needed either way, so `fs.readFile` — asar-safe, keeps every response header ours — is the better primitive. |
@@ -220,7 +220,7 @@ export default defineConfig({
   plugins: [stripPwaTags()],
   define: { ...base.define,
     __APP_TARGET__: JSON.stringify('desktop'),
-    __DEMO_BASE__: JSON.stringify(process.env.DEMO_BASE ?? 'https://jserizay.com/metacooler.js/') },
+    __DEMO_BASE__: JSON.stringify(process.env.DEMO_BASE ?? 'https://jserizay.com/chromosomix/') },
   build: { ...base.build, outDir: 'dist-electron/renderer', emptyOutDir: true, sourcemap: false },
 })
 ```
@@ -347,8 +347,8 @@ Do not proceed to step 13 until all six pass. If (2) fails with a `not-hdf5` run
 `type: module`. Getting this wrong fails silently: the config is not found, defaults apply, and the
 default `directories.output` is `dist` — the directory Vite writes and Pages uploads.
 
-- `appId: 'io.github.js2264.metacooler-viewer'`
-- `productName: 'metacooler-viewer'` — not the manifest's parenthesised em-dashed PWA name, which
+- `appId: 'io.github.js2264.chromosomix'`
+- `productName: 'chromosomix'` — not the manifest's em-dashed PWA name, which
   would become the `.app` bundle name and every artifact filename
 - `directories: {output:'release', buildResources:'build'}`, `asar:true`, `npmRebuild:false`,
   `publish:null`, `artifactName:'${name}-${version}-${os}-${arch}.${ext}'`
@@ -405,7 +405,7 @@ Steps: checkout; setup-node 24 with `cache: npm`; `actions/cache` for the per-OS
 `npx electron-builder <args> --config electron-builder.config.cjs --publish never` with
 `CSC_IDENTITY_AUTO_DISCOVERY: false` so a runner keychain cannot silently supply a real Developer
 ID; on mac only, `codesign -dv --verbose=4` failing the job on `code object is not signed at all`;
-`node scripts/check-package.mjs`; `upload-artifact` named `metacooler-viewer-${{ matrix.id }}`
+`node scripts/check-package.mjs`; `upload-artifact` named `chromosomix-${{ matrix.id }}`
 (v4+ refuses duplicate names in one run).
 
 Collector job `needs: build`, downloads with `merge-multiple: true`, runs a GitHub Release action
@@ -426,7 +426,7 @@ fired.
 `docs/desktop.md` (user-facing): what it is — a delivery channel, not a second feature set; the
 artifact names; **the two warnings verbatim** with exact fixes (macOS *"cannot be opened because the
 developer cannot be verified"* → right-click Open, or
-`xattr -d com.apple.quarantine /Applications/metacooler-viewer.app`; Windows *"Windows protected
+`xattr -d com.apple.quarantine /Applications/chromosomix.app`; Windows *"Windows protected
 your PC"* → More info → Run anyway), stating plainly that a signature says who published a build,
 not whether it works; remote files (the app sends `Origin: app://viewer`, so a bucket whose
 allow-list names the Pages site by hostname will refuse it while the website keeps working —
@@ -470,7 +470,7 @@ cannot be re-read, and it sits beside ⌘T) and the three page-zoom roles (they 
 size under `largestDpiThatFits`, `src/ui/export.ts:215`, so the same "300 dpi" click yields a
 different pixel count at 125 %). Keep `toggleDevTools` only when `!app.isPackaged`.
 
-`src/desktop.ts` is the single renderer module that touches `window.metacoolerDesktop`, exporting
+`src/desktop.ts` is the single renderer module that touches `window.chromosomixDesktop`, exporting
 `IS_DESKTOP` and `desktop(): DesktopBridge | null` — the two questions kept apart on purpose, so a
 desktop build whose preload failed degrades to browser behaviour rather than throwing.
 
@@ -534,7 +534,7 @@ Each of these produces no useful error message, which is why they are written do
 | `mac.identity: null` for an "unsigned" build — the recipe every blog post quotes | CI green, `.dmg` builds and installs, then does not launch on any Apple Silicon Mac. The packaging job never notices. | `identity: '-'`. Assert with `codesign -dv --verbose=4` in CI, failing on `code object is not signed at all`. |
 | Registering the scheme without `standard: true`, or reaching for `file://` | Looks fine, then `SecurityError` the first time you navigate into a genome — killing back/forward and every deep link at once. On `file://` quieter still: the module worker never constructs and the app hangs on "Opening…". | `registerSchemesAsPrivileged` with `standard/secure/supportFetchAPI/stream` before `whenReady`. Gate item (4). |
 | Omitting `'wasm-unsafe-eval'`, or a `<meta>` CSP | Shell renders perfectly; every file open fails with `CompileError` from inside the reader worker — a long way from index.html, where you will be looking. | Both verified in both directions. Set the CSP as a header on every `app://` response. |
-| Defaulting `__DEMO_BASE__` to `pkg.homepage` | Every figure in the lab's store errors — the first thing a new user with no data of their own clicks. | Pin `https://jserizay.com/metacooler.js/`. Add a CI curl assertion for 206 + ACAO + no redirect. |
+| Defaulting `__DEMO_BASE__` to `pkg.homepage` | Every figure in the lab's store errors — the first thing a new user with no data of their own clicks. | Pin `https://jserizay.com/chromosomix/`. Add a CI curl assertion for 206 + ACAO + no redirect. |
 | Enabling `nodeIntegrationInWorker`, or turning off `sandbox`, for some later feature | Every open dies with a generic `not-hdf5` error hundreds of frames from the cause, and `LocalFileSource.mountTarget()` quietly starts writing 14–46 MB temp files into TMPDIR. | Pin all four flags with a comment naming the `isNodeRuntime()` dependency, plus a text-assertion test so a later edit fails `preversion` rather than a user's first open. |
 | Letting `directories.output` default, or writing the config as `.mjs` | A local `dist:desktop` after `build` puts a `.dmg` inside the directory published to the website — or wipes the site build. An `.mjs` config is silently not read, which looks exactly like "electron-builder ignored my settings". | `directories.output: 'release'`, config as `.cjs`, passed with `--config`. Ignore `dist-electron/`, `release/`, `*.asar` — never `build/`. |
 | Trusting the `files` glob to keep the 239 MB demo directory out | Every installer ~250 MB too large, CI upload minutes longer per leg, nothing reports a problem. | Two independent guards: `publicDir: false` means the files are never copied in, and `check-package.mjs` reads the packed asar. Give the size check a lower bound too. |

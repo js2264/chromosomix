@@ -53,7 +53,7 @@ import { routeOf } from '../browse/route'
 import { rowVerbs } from './rowVerbs'
 
 /** Where the panel's last-opened folder is remembered, so a reload comes back to it. */
-const LAST_FOLDER = 'metacooler-viewer:files-last'
+const LAST_FOLDER = 'chromosomix:files-last'
 
 function readLast(): string | null {
   try {

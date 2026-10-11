@@ -1,4 +1,4 @@
-# HiContacts::distanceLaw(), as an oracle for metacooler.js's P(s).
+# HiContacts::distanceLaw(), as an oracle for chromosomix's P(s).
 #
 # Run by `scripts/make_analysis_golden.py`, which hands it a table of
 # (unit, k, n) — a curve's name, a separation in bins, and the raw contacts at

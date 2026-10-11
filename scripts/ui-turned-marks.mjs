@@ -110,7 +110,7 @@ const readout = () =>
 /** Open the yeast demo and turn its map; the turn is on the Map card, in Aesthetics. */
 const openTurned = async () => {
   await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
   await page.waitForFunction(
     () => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null,
     null,

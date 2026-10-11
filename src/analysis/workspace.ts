@@ -1043,7 +1043,7 @@ export class AnalysisWorkspace {
    *
    * For the Structures card, which writes a model's bed3d itself and whose `#`
    * line said what the model was and what it was made from but not when (§25.7)
-   * — where the drawer's button and `metacooler-run` both say all three. The
+   * — where the drawer's button and `chromosomix` both say all three. The
    * date is the run's provenance, which lives here beside the numbers and never
    * on the store (§18.5), so the card asks.
    */

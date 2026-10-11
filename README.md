@@ -1,4 +1,4 @@
-# metacooler-viewer
+# chromosomix
 
 A unified genome browser for `.*cool`, `.scool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
 and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, `.2bit`, BAM, VCF, barChart, 
@@ -37,9 +37,9 @@ server-side processing or data upload.
 
 - Serverless: There is no upload, no required preprocessing step, no backend of any kind. The viewer is static files, and reads data directly from standard genome-wide formats. 
 
-- CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line with `metacooler-run`, with the same parameters and producing the same results. A bottom Console panel in the genome browser records every action and reports the corresponding `metacooler-run` command.
+- CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line with `chromosomix`, with the same parameters and producing the same results. A bottom Console panel in the genome browser records every action and reports the corresponding `chromosomix` command.
 
-- Dev features: what is still being built ships on `main` but stays out of sight until **dev features** is switched on in *About this viewer* — today the multi-genome `.metacool`/`.mmetacool` containers and their metagenome tasks, editing the reference a map was built against, and the dot plot of two sequences against each other. `metacooler-run` has no such switch: it lists and runs every task, the dev ones included.
+- Dev features: what is still being built ships on `main` but stays out of sight until **dev features** is switched on in *About this viewer* — today the multi-genome `.metacool`/`.mmetacool` containers (written by metacooler, a separate project) and their metagenome tasks, editing the reference a map was built against, and the dot plot of two sequences against each other. `chromosomix` has no such switch: it lists and runs every task, the dev ones included.
 
 ## Philosophy
 
@@ -49,15 +49,15 @@ server-side processing or data upload.
 
 1. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
 
-## Using metacooler.js
+## Using chromosomix
 
 ### Use it from a web browser
 
-Go to [`chromatlas.app`](https://chromatlas.app) to open the viewer in a web browser. The app runs entirely in the browser, with no server-side processing or data upload.
+Go to [`js2264.github.io/chromosomix`](https://js2264.github.io/chromosomix/) to open the viewer in a web browser. The app runs entirely in the browser, with no server-side processing or data upload.
 
 ### Install as a PWA (Progressive Web App)
 
-Go to [`chromatlas.app`](https://chromatlas.app) and: 
+Go to [`js2264.github.io/chromosomix`](https://js2264.github.io/chromosomix/) and: 
 
 - On **Chrome** or **Edge**: click on the **Install** in the URL bar (far right button). 
 - On **Safari**: click on **Share → Add to Dock**.
@@ -67,7 +67,7 @@ The app is then available offline as a desktop app as a PWA (Progressive Web App
 
 ### Install as a desktop app
 
-To install the app as a desktop app, you can fetch the latest release from [https://github.com/js2264/metacooler.js/releases](https://github.com/js2264/metacooler.js/releases). Builds are available for macOS (`.dmg`, Intel and Apple silicon) and Linux (`AppImage`, `.deb`); the Windows installer is temporarily not built, and on Windows the static HTML page below needs no installer at all. The app is then available offline as a desktop app.
+To install the app as a desktop app, you can fetch the latest release from [https://github.com/js2264/chromosomix/releases](https://github.com/js2264/chromosomix/releases). Builds are available for macOS (`.dmg`, Intel and Apple silicon) and Linux (`AppImage`, `.deb`); the Windows installer is temporarily not built, and on Windows the static HTML page below needs no installer at all. The app is then available offline as a desktop app.
 
 ### Install with Node, from a local machine
 
@@ -80,8 +80,8 @@ node --version
 Then the repository can be cloned and the dependencies installed:
 
 ```bash
-git clone https://github.com/js2264/metacooler.js
-cd metacooler.js
+git clone https://github.com/js2264/chromosomix
+cd chromosomix
 npm install
 npm run dev
 ```
@@ -92,16 +92,16 @@ Every release produces a single `index.html` (about 14 MB). It has
 no server and no install: put it on a USB stick, email it, open it by
 double-clicking and you end up with a fully functional genome browser.
 
-It is attached to every [release](https://github.com/js2264/metacooler.js/releases)
-as `metacooler-viewer-<tag>.html`, and `npm run build:standalone` builds it from a clone.
+It is attached to every [release](https://github.com/js2264/chromosomix/releases)
+as `chromosomix-<tag>.html`, and `npm run build:standalone` builds it from a clone.
 
-## Embedding metacooler.js in a page
+## Embedding chromosomix in a page
 
 A minimal version of the viewer can be added to any HTML page as an `<iframe>`. Nothing needs to be installed. There is no extra package dependency and no modifications to make to the page's header, just drop the `<iframe>` in. The `src` attribute is the URL of the viewer, with a query string that tells it what to show.
 
 ```html
 <iframe
-  src="https://js2264.github.io/metacooler.js/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+  src="https://js2264.github.io/chromosomix/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
   width="100%"
   height="640"
   loading="lazy"
@@ -115,26 +115,26 @@ Paste it into a page and it works (not rendered here though because GitHub does 
 The text below is a live version of the above `<iframe>` (it will not work on GitHub, but it would work on any HTML page):
 
 <iframe
-  src="https://js2264.github.io/metacooler.js/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+  src="https://js2264.github.io/chromosomix/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
   width="100%"
   height="640"
 ></iframe>
 
-## Using the metacooler.js analysis CLI
+## Using the chromosomix analysis CLI
 
 Thirty-one analysis tasks can be executed programatically through the CLI, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. To install the CLI, run the following commands in a terminal:
 
 ```bash
-git clone https://github.com/js2264/metacooler.js
-cd metacooler.js
+git clone https://github.com/js2264/chromosomix
+cd chromosomix
 npm install
 npm run build:cli && npm link
 ```
 
-This will install the `metacooler-run` command globally. You can then run the following command to see the available tasks and their parameters:
+This will install the `chromosomix` command globally. You can then run the following command to see the available tasks and their parameters:
 
 ```bash
-metacooler-run tasks
+chromosomix tasks
 
 ## coverage
 ##     Coverage and marginals
@@ -464,77 +464,77 @@ and inclusive, digits grouped or not. Files are read from disk: the reader's ran
 synchronous, which a browser worker has and Node does not, so a remote file is fetched first.
 
 ```bash
-metacooler-run insulation *.mcool --sequences II --out results/
-metacooler-run chromosight sample.cool --pattern borders --out results/
-metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight
+chromosomix insulation *.mcool --sequences II --out results/
+chromosomix chromosight sample.cool --pattern borders --out results/
+chromosomix apa sample.cool --pairs loops.bedpe --norm chromosight
 
 # A 4C profile from an anchor, written as the breadcrumb or IGV writes a locus:
 # 1-based and inclusive, so the window you copied is the window that is read.
-metacooler-run fourc sample.cool --anchor IV:1,200,001-1,210,000 --out results/
+chromosomix fourc sample.cool --anchor IV:1,200,001-1,210,000 --out results/
 
 # The domain pileup: a set of TADs — the span from one insulation boundary to
 # the next — every one of them stretched to the same width, with half a domain
 # of padding each side. The distance-matched control is shifted by a multiple of
 # the window, so it never overlaps the domain it is the denominator of.
-metacooler-run apa sample.cool --features domains.bed --anchors features \
+chromosomix apa sample.cool --features domains.bed --anchors features \
   --mode scaled --grid 48 --flankFraction 0.5 --out results/
 
 # Two of the tasks that run beside the tracks rather than on the map. A motif
 # search reads the reference `--sequence` names and writes both halves: the
 # sites as a BED-shaped table, and their density on the open map's bin grid.
-metacooler-run motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --mismatches 1 --out results/
-metacooler-run overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
+chromosomix motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --mismatches 1 --out results/
+chromosomix overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
 
 # The tasks that read tracks take them as --tracks: a bigWig, a bedGraph, a
 # wig, or a FASTA read as GC content. Repeat the flag or separate with commas.
-metacooler-run metaplot sample.cool --tracks ATAC.bw --features peaks.narrowPeak --flank 2000 --out results/
-metacooler-run frip sample.cool --tracks ATAC.bw,MNase.bw --features peaks.narrowPeak
-metacooler-run trackcorr sample.cool --tracks ATAC.bw --tracks MNase.bw --over features --features peaks.bed
+chromosomix metaplot sample.cool --tracks ATAC.bw --features peaks.narrowPeak --flank 2000 --out results/
+chromosomix frip sample.cool --tracks ATAC.bw,MNase.bw --features peaks.narrowPeak
+chromosomix trackcorr sample.cool --tracks ATAC.bw --tracks MNase.bw --over features --features peaks.bed
 
 # ...and with no contact map at all, over the assembly the tracks declare —
 # what a 1D browser session runs. Peak calling names its track --signal (and a
 # second one --replicate, for IDR); base composition reads a reference.
-metacooler-run metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
-metacooler-run peaks --signal ChIP.bw --out results/
-metacooler-run composition --sequence ref.fa.gz --out results/
+chromosomix metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
+chromosomix peaks --signal ChIP.bw --out results/
+chromosomix composition --sequence ref.fa.gz --out results/
 
 # Reproducibility compares the file with every map --against names.
-metacooler-run hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 400
+chromosomix hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 400
 
 # Compartments phased by GC content read the reference under --sequence.
-metacooler-run compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
+chromosomix compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
 
 # Maps drawn to one number of contacts before the task reads them: an exact
 # subsample below the file's own total, Boost-HiC above it, with the app's seed.
-metacooler-run insulation rep1.cool --contacts 10M --out results/
+chromosomix insulation rep1.cool --contacts 10M --out results/
 
 # A bacterial chromosome: which sequences join their own ends (the test the app
 # runs on a first open), then the alignment of its two arms about its origin.
-metacooler-run circular ecoli.mcool::/resolutions/5000
-metacooler-run interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
+chromosomix circular ecoli.mcool::/resolutions/5000
+chromosomix interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
   --origin NC_000913.3:3925744 --out results/
 
 # A 3D model built from the map, written as a bed3d the viewer opens beside it.
-metacooler-run reconstruct3d ecoli.mcool::/resolutions/20000 --out results/
+chromosomix reconstruct3d ecoli.mcool::/resolutions/20000 --out results/
 
 # What the session set from the picture, as flags: the score column a
 # .metacool is drawn from, the sequences declared circular, the cells of an
 # .scool that were ticked. The console writes them whenever they differ from
 # the defaults (count, none, every cell).
-metacooler-run insulation sample.metacool --value balanced_by_depth --circular pCEN,p2u
-metacooler-run cellqc cells.scool --cell c01,c02,c07 --cells selected
+chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN,p2u
+chromosomix cellqc cells.scool --cell c01,c02,c07 --cells selected
 
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact
 # list is the positional argument.
-metacooler-run coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
+chromosomix coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 
-metacooler-run replay workspace.metacooler.json --over 'data/*.hic'
+chromosomix replay workspace.chromosomix.json --over 'data/*.hic'
 ```
 
 ### Recovering the commands you ran
 
-You do not have to write those lines from memory. The browser app has a **console** and every analysis run lands in it as the `metacooler-run` command that repeats it, written the moment the run happens rather than when you look at the result. 
+You do not have to write those lines from memory. The browser app has a **console** and every analysis run lands in it as the `chromosomix` command that repeats it, written the moment the run happens rather than when you look at the result. 
 
 The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed under *What this browser is remembering* (in the command palette, `Ctrl+P` → Help) with everything else this app keeps, and *forget everything* drops it.
 

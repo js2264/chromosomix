@@ -235,7 +235,7 @@ function createWindow(): void {
     // white rectangle for as long as the bundle takes to parse.
     show: false,
     backgroundColor: '#ffffff',
-    title: '(meta)cooler',
+    title: 'chromosomix',
     // Linux only; see WINDOW_ICON. `undefined` is what the option means by
     // "leave it to the platform", which is the right answer on the other two.
     icon: process.platform === 'linux' ? WINDOW_ICON : undefined,

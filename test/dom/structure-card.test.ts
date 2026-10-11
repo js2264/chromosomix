@@ -162,7 +162,7 @@ describe('the Structures card', () => {
 
   /**
    * **A computed model's bed3d says when it was made**, as the drawer's button
-   * and `metacooler-run` write it (§25.7): the `#` line named the model and its
+   * and `chromosomix` write it (§25.7): the `#` line named the model and its
    * framing and left the date off, so the one file that leaves a tab without
    * the drawer was the one with no date on it. The run is the workspace's, so
    * the card asks it; a model loaded from a file was not made here and gets no
@@ -198,10 +198,10 @@ describe('the Structures card', () => {
         headers.push((await written[headers.length].text()).split('\n')[0])
       }
       expect(headers[0]).toBe(
-        '# metacooler analysis:reconstruct3d:reconstructed-model from chr1:1–30,000 at 5 kb on ' +
+        '# chromosomix analysis:reconstruct3d:reconstructed-model from chr1:1–30,000 at 5 kb on ' +
           '2026-08-08T14:52:33 · bed3d: chrom start end x y z',
       )
-      expect(headers[1]).toBe('# metacooler model.g3d · bed3d: chrom start end x y z')
+      expect(headers[1]).toBe('# chromosomix model.g3d · bed3d: chrom start end x y z')
     } finally {
       delete scope.showSaveFilePicker
     }

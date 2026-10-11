@@ -12,7 +12,7 @@ four public stores the app ships are kept fresh.
 
 ```json
 {
-  "kind": "metacooler.store",
+  "kind": "chromosomix.store",
   "version": 1,
   "name": "Lab Hi-C",
   "description": "Everything under s3://my-lab/hic/, balanced at 1 kb.",
@@ -24,7 +24,7 @@ four public stores the app ships are kept fresh.
   "entries": [
     {
       "label": "WT, G2/M — map with tracks",
-      "uri": "wt/WT_G2M.metacooler.json",
+      "uri": "wt/WT_G2M.chromosomix.json",
       "kind": "workspace",
       "fields": { "assembly": "S288C", "condition": "G2/M" },
       "note": "GSE000000 · rep1+rep2"
@@ -67,11 +67,11 @@ four public stores the app ships are kept fresh.
 
 ```json
 {
-  "kind": "metacooler.store", "version": 1, "name": "Bacteria",
+  "kind": "chromosomix.store", "version": 1, "name": "Bacteria",
   "layout": "cards", "group": "species", "headline": ["strain"],
   "columns": [{ "key": "species", "label": "Species" }, { "key": "strain", "label": "Strain" }],
   "entries": [
-    { "label": "E. coli — map with tracks", "uri": "ecoli/ecoli.metacooler.json", "kind": "workspace",
+    { "label": "E. coli — map with tracks", "uri": "ecoli/ecoli.chromosomix.json", "kind": "workspace",
       "fields": { "species": "E. coli", "strain": "MG1655", "tracks": "8" } },
     { "label": "E. coli", "uri": "ecoli/ecoli.mcool", "kind": "map",
       "fields": { "species": "E. coli", "strain": "MG1655" } },
@@ -223,7 +223,7 @@ facet answering 404 for a file that exists under another name.
 
 ### Pre-configured sessions
 
-`--sessions-dir DIR` writes one `.metacooler.json` per genome or dataset with its tracks already
+`--sessions-dir DIR` writes one `.chromosomix.json` per genome or dataset with its tracks already
 placed, and a store listing them as `kind: "workspace"` rows. IGV's hg38 becomes its FASTA plus every
 track IGV publishes for hg38; a 4DN experiment set becomes its richest contact map with the
 bigWigs and peak files of the same set on it. One click and it is on screen, which is what three
@@ -258,7 +258,7 @@ and publishes to the `stores` branch:
 ```
 igv.json  4dn.json  dnazoo.json  encode-<assembly>-<category>.json ×12
 igv-sessions.json  4dn-sessions.json  encode-sessions.json
-sessions/*.metacooler.json
+sessions/*.chromosomix.json
 index.json        what is there, how many rows each has, how big, and when
 fingerprint.json  each file's hash with its timestamps removed
 archive/          dated copies of index.json and of every store under 2 MB, last 26 runs
@@ -299,7 +299,7 @@ the map with its HiC score, insulation and E1 along both arms and nothing else. 
 store, and publishing it is uploading it beside the demo data:
 
 ```bash
-npm run build:cli                                                   # the metacooler-run it drives
+npm run build:cli                                                   # the chromosomix command it drives
 scripts/dbz-store.sh                                                # ~/Downloads/metacooler/data/dbz → …/dbz/store
 python3 scripts/DBZ_store.py serve ~/Downloads/metacooler/data/dbz/store   # look at it first, on :8765
 aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delete \

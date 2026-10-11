@@ -87,7 +87,7 @@ export interface SessionConfig {
   /** When it was written, for the reader who finds four of them in a folder. */
   createdAt: string
   /**
-   * Which build wrote this — `(meta)cooler 0.10.0`, or `… desktop`.
+   * Which build wrote this — `chromosomix 0.10.0`, or `… desktop`.
    *
    * Byte-identical to the string every exported PDF carries in its `/Producer`
    * field (`ui/export.ts`), and deliberately so: a figure and the session that
@@ -787,7 +787,7 @@ export function refusalMessage(refusal: ConfigRefusal, label: string): string {
     // they can do nothing with.
     return (
       `${label} is a JSON file but not a store — it does not name itself as one. ` +
-      'A store declares {"kind": "metacooler.store", "version": 1, "entries": [...]}, and ' +
+      'A store declares {"kind": "chromosomix.store", "version": 1, "entries": [...]}, and ' +
       'scripts/make_store.py writes one.'
     )
   }

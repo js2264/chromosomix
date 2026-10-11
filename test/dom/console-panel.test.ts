@@ -121,7 +121,7 @@ function findButton(panel: ConsolePanel, label: string): HTMLButtonElement {
 function run(map: string, task = 'insulation'): void {
   const id = logAction({
     kind: 'run',
-    line: `metacooler-run ${task} ${map} --window 10`,
+    line: `chromosomix ${task} ${map} --window 10`,
     shell: true,
     detail: [`# task: ${task} v1`, '# param window: 10'],
     status: 'running',
@@ -226,7 +226,7 @@ describe('the rows', () => {
   })
 
   it('marks a row by what happened to it, and prints a failure in full', () => {
-    const id = logAction({ kind: 'run', line: 'metacooler-run apa a.cool', shell: true, status: 'running' })
+    const id = logAction({ kind: 'run', line: 'chromosomix apa a.cool', shell: true, status: 'running' })
     const panel = mount()
     panel.toggle.click()
     expect(rows(panel)[0].classList.contains('is-running')).toBe(true)
@@ -237,7 +237,7 @@ describe('the rows', () => {
     // In full: a truncated message is a bug report nobody can act on.
     expect(textOf(row, '.console-error')).toBe('No loop set was chosen.')
     // The command stays the command it was, failure or not.
-    expect(textOf(row, '.console-line')).toBe('metacooler-run apa a.cool')
+    expect(textOf(row, '.console-line')).toBe('chromosomix apa a.cool')
   })
 
   it('names the state on its mark in the words every surface uses (§26.7)', () => {
@@ -246,12 +246,12 @@ describe('the rows', () => {
     // end, so it comes back interrupted (§23.5).
     const at = Date.now()
     window.localStorage.setItem(
-      'metacooler-viewer:actions',
+      'chromosomix:actions',
       JSON.stringify({
         version: 1,
         entries: [
-          { id: 'ran', at, kind: 'run', line: 'metacooler-run insulation a.cool', shell: true, status: 'ok' },
-          { id: 'gone', at: at + 1, kind: 'run', line: 'metacooler-run compartments a.cool', shell: true, status: 'running' },
+          { id: 'ran', at, kind: 'run', line: 'chromosomix insulation a.cool', shell: true, status: 'ok' },
+          { id: 'gone', at: at + 1, kind: 'run', line: 'chromosomix compartments a.cool', shell: true, status: 'running' },
         ],
       }),
     )
@@ -265,7 +265,7 @@ describe('the rows', () => {
   it('draws a refusal under the line it explains, and a caveat over it', () => {
     logAction({
       kind: 'run',
-      line: 'metacooler-run insulation a.cool',
+      line: 'chromosomix insulation a.cool',
       shell: true,
       notes: ['# This file is remote.'],
     })
@@ -361,7 +361,7 @@ describe('the provenance toggle', () => {
 
     findButton(panel, 'copy').click()
     await Promise.resolve()
-    expect(copied[0]).toContain('metacooler-run insulation a.cool --window 10')
+    expect(copied[0]).toContain('chromosomix insulation a.cool --window 10')
     expect(copied[0]).not.toContain('# param window: 10')
 
     const box = panel.el.querySelector<HTMLButtonElement>('.console-output-box')
@@ -380,7 +380,7 @@ describe('taking it away', () => {
     panel.toggle.click()
     findButton(panel, 'copy this day').click()
     await Promise.resolve()
-    expect(copied[0]).toContain('metacooler-run insulation a.cool')
+    expect(copied[0]).toContain('chromosomix insulation a.cool')
   })
 
   it('copies one row from the row itself', async () => {
@@ -391,7 +391,7 @@ describe('taking it away', () => {
     await Promise.resolve()
     // The command alone, with no day heading around it: a row is copied to be
     // pasted into something, not to be read.
-    expect(copied[0]).toBe('metacooler-run insulation a.cool --window 10')
+    expect(copied[0]).toBe('chromosomix insulation a.cool --window 10')
   })
 
   it('writes a comment rather than a bare line for what a shell cannot run', async () => {
@@ -422,15 +422,15 @@ describe('taking it away', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(saved).toHaveLength(1)
-    expect(saved[0].name).toMatch(/^metacooler-console-.*\.sh$/)
+    expect(saved[0].name).toMatch(/^chromosomix-console-.*\.sh$/)
     const text = await saved[0].blob.text()
     expect(text.split('\n')[0]).toBe('#!/bin/sh')
-    expect(text).toContain('metacooler-run insulation a.cool --window 10')
+    expect(text).toContain('chromosomix insulation a.cool --window 10')
 
     // A console that wrote a file and did not say so would be the one place in
     // the app where a file leaves without a line about it.
     const written = rows(panel).filter((row) => row.dataset['kind'] === 'write')
     expect(written).toHaveLength(1)
-    expect(textOf(written[0], '.console-line')).toMatch(/^wrote metacooler-console-.*\.sh$/)
+    expect(textOf(written[0], '.console-line')).toMatch(/^wrote chromosomix-console-.*\.sh$/)
   })
 })

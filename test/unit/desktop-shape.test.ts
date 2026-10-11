@@ -152,8 +152,8 @@ describe('isDataFile', () => {
 
 describe('preloadProblems', () => {
   const BUNDLED =
-    'var CHANNEL_COMMAND="metacooler:command";var electron=require("electron");' +
-    'electron.contextBridge.exposeInMainWorld("metacoolerDesktop",{platform:{},onCommand(h){}});'
+    'var CHANNEL_COMMAND="chromosomix:command";var electron=require("electron");' +
+    'electron.contextBridge.exposeInMainWorld("chromosomixDesktop",{platform:{},onCommand(h){}});'
 
   it('passes a bundled preload that requires only electron', () => {
     expect(preloadProblems(BUNDLED)).toEqual([])

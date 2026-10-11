@@ -1327,7 +1327,7 @@ describe('how each companion was drawn', () => {
   }
 
   function remembered(): Array<Record<string, unknown>> {
-    const raw = sessionStorage.getItem('metacooler-viewer:ui:deck-test:deck:looks')
+    const raw = sessionStorage.getItem('chromosomix:ui:deck-test:deck:looks')
     return raw === null ? [] : (JSON.parse(raw) as Array<Record<string, unknown>>)
   }
 
@@ -1487,7 +1487,7 @@ describe('a box drawn on a companion (§16.3)', () => {
 
 describe('a row of the Contact maps card dropped on a cell (§16.9)', () => {
   function dropRow(target: Element, row: unknown): void {
-    const data = new Map([['application/x-metacooler-map', JSON.stringify(row)]])
+    const data = new Map([['application/x-chromosomix-map', JSON.stringify(row)]])
     const transfer = { getData: (type: string) => data.get(type) ?? '', types: [...data.keys()], files: [], dropEffect: '' }
     const drop = new window.Event('drop', { bubbles: true, cancelable: true }) as DragEvent
     Object.defineProperty(drop, 'dataTransfer', { value: transfer })

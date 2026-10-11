@@ -55,10 +55,10 @@ const isDark = (page) =>
     return (r + g + b) / 3 < 96
   })
 
-const YEAST = `${BASE}/demo/yeast/Yeast_microC.metacooler.json`
-const DECK = `${BASE}/demo/yeast/Yeast_deck.metacooler.json`
-const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.metacooler.json`
-const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.metacooler.json`
+const YEAST = `${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
+const DECK = `${BASE}/demo/yeast/Yeast_deck.chromosomix.json`
+const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`
+const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`
 
 /** One scene: its own context, viewport and storage. */
 async function scene(name, fn, { width = 1920, height = 1100, dark = false } = {}) {

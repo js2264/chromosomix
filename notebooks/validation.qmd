@@ -1,6 +1,6 @@
 ---
-title: "metacooler-run against reference implementations"
-subtitle: "Eight analyses on public data, each run by metacooler-run and by the package it reproduces"
+title: "chromosomix against reference implementations"
+subtitle: "Eight analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -14,7 +14,7 @@ execute:
   warning: false
 ---
 
-Each analysis is run on the same public file twice: by **`metacooler-run`**, the command-line form of
+Each analysis is run on the same public file twice: by **`chromosomix`**, the command-line form of
 the app's Analysis panel (the same code), and by the **reference package** it reproduces, called as
 its authors intend. The two outputs are matched bin by bin or call by call. Every command is printed
 as it ran, from `notebooks/work/validation/`, and its CPU time is measured in the last section.
@@ -30,7 +30,7 @@ as it ran, from `notebooks/work/validation/`, and its CPU time is measured in th
 | 7 | Reproducibility | chicken Hi-C, three maps, 100 kb | hicrep 0.2.6 |
 | 8 | 3D model | yeast Micro-C, 12.8 kb | pastis (GitHub `6888ac2`) |
 
-**To render.** `npm run build:cli` at the repository root builds this checkout's `metacooler-run`.
+**To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
 `scripts/make_analysis_golden.py`); the other references share one:
 
@@ -61,7 +61,7 @@ YAPC_PYTHON = os.environ.get('YAPC_PYTHON', 'yapc-env/bin/python')
 
 HERE = Path.cwd().resolve()
 REPO = HERE.parent if HERE.name == 'notebooks' else HERE
-CLI = REPO / 'dist-cli' / 'metacooler-run.mjs'
+CLI = REPO / 'dist-cli' / 'chromosomix.mjs'
 WORK = REPO / 'notebooks' / 'work' / 'validation'
 DATA = WORK / 'data'
 SCRIPTS = REPO / 'notebooks' / 'scripts'
@@ -128,22 +128,22 @@ def typed(argv):
     """A command as a reader would type it: each tool by its installed name."""
     names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight'}
     if argv[:2] == ['node', str(CLI)]:
-        argv = ['metacooler-run', *argv[2:]]
+        argv = ['chromosomix', *argv[2:]]
     return shlex.join([names.get(a, a) for a in argv])
 
 
-#: Every metacooler-run command and every reference command, by name: for the summary and the timing.
+#: Every chromosomix command and every reference command, by name: for the summary and the timing.
 APP, REFS, NOTES = {}, {}, {}
 #: Where a reference writes, in its command.
 OUT = '<out>'
 
 
 def mr(task, *args, out, name, analysis, label='', bench=True):
-    """One metacooler-run command into `out`, skipped when `out` already holds its outputs."""
+    """One chromosomix command into `out`, skipped when `out` already holds its outputs."""
     out = Path(out)
     argv = ['node', str(CLI), task, *[arg(a) for a in args]]
     full = argv + ['--out', rel(out)]
-    APP[name] = dict(analysis=analysis, tool='metacooler-run', label=label, argv=argv, bench=bench,
+    APP[name] = dict(analysis=analysis, tool='chromosomix', label=label, argv=argv, bench=bench,
                      shown=typed(full))
     print('$', typed(full))
     if not (out / '.command').exists() or REDO:
@@ -187,7 +187,7 @@ def reference(name, analysis, tool, argv, out, made=None, env=None, label='', be
 
 
 def table(path):
-    """A table metacooler-run wrote: its '#' lines are provenance, not data."""
+    """A table chromosomix wrote: its '#' lines are provenance, not data."""
     return pd.read_csv(path, sep='\t', comment='#')
 
 
@@ -228,7 +228,7 @@ def pearson(a, b):
     return stats.pearsonr(a[ok], b[ok])[0]
 
 
-# Blue is metacooler-run, orange the reference.
+# Blue is chromosomix, orange the reference.
 APP_COLOUR, REF = '#2a78d6', '#eb6834'
 INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
 DENSITY = LinearSegmentedColormap.from_list(
@@ -272,7 +272,7 @@ def commands(lines):
 def record(task, data, reference_, agreement_, verdict, apps, refs):
     """One row of the summary, with the commands as they ran."""
     SUMMARY.append({'Analysis': task, 'Data': data,
-                    'metacooler-run command': commands([f'$ {APP[name]["shown"]}' for name in apps]),
+                    'chromosomix command': commands([f'$ {APP[name]["shown"]}' for name in apps]),
                     'Reference': reference_,
                     'Reference command': commands([f'$ {REFS[name]["shown"]}' for name in refs]),
                     'Agreement': agreement_, 'Verdict': verdict})
@@ -334,7 +334,7 @@ YAPC, IDR, YAPC_NUMPY = yapc_versions()
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'numpy', 'scipy',
     'pandas')}
-show(pd.DataFrame([{'package': 'metacooler-run', 'version': APP_VERSION},
+show(pd.DataFrame([{'package': 'chromosomix', 'version': APP_VERSION},
                    *[{'package': k, 'version': v} for k, v in VERSIONS.items()],
                    {'package': 'yapc (own environment)', 'version': f'{YAPC}, with idr {IDR} and numpy {YAPC_NUMPY}'}]))
 ```
@@ -345,7 +345,7 @@ cooltools' definition: per bin, the mean of the valid cells of the `window × wi
 diagonal pixel, the `ignoreDiags` nearest diagonals left out, over the chromosome's median, in log2;
 boundaries at the minima whose prominence reaches the threshold.
 
-| | metacooler-run | cooltools |
+| | chromosomix | cooltools |
 |---|---|---|
 | window | `--window 10` (100 kb) | `window_bp=[100_000]` |
 | diagonals left out | `--ignoreDiags 2` (default) | `ignore_diags=2` |
@@ -378,7 +378,7 @@ measures({
     'bins both score': f'{both.sum():,}',
     'bins only one scores': f'{int((np.isfinite(a_ins) != np.isfinite(b_ins)).sum()):,}',
     'score, max |difference|': f'{ins_diff.max():.1e}',
-    'boundaries, metacooler-run / cooltools': f'{len(app_b):,} / {len(ref_b):,}',
+    'boundaries, chromosomix / cooltools': f'{len(app_b):,} / {len(ref_b):,}',
     'boundaries at the same bin': f'{len(same_calls):,}',
     'boundary strength, max |difference|': f'{strength_diff.max():.1e}',
 })
@@ -395,13 +395,13 @@ TEXT['ins_strength'] = f'{strength_diff.max():.1e}'
 
 fig = plt.figure(figsize=(11, 7.2), layout='constrained')
 grid = fig.add_gridspec(2, 2, height_ratios=[1.15, 1])
-agreement(fig.add_subplot(grid[0, 0]), b_ins[both], a_ins[both], 'cooltools (log2)', 'metacooler-run (log2)',
+agreement(fig.add_subplot(grid[0, 0]), b_ins[both], a_ins[both], 'cooltools (log2)', 'chromosomix (log2)',
           'a  every bin')
 ax = fig.add_subplot(grid[0, 1])
 ax.scatter(same_calls['boundary_strength_100000'], same_calls['score'], s=4, color=APP_COLOUR, alpha=0.35, lw=0,
            rasterized=True)
 identity(ax, 0, same_calls['boundary_strength_100000'].max())
-ax.set(xlabel='cooltools boundary strength', ylabel='metacooler-run prominence', title='b  every boundary')
+ax.set(xlabel='cooltools boundary strength', ylabel='chromosomix prominence', title='b  every boundary')
 ax = fig.add_subplot(grid[1, :])
 lo, _ = clr10.extent('chr11')
 stretch = slice(lo + 3_000, lo + 4_000)
@@ -409,7 +409,7 @@ x = bins10['start'].to_numpy()[stretch] / 1e6
 for pos in x[~np.isfinite(bins10['weight'].to_numpy(float)[stretch])]:
     ax.axvspan(pos, pos + 0.01, color=MISSING, lw=0, zorder=0)
 ax.plot(x, b_ins[stretch], color=REF, lw=3, label='cooltools')
-ax.plot(x, a_ins[stretch], color=APP_COLOUR, lw=1.2, label='metacooler-run')
+ax.plot(x, a_ins[stretch], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.set(xlabel='chr11 (Mb)', ylabel='insulation (log2)', title='c  chr11, 30–40 Mb')
 ax.legend(loc='lower left', ncols=2)
 plt.show()
@@ -431,7 +431,7 @@ Dixon et al. (2012): `sign(B − A)·(B − A)²/(A + B)`, A and B the contacts 
 the window. Reference: `domaincaller`'s `Chrom.calDI` on the balanced matrix, built as its own script
 builds it.
 
-| | metacooler-run | domaincaller |
+| | chromosomix | domaincaller |
 |---|---|---|
 | window | `--window 40` (2 Mb) | `calDI(window=2_000_000)` |
 | cells | every cell off the diagonal, `--ignoreDiags 0` | the upper triangle off the diagonal |
@@ -453,7 +453,7 @@ di_only_ref = int((np.isfinite(b_di) & ~np.isfinite(a_di)).sum())
 measures({
     'bins both score': f'{ok.sum():,}',
     'bins only domaincaller scores': f'{di_only_ref:,}',
-    'bins only metacooler-run scores': f'{int((np.isfinite(a_di) & ~np.isfinite(b_di)).sum()):,}',
+    'bins only chromosomix scores': f'{int((np.isfinite(a_di) & ~np.isfinite(b_di)).sum()):,}',
     'relative difference, max': f'{relative.max():.1e}',
     'same sign': f'{(np.sign(a_di[ok]) == np.sign(b_di[ok])).mean():.2%}',
 })
@@ -478,13 +478,13 @@ ax.set_xticks(TICKS, [f'{t:g}' for t in TICKS])
 ax.set_yticks(TICKS, [f'{t:g}' for t in TICKS])
 ax.xaxis.set_minor_locator(plt.NullLocator())
 ax.yaxis.set_minor_locator(plt.NullLocator())
-ax.set(xlabel='domaincaller', ylabel='metacooler-run', title='a  every bin')
+ax.set(xlabel='domaincaller', ylabel='chromosomix', title='a  every bin')
 ax = axes[1]
 lo, _ = clr50.extent('chr2')
 stretch = slice(lo + 800, lo + 1_400)
 x = clr50.bins()['start'][:].to_numpy()[stretch] / 1e6
 ax.plot(x, b_di[stretch], color=REF, lw=3, label='domaincaller')
-ax.plot(x, a_di[stretch], color=APP_COLOUR, lw=1.2, label='metacooler-run')
+ax.plot(x, a_di[stretch], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr2 (Mb)', ylabel='directionality index', title='b  chr2, 40–70 Mb')
 ax.legend(loc='lower left', ncols=2)
@@ -509,7 +509,7 @@ and three eigenvectors ranked by eigenvalue and signed by GC content, computed o
 Pearson, and the app leaves the sign unset below |r| = 0.1. chrY, mostly unmappable at 100 kb, is left
 out of the comparison.
 
-| | metacooler-run | cooltools |
+| | chromosomix | cooltools |
 |---|---|---|
 | components | `--components 3` | `n_eigs=3` |
 | phasing | `--phaseTrack gc.bedGraph` | `phasing_track=gc` |
@@ -589,14 +589,14 @@ x = np.arange(len(cmp_table))
 for k, colour, offset in ((1, APP_COLOUR, -0.2), (2, REF, 0), (3, '#1baf7a', 0.2)):
     ax.scatter(x + offset, cmp_table[f'r E{k}'].abs(), s=24, color=colour, label=f'E{k}', zorder=3)
 ax.set_xticks(x, cmp_table['chromosome'].str.replace('chr', ''), fontsize=7)
-ax.set(ylim=(0, 1.05), xlabel='chromosome', ylabel='|Pearson r|, metacooler-run vs cooltools',
+ax.set(ylim=(0, 1.05), xlabel='chromosome', ylabel='|Pearson r|, chromosomix vs cooltools',
        title='a  each component, each chromosome')
 ax.legend(loc='lower left', ncols=3)
 ax = axes[1]
 s = chrom100 == 'chr1'
 xs = ref_vec['start'].to_numpy()[s] / 1e6
 ax.plot(xs, ref_vec['E1'].to_numpy(float)[s], color=REF, lw=3, label='cooltools')
-ax.plot(xs, app_vec[1][s], color=APP_COLOUR, lw=1.2, label='metacooler-run')
+ax.plot(xs, app_vec[1][s], color=APP_COLOUR, lw=1.2, label='chromosomix')
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set(xlabel='chr1 (Mb)', ylabel='E1', title='b  E1 along chr1')
 ax.legend(loc='lower left', ncols=2)
@@ -680,7 +680,7 @@ show(pd.DataFrame([{'map': k, 'points': len(v['x']), 'furthest separation (Mb)':
 
 ```{python}
 #| label: fig-ps
-#| fig-cap: "P(s), metacooler-run against cooltools.expected_cis pooled over the same bands. Top, the curves; bottom, the relative difference at every point."
+#| fig-cap: "P(s), chromosomix against cooltools.expected_cis pooled over the same bands. Top, the curves; bottom, the relative difference at every point."
 TEXT['ps_max'] = f"{max(v['rel'].max() for v in ps.values()):.1e}"
 TEXT['ps_points'] = f"{sum(len(v['x']) for v in ps.values())}"
 
@@ -688,13 +688,13 @@ fig, axes = plt.subplots(2, 2, figsize=(11, 6.4), layout='constrained', height_r
 for col, (label, v) in enumerate(ps.items()):
     ax = axes[0, col]
     ax.plot(v['x'], v['ref'], color=REF, lw=3, label='cooltools, pooled')
-    ax.scatter(v['x'], v['app'], s=14, color=APP_COLOUR, zorder=3, label='metacooler-run')
+    ax.scatter(v['x'], v['app'], s=14, color=APP_COLOUR, zorder=3, label='chromosomix')
     ax.set(xscale='log', yscale='log', ylabel='mean balanced contact per bin pair', title=label)
     ax.legend(loc='lower left')
     ax = axes[1, col]
     ax.scatter(v['x'], np.maximum(v['rel'], 1e-9), s=10, color=APP_COLOUR)
     ax.set(xscale='log', yscale='log', ylim=(1e-9, 1e-3), xlabel='separation (bp)',
-           ylabel='|metacooler-run / cooltools − 1|')
+           ylabel='|chromosomix / cooltools − 1|')
 plt.show()
 ```
 
@@ -716,7 +716,7 @@ chr19, interval for interval (yapc holds a whole genome's second derivative in m
 yapc 0.1's command line with IDR 2.0.3, NumPy's random seed fixed. yapc breaks score ties at random,
 so it is run with five seeds, and their spread is the yardstick for IDR.
 
-| | metacooler-run | yapc 0.1 |
+| | chromosomix | yapc 0.1 |
 |---|---|---|
 | smoothing | `--width 150 --times 3` | `--smoothing-window-width 150 --smoothing-times 3` |
 | narrowest region | `--minWidth 75` | `--min-concave-region-width 75` |
@@ -792,13 +792,13 @@ found_app, wide_app = (int(re.search(rf'([\d,]+) {w}', note).group(1).replace(',
                        for w in ('concave region', 'at least'))
 wide_ref = int(((peaksall['concave_end'] - peaksall['concave_start']) >= 75).sum())
 measures({
-    'concave regions, metacooler-run / yapc': f'{found_app:,} / {len(peaksall):,}',
-    'at least 75 bp, metacooler-run / yapc': f'{wide_app:,} / {wide_ref:,}',
-    'given to IDR, metacooler-run / yapc': f'{len(listing):,} / {len(ref_tested):,}',
+    'concave regions, chromosomix / yapc': f'{found_app:,} / {len(peaksall):,}',
+    'at least 75 bp, chromosomix / yapc': f'{wide_app:,} / {wide_ref:,}',
+    'given to IDR, chromosomix / yapc': f'{len(listing):,} / {len(ref_tested):,}',
     'same bounds; in one only': f"{len(shared):,}; {int((m['_merge'] != 'both').sum())}",
     'same summit': f"{(shared['summit'] == shared['mode']).mean():.2%}",
     'curvature, max |difference| (two decimals written)': f'{curvature.max():.4f}',
-    'peaks at IDR ≤ 0.05, metacooler-run / yapc; same': f'{len(called_app):,} / {len(called_ref):,}; {len(same_called):,}',
+    'peaks at IDR ≤ 0.05, chromosomix / yapc; same': f'{len(called_app):,} / {len(called_ref):,}; {len(same_called):,}',
     '−log10 IDR of those peaks, max |difference| to each yapc seed': f'{min(idr_app):.1e} to {max(idr_app):.1e}',
     '−log10 IDR, yapc seeds against one another': f'{min(idr_self):.1e} to {max(idr_self):.1e}',
 })
@@ -811,7 +811,7 @@ def counted(th):
 
 
 show(pd.DataFrame([{'IDR ≤': th, f'yapc 0.1, seeds 0–{len(SEEDS) - 1}': counted(th),
-                    'metacooler-run': f"{int(counts_app.loc[np.isclose(counts_app['threshold'], th), 'peaks'].iloc[0]):,}"}
+                    'chromosomix': f"{int(counts_app.loc[np.isclose(counts_app['threshold'], th), 'peaks'].iloc[0]):,}"}
                    for th in THRESHOLDS]), **{'IDR ≤': '{:g}'})
 ```
 
@@ -831,9 +831,9 @@ IDR_WITHIN = max(idr_app) <= max(idr_self) + 1e-5
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4.4), layout='constrained')
 agreement(axes[0], np.r_[shared['cond_rep1_score'], shared['cond_rep2_score']],
-          np.r_[shared['curvature0'], shared['curvature1']], 'yapc 0.1', 'metacooler-run', 'a  curvature')
+          np.r_[shared['curvature0'], shared['curvature1']], 'yapc 0.1', 'chromosomix', 'a  curvature')
 agreement(axes[1], idr['cond_globalIDR'].to_numpy(float), idr['score'].to_numpy(float), 'yapc 0.1',
-          'metacooler-run', 'b  −log10 IDR, called peaks')
+          'chromosomix', 'b  −log10 IDR, called peaks')
 plt.show()
 ```
 
@@ -874,7 +874,7 @@ shared = m[m['_merge'] == 'both']
 readable = shared[shared['pvalue'] >= 1e-6]
 readable_q = shared[shared['qvalue'] >= 1e-6]
 measures({
-    'loops, metacooler-run / chromosight': f'{len(app_loops):,} / {len(ref_loops):,}',
+    'loops, chromosomix / chromosight': f'{len(app_loops):,} / {len(ref_loops):,}',
     'same bin pair; in one only': f"{len(shared):,}; {int((m['_merge'] != 'both').sum())}",
     'score, max |difference|': f"{np.abs(shared['score_app'] - shared['score_ref']).max():.1e}",
     f'p, max relative difference ({len(readable):,} loops with p ≥ 1e-6)':
@@ -896,12 +896,12 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 4.4), layout='constrained')
 ax = axes[0]
 ax.scatter(shared['score_ref'], shared['score_app'], s=8, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, shared['score_ref'].min(), shared['score_ref'].max())
-ax.set(xlabel='chromosight score', ylabel='metacooler-run score', title='a  loop scores')
+ax.set(xlabel='chromosight score', ylabel='chromosomix score', title='a  loop scores')
 ax = axes[1]
 px, py = -np.log10(readable['pvalue']), -np.log10(readable['p'])
 ax.scatter(px, py, s=8, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, min(px.min(), py.min()), max(px.max(), py.max()))
-ax.set(xlabel='chromosight, −log10 p', ylabel='metacooler-run, −log10 p', title='b  p-values')
+ax.set(xlabel='chromosight, −log10 p', ylabel='chromosomix, −log10 p', title='b  p-values')
 plt.show()
 ```
 
@@ -923,7 +923,7 @@ of half-width `h`, a Pearson correlation per diagonal over the positions where e
 and weights `(n + 1)/12`. Every pair of the three maps, on every chromosome longer than the furthest
 diagonal compared.
 
-| | metacooler-run | hicrep |
+| | chromosomix | hicrep |
 |---|---|---|
 | counts | raw, `--no-balance` | raw (`balance=False`) |
 | smoothing | `--smooth 1` | `h=1` |
@@ -957,34 +957,34 @@ def unordered(frame):
     return frame
 
 
-scc = (unordered(app_scc[['a', 'b', 'sequence', 'scc']].rename(columns={'scc': 'metacooler-run'}))
+scc = (unordered(app_scc[['a', 'b', 'sequence', 'scc']].rename(columns={'scc': 'chromosomix'}))
        .merge(unordered(pd.read_csv(HR / 'hicrep.tsv', sep='\t')), on=['a', 'b', 'sequence']))
-scc_diff = scc['metacooler-run'] - scc['hicrep']
+scc_diff = scc['chromosomix'] - scc['hicrep']
 measures({
     'values (pairs × chromosomes)': f'{len(scc):,}',
     'mean difference': f'{scc_diff.mean():+.1e}',
     'max |difference|': f'{scc_diff.abs().max():.1e}',
-    'Pearson r': f"{pearson(scc['metacooler-run'].to_numpy(), scc['hicrep'].to_numpy()):.6f}",
+    'Pearson r': f"{pearson(scc['chromosomix'].to_numpy(), scc['hicrep'].to_numpy()):.6f}",
 })
 ```
 
 ```{python}
 #| label: fig-hicrep
-#| fig-cap: "HiCRep on three chicken Hi-C maps at 100 kb, every pair, every chromosome of at least 5.1 Mb. a, metacooler-run against hicrep; b, their difference, value by value."
+#| fig-cap: "HiCRep on three chicken Hi-C maps at 100 kb, every pair, every chromosome of at least 5.1 Mb. a, chromosomix against hicrep; b, their difference, value by value."
 TEXT['hr_n'] = f'{len(scc)}'
 TEXT['hr_max'] = f'{scc_diff.abs().max():.1e}'
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), layout='constrained')
 ax = axes[0]
-ax.scatter(scc['hicrep'], scc['metacooler-run'], s=10, color=APP_COLOUR, alpha=0.6, lw=0)
+ax.scatter(scc['hicrep'], scc['chromosomix'], s=10, color=APP_COLOUR, alpha=0.6, lw=0)
 identity(ax, 0, 1)
-ax.set(xlim=(0, 1), ylim=(0, 1), xlabel='hicrep SCC', ylabel='metacooler-run SCC', title='a  every value')
+ax.set(xlim=(0, 1), ylim=(0, 1), xlabel='hicrep SCC', ylabel='chromosomix SCC', title='a  every value')
 ax.set_aspect('equal')
 ax = axes[1]
 ax.hist(scc_diff * 1e5, bins=np.linspace(-6, 6, 49), color=APP_COLOUR)
 for edge in (-5, 5):
     ax.axvline(edge, color=INK2, lw=1, ls=(0, (4, 3)))
-ax.set(xlabel='metacooler-run − hicrep (×10⁻⁵)', ylabel='pairs × chromosomes',
+ax.set(xlabel='chromosomix − hicrep (×10⁻⁵)', ylabel='pairs × chromosomes',
        title='b  difference; dashed, the rounding of four decimals')
 plt.show()
 ```
@@ -1006,7 +1006,7 @@ Vert 2023) through its own functions — the dispersion fitted against the mean
 (`ExponentialDispersion(degree=1)`), an MDS start, `negative_binomial_structure.estimate_X` — on the same
 beads (bins with a weight and a contact). The app departs on purpose: its dispersion is a moment
 estimate per separation, its start ShRec3D's MDS. A structure has no unique solution, so pastis from
-three seeds is the yardstick. metacooler-run runs its default 150 steps.
+three seeds is the yardstick. chromosomix runs its default 150 steps.
 
 ```{python}
 P3 = WORK / 'pastis'
@@ -1032,7 +1032,7 @@ def app_model(folder):
     return beads.merge(bed3d, on=['chrom', 'start'], how='left')[['x', 'y', 'z']].to_numpy(float)
 
 
-MODELS = {'metacooler-run': app_model(P3 / 'app'),
+MODELS = {'chromosomix': app_model(P3 / 'app'),
           **{f'pastis, seed {s}': np.load(P3 / f'pastis-seed{s}.npy') for s in (0, 1, 2)}}
 assert all(model.shape == (KEEP.sum(), 3) and np.isfinite(model).all() for model in MODELS.values()), \
     'a bead is missing from a model'
@@ -1057,7 +1057,7 @@ names_ = list(MODELS)
 for i, a in enumerate(names_):
     for b in names_[i + 1:]:
         rows.append({'models': f'{a} / {b}',
-                     'kind': 'pastis vs pastis' if a.startswith('pastis') else 'metacooler-run vs pastis',
+                     'kind': 'pastis vs pastis' if a.startswith('pastis') else 'chromosomix vs pastis',
                      'within chromosomes, Spearman ρ': stats.spearmanr(dist[a][same], dist[b][same])[0],
                      'between chromosomes, Spearman ρ': stats.spearmanr(dist[a][~same], dist[b][~same])[0],
                      'per-chromosome Procrustes disparity': per_chromosome_disparity(MODELS[a], MODELS[b])})
@@ -1074,8 +1074,8 @@ map counted.
 
 ```{python}
 #| label: fig-pastis
-#| fig-cap: "pastis-NB, yeast Micro-C at 12.8 kb. a, distances within chromosomes, metacooler-run against pastis' first seed, each over its model's median distance between neighbouring beads; b, how alike two models are, within and between chromosomes."
-cross = models_table[models_table['kind'] == 'metacooler-run vs pastis']
+#| fig-cap: "pastis-NB, yeast Micro-C at 12.8 kb. a, distances within chromosomes, chromosomix against pastis' first seed, each over its model's median distance between neighbouring beads; b, how alike two models are, within and between chromosomes."
+cross = models_table[models_table['kind'] == 'chromosomix vs pastis']
 selfs = models_table[models_table['kind'] == 'pastis vs pastis']
 
 
@@ -1089,12 +1089,12 @@ TEXT['p3_intra_self'] = spread(selfs, 'within chromosomes, Spearman ρ', 3)
 TEXT['p3_inter_cross'] = spread(cross, 'between chromosomes, Spearman ρ', 2)
 TEXT['p3_inter_self'] = spread(selfs, 'between chromosomes, Spearman ρ', 2)
 fits = fit_table.set_index('model')['fit, all pairs']
-TEXT['p3_fit_app'] = f"{fits['metacooler-run']:.3f}"
+TEXT['p3_fit_app'] = f"{fits['chromosomix']:.3f}"
 pastis_fits = fits[[n for n in fits.index if n.startswith('pastis')]]
 TEXT['p3_fit_pastis'] = f"{pastis_fits.min():.3f}–{pastis_fits.max():.3f}"
 within = fit_table.set_index('model')['fit, within chromosomes']
 pastis_within = within[[n for n in within.index if n.startswith('pastis')]]
-TEXT['p3_fit_app_within'] = f"{within['metacooler-run']:.3f}"
+TEXT['p3_fit_app_within'] = f"{within['chromosomix']:.3f}"
 TEXT['p3_fit_pastis_within'] = f"{pastis_within.min():.3f}–{pastis_within.max():.3f}"
 
 
@@ -1102,8 +1102,8 @@ def versus(app, reference_):
     return 'better than' if app > reference_.max() else 'less well than' if app < reference_.min() else 'as well as'
 
 
-TEXT['p3_within_word'] = versus(within['metacooler-run'], pastis_within)
-TEXT['p3_all_word'] = versus(fits['metacooler-run'], pastis_fits)
+TEXT['p3_within_word'] = versus(within['chromosomix'], pastis_within)
+TEXT['p3_all_word'] = versus(fits['chromosomix'], pastis_fits)
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ratios=[1, 1.15])
 
@@ -1113,11 +1113,11 @@ def scaled(model):
     return pdist(model) / step
 
 
-agreement(axes[0], scaled(MODELS['pastis, seed 0'])[same], scaled(MODELS['metacooler-run'])[same],
-          'pastis, seed 0', 'metacooler-run', 'a  distances within chromosomes', scale='log')
+agreement(axes[0], scaled(MODELS['pastis, seed 0'])[same], scaled(MODELS['chromosomix'])[same],
+          'pastis, seed 0', 'chromosomix', 'a  distances within chromosomes', scale='log')
 ax = axes[1]
 for col, metric in enumerate(('within chromosomes, Spearman ρ', 'between chromosomes, Spearman ρ')):
-    for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'metacooler-run vs pastis'),
+    for offset, frame, colour, label in ((-0.12, cross, APP_COLOUR, 'chromosomix vs pastis'),
                                          (0.12, selfs, REF, 'pastis vs pastis')):
         ax.scatter(np.full(len(frame), col + offset), frame[metric], s=36, color=colour,
                    label=label if col == 0 else None, zorder=3)
@@ -1130,7 +1130,7 @@ plt.show()
 On `{python} TEXT['p3_beads']` beads, distances within chromosomes correlate with pastis' at
 ρ = `{python} TEXT['p3_intra_cross']`, against `{python} TEXT['p3_intra_self']` between pastis seeds;
 between chromosomes at `{python} TEXT['p3_inter_cross']` (`{python} TEXT['p3_inter_self']`).
-metacooler-run's model fits the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis'
+chromosomix's model fits the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis'
 (`{python} TEXT['p3_fit_app_within']` against `{python} TEXT['p3_fit_pastis_within']`), and over all
 pairs, the chromosomes' arrangement included, `{python} TEXT['p3_all_word']` pastis'
 (`{python} TEXT['p3_fit_app']` against `{python} TEXT['p3_fit_pastis']`).
@@ -1146,13 +1146,13 @@ record('3D model (pastis-NB)', f"yeast Micro-C, 12.8 kb, {TEXT['p3_beads']} bead
 
 ## Summary
 
-Commands as run, from `notebooks/work/validation/`: `metacooler-run` is this checkout's
-`node dist-cli/metacooler-run.mjs`, `python` the reference packages' interpreter, `yapc-env/bin/python`
+Commands as run, from `notebooks/work/validation/`: `chromosomix` is this checkout's
+`node dist-cli/chromosomix.mjs`, `python` the reference packages' interpreter, `yapc-env/bin/python`
 yapc's. The reference scripts, in `notebooks/scripts/`, are listed [below](#reference-scripts).
 
 ```{python}
 #| column: screen-inset
-WIDTHS = {'Analysis': 8, 'Data': 9, 'metacooler-run command': 25, 'Reference': 8, 'Reference command': 25,
+WIDTHS = {'Analysis': 8, 'Data': 9, 'chromosomix command': 25, 'Reference': 8, 'Reference command': 25,
           'Agreement': 14, 'Verdict': 11}
 summary = pd.DataFrame(SUMMARY)[list(WIDTHS)]
 summary.style.hide(axis='index').set_table_styles([
@@ -1187,7 +1187,7 @@ for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref[
 
 Each command of the summary is run `{python} str(RUNS)` times as a fresh process, exactly as printed but
 writing to a scratch folder, round robin. CPU time is counted: user and system, of the process and every
-process it started. `metacooler-run` computes on one thread; cooltools' insulation and P(s), and
+process it started. `chromosomix` computes on one thread; cooltools' insulation and P(s), and
 chromosight, were given `{python} str(THREADS)` processes.
 
 ```{python}
@@ -1206,12 +1206,12 @@ def timed(argv, env=None):
 
 
 def jobs():
-    """What is timed, in the summary's order: each analysis's metacooler-run commands, then its references."""
+    """What is timed, in the summary's order: each analysis's chromosomix commands, then its references."""
     out = []
     for analysis in ANALYSES:
         for name, app in APP.items():
             if app['analysis'] == analysis and app['bench']:
-                out.append(dict(name=name, analysis=analysis, tool='metacooler-run', label=app['label'], env=None,
+                out.append(dict(name=name, analysis=analysis, tool='chromosomix', label=app['label'], env=None,
                                 argv=lambda scratch, app=app: app['argv'] + ['--out', rel(scratch)]))
         for name, ref in REFS.items():
             if ref['analysis'] == analysis and ref['bench']:
@@ -1267,14 +1267,14 @@ wide['CPU, mean ± sd'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(wide['mean'], w
 
 
 def against_reference(row):
-    """A metacooler-run row's reference: the same analysis and variant, or the analysis's one reference."""
-    refs = wide[(wide['analysis'] == row['analysis']) & (wide['tool'] != 'metacooler-run')]
+    """A chromosomix row's reference: the same analysis and variant, or the analysis's one reference."""
+    refs = wide[(wide['analysis'] == row['analysis']) & (wide['tool'] != 'chromosomix')]
     same = refs[refs['variant'] == row['variant']]
     pick = same if len(same) == 1 else refs if len(refs) == 1 else None
     return np.nan if pick is None else pick['mean'].iloc[0] / row['mean']
 
 
-wide['fold'] = [against_reference(row) if row['tool'] == 'metacooler-run' else np.nan for _, row in wide.iterrows()]
+wide['fold'] = [against_reference(row) if row['tool'] == 'chromosomix' else np.nan for _, row in wide.iterrows()]
 wide['× faster than the reference'] = [f'{f:.1f}×' if np.isfinite(f) else '' for f in wide['fold']]
 run_columns = [f'run {r}' for r in range(1, RUNS + 1)]
 show(wide[['analysis', 'tool', 'variant', *run_columns, 'CPU, mean ± sd', '× faster than the reference']], precision=2)
@@ -1288,7 +1288,7 @@ TEXT['t_range'] = f'{folds.min():.1f}× to {folds.max():.1f}×'
 TEXT['t_sd'] = f"{(wide['sd'] / wide['mean']).max():.0%}"
 ```
 
-CPU seconds per run, and the mean ± sd. On average overall, `metacooler-run` is
+CPU seconds per run, and the mean ± sd. On average overall, `chromosomix` is
 **`{python} TEXT['t_fold']`-fold faster** than the reference tools: the mean of the
 `{python} TEXT['t_n']` folds in the last column (`{python} TEXT['t_range']`). No command's time spreads
 by more than `{python} TEXT['t_sd']` of its mean across runs.
@@ -1304,7 +1304,7 @@ for k, (analysis, members) in enumerate(wide.groupby('analysis', sort=False)):
     if k % 2:
         ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
 for yi, (_, row) in zip(y, wide.iterrows()):
-    colour = APP_COLOUR if row['tool'] == 'metacooler-run' else REF
+    colour = APP_COLOUR if row['tool'] == 'chromosomix' else REF
     runs_ = times[times['order'] == row['order']]['CPU s']
     ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
     ax.plot([row['mean']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
@@ -1317,7 +1317,7 @@ ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
 ax.xaxis.set_minor_locator(NullLocator())
 ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(wide) - 0.5))
 ax.grid(axis='y', visible=False)
-ax.scatter([], [], s=24, color=APP_COLOUR, label='metacooler-run')
+ax.scatter([], [], s=24, color=APP_COLOUR, label='chromosomix')
 ax.scatter([], [], s=24, color=REF, label='reference')
 ax.legend(loc='upper right')
 plt.show()

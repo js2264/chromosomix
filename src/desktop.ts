@@ -3,7 +3,7 @@
  *
  * Everything else asks this. That is the same argument `version.ts` makes about
  * the target flag, for the same reason: a second module reaching into
- * `window.metacoolerDesktop` is a second place to get the guard wrong, and the
+ * `window.chromosomixDesktop` is a second place to get the guard wrong, and the
  * wrong guard here throws a `TypeError` on a property of `undefined` in the web
  * build, where the object never exists at all.
  *
@@ -41,7 +41,7 @@ export interface DesktopBridge {
 
 declare global {
   interface Window {
-    metacoolerDesktop?: DesktopBridge
+    chromosomixDesktop?: DesktopBridge
   }
 }
 
@@ -57,7 +57,7 @@ export const IS_DESKTOP: boolean = TARGET === 'desktop'
  * `!== undefined` test would pass and the call would throw.
  */
 export function desktop(): DesktopBridge | null {
-  const bridge = typeof window === 'undefined' ? undefined : window.metacoolerDesktop
+  const bridge = typeof window === 'undefined' ? undefined : window.chromosomixDesktop
   if (bridge === undefined) return null
   if (typeof bridge.onCommand !== 'function') return null
   return bridge

@@ -119,8 +119,8 @@ export interface Versions {
 /**
  * Split a base path into the site it belongs to and the commit it is pinned to.
  *
- * `/metacooler.js/v/a1b2c3d/` is one archived build of the site at
- * `/metacooler.js/`; `/metacooler.js/` is the site itself and is pinned to
+ * `/chromosomix/v/a1b2c3d/` is one archived build of the site at
+ * `/chromosomix/`; `/chromosomix/` is the site itself and is pinned to
  * nothing. Exported for the test, because this is the one piece of arithmetic
  * here that has an off-by-one in it.
  */
@@ -165,8 +165,8 @@ export const IS_PINNED = PINNED_COMMIT !== null || PINNED_PULL !== null
 /**
  * `true` when this build does not know where it is served from.
  *
- * Every other build bakes a root-absolute base: the site's `/metacooler.js/`, an
- * archived copy's `/metacooler.js/v/<commit>/`, the desktop renderer's `/`. The
+ * Every other build bakes a root-absolute base: the site's `/chromosomix/`, an
+ * archived copy's `/chromosomix/v/<commit>/`, the desktop renderer's `/`. The
  * package build (`vite.package.config.ts`) is the one that cannot — a tarball is
  * unpacked into a lab site, a course page or a registry CDN, and the whole point
  * of it is that one published version serves all three — so its base is `./`.

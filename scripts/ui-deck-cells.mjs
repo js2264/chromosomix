@@ -231,7 +231,7 @@ try {
   // -------------------------------------------------------------------------
   // A tracks cell: what it has in its heading and over its lanes.
   // -------------------------------------------------------------------------
-  await open('Yeast_deck.metacooler.json')
+  await open('Yeast_deck.chromosomix.json')
   console.log('deck:', JSON.stringify(await cells()))
   const first = await gripOf(0, 'bottom')
   const plus = await middle('.deck-grow.is-beside')
@@ -311,7 +311,7 @@ try {
   // One side of a track drawn on two, carried to a `+`.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await open('Yeast_deck.metacooler.json')
+  await open('Yeast_deck.chromosomix.json')
   await fold('Show the Annotations panel')
   // The genes off the map for this, so the lane under it is ATAC's alone.
   await rowOf('demo-genes').locator('.ann-eye').first().click()
@@ -340,7 +340,7 @@ try {
   // The Structures card's eye, and the structure cell's name.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await open('Yeast_deck.metacooler.json')
+  await open('Yeast_deck.chromosomix.json')
   await fold('Show the Annotations panel')
   await page.evaluate(async (url) => {
     const card = document.querySelector('.structure-card')
@@ -368,7 +368,7 @@ try {
       const id = row?.getAttribute('data-id') ?? ''
       if (grow === null || id === '') return ''
       const transfer = new DataTransfer()
-      transfer.setData('application/x-metacooler-structure', id)
+      transfer.setData('application/x-chromosomix-structure', id)
       for (const kind of ['dragenter', 'dragover', 'drop']) grow.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
       return id
     }, which)
@@ -402,7 +402,7 @@ try {
   // A track beside the map, put in a tracks cell.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.lane-canvas:not(.hidden)').length > 0, null, { timeout: 120000 })
   await sleep(6000)

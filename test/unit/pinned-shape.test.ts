@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SIZE_LIMIT, pinnedFileProblems, pinnedIndexProblems } from '../../scripts/pinned-shape.mjs'
 
-const BASE = '/metacooler.js/v/a1b2c3d/'
+const BASE = '/chromosomix/v/a1b2c3d/'
 
 /** What the build actually emits today, as the walk reports it. */
 const GOOD = [
@@ -97,14 +97,14 @@ describe('pinnedIndexProblems', () => {
   it('refuses a build made for another base, which is a blank page', () => {
     // What a missing or wrong PINNED_BASE produces. Every asset 404s, and
     // nothing is written anywhere a reader would look.
-    const problems = pinnedIndexProblems(INDEX.split(BASE).join('/metacooler.js/'), BASE)
+    const problems = pinnedIndexProblems(INDEX.split(BASE).join('/chromosomix/'), BASE)
     expect(problems.length).toBeGreaterThan(0)
     expect(problems[0]).toContain('module script')
   })
 
   it('refuses a reference to another build, which would resolve to the newest', () => {
     const problems = pinnedIndexProblems(
-      INDEX.replace('</head>', '<link rel="preload" href="/metacooler.js/assets/x.js"></head>'),
+      INDEX.replace('</head>', '<link rel="preload" href="/chromosomix/assets/x.js"></head>'),
       BASE,
     )
     expect(problems).toHaveLength(1)

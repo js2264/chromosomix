@@ -21,7 +21,7 @@ import {
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
-const KEY = 'metacooler-viewer:export'
+const KEY = 'chromosomix:export'
 
 let teardown: DomTeardown
 

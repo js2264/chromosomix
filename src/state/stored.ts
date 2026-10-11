@@ -39,7 +39,7 @@ import { actions, dayOf, forgetActions } from './actions'
 import { isSigned, readScopes } from '../s3/credentials'
 
 /** The one prefix every key this app writes begins with. */
-export const PREFIX = 'metacooler-viewer:'
+export const PREFIX = 'chromosomix:'
 
 /** One line of the account: what is held, and how much of it. */
 export interface StoredItem {

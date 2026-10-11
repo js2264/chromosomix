@@ -36,7 +36,7 @@
 
 import type { StoredItem } from './stored'
 
-const KEY = 'metacooler-viewer:drives'
+const KEY = 'chromosomix:drives'
 
 /** One connected Drive folder: what to call it, and which folder it is. */
 export interface DriveRow {

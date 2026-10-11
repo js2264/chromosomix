@@ -123,7 +123,7 @@ try {
   // -------------------------------------------------------------------------
   // One map.
   // -------------------------------------------------------------------------
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.lane-canvas:not(.hidden)').length > 0, null, { timeout: 120000 })
   await sleep(6000)
@@ -185,7 +185,7 @@ try {
   // The deck.
   // -------------------------------------------------------------------------
   page = await fresh()
-  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.metacooler.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_deck.chromosomix.json`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await page.waitForFunction(() => document.querySelectorAll('.deck-grid .heatmap-canvas').length >= 2, null, { timeout: 240000 })
   await sleep(6000)
   await fold('Show the Annotations panel')

@@ -224,7 +224,7 @@ const PARAMS: readonly ParamSpec[] = [
     // go and find somewhere to host it — and on a map binned from a `.pairs` it
     // asked for the file the map was binned from, whose four curves the import
     // had already counted. The key keeps its old name, because stored sessions
-    // and `metacooler-run --pairsUri` lines carry it, and a local file's name is
+    // and `chromosomix --pairsUri` lines carry it, and a local file's name is
     // what this app calls its address everywhere else.
     kind: 'file',
     key: 'pairsUri',

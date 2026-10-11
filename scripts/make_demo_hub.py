@@ -445,8 +445,8 @@ def write_hub() -> None:
     (DEMO / "hub.txt").write_text(
         "\n".join(
             (
-                "hub metacoolerDemo",
-                "shortLabel metacooler demo",
+                "hub chromosomixDemo",
+                "shortLabel chromosomix demo",
                 "longLabel The yeast demo data, as a UCSC assembly hub",
                 "genomesFile genomes.txt",
                 "email noreply@example.org",

@@ -288,7 +288,7 @@ display and look. Run it after any change to `analysis/surfaces.ts`, `ui/calledS
 `drawDiagonalFeatures`, or where a task's sets open.
 
 `scripts/ui-overlay-maps.mjs` drives which maps an overlay is drawn on (§8.1), on a deck of three
-yeast maps it writes itself (`gallery/_overlay-deck.metacooler.json`, served beside `demo/`): the
+yeast maps it writes itself (`gallery/_overlay-deck.chromosomix.json`, served beside `demo/`): the
 loops row's *maps* field and the deck at each state — imported onto the first map, the Hi-C map's
 mark pressed, *every map*, the first map's mark pressed off, *no map* — then the two drops onto a
 map's middle, *on this map*: the loops row carried onto the Hi-C map, with the middle the only
@@ -303,7 +303,7 @@ a drop, or to `AnnotationStore.overlays`.
 `scripts/ui-contacts.mjs` drives the **contacts box** at the end of the breadcrumb (§6.5): the yeast
 micro-C as stored, its own total in grey; `10M` typed and the map redrawn from ten million contacts;
 a figure saved with the caption that says so, P(s) run on the drawn map with its framing line and the
-console's `metacooler-run … --contacts` printed; a total that is not one, refused in the box; the
+console's `chromosomix … --contacts` printed; a total that is not one, refused in the box; the
 box emptied. Then the deck demo, a cooler beside a `.hic` whose total is counted: the chevrons
 pressed down and up (through Boost-HiC), and the deck's figure. Then two files in one square — the
 second named in `GALLERY_PAIR`, since the demo has no second yeast map with the cooler's sequences —
@@ -378,7 +378,7 @@ distance and the separation must not — and drops a VCF on the Tracks card's ow
 
 ## What it drives
 
-The yeast demo (`?config=…/demo/yeast/Yeast_microC.metacooler.json`), the square map, the
+The yeast demo (`?config=…/demo/yeast/Yeast_microC.chromosomix.json`), the square map, the
 side panels folded for room, then: the demo structure dropped on the Structures card,
 the cell framed on the maps' window, a hover on a bead (the status bar names it) and on the map
 (the chord), colour by the first track, a tracks cell with two tracks placed on it, the Analysis

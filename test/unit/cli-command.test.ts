@@ -2,7 +2,7 @@
  * The run on screen, written as the shell command that repeats it.
  *
  * `cli/main.ts` exists because clicking stops being the interface at the second
- * file, and `metacooler-run tasks` answers *what is possible* rather than *what
+ * file, and `chromosomix tasks` answers *what is possible* rather than *what
  * did I just do* — so the reader who spent twenty minutes moving a window and
  * nudging four numbers still had to transcribe those numbers into a shell, by
  * eye, once per task. Transcription is the one step in that loop where the
@@ -165,7 +165,7 @@ describe('the shape of the command', () => {
         context: context(),
       }).text,
     )
-    expect(command.startsWith('metacooler-run insulation yeast.mcool::resolutions/1000 ')).toBe(
+    expect(command.startsWith('chromosomix insulation yeast.mcool::resolutions/1000 ')).toBe(
       true,
     )
   })
@@ -505,7 +505,7 @@ describe('a run with no contact map', () => {
   }
 
   it('is written with no file to open, rather than against the file that named the assembly', () => {
-    // `metacooler-run overlap Yeast_ATAC.bw` reads perfectly well and fails at
+    // `chromosomix overlap Yeast_ATAC.bw` reads perfectly well and fails at
     // the open: the command takes a contact map as its first argument, and a
     // browser session has none. So the line has no positional at all — which
     // is how `cli/main.ts` runs a track task over what the tracks declare.
@@ -516,7 +516,7 @@ describe('a run with no contact map', () => {
       context: context(),
     })
     const command = commandOf(built.text)
-    expect(command.startsWith('metacooler-run overlap --')).toBe(true)
+    expect(command.startsWith('chromosomix overlap --')).toBe(true)
     expect(command).not.toContain('Yeast_ATAC.bw')
     // Nothing to balance and nothing to window, so neither is said.
     expect(command).not.toContain('--balance')
@@ -535,7 +535,7 @@ describe('a run with no contact map', () => {
       context: context([entry('t1', 'ATAC', 'Yeast_ATAC.bw'), entry('a1', 'peaks', 'peaks.bed')]),
     })
     const command = commandOf(built.text)
-    expect(command.startsWith('metacooler-run metaplot --')).toBe(true)
+    expect(command.startsWith('chromosomix metaplot --')).toBe(true)
     expect(command).toContain('--tracks Yeast_ATAC.bw')
     expect(command).toContain('--features peaks.bed')
   })
@@ -565,7 +565,7 @@ describe('a run with no contact map', () => {
       provenance: provenance('overlap', defaultsOf(overlap)),
       context: context(),
     })
-    expect(commandOf(built.text).startsWith('metacooler-run overlap yeast.mcool')).toBe(true)
+    expect(commandOf(built.text).startsWith('chromosomix overlap yeast.mcool')).toBe(true)
   })
 })
 
@@ -617,7 +617,7 @@ describe('two sequence sets against each other', () => {
       context: context([entry('a1', 'assembly', 'assembly.fa'), entry('b1', 'theory', 'theory.fa')]),
     })
     const command = commandOf(built.text)
-    expect(command.startsWith('metacooler-run dotplot --sequence assembly.fa --sequence theory.fa')).toBe(true)
+    expect(command.startsWith('chromosomix dotplot --sequence assembly.fa --sequence theory.fa')).toBe(true)
     expect(command).toContain('--x assembly.fa')
     expect(command).toContain('--y theory.fa')
     expect(command).toContain("--streaks 'one to one'")
@@ -727,7 +727,7 @@ describe('every task in the registry', () => {
           .toBe(true)
       }
       // And the subject is always there, whatever the task.
-      expect(command.startsWith(`metacooler-run ${task.id} yeast.mcool`)).toBe(true)
+      expect(command.startsWith(`chromosomix ${task.id} yeast.mcool`)).toBe(true)
     })
   }
 })
@@ -828,7 +828,7 @@ describe('the framing a session sets from the picture', () => {
       }),
       context: context(),
     })
-    expect(commandOf(built.text)).toContain('metacooler-run insulation data/Hum53.pairs.gz --bin-size 5000')
+    expect(commandOf(built.text)).toContain('chromosomix insulation data/Hum53.pairs.gz --bin-size 5000')
     const cooler = cliCommandFor({
       task: insulation,
       provenance: provenance('insulation', defaultsOf(insulation)),

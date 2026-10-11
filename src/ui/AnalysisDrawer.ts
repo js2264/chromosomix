@@ -122,7 +122,7 @@ import { VectorPage } from './vector'
  * three columns: how wide a reader likes their workspace is a preference about
  * this window, not a train of thought about this file.
  */
-const WIDTH_KEY = 'metacooler-viewer:analysis-drawer:width'
+const WIDTH_KEY = 'chromosomix:analysis-drawer:width'
 
 /**
  * Where an output that is not a picture went, as the four answers there are.
@@ -1793,12 +1793,12 @@ export class AnalysisDrawer {
     // written by a later one — is the one run with no command: the flags are
     // the descriptor's, and there is no descriptor, so the button goes quiet
     // rather than guessing at them. Every task this build has is one
-    // `metacooler-run` takes (`analysis/cliCommand.ts`).
+    // `chromosomix` takes (`analysis/cliCommand.ts`).
     const unknown = taskById(provenance.task) === undefined
     this.cliButton.disabled = unknown
     this.cliButton.title = unknown
       ? `This build does not have the task ${provenance.task}, so it cannot write its flags.`
-      : 'The same run as a metacooler-run command line — the file, the window, the balancing ' +
+      : 'The same run as a chromosomix command line — the file, the window, the balancing ' +
         'and every parameter — for the other two hundred files.'
   }
 

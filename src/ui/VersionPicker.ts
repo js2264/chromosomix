@@ -48,7 +48,7 @@ import {
 import { button, el } from './dom'
 
 /** Where a dismissed notice is remembered: this tab, not this browser. */
-const DISMISSED = 'metacooler-viewer:pinned-notice-dismissed'
+const DISMISSED = 'chromosomix:pinned-notice-dismissed'
 
 /**
  * Go to another build, carrying the view.

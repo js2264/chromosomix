@@ -70,7 +70,7 @@ export function stripPwaTagsFrom(html) {
 /** The same thing as a Vite plugin, which is how both configs use it. */
 export function stripPwaTags() {
   return {
-    name: 'metacooler-strip-pwa-tags',
+    name: 'chromosomix-strip-pwa-tags',
     apply: 'build',
     transformIndexHtml(html) {
       return stripPwaTagsFrom(html)

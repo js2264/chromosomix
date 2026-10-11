@@ -92,7 +92,7 @@ export class CustomView {
         'aria-label': hub ? 'the text of a hub' : 'the text of a store file',
         placeholder: hub
           ? 'hub myHub\nshortLabel My hub\n\ngenome hg38\n\ntrack signal\nbigDataUrl https://…/signal.bw\ntype bigWig'
-          : '{ "kind": "metacooler.store", "name": "My store", "entries": [ … ] }',
+          : '{ "kind": "chromosomix.store", "name": "My store", "entries": [ … ] }',
       },
     }) as HTMLTextAreaElement
     this.baseInput = el('input', {

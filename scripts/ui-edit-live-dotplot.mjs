@@ -16,7 +16,7 @@ const OUT = process.argv[2] ?? 'gallery'
 const g = await gallery(OUT)
 const { page, shot, text, openStage, openWithDev, settled } = g
 
-await openWithDev(`?config=${g.base}/out/reasm/Dotplot.metacooler.json`)
+await openWithDev(`?config=${g.base}/out/reasm/Dotplot.chromosomix.json`)
 await sleep(15000)
 await openStage()
 await settled()

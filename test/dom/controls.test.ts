@@ -278,20 +278,20 @@ describe('the theme toggle', () => {
   it('keeps an explicit choice and forgets the implicit one', () => {
     const toggle = new ThemeToggle()
     toggle.el.click()
-    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBe('dark')
+    expect(window.localStorage.getItem('chromosomix:theme')).toBe('dark')
     toggle.el.click()
     toggle.el.click()
-    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBeNull()
+    expect(window.localStorage.getItem('chromosomix:theme')).toBeNull()
   })
 
   it('restores what was stored, before anything is mounted', () => {
-    window.localStorage.setItem('metacooler-viewer:theme', 'dark')
+    window.localStorage.setItem('chromosomix:theme', 'dark')
     expect(initTheme()).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
 
   it('treats a stored absurdity as system', () => {
-    window.localStorage.setItem('metacooler-viewer:theme', 'chartreuse')
+    window.localStorage.setItem('chromosomix:theme', 'chartreuse')
     expect(initTheme()).toBe('system')
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })

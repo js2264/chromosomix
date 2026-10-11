@@ -140,7 +140,7 @@ const FRAMING: AnalysisFraming = {
   label: 'Yeast_ATAC.bw · loaded tracks, no contact map',
 }
 
-/** A run of the task over the demo bigWigs, as `metacooler-run peaks` runs it. */
+/** A run of the task over the demo bigWigs, as `chromosomix peaks` runs it. */
 async function run(params: Params): Promise<{ outputs: TaskOutput[]; notes: string[] }> {
   const tracks = await loadTracks([ATAC, POL2])
   const lengths: Record<string, number> = {}

@@ -28,7 +28,7 @@ import type { IconName } from './icons'
  * the same way: a default that only reaches people who have never opened the app
  * is not a default, it is a decision about new users.
  */
-const KEY = 'metacooler-viewer:overlays2'
+const KEY = 'chromosomix:overlays2'
 
 /**
  * The app's defaults, deliberately not the renderer's.

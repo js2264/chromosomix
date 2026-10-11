@@ -44,7 +44,7 @@ export function appMark(size?: number): HTMLElement {
     class: 'app-mark',
     // Decorative in both places it appears: the header has the app's name
     // beside it and the landing page has it beside one too, so a screen reader
-    // announcing "metacooler logo, metacooler" would be reading it twice.
+    // announcing "chromosomix logo, chromosomix" would be reading it twice.
     attrs: { src: markUrl(), alt: '' },
   })
   if (size !== undefined) {

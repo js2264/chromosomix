@@ -273,9 +273,9 @@ describe('an overlay row, dragged', () => {
       made.el.querySelector(`[data-grip="${id}"]`)?.dispatchEvent(start)
       return [...set.keys()]
     }
-    expect(typesOf('loops')).toContain('application/x-metacooler-overlay')
-    expect(typesOf('loops')).toContain('application/x-metacooler-track')
-    expect(typesOf('atac')).not.toContain('application/x-metacooler-overlay')
+    expect(typesOf('loops')).toContain('application/x-chromosomix-overlay')
+    expect(typesOf('loops')).toContain('application/x-chromosomix-track')
+    expect(typesOf('atac')).not.toContain('application/x-chromosomix-overlay')
   })
 })
 
