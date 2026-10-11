@@ -1,0 +1,101 @@
+# chromosomix 0.13.0 cli
+# created: 2026-10-11T18:42:59.499Z
+# file: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFI5QJNFAT.mcool::/resolutions/250000
+# task: compartments v3
+# framing: whole file at 250000 bp, balanced, count
+# param armWindow: 50
+# param balance: true
+# param components: 1
+# param contacts: cis
+# param expected: distance
+# param ignoreDiags: 2
+# param method: cooltools
+# param minR: 0.1
+# param phaseTrack: /home/user/metacooler.js/manuscript/figure1/build/mouse/4DNFIXE23VC7.bw
+# param quantiles: 50
+# param saddle: true
+# param sequences: chr3
+# output: A/B compartments · chr3 · cis
+chrom	start	end	name	score	strand	detail
+chr3	3000000	7500000	B	-0.538983	.	E1 mean -0.539 · 18 bins
+chr3	7500000	7750000	A	0.132589	.	E1 mean 0.133 · 1 bins
+chr3	7750000	8500000	B	-0.104615	.	E1 mean -0.105 · 3 bins
+chr3	8500000	10500000	A	0.748557	.	E1 mean 0.749 · 8 bins
+chr3	10500000	15500000	B	-0.477549	.	E1 mean -0.478 · 20 bins
+chr3	15750000	18500000	B	-0.497503	.	E1 mean -0.498 · 11 bins
+chr3	18500000	18750000	A	0.04532	.	E1 mean 0.045 · 1 bins
+chr3	18750000	19000000	B	-0.184302	.	E1 mean -0.184 · 1 bins
+chr3	19000000	19500000	A	0.217737	.	E1 mean 0.218 · 2 bins
+chr3	19500000	20000000	B	-0.0659589	.	E1 mean -0.066 · 2 bins
+chr3	20000000	20250000	A	0.203251	.	E1 mean 0.203 · 1 bins
+chr3	20250000	21750000	B	-0.376504	.	E1 mean -0.377 · 6 bins
+chr3	21750000	22250000	A	0.409549	.	E1 mean 0.410 · 2 bins
+chr3	22250000	27000000	B	-0.377943	.	E1 mean -0.378 · 19 bins
+chr3	27000000	29250000	A	0.41752	.	E1 mean 0.418 · 9 bins
+chr3	29250000	30000000	B	-0.159654	.	E1 mean -0.160 · 3 bins
+chr3	30000000	31500000	A	0.427403	.	E1 mean 0.427 · 6 bins
+chr3	31500000	31750000	B	-0.0238945	.	E1 mean -0.024 · 1 bins
+chr3	31750000	33250000	A	0.30466	.	E1 mean 0.305 · 6 bins
+chr3	33250000	33750000	B	-0.200034	.	E1 mean -0.200 · 2 bins
+chr3	33750000	38750000	A	0.48274	.	E1 mean 0.483 · 20 bins
+chr3	38750000	40500000	B	-0.376963	.	E1 mean -0.377 · 7 bins
+chr3	40500000	41750000	A	0.509722	.	E1 mean 0.510 · 5 bins
+chr3	41750000	51000000	B	-0.473448	.	E1 mean -0.473 · 37 bins
+chr3	51000000	55750000	A	0.478978	.	E1 mean 0.479 · 19 bins
+chr3	55750000	57500000	B	-0.179934	.	E1 mean -0.180 · 7 bins
+chr3	57500000	59250000	A	0.271319	.	E1 mean 0.271 · 7 bins
+chr3	59250000	63250000	B	-0.349482	.	E1 mean -0.349 · 16 bins
+chr3	63250000	63500000	A	0.05025	.	E1 mean 0.050 · 1 bins
+chr3	63500000	64500000	B	-0.28336	.	E1 mean -0.283 · 4 bins
+chr3	64750000	65250000	B	-0.344112	.	E1 mean -0.344 · 2 bins
+chr3	65250000	66250000	A	0.236152	.	E1 mean 0.236 · 4 bins
+chr3	66250000	67000000	B	-0.129145	.	E1 mean -0.129 · 3 bins
+chr3	67000000	67750000	A	0.0777584	.	E1 mean 0.078 · 3 bins
+chr3	67750000	68000000	B	-0.220986	.	E1 mean -0.221 · 1 bins
+chr3	68000000	70000000	A	0.490162	.	E1 mean 0.490 · 8 bins
+chr3	70000000	75500000	B	-0.482729	.	E1 mean -0.483 · 22 bins
+chr3	75500000	75750000	A	0.0268837	.	E1 mean 0.027 · 1 bins
+chr3	75750000	79000000	B	-0.56753	.	E1 mean -0.568 · 13 bins
+chr3	79000000	80000000	A	0.400754	.	E1 mean 0.401 · 4 bins
+chr3	80000000	83000000	B	-0.31392	.	E1 mean -0.314 · 12 bins
+chr3	83000000	83250000	A	0.170378	.	E1 mean 0.170 · 1 bins
+chr3	83250000	83500000	B	-0.142897	.	E1 mean -0.143 · 1 bins
+chr3	83500000	90750000	A	0.626812	.	E1 mean 0.627 · 29 bins
+chr3	90750000	93250000	B	-0.645941	.	E1 mean -0.646 · 10 bins
+chr3	93250000	93500000	A	0.035929	.	E1 mean 0.036 · 1 bins
+chr3	93500000	94000000	B	-0.50586	.	E1 mean -0.506 · 2 bins
+chr3	94250000	98500000	A	0.684667	.	E1 mean 0.685 · 17 bins
+chr3	98500000	99000000	B	-0.155563	.	E1 mean -0.156 · 2 bins
+chr3	99000000	99250000	A	0.00908172	.	E1 mean 0.009 · 1 bins
+chr3	99250000	100000000	B	-0.290276	.	E1 mean -0.290 · 3 bins
+chr3	100000000	106000000	A	0.532591	.	E1 mean 0.533 · 24 bins
+chr3	106000000	107000000	B	-0.644529	.	E1 mean -0.645 · 4 bins
+chr3	107000000	109250000	A	0.613102	.	E1 mean 0.613 · 9 bins
+chr3	109250000	113250000	B	-0.375585	.	E1 mean -0.376 · 16 bins
+chr3	113500000	115750000	B	-0.434863	.	E1 mean -0.435 · 9 bins
+chr3	115750000	117000000	A	0.461089	.	E1 mean 0.461 · 5 bins
+chr3	117000000	121000000	B	-0.324662	.	E1 mean -0.325 · 16 bins
+chr3	121000000	123500000	A	0.673574	.	E1 mean 0.674 · 10 bins
+chr3	123500000	127000000	B	-0.386089	.	E1 mean -0.386 · 14 bins
+chr3	127000000	128000000	A	0.363503	.	E1 mean 0.364 · 4 bins
+chr3	128000000	129250000	B	-0.331298	.	E1 mean -0.331 · 5 bins
+chr3	129250000	130250000	A	0.52998	.	E1 mean 0.530 · 4 bins
+chr3	130250000	130500000	B	-0.0123056	.	E1 mean -0.012 · 1 bins
+chr3	130500000	131750000	A	0.521009	.	E1 mean 0.521 · 5 bins
+chr3	131750000	132750000	B	-0.271223	.	E1 mean -0.271 · 4 bins
+chr3	132750000	133750000	A	0.162897	.	E1 mean 0.163 · 4 bins
+chr3	133750000	135250000	B	-0.38813	.	E1 mean -0.388 · 6 bins
+chr3	135250000	135750000	A	0.647636	.	E1 mean 0.648 · 2 bins
+chr3	135750000	137750000	B	-0.253526	.	E1 mean -0.254 · 8 bins
+chr3	137750000	139000000	A	0.453098	.	E1 mean 0.453 · 5 bins
+chr3	139000000	142250000	B	-0.42999	.	E1 mean -0.430 · 13 bins
+chr3	142250000	143000000	A	0.124848	.	E1 mean 0.125 · 3 bins
+chr3	143000000	144250000	B	-0.308697	.	E1 mean -0.309 · 5 bins
+chr3	144250000	147000000	A	0.439082	.	E1 mean 0.439 · 11 bins
+chr3	147000000	148750000	B	-0.245459	.	E1 mean -0.245 · 7 bins
+chr3	148750000	149500000	A	0.254455	.	E1 mean 0.254 · 3 bins
+chr3	149500000	152000000	B	-0.375977	.	E1 mean -0.376 · 10 bins
+chr3	152000000	154750000	A	0.574516	.	E1 mean 0.575 · 11 bins
+chr3	154750000	157750000	B	-0.361619	.	E1 mean -0.362 · 12 bins
+chr3	157750000	158000000	A	0.167184	.	E1 mean 0.167 · 1 bins
+chr3	158000000	160000000	B	-0.57114	.	E1 mean -0.571 · 8 bins

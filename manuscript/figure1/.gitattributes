@@ -1,0 +1,4 @@
+# A figure is reviewed as a picture, not as a diff of its base64.
+figure1.svg -diff
+*.pdf binary
+*.png binary
