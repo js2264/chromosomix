@@ -250,6 +250,17 @@ try {
           await against.locator('select').selectOption(second)
           await sleep(2000)
           await shot('14-table-as-scatter')
+          // The least-squares line through it, named in the legend by its fit.
+          const word = page.locator('.modal-stage .figure-settings .field-label', { hasText: /^least squares$/ }).first()
+          if (await word.count()) {
+            const id = await word.getAttribute('id')
+            await page.locator(`.modal-stage button[aria-labelledby="${id}"]`).first().click()
+            await sleep(2000)
+            const legend = await page.evaluate(() =>
+              [...document.querySelectorAll('.modal-stage svg text')].map((t) => t.textContent).filter((t) => /least squares/.test(t ?? '')))
+            console.log('least squares:', JSON.stringify(legend))
+            await shot('14b-table-least-squares')
+          }
         }
       }
     }

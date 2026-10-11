@@ -25,7 +25,14 @@
  * the O/E along both arms — the expectation the map's arms and Compartments
  * divide by, which takes the secondary diagonal into itself — over the same
  * stretch. It is a control on that detrending rather than a second measure:
- * where the detrending works, it is near 1.
+ * where the detrending works, it is near 1. It is a curve too, beside the
+ * measurement's and on its axis, so the profile the detrending leaves can be
+ * read against the one it removed.
+ *
+ * And the two expectations themselves, as **decay curves**: the ordinary decay
+ * along the diagonal, which the enrichment is read over, and the decay along
+ * both arms — within an arm, and across the arms from the secondary diagonal —
+ * which the control is read over.
  *
  * The arms are read from each sequence's origin — the Origin and terminus task
  * fills it in, a reader types it, and it is the first base until either has —
@@ -110,7 +117,9 @@ export const INTERARM_TASK: AnalysisTask = {
   // column, and the peak and the expected column are gone.
   // 6: the reach runs until the enrichment is a fifth of its peak, where it was a
   // tenth.
-  version: 6,
+  // 7: the control as a curve beside the measurement's, on its axis, and the
+  // decay curves along the diagonal and along both arms.
+  version: 7,
   // A metagenome's MAGs are hundreds of chromosomes whose origins nobody has
   // declared, and the question is asked of one molecule at a time.
   availability: (context) =>

@@ -18,6 +18,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   distributionOfTable,
+  leastSquares,
+  numberIn,
+  numberedColumns,
   numericColumns,
   specOf,
   xyOfTable,
@@ -167,6 +170,85 @@ describe('a table as a chart', () => {
   })
 })
 
+/** An all-maps table of a time course: named maps, one of them with no time. */
+function course(): TableOutput {
+  return {
+    kind: 'table',
+    id: 'interarm-table__all',
+    label: 'Inter-arm alignment per sequence — all maps',
+    columns: [
+      { key: 'map', label: 'Map', kind: 'text' },
+      { key: 'sequence', label: 'sequence', kind: 'text' },
+      { key: 'reach', label: 'reach', kind: 'number' },
+    ],
+    rows: [
+      { map: 'WT', sequence: 'chr', reach: 2_000_000 },
+      { map: '+parB 15 min', sequence: 'chr', reach: 35 },
+      { map: '+parB 30 min', sequence: 'chr', reach: 65 },
+      { map: '+parB 45 min', sequence: 'chr', reach: 95 },
+      { map: '+parB 60 min', sequence: 'chr', reach: Number.NaN },
+    ],
+  }
+}
+
+describe('a table’s names as an axis, and a line through it', () => {
+  it('reads the first number a name writes, and nothing from a name with none', () => {
+    expect(numberIn('+parB 15 min')).toBe(15)
+    expect(numberIn('2.5 µM')).toBe(2.5)
+    expect(numberIn('rep-2')).toBe(2)
+    expect(numberIn('WT')).toBeNaN()
+  })
+
+  it('offers a column of names once two of its rows carry a number', () => {
+    const spec = specOf(course()) as never
+    expect(numberedColumns(spec).map((column) => column.key)).toEqual(['map'])
+  })
+
+  it('plots each row at the number in its name, leaving out a name with none', () => {
+    const xy = xyOfTable(specOf(course()) as never, 'map', 'reach', 'points')
+    expect(xy.series).toHaveLength(1)
+    expect(xy.series[0].x).toEqual([15, 30, 45])
+    expect(xy.series[0].y).toEqual([35, 65, 95])
+    expect(xy.xLabel).toBe('number in Map')
+  })
+
+  it('fits the least-squares line through what is drawn, named by its equation', () => {
+    const xy = xyOfTable(specOf(course()) as never, 'map', 'reach', 'points', true)
+    expect(xy.series).toHaveLength(2)
+    const line = xy.series[1]
+    expect(line.id).toBe('least-squares')
+    expect(line.mark).toBe('line')
+    // reach = 2·t + 5, exactly.
+    expect(line.x).toEqual([15, 45])
+    expect(line.y[0]).toBeCloseTo(35, 9)
+    expect(line.y[1]).toBeCloseTo(95, 9)
+    expect(line.name).toBe('least squares: y = 2·x + 5 · r² = 1.000 · n = 3')
+  })
+
+  it('fits the points inside the window and no others', () => {
+    // A time point before anything has started, whose reach is noise.
+    const early = course()
+    early.rows.unshift({ map: '+parB 0 min', sequence: 'chr', reach: 80 })
+    const everything = xyOfTable(specOf(early) as never, 'map', 'reach', 'points', true)
+    expect(everything.series[1].name).toMatch(/n = 4$/)
+    const under = xyOfTable(specOf(early) as never, 'map', 'reach', 'points', true, [10, 50])
+    // Every point is still drawn; the line is the three in the window's.
+    expect(under.series[0].x).toEqual([0, 15, 30, 45])
+    expect(under.series[1].x).toEqual([15, 45])
+    expect(under.series[1].name).toBe('least squares: y = 2·x + 5 · r² = 1.000 · n = 3')
+  })
+
+  it('has no line through one abscissa, and says how well a line fits', () => {
+    expect(leastSquares([3, 3], [1, 2])).toBeNull()
+    expect(leastSquares([1], [1])).toBeNull()
+    const fit = leastSquares([0, 1, 2, 3], [0, 2, 1, 3])!
+    expect(fit.slope).toBeCloseTo(0.8, 9)
+    expect(fit.intercept).toBeCloseTo(0.3, 9)
+    expect(fit.r2).toBeCloseTo(0.64, 9)
+    expect(fit.n).toBe(4)
+  })
+})
+
 describe('defaultStyle', () => {
   it('opens the figure the way the task meant it', () => {
     const spec = specOf(curve())!
@@ -250,7 +332,13 @@ describe('sanitiseStyle', () => {
     expect(sanitiseStyle({ plot: { y: 'gone', mark: 'points' } }, tableSpec).plot).toBeNull()
     expect(
       sanitiseStyle({ plot: { x: 'gone', y: 'completeness', mark: 'points' } }, tableSpec).plot,
-    ).toEqual({ x: null, y: 'completeness', mark: 'points' })
+    ).toEqual({ x: null, y: 'completeness', mark: 'points', fit: false })
+    expect(
+      sanitiseStyle({ plot: { x: 'name', y: 'completeness', mark: 'points', fit: true } }, tableSpec).plot,
+    ).toEqual({ x: 'name', y: 'completeness', mark: 'points', fit: true })
+    expect(
+      sanitiseStyle({ plot: { y: 'completeness', mark: 'points', fit: 'yes' } }, tableSpec).plot?.fit,
+    ).toBe(false)
   })
 
   it('is the default for anything that is not a record', () => {

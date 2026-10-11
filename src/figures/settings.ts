@@ -36,11 +36,13 @@ import { seriesColour, type FigureTheme } from './option'
 import {
   DISTRIBUTION_MARKS,
   XY_MARKS,
+  numberedColumns,
   numericColumns,
   type FigureSpec,
   type MarkKind,
   type TableFigureSpec,
   type XyFigureSpec,
+  xyOfTable,
 } from './spec'
 import type { FigureStyle, LegendPlace } from './style'
 
@@ -90,7 +92,7 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
             props.spec.output.streaks !== undefined
             ? [textCard(style, set)]
             : [colourCard(style, set), textCard(style, set)]
-          : [rowsCard(props.spec, style, set), textCard(style, set)]
+          : [rowsCard(props.spec, style, set), ...scatterAxes(props.spec, style, set), textCard(style, set)]
 
     host.replaceChildren(
       cardTitle('Figure', 'chart-line', 'controls-title'),
@@ -320,6 +322,17 @@ function axisRows(
   ]
 }
 
+/**
+ * A table drawn as a scatter has a curve's axes card, read off the scatter it
+ * becomes: the names its columns give — `number in Map` — as the placeholders a
+ * reader replaces with what the axes are, its scales and its windows.
+ */
+function scatterAxes(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLElement[] {
+  const plot = style.plot
+  if (plot === null || plot.x === null) return []
+  return [axesCard(xyOfTable(spec, plot.x, plot.y, plot.mark, plot.fit, style.x.domain), style, set)]
+}
+
 function axesCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLElement {
   return group(
     'axes',
@@ -454,6 +467,9 @@ function colourCard(style: FigureStyle, set: Apply): HTMLElement {
  */
 function rowsCard(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLElement {
   const numbers = numericColumns(spec)
+  // An abscissa may be a column of names that carry numbers — a time course's
+  // maps — read at the number in each; an ordinate is always measured.
+  const abscissae = [...numbers, ...numberedColumns(spec)]
   const plot = style.plot
   const keys = spec.columns.map((column) => column.key)
   const shown = style.columns ?? keys
@@ -495,7 +511,10 @@ function rowsCard(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLEl
           plot === null ? 'table' : plot.y,
           (key) =>
             set({
-              plot: key === 'table' ? null : { x: plot?.x ?? null, y: key, mark: plot?.mark ?? 'histogram' },
+              plot:
+                key === 'table'
+                  ? null
+                  : { x: plot?.x ?? null, y: key, mark: plot?.mark ?? 'histogram', fit: plot?.fit ?? false },
             }),
         ),
         'A column drawn instead of the rows: its distribution on its own, or against another column',
@@ -504,7 +523,7 @@ function rowsCard(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLEl
       settingsField(
         'against',
         choice(
-          ['—', ...numbers.map((column) => column.key)],
+          ['—', ...abscissae.map((column) => column.key)],
           plot.x ?? '—',
           (key) =>
             set({
@@ -515,7 +534,16 @@ function rowsCard(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLEl
               },
             }),
         ),
-        'The abscissa; on its own the column is drawn as a distribution',
+        'The abscissa; on its own the column is drawn as a distribution. A column of names is ' +
+          'read at the first number in each, and a row whose name has none is left out',
+      ),
+    plot !== null &&
+      plot.x !== null &&
+      toggle(
+        'least squares',
+        plot.fit,
+        (fit) => set({ plot: { ...plot, fit } }),
+        'The straight line fitted through the points, its equation, r² and n in the legend',
       ),
     plot !== null &&
       settingsField(
