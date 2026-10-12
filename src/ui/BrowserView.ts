@@ -1220,7 +1220,7 @@ export class BrowserView {
    * the same question. There is one box here and it is both things: `chrIV`,
    * `chrIV:1,000-2,000` and `GAL4` are three spellings of *where do I want to
    * be*, and the text decides which. It answered to `l` as well until `l` was
-   * found to be the labels overlay too — see `Session.commands`.
+   * found to be the labels overlay too — see `SessionCommands`.
    */
   focusSearch(): void {
     this.locusInput.focus()
