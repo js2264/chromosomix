@@ -1,0 +1,25 @@
+a · C. necator origin (1-based)	8,501
+a · inter-arm enrichment	4.374
+a · after detrending along both arms	0.929
+a · arms aligned over (Mb)	1.832 of 1.936
+b · B. subtilis origin (1-based)	4,033,459
+b · reach, WT (Mb)	2.020
+b · reach, ΔparAB (Mb)	0.930
+b · reach, +parB 0 min (Mb)	1.110
+b · reach, +parB 15 min (Mb)	0.930
+b · reach, +parB 20 min (Mb)	1.000
+b · reach, +parB 30 min (Mb)	1.300
+b · reach, +parB 35 min (Mb)	1.580
+b · reach, +parB 45 min (Mb)	1.910
+b · reach against minutes, 15–45 min	33.9 kb/min, intercept 0.361 Mb, r² = 0.981
+c · P. aeruginosa origin (1-based)	6,250,501
+c · E1 along both arms, WT: range	-0.654 to 1.522
+c · E1 along both arms, SMC-ScpAB–: range	-0.658 to 1.020
+c · E1 along both arms, MksBEF–: range	-1.126 to 0.733
+d · bins A / B	550 / 232
+d · GC A / B (mean)	0.6701 / 0.6553
+d · GC, A against B: P	2.17e-20
+d · radial A / B (mean)	0.864 / 1.147
+d · radial, A against B: P	5.78e-34
+d · RNA-seq A / B (median CPM per 8-kb bin)	0.69 / 3.91
+d · RNA-seq, A against B: P	4.13e-55
