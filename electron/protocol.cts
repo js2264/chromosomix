@@ -44,6 +44,17 @@ export const APP_INDEX = 'app://viewer/index.html'
  *   file open fails.
  * - **`data:` in `img-src`**, for `index.html`'s data-URI favicon.
  *
+ * **`data:` in `connect-src`** is for a worker, and reaches nothing. The bigWig
+ * and bigBed reader (`@gmod/bbi`) carries its inflate wasm as a
+ * `data:application/wasm` URL and *fetches* it before its first read, in the
+ * annotations worker — which this header reaches, where a meta would not.
+ * Without it the fetch is refused inside that worker, where the page hears
+ * nothing, and every bigWig lane says "fetching…" for good while the interval
+ * lanes beside it draw. A `data:` URL is its own content, with no host behind
+ * it. Verified in both directions with this policy sent as a header to a
+ * Chromium page and its workers, which is how this handler sends it; not in
+ * Electron itself.
+ *
  * `style-src 'self'` without `'unsafe-inline'` is correct here and is a
  * property of the code rather than a hope: there is no `innerHTML`, no `<style>`
  * element creation and no `style=` attribute anywhere in `src/` — `el()` assigns
@@ -67,7 +78,7 @@ export const CSP = [
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+  "connect-src 'self' data: https: http://localhost:* http://127.0.0.1:*",
   "worker-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",

@@ -42,6 +42,17 @@ function directives(policy: readonly string[] | string): Map<string, string[]> {
 
 const WEB = directives(WEB_CSP_DIRECTIVES)
 
+/**
+ * The desktop's policy, which delivers the same app's as a header
+ * (`electron/protocol.cts`). Read as text, because the main process is a
+ * separate TypeScript project; the list there is plain string literals.
+ */
+const DESKTOP = (() => {
+  const source = readFileSync(new URL('../../electron/protocol.cts', import.meta.url), 'utf8')
+  const block = /export const CSP = \[([\s\S]*?)\]\.join/.exec(source)?.[1] ?? ''
+  return directives([...block.matchAll(/"([^"]+)"/g)].map((match) => match[1]))
+})()
+
 /** The repository's own `index.html`, which every web build starts from. */
 const SOURCE = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
 
@@ -62,6 +73,7 @@ describe('the web builds’ policy', () => {
   it('reaches any https host and the loopback over plain http, and no other http host', () => {
     expect(WEB.get('connect-src')).toEqual([
       "'self'",
+      'data:',
       'https:',
       'http://localhost:*',
       'http://127.0.0.1:*',
@@ -86,26 +98,45 @@ describe('the web builds’ policy', () => {
   })
 
   it('is the desktop’s policy, plus Google’s sign-in, an install prompt and a frame', () => {
-    // The desktop delivers the same app's policy as a header
-    // (`electron/protocol.cts`). Read as text, because the main process is a
-    // separate TypeScript project; the list there is plain string literals.
-    const source = readFileSync(new URL('../../electron/protocol.cts', import.meta.url), 'utf8')
-    const block = /export const CSP = \[([\s\S]*?)\]\.join/.exec(source)?.[1] ?? ''
-    const desktop = directives([...block.matchAll(/"([^"]+)"/g)].map((match) => match[1]))
-    expect(desktop.size).toBeGreaterThan(8)
-
+    expect(DESKTOP.size).toBeGreaterThan(8)
     const google = (sources: string[]): string[] => sources.filter((one) => !one.startsWith('https://accounts.google.com/'))
     for (const [name, sources] of WEB) {
       if (name === 'frame-src') continue
       if (name === 'manifest-src') {
         // The site is installable; an installed application is not.
-        expect([sources, desktop.get(name)]).toEqual([["'self'"], ["'none'"]])
+        expect([sources, DESKTOP.get(name)]).toEqual([["'self'"], ["'none'"]])
         continue
       }
-      expect([name, google(sources)]).toEqual([name, desktop.get(name)])
+      expect([name, google(sources)]).toEqual([name, DESKTOP.get(name)])
     }
     // The one directive the desktop has and a meta cannot.
-    expect([...desktop.keys()].filter((name) => !WEB.has(name))).toEqual(['frame-ancestors'])
+    expect([...DESKTOP.keys()].filter((name) => !WEB.has(name))).toEqual(['frame-ancestors'])
+  })
+})
+
+describe('the bigWig reader’s wasm', () => {
+  // `@gmod/bbi` inlines its inflate wasm as a `data:` URL and fetches it before
+  // its first read, in the annotations worker. Wherever a policy reaches that
+  // worker — the desktop's header, the single file's meta, which a worker built
+  // from a blob inherits — a `connect-src` without `data:` refuses the fetch
+  // there, where the page hears nothing, and every bigWig lane says
+  // "fetching…" for good while the intervals beside it draw. Should the library
+  // stop fetching it, this is the test that says the source can go.
+  const loader = readFileSync(
+    new URL('../../node_modules/@gmod/bbi/esm/wasm/inflate-wasm-inlined.js', import.meta.url),
+    'utf8',
+  )
+
+  it('is fetched, from a data: URL', () => {
+    const inlined = /const (\w+) = "data:application\/wasm;base64,/.exec(loader)?.[1]
+    expect(inlined).toBeDefined()
+    expect(loader).toContain(`fetch(${inlined})`)
+  })
+
+  it('is let through wherever a policy reaches the worker, and by the site’s, which is the desktop’s', () => {
+    expect(DESKTOP.get('connect-src')).toContain('data:')
+    expect(directives(standaloneCsp('<script>boot()</script>')).get('connect-src')).toEqual(['data:'])
+    expect(WEB.get('connect-src')).toContain('data:')
   })
 })
 
@@ -191,23 +222,6 @@ describe('the single file’s policy', () => {
     expect(policy.get('worker-src')).toEqual(['blob:'])
     expect(policy.get('connect-src')).toEqual(['data:'])
     expect(policy.get('img-src')).toEqual(['data:', 'blob:'])
-  })
-
-  it('lets the bigWig reader fetch the wasm it carries, which its workers inherit the policy for', () => {
-    // `@gmod/bbi` inlines its inflate wasm as a `data:` URL and fetches it
-    // before its first read, in the annotations worker — which, built from a
-    // blob, inherits this policy. Under `connect-src 'none'` the fetch was
-    // refused there, where the page hears nothing, and every bigWig lane said
-    // "fetching…" for good. Should the library stop fetching it, this is the
-    // test that says the source can go.
-    const loader = readFileSync(
-      new URL('../../node_modules/@gmod/bbi/esm/wasm/inflate-wasm-inlined.js', import.meta.url),
-      'utf8',
-    )
-    const inlined = /const (\w+) = "data:application\/wasm;base64,/.exec(loader)?.[1]
-    expect(inlined).toBeDefined()
-    expect(loader).toContain(`fetch(${inlined})`)
-    expect(directives(standaloneCsp(raw)).get('connect-src')).toContain('data:')
   })
 
   it('reads a `<style` inside a script as script, not as an element', () => {

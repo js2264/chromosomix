@@ -53,7 +53,12 @@
  * - **`connect-src 'self' https:` and plain HTTP to `localhost`.** Remote files
  *   are the whole remote half of the app and live on whatever host a reader
  *   names; a dev server or a local object store serves over plain HTTP, which a
- *   page on `https:` may still reach on the loopback address.
+ *   page on `https:` may still reach on the loopback address. And `data:`,
+ *   which reaches nothing and is the desktop's: the bigWig reader fetches its
+ *   own wasm from a `data:` URL, in a worker that the desktop's header reaches
+ *   and this meta does not. The site has never needed it; it is here so that
+ *   the two stay one policy, and so that this text, sent as a header by a host
+ *   that chose to, breaks no lane.
  * - **`worker-src 'self'`**: the four workers and the service worker are files
  *   beside the page. None is built from a `blob:` URL in these builds; the
  *   single file is the one that does, and it has a policy of its own below.
@@ -82,7 +87,7 @@ export const WEB_CSP_DIRECTIVES = [
   // `https:` already admits Google's endpoint; it is named anyway, so that the
   // four sources Google documents read as one set and survive a narrowing of
   // the clause beside them.
-  "connect-src 'self' https: http://localhost:* http://127.0.0.1:* https://accounts.google.com/gsi/",
+  "connect-src 'self' data: https: http://localhost:* http://127.0.0.1:* https://accounts.google.com/gsi/",
   "worker-src 'self'",
   "frame-src https://accounts.google.com/gsi/",
   "manifest-src 'self'",

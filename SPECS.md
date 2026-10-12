@@ -5335,7 +5335,9 @@ styles from its own origin, with no `'unsafe-inline'`, because nothing in the tr
 the chart tooltips, which showed the library's styled markup, now carry markup of their own (§18.13);
 images from itself, `data:` and `blob:`; connections to itself, to any `https:` host — remote files
 are the remote half of the app — and over plain HTTP to `localhost`, where a dev server or a local
-object store answers; workers, the service worker and the manifest from itself; and Google Identity
+object store answers, and to `data:`, which reaches nothing and keeps this the desktop's policy:
+its header reaches the worker that fetches the bigWig reader's wasm from a `data:` URL (§15), and
+this meta does not; workers, the service worker and the manifest from itself; and Google Identity
 Services by exactly the sources Google documents — its client script, fetched on a sign-in click
 and never on load (§24.7), its stylesheet, its frames and its endpoints. When that script loads it
 writes an inline `<style>` of button styles, which the policy refuses with one console line and
@@ -5626,7 +5628,12 @@ directions; without it h5wasm fails to instantiate in both document and worker �
 `innerHTML`, no `<style>` creation and no `style=` attribute. The one markup it hands a library is a
 chart's tooltip, which ECharts parses with `innerHTML`, and it carries classes rather than `style=`
 (§18.13) — the library's own tooltip markup did not, so under this policy every hover over a figure had
-its styling refused until the charts had formatters of their own.
+its styling refused until the charts had formatters of their own. And `connect-src` takes `data:`,
+for a worker: the bigWig and bigBed reader carries its inflate wasm as a `data:` URL and fetches it
+before its first read, and this header reaches the annotations worker, where a meta would not.
+Without `data:` the fetch was refused inside that worker, where the page hears nothing, and every
+bigWig lane said *fetching…* for good while the interval lanes beside it drew. A `data:` URL has no
+host behind it, so the clause reaches nothing.
 
 **One request header is rewritten, and it is the target's only capability.** `Accept-Encoding` is a
 forbidden header name in Fetch, so no page may set it; the main process may. Every http(s) request

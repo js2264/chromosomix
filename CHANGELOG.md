@@ -2195,6 +2195,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Desktop: bigWig lanes draw (§15).** The bigWig reader fetches its own inflate wasm from a `data:`
+  URL inside the annotations worker, and the desktop's policy, which reaches its workers, refused it —
+  inside the worker, so nothing in the page said so — and every bigWig lane stayed on *fetching…*.
+  `connect-src` admits `data:`, which has no server behind it, and the site's policy stays its mirror.
+
 - **A workspace, link, `?config=`, embed message or saved tab naming an unknown view or transform
   opens (§5.5, §5.6, §21.1).** The address was read by an allow-list and everything else was not: a
   state arriving as an object — a workspace, a share link, a `?config=` file, an embed's `navigate`,
