@@ -37,6 +37,7 @@
  * filename to a stranger.
  */
 
+import { TEXT_INFLATE_MAX, inflateCapped, inflationCap, type InflationPolicy } from '../sources/untrusted'
 import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 import type { MapNames } from '../ui/mapNames'
@@ -95,11 +96,24 @@ async function deflate(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
+/**
+ * How far a link's payload may inflate: 64 times its size, never under 16 MiB.
+ *
+ * A link is as untrusted as a file — easier to hand someone, in fact — and a
+ * fragment of a megabyte or two, which is as long as a browser takes an address,
+ * can stand for a gigabyte or two of deflate's output. A workspace is JSON,
+ * which compresses five to twenty times; the cap holds a bomb to sixty-four
+ * times its own size and refuses no link a workspace made.
+ */
+const SHARE_INFLATION: InflationPolicy = { ratio: 64, floor: 16 << 20, ceiling: TEXT_INFLATE_MAX }
+
 async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart])
-    .stream()
-    .pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+  return inflateCapped(bytes, {
+    format: 'link',
+    field: 'workspace',
+    encoding: 'deflate-raw',
+    maxBytes: inflationCap(bytes.length, SHARE_INFLATION),
+  })
 }
 
 /**

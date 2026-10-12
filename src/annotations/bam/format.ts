@@ -279,6 +279,13 @@ export interface RecordCursor {
  * A record with `pos === -1` is an unplaced read and is handed on with an `end`
  * equal to its start, so a caller that does not filter it cannot accidentally
  * paint it at the origin.
+ *
+ * A record whose name, CIGAR and sequence do not fit inside its own length is
+ * not a record, and stops the walk as a non-positive length does. Every caller
+ * sizes something by those fields — an `l_seq` sizes an `Int32Array` for base
+ * modifications and a loop that builds the read's string — so a corrupt one
+ * reaching a visitor was a two-billion-iteration loop over bytes that belong
+ * to the next record, or to nothing (§10).
  */
 export function forEachRecord(
   bytes: Uint8Array,
@@ -306,6 +313,10 @@ export function forEachRecord(
     const cigarAt = recordAt + RECORD_PREFIX_BYTES + nameBytes
     const seqLength = view.getInt32(recordAt + 16, true)
     const pos = view.getInt32(recordAt + 4, true)
+    // Name, CIGAR, packed bases and qualities, in that order before the tags.
+    // `Math.ceil` rather than `>> 1`: an `l_seq` near 2^31 wraps under a shift.
+    const fixed = RECORD_PREFIX_BYTES + nameBytes + cigarOps * 4 + Math.ceil(seqLength / 2) + seqLength
+    if (seqLength < 0 || fixed > blockSize) break
 
     cursor.at = recordAt
     cursor.bytes = blockSize + 4
@@ -398,7 +409,10 @@ export function readTags(
       const count = view.getInt32(at + 1, true)
       at += 5
       const width = NUMERIC_WIDTH[subtype]
-      if (width === undefined || count < 0) return out
+      // An array longer than the tag block is the block's end misread, and
+      // reading it would build a list of whatever follows: the next record's
+      // bytes, a few megabytes of them.
+      if (width === undefined || count < 0 || at + count * width > to) return out
       const values: number[] = []
       for (let i = 0; i < count; i++) values.push(readNumeric(view, at + i * width, subtype))
       at += count * width

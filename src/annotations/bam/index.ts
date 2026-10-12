@@ -40,8 +40,22 @@
  * decide whether it can afford a window at all — so a window too deep to draw
  * is refused **from the index**, at zero data cost, rather than by starting a
  * fetch and giving up part-way through it (§12).
+ *
+ * ## The geometry is the file's, and is checked
+ *
+ * Every count and both of CSI's shape parameters come out of the same bytes as
+ * the offsets, and each sizes something: a slot count an allocation, a depth
+ * the walk every query makes. So each goes through `sources/untrusted.ts` first
+ * (§10). The depth matters most, because a query's cost is quadratic in it:
+ * depths of two, four and eight thousand took 12, 31 and 89 ms a query, so a
+ * twenty-four-byte `.csi` declaring one near a million would hold the
+ * annotations worker for some twenty minutes a query. And the bins a query
+ * names are never enumerated past the number the index holds, so a `min_shift`
+ * of nought cannot turn a window into a billion candidates either.
  */
 
+import { ViewerError } from '../../errors'
+import { declaredCount } from '../../sources/untrusted'
 import { BGZF_MAX_BLOCK, inflateBgzf, isBgzf } from '../tabix'
 
 /** `BAI\1`. */
@@ -62,6 +76,47 @@ const BAI_DEPTH = 5
  * arithmetic on a read count.
  */
 const BAI_PSEUDO_BIN = 37450
+
+/** The format as a refusal names it. */
+const INDEX = 'BAM index'
+
+/**
+ * The most bins a BAI reference holds: its six levels number 37,450 bins and
+ * the pseudo-bin is one more, so 65,536 is past any writer, a duplicated bin
+ * or two included.
+ */
+const BAI_MAX_BINS = 1 << 16
+
+/**
+ * The most linear-index slots a BAI reference holds.
+ *
+ * One slot a 16 kb window, and BAI's bins cannot address past 2^29 bp — which
+ * is why htslib refuses to write one for a longer reference and asks for CSI —
+ * so 2^29 / 2^14 = 32,768 is the format's own maximum (Picard writes one more).
+ * Twice it is the ceiling.
+ */
+const BAI_MAX_INTERVALS = 1 << 16
+
+/**
+ * The deepest a CSI's binning can go: 10 levels below the root.
+ *
+ * A bin number is a `uint32`, and depth `d` numbers (8^(d+1) − 1) / 7 bins —
+ * 1.2 × 10^9 at ten, 9.8 × 10^9 at eleven — so an eleventh level could not be
+ * written down. htslib computes its first-bin offsets in an `int` and could not
+ * read one either. With htslib's default `min_shift` of 14, ten levels cover a
+ * reference of 2^44 bp; the longest chromosomes sequenced, a few gigabases,
+ * need seven.
+ */
+const CSI_MAX_DEPTH = 10
+
+/**
+ * The widest a CSI's smallest bin can be, as `min_shift + 3 × depth`: htslib
+ * shifts 64-bit positions by it, so it stops at 63.
+ */
+const CSI_MAX_SHIFT = 63
+
+/** An `int32` count's own bound, where the format sets none tighter than its bytes. */
+const INT32_MAX = 2 ** 31 - 1
 
 /** A span of the file, as the index stores it: two virtual offsets. */
 export interface Chunk {
@@ -115,24 +170,61 @@ export async function parseBamIndex(raw: Uint8Array): Promise<BamIndex> {
   // rather than the suffix costs one comparison and means a `.csi` named `.bai`
   // still opens — which happens, because the two are handed around together.
   const bytes = isBgzf(raw) ? await inflateBgzf(raw) : raw
-  if (matches(bytes, CSI_MAGIC)) return parseCsi(bytes)
-  if (matches(bytes, BAI_MAGIC)) return parseBai(bytes)
-  throw new Error('This is not a BAM index: the magic bytes are neither BAI\\1 nor CSI\\1.')
+  const parse = matches(bytes, CSI_MAGIC) ? parseCsi : matches(bytes, BAI_MAGIC) ? parseBai : null
+  if (parse === null) {
+    throw new Error('This is not a BAM index: the magic bytes are neither BAI\\1 nor CSI\\1.')
+  }
+  try {
+    return parse(bytes)
+  } catch (err) {
+    // Every count is checked before it sizes anything, so the one `RangeError`
+    // left is a `DataView` read past the last byte: the index stops part-way
+    // through what its own counts promised.
+    if (!(err instanceof RangeError)) throw err
+    throw new ViewerError(
+      'format',
+      `This ${INDEX} ends part-way through its own tables, ${bytes.byteLength.toLocaleString('en-US')} ` +
+        'bytes in. It is truncated; rebuild it with `samtools index`.',
+      { bytes: bytes.byteLength },
+    )
+  }
 }
 
 function parseBai(bytes: Uint8Array): BamIndex {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const refCount = view.getInt32(4, true)
+  /** Bytes after `at`. */
+  const after = (at: number): number => bytes.byteLength - at
+  // Each reference is at least its two counts.
+  const refCount = declaredCount(view.getInt32(4, true), {
+    format: INDEX,
+    field: 'reference count',
+    ceiling: INT32_MAX,
+    available: after(8),
+    bytesPerItem: 8,
+  })
   let at = 8
   const refs: RefIndex[] = []
   for (let ref = 0; ref < refCount; ref++) {
     const bins = new Map<number, Chunk[]>()
-    const binCount = view.getInt32(at, true)
+    // A bin number and a chunk count apiece, with the linear index's count after them.
+    const binCount = declaredCount(view.getInt32(at, true), {
+      format: INDEX,
+      field: `bin count of reference ${ref}`,
+      ceiling: BAI_MAX_BINS,
+      available: after(at + 4) - 4,
+      bytesPerItem: 8,
+    })
     at += 4
     for (let b = 0; b < binCount; b++) {
       const bin = view.getUint32(at, true)
       at += 4
-      const chunkCount = view.getInt32(at, true)
+      const chunkCount = declaredCount(view.getInt32(at, true), {
+        format: INDEX,
+        field: `chunk count of bin ${bin}`,
+        ceiling: INT32_MAX,
+        available: after(at + 4),
+        bytesPerItem: 16,
+      })
       at += 4
       const chunks: Chunk[] = []
       for (let c = 0; c < chunkCount; c++) {
@@ -145,9 +237,17 @@ function parseBai(bytes: Uint8Array): BamIndex {
       // Read past it, then drop it: the pseudo-bin's "chunks" are counts.
       if (bin !== BAI_PSEUDO_BIN) bins.set(bin, chunks)
     }
-    const intervalCount = view.getInt32(at, true)
+    // Sizes an allocation, and was the one count here read on trust: a slot
+    // count of 2^31 − 1 asked for sixteen gigabytes of `BigUint64Array`.
+    const intervalCount = declaredCount(view.getInt32(at, true), {
+      format: INDEX,
+      field: `linear index size of reference ${ref}`,
+      ceiling: BAI_MAX_INTERVALS,
+      available: after(at + 4),
+      bytesPerItem: 8,
+    })
     at += 4
-    const linear = new BigUint64Array(Math.max(0, intervalCount))
+    const linear = new BigUint64Array(intervalCount)
     for (let i = 0; i < intervalCount; i++) {
       linear[i] = view.getBigUint64(at, true)
       at += 8
@@ -159,24 +259,62 @@ function parseBai(bytes: Uint8Array): BamIndex {
 
 function parseCsi(bytes: Uint8Array): BamIndex {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const minShift = view.getInt32(4, true)
-  const depth = view.getInt32(8, true)
-  const auxBytes = view.getInt32(12, true)
+  const after = (at: number): number => bytes.byteLength - at
+  // The two numbers every query is shaped by, and the one a twenty-four-byte
+  // file once made a twenty-minute query of: `reg2bins`, `lowestOffset` and
+  // `highestOffset` all walk every level, and the level offsets are summed per
+  // level.
+  const depth = declaredCount(view.getInt32(8, true), {
+    format: INDEX,
+    field: 'CSI depth',
+    ceiling: CSI_MAX_DEPTH,
+  })
+  const minShift = declaredCount(view.getInt32(4, true), {
+    format: INDEX,
+    field: 'CSI min_shift',
+    ceiling: CSI_MAX_SHIFT - 3 * depth,
+  })
+  // The auxiliary data is skipped, but the reference count follows it.
+  const auxBytes = declaredCount(view.getInt32(12, true), {
+    format: INDEX,
+    field: 'auxiliary data length',
+    ceiling: INT32_MAX,
+    available: after(16) - 4,
+  })
   let at = 16 + auxBytes
-  const refCount = view.getInt32(at, true)
+  const refCount = declaredCount(view.getInt32(at, true), {
+    format: INDEX,
+    field: 'reference count',
+    ceiling: INT32_MAX,
+    available: after(at + 4),
+    bytesPerItem: 4,
+  })
   at += 4
   const refs: RefIndex[] = []
   for (let ref = 0; ref < refCount; ref++) {
     const bins = new Map<number, Chunk[]>()
     const loffset = new Map<number, bigint>()
-    const binCount = view.getInt32(at, true)
+    // A bin number, its lowest offset and a chunk count apiece.
+    const binCount = declaredCount(view.getInt32(at, true), {
+      format: INDEX,
+      field: `bin count of reference ${ref}`,
+      ceiling: INT32_MAX,
+      available: after(at + 4),
+      bytesPerItem: 16,
+    })
     at += 4
     for (let b = 0; b < binCount; b++) {
       const bin = view.getUint32(at, true)
       at += 4
       loffset.set(bin, view.getBigUint64(at, true))
       at += 8
-      const chunkCount = view.getInt32(at, true)
+      const chunkCount = declaredCount(view.getInt32(at, true), {
+        format: INDEX,
+        field: `chunk count of bin ${bin}`,
+        ceiling: INT32_MAX,
+        available: after(at + 4),
+        bytesPerItem: 16,
+      })
       at += 4
       const chunks: Chunk[] = []
       for (let c = 0; c < chunkCount; c++) {
@@ -232,6 +370,40 @@ export function reg2bins(
     const from = offset + shiftRight(start, shift)
     const to = offset + shiftRight(last, shift)
     for (let bin = from; bin <= to; bin++) out.push(bin)
+    offset += 1 << (level * 3)
+    shift -= 3
+  }
+  return out
+}
+
+/**
+ * The chunk lists of every populated bin {@link reg2bins} names for `[start, end)`.
+ *
+ * Level by level, as `reg2bins` walks — but a level whose run of bin numbers is
+ * longer than the bins the reference holds is answered by looking through those
+ * instead. The run's length is set by the file: a window of a megabase at a
+ * `min_shift` of nought is a million bins at the deepest level, and of a whole
+ * chromosome a quarter of a billion, every one of them a lookup that finds
+ * nothing. Looking through the index costs its size, at most `depth + 1` times
+ * over. The chunks are sorted by `chunksFor` afterwards, so the order they
+ * arrive in is not part of the answer.
+ */
+function binsOverlapping(ref: RefIndex, start: number, end: number, index: BamIndex): Chunk[][] {
+  const out: Chunk[][] = []
+  const last = Math.max(start, end - 1)
+  let shift = index.minShift + index.depth * 3
+  let offset = 0
+  for (let level = 0; level <= index.depth; level++) {
+    const from = offset + shiftRight(start, shift)
+    const to = offset + shiftRight(last, shift)
+    if (to - from + 1 > ref.bins.size) {
+      for (const [bin, chunks] of ref.bins) if (bin >= from && bin <= to) out.push(chunks)
+    } else {
+      for (let bin = from; bin <= to; bin++) {
+        const chunks = ref.bins.get(bin)
+        if (chunks !== undefined) out.push(chunks)
+      }
+    }
     offset += 1 << (level * 3)
     shift -= 3
   }
@@ -393,9 +565,7 @@ export function chunksFor(
   const ceiling = highestOffset(ref, Math.max(1, end), index)
 
   const wanted: Chunk[] = []
-  for (const bin of reg2bins(Math.max(0, start), Math.max(1, end), index.minShift, index.depth)) {
-    const chunks = ref.bins.get(bin)
-    if (chunks === undefined) continue
+  for (const chunks of binsOverlapping(ref, Math.max(0, start), Math.max(1, end), index)) {
     // Both ends. A chunk ending before the floor holds nothing that reaches the
     // window; one beginning at or after the ceiling holds nothing that starts
     // before the window ends.

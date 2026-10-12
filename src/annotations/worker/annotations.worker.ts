@@ -2090,8 +2090,13 @@ async function readTwoBit(
   if (cached !== null && cached.key === cacheKey(source) && isTwoBit(cached.store)) {
     return cached.store
   }
-  const file = await openTwoBit((length, position) =>
-    handle.read(length, position, { onProgress: report }),
+  // Asked of the handle and not of the host: a local file knows it, and a remote
+  // one learns it from the read of the file's front that the index needs anyway,
+  // so no request is spent on it — and every count is then checked against it.
+  const size = await sizeOf(handle)
+  const file = await openTwoBit(
+    (length, position) => handle.read(length, position, { onProgress: report }),
+    size ?? undefined,
   )
   const store: TwoBitSequences = {
     twobit: true,

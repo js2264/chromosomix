@@ -4847,7 +4847,10 @@ fields it had never seen would fail far from here, in the middle of a chromosome
 The refusal names the version and the two commands that convert it. A file declaring more than
 100,000 sequences is refused as well — opening one reads a record header per sequence, and a count
 that large is likelier a truncated file than an assembly — and one that ends inside its index or a
-record says it is truncated.
+record says it is truncated. So is a record whose gap or mask count it could not hold — a run covers
+at least a base and costs eight bytes — before that count decides a read (§10): a flipped
+`nBlockCount` asked for thirty-four gigabytes of gap list, which a ranged read answers with the rest
+of the file.
 
 The assembly is `origin: 'twobit'` and **exact** — every `dnaSize` is in the index — so an 800 MB
 genome declares its chromosomes in a few hundred kilobytes without reading a base. The store is the
@@ -5233,6 +5236,48 @@ tooltip, rather than live and answering with a dialog (§8.5).
 | BAM whose index cannot be read | Read by search, the summary naming the index that did not read and what went wrong with it |
 | BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>`. Where the header claimed otherwise or said nothing and the search found the reads out of order, name the two places that show it, give `samtools sort` then `samtools index`, and say that a Hi-C pipeline's alignment file is in read-pair order and not made for browsing |
 | CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name, **and of a track hub's `cram` track** (§24.10); a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
+| A count, length or offset a binary file declares that the file could not hold — a `.hic` block's record count, a normalisation vector's length, an index entry past the end of the file, a BAI's linear-index size, a CSI deeper than ten levels, a `.2bit` record's gap count, a MessagePack array longer than its bytes | `format`, naming the format, the field and the value — *The record count of a block of this .hic reads 50,000,000, and the 2 bytes after it could hold at most 0* — and ending *the file is truncated, corrupt, or not the format its first bytes claim*. Refused **before** anything is read, allocated or walked on its strength; see below |
+| Compressed data that inflates past its cap | `format`, naming the format, the field and the cap. The inflate is stopped as soon as the cap is passed, not after the bomb has gone off; see below |
+
+**A number a file declares is a claim, not a size.** Every binary reader sizes its reads, its typed
+arrays and its loops by counts read out of the same bytes as the data, so a truncated download, a
+flipped bit and a file written to hurt are all the same thirty-two bits read as a count — and
+trusted, a sixteen-byte `.hic` block declaring fifty million records allocated 572 MiB, one negative
+vector length in a footer read 341 MiB of a 256 MiB file, and a twenty-four-byte `.csi` would hold
+the annotations worker for some twenty minutes a query. So each count passes three questions in
+`sources/untrusted.ts` before it sizes anything: **is it a count** (a non-negative safe integer),
+**is it under the format's ceiling**, and **could the bytes left hold it** at the fewest bytes one
+item takes. The third does the work: it makes every allocation and every loop proportional to bytes
+that are actually there. An offset and length pair must also name bytes inside the file, and entries
+a writer lays end to end — a `.hic`'s matrix records, a resolution's blocks, its normalisation
+vectors — must between them fit in it, since overlapping entries that each lie inside the file would
+read it once per entry.
+
+**The ceilings are the formats' own maxima, set generously**, because a ceiling that refuses a real
+file is a bug in the ceiling and not a protection. Each is argued where it is set: a `.hic` block
+holds at most 2^26 records (Juicer and `hictk` cut a matrix into blocks of about a thousand bins a side,
+or a fixed 500 kb or 5 Mb of genome below 500 bp and 5 kb, so a mammalian block holds about a
+million; tens of millions are reachable only on a small genome sequenced to saturation at 100 bp or
+finer); a BAI reference at most 2^16 linear-index slots (BAI cannot address past 2^29 bp, so the
+format's own maximum is 32,768); a CSI at most ten levels (its bins are `uint32`, and an eleventh
+level could not be numbered). Two counts are read leniently, as they always were: a `.hic`
+normalisation index no file could hold opens the file with no weights, since what follows the
+expected values may be no index at all, and a BAM record whose name, CIGAR and sequence overrun its
+own length stops the walk as a non-positive length does.
+
+**An inflate is capped in proportion to what went in.** A fixed cap cannot be both safe and
+generous: one small enough to hold a thousand-to-one bomb refuses a large real file. So the cap is a
+ratio well above the format's real one, with a floor under which a small file may compress as well
+as it likes and a ceiling the reader could not use past: a `.hic` block and a g3d model block at
+64 times their compressed size (`straw`, the C++ reader `hicstraw` is built on, sizes its buffer at
+ten and records three as the most it has seen), never under 16 and 64 MiB; a HiC-Pro matrix or a
+FASTA the command line keeps as bytes the same, never under 512 MiB; a share link's workspace the
+same, never under 16 MiB. A BGZF member is held to the format's own 64 KiB, which htslib refuses to
+exceed, and text to 2^29 bytes, past which no engine can decode a string anyway. The decompressor is
+fed 64 KiB at a time and stopped the moment its output passes the cap, so the overshoot is one
+slice's worth and never the bomb. A plain-gzip `.pairs` is a stream with no total to cap — its
+records are walked as they arrive — so it is fed the same way, and a line in it is refused past
+64 MiB rather than carried to the end of the inflate.
 
 ---
 
@@ -5409,6 +5454,15 @@ memory rather than round trips and a local file pays it in full:
 
 The way out here is not an index but a conversion, and the gate says so: `cooler load -f coo` turns
 the same two files into a `.cool` that opens in a handful of requests at any size.
+
+**Every budget above assumes a file that is what it says it is. One that is not is held to its own
+size** (§10). A corrupt or hostile file is either read or refused, and either way the cost is bounded
+by its bytes rather than by what its counts claim:
+
+| Operation | Budget |
+|---|---|
+| Open and read a binary file whose counts, offsets or compressed data are corrupt — `.hic`, BAM with BAI or CSI, `.2bit`, binary g3d | an answer or a refusal; **never more than 16× the file's size read** in one open, never one typed array past 64 MiB, never 1.5 s. `test/unit/fuzz-readers.test.ts` holds every reader to this over 1,140 seeded corruptions of files the repository's own writers made; the worst reads 4× its file and allocates 30 KB, and the slowest takes a tenth of a second |
+| An inflate of any kind | stopped as soon as its output passes its cap, at most one 64 KiB slice of input later (§10) |
 
 ---
 

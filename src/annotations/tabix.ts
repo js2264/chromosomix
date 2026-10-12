@@ -42,6 +42,7 @@
 
 import { NameIndex } from '../genome/naming'
 import { inflateMember } from '../pairs/stream'
+import { TEXT_INFLATE_MAX, inflatedPast } from '../sources/untrusted'
 
 /** A BGZF member header is always at least this long. */
 const BGZF_HEADER_BYTES = 12
@@ -115,10 +116,18 @@ const inflateRaw = inflateMember
  * the four sequences that happened to follow it: cheap on a file whose blocks
  * are large, and on a densely packed one it is most of the rest of the file.
  * Given the offset, inflation stops after the block that begins at it.
+ *
+ * Each member is held to BGZF's own 64 KiB, and the whole to `maxBytes` (§10):
+ * a member is at most 64 KiB inflated but can be as little as ninety bytes
+ * compressed, so a span of them can stand for seven hundred times its size.
+ * The default is the text ceiling — every caller that decodes a span to text
+ * cannot use more, and an index or a window of a BAM is far less — and a
+ * caller keeping bytes it can use more of passes its own.
  */
 export async function inflateBgzf(
   bytes: Uint8Array,
   lastBlockStart = Number.POSITIVE_INFINITY,
+  maxBytes = TEXT_INFLATE_MAX,
 ): Promise<Uint8Array> {
   const parts: Uint8Array[] = []
   let total = 0
@@ -137,6 +146,9 @@ export async function inflateBgzf(
     if (dataTo > dataFrom) {
       const inflated = await inflateRaw(bytes.subarray(dataFrom, dataTo))
       if (inflated.length > 0) {
+        if (total + inflated.length > maxBytes) {
+          throw inflatedPast({ format: 'BGZF file', field: 'span read' }, maxBytes, bytes.length)
+        }
         parts.push(inflated)
         total += inflated.length
       }

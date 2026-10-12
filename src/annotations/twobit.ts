@@ -64,12 +64,23 @@
  * Nothing in this module touches a file: it reads `Uint8Array`s and does sums,
  * exactly as `annotations/fai.ts` does, so every case in it is pinned by a test
  * that never leaves memory.
+ *
+ * ## Counts are the file's claims
+ *
+ * A record's two block counts are what decide how much is read and allocated
+ * for it, so both go through `sources/untrusted.ts` before either does (§10):
+ * a flipped `nBlockCount` used to ask for thirty-four gigabytes of gap list,
+ * which a ranged read answers with the rest of the file.
  */
 
 import type { Contig } from '../genome/assembly'
+import { declaredCount, declaredSpan } from '../sources/untrusted'
 
 /** `0x1A412743`, the file's first four bytes in whichever order it was written. */
 export const TWOBIT_MAGIC = 0x1a412743
+
+/** The format as a refusal names it. */
+const TWOBIT = '.2bit'
 
 /** The fixed part: magic, version, sequence count, reserved. */
 const HEADER_BYTES = 16
@@ -202,12 +213,50 @@ export function readTwoBitIndex(bytes: Uint8Array, header: TwoBitHeader, from = 
  * soft-masked hg38 opening the genome was the tens of megabytes of offsets this
  * reader exists never to read.
  */
-export function recordHeaderBytes(bytes: Uint8Array, at: number, littleEndian: boolean): number | null {
+export function recordHeaderBytes(
+  bytes: Uint8Array,
+  at: number,
+  littleEndian: boolean,
+  record: RecordPlace = {},
+): number | null {
   if (at + 8 > bytes.length) return 8
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const nBlockCount = view.getUint32(at + 4, littleEndian)
+  const nBlockCount = gapCount(view, at, littleEndian, record)
   const afterN = at + 8 + nBlockCount * 8
   return afterN + 4 > bytes.length ? afterN + 4 - at : null
+}
+
+/**
+ * What a record's counts are checked against, where the caller knows it.
+ *
+ * `fileLeft` is the bytes the file holds from the record's first byte on: a
+ * gap list longer than that cannot be there, and asking for it reads the rest
+ * of the file to find out — 800 MB of hg38, for one flipped count. `name` is
+ * only for the refusal's sentence.
+ */
+export interface RecordPlace {
+  fileLeft?: number
+  name?: string
+}
+
+/**
+ * A record's N-block count, refused unless the record could hold it.
+ *
+ * A gap covers at least one base, so a sequence of `dnaSize` bases has at most
+ * that many — the bound that holds with no file size known — and each costs
+ * eight bytes of starts and sizes, which with one known is the tighter bound.
+ * Nothing else bounds it: a consensus FASTA with an ambiguity code at every
+ * heterozygous site has a gap for each, hundreds of thousands a chromosome.
+ */
+function gapCount(view: DataView, at: number, littleEndian: boolean, record: RecordPlace): number {
+  return declaredCount(view.getUint32(at + 4, littleEndian), {
+    format: TWOBIT,
+    field: `N-block count${record.name === undefined ? '' : ` of ${record.name}`}`,
+    ceiling: view.getUint32(at, littleEndian),
+    // The size and count before the blocks, the mask count after them.
+    ...(record.fileLeft === undefined ? {} : { available: record.fileLeft - 8 - 4 }),
+    bytesPerItem: 8,
+  })
 }
 
 /**
@@ -218,6 +267,12 @@ export function recordHeaderBytes(bytes: Uint8Array, at: number, littleEndian: b
  * `bytes` at all; see the module header for why. Nor does `reserved`, which
  * would only be read to be ignored — the format says it is zero, and nothing is
  * gained by refusing a file whose writer put something there.
+ *
+ * Both block counts are checked before either sizes anything (§10): the gaps
+ * against the buffer, which must hold them, and the masks, which are stepped
+ * over unread, against the file where its size is known — as is where the
+ * packed bases then begin and end, since a count that steps past the end of
+ * the file puts every window of the sequence in bytes that do not exist.
  */
 export function readTwoBitRecord(
   name: string,
@@ -234,10 +289,13 @@ export function readTwoBitRecord(
    * disagreement would show up as residues from the wrong part of the file.
    */
   base = 0,
+  /** The file's length, where the caller knows it; the buffer's end is the bound otherwise. */
+  fileSize?: number,
 ): TwoBitRecord {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const length = view.getUint32(at, littleEndian)
-  const nBlockCount = view.getUint32(at + 4, littleEndian)
+  // The gaps are read out of `bytes`, so the buffer bounds them whatever the file does.
+  const nBlockCount = gapCount(view, at, littleEndian, { name, fileLeft: bytes.length - at })
   const starts = new Int32Array(nBlockCount)
   const ends = new Int32Array(nBlockCount)
   const startsAt = at + 8
@@ -248,10 +306,25 @@ export function readTwoBitRecord(
     ends[i] = start + view.getUint32(sizesAt + i * 4, littleEndian)
   }
   const afterN = sizesAt + nBlockCount * 4
-  const maskBlockCount = view.getUint32(afterN, littleEndian)
+  // A soft-masked run, like a gap, covers a base at least.
+  const maskBlockCount = declaredCount(view.getUint32(afterN, littleEndian), {
+    format: TWOBIT,
+    field: `mask-block count of ${name}`,
+    ceiling: length,
+    // The masks' arrays, then the reserved word.
+    ...(fileSize === undefined ? {} : { available: fileSize - (base + afterN + 4) - 4 }),
+    bytesPerItem: 8,
+  })
   // …and this is the step-over: `8` a block for the two parallel arrays, then
   // the reserved word, and the packed DNA begins.
   const dnaAt = base + afterN + 4 + maskBlockCount * 8 + 4
+  if (fileSize !== undefined) {
+    declaredSpan(dnaAt, Math.ceil(length / 4), {
+      format: TWOBIT,
+      field: `packed bases of ${name}`,
+      size: fileSize,
+    })
+  }
   return { name, length, nStarts: starts, nEnds: ends, dnaAt }
 }
 
@@ -387,8 +460,13 @@ export const TWOBIT_MAX_SEQUENCES = 100_000
  * touched no packed DNA at all. On hg38 that is a few hundred kilobytes against
  * a file of 800 MB — the point of the format, and the reason an assembly hub
  * opens about as fast as a `chrom.sizes` does.
+ *
+ * `size` is the file's length where the caller knows it, and every offset and
+ * count is checked against it before it decides a read. Without it the counts
+ * are held to what their sequence's length allows, which bounds them and is
+ * looser; a reader of a remote file learns the size from its first read.
  */
-export async function openTwoBit(read: ReadRange): Promise<TwoBitFile> {
+export async function openTwoBit(read: ReadRange, size?: number): Promise<TwoBitFile> {
   let slab = await read(INDEX_GUESS, 0)
   const header = readTwoBitHeader(slab)
   if (header.count > TWOBIT_MAX_SEQUENCES) {
@@ -418,8 +496,16 @@ export async function openTwoBit(read: ReadRange): Promise<TwoBitFile> {
   const ordered: TwoBitRecord[] = []
   let total = 0
   for (const entry of index.entries) {
+    // The size and the gap count, at the least, before a read is aimed there.
+    if (size !== undefined) {
+      declaredSpan(entry.offset, 8, { format: TWOBIT, field: `index entry for ${entry.name}`, size })
+    }
+    const place: RecordPlace = {
+      name: entry.name,
+      ...(size === undefined ? {} : { fileLeft: size - entry.offset }),
+    }
     let bytes = await read(RECORD_GUESS, entry.offset)
-    let wanted = recordHeaderBytes(bytes, 0, header.littleEndian)
+    let wanted = recordHeaderBytes(bytes, 0, header.littleEndian, place)
     // At most once round: the first answer is how many bytes the gap list needs,
     // and once that has been read the mask count is in hand too.
     while (wanted !== null) {
@@ -428,9 +514,9 @@ export async function openTwoBit(read: ReadRange): Promise<TwoBitFile> {
         throw new Error(`This .2bit ends part-way through the record for ${entry.name}.`)
       }
       bytes = grown
-      wanted = recordHeaderBytes(bytes, 0, header.littleEndian)
+      wanted = recordHeaderBytes(bytes, 0, header.littleEndian, place)
     }
-    const record = readTwoBitRecord(entry.name, bytes, 0, header.littleEndian, entry.offset)
+    const record = readTwoBitRecord(entry.name, bytes, 0, header.littleEndian, entry.offset, size)
     records.set(record.name, record)
     ordered.push(record)
     total += record.length

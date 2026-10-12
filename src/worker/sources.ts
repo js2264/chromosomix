@@ -12,9 +12,10 @@ import type { ByteSource } from '../types'
 import { LocalFileSource } from '../sources/LocalFileSource'
 import { RemoteRangeSource } from '../sources/RemoteRangeSource'
 import { accessHeaders } from '../sources/access'
+import { inflationCap } from '../sources/untrusted'
 import type { S3Credential } from '../s3/sigv4'
 import type { SourceSpec } from './protocol'
-import { decodeAnnotationBytes } from '../annotations/parse'
+import { WHOLE_FILE_INFLATION, decodeAnnotationBytes } from '../annotations/parse'
 
 /**
  * Build the byte source described by `spec`.
@@ -509,8 +510,10 @@ export async function readWhole(
   }
   // The two halves are shipped gzipped as often as not — `.matrix.gz` beside a
   // plain `.bed`, or both — and this is the same un-gzipping every text format
-  // in the application already goes through, BGZF included.
-  return decodeAnnotationBytes(bytes)
+  // in the application already goes through, BGZF included. Capped in
+  // proportion to what was read rather than at the text ceiling: a matrix is
+  // parsed from its bytes and may be past a gigabyte (§3.9).
+  return decodeAnnotationBytes(bytes, inflationCap(bytes.length, WHOLE_FILE_INFLATION))
 }
 
 /**

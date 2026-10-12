@@ -14,6 +14,7 @@
  * against BED12.
  */
 
+import { TEXT_INFLATE_MAX, inflateCapped, type InflationPolicy } from '../sources/untrusted'
 import { FeatureBuilder, PairBuilder } from './featureset'
 import { DETAIL_SEP, type FeatureSet, type PairSet } from './types'
 import { inflateBgzf, isBgzf } from './tabix'
@@ -38,6 +39,23 @@ export async function decodeAnnotationText(bytes: Uint8Array): Promise<string> {
 }
 
 /**
+ * How far a file read whole and kept as **bytes** may inflate: 64 times its
+ * compressed size, never under 512 MiB nor over 16 GiB.
+ *
+ * For the callers {@link TEXT_INFLATE_MAX} is the wrong ceiling for, because
+ * what they keep is not a string: a HiC-Pro matrix, parsed straight from its
+ * bytes and gated by size above 200 MB (§3.9), and a FASTA the command line
+ * holds whole — a gzipped hg38 is 3.1 GB of residues. Text of numbers and
+ * residues compresses three to six times; sixty-four is far past either, and
+ * holds a bomb to sixty-four times its own size rather than to a thousand.
+ */
+export const WHOLE_FILE_INFLATION: InflationPolicy = {
+  ratio: 64,
+  floor: TEXT_INFLATE_MAX,
+  ceiling: 2 ** 34,
+}
+
+/**
  * The same un-gzipping, stopping one step short of a string.
  *
  * A FASTA is read this way. Residues are ASCII by definition, so decoding one to
@@ -45,8 +63,16 @@ export async function decodeAnnotationText(bytes: Uint8Array): Promise<string> {
  * — and every byte of it is then re-encoded into the `Uint8Array` the sequence
  * store keeps. The text formats still go through {@link decodeAnnotationText},
  * because a GTF attribute really can be UTF-8 and its columns are strings.
+ *
+ * Inflated to at most `maxBytes` (§10). The default is the text ceiling, past
+ * which no engine can decode the result into a string anyway, and which holds
+ * a FASTA too: the worker keeps one of at most 300 MB. A caller that keeps
+ * more as bytes passes {@link WHOLE_FILE_INFLATION}'s cap for its input.
  */
-export async function decodeAnnotationBytes(bytes: Uint8Array): Promise<Uint8Array> {
+export async function decodeAnnotationBytes(
+  bytes: Uint8Array,
+  maxBytes = TEXT_INFLATE_MAX,
+): Promise<Uint8Array> {
   const gzipped = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
   if (!gzipped) return bytes
   if (typeof DecompressionStream === 'undefined') {
@@ -68,9 +94,8 @@ export async function decodeAnnotationBytes(bytes: Uint8Array): Promise<Uint8Arr
   // This is the whole-file road, so it is `bcftools`' and `tabix`' own output
   // that lands here whenever the index is missing — `.vcf.gz`, `.gtf.gz`,
   // `.fa.gz` are all BGZF, and a plain `.gz` still is not, and still goes below.
-  if (isBgzf(bytes)) return inflateBgzf(bytes)
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+  if (isBgzf(bytes)) return inflateBgzf(bytes, Number.POSITIVE_INFINITY, maxBytes)
+  return inflateCapped(bytes, { format: 'file', field: 'gzip stream', encoding: 'gzip', maxBytes })
 }
 
 /**

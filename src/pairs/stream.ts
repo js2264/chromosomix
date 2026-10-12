@@ -58,6 +58,8 @@
  * and available for an unindexed file too.
  */
 
+import { ViewerError } from '../errors'
+import { inflateCapped } from '../sources/untrusted'
 import type { ByteSource } from '../types'
 
 /**
@@ -75,6 +77,15 @@ const BGZF_HEADER_BYTES = 12
 
 /** No BGZF member exceeds 64 KiB compressed; the format guarantees it. */
 export const BGZF_MAX_MEMBER = 1 << 16
+
+/**
+ * Nor does any inflate to more than 64 KiB: htslib inflates a member into a
+ * buffer of `BGZF_MAX_BLOCK_SIZE`, 65,536 bytes, and refuses one that does not
+ * fit — so no file any BGZF reader opens has a larger one, and this is the cap
+ * {@link inflateMember} holds every member to. A member's 64 KiB can otherwise
+ * stand for sixty-four megabytes.
+ */
+export const BGZF_MAX_INFLATED = 1 << 16
 
 /** gzip's first two bytes, which BGZF shares because BGZF *is* gzip. */
 export function isGzip(bytes: Uint8Array): boolean {
@@ -122,38 +133,22 @@ export function memberSize(bytes: Uint8Array, at = 0): number | null {
 /**
  * Inflate one member's deflate payload.
  *
- * The writer and reader are taken off the `DecompressionStream` directly. The
- * `Blob` + `pipeThrough` + `Response` spelling is the obvious one and costs
- * 7.6× as much — see the module docblock. `deflate-raw` rather than `gzip`
- * because the gzip framing has already been stripped by the caller, which is
- * the only way to know where the member ended in the first place.
+ * The writer and reader are taken off the `DecompressionStream` directly — by
+ * `sources/untrusted.ts`, which owns that loop now. The `Blob` + `pipeThrough`
+ * + `Response` spelling is the obvious one and costs 7.6× as much — see the
+ * module docblock. `deflate-raw` rather than `gzip` because the gzip framing
+ * has already been stripped by the caller, which is the only way to know where
+ * the member ended in the first place. Capped at {@link BGZF_MAX_INFLATED}, the
+ * format's own ceiling, and stopped the moment a member passes it.
  */
 export async function inflateMember(payload: Uint8Array): Promise<Uint8Array> {
   if (payload.length === 0) return payload
-  const stream = new DecompressionStream('deflate-raw')
-  const writer = stream.writable.getWriter()
-  const reader = stream.readable.getReader()
-  const parts: Uint8Array[] = []
-  let total = 0
-  const pump = (async (): Promise<void> => {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      parts.push(value)
-      total += value.length
-    }
-  })()
-  await writer.write(payload as Uint8Array<ArrayBuffer>)
-  await writer.close()
-  await pump
-  if (parts.length === 1) return parts[0]
-  const out = new Uint8Array(total)
-  let at = 0
-  for (const part of parts) {
-    out.set(part, at)
-    at += part.length
-  }
-  return out
+  return inflateCapped(payload, {
+    format: 'BGZF file',
+    field: 'member',
+    encoding: 'deflate-raw',
+    maxBytes: BGZF_MAX_INFLATED,
+  })
 }
 
 /**
@@ -232,14 +227,27 @@ export function decompressedStream(
   // it came from does.
   const head = source.readBytes(0, Math.min(source.size, 64))
   if (isBgzfMember(head)) return bgzfStream(source, options)
-  const raw = spanStream(source, options)
-  return isGzip(head) ? raw.pipeThrough(new DecompressionStream('gzip')) : raw
+  if (!isGzip(head)) return spanStream(source, options, PULL_CHUNK_BYTES)
+  // A plain gzip is one stream with no members to cap, and a platform
+  // decompressor inflates the whole of each chunk it is written before anyone
+  // reads a byte — four megabytes of deflate can be four gigabytes of output in
+  // one go. Written to it a slice at a time, a chunk is at most sixty-four
+  // megabytes out, and the stream's backpressure holds the rest until the
+  // lines are walked; how long a line may grow is `forEachLine`'s to bound.
+  return spanStream(source, options, GZIP_FEED_BYTES).pipeThrough(new DecompressionStream('gzip'))
 }
 
-/** The compressed bytes of a span, unchanged, in source-sized reads. */
+/** The slice of compressed bytes a plain gzip's decompressor is written at a time. */
+const GZIP_FEED_BYTES = 64 << 10
+
+/**
+ * The compressed bytes of a span, unchanged, in source-sized reads handed on
+ * `piece` bytes at a time — views into one read, so the slicing costs nothing.
+ */
 function spanStream(
   source: ByteSource,
   options: SpanOptions,
+  piece: number,
 ): ReadableStream<Uint8Array<ArrayBuffer>> {
   const from = options.from ?? 0
   const to = Math.min(options.to ?? source.size, source.size)
@@ -262,7 +270,9 @@ function spanStream(
       }
       at += bytes.length
       fed += bytes.length
-      controller.enqueue(bytes as Uint8Array<ArrayBuffer>)
+      for (let from = 0; from < bytes.length; from += piece) {
+        controller.enqueue(bytes.subarray(from, Math.min(from + piece, bytes.length)) as Uint8Array<ArrayBuffer>)
+      }
       options.onProgress?.(fed, total)
     },
   })
@@ -363,6 +373,14 @@ function bgzfStream(source: ByteSource, options: SpanOptions): ReadableStream<Ui
  * pairs file routinely lacks one and dropping its last record silently would be
  * the worst possible way to be wrong.
  *
+ * A line a chunk ends inside is kept in the pieces it arrives in and joined
+ * once, when its newline comes, so assembling one costs its own length. It used
+ * to be joined onto every chunk that followed — the next chunk copied whole to
+ * carry a few bytes of tail, and a line spanning many chunks copied over and
+ * over, quadratic in its length: a gzip of zeros with no newline in it, a
+ * megabyte that inflates to a gigabyte, was minutes of copying on its way to
+ * running out of memory. And a line is refused past {@link MAX_LINE_BYTES} (§10).
+ *
  * @returns `false` when it stopped early because the caller cancelled.
  */
 export async function forEachLine(
@@ -371,7 +389,22 @@ export async function forEachLine(
   cancelled?: () => boolean,
 ): Promise<boolean> {
   const reader = stream.getReader()
-  let carry = new Uint8Array(0)
+  // The front of a line not yet ended, as it arrived.
+  let pending: Uint8Array[] = []
+  let pendingBytes = 0
+  const lineEndingIn = (tail: Uint8Array): Uint8Array => {
+    if (pendingBytes === 0) return tail
+    const line = new Uint8Array(pendingBytes + tail.length)
+    let at = 0
+    for (const piece of pending) {
+      line.set(piece, at)
+      at += piece.length
+    }
+    line.set(tail, at)
+    pending = []
+    pendingBytes = 0
+    return line
+  }
   try {
     for (;;) {
       // Before the read, not after it. A caller that has what it came for —
@@ -382,30 +415,42 @@ export async function forEachLine(
       const { done, value } = await reader.read()
       if (done) break
 
-      let buf: Uint8Array
-      if (carry.length === 0) {
-        buf = value
-      } else {
-        buf = new Uint8Array(carry.length + value.length)
-        buf.set(carry)
-        buf.set(value, carry.length)
-      }
-
       let start = 0
-      for (let i = 0; i < buf.length; i++) {
-        if (buf[i] !== 0x0a) continue
+      for (let i = value.indexOf(0x0a); i >= 0; i = value.indexOf(0x0a, start)) {
+        const line = lineEndingIn(value.subarray(start, i))
         // A CRLF file is not the common case and is cheap to tolerate.
-        const end = i > start && buf[i - 1] === 0x0d ? i - 1 : i
-        onLine(buf.subarray(start, end))
+        const end = line.length > 0 && line[line.length - 1] === 0x0d ? line.length - 1 : line.length
+        onLine(line.subarray(0, end))
         start = i + 1
       }
-      // `slice`, not `subarray`: the tail has to outlive `value`, which the
-      // next `read()` is free to reuse.
-      carry = buf.subarray(start).slice()
+      if (start < value.length) {
+        // `slice`, not `subarray`: the piece has to outlive `value`, which the
+        // next `read()` is free to reuse.
+        pending.push(value.slice(start))
+        pendingBytes += value.length - start
+        if (pendingBytes > MAX_LINE_BYTES) {
+          throw new ViewerError(
+            'format',
+            `A line of this .pairs file runs past ${MAX_LINE_BYTES >> 20} MiB without ending, and ` +
+              'no pairs line is that long. The file is corrupt, or is not a .pairs file.',
+            { maxLineBytes: MAX_LINE_BYTES },
+          )
+        }
+      }
     }
-    if (carry.length > 0) onLine(carry)
+    if (pendingBytes > 0) onLine(lineEndingIn(new Uint8Array(0)))
     return true
   } finally {
     reader.releaseLock()
   }
 }
+
+/**
+ * The longest line {@link forEachLine} assembles: 64 MiB.
+ *
+ * A pairs record is a dozen short columns, and the longest real ones carry a
+ * read's SAM record in each of two columns — a `.pairsam` of nanopore reads,
+ * a megabyte or two a line. Sixty-four is far past that, and far short of what
+ * an inflate with no newline in it reaches.
+ */
+const MAX_LINE_BYTES = 64 << 20

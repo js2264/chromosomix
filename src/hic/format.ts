@@ -36,9 +36,21 @@
  * own from the pixels it is already reading — against a golden, per sequence,
  * with the near-diagonal trim the reader chose. Two expectations with one name
  * would be a quantity that changes depending on which code path produced it.
+ *
+ * ## Every count is the file's claim, and is checked as one
+ *
+ * The header, the footer and the vectors are sized by numbers read out of the
+ * same bytes, so each goes through `sources/untrusted.ts` before it sizes a
+ * read, an allocation or a walk: a count must be a count, below the most any
+ * real file declares, and small enough for the bytes left in the *file* to
+ * hold (§10). And a window too small is said by {@link Truncated} and by nothing
+ * else — a `RangeError` is also what an allocation sized by a corrupt count
+ * throws, and reading that as "grow the window" is how one negative `nValues`
+ * became six reads and 341 MiB of a 256 MiB file.
  */
 
 import { ViewerError } from '../errors'
+import { declaredCount, declaredSpan, plausibleCount } from '../sources/untrusted'
 import type { ByteSource } from '../types'
 
 /** `HIC` followed by a NUL. The first four bytes of every version. */
@@ -46,6 +58,54 @@ export const HIC_MAGIC = 'HIC\0'
 
 /** Versions this reader accepts. 7 and 8 share a layout; 9 differs in five places. */
 export const SUPPORTED_VERSIONS = [7, 8, 9] as const
+
+/**
+ * The format as a refusal names it, for `sources/untrusted.ts`.
+ */
+export const HIC = '.hic'
+
+/**
+ * The most bins one chromosome holds at one rung, as a vector's length.
+ *
+ * v8's `int32` width. v9 widened the expected- and normalisation-vector counts
+ * to `int64`, and nothing has needed the room: the longest vector any file
+ * carries is its longest chromosome at its finest rung, which is 2.5 × 10⁸ bins
+ * for human chr1 at 1 bp — a rung nobody balances at. What bounds an
+ * allocation is not this but the bytes behind it, which a vector's length is
+ * also checked against.
+ */
+export const HIC_MAX_VECTOR_VALUES = 2 ** 31 - 1
+
+/**
+ * The longest chromosome a header may declare: 2^40 bp, a terabase.
+ *
+ * The largest genomes sequenced are under 200 Gbp in total and their longest
+ * chromosomes a few gigabases — which is why v9 widened the field past 2^31 —
+ * so this refuses only a length no assembly has, and keeps every bin count
+ * derived from one far inside a safe integer.
+ */
+export const HIC_MAX_CHROM_LENGTH = 2 ** 40
+
+/**
+ * Thrown when a read runs past the bytes in hand — the one signal that a
+ * larger window would answer.
+ *
+ * A `RangeError`, because that is what the `DataView` beneath the cursor would
+ * have thrown and what a caller written against the platform expects. But the
+ * readers that grow a window catch *this* and nothing else: a `RangeError` is
+ * also what `new Float64Array(-1)` throws, and taking that for "read further"
+ * is the mistake this class exists to make impossible.
+ */
+export class Truncated extends RangeError {
+  /** Bytes from the start of the buffer the read needed. */
+  readonly needed: number
+
+  constructor(needed: number) {
+    super(`a read needs ${needed} bytes of a shorter buffer`)
+    this.name = 'Truncated'
+    this.needed = needed
+  }
+}
 
 /**
  * A cursor over a byte range, **little-endian throughout**.
@@ -63,6 +123,10 @@ export const SUPPORTED_VERSIONS = [7, 8, 9] as const
  * checks below exist to turn that into a sentence, and `hic-straw-oracle.test.ts`
  * exists so that a reader and a writer cannot agree on the wrong answer — which
  * is exactly what they did until that test was written.
+ *
+ * Every read past the end throws {@link Truncated}, including a string whose
+ * terminator is not in the buffer: what is in hand is the front of something
+ * longer, and only a larger window can say what.
  */
 export class Cursor {
   private readonly view: DataView
@@ -85,19 +149,27 @@ export class Cursor {
     return this.bytes.byteLength - this.at
   }
 
+  /** Throw {@link Truncated} unless `width` bytes from here are in the buffer. */
+  private need(width: number): void {
+    if (this.at + width > this.bytes.byteLength) throw new Truncated(this.at + width)
+  }
+
   int8(): number {
+    this.need(1)
     const value = this.view.getInt8(this.at)
     this.at += 1
     return value
   }
 
   int16(): number {
+    this.need(2)
     const value = this.view.getInt16(this.at, true)
     this.at += 2
     return value
   }
 
   int32(): number {
+    this.need(4)
     const value = this.view.getInt32(this.at, true)
     this.at += 4
     return value
@@ -111,18 +183,25 @@ export class Cursor {
    * the arithmetic downstream, exactly as `h5/api.ts` does for int64 columns.
    */
   int64(): number {
+    this.need(8)
     const value = this.view.getBigInt64(this.at, true)
     this.at += 8
-    return Number(value)
+    // Past 2^53 the narrowing rounds, and a rounded offset is a wrong one; such
+    // a value is made a NaN instead, which every count check downstream refuses.
+    return value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)
+      ? Number.NaN
+      : Number(value)
   }
 
   float32(): number {
+    this.need(4)
     const value = this.view.getFloat32(this.at, true)
     this.at += 4
     return value
   }
 
   float64(): number {
+    this.need(8)
     const value = this.view.getFloat64(this.at, true)
     this.at += 8
     return value
@@ -131,10 +210,27 @@ export class Cursor {
   /** A NUL-terminated string. The format's only string encoding. */
   string(): string {
     const start = this.at
-    while (this.at < this.bytes.byteLength && this.bytes[this.at] !== 0) this.at += 1
-    const text = new TextDecoder().decode(this.bytes.subarray(start, this.at))
-    this.at += 1
+    const end = this.bytes.indexOf(0, start)
+    // Its terminator is somewhere past the window, and the window has to reach
+    // at least one byte further than the string's start to find it.
+    if (end < 0) throw new Truncated(Math.max(start, this.bytes.byteLength) + 1)
+    const text = new TextDecoder().decode(this.bytes.subarray(start, end))
+    this.at = end + 1
     return text
+  }
+
+  /**
+   * Step over `width` bytes without reading them.
+   *
+   * May land past the end, since what is stepped over need not be in hand —
+   * only the next read has to be, and it throws {@link Truncated} if it is not.
+   * A negative width is the one thing that cannot be a skip: it walks the
+   * cursor backwards over bytes already read, and a loop doing that need never
+   * end.
+   */
+  skip(width: number): void {
+    if (!(width >= 0)) throw new RangeError(`a cursor cannot skip ${width} bytes`)
+    this.at += width
   }
 }
 
@@ -193,31 +289,41 @@ export function isHicMagic(bytes: Uint8Array): boolean {
  *
  * Two passes at worst, and the second only for a file whose scaffold list is
  * bigger than the first probe — which is honest about the cost rather than
- * reading a megabyte to be safe.
+ * reading a megabyte to be safe. The probe grows only on {@link Truncated}, to
+ * at least what the read that ran out needed, and never past the file: every
+ * count in the header has been checked against the bytes the file has left, so
+ * a header that still runs out at the end of the file is a truncated one, and
+ * is refused as that.
  */
 export function readHeader(source: ByteSource): HicHeader {
   let probe = Math.min(HEADER_PROBE_BYTES, source.size)
   for (;;) {
     const bytes = source.readBytes(0, probe)
     try {
-      return parseHeader(bytes)
+      return parseHeader(bytes, source.size)
     } catch (err) {
-      const truncated = err instanceof RangeError || err instanceof HeaderTruncated
-      if (!truncated || probe >= source.size) {
-        if (err instanceof HeaderTruncated) {
-          throw new ViewerError('format', err.message, {})
-        }
-        throw err
+      if (!(err instanceof Truncated)) throw err
+      if (probe >= source.size) {
+        throw new ViewerError(
+          'format',
+          `This .hic ends inside its header, ${source.size.toLocaleString('en-US')} bytes in. ` +
+            'The file is truncated, or is not the format its first four bytes claim.',
+          { size: source.size },
+        )
       }
-      probe = Math.min(probe * 4, source.size)
+      probe = Math.min(source.size, Math.max(probe * 4, err.needed))
     }
   }
 }
 
-/** Thrown while the probe is too small; never escapes {@link readHeader}. */
-class HeaderTruncated extends Error {}
-
-export function parseHeader(bytes: Uint8Array): HicHeader {
+/**
+ * Parse a header out of `bytes`, the front of a file of `fileSize` bytes.
+ *
+ * `fileSize` is what a count is checked against: a header cannot declare more
+ * chromosomes than the file has bytes for, whatever the probe in hand holds.
+ * Omitted, the bytes are taken to be the whole file.
+ */
+export function parseHeader(bytes: Uint8Array, fileSize = bytes.byteLength): HicHeader {
   if (!isHicMagic(bytes)) {
     throw new ViewerError(
       'format',
@@ -248,31 +354,65 @@ export function parseHeader(bytes: Uint8Array): HicHeader {
     normVectorIndexLength = cursor.int64()
   }
 
+  // The bytes the file has after the cursor: what every count below must fit.
+  const left = (): number => fileSize - cursor.position
+
   const attributes: Record<string, string> = {}
-  const nAttributes = cursor.int32()
-  guard(nAttributes >= 0 && nAttributes < 1e6, 'attribute count')
+  // Two terminators an attribute, at the least. A million is far past what any
+  // writer records — Juicer writes a handful, `hictk` a few more.
+  const nAttributes = declaredCount(cursor.int32(), {
+    format: HIC,
+    field: 'header attribute count',
+    ceiling: 1e6,
+    available: left(),
+    bytesPerItem: 2,
+  })
   for (let i = 0; i < nAttributes; i++) {
-    if (cursor.remaining <= 0) throw new HeaderTruncated('header probe too small')
     const key = cursor.string()
     attributes[key] = cursor.string()
   }
 
-  const nChroms = cursor.int32()
-  guard(nChroms > 0 && nChroms < 1e7, 'chromosome count')
+  // A terminator and a length a chromosome. Ten million is past every
+  // assembly, the scaffold-level metagenomes this viewer exists for included.
+  const nChroms = declaredCount(cursor.int32(), {
+    format: HIC,
+    field: 'chromosome count',
+    ceiling: 1e7,
+    available: left(),
+    bytesPerItem: 1 + (version >= 9 ? 8 : 4),
+  })
+  guard(nChroms > 0, 'chromosome count')
   const chroms: HicChrom[] = []
   for (let i = 0; i < nChroms; i++) {
-    if (cursor.remaining <= 0) throw new HeaderTruncated('header probe too small')
     const name = cursor.string()
     // v9 widened chromosome lengths to 64 bits. A v8 file with a chromosome
     // past 2^31 does not exist, so the narrow read is not a limitation there.
-    const length = version >= 9 ? cursor.int64() : cursor.int32()
+    const length = declaredCount(version >= 9 ? cursor.int64() : cursor.int32(), {
+      format: HIC,
+      field: `length of chromosome ${name}`,
+      ceiling: HIC_MAX_CHROM_LENGTH,
+    })
     chroms.push({ name, length })
   }
 
-  const nBpResolutions = cursor.int32()
-  guard(nBpResolutions > 0 && nBpResolutions < 1e4, 'resolution count')
+  // Juicer offers ten base-pair rungs and `hictk` as many as it is asked for;
+  // ten thousand is past both.
+  const nBpResolutions = declaredCount(cursor.int32(), {
+    format: HIC,
+    field: 'resolution count',
+    ceiling: 1e4,
+    available: left(),
+    bytesPerItem: 4,
+  })
+  guard(nBpResolutions > 0, 'resolution count')
   const bpResolutions: number[] = []
-  for (let i = 0; i < nBpResolutions; i++) bpResolutions.push(cursor.int32())
+  for (let i = 0; i < nBpResolutions; i++) {
+    // A bin size is a divisor everywhere above this, so nought is the one value
+    // that cannot be let through: it makes every chromosome infinitely long.
+    const binSize = cursor.int32()
+    guard(binSize > 0, 'bin size')
+    bpResolutions.push(binSize)
+  }
 
   return {
     version,
@@ -345,42 +485,117 @@ export function normKey(type: string, chromIdx: number, unit: string, binSize: n
  * decoded — see the module head for why this reader does not use them — but
  * they have to be walked to reach the normalisation index behind them, which is
  * why their layout appears here at all.
+ *
+ * The window grows only on {@link Truncated}, to at least what the read that
+ * ran out needed and never past the end of the file. Every count the walk is
+ * sized by has been checked against the bytes the file has left, so the walk
+ * cannot ask for more than the file holds; one that still runs out at its end
+ * is a truncated footer and is refused as one.
  */
 export function readFooter(source: ByteSource, header: HicHeader): HicFooter {
   const { version, footerPosition } = header
+  const lead = version >= 9 ? 8 : 4
+  // Room for the length field and a master-index count, at the least: a footer
+  // position that leaves less is not where the footer is.
+  declaredSpan(footerPosition, lead + 4, { format: HIC, field: 'footer position', size: source.size })
+  const remaining = source.size - footerPosition
   // The leading field is the byte length of the v5-compatible portion, and it
   // is *not* the length of the whole footer: the normalisation index sits past
   // it. Read a generous window and grow if the walk runs off the end.
-  const first = source.readBytes(footerPosition, 8)
-  const declared = version >= 9 ? new Cursor(first).int64() : new Cursor(first).int32()
-  const lead = version >= 9 ? 8 : 4
-  let window = Math.min(source.size - footerPosition, Math.max(declared + lead + (1 << 20), 1 << 16))
+  const first = new Cursor(source.readBytes(footerPosition, lead))
+  const declared = declaredCount(version >= 9 ? first.int64() : first.int32(), {
+    format: HIC,
+    field: 'footer length',
+    // A byte length, which the format bounds by nothing tighter than the file.
+    ceiling: Number.MAX_SAFE_INTEGER,
+    available: remaining - lead,
+  })
+  const place: FooterPlace = { fileSize: source.size, footerPosition }
+  let window = Math.min(remaining, Math.max(declared + lead + (1 << 20), 1 << 16))
   for (;;) {
     const bytes = source.readBytes(footerPosition, window)
     try {
-      return parseFooter(bytes, version, lead)
+      return parseFooter(bytes, version, lead, place)
     } catch (err) {
-      const truncated = err instanceof RangeError || err instanceof HeaderTruncated
-      if (!truncated || footerPosition + window >= source.size) {
-        if (err instanceof HeaderTruncated) throw new ViewerError('format', err.message, {})
-        throw err
+      if (!(err instanceof Truncated)) throw err
+      if (window >= remaining) {
+        throw new ViewerError(
+          'format',
+          `This .hic ends inside its footer, which begins ${footerPosition.toLocaleString('en-US')} ` +
+            'bytes in. The file is truncated, or its header does not point at its footer.',
+          { footerPosition, size: source.size },
+        )
       }
-      window = Math.min(window * 4, source.size - footerPosition)
+      window = Math.min(remaining, Math.max(window * 4, err.needed))
     }
   }
 }
 
-export function parseFooter(bytes: Uint8Array, version: number, lead: number): HicFooter {
+/** Where a footer buffer sits in its file — what a count in it is checked against. */
+export interface FooterPlace {
+  fileSize: number
+  footerPosition: number
+}
+
+/** The fewest bytes a master-index entry takes: an empty key, an offset and a size. */
+const MASTER_ENTRY_MIN_BYTES = 1 + 8 + 4
+
+/**
+ * Parse a footer out of `bytes`, which begin at its length field.
+ *
+ * `place` says where the bytes sit in their file, so a count is checked against
+ * what the *file* has left rather than against the window in hand: the first
+ * says whether a count is possible at all, the second only whether to read
+ * further. Omitted, the bytes are taken to run to the end of the file, and the
+ * master index's offsets, which point outside them, go unchecked.
+ */
+export function parseFooter(
+  bytes: Uint8Array,
+  version: number,
+  lead: number,
+  place?: FooterPlace,
+): HicFooter {
   const cursor = new Cursor(bytes)
   cursor.position = lead
+  const fileSize = place?.fileSize ?? bytes.byteLength
+  const footerPosition = place?.footerPosition ?? 0
+  const fileLeft = (): number => fileSize - (footerPosition + cursor.position)
 
   const masterIndex = new Map<string, MasterIndexEntry>()
-  const nEntries = cursor.int32()
-  guard(nEntries >= 0 && nEntries < 1e8, 'master index size')
+  // One entry a chromosome pair that holds a contact. A hundred million is
+  // every pair of ten thousand chromosomes populated, far past any file whose
+  // pairs a walk could visit.
+  const nEntries = declaredCount(cursor.int32(), {
+    format: HIC,
+    field: 'master index size',
+    ceiling: 1e8,
+    available: fileLeft(),
+    bytesPerItem: MASTER_ENTRY_MIN_BYTES,
+  })
+  let recorded = 0
   for (let i = 0; i < nEntries; i++) {
     const key = cursor.string()
     const position = cursor.int64()
     const size = cursor.int32()
+    // A record is read whole when the rung asked for is past its head, so a
+    // size running past the end of the file would read the rest of the file —
+    // once per pair, on a walk across all of them. And the records are written
+    // one after another, never over each other, so between them they cannot
+    // hold more than the file: an index of a thousand entries each naming the
+    // whole file is in the file, and would read it a thousand times.
+    if (place !== undefined) {
+      declaredSpan(position, size, { format: HIC, field: `matrix record for ${key}`, size: place.fileSize })
+      recorded += size
+      if (recorded > place.fileSize) {
+        throw new ViewerError(
+          'format',
+          `The master index of this .hic gives its matrix records ${recorded.toLocaleString('en-US')} ` +
+            `bytes between them by entry ${i + 1}, more than the whole file's ` +
+            `${place.fileSize.toLocaleString('en-US')}. The file is corrupt, or not the format its first bytes claim.`,
+          { entries: i + 1, bytes: recorded, size: place.fileSize },
+        )
+      }
+    }
     masterIndex.set(key, { key, position, size })
   }
 
@@ -388,17 +603,26 @@ export function parseFooter(bytes: Uint8Array, version: number, lead: number): H
   // v8 and v9 in two fields — the value count widened and the values themselves
   // narrowed to float32 — and getting either wrong lands the cursor in the
   // middle of the normalisation index rather than at its start.
-  skipExpectedValues(cursor, version, false)
-  skipExpectedValues(cursor, version, true)
+  skipExpectedValues(cursor, version, false, fileLeft)
+  skipExpectedValues(cursor, version, true, fileLeft)
 
   const normVectors = new Map<string, NormVectorKey>()
   const normTypes: string[] = []
-  // A file written before normalisation vectors existed simply ends here.
-  if (cursor.remaining >= 4) {
+  // A file written before normalisation vectors existed simply ends here — the
+  // *file*, not the window: a window that happens to stop at this point says
+  // nothing about whether an index follows, and reading `cursor.remaining`
+  // here used to open such a file with no weights at all.
+  if (fileLeft() >= 4) {
     const nNorm = cursor.int32()
-    if (nNorm >= 0 && nNorm < 1e8) {
+    // A type and a unit, a chromosome, a bin size, an offset and a length.
+    const entryBytes = 1 + 4 + 1 + 4 + 8 + (version >= 9 ? 8 : 4)
+    // Lenient where the rest of the footer is not, as it always has been: what
+    // follows the expected values may be no normalisation index at all, and a
+    // count no file could hold says so — the file opens, with no weights.
+    const limits = { format: HIC, field: 'normalisation index size', ceiling: 1e8, available: fileLeft(), bytesPerItem: entryBytes }
+    if (plausibleCount(nNorm, limits)) {
+      let held = 0
       for (let i = 0; i < nNorm; i++) {
-        if (cursor.remaining <= 0) throw new HeaderTruncated('footer window too small')
         const type = cursor.string()
         const chromIdx = cursor.int32()
         const unit = cursor.string()
@@ -414,6 +638,14 @@ export function parseFooter(bytes: Uint8Array, version: number, lead: number): H
           nBytes,
         })
         if (!normTypes.includes(type)) normTypes.push(type)
+        held += nBytes
+      }
+      // The vectors are written one after another too. An index whose vectors
+      // need more bytes than the file has is not the index — the same reading,
+      // as leniently, as a count no file could hold.
+      if (place !== undefined && !(held <= place.fileSize)) {
+        normVectors.clear()
+        normTypes.length = 0
       }
     }
   }
@@ -421,27 +653,38 @@ export function parseFooter(bytes: Uint8Array, version: number, lead: number): H
 }
 
 /** One expected-value section, walked past. `normed` adds the leading type string. */
-function skipExpectedValues(cursor: Cursor, version: number, normed: boolean): void {
-  if (cursor.remaining < 4) return
-  const count = cursor.int32()
-  if (!(count >= 0 && count < 1e6)) {
-    throw new ViewerError(
-      'format',
-      'The expected-value section of this .hic footer is not walkable; the file may have ' +
-        'been written by a tool this reader has not seen.',
-      { count },
-    )
-  }
+function skipExpectedValues(
+  cursor: Cursor,
+  version: number,
+  normed: boolean,
+  fileLeft: () => number,
+): void {
+  if (fileLeft() < 4) return
+  const valueWidth = version >= 9 ? 4 : 8
+  // A type (when normalised), a unit, a bin size, a value count and a scale
+  // factor count: the least a vector takes. One vector per rung, and one per
+  // rung per normalisation, comes to dozens; a million is past every writer.
+  const count = declaredCount(cursor.int32(), {
+    format: HIC,
+    field: `${normed ? 'normalised ' : ''}expected-value vector count`,
+    ceiling: 1e6,
+    available: fileLeft(),
+    bytesPerItem: (normed ? 1 : 0) + 1 + 4 + (version >= 9 ? 8 : 4) + 4,
+  })
   for (let i = 0; i < count; i++) {
     if (normed) cursor.string()
     cursor.string()
     cursor.int32()
-    const nValues = version >= 9 ? cursor.int64() : cursor.int32()
-    if (cursor.remaining <= 0) throw new HeaderTruncated('footer window too small')
     // v9 narrowed the values to float32. Reading them as doubles walks twice as
     // far and lands the cursor past the end of the section.
-    cursor.position += nValues * (version >= 9 ? 4 : 8)
-    const nScaleFactors = cursor.int32()
+    const nValues = declaredCount(version >= 9 ? cursor.int64() : cursor.int32(), {
+      format: HIC,
+      field: 'expected-value vector length',
+      ceiling: HIC_MAX_VECTOR_VALUES,
+      available: fileLeft(),
+      bytesPerItem: valueWidth,
+    })
+    cursor.skip(nValues * valueWidth)
     // The same narrowing applies to the per-chromosome scale factors, and this
     // walked all three versions at the v8 width until a v9 file showed what
     // that costs: a pair is `int32 chrIdx + float64 factor` in v7/v8 and
@@ -453,11 +696,19 @@ function skipExpectedValues(cursor: Cursor, version: number, normed: boolean): v
     // weights either fails to open or opens with no weights at all.
     // `hic-straw` states the same widths: `INT + nChrScaleFactors * (INT +
     // (version < 9 ? DOUBLE : FLOAT))`.
-    cursor.position += nScaleFactors * (4 + (version >= 9 ? 4 : 8))
-    if (cursor.position > cursor.position + cursor.remaining) {
-      throw new HeaderTruncated('footer window too small')
-    }
+    const nScaleFactors = declaredCount(cursor.int32(), {
+      format: HIC,
+      field: 'expected-value scale factor count',
+      // One a chromosome, and the header allows ten million chromosomes.
+      ceiling: 1e7,
+      available: fileLeft(),
+      bytesPerItem: 4 + valueWidth,
+    })
+    cursor.skip(nScaleFactors * (4 + valueWidth))
   }
+  // A walk that stepped past the window is not finished: the next section
+  // begins out of reach, and only a larger window says where it ends.
+  if (cursor.remaining < 0) throw new Truncated(cursor.position)
 }
 
 /**
@@ -475,26 +726,37 @@ export function readNormVector(
   version: number,
   key: NormVectorKey,
 ): Float64Array {
-  const head = source.readBytes(key.position, 8)
+  const field = `${key.type} normalisation vector of chromosome ${key.chromIdx}`
+  const lead = version >= 9 ? 8 : 4
+  const width = version >= 9 ? 4 : 8
+  // The section the index names has to be in the file before anything in it is
+  // believed — a position past the end is a mispositioned index, and a length
+  // past it would read the rest of the file to find out.
+  declaredSpan(key.position, key.nBytes, { format: HIC, field, size: source.size })
+  const head = source.readBytes(key.position, lead)
+  if (head.byteLength < lead) {
+    throw new ViewerError(
+      'format',
+      `The ${field} begins in the last ${head.byteLength} bytes of this .hic, too few for its ` +
+        'length. The file is truncated, or its normalisation index does not point at its vectors.',
+      { type: key.type, chromIdx: key.chromIdx, position: key.position },
+    )
+  }
   const cursor = new Cursor(head)
-  const nValues = version >= 9 ? cursor.int64() : cursor.int32()
   // A length that cannot be right is a mispositioned index, and the allocation
   // it would make is the difference between an error and a dead tab: a garbage
   // int64 read as a vector length asks for gigabytes before anything notices.
   // `key.nBytes` is the index's own claim about the section, so the two have to
-  // agree with each other as well as with reason.
-  if (!(nValues >= 0 && nValues < 1e9)) {
-    throw new ViewerError(
-      'format',
-      `The ${key.type} normalisation vector for chromosome ${key.chromIdx} declares ` +
-        `${nValues} values, which is not a plausible length. The normalisation index of this ` +
-        'file does not point where it says it does.',
-      { type: key.type, chromIdx: key.chromIdx, nValues },
-    )
-  }
-  const width = version >= 9 ? 4 : 8
-  const offset = version >= 9 ? 8 : 4
-  const body = source.readBytes(key.position + offset, nValues * width)
+  // agree — the values must fit in the bytes the index gave them, which is what
+  // Juicebox reads (`idx.size` of them, exactly) and what Juicer writes.
+  const nValues = declaredCount(version >= 9 ? cursor.int64() : cursor.int32(), {
+    format: HIC,
+    field: `length of the ${field}`,
+    ceiling: HIC_MAX_VECTOR_VALUES,
+    available: key.nBytes - lead,
+    bytesPerItem: width,
+  })
+  const body = source.readBytes(key.position + lead, nValues * width)
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength)
   const out = new Float64Array(nValues)
   for (let i = 0; i < nValues; i++) {

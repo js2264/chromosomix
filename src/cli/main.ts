@@ -83,6 +83,7 @@ import { pathToFileURL } from 'node:url'
 
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
+import { inflationCap } from '../sources/untrusted'
 import { yieldToEventLoop } from '../async'
 import { chosenEntries } from '../analysis/runner'
 import { RUNNERS } from '../analysis/run/index'
@@ -113,6 +114,7 @@ import {
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import {
+  WHOLE_FILE_INFLATION,
   decodeAnnotationBytes,
   decodeAnnotationText,
   parseBed,
@@ -1045,9 +1047,9 @@ async function openLocal(
         `id means, and there are no coordinates without it.`,
     )
   }
-  const binBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(beside)))
+  const binBytes = await decodeWhole(readFileSync(beside))
   const parsedBins = parseBins(binBytes, basename(beside))
-  const matrixBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(path)))
+  const matrixBytes = await decodeWhole(readFileSync(path))
   const opened = await hicProMap(
     named,
     { bytes: matrixBytes, name },
@@ -1056,6 +1058,18 @@ async function openLocal(
     binBytes.length,
   )
   return { ...opened, orientation: null }
+}
+
+/**
+ * One half of a HiC-Pro pair, read whole and un-gzipped if it is gzipped.
+ *
+ * Capped in proportion to the file rather than at the text ceiling, as the
+ * worker's own read of the pair is (`worker/sources.ts`): both halves are parsed
+ * from their bytes, and a matrix may be past a gigabyte (§3.9).
+ */
+function decodeWhole(read: Buffer): Promise<Uint8Array> {
+  const bytes = new Uint8Array(read)
+  return decodeAnnotationBytes(bytes, inflationCap(bytes.length, WHOLE_FILE_INFLATION))
 }
 
 /**

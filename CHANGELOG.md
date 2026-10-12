@@ -2187,6 +2187,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A `.hic` block larger than the block cache is handed back and not kept (§3.6).** The eviction
+  skipped the block just stored, so one oversize block stayed over the 48 MiB budget until the next
+  was decoded.
+
+- **A read stored without its bases (`*`) shows no mismatches it does not have (§8.13).** The
+  mismatch walk compared the bytes after an empty sequence — its tags — with the reference as though
+  they were bases; it now walks an aligned operation only as far as the read has bases.
+
 - **`chromosomix` reads its command line by what each command takes (§23.1).** A flag took the word
   after it as its value unless that word began with `--`, so `coverage a.cool --no-balance b.hic`
   ran over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file,
@@ -3228,6 +3236,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The pair view opens either genome by name.** There was one door, labelled `open rows genome →`,
   which is not a phrase and did not say which of the two it opened.
+
+
+### Security
+
+- **A binary file is held to its own size, whatever its counts claim (§10, §12).** A `.hic`, a
+  BAM's BAI or CSI, a `.2bit` and a binary g3d with its MessagePack header were read on the strength
+  of the counts and lengths they declare, so a truncated download, a flipped bit or a hostile file
+  sized a typed array, a read or a loop: a sixteen-byte `.hic` block declaring fifty million records
+  allocated 572 MiB, one negative vector length in a footer read 341 MiB of a 256 MiB file, and a
+  twenty-four-byte `.csi` declaring a depth near a million would hold the annotations worker for some
+  twenty minutes a query. Each count is now refused — naming the format, the field and the value —
+  unless it is a count, under the format's own maximum and small enough for the bytes left to hold
+  it, and an offset and length must name bytes inside the file. Over 1,140 seeded corruptions of
+  files the repository's own writers produce, no reader reads more than four times its file, makes
+  an array past 30 KB or takes a tenth of a second.
+
+- **Every inflate stops at a cap (§10, §12).** A `.hic` block, a g3d model, a gzipped or bgzipped
+  text file, a BGZF span, a `.pairs` stream, a whole file the command line keeps and a share link were
+  each inflated to the end before anything looked at the size. The decompressor is now fed 64 KiB at
+  a time and stopped as soon as its output passes a cap in proportion to what went in — sixty-four
+  times for a `.hic` or g3d block, where `straw` allows ten — a BGZF member is held to the format's
+  own 64 KiB and text to 2^29 bytes, and a line of a plain-gzip `.pairs` past 64 MiB is refused.
 
 ## [0.13.0] - 2026-09-20
 

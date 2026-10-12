@@ -36,7 +36,32 @@
  * followed by fifty thousand zeros. Decoding one object and stopping is what
  * `g3dtools`' own reader does with `msgpack.Unpacker`; the JavaScript reader
  * trims trailing zeros first, which is wrong the day a header ends in a `0`.
+ *
+ * ## A container's length is the file's claim
+ *
+ * An array or a map says how many values follow, in up to thirty-two bits, and
+ * every value is at least a byte — so a length the bytes left could not hold is
+ * refused before the array is made or the loop begins (`sources/untrusted.ts`,
+ * §10), rather than discovered a value at a time. And values nest only
+ * {@link MAX_DEPTH} deep: each level is a frame of this decoder's recursion,
+ * and a header of sixty-four thousand `0x91` bytes — an array of one, each
+ * inside the last — is otherwise a stack overflow rather than a sentence.
  */
+
+import { ViewerError } from '../errors'
+import { declaredCount } from '../sources/untrusted'
+
+/** The format as a refusal names it. */
+const MSGPACK = 'MessagePack value'
+
+/**
+ * How deep values may nest: sixty-four levels.
+ *
+ * A g3d block is four deep — category, chromosome, column, value — and its
+ * header three; sixty-four is far past any document this reads, and far short
+ * of the thousands of frames a worker's stack holds.
+ */
+const MAX_DEPTH = 64
 
 /** What one decode returns: the value, and the offset just past its bytes. */
 export interface Decoded {
@@ -74,6 +99,8 @@ class Reader {
   at: number
   private readonly view: DataView
   private readonly decoder = new TextDecoder()
+  /** Containers open around the value being read. */
+  private depth = 0
 
   constructor(
     private readonly bytes: Uint8Array,
@@ -219,9 +246,32 @@ class Reader {
     return this.bytes.subarray(start, start + length)
   }
 
-  private array(length: number): unknown[] {
+  /** Enter a container of `length` items of at least `bytesPerItem` bytes each, refusing one that cannot be. */
+  private open(length: number, what: string, bytesPerItem: number): number {
+    if (this.depth >= MAX_DEPTH) {
+      throw new ViewerError(
+        'format',
+        `This ${MSGPACK} nests deeper than ${MAX_DEPTH} levels at offset ${this.at}, which no ` +
+          'document this reader opens does. The file is corrupt, or not the format its first bytes claim.',
+        { format: MSGPACK, offset: this.at, depth: this.depth },
+      )
+    }
+    this.depth++
+    return declaredCount(length, {
+      format: MSGPACK,
+      field: `${what} length at offset ${this.at}`,
+      // The format's own widest length field.
+      ceiling: 2 ** 32 - 1,
+      available: this.bytes.length - this.at,
+      bytesPerItem,
+    })
+  }
+
+  private array(declared: number): unknown[] {
+    const length = this.open(declared, 'array', 1)
     const out = new Array<unknown>(length)
     for (let k = 0; k < length; k++) out[k] = this.next()
+    this.depth--
     return out
   }
 
@@ -233,7 +283,9 @@ class Reader {
    * string key, and a g3d's resolutions would come out sorted whether or not
    * the file listed them so.
    */
-  private map(length: number): Map<string | number, unknown> {
+  private map(declared: number): Map<string | number, unknown> {
+    // A key and a value a pair.
+    const length = this.open(declared, 'map', 2)
     const out = new Map<string | number, unknown>()
     for (let k = 0; k < length; k++) {
       const keyAt = this.at
@@ -243,6 +295,7 @@ class Reader {
       }
       out.set(key, this.next())
     }
+    this.depth--
     return out
   }
 }

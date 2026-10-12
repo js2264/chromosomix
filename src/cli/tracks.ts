@@ -324,7 +324,7 @@ export function gcTrack(path: string, name: string, store: Reference): LoadedTra
  */
 async function twoBitTrack(path: string, name: string, at: string): Promise<LoadedTrack> {
   const handle = new LocalFile(at)
-  const file = await openTwoBit((length, position) => handle.read(length, position))
+  const file = await openTwoBit((length, position) => handle.read(length, position), (await handle.stat()).size)
   const recordOf = (contig: string): TwoBitRecord | undefined => {
     const direct = file.records.get(contig)
     if (direct !== undefined) return direct
