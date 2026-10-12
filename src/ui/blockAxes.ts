@@ -207,9 +207,9 @@ export function axisCoordsFor(
  * contig but the first, so a tick's `unit` needs no offsetting to be a matrix
  * coordinate like any other.
  *
- * A cell that several short sequences share is skipped, on {@link describeAxis}'s
- * rule: the pixel is all of them, and a coordinate inside one of them names a
- * place the picture does not show.
+ * A cell that several short sequences share is skipped, on `describeAxis`'s
+ * rule in `ui/MapReadout.ts`: the pixel is all of them, and a coordinate inside
+ * one of them names a place the picture does not show.
  *
  * And nothing at all past {@link MAX_RULED_SPANS}. A metagenome's axis is
  * thousands of contigs, each a pixel or less: there is no room for a position on
