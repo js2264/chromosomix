@@ -1,0 +1,1316 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 1c · one session, from the genome to Sox2",
+      "state": {
+        "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2500000",
+        "maps": "mouse/4DNFI5QJNFAT.mcool::resolutions/250000|mouse/4DNFI5QJNFAT.mcool::resolutions/10000|mouse/4DNFI5QJNFAT.mcool::resolutions/5000|mouse/4DNFI5QJNFAT.mcool::resolutions/2000|3d|3d|3d|3d|3d",
+        "view": "whole",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "c-e1",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · 250 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_250000.compartments-e1.bw",
+            "url": "mouse/4DNFI5QJNFAT_250000.compartments-e1.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-ab",
+          "card": "linear",
+          "kind": "segments",
+          "label": "A/B · 250 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_250000.compartments-ab.bed",
+            "url": "mouse/4DNFI5QJNFAT_250000.compartments-ab.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 20,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-insulation",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · 100 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.insulation-w10.bw",
+            "url": "mouse/4DNFI5QJNFAT_10000.insulation-w10.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-borders",
+          "card": "linear",
+          "kind": "segments",
+          "label": "borders",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.borders.bed",
+            "url": "mouse/4DNFI5QJNFAT_10000.borders.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 20,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-genes-5000",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes · mm10",
+          "source": {
+            "kind": "remote",
+            "name": "mm10_genes.gtf.gz",
+            "url": "mouse/mm10_genes.gtf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true,
+          "lead": null
+        },
+        {
+          "id": "c-ctcf",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIFFXFV82.bw",
+            "url": "mouse/4DNFIFFXFV82.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-loops",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops · 5 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_5000.loops.bedpe",
+            "url": "mouse/4DNFI5QJNFAT_5000.loops.bedpe"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#000000",
+            "size": 16,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 0.9,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-genes-2000",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes · mm10",
+          "source": {
+            "kind": "remote",
+            "name": "mm10_genes.gtf.gz",
+            "url": "mouse/mm10_genes.gtf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-h3k27ac",
+          "card": "linear",
+          "kind": "track",
+          "label": "H3K27ac",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIXE23VC7.bw",
+            "url": "mouse/4DNFIXE23VC7.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-h3k4me3",
+          "card": "linear",
+          "kind": "track",
+          "label": "H3K4me3",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIQYJLKKH.bw",
+            "url": "mouse/4DNFIQYJLKKH.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "c-model-2500000",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · genome · 2.5 Mb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_2500000.genome.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_2500000.genome.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:c-h3k27ac"
+            }
+          }
+        },
+        {
+          "id": "c-model-250000",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · chr3 · 250 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_250000.chr3.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_250000.chr3.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:c-e1"
+            }
+          }
+        },
+        {
+          "id": "c-model-10000",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · chr3:27–37 Mb · 10 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:c-insulation"
+            }
+          }
+        },
+        {
+          "id": "c-model-5000",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · chr3:34–35 Mb · 5 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:c-ctcf"
+            }
+          }
+        },
+        {
+          "id": "c-model-2000",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · Sox2 and its SCR · 2 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_2000.Sox2-SCR.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_2000.Sox2-SCR.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:c-h3k27ac"
+            }
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "c-e1",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/250000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-ab",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/250000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-insulation",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/10000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-borders",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/10000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-genes-5000",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/5000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-ctcf",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/5000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-loops",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/5000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-genes-2000",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-h3k27ac",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "c-h3k4me3",
+          "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 5,
+        "looks": [
+          {
+            "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/250000",
+            "locked": false,
+            "place": {
+              "rows": "chr3"
+            },
+            "score": "correlation",
+            "smooth": "1"
+          },
+          {
+            "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/10000",
+            "locked": false,
+            "place": {
+              "rows": "chr3:27000001-37000000"
+            }
+          },
+          {
+            "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/5000",
+            "locked": false,
+            "place": {
+              "rows": "chr3:34000001-35000000"
+            },
+            "oe": true,
+            "transform": "log2",
+            "smooth": "1"
+          },
+          {
+            "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/2000",
+            "locked": false,
+            "place": {
+              "rows": "chr3:34550001-34800000"
+            }
+          }
+        ]
+      },
+      "mapNames": {
+        "mouse/4DNFI5QJNFAT.mcool": "Hi-C · mouse ES cells (4DN)"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 1d · borders, CTCF and the model, chr3:32–36 Mb",
+      "state": {
+        "uri": "mouse/4DNFI5QJNFAT.mcool::resolutions/10000",
+        "maps": "3d",
+        "view": "region",
+        "region": "chr3:32000001-36000000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "d-insulation",
+          "card": "linear",
+          "kind": "track",
+          "label": "insulation · 100 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.insulation-w10.bw",
+            "url": "mouse/4DNFI5QJNFAT_10000.insulation-w10.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "d-borders",
+          "card": "linear",
+          "kind": "segments",
+          "label": "borders",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_10000.borders.bed",
+            "url": "mouse/4DNFI5QJNFAT_10000.borders.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 20,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "d-ctcf",
+          "card": "linear",
+          "kind": "track",
+          "label": "CTCF",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIFFXFV82.bw",
+            "url": "mouse/4DNFIFFXFV82.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 48,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "d-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes · mm10",
+          "source": {
+            "kind": "remote",
+            "name": "mm10_genes.gtf.gz",
+            "url": "mouse/mm10_genes.gtf.gz"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 56,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "d-model",
+          "card": "structure",
+          "kind": "structure",
+          "label": "model · chr3 · 250 kb",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5QJNFAT_250000.chr3.bed3d",
+            "url": "mouse/4DNFI5QJNFAT_250000.chr3.bed3d"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": false,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 24,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false,
+            "structure": {
+              "colourBy": "track:d-ctcf"
+            }
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "deck": {
+        "columns": 2
+      },
+      "mapNames": {
+        "mouse/4DNFI5QJNFAT.mcool": "Hi-C · mouse ES cells (4DN)"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 2a · C. necator, obs./exp.: the decay along the diagonal, then along both arms",
+      "state": {
+        "uri": "C_necator/C_necator_N1_VJ_MM260.mcool::resolutions/8000",
+        "maps": "C_necator/C_necator_N1_VJ_MM260.mcool::resolutions/8000",
+        "view": "region",
+        "region": "chromosome1:1944968-1944967",
+        "level": "bin",
+        "balance": true,
+        "transform": "log2",
+        "colormap": "default",
+        "oe": true
+      },
+      "tracks": [
+        {
+          "id": "a-loci",
+          "card": "linear",
+          "kind": "segments",
+          "label": "origins and termini",
+          "source": {
+            "kind": "remote",
+            "name": "C_necator_N1_VJ_MM260_4000.oriter-loci.bed",
+            "url": "C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#000000",
+            "size": 20,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "a-skew",
+          "card": "linear",
+          "kind": "track",
+          "label": "cumulative GC skew",
+          "source": {
+            "kind": "remote",
+            "name": "C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw",
+            "url": "C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d95f02",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "deck": {
+        "columns": 2,
+        "looks": [
+          {
+            "uri": "C_necator/C_necator_N1_VJ_MM260.mcool::resolutions/8000",
+            "oe": true,
+            "arms": 50,
+            "transform": "log2"
+          }
+        ]
+      },
+      "circular": [
+        "chromosome1",
+        "chromosome2",
+        "pBB1",
+        "pBB2"
+      ],
+      "origins": {
+        "chromosome1": 8500,
+        "chromosome2": 500,
+        "pBB1": 5500,
+        "pBB2": 342500
+      },
+      "mapNames": {
+        "C_necator/C_necator_N1_VJ_MM260.mcool": "C. necator N-1 (MM260)"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 2b · B. subtilis: WT, ΔparAB, and after ParB is induced",
+      "state": {
+        "uri": "B_subtilis/Bsubtilis_WT.mcool::resolutions/10000",
+        "maps": "B_subtilis/Bsubtilis_dparAB.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_0min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_15min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_20min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_30min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_35min.mcool::resolutions/10000|B_subtilis/Bsubtilis_induction_45min.mcool::resolutions/10000",
+        "view": "region",
+        "region": "NC_022898.1:2016730-2016729",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "deck": {
+        "columns": 4
+      },
+      "circular": [
+        "NC_022898.1"
+      ],
+      "origins": {
+        "NC_022898.1": 0
+      },
+      "mapNames": {
+        "B_subtilis/Bsubtilis_WT.mcool": "WT",
+        "B_subtilis/Bsubtilis_dparAB.mcool": "ΔparAB",
+        "B_subtilis/Bsubtilis_induction_0min.mcool": "+parB 0 min",
+        "B_subtilis/Bsubtilis_induction_15min.mcool": "+parB 15 min",
+        "B_subtilis/Bsubtilis_induction_20min.mcool": "+parB 20 min",
+        "B_subtilis/Bsubtilis_induction_30min.mcool": "+parB 30 min",
+        "B_subtilis/Bsubtilis_induction_35min.mcool": "+parB 35 min",
+        "B_subtilis/Bsubtilis_induction_45min.mcool": "+parB 45 min"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "Fig. 2c · P. aeruginosa: WT, SMC-ScpAB– and MksBEF–, the correlation along both arms",
+      "state": {
+        "uri": "P_aeruginosa/PAO1_v3_MM38.mcool::resolutions/8000",
+        "maps": "P_aeruginosa/PAO1_v3_FG0235.mcool::resolutions/8000|P_aeruginosa/PAO1_v3_FG0238.mcool::resolutions/8000",
+        "view": "region",
+        "region": "PAO1:3115000-3114999",
+        "level": "bin",
+        "balance": true,
+        "transform": "none",
+        "colormap": "default",
+        "score": "correlation",
+        "arms": 50
+      },
+      "tracks": [
+        {
+          "id": "pa-e1-0",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · WT",
+          "source": {
+            "kind": "remote",
+            "name": "PAO1_v3_MM38_8000.e1-arms.bw",
+            "url": "P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "pa-e1-1",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · SMC-ScpAB–",
+          "source": {
+            "kind": "remote",
+            "name": "PAO1_v3_FG0235_8000.e1-arms.bw",
+            "url": "P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pa-e1-2",
+          "card": "linear",
+          "kind": "track",
+          "label": "E1 · MksBEF–",
+          "source": {
+            "kind": "remote",
+            "name": "PAO1_v3_FG0238_8000.e1-arms.bw",
+            "url": "P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pa-rna",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA-seq · PAK, CPM",
+          "source": {
+            "kind": "remote",
+            "name": "GSE76513_PAK_T0_pooled.unstranded.CPM.bw",
+            "url": "P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 44,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 30
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "pa-e1-1",
+          "uri": "P_aeruginosa/PAO1_v3_FG0235.mcool::resolutions/8000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pa-e1-2",
+          "uri": "P_aeruginosa/PAO1_v3_FG0238.mcool::resolutions/8000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 3
+      },
+      "circular": [
+        "PAO1"
+      ],
+      "origins": {
+        "PAO1": 6250500
+      },
+      "mapNames": {
+        "P_aeruginosa/PAO1_v3_MM38.mcool": "WT",
+        "P_aeruginosa/PAO1_v3_FG0235.mcool": "SMC-ScpAB–",
+        "P_aeruginosa/PAO1_v3_FG0238.mcool": "MksBEF–"
+      }
+    }
+  ]
+}

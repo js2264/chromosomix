@@ -2,16 +2,17 @@
  * The dev features switch (§29), in headless Chromium: what a reader sees with
  * it off, the switch itself, and what turning it on brings back.
  *
- * Off, the landing page's store has no mock community, *About* says nothing of
- * `.metacool`, and a `.metacool` named by a link is refused in the sentence an
- * unknown file gets. The switch is then pressed — which reloads the window —
- * and the same three are shot again: the mock community back on the landing
- * page, the switch lit, and the `.metacool` opening on its genomes table. It
+ * Off, the landing page's store has no mock community, the stores have no DNA
+ * Bacterial Zoo tile, *About* says nothing of `.metacool`, and a `.metacool`
+ * named by a link is refused in the sentence an unknown file gets. The switch
+ * is then pressed — which reloads the window — and the same are shot again: the
+ * mock community back on the landing page, the zoo's tile beside the lab's, the
+ * switch lit, and the `.metacool` opening on its genomes table. It
  * prints what each step found, so a clause that should have gone and did not
  * is a line in the log rather than something to spot in a picture.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-dev-features.mjs [out-dir]     # d01 … d08
+ *   node scripts/ui-dev-features.mjs [out-dir]     # d00 … d08
  */
 
 import { createRequire } from 'node:module'
@@ -93,10 +94,16 @@ async function labStore() {
   await sleep(2500)
 }
 
+/** The store tiles on the landing page, by their names. */
+const tiles = () => page.evaluate(() => [...document.querySelectorAll('.store-tile .store-tile-name')].map((name) => name.textContent))
+
 // ── Off ────────────────────────────────────────────────────────────────────
 await page.goto(`${BASE}/`)
 await page.evaluate(() => localStorage.removeItem('chromosomix:dev-features'))
 await landing()
+console.log('off · store tiles:', JSON.stringify(await tiles()))
+console.log('off · a DNA Bacterial Zoo tile:', /DNA Bacterial Zoo/.test(await words()))
+await shot('d00-tiles-off')
 await labStore()
 let text = await words()
 console.log('off · the lab store names the mock community:', /mock (microbial )?community/i.test(text))
@@ -127,6 +134,9 @@ await Promise.all([page.waitForEvent('load'), page.click('.about-dev .btn-switch
 await sleep(2500)
 
 // ── On ─────────────────────────────────────────────────────────────────────
+console.log('on · store tiles:', JSON.stringify(await tiles()))
+console.log('on · a DNA Bacterial Zoo tile:', /DNA Bacterial Zoo/.test(await words()))
+await shot('d04b-tiles-on')
 await labStore()
 text = await words()
 console.log('on · the lab store names the mock community:', /mock (microbial )?community/i.test(text))

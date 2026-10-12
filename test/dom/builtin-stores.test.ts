@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   builtinStores,
@@ -29,6 +29,7 @@ import {
   storeFronts,
 } from '@/ui/stores/registry'
 import { addStoreRow } from '@/state/stores'
+import { resetDevFeatures } from '@/state/devFeatures'
 
 // `process.cwd()` rather than `import.meta.url`: this suite runs in jsdom,
 // where a module's own URL is an `http://localhost/` one and `readFileSync`
@@ -55,6 +56,11 @@ function generatorShards(): string[] {
     names(categories).map((category) => `${assembly}-${category}`),
   )
 }
+
+// Every shipped store, the DNA Bacterial Zoo's included, which is a dev feature
+// (§29): the last case here is the shelf with the switch off.
+beforeEach(() => resetDevFeatures(true))
+afterEach(() => resetDevFeatures())
 
 describe('the shipped stores, on a page', () => {
   it('are seven, in the order the tiles offer them', () => {
@@ -131,7 +137,7 @@ describe('the shipped stores, on a page', () => {
     // writes: it lives beside its data on the lab's bucket, one file with its
     // sessions among its rows — and says what publishes it, since it is not the
     // workflow the default sentence names.
-    expect(frontById('dbz')?.rows?.url).toBe('https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json')
+    expect(frontById('dbz')?.rows?.url).toBe('https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json')
     expect(frontById('dbz')?.sessions).toBeUndefined()
     expect(frontById('dbz')?.rows?.publishedBy).toContain('s3://rsglab-data/dbz/')
   })
@@ -221,5 +227,18 @@ describe('stores the reader connected', () => {
     expect(initialsOf('4dn')).toBe('4DN')
     expect(initialsOf('my lab hi-c data')).toBe('MLH')
     expect(initialsOf('')).toBe('?')
+  })
+})
+
+describe('the DNA Bacterial Zoo, a dev feature (§29)', () => {
+  it('has no tile while the switch is off, and its own beside the lab’s first shelf while it is on', () => {
+    // Published with the multi-genome format, when the metacooler project is:
+    // until then a reader with the switch off has no tile, tooltip or drawer.
+    resetDevFeatures(false)
+    expect(builtinStores().map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', 'dnazoo', 'roadmap'])
+    expect(frontById('dbz')).toBeNull()
+    expect(storeFronts().some((front) => front.id === 'dbz')).toBe(false)
+    resetDevFeatures(true)
+    expect(builtinStores().map((front) => front.id).slice(0, 2)).toEqual(['rsg', 'dbz'])
   })
 })

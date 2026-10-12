@@ -575,12 +575,12 @@ describe('manual marks', () => {
 })
 
 describe('the annotations published beside a demo map', () => {
-  const map = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+  const map = 'https://example.org/demo/store/yeast/GSE151553_A364_merged.mcool'
 
-  it('offers all ten, with their URLs beside the map', () => {
+  it('offers all seven, with their URLs beside the map', () => {
     const found = demoAnnotationsFor(map)
-    expect(found).toHaveLength(10)
-    expect(found[0].url).toBe('https://example.org/demo/Yeast_annotations.gtf')
+    expect(found).toHaveLength(7)
+    expect(found[0].url).toBe('https://example.org/demo/store/yeast/S288c.gtf')
     // No card and no zone: where each of these is drawn comes from its own
     // bytes, like every other file (`cardFor`), so the table names a file and a
     // label and nothing it would have to be kept in step with.
@@ -588,14 +588,14 @@ describe('the annotations published beside a demo map', () => {
   })
 
   // A *local* file of the same name is somebody else's data under a familiar
-  // name; offering ten yeast tracks against it would be a serious mistake.
+  // name; offering seven yeast tracks against it would be a serious mistake.
   it('offers nothing for a local file, or for another map', () => {
-    expect(demoAnnotationsFor('Yeast_microC_G2M_1kb.cool')).toEqual([])
+    expect(demoAnnotationsFor('GSE151553_A364_merged.mcool')).toEqual([])
     expect(demoAnnotationsFor('https://example.org/demo/Ecoli.mcool')).toEqual([])
   })
 
-  it('names ten distinct files', () => {
-    expect(new Set(DEMO_ANNOTATION_FILES).size).toBe(10)
+  it('names seven distinct files', () => {
+    expect(new Set(DEMO_ANNOTATION_FILES).size).toBe(7)
   })
 })
 

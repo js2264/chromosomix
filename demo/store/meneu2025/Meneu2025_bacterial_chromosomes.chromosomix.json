@@ -1,0 +1,582 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "The bacterial chromosomes, G2/M",
+      "state": {
+        "uri": "HiC/HiC_Mmyco_G2M.mcool::resolutions/4000",
+        "maps": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+        "view": "region",
+        "region": "Mmmyco:1-1222199",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "myco-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "W303_Mmmyco.gff3",
+            "url": "genome_references/W303_Mmmyco.gff3"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "myco-mnase",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "MNase_Mmyco_rep1.130-200.CPM.bw",
+            "url": "MNase/MNase_Mmyco_rep1.130-200.CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "myco-rna-fwd",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA +",
+          "source": {
+            "kind": "remote",
+            "name": "RNAseq_Mmyco_rep1.fwd-CPM.bw",
+            "url": "RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna-myco",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "myco-rna-rev",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA −",
+          "source": {
+            "kind": "remote",
+            "name": "RNAseq_Mmyco_rep1.rev-CPM.bw",
+            "url": "RNA/RNAseq_Mmyco_rep1.rev-CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna-myco",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": true
+          }
+        },
+        {
+          "id": "myco-pol2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Pol II / input",
+          "source": {
+            "kind": "remote",
+            "name": "PolII_Mmyco_rep1.vs-input.bw",
+            "url": "ChIP/PolII_Mmyco_rep1.vs-input.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "myco-scc1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Scc1 / input",
+          "source": {
+            "kind": "remote",
+            "name": "Scc1_Mmyco_rep1.vs-input.bw",
+            "url": "ChIP/Scc1_Mmyco_rep1.vs-input.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "pneumo-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "S288c_Mpneumo.gtf",
+            "url": "genome_references/S288c_Mpneumo.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pneumo-mnase",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "MNase_Mpneumo_rep1.130-200.CPM.bw",
+            "url": "MNase/MNase_Mpneumo_rep1.130-200.CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pneumo-rna-fwd",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA +",
+          "source": {
+            "kind": "remote",
+            "name": "RNAseq_Mpneumo_rep1.fwd-CPM.bw",
+            "url": "RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna-pneumo",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pneumo-rna-rev",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA −",
+          "source": {
+            "kind": "remote",
+            "name": "RNAseq_Mpneumo_rep1.rev-CPM.bw",
+            "url": "RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#56789a",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "rna-pneumo",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": true
+          },
+          "lead": null
+        },
+        {
+          "id": "pneumo-pol2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Pol II / input",
+          "source": {
+            "kind": "remote",
+            "name": "PolII_Mpneumo_rep1.vs-input.bw",
+            "url": "ChIP/PolII_Mpneumo_rep1.vs-input.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        },
+        {
+          "id": "pneumo-scc1",
+          "card": "linear",
+          "kind": "track",
+          "label": "Scc1 / input",
+          "source": {
+            "kind": "remote",
+            "name": "Scc1_Mpneumo_rep1.vs-input.bw",
+            "url": "ChIP/Scc1_Mpneumo_rep1.vs-input.bw"
+          },
+          "visible": true,
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 40,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "lead": null
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {
+        "rna-myco": "stacked",
+        "rna-pneumo": "stacked"
+      },
+      "scaling": {
+        "rna-myco": "shared",
+        "rna-pneumo": "shared"
+      },
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "lanes": [
+        {
+          "track": "pneumo-genes",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pneumo-mnase",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pneumo-rna-fwd",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pneumo-rna-rev",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pneumo-pol2",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        },
+        {
+          "track": "pneumo-scc1",
+          "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+          "placement": {
+            "top": false,
+            "right": false,
+            "bottom": true,
+            "left": false
+          },
+          "borrowedLead": true
+        }
+      ],
+      "deck": {
+        "columns": 2,
+        "looks": [
+          {
+            "uri": "HiC/HiC_Mpneumo_G2M.mcool::resolutions/4000",
+            "locked": false,
+            "place": {
+              "rows": "Mpneumo:1-817946"
+            }
+          }
+        ]
+      },
+      "mapNames": {
+        "HiC/HiC_Mmyco_G2M.mcool": "M. mycoides, G2/M",
+        "HiC/HiC_Mpneumo_G2M.mcool": "M. pneumoniae, G2/M"
+      }
+    },
+    {
+      "version": 1,
+      "createdAt": "2026-10-07T00:00:00.000Z",
+      "name": "In the yeast nucleus, G1",
+      "state": {
+        "uri": "HiC/HiC_Mmyco_G1.mcool::resolutions/16000",
+        "maps": "HiC/HiC_Mpneumo_G1.mcool::resolutions/16000",
+        "view": "whole",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "deck": {
+        "columns": 2,
+        "looks": [
+          {
+            "uri": "HiC/HiC_Mpneumo_G1.mcool::resolutions/16000",
+            "locked": false
+          }
+        ]
+      },
+      "mapNames": {
+        "HiC/HiC_Mmyco_G1.mcool": "M. mycoides, G1",
+        "HiC/HiC_Mpneumo_G1.mcool": "M. pneumoniae, G1"
+      }
+    }
+  ]
+}

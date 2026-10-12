@@ -161,11 +161,11 @@ const originBox = () => page.evaluate(() => {
 // GALLERY_ONLY runs one part alone: `groups` for Signal by group,
 // `declarations` for a 1D browser's Chromosomes table, a map dropped over it,
 // and a map's default origin, and `store` for the DNA Bacterial Zoo as
-// scripts/dbz-store.sh writes it — GALLERY_STORE names its store.json, served
+// scripts/dbz-store.sh writes it — GALLERY_STORE names its store.chromosomix.json, served
 // by `python3 scripts/DBZ_store.py serve <store>`; the lab's bucket otherwise.
 const ONLY = process.env.GALLERY_ONLY ?? ''
-const STORE = process.env.GALLERY_STORE ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
-const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+const STORE = process.env.GALLERY_STORE ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
+const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
 
 try {
   if (ONLY === '') {
@@ -476,9 +476,12 @@ try {
     await ori('on the declared origin')
     await shot('b35-session-ori')
 
-    // The shipped tile with nothing uploaded yet names what builds it.
+    // The shipped tile with nothing uploaded yet names what builds it. A dev
+    // feature (§29): the switch goes on first, or `dbz` names no tile.
     page = await fresh()
     await page.route(DBZ_STORE, (route) => route.fulfill({ status: 404, body: 'Not Found' }))
+    await page.goto(`${BASE}/`)
+    await page.evaluate(() => localStorage.setItem('chromosomix:dev-features', 'on'))
     await page.goto(`${BASE}/?store=dbz`)
     await until('Nothing has been published', 30000)
     await sleep(1000)

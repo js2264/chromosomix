@@ -33,7 +33,7 @@ server-side processing or data upload.
 
 - Virtual file system: The browser runs entirely in the client, with no server-side processing or data upload. It uses a virtual file system to access local files, remote files, and cloud storage: 
   - Cloud-based file access: Open files directly from any object store that serves byte ranges with CORS (e.g. S3, Cloudflare R2, Google Cloud Storage, or any HTTP server that supports range requests), from Dropbox and Google Drive share links, and private Google Drive folder or Dropbox.
-  - Stores: several pre-configured remote data stores are available — the lab's own figures, the DNA Bacterial Zoo, IGV's genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap — and so is any UCSC track hub with a `hub.txt` file. The user can also setup their own store by providing a structured JSON file describing the store and its data.
+  - Stores: several pre-configured remote data stores are available — the lab's own figures, IGV's genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap — and so is any UCSC track hub with a `hub.txt` file. The user can also setup their own store by providing a structured JSON file describing the store and its data.
 
 - Serverless: There is no upload, no required preprocessing step, no backend of any kind. The viewer is static files, and reads data directly from standard genome-wide formats. 
 

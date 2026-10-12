@@ -8,14 +8,14 @@
         --exclude '*.tsv' --exclude '*.log'
 
 The viewer ships a tile for it (``DBZ_STORE`` in ``src/ui/stores/registry.ts``)
-that reads ``https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json``, so
+that reads ``https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json``, so
 publishing it is the sync above: the folder goes up as it is, names and all.
 
 ``scripts/dbz-store.sh`` writes every step of every sample straight into the
 store's folder for it, and ``index`` reads that folder as it stands::
 
     store/
-      store.json                                   the store (SPECS §24.1): written here
+      store.chromosomix.json                       the store (SPECS §24.1): written here
       <sample>/<sample>.mcool                      the map every result came from
       <sample>/<species>.fa                        its reference
       <sample>/<sample>.chromosomix.json           its session: written here
@@ -69,6 +69,11 @@ import make_store  # noqa: E402  (a sibling script, not a package)
 
 HERE = Path(__file__).resolve().parent
 SPECIES = HERE / "DBZ_species.tsv"
+#: The index, beside the `store.json` the build before the rename reads: its kind
+#: (`chromosomix.store`) is one that build refuses, and the zoo is published by a sync of
+#: the whole folder, so a second name is what lets it go up before the site carries the
+#: rename. Each build reads its own; the old file goes once that site is gone.
+INDEX = "store.chromosomix.json"
 
 #: The steps whose outputs become rows, in the order they are listed under a
 #: species, with the name the Analysis facet gives each.
@@ -422,7 +427,7 @@ def index(store_dir: Path, species_table: Path, resolution: int) -> int:
         # screen is one row per species that opens it whole.
         "entries": sessions + maps + tracks,
     }
-    written = store_dir / "store.json"
+    written = store_dir / INDEX
     written.write_text(json.dumps(store, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     # make_store's checks, less two rules that are its own portals' and not the
@@ -530,7 +535,7 @@ class RangeHandler(SimpleHTTPRequestHandler):
 def serve(folder: Path, host: str, port: int) -> int:
     handler = lambda *a, **k: RangeHandler(*a, directory=str(folder), **k)  # noqa: E731
     server = ThreadingHTTPServer((host, port), handler)
-    url = f"http://{host}:{port}/store.json"
+    url = f"http://{host}:{port}/{INDEX}"
     quoted = urllib.parse.quote(url, safe="")
     print(f"Serving {folder} at {url}")
     print(f"  deployed viewer   https://js2264.github.io/chromosomix/?store={quoted}")
@@ -546,7 +551,7 @@ def serve(folder: Path, host: str, port: int) -> int:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    one = commands.add_parser("index", help="write store.json and the sessions over a store dbz-store.sh wrote")
+    one = commands.add_parser("index", help=f"write {INDEX} and the sessions over a store dbz-store.sh wrote")
     one.add_argument("store", type=Path, help="the folder dbz-store.sh wrote: one sub-folder a sample")
     one.add_argument("--species", type=Path, default=SPECIES, help=f"species<TAB>sample table (default: {SPECIES.name})")
     one.add_argument(

@@ -31,8 +31,11 @@ import { embedded } from '../embed'
 
 /** What is dev today, and why. Delete a line to make that feature public. */
 export const DEV_FEATURES = {
-  /** Both containers, the genome layer, its views and tasks, and every sentence naming them. */
-  metacool: 'The multi-genome format is not published yet.',
+  /**
+   * Both containers, the genome layer, its views and tasks, and every sentence naming them —
+   * and the DNA Bacterial Zoo's store, which is published with them (§24.3).
+   */
+  metacool: 'The multi-genome format, and the bacterial zoo made beside it, are not published yet.',
   /** The reference editor (§27): the stage, its task, its keys and the lens. */
   edit: 'Editing the reference is not validated yet.',
   /** Two sequences on two axes (§28). */

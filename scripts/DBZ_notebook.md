@@ -17,11 +17,11 @@ npm run build:cli
 scripts/dbz-store.sh
 
 # Serve it with byte ranges and CORS, then open the link it prints
-# (or paste http://127.0.0.1:8765/store.json under "Add a custom store").
+# (or paste http://127.0.0.1:8765/store.chromosomix.json under "Add a custom store").
 python3 scripts/DBZ_store.py serve ~/Downloads/metacooler/data/dbz/store
 
 # Publish it: the viewer's "DNA Bacterial Zoo" tile reads
-# https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json
+# https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json
 # The TSVs (tables, provenance) and the run logs stay on this machine.
 aws s3 sync ~/Downloads/metacooler/data/dbz/store/ s3://rsglab-data/dbz/ --delete \
   --exclude '*.tsv' --exclude '*.log'

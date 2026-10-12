@@ -16,6 +16,19 @@
  * can be made without the network, and makes a missing file a red CI run rather
  * than a broken landing page.
  *
+ * One folder is the exception, and the check bends for it rather than breaking:
+ * `demo/store/`, the lab's store, is made of files of up to seven gigabytes —
+ * 4DN's mouse map, the Meneu paper's Hi-C — that are copied into it on the
+ * bucket and never kept in git. What the repository holds for it is its
+ * workspaces and `demo/store/MANIFEST.tsv`, one line a file naming where the
+ * file comes from, which `scripts/publish-store.sh` makes the bucket match. So a
+ * name under `store/` is found on disk **or in the manifest**, which is the
+ * strongest statement about that folder that can be made without the network;
+ * a map known only from the manifest is not opened here, since it cannot be
+ * read; and a manifest line whose source is a file of this repository is
+ * itself checked to exist, so the publish step cannot be handed a name that is
+ * not there.
+ *
  * The catalogue is now a **store** whose rows are published sessions rather than
  * a list of data files, which puts one more link in the chain and one more way
  * to break it: a
@@ -44,6 +57,8 @@ import {
   demoAnnotationsFor,
   demoAnnotationsToOffer,
   demosStore,
+  exampleHubText,
+  exampleStoreText,
   registerShelf,
 } from '../../src/ui/examples'
 import { STORE_KIND, STORE_VERSION } from '../../src/state/store'
@@ -62,6 +77,26 @@ import { parseUri } from '../../src/uri'
 import { resetDevFeatures } from '../../src/state/devFeatures'
 
 const DIR = decodeURIComponent(new URL('../../demo/', import.meta.url).pathname)
+const ROOT = decodeURIComponent(new URL('../../', import.meta.url).pathname)
+
+/**
+ * The store's manifest: every file of `demo/store/` on the bucket, by its path
+ * under `demo/`, and where it comes from (`s3://…`, `repo:<path>` or
+ * `work:<name>`).
+ */
+const MANIFEST: ReadonlyMap<string, string> = new Map(
+  readFileSync(`${DIR}store/MANIFEST.tsv`, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .slice(1)
+    .map((line) => line.split('\t'))
+    .map(([path, source]) => [`store/${path}`, source] as const),
+)
+
+/** Whether a path under `demo/` is published: on disk, or a line of the store's manifest. */
+function published_(path: string): boolean {
+  return existsSync(`${DIR}${path}`) || MANIFEST.has(path)
+}
 
 /**
  * Where a config is served from, for the resolution step.
@@ -201,8 +236,8 @@ describe('the picker examples', () => {
         for (const uri of namedFiles(config)) {
           expect(uri.startsWith(ORIGIN), `${file} names ${uri}, which did not resolve`).toBe(true)
           expect(
-            existsSync(`${DIR}${underDemo(uri)}`),
-            `${file} names ${underDemo(uri)}, which is not in demo/`,
+            published_(underDemo(uri)),
+            `${file} names ${underDemo(uri)}, which is neither in demo/ nor in the store's manifest`,
           ).toBe(true)
         }
       }
@@ -239,7 +274,15 @@ describe('the picker examples', () => {
         // valid is that the annotations worker can read an assembly out of it,
         // which `annotation-parse` covers for these very files.
         if (config.state.view === 'browser') {
-          expect(existsSync(path)).toBe(true)
+          expect(published_(underDemo(config.state.uri))).toBe(true)
+          continue
+        }
+
+        // A map the bucket has and the repository does not — every map of the
+        // store, the smallest 122 MB — is the manifest's to vouch for, and the
+        // publish step's to check once it is up.
+        if (!existsSync(path)) {
+          expect(MANIFEST.has(underDemo(config.state.uri)), `${file} opens a map nobody publishes`).toBe(true)
           continue
         }
 
@@ -301,8 +344,8 @@ describe('the annotations published beside a demo map', () => {
   for (const file of DEMO_ANNOTATION_FILES) {
     it(`ships ${file}`, () => {
       expect(
-        existsSync(`${DIR}${file}`),
-        `${file} is offered beside a demo map but is not in demo/`,
+        published_(file),
+        `${file} is offered beside a demo map but is not in demo/ or the store's manifest`,
       ).toBe(true)
     })
   }
@@ -314,8 +357,8 @@ describe('the annotations published beside a demo map', () => {
   for (const file of EXAMPLE_FILES) {
     it(`ships ${file}, which a paste-box example names`, () => {
       expect(
-        existsSync(`${DIR}${file}`),
-        `${file} is named by a paste-box example but is not in demo/`,
+        published_(file),
+        `${file} is named by a paste-box example but is not in demo/ or the store's manifest`,
       ).toBe(true)
       // …and is published, not merely on disk: the examples are absolute URLs
       // on the demo bucket, so a file that ships but is never synced is a row
@@ -328,7 +371,7 @@ describe('the annotations published beside a demo map', () => {
   }
 
   it('offers them only for a map that is itself published', () => {
-    for (const link of demoAnnotationsFor('https://example.org/demo/Yeast_microC_G2M_1kb.cool')) {
+    for (const link of demoAnnotationsFor('https://example.org/demo/store/yeast/GSE151553_A364_merged.mcool')) {
       expect(DEMO_FILES).not.toContain(link.file)
     }
   })
@@ -344,7 +387,7 @@ describe('the annotations published beside a demo map', () => {
    * Worst on the published sessions, which are saved over exactly these maps.
    */
   describe('and whether to offer them at all', () => {
-    const map = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+    const map = 'https://example.org/demo/store/yeast/GSE151553_A364_merged.mcool'
 
     it('offers the published set to a session starting empty', () => {
       expect(demoAnnotationsToOffer(map, { restoring: false }).length).toBeGreaterThan(0)
@@ -385,6 +428,7 @@ describe('the lab’s store', () => {
     expect(store.version).toBe(STORE_VERSION)
     expect(store.name).not.toBe('')
     expect(store.columns.map((column) => column.key)).toEqual([
+      'section',
       'assembly',
       'dataset',
       'format',
@@ -445,9 +489,10 @@ describe('the lab’s store', () => {
         listed.includes(under),
         `the store offers ${entry.uri}, which is not one of the published files`,
       ).toBe(true)
-      expect(existsSync(`${DIR}${under}`), `${under} is offered by the store but not in demo/`).toBe(
-        true,
-      )
+      expect(
+        published_(under),
+        `${under} is offered by the store but is neither in demo/ nor in the store's manifest`,
+      ).toBe(true)
     }
   })
 
@@ -467,6 +512,98 @@ describe('the lab’s store', () => {
       expect(entry.note, `${entry.label} has no line`).toBeTruthy()
       expect(entry.fields?.['provenance'], `${entry.label} has no provenance`).toBeTruthy()
       expect(entry.fields?.['detail'], `${entry.label} has no detail`).toBeTruthy()
+    }
+  })
+
+  /**
+   * Two headings, and a figure under each (§24.2): what the viewer does, then
+   * the figures of the lab's papers — in that order, since the gallery draws a
+   * section where its first figure stands.
+   */
+  it('files every figure under Demo or Papers, the demos first', () => {
+    resetDevFeatures(true)
+    try {
+      const sections = demosStore()
+        .entries.filter((entry) => entry.kind === 'workspace')
+        .map((entry) => entry.fields?.['section'])
+      expect(new Set(sections)).toEqual(new Set(['Demo', 'Papers']))
+      expect(sections.lastIndexOf('Demo')).toBeLessThan(sections.indexOf('Papers'))
+    } finally {
+      resetDevFeatures()
+    }
+  })
+
+  /**
+   * The old yeast demo was a map of a synthetic strain — chromosome XIII carried
+   * a 40-kb insertion — and every track beside it had been lifted onto that
+   * assembly. The store is on R64 now, and none of it may name the old one: not
+   * a card, not a file row, not a workspace, not the shelf beside the map and
+   * not the two examples the paste boxes offer.
+   */
+  it('names nothing of the synthetic chromosome the old yeast demo was built on', () => {
+    resetDevFeatures(true)
+    try {
+      const said = [
+        JSON.stringify(demosStore()),
+        ...DEMO_FILES.map((file) => readFileSync(`${DIR}${file}`, 'utf8')),
+        JSON.stringify(demoAnnotationsFor(`${DEMO_BUCKET}store/yeast/GSE151553_A364_merged.mcool`)),
+        exampleHubText(),
+        exampleStoreText(),
+        readFileSync(`${DIR}store/MANIFEST.tsv`, 'utf8'),
+      ]
+      for (const text of said) expect(text).not.toMatch(/syn ?XIII|XIII-?syn|syn-?40|sacCer3_syn/i)
+      for (const file of [...DEMO_FILES, ...DEMO_DATA_FILES, ...DEMO_ANNOTATION_FILES, ...EXAMPLE_FILES]) {
+        expect(file, `${file} is a file of the old yeast demo`).not.toMatch(/^yeast\//)
+      }
+    } finally {
+      resetDevFeatures()
+    }
+  })
+})
+
+/**
+ * The store's manifest is the list the bucket is made to match, so it is held
+ * to the bar the files on disk are.
+ */
+describe('the store’s manifest', () => {
+  it('names each file once, with a source of a kind the publish step knows, and says what it is', () => {
+    const lines = readFileSync(`${DIR}store/MANIFEST.tsv`, 'utf8')
+      .split('\n')
+      .filter((line) => line !== '' && !line.startsWith('#'))
+    expect(lines[0]).toBe('path\tsource\tdescription')
+    const paths = lines.slice(1).map((line) => line.split('\t')[0])
+    expect(new Set(paths).size).toBe(paths.length)
+    for (const line of lines.slice(1)) {
+      const [path, source, description] = line.split('\t')
+      expect(path, `${line} names a path outside its folder`).toMatch(/^[\w.-]+(?:\/[\w.-]+)+$/)
+      expect(source, `${path} comes from nowhere the publish step can copy`).toMatch(
+        /^(s3:\/\/[\w.-]+\/\S+|repo:\S+|work:[\w.-]+)$/,
+      )
+      expect(description, `${path} says nothing about what it is`).toBeTruthy()
+    }
+  })
+
+  it('names files of this repository that are here', () => {
+    for (const [path, source] of MANIFEST) {
+      if (!source.startsWith('repo:')) continue
+      expect(existsSync(`${ROOT}${source.slice('repo:'.length)}`), `${path} is copied from a file that is not here`).toBe(
+        true,
+      )
+    }
+  })
+
+  it('publishes every workspace of the folder from the copy in this repository', () => {
+    for (const file of DEMO_FILES.filter((path) => path.startsWith('store/'))) {
+      expect(MANIFEST.get(file), `${file} is offered but not published`).toBe(`repo:demo/${file}`)
+    }
+  })
+
+  it('publishes the index beside every file that is read by one', () => {
+    // A bgzipped VCF and a BAM are read a region at a time through their index,
+    // which the app looks for beside the file (`annotations/sidecar.ts`).
+    for (const path of MANIFEST.keys()) {
+      if (/\.vcf\.gz$/.test(path)) expect(MANIFEST.has(`${path}.tbi`), `${path} has no .tbi`).toBe(true)
+      if (/\.bam$/.test(path)) expect(MANIFEST.has(`${path}.bai`), `${path} has no .bai`).toBe(true)
     }
   })
 })
@@ -496,6 +633,15 @@ describe('a shelf registered by a store row', () => {
     expect(demoAnnotationsToOffer(map, { restoring: false })).toHaveLength(1)
   })
 
+  it('answers for the demo map opened at one of its entries, beside the file', () => {
+    // The store's map is a ladder, so the URI the session ends up on names an
+    // entry: the shelf is still the file's, and its tracks are beside the file.
+    const map = 'https://example.org/demo/store/yeast/GSE151553_A364_merged.mcool'
+    const found = demoAnnotationsFor(`${map}::resolutions/1600`)
+    expect(found).toEqual(demoAnnotationsFor(map))
+    expect(found[0].url).toBe('https://example.org/demo/store/yeast/S288c.gtf')
+  })
+
   it('answers for the same file opened at one of its entries', () => {
     // A collection opened at its root lands on an entry, so the URI the session
     // ends up on is not the one the store row carried.
@@ -506,7 +652,7 @@ describe('a shelf registered by a store row', () => {
   it('wins over the file-name table rather than adding to it', () => {
     // A specific answer beats a general one: the publisher named these beside
     // *this* URI, where the table below matches on a file name.
-    const demo = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+    const demo = 'https://example.org/demo/store/yeast/GSE151553_A364_merged.mcool'
     expect(demoAnnotationsFor(demo).length).toBeGreaterThan(1)
     registerShelf(demo, [{ label: 'only this', url: 'https://example.org/demo/one.bw' }])
     expect(demoAnnotationsFor(demo).map((link) => link.label)).toEqual(['only this'])

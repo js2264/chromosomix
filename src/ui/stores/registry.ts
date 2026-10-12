@@ -301,8 +301,41 @@ const ROADMAP: StoreFront = {
  * to the demo files (`DEMO_BUCKET` in `ui/examples.ts`), and is read from there
  * on the gesture that opens it. There is nothing for a workflow to regenerate:
  * it changes when the lab reruns the suite and uploads the folder again.
+ *
+ * `store.chromosomix.json` rather than the folder's `store.json`, which the
+ * build before the rename reads: that index is a `metacooler.store`, refused
+ * here, and this one is refused there. Two names let the zoo be republished
+ * while the site still runs the old build (`scripts/DBZ_store.py`, `INDEX`).
  */
-export const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+export const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
+
+/** The DNA Bacterial Zoo's tile, a dev feature (§29): see {@link DBZ_STORE}. */
+function bacterialZoo(): StoreFront {
+  return {
+    id: 'dbz',
+    label: 'DNA Bacterial Zoo',
+    blurb: 'The lab’s Hi-C maps of bacteria, one card a species: its map, its tracks, and a session opening both.',
+    tagline: 'Bacterial Hi-C maps, one card a species.',
+    // IGV's cards, from one file rather than two: the sessions are rows of
+    // the store itself, so there is no `sessions` here, and that is what tells
+    // `GenomesView` which of its two roads to take.
+    kind: 'genomes',
+    mark: { text: 'DBZ', colour: COLOURS.dbz, image: DBZ_MARK_IMAGE },
+    builtin: true,
+    rows: {
+      id: 'dbz',
+      label: 'DNA Bacterial Zoo',
+      url: DBZ_STORE,
+      builtin: true,
+      publishedBy:
+        'scripts/dbz-store.sh builds it from the lab’s Hi-C maps, and the folder it writes is uploaded to s3://rsglab-data/dbz/',
+    },
+    group: 'species',
+    // The sample a card is, and how many replicons its genome has.
+    headline: ['id', 'sequences'],
+    home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
+  }
+}
 
 /** The stores this build ships, in the order the tiles offer them. */
 export function builtinStores(): StoreFront[] {
@@ -315,9 +348,9 @@ export function builtinStores(): StoreFront[] {
       // only while the switch is on: it is the drawer's header and the tile's
       // tooltip, the first sentence about the store a reader sees.
       blurb: devFeature('metacool')
-        ? 'Composed figures over the lab’s published yeast and metagenome data, one click each.'
-        : 'Composed figures over the lab’s published yeast data, one click each.',
-      tagline: 'The lab’s published figures, one click each.',
+        ? 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse, bacterial and metagenome data, one click each.'
+        : 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse and bacterial data, one click each.',
+      tagline: 'Demos, and the lab’s papers, one click each.',
       kind: 'gallery',
       mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },
       builtin: true,
@@ -326,30 +359,10 @@ export function builtinStores(): StoreFront[] {
       group: 'assembly',
       home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
     },
-    {
-      id: 'dbz',
-      label: 'DNA Bacterial Zoo',
-      blurb: 'The lab’s Hi-C maps of bacteria, one card a species: its map, its tracks, and a session opening both.',
-      tagline: 'Bacterial Hi-C maps, one card a species.',
-      // IGV's cards, from one file rather than two: the sessions are rows of
-      // the store itself, so there is no `sessions` here, and that is what tells
-      // `GenomesView` which of its two roads to take.
-      kind: 'genomes',
-      mark: { text: 'DBZ', colour: COLOURS.dbz, image: DBZ_MARK_IMAGE },
-      builtin: true,
-      rows: {
-        id: 'dbz',
-        label: 'DNA Bacterial Zoo',
-        url: DBZ_STORE,
-        builtin: true,
-        publishedBy:
-          'scripts/dbz-store.sh builds it from the lab’s Hi-C maps, and the folder it writes is uploaded to s3://rsglab-data/dbz/',
-      },
-      group: 'species',
-      // The sample a card is, and how many replicons its genome has.
-      headline: ['id', 'sequences'],
-      home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
-    },
+    // A dev feature (§29), with the multi-genome format it was built beside: the
+    // zoo is published when the metacooler project is, and until then a reader
+    // with the switch off has no tile for it, no tooltip and no drawer.
+    ...(devFeature('metacool') ? [bacterialZoo()] : []),
     {
       id: 'igv',
       label: 'IGV genomes',

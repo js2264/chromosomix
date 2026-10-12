@@ -7334,6 +7334,12 @@ canvas.is-frozen {
   padding-top: 0.2rem;
 }
 
+/* A heading over a run of cards (the lab's *Demo* and *Papers*): the app's own
+   section heading, without the space it keeps above — the gallery's gap is that. */
+.gallery-section > .gallery-heading {
+  margin: 0 0 0.5rem;
+}
+
 .genomes {
   display: flex;
   flex-direction: column;

@@ -134,9 +134,9 @@ describe('opening', () => {
   it('offers every store as a tile in its head, the open one marked', () => {
     const { drawer } = build()
     drawer.open('4dn')
+    // The DNA Bacterial Zoo is a dev feature (§29), and the switch is off here.
     expect(textsOf(drawer.el, '.store-head-tiles .store-tile-name')).toEqual([
       'RSG lab data',
-      'DNA Bacterial Zoo',
       'IGV genomes',
       '4DN open data',
       'ENCODE',

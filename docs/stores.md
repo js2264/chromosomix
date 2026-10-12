@@ -293,7 +293,7 @@ and the branch name in the two workflows; nothing else knows where they live.
 One shipped store is the lab's own analyses rather than a portal's catalogue, so it is not on the
 `stores` branch. `scripts/dbz-store.sh` runs the suite over every map of `scripts/DBZ_species.tsv`
 straight into the folder that is published — one directory a sample with its `.mcool`, its reference
-and a directory a step — and then `scripts/DBZ_store.py index` writes `store.json` over it with every
+and a directory a step — and then `scripts/DBZ_store.py index` writes `store.chromosomix.json` over it with every
 name relative: every file the viewer opens, species by species, and a session a species that opens
 the map with its HiC score, insulation and E1 along both arms and nothing else. The folder is the
 store, and publishing it is uploading it beside the demo data:
@@ -311,8 +311,11 @@ or `.fasta`, gzipped or not, or failing that the one holding the map's longest s
 store goes to `STORE`, `$DATA/store` by default. `STEPS="oriter compartments-arms"` reruns two steps
 and keeps the rest; `scripts/dbz-store.sh --help` lists the other settings.
 
-The *DNA Bacterial Zoo* tile reads `https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json`
+The *DNA Bacterial Zoo* tile is a dev feature (SPECS §29), published with the multi-genome format: with
+the switch in *About* off there is no tile. It reads `https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json`
 (`DBZ_STORE` in `src/ui/stores/registry.ts`), whose bucket already answers the cross-origin ranged
-reads the demo needs. Until the sync has run it answers 404, and the tile says what publishes it.
+reads the demo needs. The folder's `store.json` beside it is the index the build before the rename
+reads, a `metacooler.store` this build refuses: keep it, and the `*.metacooler.json` sessions, in the
+local folder until that site is gone, or the sync's `--delete` takes them off the bucket. Until the sync has run it answers 404, and the tile says what publishes it.
 `--delete` keeps the prefix a mirror of the folder, so a sample dropped from the table leaves the
 bucket too; the prefix holds nothing else.

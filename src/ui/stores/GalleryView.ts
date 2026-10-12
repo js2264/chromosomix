@@ -13,6 +13,13 @@
  * The paragraph that used to be the whole row is behind a fold, because a
  * gallery of four paragraphs is a page to read rather than a shelf to pick
  * from.
+ *
+ * The cards stand under the headings the store files them under — a figure's
+ * `section` field, *Demo* and *Papers* in the lab's — in the order each first
+ * appears. Two kinds of card are on that shelf and a reader is looking for one
+ * of them: a demonstration of what the viewer does, or the figures of a paper
+ * they came to see. A store whose figures name no section is one run of cards,
+ * as it always was.
  */
 
 import { button, el } from '../dom'
@@ -51,9 +58,14 @@ export class GalleryView {
     const figures = file.entries.filter((entry) => entry.kind === 'workspace')
     const files = file.entries.filter((entry) => entry.kind !== 'workspace')
     const byUri = new Map(files.map((entry) => [entry.uri, entry] as const))
-    this.el.appendChild(
-      el('div', { class: 'gallery-cards' }, ...figures.map((entry) => this.card(entry, byUri))),
-    )
+    for (const { name, rows } of sectionsOf(figures)) {
+      const cards = el('div', { class: 'gallery-cards' }, ...rows.map((entry) => this.card(entry, byUri)))
+      this.el.appendChild(
+        name === ''
+          ? cards
+          : el('section', { class: 'gallery-section' }, el('h3', { class: 'gallery-heading', text: name }), cards),
+      )
+    }
     // A file no figure names still has a row, under the cards rather than
     // nowhere: the two maps published without a session of their own.
     const named = new Set(figures.flatMap((entry) => filesOf(entry)))
@@ -148,6 +160,18 @@ export class GalleryView {
       el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
     )
   }
+}
+
+/** The figures by their `section` field, each section where its first figure stands. */
+function sectionsOf(figures: readonly StoreEntry[]): Array<{ name: string; rows: StoreEntry[] }> {
+  const out: Array<{ name: string; rows: StoreEntry[] }> = []
+  for (const entry of figures) {
+    const name = valueOf(entry, 'section')
+    const held = out.find((section) => section.name === name)
+    if (held === undefined) out.push({ name, rows: [entry] })
+    else held.rows.push(entry)
+  }
+  return out
 }
 
 /** The URIs of the rows a figure is made of, from its `files` field. */
