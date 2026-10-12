@@ -14,6 +14,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The lab's store opens the Chromosomix paper, five tabs, a panel each (§24.2, §24.3).** *The
+  Chromosomix paper* replaces *Chromosomix, Fig. 1* under Papers. Fig. 1c is 4DN's mouse ES-cell
+  Hi-C at five scales side by side, each map at its own rung and on its own window — the genome at
+  2.5 Mb, chromosome 3 as the correlation of its observed/expected at 250 kb with E1 and A/B under
+  it, chr3:27–37 Mb at 10 kb with its insulation and borders, the *Sox2* locus as observed/expected at
+  5 kb with its genes, CTCF and loops, and *Sox2* with its control region at 2 kb with H3K27ac and
+  H3K4me3 — and under each map the model the figure inferred at that scale, coloured by a track.
+  Fig. 1d is chr3:32–36 Mb at 10 kb with its insulation, borders, CTCF and genes, beside chromosome
+  3's model coloured by CTCF. Fig. 2a is *C. necator*'s first chromosome, its origin in the middle,
+  over the decay along the diagonal and then along both arms; Fig. 2b the *B. subtilis* wild type,
+  ΔparAB and six times after ParB is induced; Fig. 2c *P. aeruginosa* WT, SMC-ScpAB– and MksBEF– as
+  the correlation along both arms, with each strain's E1 under its map and the wild type's RNA-seq
+  (PAK at T0, GEO GSE76513, drawn to 30 CPM) under its own. A deck keeps one look a map, so a panel
+  that reads one map several ways opens on one of them and the map's score picker has the rest. The
+  files are one folder, `demo/store/chromosomix_paper/`, a subfolder an organism, the bacterial maps
+  and the RNA-seq copied there from where the lab keeps them so the card names none of those places;
+  `scripts/make_rsg_store.py derive` computes the three E1 tracks with `chromosomix compartments`, as
+  the zoo does. The bucket needs `scripts/publish-store.sh` again.
+
 - **A model coloured by a track can run from white to the track's colour, and its key's ends can be
   typed into (§25.5).** *White to the track's colour* joins the colour-scale picker under a track,
   so a model coloured by H3K27ac is drawn in its lane's orange. A click on either end of the key's
@@ -941,6 +960,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The DNA Bacterial Zoo is a dev feature (§24.3, §29).** It is published with the multi-genome
+  format, when the metacooler project is: with the switch in *About* off, *Connect to a data store*
+  has no tile for it. The lab's store says it holds bacterial data, which its paper card now does.
+
 - **The app is chromosomix (§1, §23, §29.5).** It was metacooler.js, with the mark *(meta)cooler* —
   named after metacooler, the Python CLI that writes `.metacool` files, which is a separate project
   and whose format is a dev feature here (§29). The header, the landing page, the tab's title, the
@@ -955,8 +978,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   - **A workspace is `workspace-<stamp>.chromosomix.json`, of `kind: "chromosomix.workspace"`, and a
     store is `kind: "chromosomix.store"`.** A workspace, a store, a session file or a `#session=`
     link written before is refused as not one. The demo workspaces are
-    `demo/**/*.chromosomix.json`, so the lab's bucket needs `scripts/publish-demo.sh` again, the DNA
-    Bacterial Zoo `scripts/dbz-store.sh`, and the 4DN and ENCODE shelves a run of the stores workflow.
+    `demo/**/*.chromosomix.json`, so the lab's bucket needs `scripts/publish-demo.sh` and
+    `scripts/publish-store.sh` again (the store's paper card is *The Chromosomix paper*, in
+    `chromosomix_paper/`). The DNA Bacterial Zoo needs `scripts/DBZ_store.py index` over its folder and
+    a sync, and its index is now `dbz/store.chromosomix.json`, beside the `store.json` the build before
+    the rename reads, so it can be published while the site still runs that build. The 4DN and ENCODE
+    shelves need a run of the stores workflow.
   - **What the browser keeps is under `chromosomix:`**, and in the IndexedDB database
     `chromosomix`: the theme, the columns, connected folders and buckets, recent colours and every
     other remembered setting start afresh.
@@ -996,6 +1023,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now the mark's own eye on the card — the mark goes from the model, the maps and the tracks
   together, and the card's eye goes dark with it — and a double-click shows it alone everywhere. A
   model saved with marks taken off its colouring opens coloured by every drawn mark.
+
+- **The RSG lab data store is new, and in two sections (§24.2, §24.3).** *Demo*: a yeast micro-C
+  map at 1.6 kb with the sequence, genes, RNA-seq as a chart per gene, ATAC, MNase, shotgun, SNPs
+  in sixteen samples and its loops; the same tracks with no map, at 5.5 kb with the six reading
+  frames; Hi-C, micro-C and PCP of one locus in a deck of three, MNase and the genes under each;
+  splicing on human chrX; and Gibcus et al. 2018's mitotic Hi-C time course in three tabs of decks.
+  *Papers*: the session behind this viewer's Fig. 1 — 4DN's mouse ES-cell Hi-C at *Sox2* with
+  CTCF, H3K27ac and H3K4me3, its insulation and its 3D model — and Meneu et al. 2025's
+  *M. mycoides* and *M. pneumoniae* chromosomes in yeast, with MNase, RNA-seq, Pol II and Scc1. The
+  yeast is R64 throughout: nothing in the store, the shelf beside its map or the paste boxes'
+  examples names the old demo's synthetic chromosome XIII. The files live in one folder on the
+  bucket, `demo/store/`, listed with their sources in `demo/store/MANIFEST.tsv`, written by
+  `scripts/make_rsg_store.py` and published by `scripts/publish-store.sh`.
 
 - **The link, the save button and the console moved next to back and forward (§5.5, §23).** They
   follow the two history buttons in the group after the panels, and the right of the header holds
@@ -2152,7 +2192,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A workspace opened from its address puts the first map where it was saved (§16.9).** A published
   figure or a `?config=` link whose deck had its first map moved, hidden or unchained opened with it
   back in the first cell, on screen and chained: resolving the workspace's names rebuilt the deck
-  from its other fields and dropped the lead's. A dropped workspace file was not affected.
+  from its other fields and dropped the lead's. A dropped workspace file was not affected. The
+  store's Hi-C, micro-C and PCP deck now reads in that order, micro-C second.
 
 - **A workspace's tracks come back under the companions they were drawn under (§16.6).** Restoring
   the tracks wrote the session's lanes, none yet, over the record of where they were drawn before it

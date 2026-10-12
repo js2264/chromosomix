@@ -167,25 +167,46 @@ own; what the store leads with is the workspaces below, and those name these.
 ## The published workspaces
 
 The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
-`ui/stores/registry.ts`, SPECS §24.2) leads with **five workspace files**, drawn as figures:
+`ui/stores/registry.ts`, SPECS §24.2) leads with **workspace files**, drawn as figures under two
+headings. All but the metagenome's are in one folder, `demo/store/`, a directory a card or a dataset:
 
-| file | opens |
-| --- | --- |
-| `Yeast_microC.chromosomix.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
-| `Yeast_tracks.chromosomix.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
-| `Yeast_deck.chromosomix.json` | the micro-C `.cool` beside a Juicer `.hic` of the same locus, in two locked columns |
-| `Human_chrX_RNA.chromosomix.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads as depth with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
-| `Mock_microbial_community.chromosomix.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
+| section | file | opens |
+| --- | --- | --- |
+| Demo | `yeast/Yeast_microC.chromosomix.json` | micro-C of A364A (GSE151553) at 1.6 kb on 400 kb of chromosome XIV, balanced, with the sequence and genes on both edges, RNA-seq as one chart per gene, ATAC, MNase, shotgun and SNPs under it, and its loops drawn on it |
+| Demo | `yeast/Yeast_landscape.chromosomix.json` | the same tracks with **no contact map**, at 5.5 kb of chromosome XIV, the sequence lane drawing the six reading frames |
+| Demo | `yeast/Yeast_HiC_microC_PCP.chromosomix.json` | Hi-C (Meneu et al. 2025, G1), micro-C and PCP of chrXV:200–400 kb in a deck of three, MNase and the genes under each |
+| Demo | `human/Human_chrX_splicing.chromosomix.json` | the 1D browser opened from UCSC's hg19 cytoBand alone, at RPL10 in Xq28: the ideogram, the chrX gene model, one Geuvadis sample's reads with their splice arcs, and two samples' STAR junctions on one typed axis (SPECS §8.22, §8.23) |
+| Demo | `gibcus2018/Gibcus2018_mitosis.chromosomix.json` | DT40 Hi-C from G2 into prometaphase (Gibcus et al. 2018, from 4DN), three tabs of decks: chromosome 7 whole, compartments on chromosome 1, domains on 4 Mb of it |
+| Demo | `metagenomics/mock-community/Mock_microbial_community.chromosomix.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length — a dev feature |
+| Papers | `chromosomix_paper/Chromosomix_paper.chromosomix.json` | the Chromosomix paper, five tabs, a panel each: Fig. 1c, 4DN's mouse ES-cell Hi-C at five scales from the genome to *Sox2*, each with its tracks and the model the figure inferred at that scale; Fig. 1d, chr3:32–36 Mb at 10 kb with its insulation, borders and CTCF beside chromosome 3's model; Fig. 2a, *C. necator* over the decay along the diagonal and along both arms; Fig. 2b, the *B. subtilis* ParB time course; Fig. 2c, *P. aeruginosa* WT, SMC-ScpAB– and MksBEF– with each one's E1 |
+| Papers | `meneu2025/Meneu2025_bacterial_chromosomes.chromosomix.json` | Meneu et al. 2025 (GSE217022): the *M. mycoides* and *M. pneumoniae* chromosomes in yeast at G2/M with MNase, RNA-seq, Pol II and Scc1, then both strains whole in G1 |
+
+The store's folder is the one part of `demo/` that is **not** a copy of the repository. Its maps run
+to 7 GB, so they are copied into it on the bucket and never pass through git: the repository keeps
+the workspaces and `demo/store/MANIFEST.tsv`, one line a file saying where it comes from — a key on
+the lab's bucket or on 4DN's open-data one, a file of this repository, or a file
+`scripts/make_rsg_store.py derive` computes. That script writes the workspaces and the manifest from
+one table; `scripts/publish-store.sh` makes the bucket match the manifest and checks every file
+anonymously afterwards. It copies and uploads and never deletes.
+
+```bash
+python3 scripts/make_rsg_store.py derive --work ~/rsg-store   # the computed files (pysam, numpy, hictkpy[pyarrow])
+python3 scripts/make_rsg_store.py workspaces                  # demo/store/**/*.chromosomix.json and the manifest
+./scripts/publish-store.sh --work ~/rsg-store --dry-run       # what would be copied
+./scripts/publish-store.sh --work ~/rsg-store                 # copy, upload, verify
+```
+
+`make_rsg_store.py stage --out DIR --local URL` writes the same workspaces pointed at where each file
+is today — the bucket, 4DN, a local server for the rest — to look at one before it is published.
 
 They are ordinary `chromosomix.workspace` files — the exact format the save button in the top bar
 writes (`state/workspace.ts`) — so choosing one from the list and dropping one somebody sent you are
 the same gesture, through the same code. A `.json` on a URL is fetched, parsed and applied;
 everything it names is then opened by the ordinary paths.
 
-Each is a workspace of **one tab**, which is what the format collapses to when a window holds one.
-Nothing stops a published example carrying several — a map and the genome browser over the same
-assembly, opening as two tabs — and `demo-examples.test.ts` walks every tab of every entry rather
-than the first, so a second one is checked the day it is added.
+Most are a workspace of **one tab**, which is what the format collapses to when a window holds one;
+the time course and the Meneu paper carry several, and `demo-examples.test.ts` walks every tab of
+every entry rather than the first.
 
 The reason to publish workspaces rather than the data files themselves is that a `.cool` in a
 dropdown can only ever offer what dropping that `.cool` offers — a map at its landing view, with
@@ -197,7 +218,7 @@ file, so it is written as one.
 absolute — built from the bucket prefix in `ui/examples.ts` — because a *relative* URI in a shared
 link would not re-open: `inferSource` follows a link only when its path is `http(s)://`. But the
 files a published workspace names are resolved against its own URL (`resolveConfig`), which is what
-makes a dataset folder self-contained: `demo/yeast/` holds two workspaces and everything they name,
+makes a dataset folder self-contained: `demo/store/` holds its workspaces and everything they name,
 and it opens from the bucket, from a copy on another bucket, or from `python3 -m http.server` over
 the directory. It is also why moving 250 MB from Pages to S3 changed no line of any
 `.chromosomix.json`. A *saved* workspace names absolute URLs and is left untouched by that step, so
@@ -213,6 +234,11 @@ companion. The `~` placeholder keeps the slot, so the count and the order surviv
 a drop rectangle.
 
 ## The track resources
+
+> The store no longer offers anything below: its yeast is on R64 (`demo/store/yeast/`), and the
+> one-click shelf is now beside the store's micro-C map, `GSE151553_A364_merged.mcool` — seven tracks:
+> the genes, RNA-seq, ATAC, MNase, shotgun, SNPs and the loops. `demo/yeast/` stays in the
+> repository and on the bucket as the test suite's fixtures, which is what this section describes.
 
 `demo/yeast/` also carries eleven files that are **not maps**. They are what the annotation cards
 (SPECS §8) draw: a real signal beside a real map rather than a fixture. Every one of them is aligned

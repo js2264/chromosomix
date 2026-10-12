@@ -18,13 +18,14 @@
  * 4DN means a blue-green disc on a green square.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { STORE_LOGOS } from '@/ui/stores/logos.generated'
 import { DBZ_MARK_IMAGE } from '@/ui/stores/dbz-mark.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
 import { builtinStores, customStore, hubStoreFront } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
+import { resetDevFeatures } from '@/state/devFeatures'
 
 /** The edge `make-store-logos.mjs` fits every mark to. */
 const EDGE = 160
@@ -46,6 +47,9 @@ const WIRING = [
 ] as const
 
 describe('the store logos', () => {
+  // The zoo is a dev feature (§29): drawn here with the switch on.
+  beforeEach(() => resetDevFeatures(true))
+  afterEach(() => resetDevFeatures())
   it.each(WIRING)('draws %s as an opaque square', (key) => {
     const { width, height, colour } = header(STORE_LOGOS[key])
     expect({ width, height }).toEqual({ width: EDGE, height: EDGE })

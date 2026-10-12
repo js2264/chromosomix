@@ -13,7 +13,7 @@
 # The maps (<sample>.mcool) and the references (<species>.fa, .fna or .fasta,
 # gzipped or not) are found wherever they are under $DATA, and the store is
 #
-#   $STORE/store.json                          every file of every species (SPECS §24.1)
+#   $STORE/store.chromosomix.json              every file of every species (SPECS §24.1)
 #   $STORE/<sample>/<sample>.mcool             the map: a hard link to the one in $DATA
 #   $STORE/<sample>/<species>.fa               its reference, likewise
 #   $STORE/<sample>/<sample>.chromosomix.json  the session: the map, and under it its HiC
@@ -50,13 +50,16 @@
 #
 # A per-sample run.log holds each command with its notes and its exit status,
 # and the run ends with a list of every step that failed or wrote nothing. Then
-# scripts/DBZ_store.py indexes the folder as it is: store.json lists every file
+# scripts/DBZ_store.py indexes the folder as it is: store.chromosomix.json lists every file
 # the viewer opens, species by species, and each session opens on three tracks.
 #
 # Look at it, then publish it. The TSVs and the logs are the lab's and stay here:
 #
 #   python3 scripts/DBZ_store.py serve "$STORE"
 #   aws s3 sync "$STORE"/ s3://rsglab-data/dbz/ --delete --exclude '*.tsv' --exclude '*.log'
+#
+# Keep store.json and the <sample>.metacooler.json sessions in the folder until the site built
+# before the rename is gone: that build reads them, and --delete would take them off the bucket.
 
 set -uo pipefail
 
@@ -552,12 +555,15 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     # GC content signs each component and chooses none of them: E1 is the
     # largest eigenvalue's, so comparing GC content between the compartments it
     # calls is not comparing GC content with itself.
+    # Cis contacts are the task's default and are left to it: on the command line
+    # `--contacts` is the number of contacts a map is drawn to (§6.5), which
+    # refuses `cis`, and both compartment steps failed on it.
     phase=()
     [ -n "$reference" ] && phase=(--sequence "$reference" --phaseSequence "$reference")
     run_step compartments "$dir/compartments" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
       ${frame[@]+"${frame[@]}"} ${phase[@]+"${phase[@]}"} \
-      --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
+      --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
       --method "$COMPARTMENTS_METHOD"
 
     # -----------------------------------------------------------------------
@@ -571,7 +577,7 @@ while IFS=$'\t' read -r species sample named _ <&3 || [ -n "${sample:-}" ]; do
     run_step compartments-arms "$dir/compartments-arms" \
       compartments "$file::/resolutions/$RES_PATTERNS" \
       ${frame[@]+"${frame[@]}"} ${arms[@]+"${arms[@]}"} ${phase[@]+"${phase[@]}"} \
-      --contacts cis --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
+      --ignoreDiags 2 --components 3 --minR 0.1 --saddle=false \
       --expected arms --armWindow "$ARM_WINDOW" --method "$COMPARTMENTS_METHOD"
 
     # -----------------------------------------------------------------------
@@ -651,7 +657,7 @@ done 3< "$WORK/samples"
 
 printf '\n=== index\n'
 python3 "$HERE/DBZ_store.py" index "$STORE" --species "$SPECIES" --resolution "$RES_PATTERNS" ||
-  { summary+=("store.json: the index reported a problem"); failures=$((failures + 1)); }
+  { summary+=("store.chromosomix.json: the index reported a problem"); failures=$((failures + 1)); }
 
 printf '\n=== %d step(s) to look at, %d of them a failure\n' \
   "${#summary[@]}" "$failures"

@@ -25,7 +25,7 @@
  * corners are warm, with the X its zipped arms draw.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { inflateSync } from 'node:zlib'
 
 import { applyColormap, COLORMAP_SIZE } from '@/render/colormaps'
@@ -33,6 +33,7 @@ import { DBZ_MARK_IMAGE } from '@/ui/stores/dbz-mark.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
 import { builtinStores } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
+import { resetDevFeatures } from '@/state/devFeatures'
 
 /** Bins a side, as the brief set it and as the generator's `N` writes it. */
 const N = 100
@@ -170,6 +171,9 @@ describe('the RSG store mark', () => {
 })
 
 describe('the DNA Bacterial Zoo store mark', () => {
+  // The zoo is a dev feature (§29): drawn here with the switch on.
+  beforeEach(() => resetDevFeatures(true))
+  afterEach(() => resetDevFeatures())
   const dbz = Buffer.from(DBZ_MARK_IMAGE.slice(DBZ_MARK_IMAGE.indexOf(',') + 1), 'base64')
   const dbzParts = chunks(dbz)
   const px = indices(dbzParts.get('IDAT')!)

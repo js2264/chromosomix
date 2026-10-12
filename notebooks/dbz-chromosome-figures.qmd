@@ -57,7 +57,7 @@ the file carries weights; the raw coverage the origin call reads is asked for wi
 from pathlib import Path
 
 #: The store: the lab's bucket, or a folder scripts/dbz-store.sh wrote (the folder or its store.json).
-STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.json'
+STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
 #: Only these species, as the store's cards name them — e.g. ['PAK'] — or None for every card.
 SPECIES = None
 
@@ -209,7 +209,7 @@ def read_store(store):
         base = store.rsplit('/', 1)[0] + '/'
     else:
         path = Path(store).expanduser()
-        path = path / 'store.json' if path.is_dir() else path
+        path = path / 'store.chromosomix.json' if path.is_dir() else path
         text = path.read_text()
         base = f'{path.parent}/'
     cards = {}

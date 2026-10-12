@@ -1,0 +1,103 @@
+# Every file of s3://rsglab-data/demo/store/, and where it comes from.
+# Written by scripts/make_rsg_store.py; published by scripts/publish-store.sh.
+path	source	description
+yeast/S288c.fa	s3://rsglab-data/demo/store/S288c.fa	S. cerevisiae S288C, Ensembl R64-1-1
+yeast/S288c.gtf	s3://rsglab-data/demo/store/S288c.gtf	Genes, Ensembl R64-1-1
+yeast/Yeast_ATAC.bw	s3://rsglab-data/demo/store/Yeast_ATAC.bw	ATAC-seq
+yeast/Yeast_MNase.bw	s3://rsglab-data/demo/store/Yeast_MNase_coverage.bw	MNase-seq coverage
+yeast/Yeast_shotgun.bw	s3://rsglab-data/demo/store/Yeast_shotgun.bw	Shotgun (input) coverage
+yeast/Yeast_snps.vcf.gz	work:Yeast_snps.vcf.gz	SNPs of 16 samples: wine, ale, lager, bioethanol and other strains, bgzipped
+yeast/Yeast_snps.vcf.gz.tbi	work:Yeast_snps.vcf.gz.tbi	…and its tabix index
+yeast/yeastRNAseq_counts.txt	s3://rsglab-data/demo/store/yeastRNAseq_counts.txt	RNA-seq counts per gene
+yeast/Yeast_RNAseq.barChart	repo:demo/store/yeast/Yeast_RNAseq.barChart	The counts as CPM, one chart per gene
+yeast/GSE151553_A364_merged.mcool	s3://rsglab-data/demo/store/GSE151553_A364_merged.mcool	Micro-C, A364A (Costantino et al. 2020, GEO GSE151553)
+yeast/Yeast_microC_loops.bedpe	repo:demo/store/yeast/Yeast_microC_loops.bedpe	Loops called on the micro-C map
+yeast/Yeast_PCP_GSM8476641_G1_rep1.mcool	s3://rsglab-data/demo/store/Yeast_PCP_GSM8476641_G1_rep1.mcool	PCP, G1 (Delamarre et al. 2025, GEO GSM8476641)
+yeast/S288c.2bit	work:S288c.2bit	The S288C sequence at two bits a base, for the hub example
+yeast/GSE151553_A364_merged.hic	work:GSE151553_A364_merged.hic	The micro-C map as a .hic (raw counts, 1.6–102.4 kb), for the hub example
+human/hg19_cytoBand.txt	repo:demo/human/hg19_cytoBand.txt	UCSC hg19 cytoBand
+human/Homo_sapiens.GRCh37.chrX.gtf.gz	repo:demo/human/Homo_sapiens.GRCh37.chrX.gtf.gz	Ensembl GRCh37 genes, chromosome X
+human/Geuvadis_chrX_GBR_ERR188428.bam	repo:demo/human/Geuvadis_chrX_GBR_ERR188428.bam	RNA-seq reads, GBR ERR188428, chrX
+human/Geuvadis_chrX_GBR_ERR188428.bam.bai	repo:demo/human/Geuvadis_chrX_GBR_ERR188428.bam.bai	…and its index
+human/Geuvadis_chrX_GBR_ERR188428.SJ.out.tab	repo:demo/human/Geuvadis_chrX_GBR_ERR188428.SJ.out.tab	STAR junctions, GBR ERR188428
+human/Geuvadis_chrX_GBR_ERR188383.SJ.out.tab	repo:demo/human/Geuvadis_chrX_GBR_ERR188383.SJ.out.tab	STAR junctions, GBR ERR188383
+human/Geuvadis_chrX_YRI_ERR188454.SJ.out.tab	repo:demo/human/Geuvadis_chrX_YRI_ERR188454.SJ.out.tab	STAR junctions, YRI ERR188454
+human/Geuvadis_chrX_YRI_ERR204916.SJ.out.tab	repo:demo/human/Geuvadis_chrX_YRI_ERR204916.SJ.out.tab	STAR junctions, YRI ERR204916
+human/Geuvadis_chrX_GBR_ERR188428.junctions.bed	repo:demo/human/Geuvadis_chrX_GBR_ERR188428.junctions.bed	Junctions as regtools writes them
+gibcus2018/G2_4DNFIT479GDR.mcool	s3://rsglab-data/demo/chicken/G2_4DNFIT479GDR.mcool	Hi-C, G2 block (4DNES9LEZXN7)
+gibcus2018/5m_4DNFINSJ2GYV.mcool	s3://rsglab-data/demo/chicken/5m_4DNFINSJ2GYV.mcool	Hi-C, prophase 5 min (4DNESNWWIFZU)
+gibcus2018/10m_4DNFIYOEGHHV.mcool	s3://rsglab-data/demo/chicken/10m_4DNFIYOEGHHV.mcool	Hi-C, prophase 10 min (4DNESGDXKM2I)
+gibcus2018/15m_4DNFILKIISAU.mcool	s3://rsglab-data/demo/chicken/15m_4DNFILKIISAU.mcool	Hi-C, prometaphase 15 min (4DNESIR416OW)
+gibcus2018/30m_4DNFI165SFJU.mcool	s3://rsglab-data/demo/chicken/30m_4DNFI165SFJU.mcool	Hi-C, prometaphase 30 min (4DNESS8PTK6F)
+gibcus2018/60m_4DNFIWHQLZTL.mcool	s3://rsglab-data/demo/chicken/60m_4DNFIWHQLZTL.mcool	Hi-C, prometaphase block 60 min (4DNESEQNSXSD)
+gibcus2018/G2_4DNFILLAMSTE_compartments.bw	s3://rsglab-data/demo/chicken/G2_4DNFILLAMSTE_compartments.bw	Compartments (E1), G2
+gibcus2018/5m_4DNFI9HASBHH_compartments.bw	s3://rsglab-data/demo/chicken/5m_4DNFI9HASBHH_compartments.bw	Compartments (E1), 5 min
+gibcus2018/10m_4DNFIG48YRMT_compartments.bw	s3://rsglab-data/demo/chicken/10m_4DNFIG48YRMT_compartments.bw	Compartments (E1), 10 min
+gibcus2018/15m_4DNFIY1KBU1S_compartments.bw	s3://rsglab-data/demo/chicken/15m_4DNFIY1KBU1S_compartments.bw	Compartments (E1), 15 min
+gibcus2018/30m_4DNFIOCFXWMD_compartments.bw	s3://rsglab-data/demo/chicken/30m_4DNFIOCFXWMD_compartments.bw	Compartments (E1), 30 min
+gibcus2018/60m_4DNFIX92O41_compartments.bw	s3://rsglab-data/demo/chicken/60m_4DNFIX92O41_compartments.bw	Compartments (E1), 60 min
+gibcus2018/G2_4DNFI1PRBI5L_diamond.bw	s3://rsglab-data/demo/chicken/G2_4DNFI1PRBI5L_diamond.bw	Insulation, G2
+gibcus2018/5m_4DNFIIAPL9WO_insulation.bw	s3://rsglab-data/demo/chicken/5m_4DNFIIAPL9WO_insulation.bw	Insulation, 5 min
+gibcus2018/60m_4DNFI12IF3LX_diamond.bw	s3://rsglab-data/demo/chicken/60m_4DNFI12IF3LX_diamond.bw	Insulation, 60 min
+meneu2025/HiC/HiC_Mmyco_G1.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mmyco_G1.mcool	Hi-C, yeast with M. mycoides, G1
+meneu2025/HiC/HiC_Mmyco_G2M.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mmyco_G2M.mcool	Hi-C, yeast with M. mycoides, G2/M
+meneu2025/HiC/HiC_Mpneumo_G1.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mpneumo_G1.mcool	Hi-C, yeast with M. pneumoniae, G1
+meneu2025/HiC/HiC_Mpneumo_G2M.mcool	s3://rsglab-data/public-data/2025_Meneu_et_al/HiC/HiC_Mpneumo_G2M.mcool	Hi-C, yeast with M. pneumoniae, G2/M
+meneu2025/MNase/MNase_Mmyco_rep1.130-200.CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/MNase/MNase_Mmyco_rep1.130-200.CPM.bw	MNase-seq, 130–200 bp fragments, M. mycoides
+meneu2025/MNase/MNase_Mpneumo_rep1.130-200.CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/MNase/MNase_Mpneumo_rep1.130-200.CPM.bw	MNase-seq, 130–200 bp fragments, M. pneumoniae
+meneu2025/RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/RNA/RNAseq_Mmyco_rep1.fwd-CPM.bw	RNA-seq, forward strand, M. mycoides
+meneu2025/RNA/RNAseq_Mmyco_rep1.rev-CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/RNA/RNAseq_Mmyco_rep1.rev-CPM.bw	RNA-seq, reverse strand, M. mycoides
+meneu2025/RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/RNA/RNAseq_Mpneumo_rep1.fwd-CPM.bw	RNA-seq, forward strand, M. pneumoniae
+meneu2025/RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/RNA/RNAseq_Mpneumo_rep1.rev-CPM.bw	RNA-seq, reverse strand, M. pneumoniae
+meneu2025/ChIP/PolII_Mmyco_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/ChIP/PolII_Mmyco_rep1.vs-input.bw	Pol II ChIP-seq over input, M. mycoides
+meneu2025/ChIP/PolII_Mpneumo_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/ChIP/PolII_Mpneumo_rep1.vs-input.bw	Pol II ChIP-seq over input, M. pneumoniae
+meneu2025/ChIP/Scc1_Mmyco_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/ChIP/Scc1_Mmyco_rep1.vs-input.bw	Scc1 (cohesin) ChIP-seq over input, M. mycoides
+meneu2025/ChIP/Scc1_Mpneumo_rep1.vs-input.bw	s3://rsglab-data/public-data/2025_Meneu_et_al/ChIP/Scc1_Mpneumo_rep1.vs-input.bw	Scc1 (cohesin) ChIP-seq over input, M. pneumoniae
+meneu2025/genome_references/W303_Mmmyco.gff3	s3://rsglab-data/public-data/2025_Meneu_et_al/genome_references/W303_Mmmyco.gff3	Genes, W303 with the M. mycoides chromosome
+meneu2025/genome_references/S288c_Mpneumo.gtf	s3://rsglab-data/public-data/2025_Meneu_et_al/genome_references/S288c_Mpneumo.gtf	Genes, S288C with the M. pneumoniae chromosome
+chromosomix_paper/mouse/4DNFI5QJNFAT.mcool	s3://4dn-open-data-public/fourfront-webprod/wfoutput/ef0eba47-ada0-42bc-9329-5145b57ff33a/4DNFI5QJNFAT.mcool	In situ Hi-C, F123 mouse ES cells (Kubo et al. 2021)
+chromosomix_paper/mouse/4DNFIFFXFV82.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/6dd5c984-eccf-4d2d-8118-38ea2a4d30fb/4DNFIFFXFV82.bw	CTCF ChIP-seq (Huang et al. 2021)
+chromosomix_paper/mouse/4DNFIXE23VC7.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/8ee59614-5b5f-4c8b-a29e-86d0c8047c30/4DNFIXE23VC7.bw	H3K27ac ChIP-seq (Huang et al. 2021)
+chromosomix_paper/mouse/4DNFIQYJLKKH.bw	s3://4dn-open-data-public/fourfront-webprod/wfoutput/f1ae271a-971a-4611-a6d0-fd971f1e693f/4DNFIQYJLKKH.bw	H3K4me3 ChIP-seq (Huang et al. 2021)
+chromosomix_paper/mouse/mm10_genes.gtf.gz	work:mm10_genes.gtf.gz	Genes, UCSC mm10 (iGenomes), bgzipped
+chromosomix_paper/mouse/mm10_genes.gtf.gz.tbi	work:mm10_genes.gtf.gz.tbi	…and its tabix index
+chromosomix_paper/mouse/4DNFI5QJNFAT_250000.compartments-e1.bw	repo:manuscript/figure1/results/compartments/4DNFI5QJNFAT_250000.compartments.compartment-e1.bw	Compartments (E1) of chromosome 3 at 250 kb, signed by H3K27ac (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_250000.compartments-ab.bed	repo:manuscript/figure1/results/compartments/4DNFI5QJNFAT_250000.compartments.compartment-ab.bed	A and B compartments of chromosome 3 at 250 kb (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_10000.insulation-w10.bw	repo:manuscript/figure1/results/insulation/4DNFI5QJNFAT_10000.insulation.insulation-w10.bw	Diamond insulation at 10 kb, 100-kb window (Figs. 1c, 1d)
+chromosomix_paper/mouse/4DNFI5QJNFAT_10000.borders.bed	repo:manuscript/figure1/results/insulation/4DNFI5QJNFAT_10000.insulation.insulation-boundaries.bed	Borders called on the insulation (Figs. 1c, 1d)
+chromosomix_paper/mouse/4DNFI5QJNFAT_10000.domains.bed	repo:manuscript/figure1/results/insulation/4DNFI5QJNFAT_10000.insulation.insulation-domains.bed	Domains between the borders (Fig. 1d)
+chromosomix_paper/mouse/4DNFI5QJNFAT_5000.loops.bedpe	repo:manuscript/figure1/results/loops/4DNFI5QJNFAT_5000.chromosight.chromosight-patterns.bedpe	Loops on chromosome 3 at 5 kb, Chromosight (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_2500000.genome.bed3d	repo:manuscript/figure1/results/model-genome/4DNFI5QJNFAT_2500000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of the genome at 2.5 Mb (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_250000.chr3.bed3d	repo:manuscript/figure1/results/model-chr3/4DNFI5QJNFAT_250000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chromosome 3 at 250 kb (Figs. 1c, 1d)
+chromosomix_paper/mouse/4DNFI5QJNFAT_10000.chr3-27-37Mb.bed3d	repo:manuscript/figure1/results/model-region/4DNFI5QJNFAT_10000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:27–37 Mb at 10 kb (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_5000.chr3-34-35Mb.bed3d	repo:manuscript/figure1/results/model-locus/4DNFI5QJNFAT_5000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:34–35 Mb, the Sox2 locus, at 5 kb (Fig. 1c)
+chromosomix_paper/mouse/4DNFI5QJNFAT_2000.Sox2-SCR.bed3d	repo:manuscript/figure1/results/model-gene/4DNFI5QJNFAT_2000.reconstruct3d.reconstructed-model.bed3d	pastis-NB model of chr3:34.55–34.80 Mb, Sox2 and its control region, at 2 kb (Fig. 1c)
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260.mcool	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/C_necator_N1_VJ_MM260.mcool	Hi-C, C. necator N-1 (MM260)
+chromosomix_paper/C_necator/C_necator_N1_VJ.fa	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/C_necator_N1_VJ.fa	C. necator N-1: two chromosomes and two plasmids
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.oriter-loci.bed	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/oriter/C_necator_N1_VJ_MM260_4000.oriter.oriter-loci.bed	Origins and termini, called by the app
+chromosomix_paper/C_necator/C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw	s3://rsglab-data/dbz/C_necator_N1_VJ_MM260/composition/C_necator_N1_VJ_MM260_4000.composition.composition-cumulative.bw	Cumulative GC skew, 4 kb
+chromosomix_paper/B_subtilis/Bsubtilis_WT.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_WT^mapped_PY79^FKEBR7.mcool	Hi-C, WT
+chromosomix_paper/B_subtilis/Bsubtilis_dparAB.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_dparAB^mapped_PY79^NT9IOH.mcool	Hi-C, ΔparAB
+chromosomix_paper/B_subtilis/Bsubtilis_induction_0min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_0min^mapped_PY79^14WJZP.mcool	Hi-C, +parB 0 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_15min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_15min^mapped_PY79^3JNIKY.mcool	Hi-C, +parB 15 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_20min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_20min^mapped_PY79^4WPQI3.mcool	Hi-C, +parB 20 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_30min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_30min^mapped_PY79^YKZ54M.mcool	Hi-C, +parB 30 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_35min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_35min^mapped_PY79^FSTYHN.mcool	Hi-C, +parB 35 min
+chromosomix_paper/B_subtilis/Bsubtilis_induction_45min.mcool	s3://rsglab-data/demo/subtilis/Bsubtilis_induction_45min^mapped_PY79^LW6QCG.mcool	Hi-C, +parB 45 min
+chromosomix_paper/B_subtilis/PY79.fa	s3://rsglab-data/demo/subtilis/PY79.fa	B. subtilis PY79
+chromosomix_paper/B_subtilis/PY79.gff3	s3://rsglab-data/demo/subtilis/PY79.gff3	Genes, B. subtilis PY79
+chromosomix_paper/P_aeruginosa/PAO1_v3_MM38.mcool	s3://rsglab-data/demo/pak/PAO1_v3_MM38.mcool	Hi-C, WT (MM38)
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235.mcool	s3://rsglab-data/demo/pak/PAO1_v3_FG0235.mcool	Hi-C, SMC-ScpAB– (FG0235)
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238.mcool	s3://rsglab-data/demo/pak/PAO1_v3_FG0238.mcool	Hi-C, MksBEF– (FG0238)
+chromosomix_paper/P_aeruginosa/PAO1_v3.fa	s3://rsglab-data/demo/pak/PAO1_v3.fa	P. aeruginosa, the maps' reference
+chromosomix_paper/P_aeruginosa/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	s3://rsglab-data/demo/pak/GSE76513_PAK_T0_pooled.unstranded.CPM.bw	RNA-seq, PAK at T0, counts per million (GEO GSE76513)
+chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_MM38_8000.e1-arms.bw	E1 along both arms at 8 kb, WT, computed by the app
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0235_8000.e1-arms.bw	E1 along both arms at 8 kb, SMC-ScpAB–, computed by the app
+chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	repo:demo/store/chromosomix_paper/P_aeruginosa/PAO1_v3_FG0238_8000.e1-arms.bw	E1 along both arms at 8 kb, MksBEF–, computed by the app
+yeast/Yeast_microC.chromosomix.json	repo:demo/store/yeast/Yeast_microC.chromosomix.json	Workspace
+yeast/Yeast_landscape.chromosomix.json	repo:demo/store/yeast/Yeast_landscape.chromosomix.json	Workspace
+yeast/Yeast_HiC_microC_PCP.chromosomix.json	repo:demo/store/yeast/Yeast_HiC_microC_PCP.chromosomix.json	Workspace
+human/Human_chrX_splicing.chromosomix.json	repo:demo/store/human/Human_chrX_splicing.chromosomix.json	Workspace
+gibcus2018/Gibcus2018_mitosis.chromosomix.json	repo:demo/store/gibcus2018/Gibcus2018_mitosis.chromosomix.json	Workspace
+meneu2025/Meneu2025_bacterial_chromosomes.chromosomix.json	repo:demo/store/meneu2025/Meneu2025_bacterial_chromosomes.chromosomix.json	Workspace
+chromosomix_paper/Chromosomix_paper.chromosomix.json	repo:demo/store/chromosomix_paper/Chromosomix_paper.chromosomix.json	Workspace

@@ -3,10 +3,11 @@
 # Put the demo datasets on the bucket the picker reads.
 #
 # The repository's `demo/` directory and the bucket's `demo/` prefix are the
-# same tree; this script is the one that makes that true. Everything the app
-# offers on its landing page is under it — the three published sessions and the
-# files they name — and `test/unit/demo-examples.test.ts` checks the copy on
-# disk, so a demo that would 404 on the site fails in CI first.
+# same tree; this script is the one that makes that true — except `demo/store/`,
+# the lab's store, whose files are copied on the bucket from the list in
+# `demo/store/MANIFEST.tsv` by `scripts/publish-store.sh`, and which this script
+# leaves alone. `test/unit/demo-examples.test.ts` checks the copy on disk, so a
+# demo that would 404 on the site fails in CI first.
 #
 #   ./scripts/publish-demo.sh              # sync, then verify
 #   ./scripts/publish-demo.sh --dry-run    # print what would be uploaded
@@ -172,6 +173,7 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --region "$REGION" \
   --size-only \
   --exclude '*.json' \
+  --exclude 'store/*' \
   --content-type application/octet-stream \
   --cache-control 'public, max-age=31536000, immutable' \
   $DRY
@@ -185,6 +187,7 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --size-only \
   --exclude '*' \
   --include '*.json' \
+  --exclude 'store/*' \
   --content-type application/json \
   --cache-control 'public, max-age=300' \
   $DRY
