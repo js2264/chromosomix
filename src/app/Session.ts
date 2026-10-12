@@ -37,13 +37,8 @@ import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from '../analysis/worker/client'
 import type { CorrelationField } from '../analysis/compartments'
-import { buildAnalysisContext } from '../analysis/context'
-import type { AnalysisContext, AnalysisFraming, TableOutput } from '../analysis/types'
-import type {
-  AnalysisWorkspace,
-  AnalysisWorkspaceHost,
-  CarriedResult,
-} from '../analysis/workspace'
+import type { AnalysisFraming, TableOutput } from '../analysis/types'
+import type { CarriedResult } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
 import { OriginStore } from '../state/origins'
@@ -116,7 +111,6 @@ import type {
   GenomesResult,
   McoolExport,
   OpenResult,
-  OrientationSummary,
   PairsBinning,
   PairsImportSummary,
   PairsProbeResult,
@@ -134,7 +128,6 @@ import { readFileDrag } from '../ui/fileDrag'
 import { isStructureName } from '../annotations/g3d'
 import {
   assemblyOf,
-  browsingBinsize,
   findContig,
   formatLocus,
   lengthsAreExact,
@@ -157,8 +150,6 @@ import type { ResampleTarget } from '../analysis/worker/protocol'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, LEAD_ROW } from '../ui/CompareCard'
 import { MAX_PANELS, parseMaps } from '../panels/deck'
-import type { AnalysisFacts } from '../panels/MapPanel'
-import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
 import { chooseSaveTarget, downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { mcoolNameFor } from '../pairs/mcoolName'
@@ -216,6 +207,7 @@ import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
 import { inferSource, mayResolve, resolveSource } from './resolve'
+import { SessionAnalysis } from './SessionAnalysis'
 import { SessionCompare, withoutSecond } from './SessionCompare'
 import { SessionDeck } from './SessionDeck'
 import { rememberHandle } from '../state/handles'
@@ -444,14 +436,6 @@ function genomeCard(
 }
 
 /**
- * What the Analysis column says while a deck has no map starred (§18.1): one
- * sentence, above every greyed row and in Run's refusal.
- */
-const NO_STAR_TASKS =
-  'No map is starred, so no task can run: a task reads one map, and the star is how it is named. ' +
-  'Star a map in its heading to run tasks on it.'
-
-/**
  * A `contig:start-end` region as the range the minimap draws, or `null`.
  *
  * The region grammar is the map's — 0-based, half-open, and either coordinate
@@ -562,38 +546,6 @@ interface FileAnnotations {
   contigLength(name: string): number | undefined
 }
 
-/**
- * A framing with the reader's circular declarations attached.
- *
- * A free function rather than a method, and applied at the *session* level
- * rather than in the panel, because the declaration is about the **file** while
- * a panel knows about the one sequence it is showing. A task run from a
- * whole-genome view on a file with three circular plasmids has to measure all
- * three of them the short way round, and a framing carrying only what happened
- * to be on screen would give one answer from one view and another from another
- * (SPECS §8.15).
- *
- * `null` in, `null` out: a session with no block on screen has no framing, and
- * a declaration does not make one.
- */
-function withCircularNames(
-  framing: AnalysisFraming | null,
-  names: readonly string[],
-  origins: Readonly<Record<string, number>> = {},
-): AnalysisFraming | null {
-  if (framing === null) return framing
-  const hasOrigins = Object.keys(origins).length > 0
-  if (names.length === 0 && !hasOrigins) return framing
-  return {
-    ...framing,
-    ...(names.length === 0 ? {} : { circular: names }),
-    // The declared origins travel beside the circles they are on, for the same
-    // reason: facts about the molecule that change what an arm-reading task
-    // computes, so they belong in its provenance (§8.15).
-    ...(hasOrigins ? { origins: { ...origins } } : {}),
-  }
-}
-
 let nextSessionId = 1
 
 /** Reserve the ids a restore is about to hand out, so a new tab cannot reuse one. */
@@ -637,11 +589,14 @@ export class Session {
    * Lazily, because a restored tab that nobody has clicked yet should cost no
    * worker and no h5wasm instance — that is the whole of what makes restoring
    * eight tabs cheaper than opening eight files.
+   *
+   * @internal SessionAnalysis runs a task on the first map as its reader draws
+   * it.
    */
-  private reader: ReaderClient | null = null
+  reader: ReaderClient | null = null
   private readonly picker: FilePicker
 
-  /** @internal SessionCompare gates the second file against it. */
+  /** @internal The open file: the collaborators ask after it as the session's own sections do. */
   file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
   /**
@@ -715,7 +670,10 @@ export class Session {
    * not yet opening anything and must not be described as busy with a file.
    */
   private resolving: string | null = null
-  /** @internal The mounted view: SessionDeck leads the deck with its panel. */
+  /**
+   * @internal The mounted view: SessionDeck leads the deck with its panel, and
+   * SessionAnalysis frames a task by it.
+   */
   current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
@@ -761,7 +719,8 @@ export class Session {
    * contigs table and coming back has to return to the same picture. `null` on
    * a `.metacool`, which is the whole of §8.5's gate.
    *
-   * @internal SessionDeck draws its structure and tracks cells from it.
+   * @internal SessionDeck draws its cells from it, and SessionAnalysis its
+   * contexts.
    */
   annotations: FileAnnotations | null = null
   private manualCard: ManualCard | null = null
@@ -829,8 +788,11 @@ export class Session {
    * The deck of panels (§16): further files beside this one, the `+` edges
    * round a map that has none yet, and the maps the eye took out of it
    * (`SessionDeck`). `grid` is the deck itself, or `null` while there is none.
+   *
+   * @internal SessionAnalysis runs a task on the starred map and lists the
+   * others.
    */
-  private readonly deck = new SessionDeck(this)
+  readonly deck = new SessionDeck(this)
   /**
    * The genome this session is browsing, when there is no contact map.
    *
@@ -845,7 +807,8 @@ export class Session {
    * where it was left. Opening a map from a browser still replaces the assembly
    * outright, and closing one still falls back to it.
    *
-   * @internal SessionDeck leads a deck beside the 1D browser by it.
+   * @internal SessionDeck leads a deck beside the 1D browser by it, and
+   * SessionAnalysis gives a mapless session its context from it.
    */
   assembly: Assembly | null = null
   /** Structure rows already seen, so a new one opens its cell (§25.3); `null` until the watch begins. */
@@ -871,8 +834,10 @@ export class Session {
    * measurement of. Without it the runner had a framing and no target, and each
    * of those three failed with "nothing is open" in the one session shape they
    * exist for.
+   *
+   * @internal SessionAnalysis names it as the file a mapless task measured.
    */
-  private assemblySource: SourceSpec | null = null
+  assemblySource: SourceSpec | null = null
   /**
    * Where the map goes back to while the browser is on screen.
    *
@@ -964,24 +929,19 @@ export class Session {
    */
   private redirectedConfig: SessionConfig | null = null
   /**
-   * The Analysis panel, the drawer and the synthetic tracks card (§18).
+   * The Analysis column and drawer, and the workspace behind them (§18):
+   * `SessionAnalysis`, which builds the workspace once a file is open and
+   * answers its questions from this session.
    *
-   * One object for all three, because they share a runner and a worker and are
-   * created and destroyed together with the file — see `analysis/workspace.ts`
-   * for why the wiring lives there rather than adding three hundred lines here.
-   * `null` until a file is open, and dropped with it.
-   *
-   * @internal SessionDeck refreshes it when the star or the maps beside it
-   * move.
+   * @internal SessionDeck refreshes its workspace when the star or the maps
+   * beside it move.
    */
-  analysis: AnalysisWorkspace | null = null
-  /** Set while the workspace's chunk is in flight, so it is fetched once. */
-  private analysisLoading = false
+  readonly analysis = new SessionAnalysis(this)
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
   private analysisOn = false
-  /** @internal Re-read by SessionCompare after each of its awaits, as here. */
+  /** @internal Re-read by the collaborators after each of their awaits, as here. */
   destroyed = false
   /**
    * The file this session's note is about, by its path before `::` (`null`
@@ -1338,7 +1298,7 @@ export class Session {
     this.current?.panel?.remeasure()
     this.current?.remeasure?.()
     this.deck.grid?.relayout()
-    this.analysis?.relayout()
+    this.analysis.workspace?.relayout()
   }
 
   destroy(): void {
@@ -1353,8 +1313,7 @@ export class Session {
     this.picker.destroy()
     this.minimap?.destroy()
     this.minimap = null
-    this.analysis?.destroy()
-    this.analysis = null
+    this.analysis.drop()
     this.current?.destroy?.()
     this.current = null
     this.deck.destroy()
@@ -3303,8 +3262,7 @@ export class Session {
     // outlived its store would hold the numbers for rows the Tracks card no
     // longer lists, and export nothing when one of them asked. Destroyed here
     // rather than reconciled: a workspace is per-file, and so is a store.
-    this.analysis?.destroy()
-    this.analysis = null
+    this.analysis.drop()
     this.annotations = {
       store,
       manual,
@@ -4598,18 +4556,19 @@ export class Session {
    * What a synthetic row on the Tracks card asks of the analysis workspace
    * (§18.5): its exports, and its task run again.
    *
-   * Read through `this.analysis` at the moment of the press rather than bound
-   * to a workspace here, because the Tracks card is built with the file's
-   * store and the workspace a frame or two later, once a view has mounted —
-   * and a change of resolution replaces the workspace under the same card.
+   * Read through `this.analysis.workspace` at the moment of the press rather
+   * than bound to a workspace here, because the Tracks card is built with the
+   * file's store and the workspace a frame or two later, once a view has
+   * mounted — and a change of resolution replaces the workspace under the same
+   * card.
    */
   private syntheticRowHooks(): Pick<
     ConstructorParameters<typeof AnnotationCard>[0],
     'onExport' | 'onRecompute'
   > {
     return {
-      onExport: (entry, format) => void this.analysis?.exportEntry(entry, format),
-      onRecompute: (entry) => this.analysis?.recompute(entry),
+      onExport: (entry, format) => void this.analysis.workspace?.exportEntry(entry, format),
+      onRecompute: (entry) => this.analysis.workspace?.recompute(entry),
     }
   }
 
@@ -4643,11 +4602,11 @@ export class Session {
             shown: (id) => this.deck.grid?.shownStructures().includes(id) ?? false,
           }
         : {}),
-      onRecompute: (entry) => this.analysis?.recompute(entry),
-      // Read through `this.analysis` at the press, as `onRecompute` is: a
-      // change of resolution replaces the workspace under the same card, and
-      // carries its runs across to the new one.
-      createdAt: (entry) => this.analysis?.createdAt(entry.id),
+      onRecompute: (entry) => this.analysis.workspace?.recompute(entry),
+      // Read through `this.analysis.workspace` at the press, as `onRecompute`
+      // is: a change of resolution replaces the workspace under the same card,
+      // and carries its runs across to the new one.
+      createdAt: (entry) => this.analysis.workspace?.createdAt(entry.id),
     })
     this.structureCard = card
     return card.el
@@ -5160,8 +5119,7 @@ export class Session {
     // outlived its store would hold the numbers for rows the Tracks card no
     // longer lists, and export nothing when one of them asked. Destroyed here
     // rather than reconciled: a workspace is per-file, and so is a store.
-    this.analysis?.destroy()
-    this.analysis = null
+    this.analysis.drop()
     this.annotations = {
       store,
       manual,
@@ -5361,8 +5319,11 @@ export class Session {
    * roads: a loaded track goes back in through the `AnnotationLoader`, which
    * re-reads it from the handle it still holds, and a computed one has no handle
    * — its numbers are in the workspace, and only a workspace can put them back.
+   *
+   * @internal SessionAnalysis hands these to the first workspace built after
+   * the switch.
    */
-  private carriedAnalysis: readonly CarriedResult[] | null = null
+  carriedAnalysis: readonly CarriedResult[] | null = null
 
   /**
    * The reader's own marks, held across the same gap for the same reason.
@@ -5396,7 +5357,7 @@ export class Session {
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
     const lanes = this.annotations?.store.placements
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]
-    const computed = this.reopeningSameFile(next) ? (this.analysis?.carry() ?? []) : []
+    const computed = this.reopeningSameFile(next) ? (this.analysis.workspace?.carry() ?? []) : []
     this.carriedAnalysis = computed.length === 0 ? null : computed
     const marks = this.annotations?.manual.marks
     this.carriedMarks = marks === undefined || marks.length === 0 ? null : [...marks]
@@ -5480,8 +5441,11 @@ export class Session {
    * picture four times. Rows the carry dropped — a `computed` one, a `detached`
    * one — keep whatever the new store gave them; their lanes are the analysis
    * workspace's to restore, and it does it from the same snapshot.
+   *
+   * @internal SessionAnalysis applies the snapshot again once its workspace has
+   * added its rows.
    */
-  private adoptCarriedLanes(): void {
+  adoptCarriedLanes(): void {
     const lanes = this.carriedLanes
     if (lanes === null) return
     this.annotations?.store.restoreLanes(lanes)
@@ -5546,7 +5510,10 @@ export class Session {
   private circularHeld: { key: string; store: CircularStore } | null = null
 
 
-  /** @internal SessionDeck hands the declared circles to the companions. */
+  /**
+   * @internal SessionDeck hands the declared circles to the companions, and
+   * SessionAnalysis to every task.
+   */
   circularStore(): CircularStore | null {
     const key = this.sessionKey()
     if (key === null) return null
@@ -5561,7 +5528,8 @@ export class Session {
    */
   private originsHeld: { key: string; store: OriginStore } | null = null
 
-  private originStore(): OriginStore | null {
+  /** @internal SessionAnalysis hands the declared origins to every task. */
+  originStore(): OriginStore | null {
     const key = this.sessionKey()
     if (key === null) return null
     if (this.originsHeld?.key !== key) this.originsHeld = { key, store: new OriginStore(key) }
@@ -5649,8 +5617,11 @@ export class Session {
    * it when the file opened; `null` for the file as it is. The edit store may
    * run ahead of it while the stage is open: the session is redrawn through the
    * store's when the stage closes ({@link redrawThroughEdit}).
+   *
+   * @internal SessionAnalysis runs a task through the edit the map is drawn
+   * through.
    */
-  private lens: { edit: ReferenceEdit; assembly: EditedAssembly } | null = null
+  lens: { edit: ReferenceEdit; assembly: EditedAssembly } | null = null
 
   /** The edit to open a file through: the one kept for it, where the dev features are on and it has a step. */
   private editToOpen(uri: string): ReferenceEdit | undefined {
@@ -5701,8 +5672,10 @@ export class Session {
    * A framing of the session's own map with the edit it is drawn through
    * (§27.7), so a result carries the assembly it was computed on and the next
    * edit makes it stale; a companion's, and the file as it is, unchanged.
+   *
+   * @internal SessionAnalysis frames every task through it.
    */
-  private withEditOf(framing: AnalysisFraming | null): AnalysisFraming | null {
+  withEditOf(framing: AnalysisFraming | null): AnalysisFraming | null {
     if (framing === null || this.lens === null || framing.uri !== this.file?.uri) return framing
     return { ...framing, edit: editFingerprint(this.lens.edit) }
   }
@@ -5836,8 +5809,10 @@ export class Session {
    * Where an Origin and terminus run put each origin, taken into the
    * declarations for every sequence the reader has not set one on — and said,
    * because it changes what every arm-reading task will read from next.
+   *
+   * @internal SessionAnalysis hands it the origins a run placed.
    */
-  private adoptOrigins(uri: string, found: Readonly<Record<string, number>>): void {
+  adoptOrigins(uri: string, found: Readonly<Record<string, number>>): void {
     const file = this.file
     if (file === null || file.uri !== uri) return
     const taken = this.originStore()?.fill(found) ?? []
@@ -6386,7 +6361,7 @@ export class Session {
     // …and the Analysis drawer, whose tabs, overlay legends and all-maps tables
     // name each map by what it is called now: they are read off the targets on
     // every refresh, so a result computed before the rename follows it.
-    this.analysis?.refresh()
+    this.analysis.workspace?.refresh()
   }
 
   // -------------------------------------------------------------------------
@@ -7712,8 +7687,13 @@ export class Session {
       .catch(() => undefined)
   }
 
-  /** The total a task on a reader's map is drawn to, with the census it can skip (§6.5). */
-  private resampleOf(client: ReaderClient | null): { resample?: ResampleTarget } {
+  /**
+   * The total a task on a reader's map is drawn to, with the census it can skip
+   * (§6.5).
+   *
+   * @internal SessionAnalysis runs a task on the map as it is drawn.
+   */
+  resampleOf(client: ReaderClient | null): { resample?: ResampleTarget } {
     const contacts = this.contactsTarget
     if (contacts === null || client === null) return {}
     const census = this.censuses.get(client)
@@ -7808,8 +7788,10 @@ export class Session {
    * The table is rebuilt only when it is the view on screen; otherwise the
    * columns are simply there the next time somebody navigates to it, which is
    * the moment they are wanted.
+   *
+   * @internal SessionAnalysis hands it the per-cell task's table.
    */
-  private adoptCellMeasurements(uri: string, table: TableOutput): void {
+  adoptCellMeasurements(uri: string, table: TableOutput): void {
     // The fractions only. `contacts` and `nnz` are already columns of this table
     // from the file's own attributes, and a second pair beside them differing in
     // the third decimal — because one counts records and the other sums a
@@ -8675,7 +8657,7 @@ export class Session {
     // After the view is mounted, because the framing and the block a task runs
     // on are read off whatever is on screen *now* (§18.4) — and because a table
     // view has neither, which is a state the panel has to be able to show.
-    this.syncAnalysis()
+    this.analysis.sync()
   }
 
   /** The picker, asking for the file a config describes. */
@@ -8754,504 +8736,11 @@ export class Session {
 
 
   // -------------------------------------------------------------------------
-  // Analysis (§18)
+  // The four columns
   // -------------------------------------------------------------------------
 
-  /**
-   * Build, refresh or drop the analysis surfaces to match what is open.
-   *
-   * Called after every view mount, because two of the four things a task needs
-   * are properties of the picture rather than of the file: the framing it will
-   * be a record of, and whether there is a block in memory cheap enough to hand
-   * over instead of re-reading (§18.3, §18.4). A table view has neither, and the
-   * panel has to be able to say so.
-   *
-   * The workspace itself outlives a navigation — it holds a worker and possibly
-   * a running job, and §18.3 is explicit that a job survives clicking a
-   * chromosome — so it is built once per file and only *refreshed* here.
-   */
-  private syncAnalysis(): void {
-    // Keyed on the *context* rather than on a file, because a 1D browser session
-    // has no file and still has three tasks it can run (§5.8). What decides the
-    // column is whether there is anything at all to analyse.
-    if (this.analysisContext() === null) {
-      this.analysis?.destroy()
-      this.analysis = null
-      this.setAnalysis([])
-      this.drawerHost.replaceChildren()
-      return
-    }
-    if (this.analysis === null) {
-      void this.loadAnalysis()
-      return
-    }
-    this.paintAnalysis(this.analysis)
-  }
-
-  /**
-   * Fetch the analysis surfaces, the first time a file is open.
-   *
-   * A dynamic import, in the idiom `ui/FilePicker.ts` already uses for the S3
-   * buckets card, and for a reason §18.3 states about the *worker* and which is
-   * no less true of the *bundle*: a reader who never opens the panel should pay
-   * nothing for it. Statically imported, the drawer, the plot renderers, the
-   * form and the two writers were 75 kB of the main chunk — a quarter of it —
-   * carried by every session including the ones that only ever look at a map.
-   *
-   * The cost is that the column appears a frame or two after the view. That is
-   * the right trade here: the panel is not what a reader is looking at when a
-   * file opens, and nothing else waits on it.
-   */
-  private async loadAnalysis(): Promise<void> {
-    if (this.analysisLoading) return
-    this.analysisLoading = true
-    try {
-      const { AnalysisWorkspace } = await import('../analysis/workspace')
-      // Everything below is re-checked because an await is a gap: the tab may
-      // have been closed, or the file replaced, while the chunk was in flight.
-      if (this.destroyed || this.analysisContext() === null || this.analysis !== null) return
-      this.analysis = new AnalysisWorkspace(this.analysisHost_())
-      // The workspace brings its own carried rows back through the same `begin`
-      // an import goes through, so they arrive on the lead like everything else
-      // — and a computed row's map is exactly the fact a batch existed to
-      // record. The snapshot is still here, so it is applied again over what the
-      // workspace has just added ({@link adoptCarriedLanes}).
-      this.adoptCarriedLanes()
-      this.paintAnalysis(this.analysis)
-    } catch {
-      // A chunk that will not load is a viewer with no Analysis column, which
-      // is a state the shell already handles — every other panel can be absent
-      // too. Not worth an error screen over a feature nothing else depends on.
-    } finally {
-      this.analysisLoading = false
-    }
-  }
-
-  private paintAnalysis(analysis: AnalysisWorkspace): void {
-    analysis.refresh()
-    // The column carries the list; the drawer floats over the body and is the
-    // shell's to place, which is why the two are separate hosts.
-    this.setAnalysis(analysis.hasTasks ? [analysis.panelEl] : [])
-    this.drawerHost.replaceChildren(analysis.drawerEl)
-  }
-
-  /** The callbacks `AnalysisWorkspace` reads the session through. */
-  private analysisHost_(): AnalysisWorkspaceHost {
-    return {
-      source: () => {
-        const starred = this.starredFacts()
-        if (starred !== null) {
-          return {
-            uri: starred.uri,
-            source: starred.source,
-            ...cellsOfMap(starred.info),
-            ...binningOfMap(starred.info),
-            ...(this.deck.grid?.starredPanel?.resampleTarget() ?? {}),
-            // What a plain Run names the map it measured (§16.10), as a batch
-            // names each of its maps (`readyTargets`).
-            label: this.mapLabel(starred.uri),
-          }
-        }
-        const file = this.file
-        if (file !== null) {
-          // The ticked cells, so a task measures the map that is drawn rather
-          // than the pseudo-bulk of every cell in the file (§3.8). The analysis
-          // worker mounts the file for itself and would otherwise have no way to
-          // know a selection exists.
-          return {
-            uri: file.uri,
-            source: file.source,
-            ...cellsOfMap(file.info),
-            ...binningOfMap(file.info),
-            ...this.resampleOf(this.reader),
-            ...(this.lens === null ? {} : { edit: this.lens.edit }),
-            label: this.mapLabel(file.uri),
-          }
-        }
-        // **The genome, where there is no map.** Three tasks run entirely on
-        // loaded tracks and a 1D browser session is exactly where a reader has
-        // the tracks and not the matrix (§18.3) — `analysisContext` says so and
-        // builds them a context, and the runner answers a missing framing with
-        // one over the tracks. This was the last line still assuming a matrix:
-        // with none, every one of the three failed as *nothing is open*, in the
-        // session shape they were written for.
-        //
-        // Nothing mounts this. A track-only chain never opens a file in the
-        // analysis worker (`AnalysisRunner.mount`), so what the pair is for is
-        // the record: a result names the file it is a measurement of, and here
-        // that is the genome the tracks were loaded against.
-        const assembly = this.assembly
-        const source = this.assemblySource
-        return assembly === null || source === null
-          ? null
-          : { uri: assembly.uri, source }
-      },
-      context: () => this.analysisContext(),
-      // Read fresh on every call rather than cached: `Run` takes the framing at
-      // the instant it is pressed, and a cached one would be a record of
-      // wherever the reader happened to be when the drawer opened.
-      framing: () => {
-        const starred = this.deck.grid?.starredPanel ?? null
-        if (starred !== null) {
-          const facts = starred.analysisFacts()
-          const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
-          return this.withEditOf(
-            withCircularNames(framed, this.circularStore()?.list() ?? [], this.originStore()?.record() ?? {}),
-          )
-        }
-        const file = this.file
-        const panel = this.current?.panel
-        return file === undefined || file === null || panel === undefined
-          ? null
-          : this.withEditOf(
-              withCircularNames(
-                panel.analysisFraming(file.uri),
-                this.circularStore()?.list() ?? [],
-                this.originStore()?.record() ?? {},
-              ),
-            )
-      },
-      block: () => {
-        const starred = this.deck.grid?.starredPanel ?? null
-        if (starred !== null) return starred.map?.analysisBlock() ?? null
-        return this.current?.panel?.analysisBlock() ?? null
-      },
-      store: () => this.annotations?.store ?? null,
-      // The same object both surfaces draw groups from, so a suggestion a task
-      // makes about its own set (§18.11) means the same thing beside the map and
-      // in the 1D browser.
-      groups: () => this.annotations?.groups ?? null,
-      // The one result that goes to a table rather than to the drawer (§3.8).
-      cellMeasurements: (uri, table) => this.adoptCellMeasurements(uri, table),
-      // The origins an Origin and terminus run placed, into the declarations.
-      originsFound: (uri, origins) => this.adoptOrigins(uri, origins),
-      // The star, so a measurement lands on the picture it was measured from.
-      targetMap: () => this.deck.grid?.starredMap ?? LEAD_MAP,
-      // A deck the reader has left with no map starred has no file for a task
-      // to run against, and none is guessed for them (§18.1).
-      blocked: () => (this.deck.grid !== null && this.deck.grid.starredMap === null ? NO_STAR_TASKS : null),
-      /**
-       * Every map on screen that can be run against **right now**, lead first.
-       *
-       * A companion appears once it has read the two tables an analysis needs,
-       * and the read is kicked off here. That makes this the *synchronous*
-       * answer — what the drawer can price, order results by and find the star
-       * in — and it is deliberately not what a batch runs on: see
-       * {@link allTargetsReady}, which waits.
-       */
-      allTargets: () => this.readyTargets({ start: true }),
-      /**
-       * The same list, once every map still opening has answered.
-       *
-       * This is what **Run on all maps** goes through, and it exists because the
-       * synchronous answer above quietly ran on fewer maps than the button said.
-       * A companion is a file and a worker: it opens to draw a picture, and the
-       * two tables an analysis needs are a further pair of reads only a starred
-       * or batched panel ever makes (`panels/MapPanel.ts`). So on a freshly
-       * opened deck the first press found three of four ready, ran three, and
-       * left the fourth reading — with nothing on screen saying so, since the
-       * result that never came looks exactly like the result of a task that had
-       * nothing to say. Pressing again worked, which made it look like the file.
-       *
-       * Awaited rather than polled, and every panel at once rather than in turn:
-       * these are two small reads per file against workers that already exist.
-       * A panel that *cannot* answer — a refusal, a file that will not open —
-       * settles without facts and is simply not in the list, which is the same
-       * answer it gave before and the one its own note already explains.
-       */
-      allTargetsReady: async () => {
-        await Promise.all(
-          (this.deck.grid?.analysable() ?? [])
-            .filter(({ panel }) => panel.analysisFacts() === null)
-            .map(({ panel }) => panel.prepareAnalysis(() => this.analysis?.refresh())),
-        )
-        if (this.destroyed) return []
-        return this.readyTargets({ start: false })
-      },
-      /**
-       * How many maps a batch will *end up* covering, ready or not.
-       *
-       * What the button counts, and not `allTargets().length`: a deck of four
-       * with one still opening offered "run on all 3 maps" and then ran four,
-       * which is the button lying about the smaller number rather than the
-       * larger. Every map in the grid is going to be run on — {@link
-       * allTargetsReady} waits for them — so every map in the grid is counted.
-       */
-      targetCount: () =>
-        (this.file === null ? 0 : 1) + (this.deck.grid?.analysable().length ?? 0),
-      annotations: () => this.annotations?.client ?? null,
-      // Taken rather than read: the rows belong to the first workspace built
-      // after the switch, and a second one — a later navigation, a reload of the
-      // chunk — must not be handed the same numbers again under ids the store
-      // already holds.
-      carried: () => {
-        const rows = this.carriedAnalysis ?? []
-        this.carriedAnalysis = null
-        return rows
-      },
-      contigs: () =>
-        (this.analysisContext()?.contigs ?? []).map((contig) => ({
-          name: contig.name,
-          startBin: contig.startBin,
-          bins: contig.bins,
-          length: contig.length,
-        })),
-      changed: () => {
-        this.setAnalysis(this.analysis?.hasTasks === true ? [this.analysis.panelEl] : [])
-      },
-    }
-  }
-
-  /**
-   * What the panel prices and the form fills its dropdowns from.
-   *
-   * Rebuilt per call rather than held, and cheaply: it is a walk over the contig
-   * table, and the alternative is a cached object that is wrong every time a
-   * track is loaded or the map is panned. `analysis/context.ts` does the work.
-   */
-  /**
-   * The starred companion's facts, or `null` when the star is on the lead.
-   *
-   * The star (§18.2) says which picture an analysis reads, and it is a second
-   * idea from the lead on purpose: the lead is what the *session* is of — the
-   * breadcrumb, the tables, the tracks — and it does not move. What a deck is
-   * often for is the other question, four replicates on screen and *this* one to
-   * measure, and answering that by changing the session's subject would rewrite
-   * half the furniture to run a P(s).
-   *
-   * `null` while a freshly starred panel is still fetching its tables, which the
-   * Analysis column reads as "no context" for the frame or two it takes — the
-   * honest answer, since the alternative is pricing a task against the lead
-   * under a star that says otherwise.
-   */
-  private starredFacts(): AnalysisFacts | null {
-    return this.deck.grid?.starredPanel?.analysisFacts() ?? null
-  }
-
-  /**
-   * Every map on screen **except the one a context is about** — the star — for a
-   * task that compares two files (§18.1); a map cannot be a peer of itself.
-   *
-   * A map counts **once its file has opened**: its name, its address and its
-   * bin size are all a peer is asked for, and a companion has them as soon as it
-   * has drawn. The two tables a run also reads are asked for here as well, once
-   * per panel and as `readyTargets` asks, since a companion reads them only when
-   * asked and nothing asked until a batch or a star did — so a deck of two
-   * offered Reproducibility as *waiting for a second map*. A run waits for them
-   * (`AnalysisRunner`'s inputs, through `allTargetsReady`), so the first one in a
-   * fresh deck finds every map rather than none.
-   *
-   * The lead is one of them whenever the star is on a companion: it is a map on
-   * screen like the others, and the runner already compares it. Each is named
-   * what the reader calls it (§16.10).
-   */
-  private peersOf(uri: string): Array<{ label: string; uri: string; binsize: number }> {
-    const out: Array<{ label: string; uri: string; binsize: number }> = []
-    const file = this.file
-    if (file !== null && file.uri !== uri) {
-      out.push({ label: this.mapLabel(file.uri), uri: file.uri, binsize: file.info.binsize ?? 0 })
-    }
-    for (const { panel } of this.deck.grid?.analysable() ?? []) {
-      if (panel.analysisFacts() === null) void panel.prepareAnalysis(() => this.analysis?.refresh())
-      const info = panel.openInfo ?? panel.analysisFacts()?.info ?? null
-      if (info === null || panel.uri === uri) continue
-      out.push({ label: this.mapLabel(panel.uri), uri: panel.uri, binsize: info.binsize ?? 0 })
-    }
-    return out
-  }
-
-  /**
-   * The maps a task can run against, as the runner's targets.
-   *
-   * One list built two ways, which is the point of the parameter: the
-   * synchronous caller wants whatever is ready *and* wants the rest to start
-   * reading, and the awaiting one has already waited and must not kick off a
-   * second round of the same reads. Both give the maps in the grid's order,
-   * which is the order a reader looking at the grid expects a batch to follow.
-   */
-  private readyTargets(options: { start: boolean }): RunTarget[] {
-    const out: RunTarget[] = []
-    const file = this.file
-    let lead: RunTarget | null = null
-    if (file !== null) {
-      lead = {
-        map: LEAD_MAP,
-        uri: file.uri,
-        source: file.source,
-        ...cellsOfMap(file.info),
-        ...binningOfMap(file.info),
-        ...this.resampleOf(this.reader),
-        ...(this.lens === null ? {} : { edit: this.lens.edit }),
-        // What the reader calls it (§16.10), which is what every tab, legend,
-        // lane and table a task makes of it is named by — not the file's name,
-        // which is only the default a map starts with.
-        label: this.mapLabel(file.uri),
-      }
-    }
-    for (const { map, panel } of this.deck.grid?.analysable() ?? []) {
-      const facts = panel.analysisFacts()
-      if (facts === null) {
-        if (options.start) void panel.prepareAnalysis(() => this.analysis?.refresh())
-        continue
-      }
-      out.push({
-        map,
-        uri: facts.uri,
-        source: facts.source,
-        ...cellsOfMap(facts.info),
-        ...binningOfMap(facts.info),
-        ...panel.resampleTarget(),
-        label: this.mapLabel(facts.uri),
-      })
-    }
-    // **In the grid's order**, the first map among the others where its cell
-    // stands: a batch works through the maps as a reader reads the grid, and
-    // the drawer's tabs and the all-maps figures and tables follow this list —
-    // so a map moved on the Contact maps card moves there too (§16.9). The
-    // companions still reading are left out, and the place is counted among the
-    // maps that are in.
-    if (lead !== null) {
-      const before = this.deck.grid?.leadMapIndex ?? 0
-      const ahead = (this.deck.grid?.analysable() ?? [])
-        .slice(0, before)
-        .filter(({ map }) => out.some((target) => target.map === map)).length
-      out.splice(ahead, 0, lead)
-    }
-    return out
-  }
-
-  /** The file's circular declarations and origins, as a context carries them. */
-  private declarations(): { circular: readonly string[]; origins: Record<string, number> } {
-    return {
-      circular: this.circularStore()?.list() ?? [],
-      origins: this.originStore()?.record() ?? {},
-    }
-  }
-
-  private analysisContext(): AnalysisContext | null {
-    const file = this.file
-    // **A session with no contact map still has a panel.** Three tasks run
-    // entirely on loaded tracks — metaplot, track correlation, interval overlap
-    // — and a 1D browser session (§5.8) is exactly where a reader has the tracks
-    // and not the matrix. Returning `null` here took the whole column away from
-    // them, which taught a reader who came in through a bigWig that this app
-    // does not compare two of them.
-    //
-    // The map tasks are not hidden either: they are `waiting`, with a line
-    // saying to open a contact map. `hasMap` is what tells them apart, and it
-    // stays false here because `nBins` is zero however real the bin size is.
-    //
-    // The **bin size is not zero**, and it used to be. The zero was safe for as
-    // long as the assumption under it held — that nothing producing a per-bin
-    // result could be run without a matrix, so no runner would ever see it — and
-    // the motif search broke that assumption by answering from the *sequence*,
-    // which is present with or without a map. A zero bin size gives every contig
-    // zero bins, and a profile registered against that grid is a lane that is
-    // permanently empty rather than one that is visibly wrong, which is the
-    // failure nothing reports. So a mapless session is given a browsing grid
-    // chosen from the assembly's own length ({@link browsingBinsize}); it is a
-    // resolution to *draw* at and never a claim that anything was measured at
-    // it, which is exactly what `hasMap` remains false to say.
-    if (file === null) {
-      const assembly = this.assembly
-      if (assembly === null) return null
-      return buildAnalysisContext({
-        uri: assembly.uri,
-        layout: 'cool',
-        binsize: browsingBinsize(assembly.total),
-        nBins: 0,
-        hasGenomes: false,
-        hasWeights: false,
-        scoreColumns: [],
-        // The assembly's own sequences, in its own shape, so a region control
-        // in a browser session lists what is actually open.
-        contigs: {
-          length: assembly.contigs.length,
-          columns: ['name', 'length'],
-          data: {
-            name: assembly.contigs.map((contig) => contig.name),
-            length: Float64Array.from(assembly.contigs.map((contig) => contig.length)),
-          },
-        },
-        genomes: null,
-        displayGenomes: null,
-        entries: this.annotations?.store.entries ?? [],
-        framing: null,
-        blockLoaded: false,
-        blockBytes: 0,
-        ...this.declarations(),
-      })
-    }
-    // Every coordinate a *map* analysis produces is arithmetic on a fixed bin
-    // grid (§3.3), so a file without one has nothing those tasks can be computed
-    // over. A variable-bin file is refused at open long before this, and this is
-    // the type being honest about a case the reader has already excluded — the
-    // track tasks still apply, so it is a mapless context rather than none.
-    // The star, where one has moved: an analysis is priced, framed and run
-    // against the picture it points at, and the lead only answers when it is
-    // itself the starred map. `entries` stays the session's, because the tracks
-    // are the session's however many maps are on screen.
-    const starred = this.starredFacts()
-    const starredPanel = this.deck.grid?.starredPanel ?? null
-    const info = starred?.info ?? file.info
-    const uri = starred?.uri ?? file.uri
-    const binsize = info.binsize
-    if (binsize === null || binsize <= 0) return null
-    const panel = starred === null ? this.current?.panel : (starredPanel?.map ?? undefined)
-    const declared = this.declarations()
-    // The framing a task is **run** on, and so the one that has to carry the
-    // declarations: the drawer's header was given them and the run was not, so
-    // a circle ticked on the table was still measured as a line (§8.15).
-    const framing = this.withEditOf(
-      withCircularNames(
-        panel === undefined || panel === null ? null : panel.analysisFraming(uri),
-        declared.circular,
-        declared.origins,
-      ),
-    )
-    const block = panel === undefined || panel === null ? null : panel.analysisBlock()
-    return buildAnalysisContext({
-      uri,
-      layout: info.layout.kind,
-      binsize,
-      nBins: info.nBins,
-      hasGenomes: info.hasGenomes,
-      hasWeights: info.hasWeights,
-      scoreColumns: info.scoreColumns,
-      contigs: starred === null ? (file.contigs?.table ?? null) : starred.contigs.table,
-      genomes: starred === null ? file.genomes.table : (starred.genomes?.table ?? null),
-      displayGenomes: starred === null ? file.genomes.display : (starred.genomes?.display ?? null),
-      entries: this.annotations?.store.entries ?? [],
-      framing,
-      blockLoaded: block !== null,
-      blockBytes: block === null ? 0 : block.values.byteLength,
-      ...declared,
-      // The cells of the map the star is on, not of the session's first file: a
-      // deck can hold an `.scool` beside a `.cool`, and the per-cell task is
-      // offered for whichever one an analysis would be measured against.
-      cells: info.cells.length,
-      activeCells: info.activeCells.length,
-      // By name where a subset is ticked, so the command line the console and
-      // the drawer write can say which cells the map was summed from.
-      ...(info.cells.length > 0 && info.activeCells.length < info.cells.length
-        ? { selectedCells: info.activeCells }
-        : {}),
-      resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
-      peers: this.peersOf(uri),
-      // The starred map's import, where it was binned from a `.pairs`: P(s)
-      // then has its four orientations already, and asks for no file (§18.8).
-      ...(info.pairs === undefined
-        ? {}
-        : {
-            binnedFrom: {
-              name: fileBaseLabel(uri),
-              orientation: info.pairs.orientation !== null,
-            },
-          }),
-    })
-  }
-
-  private setAnalysis(nodes: readonly HTMLElement[]): void {
+  /** @internal SessionAnalysis fills the column through it. */
+  setAnalysis(nodes: readonly HTMLElement[]): void {
     this.analysisHost.replaceChildren(...nodes)
     this.setAvailability('analysis', nodes.length > 0)
   }
@@ -9585,38 +9074,6 @@ function describe(done: number, total: number, note?: string): string {
   return counted
     ? `${fmt.int(done)} of ${fmt.int(total)}`
     : `${fmt.bytes(done)} of ${fmt.bytes(total)}`
-}
-
-/**
- * The cell set of a map, for the analysis worker's own mount of it.
- *
- * Spread rather than returned, so a file with no cells contributes no key at
- * all: `cells: undefined` on the request would be a field the protocol has to
- * mean something by, and *absent* already means the only thing it could —
- * every cell, which is what an scool with nothing ticked draws.
- */
-function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
-  return info.cells.length === 0 ? {} : { cells: info.activeCells }
-}
-
-/**
- * How this map was binned, where it was imported from a `.pairs` (§3.7).
- *
- * The second half of what a second mount needs, beside the cells. A contact list
- * has no resolution of its own, so the analysis worker opening the same file is
- * refused with the question the reader already answered in a dialog before the
- * map existed — and every §18 task on an imported map failed there. The answer
- * travels with the target instead.
- */
-function binningOfMap(info: OpenResult): {
-  binning?: PairsBinning
-  orientation?: OrientationSummary
-} {
-  if (info.pairs === undefined) return {}
-  return {
-    binning: info.pairs.binning,
-    ...(info.pairs.orientation === null ? {} : { orientation: info.pairs.orientation }),
-  }
 }
 
 /**

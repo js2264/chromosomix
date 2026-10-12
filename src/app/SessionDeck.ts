@@ -299,7 +299,7 @@ export class SessionDeck {
        * the same call a navigation makes, for the same reason.
        */
       onStarChange: () => {
-        this.session.analysis?.refresh()
+        this.session.analysis.workspace?.refresh()
         // The File card is the starred map's too, and this is also the call
         // that says its file has opened (`MapPanel.prepareAnalysis`).
         this.session.syncFileCard()
@@ -307,7 +307,7 @@ export class SessionDeck {
       // A map of the deck opened, moved rung or left: the maps a comparison
       // can be made against have changed under the column (§18.1).
       onPeersChange: () => {
-        this.session.analysis?.refresh()
+        this.session.analysis.workspace?.refresh()
       },
       // The column's *Map* card is the starred map's (§16.5), so the star
       // moving, or the starred companion's card being built, changes the card

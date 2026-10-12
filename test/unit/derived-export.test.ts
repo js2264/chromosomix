@@ -100,7 +100,7 @@ function framing(uri: string, binsize: number): AnalysisFraming {
 /**
  * The two contexts a derived row can be exported from.
  *
- * `mapped: false` is `Session.analysisContext`'s browser-session branch field
+ * `mapped: false` is `SessionAnalysis.context`'s browser-session branch field
  * for field: a real bin size chosen from the assembly, a real grid under it, and
  * `nBins` of zero — which is the entire input to the bug.
  */
