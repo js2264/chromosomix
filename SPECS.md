@@ -8885,7 +8885,10 @@ zooms the abscissa and a drag pans it; with shift held, the wheel zooms the ordi
 wider than the data is honoured**: the chart's zoom lives inside its axis and clamps a window to what
 is drawn, so where a window reaches past the data — a range typed to match another figure, or two
 figures a task opens on one ordinate (§18.8's inter-arm control) — the axis is stretched to it on
-that side, and nowhere else. **An end of a window is labelled only when it is round** — a whole
+that side, and nowhere else. **One end typed is a window**: on an axis still fitting the data, the end
+not typed is the data's own on that side — the lowest or highest value drawn, a log axis's lowest
+above zero — where it used to wait for the other, the number kept in its box over a picture that
+had not moved. **An end of a window is labelled only when it is round** — a whole
 tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
 one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
 `8.00215` over the `10` beside it, inside the data or past it. Where an end is not round it is left
@@ -8919,7 +8922,10 @@ is a button that sorts, so it has a name — a blank one is a control whose tool
 whose column the reader has to infer from its rows.
 
 **New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
-summaries of the ordinate. The last three are rules with parameters rather than plots of the data,
+summaries of the ordinate. **An area, and a line with *fill under* on, is shaded down to zero** and
+no further — a profile dipping below zero is shaded up to zero there, so above and below read as two
+sides of one line — and to the axis's edge only where zero is not on it: a log axis, or a window that
+leaves it out. The last three are rules with parameters rather than plots of the data,
 so the rules are in `figures/stats.ts` where they can be read: Freedman–Diaconis for a bin width
 unless one is typed, Tukey's whiskers stopping at the furthest *observed* value within 1.5 IQR, and
 a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled

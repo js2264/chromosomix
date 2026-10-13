@@ -2174,6 +2174,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An area is shaded down to zero, not to the bottom of the axis (§18.13).** The mark *area*, and
+  *fill under* on a line, filled every series down to the axis's lowest edge, so a profile dipping
+  below zero was shaded from its peaks to the bottom of the picture and the parts below zero were
+  lost in the fill. It now stops at zero, shading up to it where the line is below; on a log axis,
+  which has no zero, it still fills to the axis's edge.
+- **One end of a figure's window typed takes effect on its own (§18.13).** On an axis still fitting
+  the data, `x from` or `to` waited for the other end, so a number typed into either sat in its box
+  while the picture stayed on the whole of the data — and so did the second, since the window was
+  still empty when it was typed. The end not typed is now the data's own on that side.
 - **A tab with maps beside two or more 3D models keeps its maps when it is restored (§25.3).** The
   watch that opens a cell for every model that arrives began at the store's first change, which in a
   restore is the first row back, so every model after it opened a cell; publishing those cells wrote
