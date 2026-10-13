@@ -57,6 +57,8 @@ export interface FigureBlockProps {
   /** The drawer's own exports, which carry the provenance this does not know. */
   onPng?: (figure: PlotFigure) => void
   onPdf?: (figure: PlotFigure) => void
+  /** The PNG's picture put on the clipboard rather than in a file. */
+  onCopy?: (figure: PlotFigure) => void
 }
 
 export interface FigureBlock {
@@ -285,6 +287,14 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
             button('PDF', () => props.onPdf?.(drawable), {
               class: 'btn',
               title: 'The figure as a true vector page — restylable, recolourable, scalable',
+            }),
+          ]),
+      ...(drawable === null || props.onCopy === undefined
+        ? []
+        : [
+            button('Copy', () => props.onCopy?.(drawable), {
+              class: 'btn',
+              title: 'The figure as a raster at 300 dpi, onto the clipboard — the PNG, to paste',
             }),
           ]),
       iconButton('sliders-horizontal', 'Customise this figure', () => enlarge(), {

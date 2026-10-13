@@ -221,7 +221,7 @@ describe('a profile on a file that has no annotation layer', () => {
   it('offers every format the card would have offered', () => {
     const view = open(result([profile()]), false)
     const labels = buttonLabels(view.el)
-    for (const format of ['bigWig', 'bedGraph', 'TSV', 'PNG', 'PDF']) {
+    for (const format of ['bigWig', 'bedGraph', 'TSV', 'PNG', 'PDF', 'Copy']) {
       expect(labels).toContain(format)
     }
     view.destroy()

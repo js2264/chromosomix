@@ -14,6 +14,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Copy beside PNG and PDF on every task's figure (§18.13).** It puts the figure's PNG — the same
+  300 dpi redraw the PNG button saves — on the clipboard, to paste into a slide or a message without
+  a file in between, and says in the corner what was copied and at what size.
 - **The lab's store opens the Chromosomix paper, five tabs, a panel each (§24.2, §24.3).** *The
   Chromosomix paper* replaces *Chromosomix, Fig. 1* under Papers. Fig. 1c is 4DN's mouse ES-cell
   Hi-C at five scales side by side, each map at its own rung and on its own window — the genome at

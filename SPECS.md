@@ -8871,7 +8871,11 @@ with the two or three controls that are reached for constantly — the mark, the
 legend, *fit*; a colormap for a matrix; a filter box for a table. Its toggles are bordered buttons in both
 states, because §26.3's *lit means on, plain means off* has no third state where a toggle stops
 looking like a control, and so are the figure's exports in the strip above it: `TSV`, `PNG` and `PDF`
-in a bar beside a bordered icon read as buttons or as captions of the title, and they are buttons. Everything else is one button
+in a bar beside a bordered icon read as buttons or as captions of the title, and they are buttons.
+**`Copy` sits beside them, on every figure that has a PNG**: the PNG's own picture — the same redraw
+at 300 dpi — put on the clipboard instead of in a file, for a slide or a message, with a line in the
+corner naming the figure and its size in pixels (§7.2's *copy this*). The redraw happens inside the
+press, because a browser takes an image for its clipboard only there. Everything else is one button
 away, in the **same dialog the 3D model opens in**: the figure at the size of the window, every
 control in a resizable column beside it, the grip and the hide toggle behaving as they do there.
 That shell is `ui/StageDialog.ts` and the two are callers of it rather than two implementations of
