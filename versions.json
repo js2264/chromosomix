@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 105,
+      "commit": "567ae16",
+      "title": "Act on the code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits",
+      "branch": "ccr-770b1c94-w40j41",
+      "date": "2026-10-13T16:17:01Z"
+    },
+    {
       "number": 104,
       "commit": "b6d3815",
       "title": "Fix figure window input and area fill behavior",
