@@ -1,6 +1,13 @@
 {
-  "latest": "2beda15",
+  "latest": "4173f32",
   "versions": [
+    {
+      "commit": "4173f32",
+      "version": "0.13.0",
+      "date": "2026-10-13T16:55:26+02:00",
+      "subject": "Fig. 2: bacterial chromosomes along their arms, drawn from the paper store's data (manuscript/figure2)",
+      "tag": ""
+    },
     {
       "commit": "2beda15",
       "version": "0.13.0",
@@ -132,13 +139,6 @@
       "version": "0.13.0",
       "date": "2026-09-28T09:19:51+02:00",
       "subject": "Open every map of a multi-file drop in its cell (§16.11) (#77)",
-      "tag": ""
-    },
-    {
-      "commit": "8e7852f",
-      "version": "0.13.0",
-      "date": "2026-09-27T11:07:00+02:00",
-      "subject": "Add peak calling task with yapc and IDR implementations (#75)",
       "tag": ""
     },
     {
