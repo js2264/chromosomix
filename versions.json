@@ -212,5 +212,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 104,
+      "commit": "5990d28",
+      "title": "Fix figure window input and area fill behavior",
+      "branch": "js/lucid-fermi-g1kmeu",
+      "date": "2026-10-13T15:08:55Z"
+    }
+  ]
 }
