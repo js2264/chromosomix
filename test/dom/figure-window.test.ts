@@ -44,9 +44,10 @@ function ps(): XyFigureSpec {
 }
 
 /** The axes card, with the style it is given kept as the reader changes it. */
-function card(): { el: HTMLElement; style: () => FigureStyle } {
+function card(edit: (style: FigureStyle) => void = () => {}): { el: HTMLElement; style: () => FigureStyle } {
   const spec = ps()
   let style = defaultStyle(spec)
+  edit(style)
   const view = figureSettings({
     spec,
     style: () => style,
@@ -84,10 +85,27 @@ describe('a window typed on an axis that fits the data', () => {
   })
 
   it('leaves out the series that are hidden', () => {
-    const { el, style } = card()
-    const spec = ps()
-    style().hidden = [spec.series[1].id]
+    const { el, style } = card((style) => (style.hidden = [ps().series[1].id]))
     type(el, 'x', 0, '5000')
     expect(style().x.domain).toEqual([5000, 2_500_000])
+  })
+})
+
+describe('a window typed on a histogram', () => {
+  it('reads the end not typed off the bins and the counts, the axes as drawn', () => {
+    const { el, style } = card((style) => (style.mark = 'histogram'))
+    type(el, 'x', 0, '1e-6')
+    // The abscissa is the values: the last bin's edge is the largest of them.
+    expect(style().x.domain?.[1]).toBeCloseTo(1, 9)
+    type(el, 'y', 1, '20')
+    // The ordinate is a count: from the lowest above zero on this log axis…
+    expect(style().y.domain).toEqual([1, 20])
+    // …and from zero on a linear one.
+    const linear = card((style) => {
+      style.mark = 'histogram'
+      style.y.scale = 'linear'
+    })
+    type(linear.el, 'y', 1, '20')
+    expect(linear.style().y.domain).toEqual([0, 20])
   })
 })

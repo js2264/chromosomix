@@ -33,6 +33,7 @@ import { cardTitle, iconButton } from '../ui/icons'
 import { settingsField } from '../ui/laneSettings'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { seriesColour, type FigureTheme } from './option'
+import { histogram } from './stats'
 import {
   DISTRIBUTION_MARKS,
   XY_MARKS,
@@ -279,14 +280,28 @@ function chartCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLElem
   )
 }
 
-/** The data's own end of an axis, over the series that are drawn. */
+/**
+ * The data's own end of an axis, over the series that are drawn.
+ *
+ * Read off the axes as drawn: a histogram's abscissa is the series' values,
+ * from its first bin's edge to its last, and its ordinate the counts.
+ */
 function dataEnd(spec: XyFigureSpec, style: FigureStyle, which: 'x' | 'y', at: 0 | 1): number | null {
   const log = style[which].scale === 'log'
+  const histo = style.mark === 'histogram'
   let low = Number.POSITIVE_INFINITY
   let high = Number.NEGATIVE_INFINITY
   for (const series of spec.series) {
     if (style.hidden.includes(series.id)) continue
-    const values = which === 'x' ? series.y.map((_, i) => series.x[i] ?? i) : series.y
+    const bins = histo ? histogram(series.y, style.bins) : null
+    const values =
+      bins !== null
+        ? which === 'x'
+          ? bins.edges
+          : [0, ...bins.counts]
+        : which === 'x'
+          ? series.y.map((_, i) => series.x[i] ?? i)
+          : series.y
     for (const value of values) {
       if (!Number.isFinite(value) || (log && value <= 0)) continue
       if (value < low) low = value

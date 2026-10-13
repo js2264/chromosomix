@@ -8887,7 +8887,7 @@ is drawn, so where a window reaches past the data — a range typed to match ano
 figures a task opens on one ordinate (§18.8's inter-arm control) — the axis is stretched to it on
 that side, and nowhere else. **One end typed is a window**: on an axis still fitting the data, the end
 not typed is the data's own on that side — the lowest or highest value drawn, a log axis's lowest
-above zero — where it used to wait for the other, the number kept in its box over a picture that
+above zero, a histogram's outer bin edge or its count — where it used to wait for the other, the number kept in its box over a picture that
 had not moved. **An end of a window is labelled only when it is round** — a whole
 tenth of the decade its span is in on a linear axis (`10`, `-2`, `0.15`), a power of ten on a log
 one: an end is a tick of the axis, printed as the end itself, which after a box drawn by hand is
