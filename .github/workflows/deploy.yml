@@ -122,6 +122,16 @@ jobs:
             git -C archive remote add origin "$remote"
           fi
 
+      # Every build on the archive branch was built for the address the site had
+      # when it was pushed, with that base baked into each asset URL. When the
+      # site moves — `public/CNAME` puts it at the root of its own domain, a
+      # rename or `BASE_PATH` moves the sub-path — each of them would be a blank
+      # page at its new address. This rewrites the ones whose base is not the
+      # site's, previews included; on every other deploy it finds nothing to do,
+      # and the archive branch keeps the result, so a move is rewritten once.
+      - name: Move the archived builds to the site's base
+        run: node scripts/archive-rebase.mjs archive '${{ steps.base.outputs.path }}'
+
       # The generated stores, which stores.yml keeps on a branch of their own and
       # the viewer reads from the site (docs/stores.md): the picker's IGV, 4DN,
       # ENCODE and session shelves. The same shallow, by-token fetch as the

@@ -2177,6 +2177,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An archived build survives the site moving (§21).** Every build on the archive branch carries
+  the base it was built for in each asset URL, so the day the site's base changes every one of them,
+  the releases included, would be a blank page at its new address. The deploy now rewrites each
+  archived build and preview whose base is not the site's, once (`scripts/archive-rebase.mjs`, its
+  rules held by `test/unit/archive-base.test.ts`); on every other deploy it finds nothing to do.
+  Run against the thirty builds and one preview on the branch today, it moved all of them to `/`, and
+  each opened there with no failed request.
+
 - **An area is shaded down to zero, not to the bottom of the axis (§18.13).** The mark *area*, and
   *fill under* on a line, filled every series down to the axis's lowest edge, so a profile dipping
   below zero was shaded from its peaks to the bottom of the picture and the parts below zero were
