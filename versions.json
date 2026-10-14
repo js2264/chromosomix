@@ -1,6 +1,13 @@
 {
-  "latest": "35123b0",
+  "latest": "bd905e8",
   "versions": [
+    {
+      "commit": "bd905e8",
+      "version": "0.13.0",
+      "date": "2026-10-15T01:54:14+02:00",
+      "subject": "Code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits (#105)",
+      "tag": ""
+    },
     {
       "commit": "35123b0",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "ac37032",
-      "version": "0.13.0",
-      "date": "2026-09-29T10:58:10+02:00",
-      "subject": "Draw every map to one number of contacts: subsample or Boost-HiC (§6.5) (#78)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -212,13 +212,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 105,
-      "commit": "06b7ece",
-      "title": "Code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits",
-      "branch": "ccr-770b1c94-w40j41",
-      "date": "2026-10-14T22:28:25Z"
-    }
-  ]
+  "pulls": []
 }
