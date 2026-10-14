@@ -2195,6 +2195,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Signing in to Dropbox opens the Files column on it (§24.9).** The folder list hears about a
+  bucket from the form that saves it and about a Drive folder from the pane that adds it, and
+  nothing told it about a Dropbox sign-in — so the Files column, which exists only while a place is
+  connected, never appeared: *browse my Dropbox* closed the dialog on the landing page with no error,
+  and a sign-out from the dialog left a dead row behind. The sign-in and the sign-out are now passed
+  on (`browse/dropbox.ts`). An expiry is not: the click that finds one says *sign in to Dropbox* in
+  the column, and the column stays to show it. The first live sign-in, on chromosomix.app, found
+  this.
+
 - **Desktop: bigWig lanes draw (§15).** The bigWig reader fetches its own inflate wasm from a `data:`
   URL inside the annotations worker, and the desktop's policy, which reaches its workers, refused it —
   inside the worker, so nothing in the page said so — and every bigWig lane stayed on *fetching…*.

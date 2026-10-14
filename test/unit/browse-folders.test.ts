@@ -42,7 +42,7 @@ import {
   signOut,
   type TokenResponse,
 } from '../../src/auth/google'
-import { connectedFolders, disconnectFolder, folderUsable } from '../../src/browse/connected'
+import { connectedFolders, disconnectFolder, folderUsable, subscribeFolders } from '../../src/browse/connected'
 import { crumbsOf, ordered, type FolderEntry } from '../../src/browse/folder'
 // Imported for its side effect as well as for the type: the module registers
 // itself at load, which is the whole of how a third backend is wired in.
@@ -50,7 +50,7 @@ import '../../src/browse/gdrive'
 import { handleFolder, snapshotFolder } from '../../src/browse/local'
 import { routeOf, unroutableNote } from '../../src/browse/route'
 import { addDriveRow } from '../../src/state/drives'
-import { DROPBOX_FOLDER_ID } from '../../src/browse/dropbox'
+import { DROPBOX_FOLDER_ID, dropboxFolder } from '../../src/browse/dropbox'
 import {
 
   beginSignIn,
@@ -457,14 +457,19 @@ describe('a backend that registers itself', () => {
  * `browse/connected.ts` knows about the disk and the bucket because they were
  * here first; a Dropbox registers itself at its own module load, so the file
  * every panel subscribes to imports nothing that reaches for a token and a
- * backend absent from a build (§19) simply never registers. Two properties of
- * that arrangement are worth pinning, because both are invisible until somebody
- * opens the panel:
+ * backend absent from a build (§19) simply never registers. Three properties of
+ * that arrangement are worth pinning, because all three are invisible until
+ * somebody opens the panel:
  *
- * - **The rows are read on every call**, so an app key saved in the dialog puts
- *   the folder in the panel without either screen knowing the other exists —
- *   and a browser that was never given one contributes no folder at all, rather
- *   than one that refuses when it is clicked.
+ * - **The rows are read on every call**, so a browser that has not signed in
+ *   contributes no folder at all, rather than one that refuses when it is
+ *   clicked.
+ * - **Read on every call is not heard.** The panel reads the list again only
+ *   when it is told to, and so does the Files column, which exists exactly when
+ *   a place is connected — so a sign-in and a sign-out are passed on, or
+ *   *browse my Dropbox* opens a column that is not there. An expiry is not,
+ *   because the click that finds it says *sign in to Dropbox* in the column,
+ *   and the column has to be there for the reader to read it.
  * - **`usable` follows the sign-in**, which nothing else in this file has to:
  *   a reload empties the bearer registry, so the folder that was browsable
  *   yesterday is still listed and is not usable this morning. A backend that
@@ -491,6 +496,15 @@ describe('a folder backend that registers itself', () => {
 
   const dropbox = () => connectedFolders().find((folder) => folder.kind === 'dropbox')
 
+  let unsubscribe: (() => void) | null = null
+
+  /** Every time the folder list is told it changed, whether a Dropbox was in it then. */
+  const listen = (): boolean[] => {
+    const heard: boolean[] = []
+    unsubscribe = subscribeFolders(() => heard.push(dropbox() !== undefined))
+    return heard
+  }
+
   beforeEach(() => {
     window.localStorage.clear()
     setDropboxFetch(
@@ -500,6 +514,9 @@ describe('a folder backend that registers itself', () => {
   })
 
   afterEach(() => {
+    unsubscribe?.()
+    unsubscribe = null
+    vi.useRealTimers()
     dropboxSignOut()
     setDropboxFetch(null)
     window.localStorage.clear()
@@ -524,6 +541,44 @@ describe('a folder backend that registers itself', () => {
 
     dropboxSignOut()
     expect(dropbox()).toBeUndefined()
+  })
+
+  it('tells the folder list when the reader signs in, and again when they sign out', async () => {
+    // The Files column is worked out again only when the list says it changed
+    // (`app/App.ts`, `refreshFilesPanel`). A list that was right whenever it
+    // was asked, with nobody told to ask, was a sign-in that ended on the
+    // landing page: *browse my Dropbox* revealed a column that did not exist.
+    site.dropboxAppKey = APP_KEY
+    const heard = listen()
+
+    await signIn()
+    // Told once the token is held, so a listener that reads the list finds it.
+    expect(heard).toEqual([true])
+
+    dropboxSignOut()
+    expect(heard).toEqual([true, false])
+  })
+
+  it('leaves an expiry to the click that finds it', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-11T12:00:00Z'))
+    site.dropboxAppKey = APP_KEY
+    await signIn()
+    const heard = listen()
+
+    // Four hours and more later, a folder is opened in the column. Its answer
+    // is a sentence the Files card writes into the listing, and telling the
+    // list now would repaint it away — and, with nothing else connected, take
+    // the column too.
+    vi.setSystemTime(new Date('2026-09-11T17:00:00Z'))
+    await expect(dropboxFolder().list('/')).rejects.toThrow(/Sign in to Dropbox/)
+    expect(heard).toEqual([])
+    // The row is gone the next time the list is read, all the same.
+    expect(dropbox()).toBeUndefined()
+
+    // A sign-out after it is the reader's own, and is heard.
+    dropboxSignOut()
+    expect(heard).toEqual([false])
   })
 })
 

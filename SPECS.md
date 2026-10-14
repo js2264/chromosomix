@@ -10817,7 +10817,12 @@ callback route to add to a viewer that has none. The token lives in this tab's m
 with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is in the
 Files panel while a sign-in is live and not otherwise: the site's key is in every reader's page
 (§24.7), and a row in every reader's panel, Dropbox or no Dropbox, would be noise with a × that
-could not remove it. The folder is the whole
+could not remove it. So the sign-in and the sign-out are told to the folder list, as a saved bucket
+is: the Files column (§20.4), which exists only while a place is connected, is there from the
+sign-in — *browse my Dropbox* opens it on the folder — and goes with the sign-out when nothing else
+is connected. An expiry is not told: the click that finds it — a folder opened, a file picked —
+answers *sign in to Dropbox* in the column, and the column has to still be there for the reader to
+read it; the row goes at the panel's next repaint. The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague
@@ -10828,8 +10833,10 @@ Neither backend was exercised against its provider from where it was written —
 reaches neither `accounts.google.com` nor any Dropbox host — so both are asserted against their
 documented wire formats through a stubbed transport, and `docs/hosting.md` carries the manual check
 for each. What is specified above is the contract. Drive's has since been met on the live service —
-the re-encoded `HEAD` and the slow open by id above are what that turned up — and for Dropbox the
-first sign-in is still the test.
+the re-encoded `HEAD` and the slow open by id above are what that turned up. Dropbox's first live
+sign-in, on chromosomix.app, worked and turned up one thing: the folder list was never told of it,
+so the Files column never opened, which is what the telling above is for. Its listing and its
+temporary links are still to be met there.
 
 ### 24.10 A UCSC track hub is a store
 
