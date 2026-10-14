@@ -1065,7 +1065,7 @@ for seven days and 500 lines, and listed with what the browser is remembering; n
 
 | Target | What it is |
 |---|---|
-| **web** | the default: the site at `js2264.github.io/chromosomix/` |
+| **web** | the default: the site at `chromosomix.app` |
 | **desktop** | the Electron build (`IS_DESKTOP`), with a native menu that ends in the same command list |
 | **standalone** | the whole viewer as **one HTML file** (`IS_STANDALONE`). It has an opaque origin, so every remote read fails before a byte moves — the URL box is therefore *absent*, not disabled (§8.5, §19) |
 | **pinned** | one archived commit of the site, served from `…/v/<commit>/`, which is what the version dropdown points at |

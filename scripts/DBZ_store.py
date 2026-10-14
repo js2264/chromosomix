@@ -538,7 +538,7 @@ def serve(folder: Path, host: str, port: int) -> int:
     url = f"http://{host}:{port}/{INDEX}"
     quoted = urllib.parse.quote(url, safe="")
     print(f"Serving {folder} at {url}")
-    print(f"  deployed viewer   https://js2264.github.io/chromosomix/?store={quoted}")
+    print(f"  deployed viewer   https://chromosomix.app/?store={quoted}")
     print(f"  npm run dev       http://localhost:5173/?store={quoted}")
     print("  or paste the URL under Add a custom store. Ctrl-C stops.")
     try:

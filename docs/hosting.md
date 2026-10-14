@@ -312,7 +312,7 @@ silently switches private browsing off on a bucket where it was working:
     "MaxAgeSeconds": 86400
   },
   {
-    "AllowedOrigins": ["https://js2264.github.io", "https://jserizay.com"],
+    "AllowedOrigins": ["https://chromosomix.app", "https://js2264.github.io", "https://jserizay.com"],
     "AllowedMethods": ["GET", "HEAD"],
     "AllowedHeaders": [
       "Range", "If-Match", "If-None-Match",
@@ -369,7 +369,7 @@ Making one, in a Google Cloud project the lab owns:
 1. In the Google Cloud console, pick (or create) the project, then **APIs & Services → Credentials
    → Create credentials → OAuth client ID**, application type **Web application**.
 2. Under **Authorized JavaScript origins**, add the exact origin the viewer is served from — scheme,
-   host and port, no path and no trailing slash. `https://js2264.github.io` for the published site,
+   host and port, no path and no trailing slash. `https://chromosomix.app` for the published site,
    and `http://localhost:5173` as well while developing, which Google's documentation allows for
    `localhost` specifically.
    **Authorized redirect URIs stay empty**: this is the implicit token flow through Google Identity

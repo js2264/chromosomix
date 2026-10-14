@@ -56,6 +56,51 @@ mounts at `/` while the bundle asks for `/<repo>/assets/...`. Its 404 fallback a
 requests with `index.html` and a `200`, so the mismatch shows up as a blank page rather than as a
 missing file.
 
+## The site's own domain: chromosomix.app
+
+`public/CNAME` names the domain the site is served from, `chromosomix.app`, and does two things in
+this repository's workflows: the base path above becomes `/`, and a pull request's preview is
+announced at `https://chromosomix.app/pr/<number>/`. What the file cannot do is make the domain
+point here. That is four settings outside the repository, and until they agree the site is a blank
+page or no page at all:
+
+1. **DNS, at the registrar.** The apex, `chromosomix.app`, as `A` records to GitHub Pages' four
+   addresses — `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153` — and as
+   `AAAA` records to `2606:50c0:8000::153` through `2606:50c0:8003::153`; `www` as a `CNAME` to
+   `js2264.github.io`, which Pages then redirects to the apex.
+2. **Settings → Pages → Custom domain: `chromosomix.app`**, then **Enforce HTTPS** once the
+   certificate has been issued. `.app` is on every browser's HSTS preload list, so there is no
+   plain-HTTP fallback in the meantime: until the certificate exists the domain does not load at
+   all. Verify the domain under the account's own **Settings → Pages** as well (a `TXT` record), so
+   that no other repository can claim it.
+3. **The site's registrations** ([below](#the-sites-google-and-dropbox-registrations)): add
+   `https://chromosomix.app` to the Google OAuth client's *Authorized JavaScript origins* and to the
+   API key's allowed referrers, and to the Dropbox app's settings.
+4. **The bucket's CORS.** `scripts/publish-demo.sh` lists `https://chromosomix.app` among the origins
+   allowed to make *signed* requests, so running it once applies the change
+   ([hosting.md](hosting.md)). Unsigned reads — every demo, every public file — are allowed from
+   any origin already.
+
+Set the custom domain and merge the commit that adds `public/CNAME` back to back: in between, the
+address serves a build made for the other one, and that is a blank page.
+
+**What the move does to what is already published.** Every archived build and preview was built
+for `/<repo>/v/<commit>/` or `/<repo>/pr/<number>/`. The deploy step *Move the archived builds to
+the site's base* (`scripts/archive-rebase.mjs`) rewrites each of them, once, for the new base, so
+all of them — the releases included — still open at their new address. Pages redirects the old
+address to the new one, and the `#…` of a link travels with the redirect, so a view somebody shared
+still opens there; check one old link once the domain is live.
+
+Two things do not move, and both belong to the browser rather than to this repository:
+
+- **Storage is per origin.** Workspaces kept in the browser, the restore slot, the recent files and
+  the settings stay with the old address. Export what matters before the move.
+- **An installed copy keeps the old build.** The service worker answers every page load at the old
+  address from its cache, so a reader who has used it there is never shown the redirect — and its
+  update check, a request for `sw.js` at the old address, is redirected too, which a browser refuses
+  for a service worker. That reader keeps the last build from before the move until they go to
+  `chromosomix.app` themselves or clear the site's data.
+
 ## The site's Google and Dropbox registrations
 
 Signing in to Google Drive or GCS needs an OAuth client id registered for the site's origin, a
@@ -66,7 +111,7 @@ in the page of any site that uses it and authorises nothing by itself — so the
 
 | Variable | What it holds | What a reader of the site gets |
 |---|---|---|
-| `GOOGLE_CLIENT_ID` | the OAuth client id, `…apps.googleusercontent.com`, registered for `https://<owner>.github.io` | **Connect → Google Drive** offers *sign in with Google* at once |
+| `GOOGLE_CLIENT_ID` | the OAuth client id, `…apps.googleusercontent.com`, registered for the site's origin (`https://<owner>.github.io`, or the custom domain) | **Connect → Google Drive** offers *sign in with Google* at once |
 | `GOOGLE_API_KEY` | an API key of the same project, restricted to the site's referrer | a public Drive link opens with nothing pasted |
 | `DROPBOX_APP_KEY` | the scoped-access app's key | **Connect → Dropbox** offers *sign in with Dropbox* at once |
 
@@ -573,7 +618,8 @@ are no deep paths for Pages to 404 on and no SPA-fallback `404.html` is needed.
 
 ## After the first deploy
 
-- **Add the Pages origin to the bucket's CORS `AllowedOrigins`** — `https://<owner>.github.io` —
+- **Add the Pages origin to the bucket's CORS `AllowedOrigins`** — `https://<owner>.github.io`, or the
+  custom domain (below) —
   or every remote file open fails with a CORS error that looks like a bucket misconfiguration.
   See [hosting.md](hosting.md).
 - Assets are content-hashed and immutable; `index.html` is not, and Pages serves it with a short

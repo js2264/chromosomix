@@ -6,7 +6,7 @@ Notable changes to the viewer, newest first. The format follows
 contract** rather than a code API: a major bump is a `.metacool` the previous version could open and
 this one cannot, or a `#`-hash link that no longer resolves to the same view.
 
-The deployed site at <https://js2264.github.io/chromosomix/> is built from `main` on every push, so
+The deployed site at <https://chromosomix.app/> is built from `main` on every push, so
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
@@ -962,6 +962,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
+  deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
+  the README, the package's `homepage` — which the desktop and single-file builds read the generated
+  stores from — the docs and the publishing scripts name it, and `scripts/publish-demo.sh` adds it to
+  the origins the bucket allows to make signed requests. `docs/deploy.md` lists the four settings
+  outside the repository the move needs — DNS, the Pages custom domain and its certificate, the
+  Google and Dropbox registrations, the bucket's CORS — and the two things it cannot carry: a
+  browser's storage, which stays with the old address, and an installed copy, whose service worker
+  keeps serving its last build there.
 
 - **The DNA Bacterial Zoo is a dev feature (§24.3, §29).** It is published with the multi-genome
   format, when the metacooler project is: with the switch in *About* off, *Connect to a data store*
