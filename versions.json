@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 105,
-      "commit": "f5c4081",
+      "commit": "06b7ece",
       "title": "Code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits",
       "branch": "ccr-770b1c94-w40j41",
-      "date": "2026-10-14T21:35:27Z"
+      "date": "2026-10-14T22:28:25Z"
     }
   ]
 }
