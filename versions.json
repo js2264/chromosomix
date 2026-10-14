@@ -1,6 +1,13 @@
 {
-  "latest": "5bbff1e",
+  "latest": "35123b0",
   "versions": [
+    {
+      "commit": "35123b0",
+      "version": "0.13.0",
+      "date": "2026-10-14T18:20:22+02:00",
+      "subject": "Serve the site from chromosomix.app, and keep every archived build working there (#106)",
+      "tag": ""
+    },
     {
       "commit": "5bbff1e",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "a80410c",
-      "version": "0.13.0",
-      "date": "2026-09-28T19:59:24+02:00",
-      "subject": "Overlay map selection and validation notebook (#79)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -213,13 +213,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 106,
-      "commit": "e86a5da",
-      "title": "Serve the site from chromosomix.app, and keep every archived build working there",
-      "branch": "ccr-770b1c94-chromosomix-app",
-      "date": "2026-10-14T16:09:26Z"
-    },
     {
       "number": 105,
       "commit": "350b701",
