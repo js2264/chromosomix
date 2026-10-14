@@ -53,8 +53,8 @@
 import { ViewerError } from '../errors'
 import { accessHeadersFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
-import { DROPBOX_PERMISSIONS, dropboxState, signOut } from '../auth/dropbox'
-import { registerFolderSource } from './connected'
+import { DROPBOX_PERMISSIONS, dropboxState, signOut, subscribeDropbox } from '../auth/dropbox'
+import { announce, registerFolderSource } from './connected'
 import {
   LISTING_CAP,
   ordered,
@@ -329,9 +329,10 @@ function refusal(status: number, body: string, where: string): ViewerError {
  * this tab is signed in to one, and not otherwise. The site's app key is in
  * every reader's page (§24.7), and a Dropbox row in every reader's panel,
  * whether or not they have a Dropbox, would be noise with a × that could not
- * remove it — so the folder appears when *browse my Dropbox* is pressed, and
- * a reload, which empties the bearer registry, takes it away until the next
- * sign-in. `usable` is the same question, asked by the panel before it lists.
+ * remove it — so the folder is listed from the moment a sign-in completes,
+ * *browse my Dropbox* opens the column on it, and a reload, which empties the
+ * bearer registry, takes it away until the next sign-in. `usable` is the same
+ * question, asked by the panel before it lists.
  */
 registerFolderSource({
   kind: 'dropbox',
@@ -343,4 +344,28 @@ registerFolderSource({
   disconnect: () => {
     signOut()
   },
+})
+
+// **And the folder list is told when the reader signs in or out**, because it
+// is only read again when somebody says so. A bucket is announced by the form
+// that saves it and a Drive folder by the pane that adds it; a Dropbox has no
+// row to save, so the sign-in and the sign-out are the events, and this is
+// where they are passed on. Without it the Files column — which exists exactly
+// when a place is connected (`app/App.ts`, `refreshFilesPanel`) — never heard
+// of the Dropbox: *browse my Dropbox* revealed a column that was not there and
+// closed the dialog on the landing page, and a sign-out left a dead row behind.
+//
+// **An expiry is not passed on.** Nothing notices one until somebody asks
+// (`auth/dropbox.ts`, `expire`), and the somebody is nearly always the reader's
+// own click in this column — a folder opened, a file picked — whose answer,
+// *sign in to Dropbox*, the Files card writes into the listing, where the
+// reader is looking. Announcing the expiry at that moment would repaint the
+// listing away, and with nothing else connected take the column with it, so
+// the reader would watch their Dropbox vanish with no sentence saying why. Left
+// alone, the click explains itself, and the row goes at the panel's next
+// repaint. The two are told apart by the expiry: a sign-out forgets it, and an
+// expiry keeps it so that the dialog can say *sign in again*.
+subscribeDropbox(() => {
+  const { signedIn, expiresAt } = dropboxState()
+  if (signedIn || expiresAt === null) announce()
 })

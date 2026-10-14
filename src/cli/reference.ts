@@ -28,13 +28,13 @@
  * chromosome at a time and never the genome.
  */
 
-import { closeSync, existsSync, openSync, readSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { byteRange, contigsOf, parseFai, residuesIn, type FaiRecord } from '../annotations/fai'
-import { decodeAnnotationBytes } from '../annotations/parse'
+import { WHOLE_FILE_INFLATION, decodeAnnotationBytes } from '../annotations/parse'
 import { FASTA_NAME } from '../annotations/sidecar'
 import {
   contigsOfRecords,
@@ -46,6 +46,7 @@ import {
 } from '../annotations/twobit'
 import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
+import { inflationCap } from '../sources/untrusted'
 
 /** A loaded reference, however it was opened. */
 export interface Reference {
@@ -100,8 +101,11 @@ async function wholeReference(path: string): Promise<Reference> {
   // Through `decodeAnnotationBytes` rather than `readFile` alone, so a
   // `.fa.gz` is a reference and not a parse error: every other path into this
   // command already accepts one, and a reference is the file most likely to be
-  // big enough that somebody kept it compressed.
-  const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(path)))
+  // big enough that somebody kept it compressed — and capped in proportion to
+  // the file rather than at the text ceiling, since residues are kept as bytes
+  // and a gzipped hg38 is 3.1 GB of them.
+  const compressed = new Uint8Array(await readFile(path))
+  const bytes = await decodeAnnotationBytes(compressed, inflationCap(compressed.length, WHOLE_FILE_INFLATION))
   if (!looksLikeFasta(bytes)) {
     throw new Error(
       `${name} is not a FASTA: a reference begins with a > line naming its first sequence, and ` +
@@ -137,7 +141,8 @@ function indexedReference(fd: number, records: FaiRecord[]): Reference {
 
 /** A `.2bit`, read through its own index. */
 async function openTwoBitReference(fd: number): Promise<Reference> {
-  const file = await openTwoBit(async (length, position) => readAt(fd, length, position))
+  // The size, so a count in the file is checked against the bytes it really has.
+  const file = await openTwoBit(async (length, position) => readAt(fd, length, position), fstatSync(fd).size)
   const window = (record: TwoBitRecord, from: number, to: number): Uint8Array => {
     const range = dnaByteRange(record, from, to)
     return unpackDna(readAt(fd, range.to - range.from, range.from), range.firstBase, record, from, to)

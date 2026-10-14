@@ -17,7 +17,7 @@ import { FOURC_TASK } from '@/analysis/tasks/fourc'
 import { paramDerived, paramVisible } from '@/analysis/types'
 import type { AnalysisContext, AnalysisFraming } from '@/analysis/types'
 import { LocusAxis } from '@/render/locus'
-import { bandRegion } from '@/ui/MatrixPanel'
+import { bandRegion } from '@/ui/mapSelection'
 import { locusText } from '@/ui/mapPick'
 import { overviewTarget } from '@/ui/Overview'
 

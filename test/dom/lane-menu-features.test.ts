@@ -19,7 +19,7 @@ import { parseBed } from '@/annotations/parse'
 import { AnnotationStore } from '@/annotations/store'
 import type { AnnotationEntry, AnnotationKind } from '@/annotations/types'
 import { closeMenu } from '@/ui/Menu'
-import { laneMenuFeature, openLaneMenu, type LaneMenuFeature } from '@/ui/MatrixPanel'
+import { laneMenuFeature, openLaneMenu, type LaneMenuFeature } from '@/ui/laneMenu'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown

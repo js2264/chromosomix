@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { RotatedBlock } from '@/render/rotate'
-import { slidesAlongDiagonal } from '@/ui/MatrixPanel'
+import { slidesAlongDiagonal } from '@/ui/blockAxes'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
 type Block = Parameters<typeof slidesAlongDiagonal>[0]

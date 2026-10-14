@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 
+import { cspMeta } from './scripts/csp.mjs'
 import { precacheUrls } from './scripts/sw-manifest.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
@@ -147,7 +148,11 @@ export default defineConfig({
     __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY ?? ''),
     __DROPBOX_APP_KEY__: JSON.stringify(process.env.DROPBOX_APP_KEY ?? ''),
   },
-  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs()],
+  // The policy is the site's and every copy's: the pinned and package configs
+  // replace this list and name `cspMeta()` again, where the desktop's — whose
+  // policy is a response header (`electron/protocol.cts`) — deliberately does
+  // not. See `scripts/csp.mjs` for every clause and why a meta.
+  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs(), cspMeta()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

@@ -45,6 +45,7 @@
 import { defineConfig } from 'vite'
 
 import base from './vite.config'
+import { cspMeta } from './scripts/csp.mjs'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
 import { shellIcon } from './scripts/shell-icon.mjs'
 
@@ -85,7 +86,9 @@ export default defineConfig({
   ...base,
   base: PINNED_BASE,
   publicDir: false,
-  plugins: [stripPwaTags(), shellIcon('chromosomix-pinned-shell-icon')],
+  // The site's policy, which an archived copy keeps: it is the same page,
+  // served from the same origin a few directories down (`scripts/csp.mjs`).
+  plugins: [stripPwaTags(), shellIcon('chromosomix-pinned-shell-icon'), cspMeta()],
   define: {
     ...base.define,
     // `__DEMO_BASE__` is deliberately *not* overridden. It used to be

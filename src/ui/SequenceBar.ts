@@ -61,7 +61,7 @@ import {
 import type { LocusAxis, LocusSegment } from '../render/locus'
 import { Scale } from '../render/scale'
 import { button, el, fmt } from './dom'
-import { readCanvasPalette } from './MatrixPanel'
+import { readCanvasPalette } from './canvasPalette'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { getTextScale, scaleFont, scaleLength, subscribeTextScale } from './textScale'
 

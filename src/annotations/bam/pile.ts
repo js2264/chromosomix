@@ -190,10 +190,16 @@ export function coverageOf(
       }
     }
     if (reference === undefined || varPartial === null || varWhole === null) return
-    eachMismatch(bytes, cursor, reference, (at) => {
-      if (at < start || at >= end) return
-      addInterval(varPartial, varWhole, (at - start) / binWidth, (at + 1 - start) / binWidth, bins)
-    })
+    eachMismatch(
+      bytes,
+      cursor,
+      reference,
+      (at) => {
+        if (at < start || at >= end) return
+        addInterval(varPartial, varWhole, (at - start) / binWidth, (at + 1 - start) / binWidth, bins)
+      },
+      [start, end],
+    )
   })
 
   let running = 0
@@ -236,18 +242,29 @@ export function coverageOf(
  * `N` advances the reference and emits nothing: the read is aligned across it
  * and asserts nothing about what it skipped, so counting it would report every
  * intron as a variant in every RNA-seq file.
+ *
+ * Every op is walked only where it can emit: a `D` inside `within`, an aligned
+ * op where `within`, the reference and the read's own bases all are. An op's
+ * length is twenty-eight bits of the file and was walked whole, base by base,
+ * whatever lay under it — so one corrupt record of 65,535 ops of 2^28 bases
+ * each held the annotations worker for hours (§10). A real read emits the
+ * same positions either way: its aligned bases are its query's, and positions
+ * outside `within` were the caller's to drop.
  */
 export function eachMismatch(
   bytes: Uint8Array,
   cursor: RecordCursor,
   reference: { start: number; bases: Uint8Array },
   emit: (position: number) => void,
+  /** The positions the caller keeps, `[start, end)`; everything, when omitted. */
+  within: readonly [number, number] = [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY],
 ): void {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const long = longCigarOf(bytes, cursor)
   const ops = long === null ? cursor.cigarOps : long.length
   const opAt = (i: number): number =>
     long === null ? view.getUint32(cursor.cigarAt + i * 4, true) : long[i]
+  const referenceEnd = reference.start + reference.bases.length
 
   let refPos = cursor.pos
   let queryPos = 0
@@ -258,14 +275,17 @@ export function eachMismatch(
     if (op === 2) {
       // `D`: the read spans these and says they are not there, which is the
       // disagreement itself — there is no base to compare.
-      for (let k = 0; k < length; k++) emit(refPos + k)
+      const from = Math.max(0, within[0] - refPos)
+      const to = Math.min(length, within[1] - refPos)
+      for (let k = from; k < to; k++) emit(refPos + k)
       refPos += length
       continue
     }
     if (consumesReference(op) && consumesQuery(op)) {
-      for (let k = 0; k < length; k++) {
+      const from = Math.max(0, reference.start - refPos, within[0] - refPos)
+      const to = Math.min(length, referenceEnd - refPos, within[1] - refPos, cursor.seqLength - queryPos)
+      for (let k = from; k < to; k++) {
         const at = refPos + k - reference.start
-        if (at < 0 || at >= reference.bases.length) continue
         const want = BASE_CODE[reference.bases[at]]
         // `N` in either the read or the reference is an absence of information
         // rather than a disagreement, so neither is reported.

@@ -12,6 +12,8 @@
  * dropped on it. The only cheap moment to notice either is the build.
  */
 
+import { standaloneCspProblems } from './csp.mjs'
+
 /** Bytes over which the file stops being something anybody will email. */
 export const STANDALONE_MAX_BYTES = 24 * 1024 * 1024
 
@@ -82,6 +84,13 @@ export function standaloneIndexProblems(html) {
   if (!html.includes('standalone')) {
     problems.push('the build does not identify itself as the standalone target')
   }
+
+  // 7. The page's own policy, naming the hash of every script and stylesheet
+  //    it holds and nothing else (`csp.mjs`). Recomputed over this page, so a
+  //    policy written before a later edit to the file — whose hash names a
+  //    script the page no longer has — is refused here rather than by the
+  //    browser, which refuses it with a blank page.
+  problems.push(...standaloneCspProblems(html))
 
   return problems
 }

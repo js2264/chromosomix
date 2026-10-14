@@ -1021,7 +1021,7 @@ export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
  * and `contig:139005-199005` starts at bin 139 of its contig, not at bin 0. So
  * the mapping is stated as a line — the position of the block's first cell, and
  * the width of a cell — which is exactly the arithmetic the hover readout does
- * (`MatrixPanel.bpWithin`), from the same two numbers.
+ * (`ui/blockAxes.bpWithin`), from the same two numbers.
  *
  * `null` for an axis that spans more than one contig, where the ticks are the
  * contig names instead; `_bin_axis` in `ops/show.py` draws the same distinction
@@ -2503,7 +2503,7 @@ export class HeatmapView {
    * axes keeps the band under the pointer where it is. Off for a turned map,
    * whose diagonal already runs across the screen, and for a trans block — two
    * sequences, or two genomes — which has no separation to keep. The panel
-   * decides which (`MatrixPanel.slidesAlongDiagonal`); this only obeys.
+   * decides which (`ui/blockAxes.slidesAlongDiagonal`); this only obeys.
    */
   setDiagonalSlide(on: boolean): void {
     this.diagonalSlide = on
@@ -2558,7 +2558,7 @@ export class HeatmapView {
    * **Down the diagonal while the view is held on it**: rows and columns
    * together, by the same distance, so the line stays where it is on the screen;
    * and so on a block of two stretches of one sequence, whose bands of one
-   * separation run the same way (`MatrixPanel.slidesAlongDiagonal`). **The
+   * separation run the same way (`ui/blockAxes.slidesAlongDiagonal`). **The
    * columns alone otherwise**, which is what a sideways scroll is everywhere
    * else: a reader who has let go of the diagonal has said they mean to move off
    * it. The lanes beside the map take theirs through here too, so a scroll over
@@ -3139,7 +3139,7 @@ export class HeatmapView {
     // the next line is the mode this gesture has just left, and every pick
     // zoomed the picture the reader was pointing at out from under them. The
     // lane's copy of this gesture already took the reading first
-    // (`MatrixPanel.bandOnLane`); this is the map's own half of the same rule.
+    // (`LaneGestures.bandOnLane`); this is the map's own half of the same rule.
     const zooming = this.bandMode === 'zoom'
     const span = this.bandAt(axis, a, b)
     if (span !== null) this.onBand?.(axis, span)

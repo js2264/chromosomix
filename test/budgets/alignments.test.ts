@@ -67,15 +67,27 @@ beforeAll(async () => {
 let nextId = 1
 type Unsent<T> = T extends { id: number } ? Omit<T, 'id'> : never
 
+/**
+ * The worker's answer to one request — its *last* word, not its first.
+ *
+ * A request may be answered with any number of `progress` messages before its
+ * result: downloading a BAM's index reports how far it has got, under the
+ * request's own id. Taking the first message with the id took that report for
+ * the answer, which is how this suite came to fail on `'progress'` while CI,
+ * which did not run it, stayed green.
+ */
+const answers = (id: number) => (m: AnnotationResponse): boolean =>
+  'id' in m && m.id === id && m.type !== 'progress'
+
 async function ask(request: Unsent<AnnotationRequest>): Promise<AnnotationResponse> {
   const id = nextId++
   deliver({ ...request, id } as AnnotationRequest)
   const started = Date.now()
-  while (!posted.some((m) => 'id' in m && m.id === id)) {
+  while (!posted.some(answers(id))) {
     await new Promise((resolve) => setTimeout(resolve, 5))
     if (Date.now() - started > 30_000) throw new Error('the worker never answered')
   }
-  return posted.find((m) => 'id' in m && m.id === id) as AnnotationResponse
+  return posted.find(answers(id)) as AnnotationResponse
 }
 
 const REFS = [{ name: 'chrI', length: 60_000_000 }]

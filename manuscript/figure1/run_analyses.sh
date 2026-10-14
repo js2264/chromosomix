@@ -51,7 +51,7 @@ DOMAINS="$(ls "$OUT"/insulation/*domains.bed)"
 
 # 1D x 1D: CTCF piled up on the borders, the borders ranked by their strength into quartiles.
 "${RUN[@]}" metaplot --tracks "$CTCF" --features "$BORDERS" --at centre --flank 100000 --step 2000 \
-  --stranded false --rankBy score --subset groups --groups 4 --out "$OUT/metaplot" --quiet
+  --stranded=false --rankBy score --subset groups --groups 4 --out "$OUT/metaplot" --quiet
 
 # 1D -> 2D: every domain between two borders, rescaled and piled up on the map.
 "${RUN[@]}" apa "$MAP::/resolutions/10000" --anchors features --features "$DOMAINS" --mode scaled \

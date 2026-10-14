@@ -239,9 +239,32 @@ export class VectorPage {
   private readonly ops: string[] = []
   private readonly stack: State[] = []
   private state: State
+  /**
+   * The current path, as construction operators in page space.
+   *
+   * Kept until `beginPath` (or `setOrigin`, which starts a sub-drawing as a
+   * new canvas would), and written out again in front of every operator
+   * that paints it, because this is where the two models part: a canvas's
+   * `fill`, `stroke` and `clip` each *read* the current path and leave it as it
+   * was, while in PDF every painting operator — `f`, `S`, the `n` after a
+   * `W` — *ends* the path it paints. The path used to be written once and
+   * dropped, so a shape filled and then stroked printed its fill and a bare
+   * `S`: every exported box plot lost its outline, whiskers and median, the
+   * reader's arrowheads printed as white halos with nothing inside, and a bar
+   * track's outline and the 1D browser's chips lost their borders.
+   *
+   * Held in page space, because a canvas fixes a path's geometry as it is
+   * built: a point is placed by the transform current when it is *added*,
+   * while a stroke's width and dashes are scaled by the one current when it is
+   * *stroked*. So the strings are written out again unchanged, and `setStroke`
+   * works out the width at the paint. Nor is the path drawing state — a
+   * canvas's `restore` does not put one back, and nor does this page's.
+   */
   private path: string[] = []
-  /** Where the current subpath started, for `closePath` and for `arc`. */
-  private current: { x: number; y: number } | null = null
+  /** The current point, in page space; `null` while the path has no subpath. */
+  private current: [number, number] | null = null
+  /** Where the current subpath began, which is where `closePath` leaves the point. */
+  private subpathStart: [number, number] | null = null
   private readonly alphas = new Map<number, string>()
   /** The radial shadings painted on this page, as `/Shn` resources, in order. */
   private readonly shadings: string[] = []
@@ -305,10 +328,20 @@ export class VectorPage {
   private originX = 0
   private originY = 0
 
-  /** Place everything drawn from now on at this offset, in CSS pixels. */
+  /**
+   * Place everything drawn from now on at this offset, in CSS pixels.
+   *
+   * On an empty path, too, because a sub-drawing placed here is one that has
+   * a canvas of its own on screen, and a canvas starts with no path. The page
+   * keeps a path past a paint, as a canvas does, and `save` and `restore` do
+   * not hold it — so without this the path one deck cell left behind would be
+   * the next cell's, and painted there by a renderer that trusted its canvas
+   * to start empty.
+   */
   setOrigin(x: number, y: number): void {
     this.originX = x
     this.originY = y
+    this.emptyPath()
   }
 
   /** Canvas point → page point. PDF's y runs up the page; canvas's runs down. */
@@ -369,9 +402,115 @@ export class VectorPage {
     )
   }
 
-  private flushPath(): void {
-    for (const segment of this.path) this.emit(segment)
+  /** No subpath and no current point: what `beginPath` leaves, and a new canvas has. */
+  private emptyPath(): void {
     this.path = []
+    this.current = null
+    this.subpathStart = null
+  }
+
+  /** Begin a subpath at a page-space point. */
+  private startSubpath(at: [number, number]): void {
+    this.path.push(`${round(at[0])} ${round(at[1])} m`)
+    this.current = at
+    this.subpathStart = at
+  }
+
+  /**
+   * The current point, after starting a subpath at `at` if there is none.
+   *
+   * What a canvas does for a line or a curve drawn on an empty path, and what
+   * PDF cannot: its `l` and `c` are errors with no current point to start from.
+   */
+  private ensureSubpath(at: [number, number]): [number, number] {
+    if (this.current === null) this.startSubpath(at)
+    return this.current ?? at
+  }
+
+  /**
+   * A rectangle as a closed subpath of its own, in page space.
+   *
+   * Four corners rather than PDF's `re`, because `re` is axis-aligned in
+   * *page* space and the matrix here may be a quarter turn.
+   */
+  private rectangle(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): { segments: string[]; first: [number, number] } {
+    const corners = [
+      this.point(x, y),
+      this.point(x + w, y),
+      this.point(x + w, y + h),
+      this.point(x, y + h),
+    ]
+    const segments = corners.map(
+      ([px, py], index) => `${round(px)} ${round(py)} ${index === 0 ? 'm' : 'l'}`,
+    )
+    segments.push('h')
+    return { segments, first: corners[0] }
+  }
+
+  /**
+   * A path's construction operators, in front of the operator that paints it.
+   *
+   * Written out at every paint and never consumed: the segments stay the
+   * current path until `beginPath` (see `path`). This is also why a `q`
+   * from `save` can never land inside a path object, where PDF forbids it —
+   * nothing of a path reaches the stream until the operator that ends it.
+   */
+  private trace(segments: readonly string[]): void {
+    for (const segment of segments) this.emit(segment)
+  }
+
+  /**
+   * Fill a path — the current one, or the rectangle of a `fillRect` — with the
+   * fill style, flat or radial.
+   *
+   * An empty path paints nothing, as on a canvas. Written out regardless, it
+   * was a bare `f`, an operator out of place in a PDF, or a shading behind a
+   * clip with no path, which a reader that drops the clip spreads over the
+   * whole page.
+   */
+  private fillPath(segments: readonly string[], evenOdd: boolean): void {
+    if (segments.length === 0) return
+    this.alpha()
+    const gradient = this.state.fillGradient
+    if (gradient !== null) {
+      // The path as a clip, the shading painted through it, and the clip gone
+      // again with the `Q`. The shading is placed by the transform current
+      // now, as a canvas places a gradient when it fills rather than when the
+      // path was built.
+      const [x0, y0, r0, x1, y1, r1] = gradient.coords
+      const scale = scaleOf(this.state.matrix)
+      const [ax, ay] = this.point(x0, y0)
+      const [bx, by] = this.point(x1, y1)
+      const name = `Sh${this.shadings.length}`
+      this.shadings.push(
+        `/${name} << /ShadingType 3 /ColorSpace /DeviceRGB ` +
+          `/Coords [${[ax, ay, r0 * scale, bx, by, r1 * scale].map(round).join(' ')}] ` +
+          `/Function ${shadingFunction(gradient.stops)} /Extend [true true] >>`,
+      )
+      this.emit('q')
+      this.trace(segments)
+      this.emit(evenOdd ? 'W* n' : 'W n')
+      this.emit(`/${name} sh`)
+      this.emit('Q')
+      return
+    }
+    this.setFill()
+    this.trace(segments)
+    this.emit(evenOdd ? 'f*' : 'f')
+  }
+
+  /** Stroke a path — the current one, or the rectangle of a `strokeRect`. */
+  private strokePath(segments: readonly string[]): void {
+    if (segments.length === 0) return
+    this.alpha()
+    this.setStroke()
+    this.trace(segments)
+    this.emit('S')
   }
 
   // -------------------------------------------------------------------------
@@ -441,6 +580,8 @@ export class VectorPage {
         self.state.lineCap = value
       },
 
+      // The path is not saved with the state, on a canvas or here: a path
+      // built inside a `save` is still the current path after the `restore`.
       save: () => {
         self.stack.push({ ...self.state, matrix: { ...self.state.matrix } })
         self.emit('q')
@@ -453,36 +594,39 @@ export class VectorPage {
         self.state = previous
         self.emit('Q')
       },
+      // What empties the path, with `setOrigin`. A paint never does (see `path`).
       beginPath: () => {
-        self.path = []
-        self.current = null
+        self.emptyPath()
       },
       closePath: () => {
+        // A canvas ignores it on an empty path; PDF's `h` has no point to
+        // close from and is an error.
+        if (self.current === null) return
         self.path.push('h')
+        // What comes next starts where this subpath did, on a canvas and after
+        // PDF's `h` alike — so a curve's handles are worked out from there.
+        self.current = self.subpathStart
       },
       moveTo: (x: number, y: number) => {
-        const [px, py] = self.point(x, y)
-        self.path.push(`${round(px)} ${round(py)} m`)
-        self.current = { x, y }
+        self.startSubpath(self.point(x, y))
       },
       lineTo: (x: number, y: number) => {
-        const [px, py] = self.point(x, y)
-        self.path.push(`${round(px)} ${round(py)} l`)
-        self.current = { x, y }
+        const to = self.point(x, y)
+        // On an empty path a line is a move, as a canvas has it.
+        if (self.current === null) {
+          self.startSubpath(to)
+          return
+        }
+        self.path.push(`${round(to[0])} ${round(to[1])} l`)
+        self.current = to
       },
       rect: (x: number, y: number, w: number, h: number) => {
-        // Four corners rather than PDF's `re`, because `re` is axis-aligned in
-        // *page* space and the matrix here may be a quarter turn.
-        const points = [
-          self.point(x, y),
-          self.point(x + w, y),
-          self.point(x + w, y + h),
-          self.point(x, y + h),
-        ]
-        self.path.push(`${round(points[0][0])} ${round(points[0][1])} m`)
-        for (const [px, py] of points.slice(1)) self.path.push(`${round(px)} ${round(py)} l`)
-        self.path.push('h')
-        self.current = { x, y }
+        const { segments, first } = self.rectangle(x, y, w, h)
+        self.path.push(...segments)
+        // Closed, and the canvas begins the next subpath at its first corner,
+        // which is where PDF's `h` leaves the point too.
+        self.current = first
+        self.subpathStart = first
       },
       /**
        * A cubic, which PDF has natively — one operator, no conversion.
@@ -501,26 +645,29 @@ export class VectorPage {
         y: number,
       ) => {
         const [ax, ay] = self.point(c1x, c1y)
+        // On an empty path a canvas starts the subpath at the first handle.
+        self.ensureSubpath([ax, ay])
         const [bx, by] = self.point(c2x, c2y)
-        const [ex, ey] = self.point(x, y)
+        const end = self.point(x, y)
         self.path.push(
-          `${round(ax)} ${round(ay)} ${round(bx)} ${round(by)} ${round(ex)} ${round(ey)} c`,
+          `${round(ax)} ${round(ay)} ${round(bx)} ${round(by)} ${round(end[0])} ${round(end[1])} c`,
         )
-        self.current = { x, y }
+        self.current = end
       },
       quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => {
         // PDF has only cubics, so the quadratic is raised a degree — exactly,
         // which is what makes an arc in the figure the arc that was on screen.
-        const from = self.current ?? { x: cx, y: cy }
-        const c1 = { x: from.x + (2 / 3) * (cx - from.x), y: from.y + (2 / 3) * (cy - from.y) }
-        const c2 = { x: x + (2 / 3) * (cx - x), y: y + (2 / 3) * (cy - y) }
-        const [ax, ay] = self.point(c1.x, c1.y)
-        const [bx, by] = self.point(c2.x, c2.y)
-        const [ex, ey] = self.point(x, y)
-        self.path.push(
-          `${round(ax)} ${round(ay)} ${round(bx)} ${round(by)} ${round(ex)} ${round(ey)} c`,
-        )
-        self.current = { x, y }
+        // Worked in page space, from the point the path is actually at: each
+        // handle is two thirds of the way from its end to the control point,
+        // which an affine map preserves, so a start placed under an earlier
+        // transform is taken where it was put rather than re-placed.
+        const control = self.point(cx, cy)
+        const from = self.ensureSubpath(control)
+        const end = self.point(x, y)
+        const toward = (point: [number, number]): string =>
+          [0, 1].map((axis) => round(point[axis] + (2 / 3) * (control[axis] - point[axis]))).join(' ')
+        self.path.push(`${toward(from)} ${toward(end)} ${round(end[0])} ${round(end[1])} c`)
+        self.current = end
       },
       arc: (
         x: number,
@@ -554,8 +701,10 @@ export class VectorPage {
           y: y + Math.sin(angle) * radius,
         })
         let last = at(start)
-        const [sx, sy] = self.point(last.x, last.y)
-        self.path.push(`${round(sx)} ${round(sy)} m`)
+        // A subpath of its own from the arc's start. A canvas would join it to
+        // a current point with a line instead; every caller here begins an arc
+        // on an empty path or at that very point, where the two are one drawing.
+        self.startSubpath(self.point(last.x, last.y))
         for (let i = 0; i < steps; i++) {
           const from = start + piece * i
           const to = from + piece
@@ -566,42 +715,17 @@ export class VectorPage {
           self.path.push(`${c1.map(round).join(' ')} ${c2.map(round).join(' ')} ${round(ex)} ${round(ey)} c`)
           last = end
         }
-        self.current = last
+        self.current = self.point(last.x, last.y)
       },
-      fill: () => {
-        self.alpha()
-        if (self.state.fillGradient !== null) {
-          // The path as a clip, the shading painted through it, and the clip
-          // gone again with the `Q`.
-          const gradient = self.state.fillGradient
-          const [x0, y0, r0, x1, y1, r1] = gradient.coords
-          const scale = scaleOf(self.state.matrix)
-          const [ax, ay] = self.point(x0, y0)
-          const [bx, by] = self.point(x1, y1)
-          const name = `Sh${self.shadings.length}`
-          self.shadings.push(
-            `/${name} << /ShadingType 3 /ColorSpace /DeviceRGB ` +
-              `/Coords [${[ax, ay, r0 * scale, bx, by, r1 * scale].map(round).join(' ')}] ` +
-              `/Function ${shadingFunction(gradient.stops)} /Extend [true true] >>`,
-          )
-          self.emit('q')
-          self.flushPath()
-          self.emit('W n')
-          self.emit(`/${name} sh`)
-          self.emit('Q')
-          return
-        }
-        self.setFill()
-        self.flushPath()
-        self.emit('f')
+      // The fill rule, when one is passed. The page has no `Path2D`, so one
+      // passed in its place is not read, and the current path is filled.
+      fill: (rule?: unknown) => {
+        self.fillPath(self.path, rule === 'evenodd')
       },
       createRadialGradient: (x0: number, y0: number, r0: number, x1: number, y1: number, r1: number) =>
         new PageGradient([x0, y0, r0, x1, y1, r1]) as unknown as CanvasGradient,
       stroke: () => {
-        self.alpha()
-        self.setStroke()
-        self.flushPath()
-        self.emit('S')
+        self.strokePath(self.path)
       },
       setLineDash: (pattern: Iterable<number>) => {
         // Copied, and non-finite entries dropped: the canvas ignores a pattern
@@ -610,14 +734,21 @@ export class VectorPage {
         self.state.lineDash = [...pattern].filter((on) => Number.isFinite(on) && on >= 0)
       },
       getLineDash: () => [...self.state.lineDash],
-      clip: () => {
-        self.flushPath()
-        self.emit('W n')
+      clip: (rule?: unknown) => {
+        // The path stays the current path, as after a paint: a clip and then a
+        // fill fill the shape clipped to. An empty path clips everything away
+        // on a canvas, and PDF's `W` must have a path to read, so that is a
+        // rectangle of no size.
+        if (self.path.length === 0) self.emit('0 0 0 0 re')
+        else self.trace(self.path)
+        self.emit(rule === 'evenodd' ? 'W* n' : 'W n')
       },
+      // A rectangle of its own, painted without touching the current path: a
+      // canvas's `fillRect` and `strokeRect` leave the path as they found it.
+      // Going through `beginPath` and `rect` threw away a path the caller had
+      // built and not yet painted, and left the rectangle in its place.
       fillRect: (x: number, y: number, w: number, h: number) => {
-        target.beginPath()
-        target.rect(x, y, w, h)
-        target.fill()
+        self.fillPath(self.rectangle(x, y, w, h).segments, false)
       },
       fillText: (text: string, x: number, y: number) => self.text(text, x, y, false),
       strokeText: (text: string, x: number, y: number) => self.text(text, x, y, true),
@@ -664,9 +795,7 @@ export class VectorPage {
       // member is a `TypeError` in the middle of an export.
       clearRect: () => {},
       strokeRect: (x: number, y: number, w: number, h: number) => {
-        target.beginPath()
-        target.rect(x, y, w, h)
-        target.stroke()
+        self.strokePath(self.rectangle(x, y, w, h).segments)
       },
       // Nearest-neighbour or bilinear is a question about *pixels*, and the
       // answer on paper is whatever the reader's viewer does with the image.

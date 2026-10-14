@@ -13,7 +13,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { armsFor, originInMiddle, type ArmsPresentation } from '@/ui/MatrixPanel'
+import { armsFor, originInMiddle } from '@/ui/armFrame'
+import type { ArmsPresentation } from '@/ui/MatrixPanel'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
 const LENGTH = 400_000

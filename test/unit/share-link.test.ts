@@ -196,6 +196,16 @@ describe('a session in a fragment', () => {
 })
 
 describe('reading a link', () => {
+  it('reads a hostile session’s state as the address bar would', async () => {
+    // A link is a string anybody can make: its state reaches the session through
+    // the hash's own reader, not as the sender wrote it.
+    const hostile = configOf({
+      state: { uri: 'https://bucket.example.org/a.cool', view: 'banana', transform: 'banana', vmax: 'abc', oe: 'yes' },
+    } as unknown as Partial<SessionConfig>)
+    const back = decoded(await decodeShare(await encodeShare(hostile)))
+    expect(back?.state).toStrictEqual({ uri: 'https://bucket.example.org/a.cool', view: 'genomes', oe: false })
+  })
+
   it('finds the payload in a fragment', () => {
     expect(readShareHash('#session=abc')).toBe('abc')
     expect(readShareHash('session=abc')).toBe('abc')

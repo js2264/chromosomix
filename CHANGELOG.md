@@ -963,6 +963,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
+  GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
+  shipped on. Still pinned exactly, for the reason `package.json` gives.
+
+- **A chart's tooltip is the app's own, and spells a coordinate as the axes do (§18.13).** Every
+  chart has a formatter now, written in classes rather than the library's `style=` markup, which a
+  strict policy refuses — `VII`, `84.3 kb`, `2.24e-7`, as the ticks under it read.
+
 - **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
   deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
   the README, the package's `homepage` — which the desktop and single-file builds read the generated
@@ -2187,6 +2195,119 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Signing in to Dropbox opens the Files column on it (§24.9).** The folder list hears about a
+  bucket from the form that saves it and about a Drive folder from the pane that adds it, and
+  nothing told it about a Dropbox sign-in — so the Files column, which exists only while a place is
+  connected, never appeared: *browse my Dropbox* closed the dialog on the landing page with no error,
+  and a sign-out from the dialog left a dead row behind. The sign-in and the sign-out are now passed
+  on (`browse/dropbox.ts`). An expiry is not: the click that finds one says *sign in to Dropbox* in
+  the column, and the column stays to show it. The first live sign-in, on chromosomix.app, found
+  this.
+
+- **Desktop: bigWig lanes draw (§15).** The bigWig reader fetches its own inflate wasm from a `data:`
+  URL inside the annotations worker, and the desktop's policy, which reaches its workers, refused it —
+  inside the worker, so nothing in the page said so — and every bigWig lane stayed on *fetching…*.
+  `connect-src` admits `data:`, which has no server behind it, and the site's policy stays its mirror.
+
+- **A workspace, link, `?config=`, embed message or saved tab naming an unknown view or transform
+  opens (§5.5, §5.6, §21.1).** The address was read by an allow-list and everything else was not: a
+  state arriving as an object — a workspace, a share link, a `?config=` file, an embed's `navigate`,
+  the durable record of a tab — was cast as it came, so `view: 'banana'` sat on *Opening…* for ever
+  and `transform: 'banana'` threw on the first paint. Every one of them is now read by the hash's own
+  reader, which keeps what it knows and drops the rest; the twelve demo workspaces restore key for
+  key.
+
+- **Desktop: a chart's tooltip is styled (§15, §18.13).** The desktop's policy refused the chart
+  library's `style=` markup on every hover — seven hundred refusals over one P(s) — and left a box of
+  bare text with its colour swatches gone.
+
+- **A `.hic` block larger than the block cache is handed back and not kept (§3.6).** The eviction
+  skipped the block just stored, so one oversize block stayed over the 48 MiB budget until the next
+  was decoded.
+
+- **A read stored without its bases (`*`) shows no mismatches it does not have (§8.13).** The
+  mismatch walk compared the bytes after an empty sequence — its tags — with the reference as though
+  they were bases; it now walks an aligned operation only as far as the read has bases.
+
+- **`chromosomix` reads its command line by what each command takes (§23.1).** A flag took the word
+  after it as its value unless that word began with `--`, so `coverage a.cool --no-balance b.hic`
+  ran over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file,
+  and `--out --quiet` wrote into a directory called `true`. A task's on-or-off parameters and the
+  command's own `--quiet`, `--no-balance` and `--help` take nothing after them now — `--stranded=false`
+  or `--no-stranded` turns one off — a flag that takes a value is refused without one, and a flag a
+  command does not take is refused for `replay` and `circular` as for a task. `--stranded false`, the
+  old way to turn one off, is refused with what to write instead. `replay` reads the files after the
+  workspace as it reads those after `--over`, so `--over data/*.hic` replays every file rather than
+  the first alone.
+
+- **Every compartments line the console writes runs in a shell (§23.1).** `--contacts` is both the
+  total a map is drawn to (§6.5) and Compartments' own choice of contacts, and the console writes
+  both — `--contacts cis --contacts 10000000` — so the shell read `cis` as a total and refused the
+  line. A word among the task's options is the task's and any other the total's, so both are read
+  from one line, and a word that is neither is refused naming the two.
+
+- **A value no form could hold is refused before any file is opened (§23.1).** `expected --quantity
+  expectd` ran the density and wrote `# param quantity: expectd` above the table, `--factor=` ran at
+  nought and `--rungs abc` built one rung. Choices are checked against the task's options, switches
+  and numbers against what they can be, and what a replayed workspace recorded the same way — exit 2,
+  with the values there are.
+
+- **Each input of one command is written under a name of its own (§23.1).** `coverage
+  HCT116.rep1.cool HCT116.rep2.cool` wrote `HCT116.coverage.*` twice, the second run's files over the
+  first's, with exit 0. One input's outputs are named as they always were; two that would share a
+  name keep more of theirs (`HCT116.rep1`), then their directories (`dirA_sample`), then a number,
+  and nothing one command writes is written over by it.
+
+- **A remote file is fetched first, as the README said (§23.1, §23.3).** An http or https address
+  went to `stat` as a path. A map, an `--against`, a `--sequence` with its `.fai`, `--tracks`,
+  `--features`, `--pairs`, a `.pairs` for P(s)'s orientations and a replayed workspace are downloaded
+  whole into `$TMPDIR`, with their progress on stderr, and removed when the command ends; the
+  framing, the provenance and the outputs' names are the address's. The console's note on a remote
+  file says what the line costs rather than that a shell cannot read it.
+
+- **A figure's PDF strokes what it fills (§7.2, §18.13).** The PDF page let go of a path at the first
+  operator that painted it, where a canvas keeps it until `beginPath`, so a shape filled and then
+  stroked printed as its fill and a stroke of nothing: every exported box plot lost its outline,
+  whiskers and median, the reader's arrowheads came out as white halos with nothing inside, and a bar
+  track's outline and the 1D browser's chips lost their borders. The page now keeps the path and
+  writes it in front of every fill, stroke and clip, `fillRect` and `strokeRect` leave it alone, and
+  each cell of a deck's figure starts on an empty one.
+
+- **A place left before it was drawn is never drawn, and a colour changed while a region opened no
+  longer leaves the previous view on screen (§5.5).** Every change of view starts a render nobody
+  waits for, and two ran side by side whenever the reader was quicker than the file. A colour change
+  arriving while a region still waited on its contigs table repainted the view being replaced and
+  called itself mounted, and the region's own mount, overtaken, never drew — so the address named the
+  region over the old picture. A second render of the same state, which a remount, a tab coming back
+  and a closed comparison all start, ran to the end beside the first. Each render now calls off the
+  one before it, which stops at its next step, and a repaint waits for the view it would paint to have
+  finished mounting.
+
+- **The golden job compares the reader with Python on every run, with or without metacooler.**
+  It installed `metacooler` from PyPI, where there is no such package, and its fixture script
+  defaulted to one cluster path, so it built no fixture on any run and reported green with a
+  warning. Its public half now needs no credential:
+  - the four published demo maps — a `.metacool` and an `.mmetacool` metacooler wrote, a yeast
+    `.cool`, an E. coli `.mcool` — are fetched from the lab's bucket (`npm run fixtures:demo`) and
+    read against oracles the public `cooler` package recorded (`npm run fixtures:demo-golden`,
+    rebuilt on every run to prove it still reads them the same);
+  - the `.scool`, HiC-Pro, `.pairs` and binary `.g3d` fixtures, which `cooler` and `g3dtools` alone
+    can write, are built and their eight suites run.
+
+  The full suite over `make_fixtures.py`'s output runs when the `METACOOLER_REPO_TOKEN` secret can
+  read metacooler's repository, whose `tests/data` the script now finds through `--data`,
+  `$METACOOLER_TEST_DATA` or a checkout beside this one. Every install, fetch and build step may
+  still fail without failing the build, and the job's summary names what did not run. The demo maps
+  also run in the always-on job, copied from `demo/`. The metacool goldens are rebuilt from
+  metacooler's current `devel`, which records QC statistics the old ones did not.
+
+- **The request budgets run on every push, and the one that had gone red is green (§12).** The
+  fixture-free run excluded all of `test/budgets/`, though only `requests.test.ts` needs fixtures,
+  and the BAM budget had been failing unseen since the annotations worker began reporting progress
+  under the request's own id: the test took that report for the answer. HiC-Pro's suite, which no
+  CI run had built the fixture for, still expected h5wasm's own words for a text file the open path
+  now refuses by name (`not-hdf5`).
+
 - **An archived build survives the site moving (§21).** Every build on the archive branch carries
   the base it was built for in each asset URL, so the day the site's base changes every one of them,
   the releases included, would be a blank page at its new address. The deploy now rewrites each
@@ -3148,6 +3269,45 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The pair view opens either genome by name.** There was one door, labelled `open rows genome →`,
   which is not a phrase and did not say which of the two it opened.
+
+
+### Security
+
+- **Every web build carries a Content-Security-Policy (§11, §21, §22).** The site, each pinned build
+  and the package write one policy into `index.html` as a `<meta>`: scripts and styles from the page's
+  own origin and Google sign-in's documented sources, no inline script and no `style=`, connections to
+  `https:`, the loopback and `data:`, and no `frame-ancestors`, so an embed stays frameable. The build
+  fails if its page holds anything the policy would refuse. A script injected through a name in a
+  file would have run with the reader's S3 key in reach; it would be refused now.
+
+- **The single file carries a policy computed over itself (§19).** It names the hash of each inline
+  script and stylesheet, and reaches no host: `connect-src` admits only `data:` — where the bigWig
+  reader keeps its own wasm — and the blob workers inherit the policy.
+
+- **A chart's tooltip shows a file's names as text (§18.13).** A sequence, sample or series name was
+  written into the tooltip as HTML, which the chart library parses on every hover, so a file with a
+  sequence called `<img src=x onerror=…>` ran its script when the pointer crossed a Cis/trans or
+  track-correlation cell. Every formatter now escapes what it prints, through one helper — the names,
+  the numbers and a series' colour, which a workspace file carries as surely as a name.
+
+- **A binary file is held to its own size, whatever its counts claim (§10, §12).** A `.hic`, a
+  BAM's BAI or CSI, a `.2bit` and a binary g3d with its MessagePack header were read on the strength
+  of the counts and lengths they declare, so a truncated download, a flipped bit or a hostile file
+  sized a typed array, a read or a loop: a sixteen-byte `.hic` block declaring fifty million records
+  allocated 572 MiB, one negative vector length in a footer read 341 MiB of a 256 MiB file, and a
+  twenty-four-byte `.csi` declaring a depth near a million would hold the annotations worker for some
+  twenty minutes a query. Each count is now refused — naming the format, the field and the value —
+  unless it is a count, under the format's own maximum and small enough for the bytes left to hold
+  it, and an offset and length must name bytes inside the file. Over 1,140 seeded corruptions of
+  files the repository's own writers produce, no reader reads more than four times its file, makes
+  an array past 30 KB or takes a tenth of a second.
+
+- **Every inflate stops at a cap (§10, §12).** A `.hic` block, a g3d model, a gzipped or bgzipped
+  text file, a BGZF span, a `.pairs` stream, a whole file the command line keeps and a share link were
+  each inflated to the end before anything looked at the size. The decompressor is now fed 64 KiB at
+  a time and stopped as soon as its output passes a cap in proportion to what went in — sixty-four
+  times for a `.hic` or g3d block, where `straw` allows ten — a BGZF member is held to the format's
+  own 64 KiB and text to 2^29 bytes, and a line of a plain-gzip `.pairs` past 64 MiB is refused.
 
 ## [0.13.0] - 2026-09-20
 

@@ -2,7 +2,7 @@
  * A lane carried by its grip past the map it is drawn on (§16.9).
  *
  * The grip drag is a **pointer** drag, captured on the lane canvas it began on
- * (`MatrixPanel.watchLane`): every event goes to that canvas whatever is under
+ * (`LaneGestures.watchLane`): every event goes to that canvas whatever is under
  * it, which is what stops the map below reading the drag as a pan — and what
  * stops anything else on the page hearing about it at all. A `dragover` never
  * fires. So the places a lane can be let go on say so here instead: each

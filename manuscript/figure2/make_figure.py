@@ -446,7 +446,7 @@ def panel_cd() -> dict:
     for key, track in (("gc", one(composition, "*composition-gc.bw")), ("radial", one(spatial, "*radial*.bw")),
                        ("rna", fetch(AERUGINOSA["rna"]))):
         out = run(f"aeruginosa-groups-{key}", "groupsignal", "--tracks", track, "--features", ab_bed,
-                  "--outside", "false", "--resolution", res, "--circular", chrom)
+                  "--outside=false", "--resolution", res, "--circular", chrom)
         tests[key] = table(one(out, "*groupsignal-tests.tsv"))
         values[key] = by_group(one(out, "*groupsignal-1.tsv"))
     return dict(

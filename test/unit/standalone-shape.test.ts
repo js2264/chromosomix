@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { withStandaloneCsp } from '../../scripts/csp.mjs'
 import {
   STANDALONE_MAX_BYTES,
   STANDALONE_MIN_BYTES,
@@ -20,11 +21,17 @@ import {
   standaloneIndexProblems,
 } from '../../scripts/standalone-shape.mjs'
 
-/** The smallest HTML that satisfies every rule, for a test to break one at a time. */
-const GOOD =
-  '<!doctype html><html><head><title>t</title></head><body>' +
-  '<script type="module">const w=new Worker(URL.createObjectURL(b));/*standalone*/</script>' +
-  '</body></html>'
+/**
+ * The smallest HTML that satisfies every rule, for a test to break one at a time
+ * — its policy computed over it, as `vite.standalone.config.ts` computes the
+ * build's. A test that edits the script also stales the hash, which is one more
+ * problem beside the one it is about; each asserts on its own.
+ */
+const GOOD = withStandaloneCsp(
+  '<!doctype html><html><head><meta charset="utf-8"><title>t</title></head><body>' +
+    '<script type="module">const w=new Worker(URL.createObjectURL(b));/*standalone*/</script>' +
+    '</body></html>',
+)
 
 describe('the built page', () => {
   it('accepts one that is genuinely self-contained', () => {
@@ -75,6 +82,19 @@ describe('the built page', () => {
   it('refuses a build that does not say which target it is', () => {
     const html = GOOD.replace('/*standalone*/', '')
     expect(standaloneIndexProblems(html).join(' ')).toMatch(/does not identify itself/)
+  })
+
+  it('refuses a page with no policy of its own', () => {
+    const bare = GOOD.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
+    expect(standaloneIndexProblems(bare)).toEqual(['index.html carries no Content-Security-Policy'])
+  })
+
+  it('refuses a policy that does not name the script the page holds — a blank page in the browser', () => {
+    // What a plugin editing the file after the policy was computed produces:
+    // the hash is of a script the page no longer has, so its one script is
+    // refused and nothing starts.
+    const edited = GOOD.replace('/*standalone*/', '/*standalone*/;console.log(1)')
+    expect(standaloneIndexProblems(edited).join(' ')).toMatch(/does not name exactly the inline scripts/)
   })
 
   it('reports every problem, not the first', () => {

@@ -216,6 +216,20 @@ describe('readWorkspace', () => {
     expect((await readWorkspace())?.active).toBeNull()
   })
 
+  it('reads a stored tab’s state as a link is read, not as it was stored', async () => {
+    // A record outlives the build that wrote it, so a view or a transform the
+    // reading build does not have is as foreign here as in a link — and it used
+    // to reach the session as it was stored, hanging the tab on "Opening…".
+    await seed({
+      version: 1,
+      savedAt: '',
+      sessions: [{ id: 's1', config: { state: { uri: 'a.cool', view: 'banana', transform: 'banana', vmax: 'abc', oe: 'yes' } } }],
+      active: 's1',
+    })
+    const read = await readWorkspace()
+    expect(read?.sessions[0].config.state).toStrictEqual({ uri: 'a.cool', view: 'genomes', oe: false })
+  })
+
   it('defaults a missing version and savedAt rather than refusing the record', async () => {
     // The tolerance every field of a `SessionConfig` is read with, applied one
     // level up: a record written before either field existed is still a set of
@@ -315,6 +329,24 @@ describe('the workspace file', () => {
     configFor('three.cool', 'wf3|three.cool'),
   ]
   const written = (active = 1) => buildWorkspaceFile(tabs, active, new Date('2026-08-13T09:00:00Z'))
+
+  it('reads every tab’s state as a link is read', () => {
+    // A tab with no view, and one with a transform this build cannot draw: the
+    // first lands on the table, the second keeps its view and loses only that.
+    const read = parseWorkspaceFile(
+      JSON.stringify({
+        kind: 'chromosomix.workspace',
+        version: 1,
+        active: 0,
+        tabs: [{ state: { uri: 'a.cool' } }, { state: { uri: 'b.cool', view: 'region', transform: 'banana' } }],
+      }),
+    )
+    expect(isRefusal(read)).toBe(false)
+    expect((read as { tabs: Array<{ state: ViewState }> }).tabs.map((tab) => tab.state)).toStrictEqual([
+      { uri: 'a.cool', view: 'genomes' },
+      { uri: 'b.cool', view: 'region' },
+    ])
+  })
 
   it('carries every tab and remembers which was in front', () => {
     const file = written()

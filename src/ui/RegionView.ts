@@ -43,14 +43,14 @@ import { button, el, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import {
   MatrixPanel,
-  axisRegion,
-  blockSummary,
   type AnnotationContext,
   type CircularPresentation,
   type DerivePresentation,
   type FramedRegion,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
+import { axisRegion } from './mapSelection'
+import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'

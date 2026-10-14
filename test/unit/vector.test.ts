@@ -1,13 +1,16 @@
 /**
  * The vector PDF: the drawing itself, rather than a picture of it.
  *
- * Two things here are silent when wrong and expensive to notice. The first is
+ * Three things here are silent when wrong and expensive to notice. The first is
  * the *page*: a cross-reference table is a list of byte offsets into the file,
  * so an extra newline above it corrupts every entry below, and a reader either
  * repairs the file or refuses it. The second is the *flip*: PDF's y runs up the
  * page and a canvas's runs down, so a figure whose transform is upside down is
- * still a perfectly valid PDF — of the wrong picture. Both are read back out of
- * the bytes here rather than trusted.
+ * still a perfectly valid PDF — of the wrong picture. The third is the *path*:
+ * a canvas keeps it through a fill and the stroke after it, and PDF ends it at
+ * the fill, so a page that forgets the difference still writes a PDF every
+ * reader opens — whose stroke has nothing to draw. All three are read back out
+ * of the bytes here rather than trusted.
  *
  * The content stream is deflated, so every check inflates it first. That is
  * also the point of the compression test: a genome-wide view of a GTF is a few
@@ -44,6 +47,32 @@ async function contentOf(bytes: Uint8Array): Promise<string> {
     .stream()
     .pipeThrough(new DecompressionStream('deflate'))
   return latin1(new Uint8Array(await new Response(stream).arrayBuffer()))
+}
+
+/**
+ * The content stream as a reader paints it: each painting operator with the
+ * path construction in front of it.
+ *
+ * A PDF path is ended by the operator that paints it, so a paint with nothing
+ * in front of it draws nothing — which is what a bare `S` after a fill did.
+ * Anything but construction inside a path object is a broken stream, and is
+ * thrown on rather than skipped.
+ */
+function paintsOf(content: string): Array<{ op: string; path: string[] }> {
+  const paints: Array<{ op: string; path: string[] }> = []
+  let path: string[] = []
+  for (const line of content.split('\n')) {
+    if (/ [mlc]$| re$|^h$/.test(line)) path.push(line)
+    else if (/^(?:f\*?|S|W\*? n)$/.test(line)) {
+      paints.push({ op: line, path })
+      path = []
+    } else if (path.length > 0) throw new Error(`\`${line}\` inside a path object`)
+  }
+  return paints
+}
+
+async function paintsOfPage(page: VectorPage): Promise<Array<{ op: string; path: string[] }>> {
+  return paintsOf(await contentOf(await bytesOf(await page.toBlob())))
 }
 
 describe('pdfColour', () => {
@@ -427,5 +456,241 @@ describe('the state a charted figure needs', () => {
     expect(content).toMatch(/ 50 60 c$/m)
     // The control points of a quarter turn sit 0.5523 of the radius along the tangents.
     expect(content).toContain('60 55.523 55.523 60 50 60 c')
+  })
+})
+
+/** `rect(10, 10, 20, 20)` on a 100-pixel page, whose y runs up. */
+const SQUARE = ['10 90 m', '30 90 l', '30 70 l', '10 70 l', 'h']
+
+// A canvas's `fill`, `stroke` and `clip` read the current path and leave it,
+// until `beginPath`; a PDF painting operator ends the path it paints. The page
+// wrote its path once and let it go, so a shape filled and then stroked
+// printed a bare `S`: a box plot's outline, whiskers and median, the reader's
+// arrowheads, a bar track's outline and the browser's chips, all gone.
+describe('the current path, kept as a canvas keeps it', () => {
+  it('writes a path filled and then stroked in front of both', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.rect(10, 10, 20, 20)
+    page.ctx.fill()
+    page.ctx.stroke()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'S', path: SQUARE },
+    ])
+  })
+
+  // The reader's arrowhead: a halo stroked in the page's colour, then the
+  // mark's own colour filled over it. Only the halo used to reach the PDF.
+  it('writes a path stroked and then filled in front of both', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.moveTo(50, 10)
+    page.ctx.lineTo(60, 30)
+    page.ctx.lineTo(40, 30)
+    page.ctx.closePath()
+    page.ctx.strokeStyle = '#ffffff'
+    page.ctx.stroke()
+    page.ctx.fillStyle = '#ff0000'
+    page.ctx.fill()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    const triangle = ['50 90 m', '60 70 l', '40 70 l', 'h']
+    expect(paintsOf(content)).toEqual([
+      { op: 'S', path: triangle },
+      { op: 'f', path: triangle },
+    ])
+    // In the mark's colour, not left at the halo's.
+    expect(content).toMatch(/^1 0 0 rg\n50 90 m$/m)
+  })
+
+  it('fills, clips to and fills again one path', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.rect(10, 10, 20, 20)
+    page.ctx.fill()
+    page.ctx.save()
+    page.ctx.clip()
+    page.ctx.fill()
+    page.ctx.restore()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'W n', path: SQUARE },
+      { op: 'f', path: SQUARE },
+    ])
+  })
+
+  it('empties the path at beginPath, and nowhere else', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.rect(10, 10, 20, 20)
+    page.ctx.fill()
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 50)
+    page.ctx.lineTo(100, 50)
+    page.ctx.stroke()
+    // Nothing to paint is nothing written, rather than a bare operator.
+    page.ctx.beginPath()
+    page.ctx.fill()
+    page.ctx.stroke()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'S', path: ['0 50 m', '100 50 l'] },
+    ])
+  })
+
+  // As a canvas has it: the second stroke strokes both lines, because nothing
+  // between the two emptied the path.
+  it('adds what is moved to after a paint to the same path', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 10)
+    page.ctx.lineTo(50, 10)
+    page.ctx.stroke()
+    page.ctx.moveTo(0, 20)
+    page.ctx.lineTo(50, 20)
+    page.ctx.stroke()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'S', path: ['0 90 m', '50 90 l'] },
+      { op: 'S', path: ['0 90 m', '50 90 l', '0 80 m', '50 80 l'] },
+    ])
+  })
+
+  it('paints a fillRect and a strokeRect without disturbing a path being built', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 50)
+    page.ctx.fillRect(10, 10, 20, 20)
+    page.ctx.strokeRect(10, 10, 20, 20)
+    page.ctx.clearRect(0, 0, 100, 100)
+    page.ctx.lineTo(100, 50)
+    page.ctx.stroke()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'S', path: SQUARE },
+      { op: 'S', path: ['0 50 m', '100 50 l'] },
+    ])
+  })
+
+  // A canvas places a path's points under the transform current when they are
+  // added, and scales a stroke's width by the one current when it strokes.
+  it('keeps a path where it was built, at the width of the transform it is stroked under', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.setTransform(2, 0, 0, 2, 0, 0)
+    page.ctx.beginPath()
+    page.ctx.rect(5, 5, 10, 10)
+    page.ctx.fill()
+    page.ctx.lineWidth = 3
+    page.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    page.ctx.stroke()
+    page.ctx.setTransform(4, 0, 0, 4, 0, 0)
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(paintsOf(content)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'S', path: SQUARE },
+      { op: 'S', path: SQUARE },
+    ])
+    expect(content.match(/^[\d.]+ w$/gm)).toEqual(['3 w', '12 w'])
+  })
+
+  // The path is not drawing state: a canvas's `restore` lets go of the clip
+  // and keeps the path that made it.
+  it('outlives the restore of the save it was built in', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.save()
+    page.ctx.rect(10, 10, 20, 20)
+    page.ctx.clip()
+    page.ctx.restore()
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(paintsOf(content)).toEqual([
+      { op: 'W n', path: SQUARE },
+      { op: 'S', path: SQUARE },
+    ])
+    expect(content).toMatch(/^W n\nQ$/m)
+  })
+
+  // A sub-drawing placed at an origin has a canvas of its own on screen, and a
+  // canvas starts with no path: the path one deck cell leaves is not the
+  // next cell's to paint.
+  it('starts each sub-drawing placed at an origin on an empty path', async () => {
+    const page = new VectorPage(100, 100)
+    page.setOrigin(10, 10)
+    page.ctx.beginPath()
+    page.ctx.rect(0, 0, 20, 20)
+    page.ctx.fill()
+    page.setOrigin(50, 50)
+    page.ctx.stroke()
+    page.ctx.moveTo(0, 0)
+    page.ctx.lineTo(10, 0)
+    page.ctx.stroke()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'f', path: SQUARE },
+      { op: 'S', path: ['50 50 m', '60 50 l'] },
+    ])
+  })
+
+  it('keeps the path after a gradient fill, for the stroke round it', async () => {
+    const page = new VectorPage(100, 100)
+    const gradient = page.ctx.createRadialGradient(20, 20, 0, 20, 20, 10)
+    gradient.addColorStop(0, '#ffffff')
+    gradient.addColorStop(1, '#000000')
+    page.ctx.fillStyle = gradient
+    page.ctx.beginPath()
+    page.ctx.rect(10, 10, 20, 20)
+    page.ctx.fill()
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(paintsOf(content)).toEqual([
+      { op: 'W n', path: SQUARE },
+      { op: 'S', path: SQUARE },
+    ])
+    expect(content).toMatch(/^W n\n\/Sh0 sh\nQ$/m)
+  })
+
+  // A closed subpath hands its start on: on a canvas and after PDF's `h`
+  // alike, what follows begins there, so a curve's handles are worked out
+  // from there — and a line drawn on an empty path is a move.
+  it('starts what follows a closePath where the closed subpath began', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.closePath()
+    page.ctx.lineTo(10, 10)
+    page.ctx.lineTo(40, 10)
+    page.ctx.lineTo(40, 40)
+    page.ctx.closePath()
+    page.ctx.quadraticCurveTo(10, 70, 40, 70)
+    page.ctx.stroke()
+    // From (10, 10): the first handle two thirds of the way to (10, 70), the
+    // second two thirds of the way to it from (40, 70).
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'S', path: ['10 90 m', '40 90 l', '40 60 l', 'h', '10 50 20 30 40 30 c'] },
+    ])
+  })
+
+  it('fills and clips by the even-odd rule when asked to', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.rect(0, 0, 100, 100)
+    page.ctx.rect(25, 25, 50, 50)
+    page.ctx.fill('evenodd')
+    page.ctx.clip('evenodd')
+    page.ctx.fill()
+    expect((await paintsOfPage(page)).map((paint) => paint.op)).toEqual(['f*', 'W* n', 'f'])
+  })
+
+  // A canvas clipped to nothing draws nothing; PDF's `W` must have a path.
+  it('clips everything away with an empty path, as a canvas does', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.save()
+    page.ctx.beginPath()
+    page.ctx.clip()
+    page.ctx.fillRect(10, 10, 20, 20)
+    page.ctx.restore()
+    expect(await paintsOfPage(page)).toEqual([
+      { op: 'W n', path: ['0 0 0 0 re'] },
+      { op: 'f', path: SQUARE },
+    ])
   })
 })

@@ -32,6 +32,9 @@ out/
 # Fixtures and goldens are generated (`npm run fixtures`); the large real-world
 # datasets in data/ are never committed.
 test/fixtures/
+# Written beside its own fixture by `npm run fixtures:pairs`: committed alone it
+# would turn its suite's skip-by-name into a failure on every fresh clone.
+test/golden/pairs_cload.json
 data/*.metacool
 data/*.mmetacool
 data/*.cool
@@ -58,6 +61,7 @@ gallery/
 gallery-figures/
 gallery-bacteria/
 gallery-peaks/
+gallery-csp/
 
 # What notebooks/dbz-chromosome-figures.qmd fetches and makes: the store's maps
 # and references, every output of the chromosomix command, the figures, and

@@ -981,6 +981,18 @@ from the modal's own right edge.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+**Every view state from outside is read by the hash's own reader.** A link is parsed key by key — a
+`view` this build does not have lands on the table, a transform it cannot draw and a clip that is not
+a number are dropped — and so is every state that arrives as an object instead: a workspace file, a
+share link's `#session=`, a published `?config=`, the durable record (§5.6) and an embedding page's
+patch (§21.4) are each laid out as the hash body they would have been and parsed back
+(`viewStateOf`). A workspace's state used to be cast once its `uri` checked out, so one naming
+`view: 'banana'` left its tab on "Opening…" for good, a tab with no `view` did the same, and an
+unknown transform threw from the renderer. Only strings, numbers and booleans are carried into the
+read — an array is not stringified into a name, and a string the URI encoder would throw on drops
+its key rather than the tab — and every state this application writes comes back unchanged, which a
+test holds for every published demo workspace.
+
 **Back and forward are in the header**, past a divider after the four panels' toggles, as Lucide's
 *undo* and *redo* arrows: the browser's own back and forward, as buttons, so they walk exactly the
 entries every navigation here writes — a crumb, a typed locus, a zoom or pan step, a sequence
@@ -1086,6 +1098,16 @@ being looked at, so its `locus` is in the hash — written in the display form o
 settled, in place of the current history entry rather than as a new one, so a link names the window
 and the back button still walks navigations.
 
+**The newest navigation wins.** A view state that arrives while the previous one is still being drawn
+— its file opened, its deck reconciled, its contigs table read — supersedes it: the earlier one stops
+at its next step and draws nothing, so a reader quicker than the file never sees a picture of a place
+already left, and one place asked for twice is drawn once. A change of colour, score or saved place is
+a repaint of the view on screen only once that view has finished mounting; arriving earlier, it is
+drawn as the navigation it then is, rather than painted onto the view being replaced. And a state
+naming a view this build does not have — which only a stored workspace, a share link or a `?config=`
+file can carry — lands on the file's first table, as a link to a view the file cannot answer does,
+rather than leaving the tab opening.
+
 ### 5.6 Sessions
 
 Several files may be open at once, as tabs — twelve at most (`MAX_SESSIONS`), a ceiling on memory
@@ -1106,7 +1128,8 @@ a click reopens it as it would a remote one.
 
 **A closed browser is offered its tabs back, never given them.** Beside the strip, every tab's whole
 config — tracks, marks, filters — is kept in IndexedDB (`state/workspace.ts`) and read only when
-there is no session storage at all, which is what closing the browser leaves. The window then says
+there is no session storage at all, which is what closing the browser leaves. A record outlives the
+build that wrote it, so what each tab was looking at is read by §5.5's reader like a link's. The window then says
 *You had 3 tabs open 2 days ago: …* with *restore*, and its × forgets the record rather than hiding
 the note: reopening a week's files unasked would reverse the reader's own closing of them, and on a
 shared machine would put somebody's unpublished data in front of whoever sat down next.
@@ -2037,6 +2060,19 @@ what puts the format's full name and the button on one line. The clipboard butto
 takes a PNG whatever the format beside it says, so while the select is away **its tooltip names the
 resolution it will use**: a slide-maker was pasting a raster rasterised at a number they could no
 longer see or change.
+
+**The page keeps its path as a canvas does.** The context is the same drawing only if it answers
+every call as a canvas would, and the path is where a canvas and a PDF part: a canvas's `fill`,
+`stroke` and `clip` each read the current path and leave it for the next, until `beginPath` empties
+it, while in a PDF the operator that paints a path ends it. So the page holds the path itself and
+writes it out again in front of every operator that paints it — its points where the transform put
+them as they were added, a stroke's width as the transform scales it when it is stroked, as on a
+canvas — and `fillRect` and `strokeRect` paint a rectangle of their own without disturbing it. Each
+cell of a deck's figure (§16.5) starts on an empty path, as its own canvas does on screen. An empty
+path paints nothing, and a clip to it clips everything away. The page used to write a path once and
+let it go, so a shape filled and then stroked was printed as its fill and a stroke of nothing: every
+exported box plot lost its outline, whiskers and median, the reader's arrowheads came out as white
+halos with nothing inside, and a bar track's outline and the 1D browser's chips lost their borders.
 
 **The caption under a figure is quiet, and can be left off.** A saved map figure says under itself
 what it shows: the region on the first line, then the file, the bins, the score, the colour range
@@ -4824,7 +4860,10 @@ fields it had never seen would fail far from here, in the middle of a chromosome
 The refusal names the version and the two commands that convert it. A file declaring more than
 100,000 sequences is refused as well — opening one reads a record header per sequence, and a count
 that large is likelier a truncated file than an assembly — and one that ends inside its index or a
-record says it is truncated.
+record says it is truncated. So is a record whose gap or mask count it could not hold — a run covers
+at least a base and costs eight bytes — before that count decides a read (§10): a flipped
+`nBlockCount` asked for thirty-four gigabytes of gap list, which a ranged read answers with the rest
+of the file.
 
 The assembly is `origin: 'twobit'` and **exact** — every `dnaSize` is in the index — so an 800 MB
 genome declares its chromosomes in a few hundred kilobytes without reading a base. The store is the
@@ -5210,6 +5249,48 @@ tooltip, rather than live and answering with a dialog (§8.5).
 | BAM whose index cannot be read | Read by search, the summary naming the index that did not read and what went wrong with it |
 | BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>`. Where the header claimed otherwise or said nothing and the search found the reads out of order, name the two places that show it, give `samtools sort` then `samtools index`, and say that a Hi-C pipeline's alignment file is in read-pair order and not made for browsing |
 | CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name, **and of a track hub's `cram` track** (§24.10); a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
+| A count, length or offset a binary file declares that the file could not hold — a `.hic` block's record count, a normalisation vector's length, an index entry past the end of the file, a BAI's linear-index size, a CSI deeper than ten levels, a `.2bit` record's gap count, a MessagePack array longer than its bytes | `format`, naming the format, the field and the value — *The record count of a block of this .hic reads 50,000,000, and the 2 bytes after it could hold at most 0* — and ending *the file is truncated, corrupt, or not the format its first bytes claim*. Refused **before** anything is read, allocated or walked on its strength; see below |
+| Compressed data that inflates past its cap | `format`, naming the format, the field and the cap. The inflate is stopped as soon as the cap is passed, not after the bomb has gone off; see below |
+
+**A number a file declares is a claim, not a size.** Every binary reader sizes its reads, its typed
+arrays and its loops by counts read out of the same bytes as the data, so a truncated download, a
+flipped bit and a file written to hurt are all the same thirty-two bits read as a count — and
+trusted, a sixteen-byte `.hic` block declaring fifty million records allocated 572 MiB, one negative
+vector length in a footer read 341 MiB of a 256 MiB file, and a twenty-four-byte `.csi` would hold
+the annotations worker for some twenty minutes a query. So each count passes three questions in
+`sources/untrusted.ts` before it sizes anything: **is it a count** (a non-negative safe integer),
+**is it under the format's ceiling**, and **could the bytes left hold it** at the fewest bytes one
+item takes. The third does the work: it makes every allocation and every loop proportional to bytes
+that are actually there. An offset and length pair must also name bytes inside the file, and entries
+a writer lays end to end — a `.hic`'s matrix records, a resolution's blocks, its normalisation
+vectors — must between them fit in it, since overlapping entries that each lie inside the file would
+read it once per entry.
+
+**The ceilings are the formats' own maxima, set generously**, because a ceiling that refuses a real
+file is a bug in the ceiling and not a protection. Each is argued where it is set: a `.hic` block
+holds at most 2^26 records (Juicer and `hictk` cut a matrix into blocks of about a thousand bins a side,
+or a fixed 500 kb or 5 Mb of genome below 500 bp and 5 kb, so a mammalian block holds about a
+million; tens of millions are reachable only on a small genome sequenced to saturation at 100 bp or
+finer); a BAI reference at most 2^16 linear-index slots (BAI cannot address past 2^29 bp, so the
+format's own maximum is 32,768); a CSI at most ten levels (its bins are `uint32`, and an eleventh
+level could not be numbered). Two counts are read leniently, as they always were: a `.hic`
+normalisation index no file could hold opens the file with no weights, since what follows the
+expected values may be no index at all, and a BAM record whose name, CIGAR and sequence overrun its
+own length stops the walk as a non-positive length does.
+
+**An inflate is capped in proportion to what went in.** A fixed cap cannot be both safe and
+generous: one small enough to hold a thousand-to-one bomb refuses a large real file. So the cap is a
+ratio well above the format's real one, with a floor under which a small file may compress as well
+as it likes and a ceiling the reader could not use past: a `.hic` block and a g3d model block at
+64 times their compressed size (`straw`, the C++ reader `hicstraw` is built on, sizes its buffer at
+ten and records three as the most it has seen), never under 16 and 64 MiB; a HiC-Pro matrix or a
+FASTA the command line keeps as bytes the same, never under 512 MiB; a share link's workspace the
+same, never under 16 MiB. A BGZF member is held to the format's own 64 KiB, which htslib refuses to
+exceed, and text to 2^29 bytes, past which no engine can decode a string anyway. The decompressor is
+fed 64 KiB at a time and stopped the moment its output passes the cap, so the overshoot is one
+slice's worth and never the bomb. A plain-gzip `.pairs` is a stream with no total to cap — its
+records are walked as they arrive — so it is fed the same way, and a line in it is refused past
+64 MiB rather than carried to the end of the inflate.
 
 ---
 
@@ -5238,6 +5319,34 @@ own private bucket, Drive or Dropbox, read from the browser with their own crede
 §24.7, §24.9). Identical code path, different byte source. Nothing is uploaded, so there are no
 accounts, no storage, no hosting cost and no GDPR review. Stated prominently in the UI and in the
 paper.
+
+**Every web build carries a Content-Security-Policy, in its page.** The site, every archived pin and
+the package (§22) write one string (`scripts/csp.mjs`) into `index.html` as a `<meta>` right after
+the charset, ahead of everything it governs, and their builds check the page they emit against it. A
+meta because GitHub Pages, a registry CDN and a lab's static server send no header anybody here
+chooses; the desktop sends the same policy as a header and records what a meta costs (§15), and
+both costs are taken knowingly: **it does not reach the workers**, which are files and take their
+policy from their own responses, so what it polices is the document — everything parsed into it,
+every script it loads and every request it makes itself, a `?config=` workspace, a store's catalog, a
+folder listing; and **it cannot say `frame-ancestors`**, which these builds must not say anyway,
+since an embed is a frame in somebody else's page (§21). It allows what the app does and nothing
+else: scripts from its own origin, with `'wasm-unsafe-eval'` for h5wasm and the correlation kernel;
+styles from its own origin, with no `'unsafe-inline'`, because nothing in the tree writes `style=` —
+the chart tooltips, which showed the library's styled markup, now carry markup of their own (§18.13);
+images from itself, `data:` and `blob:`; connections to itself, to any `https:` host — remote files
+are the remote half of the app — and over plain HTTP to `localhost`, where a dev server or a local
+object store answers, and to `data:`, which reaches nothing and keeps this the desktop's policy:
+its header reaches the worker that fetches the bigWig reader's wasm from a `data:` URL (§15), and
+this meta does not; workers, the service worker and the manifest from itself; and Google Identity
+Services by exactly the sources Google documents — its client script, fetched on a sign-in click
+and never on load (§24.7), its stylesheet, its frames and its endpoints. When that script loads it
+writes an inline `<style>` of button styles, which the policy refuses with one console line and
+loses nothing by refusing: the token client this app uses draws no button. Everything else falls to
+`default-src 'none'`, and no plugin, `<base>` or form submission is allowed. The dev server carries
+no policy, since it injects every stylesheet as a `<style>` and talks to the page over a websocket;
+`vite preview` serves a build, policy and all. `scripts/ui-csp.mjs` drives a built page under it
+— a map, a figure hovered, the 1D browser from a second origin — and fails on any refusal the page
+did not ask for, and on a map or a lane left without its data.
 
 ---
 
@@ -5387,6 +5496,15 @@ memory rather than round trips and a local file pays it in full:
 The way out here is not an index but a conversion, and the gate says so: `cooler load -f coo` turns
 the same two files into a `.cool` that opens in a handful of requests at any size.
 
+**Every budget above assumes a file that is what it says it is. One that is not is held to its own
+size** (§10). A corrupt or hostile file is either read or refused, and either way the cost is bounded
+by its bytes rather than by what its counts claim:
+
+| Operation | Budget |
+|---|---|
+| Open and read a binary file whose counts, offsets or compressed data are corrupt — `.hic`, BAM with BAI or CSI, `.2bit`, binary g3d | an answer or a refusal; **never more than 16× the file's size read** in one open, never one typed array past 64 MiB, never 1.5 s. `test/unit/fuzz-readers.test.ts` holds every reader to this over 1,140 seeded corruptions of files the repository's own writers made; the worst reads 4× its file and allocates 30 KB, and the slowest takes a tenth of a second |
+| An inflate of any kind | stopped as soon as its output passes its cap, at most one 64 KiB slice of input later (§10) |
+
 ---
 
 ## 13. Explicit non-features
@@ -5507,7 +5625,15 @@ hundreds of frames from the cause — and `mountTarget()` starts writing tens of
 worker at all, and cannot express `frame-ancestors`. It keeps `'wasm-unsafe-eval'` — verified in both
 directions; without it h5wasm fails to instantiate in both document and worker — and needs no
 `'unsafe-inline'` for styles, because `el()` assigns through the CSSOM and the tree contains no
-`innerHTML`, no `<style>` creation and no `style=` attribute.
+`innerHTML`, no `<style>` creation and no `style=` attribute. The one markup it hands a library is a
+chart's tooltip, which ECharts parses with `innerHTML`, and it carries classes rather than `style=`
+(§18.13) — the library's own tooltip markup did not, so under this policy every hover over a figure had
+its styling refused until the charts had formatters of their own. And `connect-src` takes `data:`,
+for a worker: the bigWig and bigBed reader carries its inflate wasm as a `data:` URL and fetches it
+before its first read, and this header reaches the annotations worker, where a meta would not.
+Without `data:` the fetch was refused inside that worker, where the page hears nothing, and every
+bigWig lane said *fetching…* for good while the interval lanes beside it drew. A `data:` URL has no
+host behind it, so the clause reaches nothing.
 
 **One request header is rewritten, and it is the target's only capability.** `Accept-Encoding` is a
 forbidden header name in Fetch, so no page may set it; the main process may. Every http(s) request
@@ -8842,7 +8968,9 @@ and `figures/svgPaint.ts` replays it as canvas calls onto whatever context the c
 paths and text into a `VectorPage`, pixels onto a canvas. One implementation, two destinations,
 and no way for them to differ. `VectorPage` gained `bezierCurveTo` (a chart's curves are cubics),
 `transform` (a `<g transform>` composes with the caller's placement rather than replacing it) and
-`lineCap` for this.
+`lineCap` for this. It keeps a path through a fill and the stroke after it, as a canvas does (§7.2),
+which a chart needs as much as any track: `zrender` draws a box plot's box, whiskers and median as
+one path, filled and then stroked.
 
 Three limits of the replay are stated rather than hidden: a **linear gradient fill is drawn as
 bands** — a hundred strips across its line, each the colour the gradient has at its middle, clipped
@@ -8912,6 +9040,23 @@ typed none — which is a second bookmark and not a second window: the single so
 holds. The gesture is taken in the capture phase, because the chart pans on a drag and a picture
 sliding under the box being drawn on it is the one thing this must not do; ECharts' own brush is not
 used, since it arrives with a toolbox of buttons over the picture and zooms both axes always.
+
+**What the pointer says is the file's words as text, in this application's markup.** ECharts writes a
+tooltip with `innerHTML`, and what a tooltip names comes out of the file: a cis/trans square's ticks are
+its sequences' names, a track correlation's are its tracks', a curve is named after either. So every
+chart has a formatter of its own, and every name, number and colour reaches its markup through one
+escape (`figures/tooltip.ts`) — interpolated as it came, a sequence named `<img src=x onerror=…>` ran
+its script on hover. The library's own markup, which a chart with no formatter shows, escapes its text
+but styles every margin and swatch with `style=` attributes, which a policy without `'unsafe-inline'`
+refuses (§11, §15): one pass of the pointer over P(s) raised seven hundred violations and left a box
+of bare text with its swatches gone. The formatters' markup carries classes instead, and a series'
+swatch is an SVG `fill`. **Each coordinate is spelled as its axis spells it** — a sequence's name
+over its bar and `84.3 kb` along a P(s), where the library printed the raw number under the pointer,
+`6.00` and `84,281.00`; per cent where the axis is; and `2.24e-7` under ticks of `1e-7` rather than a
+run of zeros. Over a point, a histogram's bar, a box or a violin the series comes first, then the
+pair, the count, the five numbers the box is drawn from, or, for a violin, nothing more: the shape is
+the answer. Tick labels, legends and titles are not markup — the SVG draws them as text — and are not
+escaped.
 
 **A boolean is one of two shapes, and a tick box is neither.** A *named parameter* — smooth, fill
 under, the grid, the tooltip — is a label and an `on`/`off` button on one row, which is what every
@@ -9021,7 +9166,8 @@ written, and each is absolute rather than a degradation:
 2. **A sibling `.js` cannot be fetched** — the same refusal that blocks a dynamic import.
    `inlineDynamicImports` collapses the graph to one chunk, at both the app and the worker level,
    and the build's own plugin folds that chunk into the HTML.
-3. **No network at all.** The origin is opaque, so every remote read fails before it is sent.
+3. **No network at all.** The origin is opaque, so every remote read fails before it is sent — and
+   the page's own policy says so, so that it is a rule rather than a circumstance (below).
 4. **No service worker.** Registration is refused. `pwa.ts` needs no change: it already treats a
    refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
 
@@ -9047,12 +9193,28 @@ where the site loads each as a chunk of its own. Most of the size is the price o
 reducible without dropping it. It gzips to about a quarter in transit and costs roughly a second of
 parsing on each open, with no HTTP cache behind it.
 
+**It carries a policy of its own, computed over itself.** A file can be sent no header, and the
+site's `'self'` policy (§11) would refuse every script and stylesheet this build inlines, so the
+build writes a `<meta>` CSP after inlining them: `script-src` and `style-src` name the SHA-256 of each
+inline element and nothing else — over the text as the parser hands it over, CR LF folded to LF —
+`'wasm-unsafe-eval'` keeps h5wasm, workers come only from `blob:`, which is how they are built here,
+and images only from `data:` and `blob:`. `connect-src` names `data:` alone, which makes (3) a rule
+the browser enforces rather than a property of an opaque origin, and a worker built from a blob
+inherits its page's policy, so here — unlike on the site — the workers are policed too: a fetch to
+any host is refused in the page and in a worker alike. `data:` is there for a worker and reaches
+nothing: the bigWig and bigBed reader carries its inflate wasm as a `data:` URL and fetches it before
+its first read, and under `'none'` that was refused inside the annotations worker, where the page
+hears nothing of it — every bigWig lane said *fetching…* for good. The hashes are written last,
+because any edit to the page after them names a script it no longer holds, and the browser answers
+that by refusing the app's one script.
+
 **Every way this build can fail is silent, so the shape is a rule the build enforces.** A page that
 kept one `<script src>` paints its shell and stops, with nothing on a console nobody is looking at;
 a page that kept the module worker format looks completely normal until a file is dropped on it.
 `scripts/standalone-shape.mjs` holds the rules — one file, within a size band (4 MB to 24 MB), no
 external script or stylesheet, no root-absolute reference, no PWA tag, no `{type:"module"}` worker
-construction, the blob-URL construction present and the target's own name in the page — and
+construction, the blob-URL construction present, the target's own name in the page, and a policy
+naming exactly the scripts and stylesheet the page holds, recomputed over the file it reads — and
 `check-standalone-build.mjs` runs them over the directory as the last step of
 `npm run build:standalone`. The lower size bound is as load-bearing as the upper: a build whose
 inlining silently did nothing produces a small, tidy, entirely broken file.
@@ -9060,7 +9222,10 @@ inlining silently did nothing produces a small, tidy, entirely broken file.
 **And the rules can all pass on a page that does not run**, so `scripts/smoke-standalone.mjs` drives
 a real Chromium at a real `file://` URL, mounts the app and opens the contact map named on its
 command line through a real worker. It skips with a named message where the browser or
-`playwright-core` is absent, in the same way the fixture-dependent tests do.
+`playwright-core` is absent, in the same way the fixture-dependent tests do. `scripts/ui-csp.mjs
+standalone` drives it under its policy — the yeast map and a bigWig dropped on it, two tasks run and
+every chart hovered — and fails on a lane or a map left without its data, and on any refusal, in the
+page or in one of its workers, but the ones it provokes to show the policy is there.
 
 **Every release carries it.** The release workflow's `standalone` job builds it from the tag and
 attaches it to the release as `chromosomix-<tag>.html` — a name that says what it is and
@@ -9357,6 +9522,10 @@ and each is load-bearing:
   asset URL; when the base changes — the site's own domain, `chromosomix.app`, puts it at the root —
   the deploy rewrites each archived build and preview for the new base, once
   (`scripts/archive-rebase.mjs`), and `…/v/<commit>/` goes on opening the same build there.
+- **No `frame-ancestors`.** The web builds' policy (§11) is a `<meta>`, which cannot carry the
+  directive, and would leave it out if it could: a policy deciding who may frame the viewer is a
+  policy against this surface. The desktop's header says `frame-ancestors 'none'`, which is right
+  for an application window and is the one clause the two policies do not share.
 
 The data host needs no new CORS entry per embedding site: a frame's requests carry the **frame's**
 origin, which is the viewer's, so §11's hosting requirements are exactly as they were.
@@ -9377,7 +9546,7 @@ legitimate thing to embed.
 the embed is published and grows the URL by the size of the session; a pointer is a file on a bucket,
 editable afterwards, of no length, and — because the names inside it resolve against its own URL
 (`state/SessionConfig.ts`'s `resolveConfig`) — self-contained enough to be copied to another bucket with its data. Both are
-read by one parser.
+read by one parser, and the view state in either by the one a `#uri=` link is read by (§5.5).
 
 A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept,
 judged after `canonicalUrl` has made an `s3://` or a `gs://` the address it stands for (§24.5): the
@@ -9553,9 +9722,10 @@ why publishing happens from CI, on a clean checkout, where the directory does no
 moment rather than shipping whatever was there — and `dist-cli/` too, which `build:package` builds
 first. Then `check-package-build.mjs` refuses the result if it is wrong — no `index.html` or
 `icon-192.png`, no module script under `./assets/`, a root-absolute reference, a service worker or a
-web manifest, a source map, a data file, or more than 12 MB in all — and the rules are held by a
-test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement §15 and §21's
-archived build both use.
+web manifest, a source map, a data file, more than 12 MB in all, or a page without the site's
+policy (§11), which a copy carries in the page because no server it lands on will send it — and the
+rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`) in the arrangement
+§15 and §21's archived build both use.
 
 That check earns its place twice over here. `dist/` is written by **two** builds — the site's and this
 one — and only one of them may be published; a tarball packed over a site build would carry absolute
@@ -9663,6 +9833,72 @@ hyphen are nothing to a shell, and quotes a list of loci, which has a space in i
 cooler's 0-based numbers, `chrIV:100000-200000`, which the shell read as written: right in the shell,
 and the one locus in the console a base away from the same window everywhere else on the screen.
 
+**The line is read by what the command takes.** A task's descriptor says which of its parameters
+are switches, and the shell's own flags are known — `--quiet`, `--no-balance` and `--help` are
+switches, and `--out`, `--window`, `--features` and the rest take a value. So a switch never takes
+the word after it: `--stranded` turns one on, and `--stranded=false` or `--no-stranded` turns it off
+(`--no-balance` stays the shell's own, the raw counts, and is never coverage's `--balance=false`). A
+flag took the next word unless that word began with `--`, so `coverage a.cool --no-balance b.hic` ran
+over `a.cool` alone with exit 0, `coverage --quiet a.cool` refused itself for want of a file, and
+`--out --quiet` wrote into a directory called `true`. Where a task's parameter shares a name with
+one of the shell's own flags the task has it — apa's `--window` is its half-width and never a locus,
+coverage's `--balance` its own switch — with one exception, because both meanings are needed on one
+line: `--contacts` is the total a map is drawn to (§6.5) on every task and also Compartments' own
+choice of contacts, and the console writes both, `--contacts cis --contacts 10000000`. A choice is
+one of a few words and a total a number, so the words among the task's options are the task's and
+every other is the shell's; given wholly to the shell, `cis` was read as a total and every
+compartments line the console had written was refused. A word a switch's value used to be written as,
+`--stranded false`, is refused rather than read as a file of that name, and the refusal says what to
+write; a flag that takes a value is refused without one; only the shell's own flags may come before
+the task; and a flag the command does not take is refused by name, for `replay` and `circular` as for
+a task. `replay` takes the files named after the workspace as it takes those after `--over`, so
+`--over data/*.hic` as a shell expands it replays every file rather than the first alone. The console
+writes a switch as itself or as `--key=false`, the one spelling read alike before and after, and a
+test reads every task's line back through the parser.
+
+**A value is one the form could have held.** A choice is one of the options its descriptor lists, a
+switch is on or off — `true`, `yes`, `on` or `1`, or their opposites, after an `=` — and a number is
+digits, a point and an exponent. Anything else is refused before a file is opened, with exit 2 — the
+shell's code for a fault in the command, against 1 for a file that failed — and a sentence naming the
+values there are: *There is no --quantity “expectd”. It is density or expected.* The runners read a
+choice with a fallback, so that a stored session from a later build cannot change what the numbers on
+screen mean, and the form never reaches it: it moves a held value onto an option it offers before any
+run (`resolveChoiceDefaults`). The shell did reach it. `expected --quantity expectd` ran the density
+and wrote `# param quantity: expectd` above it — a provenance naming a computation nobody performed —
+`--factor=` ran at nought, and `--rungs abc` built one rung. What a workspace recorded is checked the
+same way before `replay` opens a file. Which options a *file* is offered — a per-genome P(s) needs a `/genomes` table — is the
+runner's to refuse, by name, once the file is open.
+
+**Each input of a command is written under a name of its own.** An output is
+`<stem>.<task>.<output>.<format>`, and the stem is the file's name up to its first dot with a group's
+last segment after it — `sample` for `sample.mcool`, `sample_1000` for
+`sample.mcool::/resolutions/1000` — as it always was, so a command over one file names its outputs as
+it did and a script that reads them keeps working. Where two inputs of one command would share a
+stem, those two keep more of their names, a step at a time, until they differ: the name less its
+format extension and a `.gz` (`HCT116.rep1`, `HCT116.rep2`), the whole name (`sample.cool`,
+`sample.hic`), then the directories they are in, nearest first (`dirA_sample`, `dirB_sample`); one
+file named twice, or two names a Mac's disk holds as one, is numbered (`sample_2`). Nothing a command
+has written is written over by the same command. `coverage HCT116.rep1.cool HCT116.rep2.cool` wrote
+`HCT116.coverage.*` twice, the second run's files over the first's, with exit 0.
+
+**An address is fetched first, whole.** The app reads a remote file by range, through a reader that
+is synchronous (§11), which a worker has and Node does not, so a shell cannot read one that way. An
+http or https address — the map, an `--against`, a `--sequence`, `--tracks`, `--features` or
+`--pairs`, a `.pairs` named for P(s)'s orientations, the workspace `replay` reads — is downloaded
+instead, streamed to disk with its progress on stderr unless `--quiet`, into one directory per
+command under `$TMPDIR` that is removed when the command ends, Ctrl-C included; and with the sidecar
+its format reads beside itself, where the server has one: a FASTA's `.fai`, a HiC-Pro matrix's bin
+file. A batch lets each map go once its run is done, so it holds one at a time. What every run reads
+— a `--sequence`, `--tracks`, `--features`, `--pairs`, `--against` or the workspace — is fetched
+before the first, so an address there that cannot be had is exit 2; a map that cannot be is that
+file's failure, named, and the batch goes on; and a `.pairs` a parameter names is fetched when the
+task asks for it, and noted by the task where it cannot be, as a file on disk is. The map is opened *as* its address, so the
+framing, the provenance and every sentence about it name the URL that was typed, and its outputs are
+named after its file, the query left off. Any other scheme is refused by name: an `s3://` address
+needs credentials the command has not got. An address went to `stat` as a path until now — *cannot
+stat /cwd/https:/example.org/x.cool* — under a README that said it was fetched, and the console said a
+shell reads local files only; its note now says what the line costs instead (§23.3).
+
 ### 23.2 What else is on it, and what is not
 
 A day is not only its runs, so three more things are recorded — each at the one place every road to
@@ -9709,12 +9945,14 @@ words are dimmed, on §26.3's rule from the other side: a copy and a save of not
 file, and a clear forgot nothing.
 
 The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'s notes about what a
-shell cannot be told — a remote file, a window across several sequences or off the diagonal, a
-parameter naming a set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared
-against where the record does not name them, a map drawn balanced and read raw or the reverse, which
-the one `--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a
-command that runs and answers a slightly different question is worse than one that says what it left
-out.
+shell cannot be told — a window across several sequences or off the diagonal, a parameter naming a
+set with no file behind it, an `.scool`'s cells or the maps `hicrep` compared against where the
+record does not name them, a map drawn balanced and read raw or the reverse, which the one
+`--no-balance` cannot say, a map drawn through an edit of its reference (§27.7) — and a command that
+runs and answers a slightly different question is worse than one that says what it left out. And
+about the one thing a shell is told at a price: a remote file, which the line names and the shell
+downloads whole before reading it (§23.1), where the app reads only what it draws — so the note says
+so, and that a reader running several lines over one file should fetch it once and name the copy.
 
 They sit **above a command and below anything else**, which is one rule read twice: a caveat
 qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is
@@ -10579,7 +10817,12 @@ callback route to add to a viewer that has none. The token lives in this tab's m
 with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is in the
 Files panel while a sign-in is live and not otherwise: the site's key is in every reader's page
 (§24.7), and a row in every reader's panel, Dropbox or no Dropbox, would be noise with a × that
-could not remove it. The folder is the whole
+could not remove it. So the sign-in and the sign-out are told to the folder list, as a saved bucket
+is: the Files column (§20.4), which exists only while a place is connected, is there from the
+sign-in — *browse my Dropbox* opens it on the folder — and goes with the sign-out when nothing else
+is connected. An expiry is not told: the click that finds it — a folder opened, a file picked —
+answers *sign in to Dropbox* in the column, and the column has to still be there for the reader to
+read it; the row goes at the panel's next repaint. The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague
@@ -10590,8 +10833,10 @@ Neither backend was exercised against its provider from where it was written —
 reaches neither `accounts.google.com` nor any Dropbox host — so both are asserted against their
 documented wire formats through a stubbed transport, and `docs/hosting.md` carries the manual check
 for each. What is specified above is the contract. Drive's has since been met on the live service —
-the re-encoded `HEAD` and the slow open by id above are what that turned up — and for Dropbox the
-first sign-in is still the test.
+the re-encoded `HEAD` and the slow open by id above are what that turned up. Dropbox's first live
+sign-in, on chromosomix.app, worked and turned up one thing: the folder list was never told of it,
+so the Files column never opened, which is what the telling above is for. Its listing and its
+temporary links are still to be met there.
 
 ### 24.10 A UCSC track hub is a store
 

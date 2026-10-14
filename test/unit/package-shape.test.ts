@@ -22,6 +22,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { WEB_CSP, cspMetaTag } from '../../scripts/csp.mjs'
 import {
   SIZE_LIMIT,
   packageFileProblems,
@@ -97,7 +98,8 @@ describe('packageFileProblems', () => {
 })
 
 const HTML =
-  '<!doctype html><link rel="icon" href="data:image/svg+xml,%3Csvg/%3E" />' +
+  `<!doctype html><meta charset="utf-8" />${cspMetaTag(WEB_CSP)}` +
+  '<link rel="icon" href="data:image/svg+xml,%3Csvg/%3E" />' +
   '<script type="module" src="./assets/index-C15U3eta.js"></script>' +
   '<link rel="stylesheet" href="./assets/index-BlXroeTc.css" />'
 
@@ -135,6 +137,18 @@ describe('packageIndexProblems', () => {
   })
 
   it('says so when there is no module script at all', () => {
-    expect(packageIndexProblems('<!doctype html><title>nothing</title>')).toHaveLength(1)
+    // And that it carries no policy, which is the second thing an empty
+    // document is missing.
+    const problems = packageIndexProblems('<!doctype html><title>nothing</title>')
+    expect(problems).toHaveLength(2)
+    expect(problems[0]).toContain('module script')
+    expect(problems[1]).toContain('Content-Security-Policy')
+  })
+
+  it('refuses a document without the site’s policy, which no server it lands on will send', () => {
+    // The copy a lab unpacks onto its own server is the one whose headers are
+    // nobody's here to set: the policy travels in the page or not at all.
+    const problems = packageIndexProblems(HTML.replace(cspMetaTag(WEB_CSP), ''))
+    expect(problems).toEqual(['index.html carries no Content-Security-Policy'])
   })
 })

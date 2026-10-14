@@ -4,7 +4,7 @@
  * Three pictures, one rule, and until now the middle one broke it. The
  * whole-metagenome view divides and labels its axis by genome, because 20,000
  * contig hairlines over the blocks that are the point are a grey wash
- * (`ui/MatrixPanel.separatorsFor`). One genome opened on its own divides by
+ * (`ui/blockAxes.separatorsFor`). One genome opened on its own divides by
  * contig, because its contigs are the only structure inside it. And ticking
  * four MAGs out of two thousand — the picture between those two — divided by
  * *contig*, so the four blocks a reader ticked four boxes to see had two
@@ -30,7 +30,7 @@ import { describe, expect, it } from 'vitest'
 
 import { IDENTITY_PLAN, selectionPooling } from '@/metacooler/pooling'
 import { selectionDrawsGenomes } from '@/worker/groups'
-import { separatorsFor } from '@/ui/MatrixPanel'
+import { separatorsFor } from '@/ui/blockAxes'
 import { labelTarget } from '@/ui/WholeView'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 

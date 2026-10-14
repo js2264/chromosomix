@@ -40,7 +40,7 @@ export const EXPORT_DPI_CHOICES = [96, 150, 300, 600] as const
  * page is: the matrix's cells are the one image on it — a contact map *is* a
  * raster, and twelve thousand bins written as a million rectangles would be a
  * larger, slower file of the same picture — and every axis, tick, label, lane,
- * key and caption round them is paths and text (`MatrixPanel.vectorFigure`).
+ * key and caption round them is paths and text (`MapFigure.vectorFigure`).
  * It was briefly `PDF (image)`, on the argument that the cells are an image;
  * but the word is there to tell a reader opening the file in Illustrator
  * whether there is anything to restyle, and there is — everything but the

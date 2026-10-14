@@ -104,7 +104,7 @@ export function aggregatedGenomeRuns(mc: MetaCooler, contigIds: Int32Array): Axi
  * **What was ticked is what the axis is divided and labelled by.** Ticking four
  * MAGs asks for four blocks, and their two thousand contig hairlines drawn
  * across them are the grey wash the whole-metagenome view already refuses
- * (`ui/MatrixPanel.separatorsFor`) — they hide exactly the block structure that
+ * (`ui/blockAxes.separatorsFor`) — they hide exactly the block structure that
  * was the reason for ticking. Ticking *contigs* is the same rule read the other
  * way: there the choice was the contigs, their names are the answer to "what did
  * I pick", and coarsening to the genomes they came from would lose it.

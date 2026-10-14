@@ -457,11 +457,22 @@ chromosomix tasks
 ##       --flagBelow (default 0.1)  flag below this cross-block ratio
 ```
 
-Every task writes its results where `--out` points. A map is read balanced wherever the file
-carries balancing weights, as the app reads it; `--no-balance` reads the raw counts. A locus —
-`--window`, or a task's own, such as 4C's `--anchor` — is written as the app writes one: 1-based
-and inclusive, digits grouped or not. Files are read from disk: the reader's range requests are
-synchronous, which a browser worker has and Node does not, so a remote file is fetched first.
+Every task writes its results where `--out` points, each named after the file it came from up to
+its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a
+name keep more of theirs (`HCT116.rep1`, `HCT116.rep2`), then their directories (`dirA_sample`,
+`dirB_sample`), and nothing one command writes is written over by it. A map is read balanced
+wherever the file carries balancing weights, as the app reads it; `--no-balance` reads the raw
+counts. A locus — `--window`, or a task's own, such as 4C's `--anchor` — is written as the app
+writes one: 1-based and inclusive, digits grouped or not. A parameter that is on or off takes no
+value after it: `--stranded` turns it on, `--stranded=false` or `--no-stranded` off. A choice that
+is none of its values is refused before any file is opened, with exit 2 and the values there are,
+and so is a number that is not one.
+
+Files are read from disk. A file named by an http or https address — the map, or what `--against`,
+`--sequence`, `--tracks`, `--features` or `--pairs` names — is downloaded first, whole, because the
+reader's range requests are synchronous, which a browser worker has and Node does not: it goes into
+`$TMPDIR`, with its progress on stderr, and is removed when the command ends. For several commands
+over one large remote file, download it once yourself and name the copy.
 
 ```bash
 chromosomix insulation *.mcool --sequences II --out results/
@@ -529,7 +540,7 @@ chromosomix cellqc cells.scool --cell c01,c02,c07 --cells selected
 # list is the positional argument.
 chromosomix coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 
-chromosomix replay workspace.chromosomix.json --over 'data/*.hic'
+chromosomix replay workspace.chromosomix.json --over data/*.hic
 ```
 
 ### Recovering the commands you ran

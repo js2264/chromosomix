@@ -40,20 +40,8 @@ import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
-import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
-import {
-  LANE_EDGES,
-  drawsAProfile,
-  hasAMovableAxis,
-  hasFeatureRows,
-  overlayShapeOf,
-  placementOn,
-  type AnnotationEntry,
-  type AnnotationKind,
-  type FeatureSet,
-} from '../annotations/types'
-import { FEATURE_DISPLAYS, featuresOf } from '../annotations/fields'
+import { LANE_EDGES, hasAMovableAxis, overlayShapeOf } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import {
@@ -63,18 +51,16 @@ import {
   keyTitle,
   type KeyContent,
 } from '../render/legend'
-import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
-import { bpAt, locusAxisFrom, stretchOf, type LocusAxis, type LocusWindow } from '../render/locus'
-import { axisThroughEdit, originalOf } from '../edit/axis'
+import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
+import { axisThroughEdit } from '../edit/axis'
 import { stretchInFile } from '../edit/places'
 import type { EditedAssembly } from '../genome/edit'
-import { baseLabel, formatLocus, formatPosition } from '../genome/assembly'
+import { formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
   drawDiagonalFeatures,
   drawManualLines,
   drawManualRects,
-  MARK_REACH,
   manualMarksAt,
   drawPairs,
   type OverlayAxes,
@@ -91,34 +77,27 @@ import {
 import type { MetaBlock } from '../annotations/metadata'
 import {
   COMPARE_OPS,
-  alignable,
   combine,
   isCompareOp,
   type CompareOp,
 } from '../render/compare'
 import {
-  deriveBlock,
-  paperZeros,
   preferredTransform,
-  type AxisRun,
   type DerivedValues,
   type SmoothedField,
   type SmoothingRequest,
-  type Derivation,
   type Normalisation,
 } from '../render/derive'
 import { SMOOTH_CHOICES } from '../render/smooth'
 import type { CorrelationField } from '../analysis/compartments'
-import { isCancellation, type Cancellable } from '../worker/client'
+import type { Cancellable } from '../worker/client'
 import {
   BIN_FRACTION,
   anchorColumns,
-  bandAt,
   binsForColumns,
   cellAt,
   cellLoci,
   isTurnable,
-  placeRays,
   rotateBlock,
   separationCoords,
   reachForRows,
@@ -129,6 +108,7 @@ import {
   type RotateDirection,
   type RotatedBlock,
 } from '../render/rotate'
+import { alongAxis, anchorFor, turnedDense } from '../render/turnGeometry'
 import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
@@ -141,18 +121,14 @@ import {
   DEFAULT_LABEL_FONT,
   HeatmapView,
   type AxisCoordSet,
-  type AxisSpan,
   type AxisSpanSet,
   type AxisCoords,
   type Cell,
   type PlotOptions,
-  type VerticalAnchor,
   type DrawnBox,
   type SelectionBox,
   type SelectionText,
-  type SeparatorSet,
 } from '../render/heatmap'
-import { rasterStride } from '../render/heatmap'
 import {
   refineEnabled,
   setRefineEnabled,
@@ -160,12 +136,24 @@ import {
   type RefineView,
 } from './refine'
 import { diagonalLocked, subscribeDiagonalLock, toggleDiagonalLock } from './diagonalLock'
-import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, type Scale } from '../render/scale'
-import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
+import type { ColorScale, DenseMatrix, Extent, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
+import { DEFAULT_ARM_WINDOW, armsInForce, armsKey, originInMiddle } from './armFrame'
+import {
+  axisCoordsFor,
+  axisSpansFor,
+  binsOf,
+  bpWithin,
+  groupAt,
+  separatorsFor,
+  slidesAlongDiagonal,
+  spanOnAxis,
+  toDense,
+} from './blockAxes'
+import { readCanvasPalette, readPageText } from './canvasPalette'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
@@ -178,78 +166,39 @@ import {
   type PickedLocus,
   type PickHandlers,
 } from './mapPick'
-import { Modal } from './Modal'
-import { openFeatureDialog } from './FeatureDialog'
-import {
-  CEILING_LABEL,
-  CEILING_MODIFIER,
-  CEILING_STEP,
-  DRAG_SLACK,
-  LaneControls,
-  colourInput,
-} from './LaneControls'
+import { bandRegion, onDiagonal, spanText, type SelectedAxis, type SelectedRegion } from './mapSelection'
+import { framedPhrase, resolutionNote } from './mapSummary'
+import { LaneControls } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
+import { LaneGestures } from './LaneGestures'
+import { MapBox } from './MapBox'
+import { MAP_CORRELATION_BINS, MapDerivation } from './MapDerivation'
+import { MapFigure } from './MapFigure'
+import { MapReadout } from './MapReadout'
 import {
   fieldPair,
   heightThatFills,
-  laneSize,
   setTrackHeight,
   smallestLaneSize,
   trackHeightField,
 } from './trackControls'
-import {
-  TRACK_DRAG_TYPE,
-  dragHasFiles,
-  dragHasOverlay,
-  dragHasTrack,
-  dropEffectFor,
-  el,
-  field,
-  fmt,
-  trimNumber,
-} from './dom'
+import { el, field, fmt, trimNumber } from './dom'
 import { resolutionLabel } from '../units'
 import { depthPhrase, type DrawnDepth } from '../contacts'
-import { dragHasFileRow } from './fileDrag'
-import { filesFrom } from './chooseFiles'
 import { MapKey } from './MapKey'
 import {
-  EXPORT_DPI_CHOICES,
-  EXPORT_FORMATS,
   type ExportFormat,
-  canvasToPng,
   captionStamp,
   copyPicture,
-  copyPngToClipboard,
   copyTextToClipboard,
-  chooseSaveTarget,
-  exportBaseName,
-  fileStamp,
-  largestDpiThatFits,
   readPageBackground,
-  scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
 import { marksMenu } from './marksMenu'
-import {
-  endCarry,
-  landingAt,
-  offerLanding,
-  startCarry,
-  within,
-  type LaneCarry,
-  type LaneLanding,
-  type LaneSurface,
-} from './laneCarry'
-import { FEATURE_DISPLAY_WORDS, patchFeatures } from './laneSettings'
-import { VectorPage } from './vector'
+import { offerLanding } from './laneCarry'
 import type { CellFigure } from '../panels/deckFigure'
 import { setReadout } from './readout'
-import { setHoverPlace, type HoverPlace } from './hoverLocus'
-
-/** What a contact map calls itself when it publishes the place under its pointer. */
-export const HOVER_SOURCE_MAP = 'map'
-import { revealTrack } from './revealTrack'
+import { HOVER_SOURCE_MAP, setHoverPlace, type HoverPlace } from './hoverLocus'
 import {
   MATRIX_OPTIONS,
   PLOT_OPTION_ICONS,
@@ -261,18 +210,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
-import { captionField, getExportPrefs } from './exportPrefs'
-import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
-import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
-import {
-  MIN_TURN_HEIGHT,
-  MIN_TURN_WIDTH,
-  fitTurnBox,
-  getTurnBox,
-  setTurnBox as rememberTurnBox,
-  subscribeTurnBox,
-  type TurnBox,
-} from './turnBox'
+import { scaleFont, subscribeTextScale, textScaleField } from './textScale'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 
@@ -352,42 +290,6 @@ const diagonalHint = (): string =>
   'is the columns alone. Greyed on a block that has no diagonal, and while the map is turned, ' +
   'where the picture already is one.'
 
-/** The band, as an ordinary dense block the renderer can be handed. */
-function turnedDense(turned: RotatedBlock): DenseMatrix {
-  return {
-    nrows: turned.nrows,
-    ncols: turned.ncols,
-    values: turned.values,
-    // The band's own extents, in the half-bin units its columns are counted in,
-    // so anything downstream that measures a span in cells measures it in the
-    // grid actually on screen.
-    rowExtent: [0, turned.nrows],
-    colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
-  }
-}
-
-/** One end of the turned band's box, as a bar a hand can take hold of. */
-/** One edge of the picture; see {@link MatrixPanel.grips}. */
-type PlotEdge = 'top' | 'bottom' | 'left' | 'right'
-
-/** Whether an edge is dragged along x or along y. */
-function edgeAxis(edge: PlotEdge): 'x' | 'y' {
-  return edge === 'left' || edge === 'right' ? 'x' : 'y'
-}
-
-function plotGrip(edge: PlotEdge): HTMLElement {
-  const axis = edgeAxis(edge)
-  return el('div', {
-    class: `plot-grip plot-grip-${axis} plot-grip-${edge} hidden`,
-    attrs: {
-      role: 'separator',
-      // Which way the *separator* lies, which is across the axis it travels on.
-      'aria-orientation': axis === 'x' ? 'vertical' : 'horizontal',
-      tabindex: '0',
-    },
-  })
-}
-
 const OE_HINT =
   'Observed over expected. Divide each cell by what its genomic distance predicts — the mean ' +
   'over every pair of bins that far apart, measured on this block, with one scalar between ' +
@@ -411,46 +313,6 @@ const ARM_BASELINE_HINT =
 
 const ARMS_ON_ARM_BASELINE_HINT =
   'The cells already are the expected along both arms. Choose another score to get the toggle back.'
-
-/**
- * What a dragged box resolves to: one block, and how much of it.
- *
- * *One* block, not the rectangle the box covers, because that is the view a
- * selection is asking for. A square drawn across the corner of two chromosomes
- * on a whole-genome map is asking to look at a chromosome — it cannot be asking
- * for a region that spans two of them, since no such region exists — so it
- * resolves to the one the drag began in, ending at the edge of the box or at
- * the end of that chromosome, whichever comes first.
- *
- * `range` is absent above bin level, where a cell *is* a contig or a genome and
- * there is no position inside one to name.
- */
-export interface SelectedAxis {
-  /** The block this axis of the box falls in: a contig, or a genome. */
-  label: string
-  /** Base pairs within that block, clamped to it; absent above bin level. */
-  range?: [number, number]
-}
-
-export interface SelectedRegion {
-  rows: SelectedAxis
-  cols: SelectedAxis
-  /**
-   * `true` when the box lies *on* the diagonal: the same block on both axes,
-   * covering the same stretch of it.
-   *
-   * Not "the same block" — that was the first version of this and it is the
-   * wrong question. A box in the top-right corner of one chromosome is two
-   * different windows of the same sequence, and answering it with the row's
-   * window alone hands back a square centred on the diagonal: the one place the
-   * reader was deliberately not looking. Only when both windows coincide is
-   * there a single region to open.
-   */
-  diagonal: boolean
-  level: 'bin' | 'contig' | 'genome'
-  /** The cell the drag began on, for a view that resolves blocks its own way. */
-  anchor: Cell
-}
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -762,9 +624,6 @@ const CENTRE_HINT =
 const UNCENTRE_HINT =
   'The origin is in the middle of the view. Press to frame the sequence from its first base again.'
 
-/** The window the arms control turns on at, in bins — the compartments task's default. */
-export const DEFAULT_ARM_WINDOW = 50
-
 const ARMS_HINT =
   'Divide by the decay along both arms of a bacterial chromosome — its secondary diagonal ' +
   'through the origin as well as the main one — so what is left is its compartments. Reads the ' +
@@ -867,133 +726,6 @@ export interface DerivePresentation {
    * costs — which is right, because the alternative is not doing it at all.
    */
   smoothBlock?(request: SmoothingRequest): Cancellable<SmoothedField>
-}
-
-/**
- * The largest square the map will correlate, per axis: the block cap, so any
- * square block the map can read, it can correlate.
- *
- * The correlation is `m²/2` correlations of `m` cells each — the one **cubic**
- * step in the viewer, where everything else it draws is linear in the cells on
- * screen. It was capped at 1,500 when each pair was computed on its own, at
- * 2.8 s for 929 bins and a projected four minutes at 4,096: a limit that was
- * the difference between a wait and a coffee break.
- *
- * `analysis/pearsonRows.ts` computes all the pairs as one matrix product in
- * WebAssembly with SIMD, and `analysis/pearsonThreads.ts` shares it across the
- * cores. Measured in Chromium with four cores, from picking the score to the
- * picture: **a thousand bins in under half a second, 2,048 in under one, 4,096 in
- * two and a half** — of which the analysis thread's part is a tenth of a second,
- * a third of one and under two. On one core 4,096 is about four seconds. So the
- * cap is the block cap rather than a budget of its own, and a whole bacterial
- * genome at 1–2 kb, or a human chromosome at 50 kb, correlates about as fast as
- * it reads.
- *
- * Two things around the product mattered as much as the product. The square is
- * the O/E with an **empty pixel as the zero it is** — the matrix the compartment
- * call correlates — where the picture's own ratio blanks it (`render/derive.ts`'s
- * `keepZeros`): blanked, a sparse map at 1 kb had a few hundred missing cells a
- * row, each pair's arithmetic was an exception to correct for, and the job was
- * eight times slower than the product. And picking the score **reads nothing**:
- * the block on screen is the block correlated (`Session.render`).
- *
- * The job still runs on the analysis thread, reports a percentage and is
- * cancelled by picking another score, as it was when a wait was expected.
- *
- * `MAX_CORRELATION_BINS` in the compartments task is 8,192 for the same
- * quantity: there a reader has asked for a number and waits for it on purpose,
- * and the square is read for it rather than being a block already on screen.
- */
-export const MAP_CORRELATION_BINS = 4096
-
-/** What identifies an arms setting, for the caches a derivation is keyed on. */
-function armsKey(arms: ArmsPresentation | undefined): string {
-  if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
-  const { startBin, n, origin, circular } = arms.frame
-  return `${arms.window}:${startBin}:${n}:${origin}:${circular ? 'o' : '-'}`
-}
-
-/**
- * The arms a derivation is read against: the presentation's own, and under
- * `arm decay` the same frame at the window `arms` turns on at while the toggle
- * is off — that baseline is read along the arms whatever the toggle says
- * (§8.15).
- *
- * One function for the read and for every key it is cached on, so an origin
- * moved under that baseline with the toggle off is a change of what is drawn:
- * keyed on the presentation's own arms, it was `''` before and after, and the
- * map kept the arms of the old origin.
- */
-function armsInForce(derive: DerivePresentation | undefined): ArmsPresentation | undefined {
-  const arms = derive?.arms
-  if (arms === undefined || derive?.baseline !== true || derive.alongArms !== true) return arms
-  return arms.window === undefined ? { ...arms, window: DEFAULT_ARM_WINDOW } : arms
-}
-
-/**
- * Whether a circle's origin is in the middle of the picture, to within
- * `tolerance` base pairs — what lights `ori` (§8.15).
- *
- * `middle` is the locus at the centre of the visible domain, read off the scale
- * rather than off the window the view note prints: that window is widened to
- * whole bins at both ends, which moves its middle by up to a bin however exactly
- * the picture is centred. Measured round the circle, so an origin a few
- * kilobases before the sequence's first base is in the middle of a view that
- * crosses the junction there.
- */
-export function originInMiddle(
-  middle: { contig: string; bp: number } | null,
-  frame: { circular: boolean; length: number; originBp: number },
-  tolerance: number,
-): boolean {
-  if (middle === null || !frame.circular || !(frame.length > 0)) return false
-  const apart = Math.abs(middle.bp - frame.originBp) % frame.length
-  return Math.min(apart, frame.length - apart) <= tolerance
-}
-
-/**
- * The arm frame for this block, where the arms are on and there is one.
- *
- * **In the block's own cells**, which are not the open map's bins in general: a
- * pooled read sums several of them, and a read from a sibling rung of an
- * `.mcool` is on another grid altogether, with extents in that grid's bins.
- * Each row is placed by where it is *in base pairs* — through the same axis
- * runs the ticks are placed by, which is also what folds a block read round a
- * circle (`worker/wrap.ts`) back onto the sequence — and the frame and its
- * window are carried over to the block's resolution. A frame kept at the open
- * rung placed a coarse block's rows as the first stretch of a longer sequence,
- * all on one arm, and sized its tables for a resolution nobody was drawing.
- */
-export function armsFor(
-  data: MatrixResult,
-  arms: ArmsPresentation | undefined,
-  bpPerCell: number,
-): Derivation['arms'] | undefined {
-  if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
-  if (arms.refusal !== null || data.level !== 'bin') return undefined
-  const { n, origin, circular, binsize, length } = arms.frame
-  if (!(n > 0) || !(binsize > 0) || !(bpPerCell > 0) || !(length > 0)) return undefined
-  const cells = Math.max(1, Math.ceil(length / bpPerCell))
-  const originCell = Math.min(cells - 1, Math.floor(((origin + 0.5) * binsize) / bpPerCell))
-  const place = (runs: AxisGroup[], blockStart: number, count: number): Int32Array => {
-    const axis = locusAxisFrom({ runs, blockStart, level: 'bin', binsize: bpPerCell, contigLength: () => length })
-    const out = new Int32Array(count)
-    for (const segment of axis?.segments ?? []) {
-      for (let i = Math.max(0, segment.unitStart); i < Math.min(count, segment.unitEnd); i++) {
-        const bp = bpAt(segment, i + 0.5)
-        const cell = Math.floor(bp / bpPerCell)
-        out[i] = ((cell % cells) + cells) % cells
-      }
-    }
-    return out
-  }
-  return {
-    frame: { n: cells, origin: originCell, circular },
-    rowBins: place(data.rowGroups, data.rowExtent[0], data.nrows),
-    colBins: place(data.colGroups, data.colExtent[0], data.ncols),
-    // The same stretch of the arms, counted in the block's cells.
-    window: arms.window > 0 ? Math.max(1, Math.round((arms.window * binsize) / bpPerCell)) : 0,
-  }
 }
 
 const CORRELATE_HINT =
@@ -1184,8 +916,6 @@ export class MatrixPanel {
   readonly cards: readonly HTMLElement[]
 
   private readonly groupsCard: GroupsCard | null
-  /** The open feature card, so a second click replaces it rather than stacking. */
-  private featureDialog: Modal | null = null
   /**
    * The store the lanes are drawn from.
    *
@@ -1211,33 +941,10 @@ export class MatrixPanel {
    */
   private readonly reframeHint: HTMLElement
   /**
-   * The four edges of the picture, as things a hand can take hold of.
-   *
-   * Bars rather than strips of live canvas, and visible on approach rather than
-   * only under the pointer, because how big the picture is drawn is a decision
-   * the reader has to be able to *find* — a gesture nobody can see is a gesture
-   * nobody uses.
-   *
-   * Which of them are shown, and what a drag on one means, is the whole of the
-   * difference between the two presentations:
-   *
-   * - **A square map** shows all four, and every one sets the same number — the
-   *   side of the box (`ui/mapSize.ts`). A square block has no shape to choose,
-   *   so a box of another shape would be paper down two sides of the picture.
-   * - **A band** shows three. Its width and its depth are separate numbers
-   *   (`ui/turnBox.ts`), and its fourth edge is the diagonal itself: the band
-   *   stands on the axis, so there is nothing to drag there. Which of the
-   *   horizontal pair is the far edge follows the direction the band grows in —
-   *   up on an ordinary turn, down on the mirrored half of a comparison.
+   * The box the picture is drawn in, the four handles on its edges, and the
+   * room it has (`ui/MapBox.ts`).
    */
-  private readonly grips: Record<PlotEdge, HTMLElement> = {
-    top: plotGrip('top'),
-    bottom: plotGrip('bottom'),
-    left: plotGrip('left'),
-    right: plotGrip('right'),
-  }
-  /** Which presentation the grips are labelled for; see {@link placeGrips}. */
-  private gripMode: 'square' | 'band' | null = null
+  private readonly box: MapBox
   /**
    * What the numbers in the cells are called, before the transform is added.
    *
@@ -1248,9 +955,6 @@ export class MatrixPanel {
    */
   private laneListener: ((geometry: PanelGeometry) => void) | null = null
   private hoverListener: ((cell: { row: number; col: number } | null) => void) | null = null
-  private laneHoverListener:
-    | ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void)
-    | null = null
   /**
    * Which map of the deck this panel *is*, for the lanes it draws.
    *
@@ -1286,14 +990,12 @@ export class MatrixPanel {
   private narrow = false
   /** Whether the key is shown — the `legend` overlay; see `ui/plotOptions.ts`. */
   private legendOn = getPlotOptions().legend
-  /** Where this panel's export goes while it leads a deck; see {@link setDeckExport}. */
-  private deckExport: DeckExport | null = null
-  /** The Export card's clipboard button, re-titled when a deck takes the key. */
-  private copyButton: HTMLButtonElement | null = null
-  /** The Export card's resolution, away while the format is a vector page; see {@link syncExportRow}. */
-  private dpiSelect: HTMLSelectElement | null = null
+  /**
+   * The Export card, and every drawing of the figure it saves — PNG, PDF, the
+   * deck's cell and the clipboard's copy (`ui/MapFigure.ts`).
+   */
+  private readonly figure: MapFigure
   private readonly heatmap: HeatmapView
-  private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly clip: ClipRange
   private readonly transformSelect: HTMLSelectElement
@@ -1308,15 +1010,10 @@ export class MatrixPanel {
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement[]>()
   private readonly unsubscribePlotOptions: () => void
   private readonly unsubscribeTextScale: () => void
-  private readonly unsubscribeTurnBox: () => void
-  private readonly unsubscribeMapSize: () => void
   private readonly unsubscribeDiagonalLock: () => void
   private readonly themeWatchers: () => void
   private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
-  private readonly exportStatus: HTMLElement
-  private exportDpi = 300
-  private exportFormat: ExportFormat = 'pdf'
   /** What the figure is called, for the download name. */
   private exportName = 'contact-map'
 
@@ -1394,57 +1091,13 @@ export class MatrixPanel {
   private smoothSelect: HTMLSelectElement | null = null
 
   /**
-   * Which block the values in {@link correlation} were measured on.
-   *
-   * Bumped on every {@link setData}, and that is what the counter is *for*: the
-   * cache key is otherwise made of shapes and extents, and a reader switching
-   * from balanced counts to raw ones is re-read on the identical grid. Every
-   * field of the key would match and the correlation of the previous quantity
-   * would be drawn under the new one's caption.
+   * The values this panel computes rather than reads, and the jobs that compute
+   * them off the main thread: the correlation and the despeckle, their caches,
+   * and their lines on the veil (`ui/MapDerivation.ts`).
    */
-  private blockGeneration = 0
-
-  /**
-   * The last correlation computed, the key it answers, and what it was a
-   * correlation *of* — the derivation's label and scope when it was sent.
-   */
-  private correlation: {
-    key: string
-    field: CorrelationField
-    label: string
-    scope: string | null
-  } | null = null
-
-  /**
-   * The one in flight, if any, the key it will answer, and the picture drawn
-   * under the veil meanwhile — kept so a redraw before the answer does not
-   * derive the block again.
-   */
-  private correlating: {
-    key: string
-    job: Cancellable<CorrelationField>
-    operand: DerivedValues
-  } | null = null
-
-  /**
-   * The veil's text while a correlation runs, or `null`.
-   *
-   * Held apart from {@link setBusy}'s own argument because the two waits nest:
-   * `setData` clears the veil as it finishes, and the job it started on the way
-   * through has seconds still to run. Without this the map came back from a read
-   * looking finished and then changed under the reader some seconds later.
-   */
-  private correlationNote: string | null = null
-  /** A smoothing already computed, for the block and setting it names. */
-  private smoothed: { key: string; field: SmoothedField } | null = null
-  /** The smoothing on its way, so a superseded one can be cancelled. */
-  private smoothing: { key: string; job: Cancellable<SmoothedField> } | null = null
-  /** The smoothing's own line on the veil, kept apart from the correlation's. */
-  private smoothingNote: string | null = null
+  private readonly derivation: MapDerivation
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
-  /** The room the box has, measured once per resize. See {@link measureRoom}. */
-  private room: { width: number; height: number } | null = null
   /**
    * The square block the band is cut from, kept so a re-cut costs one rotation.
    *
@@ -1505,7 +1158,7 @@ export class MatrixPanel {
   /**
    * The map's own box inside that grid — the canvas, the key and the handles.
    *
-   * Held for {@link measureRoom}, which reads the height a square map would have
+   * Held for {@link MapBox.measureRoom}, which reads the height a square map would have
    * claimed off this element's `max-height`: the one place the layout writes
    * that number as a length rather than as the `clamp()` it comes from.
    */
@@ -1513,82 +1166,10 @@ export class MatrixPanel {
   /** The cell under the pointer, so the lanes can continue the crosshair. */
   private hoverCell: Cell | null = null
   /**
-   * Where the pointer is over a lane stack, in that stack's canvas pixels.
-   *
-   * The hairline this drives runs across the lanes *and* the map, which is why
-   * it is held here rather than inside {@link lanes}: the map's half is painted
-   * through the overlay hook, and both halves have to come from one number or
-   * they would meet at a kink.
+   * The gestures on the lane stacks, and the rectangles inside the map a lane
+   * or a file is dropped on (`ui/LaneGestures.ts`).
    */
-  private laneHover: { edge: LaneEdge; along: number } | null = null
-  /**
-   * The lane whose far border the pointer is on, so the rule can be drawn.
-   *
-   * Drawn rather than shown as a cursor, which is the rule this canvas already
-   * follows: the pointer is the arrowhead everywhere here, so an affordance that
-   * lived in the cursor would not exist. Same accent rule the 1D browser marks
-   * its own lane borders with, because it is the same gesture on the same kind
-   * of edge.
-   */
-  private laneBorder: string | null = null
-  /**
-   * The lane the pointer is on, which is the one that shows its handle.
-   *
-   * The whole lane and not the handle's own few pixels: a control nobody can see
-   * until they are already on it is one nobody finds. It appears the moment the
-   * pointer crosses the track it belongs to, which is also the moment the reader
-   * could plausibly want to move that track.
-   */
-  private laneHandle: string | null = null
-  /**
-   * Set while a lane is being dragged by its handle.
-   *
-   * The tooltip reads from `mousemove`, which keeps arriving through a pointer
-   * drag: without this, moving a track out to a rectangle carried a readout of
-   * the position it started from across the map with it, naming a value on a
-   * lane the reader had stopped looking at.
-   */
-  private laneGripping = false
-  /**
-   * The two edge rectangles, by the edge they stand for.
-   *
-   * Kept because two gestures aim at them and only one of them is a DOM event
-   * on the zone itself: a file drop is, and a lane dragged off its own stack is
-   * not — that drag holds the pointer captured on a canvas, so the zone under
-   * the pointer has to be found by arithmetic. Empty when the panel has no
-   * annotations and therefore no lanes.
-   */
-  private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
-  /** The rectangle in the middle of the map, *on this map*; see {@link faceZone}. */
-  private faceDrop: HTMLElement | null = null
-  /**
-   * This map's edge rectangles as places a lane carried from **another** map
-   * can land (§16.9, `ui/laneCarry.ts`). A lane of this map's own is answered
-   * by its own drag, which knows the edge it came from and puts it out.
-   */
-  private readonly laneSurface: LaneSurface = {
-    landingAt: (x, y, carry) => {
-      if (carry.from === this.mapId) return null
-      for (const [edge, zone] of this.edgeZones) {
-        if (!within(zone, x, y)) continue
-        return {
-          light: (on) => zone.classList.toggle('over', on),
-          take: (moved) => this.takeLane(moved, edge),
-        }
-      }
-      return null
-    },
-    // Every map shows its rectangles while a lane from another is in the air,
-    // as the map it came from shows its own: a place that only appears once
-    // the hand is on it is a place nobody finds.
-    carrying: (carry) => {
-      if (carry !== null && carry.from === this.mapId) return
-      this.grid.classList.toggle('is-dropping', carry !== null)
-      // A lane is carried to an *edge*; the face is where an overlay lands.
-      this.faceDrop?.classList.toggle('away', carry !== null)
-      if (carry === null) for (const zone of this.edgeZones.values()) zone.classList.remove('over')
-    },
-  }
+  private readonly laneGestures: LaneGestures
   /**
    * The layer of controls over each lane stack, and the caret that opens in one.
    *
@@ -1596,20 +1177,12 @@ export class MatrixPanel {
    * `.panel-grid`'s tracks are sized from their content, so a sized child sharing
    * a lane's cell would inflate that track and shrink the map; laid over the grid
    * absolutely, and offset each frame by the canvas's own position in it, they
-   * take no space at all. It is the same conversion `placeTooltip` performs, for
-   * the same reason.
+   * take no space at all. It is the same conversion `MapReadout.placeTooltip`
+   * performs, for the same reason.
    */
   private readonly laneLayers = new Map<LaneEdge, HTMLElement>()
   private readonly laneControls = new Map<LaneEdge, LaneControls>()
   private laneEditor: LaneEditor | null = null
-  /**
-   * The lane whose ceiling is being dragged, and how far it has moved.
-   *
-   * Held here rather than written to the store on every frame, and that is what
-   * makes the gesture readable: the store is what the *faded* copy is drawn
-   * from, so it has to stand still while the hand moves. One write, on release.
-   */
-  private laneScaling: { id: string; factor: number } | null = null
   /**
    * The two axes as annotations see them, rebuilt with every block.
    *
@@ -1661,30 +1234,17 @@ export class MatrixPanel {
     /** Called once when the mode ends, however it ends. */
     end(): void
   }) | null = null
-  /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
-  private readonly tip: {
-    matrix: HTMLElement
-    rowGenome: HTMLElement
-    genomeTimes: HTMLElement
-    colGenome: HTMLElement
-    genomes: HTMLElement
-    rowName: HTMLElement
-    times: HTMLElement
-    colName: HTMLElement
-    pos: HTMLElement
-    distance: HTMLElement
-    count: HTMLElement
-    /** The lane tooltip's block: a heading and however many lines it has. */
-    lane: HTMLElement
-    laneTitle: HTMLElement
-    laneLines: HTMLElement
-  }
-  /** Cached geometry for {@link positionTooltip}; never read during a pointer move. */
-  private tipSize = { width: 0, height: 0 }
-  private hostSize = { width: 0, height: 0 }
-  private tipAt: { x: number; y: number } | null = null
-  private tipFrame = 0
-  /** Teardowns for the lane canvases' own pointer listeners. */
+  /**
+   * What the pointer is over, on the status bar's line and on the card beside
+   * the pointer (`ui/MapReadout.ts`).
+   */
+  private readonly readout: MapReadout
+  /**
+   * Teardowns for the listeners this panel registers itself: the map's own menu,
+   * Escape, the stores' subscriptions and the landing it offers carried lanes.
+   * The lane canvases' pointer listeners are {@link LaneGestures}'s, and it
+   * releases them.
+   */
   private readonly laneListeners: Array<() => void> = []
   /** The stack thicknesses the stylesheet was last told about, per edge. */
   private laneBudget: Record<LaneEdge, number> = { top: -1, right: -1, bottom: -1, left: -1 }
@@ -1706,46 +1266,24 @@ export class MatrixPanel {
     this.manualVmin = options.initial?.vmin
     this.manualVmax = options.initial?.vmax
     this.level = options.initial?.level ?? 'bin'
+    this.derivation = new MapDerivation({
+      options,
+      setBusy: (busy, message) => this.setBusy(busy, message),
+      redraw: () => this.redraw(),
+    })
 
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
-    // A tooltip follows the pointer with the same three facts as the readout.
-    // Both exist on purpose: the tooltip answers "what is under my cursor"
-    // without a glance away from the matrix, and the readout keeps the last
-    // answer visible after the pointer has moved on.
-    // Two shapes in one card: the matrix's row × column × count, and a lane's
-    // heading with however many lines the feature under the pointer has. One
-    // element rather than two, because there is one pointer and it can only be
-    // over one of them — and because the placement logic is fiddly enough that
-    // a second copy of it would drift.
-    this.tip = {
-      matrix: el('div', { class: 'cell-tip-block' }),
-      rowGenome: el('span', { class: 'cell-tip-name' }),
-      genomeTimes: el('span', { class: 'cell-tip-x', text: '×' }),
-      colGenome: el('span', { class: 'cell-tip-name' }),
-      genomes: el('div', { class: 'cell-tip-pair cell-tip-genomes hidden' }),
-      rowName: el('span', { class: 'cell-tip-name' }),
-      times: el('span', { class: 'cell-tip-x', text: '×' }),
-      colName: el('span', { class: 'cell-tip-name' }),
-      pos: el('div', { class: 'cell-tip-pos' }),
-      distance: el('div', { class: 'cell-tip-distance hidden' }),
-      count: el('div', { class: 'cell-tip-count' }),
-      lane: el('div', { class: 'cell-tip-block hidden' }),
-      laneTitle: el('div', { class: 'cell-tip-title' }),
-      laneLines: el('div', { class: 'cell-tip-lines' }),
-    }
-    this.tip.genomes.append(this.tip.rowGenome, this.tip.genomeTimes, this.tip.colGenome)
-    this.tip.matrix.append(
-      // The genome leads, where there is one: it is the coarser fact, and on a
-      // metagenome it is the one that says what you are looking at. The contig
-      // under it is the finer answer to the same question.
-      this.tip.genomes,
-      el('div', { class: 'cell-tip-pair' }, this.tip.rowName, this.tip.times, this.tip.colName),
-      this.tip.pos,
-      this.tip.distance,
-      this.tip.count,
-    )
-    this.tip.lane.append(this.tip.laneTitle, this.tip.laneLines)
-    this.tooltip = el('div', { class: 'cell-tip hidden' }, this.tip.matrix, this.tip.lane)
+    // The readout and the card beside the pointer, which say what is under it
+    // over the map and over every lane (`ui/MapReadout.ts`).
+    this.readout = new MapReadout({
+      options,
+      data: () => this.data,
+      turned: () => this.turned,
+      second: () => this.second,
+      squareCell: (cell) => this.squareCell(cell),
+      scoreWord: () => this.scoreWord(),
+      derivedReading: (row, col) => this.derivedReading(row, col),
+    })
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
@@ -1966,54 +1504,16 @@ export class MatrixPanel {
       return node
     }
 
-    // Saving a figure is one question with three parts — how fine, what file,
-    // go — so it is one row: resolution, format, and the button that acts on
-    // both. Two buttons labelled by format made the choice of file into the
-    // action itself, which left the resolution stranded in a row of its own two
-    // lines above the thing it applied to.
-    const row = exportRow({
-      dpi: {
-        choices: EXPORT_DPI_CHOICES,
-        value: this.exportDpi,
-        onChange: (dpi) => {
-          this.exportDpi = dpi
-          this.syncExportRow()
-        },
-      },
-      formats: EXPORT_FORMATS,
-      format: this.exportFormat,
-      formatTitle:
-        'PDF is a drawing: the cells as one lossless image, and every axis, label, track, key and ' +
-        'caption round them as paths and text, at no resolution at all. PNG is the whole figure as ' +
-        'pixels, at the resolution beside it.',
-      onFormat: (format) => {
-        this.exportFormat = format as ExportFormat
-        this.syncExportRow()
-      },
-      onSave: () => void this.savePlot(),
-      onCopy: () => void this.copyPlot(),
-      saveTitle: withKey('Save the figure, in the format chosen beside this', KEYS.savePlot),
-      copyTitle: withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
+    this.figure = new MapFigure({
+      heatmap: this.heatmap,
+      lanes: this.lanes,
+      canvas: this.canvas,
+      laneGeometry: () => this.laneGeometry(),
+      renderKeys: (ctx, scale, origin) => this.renderKeys(ctx, scale, origin),
+      caption: (now) => this.figureCaption(now),
+      exportName: () => this.exportName,
     })
-    this.exportStatus = row.note
-    this.copyButton = row.parts.copy
-    this.dpiSelect = row.parts.dpi
-    this.syncExportRow()
-    // Under the row it qualifies: whether the saved figure says what it is.
-    row.body.append(captionField())
-
-    // Its own card, and the first one, because saving the figure is not a
-    // property of the picture — it is the thing a reader does *after* every
-    // other control on this panel is where they want it. Buried at the foot of
-    // the Plot card it was three folds and a scroll away from the top of a
-    // column whose other two cards are settings; a reader who came to export
-    // had to walk past everything they had already decided.
-    this.exportEl = el(
-      'div',
-      { class: 'controls-card' },
-      cardTitle('Export', 'download', 'controls-title'),
-      row.body,
-    )
+    this.exportEl = this.figure.card
 
     this.plotEl = el(
       'div',
@@ -2143,14 +1643,19 @@ export class MatrixPanel {
       this.keys.classList.toggle('hidden', this.narrow || !this.legendOn)
       // Put away now, not on the next pointer move: a control that needs the
       // hand to twitch before it takes effect reads as not having worked.
-      if (!options.tooltip) this.tooltip.classList.add('hidden')
+      if (!options.tooltip) this.readout.hide()
     })
-    // Every panel, not only the one whose handle was dragged: the box is the
-    // session's, so a deck of bands is one shape (§17.3).
-    this.unsubscribeTurnBox = subscribeTurnBox(() => this.applyTurnBox())
-    // The square map's own size, on the same terms and through the same call: one
-    // reader, one shape, however many pictures are drawn from it.
-    this.unsubscribeMapSize = subscribeMapSize(() => this.applyTurnBox())
+    // The box the picture is drawn in and the handles on its edges, which
+    // follow the session's two sizes from here on (`ui/MapBox.ts`).
+    this.box = new MapBox({
+      heatmap: this.heatmap,
+      lanes: this.lanes,
+      grid: () => this.grid,
+      wrap: () => this.wrap,
+      turned: () => this.turned,
+      hostSize: () => this.readout.hostSize,
+      schedule: () => this.schedule(),
+    })
     // Every map's, a companion's as well as the lead's: a deck's maps move as
     // one, and one held on its diagonal beside one that was not would be dragged
     // off it by its own neighbour (`ui/diagonalLock.ts`).
@@ -2495,20 +2000,37 @@ export class MatrixPanel {
     this.reframeHint = el('div', { class: 'map-hint', attrs: { 'aria-hidden': 'true' } })
     this.keySlot = el('div', { class: 'map-key-slot' }, this.keys, this.reframeHint)
     this.paintReframeHint(false)
+    // The gestures on the lane stacks and the rectangles they aim at, before the
+    // map's own box: the rectangles are built into it (`ui/LaneGestures.ts`).
+    this.laneGestures = new LaneGestures({
+      lanes: this.lanes,
+      store: this.laneStore,
+      mapId: this.mapId,
+      heatmap: this.heatmap,
+      options,
+      readout: this.readout,
+      grid: () => this.grid,
+      editor: () => this.laneEditor,
+      isPicking: () => this.picking !== null,
+      laneGeometry: () => this.laneGeometry(),
+      turned: () => this.turned,
+      locusAxes: () => this.locusAxes,
+      schedule: () => this.schedule(),
+      bandDragged: (which, span) => this.bandDragged(which, span),
+    })
     const wrap = (this.wrap = el(
       'div',
       { class: 'heatmap-wrap' },
       this.canvas,
       this.overlay,
       this.keySlot,
-      this.grips.top,
-      this.grips.bottom,
-      this.grips.left,
-      this.grips.right,
-      ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
-      this.faceZone(),
+      this.box.grips.top,
+      this.box.grips.bottom,
+      this.box.grips.left,
+      this.box.grips.right,
+      ...LANE_EDGES.map((edge) => this.laneGestures.edgeZone(edge)),
+      this.laneGestures.faceZone(),
     ))
-    this.watchGrips()
 
     for (const edge of LANE_EDGES) {
       const layer = el('div', { class: 'lane-overlays' })
@@ -2532,7 +2054,7 @@ export class MatrixPanel {
       wrap,
       ...LANE_EDGES.map((edge) => this.lanes.canvasFor(edge)),
       ...this.laneLayers.values(),
-      this.tooltip,
+      this.readout.tooltip,
     )
     this.laneEditor = new LaneEditor({
       host: this.grid,
@@ -2540,9 +2062,9 @@ export class MatrixPanel {
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
     })
-    for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
-    this.watchEdgeDrops()
-    this.laneListeners.push(offerLanding(this.laneSurface))
+    for (const edge of LANE_EDGES) this.laneGestures.watchLane(edge, this.lanes.canvasFor(edge))
+    this.laneGestures.watchEdgeDrops()
+    this.laneListeners.push(offerLanding(this.laneGestures.laneSurface))
     // A restyle, a rename or a move of any lane is a different picture. Taken
     // on the store this panel was built against, which on a file with no
     // annotation machinery is the empty one — it never fires, and that costs
@@ -2642,12 +2164,12 @@ export class MatrixPanel {
             // The *grid* is what is observed, not the plot: it is the tooltip's
             // positioning parent, and it is the box that changes when a lane
             // appears — which the plot's own size does not.
-            this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+            this.readout.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
             // Room *and* box, which is what a lane appearing has to change: the
             // stack beside the map takes from the same width the band is drawn
             // in, and re-measuring without redrawing left the band overlapping
             // the tracks that had just arrived under it.
-            this.refit()
+            this.box.refit()
             this.heatmap.resize()
             this.placeKey()
             this.centrePlot(body)
@@ -2663,8 +2185,8 @@ export class MatrixPanel {
     // the centre column it is about to be mounted in — so read them again here,
     // rather than trust the fallbacks the constructor had to use.
     requestAnimationFrame(() => {
-      this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
-      this.measureRoom()
+      this.readout.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+      this.box.measureRoom()
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
       this.placeKey()
@@ -2692,347 +2214,24 @@ export class MatrixPanel {
   }
 
   /**
-   * One of the two rectangles inside the map that a track lands on.
-   *
-   * Three gestures aim at them: a file dropped from the desktop, a row dragged
-   * out of the Tracks card, and a lane dragged by the handle on its own picture.
-   * All three mean the same thing — *this track, on that edge* — so they are one
-   * target rather than three.
-   *
-   * Invisible and inert until a drag is under way, which is the whole trick: the
-   * map's own gestures — pan, the Option-drag selection, the click that opens a
-   * cell — happen in the same pixels, and a target that was always live would eat
-   * all three along the bottom edge.
-   */
-  private edgeZone(edge: LaneEdge): HTMLElement {
-    const zone = el(
-      'div',
-      { class: `lane-drop lane-drop-${edge}` },
-      el('span', { class: 'lane-drop-label', text: EDGE_WORDS[edge] }),
-    )
-    this.edgeZones.set(edge, zone)
-    zone.addEventListener('dragover', (event) => {
-      if (!this.acceptsDrag(event)) return
-      // Both, and in this order: the default action for a dropped file is to
-      // navigate the window to it, and the panel above is not the one that
-      // decides where this file goes.
-      event.preventDefault()
-      event.stopPropagation()
-      // A row dragged out of the Tracks card is being *moved*, and saying so is
-      // what stops the pointer showing a copy cursor over the target.
-      if (event.dataTransfer !== null && dragHasTrack(event)) {
-        event.dataTransfer.dropEffect = 'move'
-      }
-      zone.classList.add('over')
-    })
-    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
-    zone.addEventListener('drop', (event) => {
-      zone.classList.remove('over')
-      this.endDropping()
-
-      // A track already loaded, dragged here by its grip to change which edge it
-      // is drawn on. A move rather than a copy: the other edge is cleared, which
-      // is what dragging a thing from one place to another means. `location` in
-      // the row's settings is the same field, for the reader who wants both.
-      const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
-      if (moved !== '') {
-        event.preventDefault()
-        const entry = this.laneStore.byId(moved)
-        // An overlay has no edge: dropped on one, it is on this map, as it
-        // would be dropped on the face.
-        if (entry?.card === 'overlay') this.placeHere(moved)
-        // This panel's own map, as the grip drag is: a track carried onto the
-        // third replicate's edge belongs on the third replicate.
-        else if (entry !== undefined) this.laneStore.placeAt(moved, this.mapId, placementOn(edge))
-        return
-      }
-      this.dropFiles(event, edge)
-    })
-    return zone
-  }
-
-  /**
-   * The rectangle in the middle of the map: *on this map* (§8.1).
-   *
-   * The four at the edges say which stack a track is drawn in; this says which
-   * map, and it is the one target an overlay has — a loop set is drawn on the
-   * face of the map and along no edge of it. A file dropped here opens onto this
-   * map alone, an overlay on its face and a track on its usual edge; a row of
-   * the Tracks card is drawn on this map **as well** as wherever it already
-   * was, as the location field's marks put it. Before it the middle of a
-   * companion was no target at all, and a file dropped there went where a drop
-   * anywhere else goes: onto the first map.
-   *
-   * Kept down while a lane is carried by its grip (`.away`): that gesture is
-   * about an edge.
-   */
-  private faceZone(): HTMLElement {
-    const zone = el(
-      'div',
-      { class: 'lane-drop lane-drop-face' },
-      el('span', { class: 'lane-drop-label', text: 'on this map' }),
-    )
-    this.faceDrop = zone
-    zone.addEventListener('dragover', (event) => {
-      if (!this.acceptsDrag(event)) return
-      event.preventDefault()
-      event.stopPropagation()
-      // *Placed*, a copy: the row stays on every map it was on (§16.9).
-      if (event.dataTransfer !== null && dragHasTrack(event)) {
-        event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer, 'copy')
-      }
-      zone.classList.add('over')
-    })
-    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
-    zone.addEventListener('drop', (event) => {
-      zone.classList.remove('over')
-      this.endDropping()
-      const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
-      if (moved !== '') {
-        event.preventDefault()
-        this.placeHere(moved)
-        return
-      }
-      this.dropFiles(event, null)
-    })
-    return zone
-  }
-
-  /**
-   * A row of the Tracks card, put on this map — an overlay on its face, a track
-   * on its usual edge — and left on every other map it is drawn on.
-   *
-   * Nothing where it is here already: the face says *this map*, not *move it*,
-   * and a track already on one of this map's edges is on this map.
-   */
-  private placeHere(id: string): void {
-    const entry = this.laneStore.byId(id)
-    if (entry === undefined || this.laneStore.laneFor(id, this.mapId) !== undefined) return
-    if (entry.card === 'overlay') {
-      this.laneStore.placeOn(id, this.mapId, entry.placement)
-      return
-    }
-    const usual = LANE_EDGES.some((edge) => entry.placement[edge])
-      ? entry.placement
-      : placementOn('bottom')
-    this.laneStore.placeAt(id, this.mapId, usual)
-  }
-
-  /**
-   * Files, or a row of the Files panel, dropped on one of this map's rectangles:
-   * an edge, or the face for `null`.
-   */
-  private dropFiles(event: DragEvent, edge: LaneEdge | null): void {
-    const load = this.options.annotations?.loadOnEdge
-    // A row out of the Files panel: the same aim, at a file whose bytes have
-    // not been fetched yet. Resolved by the session, because resolving it here
-    // would mean this panel knowing how a folder is read.
-    if (dragHasFileRow(event)) {
-      const pick = this.options.annotations?.pickOnEdge
-      if (pick === undefined) return
-      event.preventDefault()
-      pick(event, edge)
-      return
-    }
-    const files = filesFrom(event.dataTransfer)
-    // Untouched where this file cannot carry tracks at all (§8.5). The shell
-    // stands aside for a `.lane-drop` target, so claiming a drop we cannot
-    // answer would swallow it — and a `.cool` dropped on a metacool's map is
-    // still a file the session knows how to open.
-    if (files.length === 0 || load === undefined) return
-    event.preventDefault()
-    // Not stopped: the shell's content-wide handler has to see this drop to
-    // put its own highlight away, and it stands aside for a `.lane-drop`
-    // target exactly as it does for the picker's zone — so the files are
-    // loaded once, here, where the reader aimed them.
-    load(files, edge)
-  }
-
-  /** Put the rectangles away at the end of a drag, whatever it carried. */
-  private endDropping(): void {
-    this.grid.classList.remove('is-dropping', 'is-overlay-drag')
-  }
-
-  /**
-   * Whether one of the rectangles will answer for this drag.
-   *
-   * A lane being moved always: that gesture is about which edge a lane is drawn
-   * on, and every file has lanes. A *file* only where one can be loaded — the
-   * rectangles are inside the map and the shell hands a drop on them to this
-   * panel, so lighting them up for a drag we would ignore is a target that eats
-   * the file.
-   */
-  private acceptsDrag(event: DragEvent): boolean {
-    if (dragHasTrack(event)) return true
-    if (dragHasFileRow(event)) return this.options.annotations?.pickOnEdge !== undefined
-    return dragHasFiles(event) && this.options.annotations?.loadOnEdge !== undefined
-  }
-
-  /**
-   * Show the two zones while a file is being dragged over the map, and only
-   * then.
-   *
-   * On the grid rather than on the zones themselves, because a zone that is
-   * invisible cannot be dragged *onto* — the reader has to see it appear while
-   * the pointer is still over the middle of the map, which is where a drag from
-   * the desktop arrives.
-   *
-   * The grid and not `this.el`, for two reasons, and the first one is not a
-   * matter of taste: this runs from the constructor, where `this.el` has not
-   * been built yet, and reading it there threw — which took the whole panel down
-   * for every file that *has* annotations, so a cooler rendered nothing and a
-   * metacool, which has none (§8.5), was fine. The grid is also the honest
-   * scope: it is the box holding the map, its lanes and these zones, while
-   * `this.el` reaches the colourbar and the header, where a drag means nothing.
-   */
-  private watchEdgeDrops(): void {
-    const show = (event: DragEvent): void => {
-      if (!this.acceptsDrag(event)) return
-      this.grid.classList.add('is-dropping')
-      // An overlay row has one target on a map, its face; the edges are down
-      // for it (see the stylesheet).
-      this.grid.classList.toggle('is-overlay-drag', dragHasOverlay(event))
-    }
-    const hide = (event: DragEvent): void => {
-      // A drag crossing from the map onto a zone leaves the grid by the letter
-      // of the event and not in fact; the related target is what tells the two
-      // apart, and `null` (leaving the window) is a real departure.
-      const to = event.relatedTarget
-      if (to instanceof Node && this.grid.contains(to)) return
-      this.endDropping()
-    }
-    this.grid.addEventListener('dragenter', show)
-    this.grid.addEventListener('dragover', show)
-    this.grid.addEventListener('dragleave', hide)
-    this.grid.addEventListener('drop', () => this.endDropping())
-    // A row dragged out of the Tracks card and then abandoned — Escape, or a
-    // release over nothing — ends with `dragend` on the row and no event of any
-    // kind here, so without this the two rectangles would stay up until the next
-    // drag. On the window because the row is not in this panel's tree.
-    const done = (): void => this.endDropping()
-    window.addEventListener('dragend', done)
-    this.laneListeners.push(() => window.removeEventListener('dragend', done))
-  }
-
-  /**
-   * Open the card for one feature, replacing any card already open.
-   *
-   * Held in a field rather than fired and forgotten because this panel is torn
-   * down under it on every navigation — a click on a contig name is a new view —
-   * and a card left behind would be describing a gene from a picture that is no
-   * longer on screen.
-   */
-  private openFeature(hit: {
-    set: FeatureSet
-    index: number
-    source: string
-    kind?: AnnotationKind
-  }): void {
-    this.featureDialog?.close()
-    this.featureDialog = openFeatureDialog({
-      ...hit,
-      onClose: () => {
-        this.featureDialog = null
-      },
-    })
-  }
-
-  /**
-   * Save the map as a figure — the `S` key, and the button in the Export card.
-   *
-   * In the format and at the resolution that card is set to, because a shortcut
-   * that exported something other than the button beside it would be a second
-   * export to keep in step with the first.
+   * Save the map as a figure — the `S` key, and the button in the Export card
+   * ({@link MapFigure.savePlot}).
    */
   savePlot(): void {
-    void this.saveFigure()
+    this.figure.savePlot()
   }
 
   /**
-   * With a deck up, the figure is the deck. The hook says whether it took the
-   * export — `false` is a deck of one map, which is this panel's own figure.
-   */
-  private async saveFigure(): Promise<void> {
-    if (this.deckExport !== null && (await this.deckExport.save(this.exportFormat, this.exportDpi))) {
-      this.exportStatus.textContent = 'saved the deck'
-      return
-    }
-    await this.save(this.exportFormat)
-  }
-
-  /**
-   * Route this panel's export to the deck it leads, or back to itself.
-   *
-   * Set by `panels/PanelDeck.ts` on the lead: the Export card and the `S` key
-   * are this panel's, and with five maps beside it a reader pressing either
-   * wants the arrangement they made, not the first cell of it.
+   * Route this panel's export to the deck it leads, or back to itself
+   * ({@link MapFigure.setDeckExport}).
    */
   setDeckExport(hook: DeckExport | null): void {
-    this.deckExport = hook
-    this.syncExportRow()
+    this.figure.setDeckExport(hook)
   }
 
-  /**
-   * The Export card's row, said again after a change of format, resolution or
-   * deck.
-   *
-   * A vector page has no resolution, so the resolution *goes* while PDF is
-   * chosen rather than sitting there greyed out — the 1D browser's card has
-   * always done this, and this one kept it on screen for a PDF it said was an
-   * image. The clipboard takes a PNG whatever the format beside it says, so
-   * while the resolution is away the copy's tooltip names the one it will use:
-   * a reader pasting into a slide is otherwise rasterised at a number they can
-   * no longer see.
-   *
-   * And the key moves with the act. `Ctrl+C` copies the whole deck once there
-   * is one (`Session`'s map-copy), so the clipboard button — which copies *this
-   * map* — stopped being the thing the key does, while still printing it. Two
-   * buttons on screen claiming one shortcut and doing different things is
-   * worse than one of them going unlabelled.
-   */
-  private syncExportRow(): void {
-    const vector = this.exportFormat === 'pdf'
-    if (this.dpiSelect !== null) this.dpiSelect.hidden = vector
-    if (this.copyButton === null) return
-    const png = vector ? `as a PNG at ${this.exportDpi} dpi` : 'as a PNG'
-    this.copyButton.title =
-      this.deckExport === null
-        ? withKey(`Copy the figure ${png}, ready to paste`, KEYS.copyPlot)
-        : `Copy this map ${png}, ready to paste. Ctrl+C copies the whole deck.`
-  }
-
-  /**
-   * The same figure onto the clipboard — ⌘C, and the button beside the save.
-   *
-   * PNG whatever the format select says, because a clipboard holds an image: a
-   * PDF pasted into a slide arrives as a file attachment rather than a picture,
-   * which is the opposite of what the gesture asked for. The resolution *is*
-   * honoured — a figure pasted into a manuscript at 300 dpi is the point of
-   * having the control at all — and the pre-flight in {@link exportCanvas} still
-   * applies, so an impossible size fails the same way it fails on save.
-   */
+  /** The same figure onto the clipboard — ⌘C ({@link MapFigure.copyPlot}). */
   copyPlot(): void {
-    void this.copy()
-  }
-
-  private async copy(): Promise<void> {
-    this.exportStatus.textContent = 'copying…'
-    try {
-      if (this.deckExport !== null && (await this.deckExport.copy(this.exportDpi))) {
-        this.exportStatus.textContent = 'copied the deck'
-        return
-      }
-      const now = new Date()
-      // The canvas is drawn *before* the clipboard item is built rather than
-      // inside the promise handed to it, because drawing is the part that can
-      // throw a message worth showing. What the item waits on is the encode.
-      const canvas = this.exportCanvas(this.exportDpi, now)
-      await copyPngToClipboard(canvasToPng(canvas))
-      this.exportStatus.textContent = `copied · ${canvas.width}×${canvas.height} px`
-    } catch (err) {
-      this.exportStatus.textContent =
-        err instanceof Error ? `copy failed: ${err.message}` : 'copy failed'
-    }
+    this.figure.copyPlot()
   }
 
   /**
@@ -3055,26 +2254,6 @@ export class MatrixPanel {
     for (const entry of this.laneStore.entries) {
       if (!hasAMovableAxis(entry.kind) || entry.style.limits.auto) continue
       this.laneStore.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
-    }
-  }
-
-  /**
-   * The end of a scaling drag: one store write for the whole gesture.
-   *
-   * From the range that was resolved when the drag began, which is the one the
-   * faded copy has been standing at all along — so the axis a reader let go on
-   * is the axis they get. Every track in the lane, because they share it.
-   */
-  private commitLaneScaling(edge: LaneEdge, members: readonly AnnotationEntry[]): void {
-    const held = this.laneScaling
-    this.laneScaling = null
-    this.schedule()
-    if (held === null || held.factor === 1) return
-    const extent = this.lanes.extentOf(edge, held.id)
-    for (const member of members) {
-      if (!hasAMovableAxis(member.kind)) continue
-      const next = nudgedLimits(member.style.limits, extent, held.factor)
-      if (next !== null) this.laneStore.restyle(member.id, { limits: next })
     }
   }
 
@@ -3382,276 +2561,6 @@ export class MatrixPanel {
   }
 
   /**
-   * Why this block cannot be correlated, or `null` when it can.
-   *
-   * Three refusals, and each is about the *object* rather than about the cost
-   * except the last.
-   *
-   * A **pair of files** has none: the correlation of a ratio is not a quantity
-   * anybody reads, and correlating each file and dividing is worse — a ratio of
-   * two correlation coefficients is not a correlation of anything.
-   *
-   * A block whose **two axes are different stretches** has none either. "The
-   * correlation between rows `i` and `j`" is a statement about two bins of one
-   * sequence measured against the same set of partners, and on a `contig_A ×
-   * contig_B` block the rows and the columns are not the same bins at all.
-   *
-   * And **size**, which is the one that is only a budget — see
-   * {@link MAP_CORRELATION_BINS}. Worded rather than hidden, because a greyed
-   * control that does not say what it wants is a control a reader concludes is
-   * broken.
-   */
-  private correlationRefusal(data: MatrixResult, second: MatrixResult | undefined): string | null {
-    if (this.options.derive?.correlateBlock === undefined) {
-      return 'not available in this view'
-    }
-    if (second !== undefined && (this.options.compare?.op ?? 'split') !== 'split') {
-      return 'one file at a time — the correlation of a ratio is not a correlation'
-    }
-    const square =
-      data.nrows === data.ncols &&
-      data.rowExtent[0] === data.colExtent[0] &&
-      data.rowExtent[1] === data.colExtent[1]
-    if (!square) return 'needs a square block — both axes over the same bins'
-    if (data.nrows > MAP_CORRELATION_BINS) {
-      return `${data.nrows.toLocaleString()} bins a side is past the ${MAP_CORRELATION_BINS.toLocaleString()}-bin limit — open the file at a coarser resolution`
-    }
-    return null
-  }
-
-  /** What identifies the square a correlation was measured on. */
-  private correlationKey(data: MatrixResult, derivation: Derivation): string {
-    return [
-      this.blockGeneration,
-      data.nrows,
-      data.rowExtent[0],
-      data.rowExtent[1],
-      derivation.normalise ?? '',
-      String(derivation.expected === true),
-      derivation.smooth ?? '0',
-      armsKey(this.options.derive?.arms),
-    ].join('|')
-  }
-
-  /**
-   * The correlation of this block if it is already computed, or the block
-   * unchanged with a job started to compute it.
-   *
-   * Returning the operand while the answer is on its way is the deliberate part.
-   * The alternative — blank until it lands — throws away a real picture of the
-   * same region for several seconds to avoid showing the reader the thing their
-   * correlation is *of*, and the veil already says what is happening.
-   *
-   * **It derives what it needs itself**, which is why the caller hands it the
-   * recipe rather than a derived block. A held correlation replaces the whole
-   * field, so the O/E under it is not computed at all — a pass over every cell,
-   * half a second at 4,096 bins, spent on the redraw that lands the answer for a
-   * picture nobody would see. A job to start takes the ratio with an empty pixel
-   * as the zero it is ({@link Derivation.keepZeros}), and it is sent before the
-   * picture under the veil is made — from that same ratio, the empty pixels
-   * blanked, which is all that separates the two.
-   *
-   * A despeckle still to come is waited for rather than raced: a correlation of
-   * the unsmoothed field would be drawn under a caption naming the smoothing,
-   * and then computed again once the smoothing landed.
-   */
-  private correlated(
-    data: MatrixResult,
-    derivation: Derivation,
-    runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
-  ): DerivedValues {
-    const key = this.correlationKey(data, derivation)
-    const held = this.correlation
-    if (held !== null && held.key === key) {
-      const { field } = held
-      return {
-        values: field.values,
-        // Centred on zero, not on one: this is a correlation coefficient and its
-        // neutral is no correlation. `preferredTransform` reads that and leaves
-        // the values linear, which is right — a coefficient on `log2` would be
-        // undefined over half its own range.
-        neutral: 0,
-        label: `${held.label} · correlation`,
-        // What a reader has to know to believe the picture, and the one thing
-        // the map itself cannot show: a dropped bin is drawn blank, and blank is
-        // also what a sparse corner looks like.
-        scope:
-          field.dropped > 0
-            ? `${field.dropped.toLocaleString()} of ${(field.kept + field.dropped).toLocaleString()} bins had too little data to correlate`
-            : held.scope,
-      }
-    }
-    const running = this.correlating
-    if (running !== null && running.key === key) return running.operand
-    // Of the ratio with an empty pixel as the zero it is, not the paper it is
-    // drawn as: the matrix the compartment call correlates.
-    const input = deriveBlock(data, { ...derivation, keepZeros: true }, runs)
-    const operand = { ...input, values: paperZeros(input.values, derivation) }
-    if (input.pending !== undefined) {
-      // The caller starts the smoothing from the operand's `pending`; this
-      // comes back through here once it has landed.
-      this.forgetCorrelation()
-      return operand
-    }
-    this.startCorrelation(key, input, operand, data.nrows)
-    return operand
-  }
-
-  /** Ask for one, with the operand drawn meanwhile. */
-  private startCorrelation(key: string, input: DerivedValues, operand: DerivedValues, n: number): void {
-    const run = this.options.derive?.correlateBlock
-    if (run === undefined) return
-    // The block moved under a job that is still running, so its answer is about
-    // a square nobody is looking at.
-    this.correlating?.job.cancel()
-
-    const job = run(input.values, n, (done, total) => {
-      if (this.correlating?.key !== key) return
-      this.showCorrelating(`correlating… ${Math.round((100 * done) / Math.max(1, total))}%`)
-    })
-    this.correlating = { key, job, operand }
-    this.showCorrelating('correlating…')
-    // What was correlated, said by the derivation that made it.
-    const { label, scope } = input
-
-    job.promise.then(
-      (field) => {
-        // A late answer to a superseded question. Dropped rather than cached:
-        // the key it belongs to may never be asked for again, and holding it
-        // would mean the cache answered for a block that is no longer read.
-        if (this.correlating?.key !== key) return
-        this.correlating = null
-        this.correlation = { key, field, label, scope }
-        this.showCorrelating(null)
-        this.redraw()
-      },
-      (err: unknown) => {
-        if (this.correlating?.key !== key) return
-        this.correlating = null
-        this.showCorrelating(null)
-        // A cancelled correlation is a reader who moved on, which is not an
-        // error and must not draw one (`worker/client.ts`).
-        if (!isCancellation(err)) {
-          this.options.derive?.onCorrelateChange?.(false)
-          this.options.derive?.onCorrelateFailure?.(
-            err instanceof Error ? err.message : String(err),
-          )
-        }
-      },
-    )
-  }
-
-  /** Put the correlation's own wait on the veil, or take it off. */
-  private showCorrelating(note: string | null): void {
-    this.correlationNote = note
-    this.refreshBusy()
-  }
-
-  /** Put the smoothing's wait on the veil, or take it off. */
-  private showSmoothing(note: string | null): void {
-    this.smoothingNote = note
-    this.refreshBusy()
-  }
-
-  /**
-   * Whichever wait is outstanding, with the correlation's winning.
-   *
-   * Both can be outstanding at once — the smoothing runs before the correlation
-   * does — and two notes cannot share one veil. The correlation's is shown
-   * because it is the longer job and the one whose progress a reader is actually
-   * waiting on.
-   */
-  private refreshBusy(): void {
-    const note = this.correlationNote ?? this.smoothingNote
-    if (note === null) this.setBusy(false)
-    else this.setBusy(true, note)
-  }
-
-  /** Drop any held or running correlation — the block it was about has gone. */
-  private forgetCorrelation(): void {
-    this.correlating?.job.cancel()
-    this.correlating = null
-    this.correlation = null
-    this.showCorrelating(null)
-  }
-
-  /** The same for a smoothing, and it is dropped on the same events. */
-  private forgetSmoothing(): void {
-    this.smoothing?.job.cancel()
-    this.smoothing = null
-    this.smoothed = null
-    this.showSmoothing(null)
-  }
-
-  /**
-   * Ask for a smoothing, unless the same one is already on its way.
-   *
-   * `startCorrelation`'s shape throughout, including the two things easy to leave
-   * out: a superseded job is cancelled rather than left to finish for a block
-   * nobody is looking at, and a late answer to a superseded question is dropped
-   * rather than cached, because the key it belongs to may never be asked for
-   * again.
-   */
-  private startSmoothing(key: string, request: SmoothingRequest): void {
-    if (this.smoothing?.key === key) return
-    const run = this.options.derive?.smoothBlock
-    if (run === undefined) return
-    this.smoothing?.job.cancel()
-
-    const job = run(request)
-    this.smoothing = { key, job }
-    this.showSmoothing('smoothing…')
-
-    job.promise.then(
-      (field) => {
-        if (this.smoothing?.key !== key) return
-        this.smoothing = null
-        this.smoothed = { key, field }
-        this.showSmoothing(null)
-        this.redraw()
-      },
-      (err: unknown) => {
-        if (this.smoothing?.key !== key) return
-        this.smoothing = null
-        this.showSmoothing(null)
-        // A cancelled smoothing is a reader who moved the picker, which is not an
-        // error and must not draw one (`worker/client.ts`). A real failure leaves
-        // the unsmoothed map standing, a true picture of the same region.
-        if (!isCancellation(err)) {
-          this.options.derive?.onCorrelateFailure?.(
-            err instanceof Error ? err.message : String(err),
-          )
-        }
-      },
-    )
-  }
-
-  /**
-   * What identifies the block a smoothing was computed for.
-   *
-   * Everything upstream of it in `deriveBlock`'s pipeline, and the baseline
-   * through `expected`: a window sized against one normalisation is not the
-   * window another would have chosen, and the O/E decides whether a second field
-   * was averaged alongside the first at all.
-   */
-  private smoothingKey(data: MatrixResult, derivation: Derivation): string {
-    return [
-      this.blockGeneration,
-      data.nrows,
-      data.ncols,
-      data.rowExtent[0],
-      data.rowExtent[1],
-      data.colExtent[0],
-      data.colExtent[1],
-      derivation.normalise ?? '',
-      String(derivation.expected === true),
-      String(derivation.baseline === true),
-      derivation.smooth ?? '0',
-      armsKey(armsInForce(this.options.derive)),
-    ].join('|')
-  }
-
-  /**
    * Show the despeckle setting the panel is drawing. {@link paintExpected}'s
    * counterpart, and silent on a companion, which has no picker to set.
    *
@@ -3699,11 +2608,8 @@ export class MatrixPanel {
     // worker thread spent on a picture nobody will see. Cancelled rather than
     // left to resolve into a dead panel, and the client itself is the session's
     // to close.
-    this.forgetCorrelation()
-    this.forgetSmoothing()
+    this.derivation.destroy()
     setReadout('')
-    this.featureDialog?.close()
-    this.featureDialog = null
     // A picking mode outlives nothing: the plot it was placing marks on is going
     // away. Ended here rather than left to be garbage-collected, because the
     // card that armed it is *not* going away — it lives in the shell — and it
@@ -3713,8 +2619,7 @@ export class MatrixPanel {
     this.unsubscribePlotOptions()
     this.unsubscribePick()
     this.unsubscribeTextScale()
-    this.unsubscribeTurnBox()
-    this.unsubscribeMapSize()
+    this.box.destroy()
     this.unsubscribeDiagonalLock()
     this.themeWatchers()
     this.narrowWatcher()
@@ -3722,6 +2627,9 @@ export class MatrixPanel {
     this.heatmap.detach()
     for (const off of this.laneListeners) off()
     this.laneListeners.length = 0
+    // The gestures' own listeners on the lane canvases and the window, and the
+    // feature card a click on a lane opened (`ui/LaneGestures.ts`).
+    this.laneGestures.destroy()
     // The lanes' sample cache goes with the panel, not with the file: the store
     // outlives this view, and a cache keyed on a view's own geometry would be
     // answering the next view's questions with the last one's data.
@@ -3734,7 +2642,7 @@ export class MatrixPanel {
     for (const controls of this.laneControls.values()) controls.destroy()
     this.groupsCard?.destroy()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
-    if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
+    this.readout.destroy()
   }
 
   /**
@@ -3748,43 +2656,11 @@ export class MatrixPanel {
    * from outside it.
    */
   remeasure(): void {
-    this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
-    this.refit()
+    this.readout.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+    this.box.refit()
     this.heatmap.resize()
     this.placeKey()
     this.schedule()
-  }
-
-  /**
-   * Take the room again, and redraw the box in it.
-   *
-   * Every road into this panel from a change of *space* ends here, and there are
-   * four of them: the shell folding a column ({@link remeasure}), the view's own
-   * `ResizeObserver` for a window resize or a lane appearing, a turn arriving or
-   * leaving, and a deck relaying out. They used to end in different places and
-   * only some of them redrew the box, so a turned band kept the width of the
-   * window it was first drawn in: folding two columns gave the map three hundred
-   * pixels it never took, and adding a track under it left the band as wide as it
-   * was before the stack was there.
-   *
-   * A square map needs none of this — its canvas is sized by the stylesheet, and
-   * `HeatmapView.resize` reads that — which is exactly why the turned one was
-   * missed: it is the one picture in the app whose size is a number this class
-   * computes.
-   *
-   * The band's *depth* follows on the next frame with nothing to arrange:
-   * {@link syncTurnDepth} runs before every draw and re-cuts the band whenever
-   * the box it has to fill has changed shape.
-   *
-   * Idempotent, and it has to be: writing the box resizes the grid, which is what
-   * the observer is watching. The room is measured against the *panel* and never
-   * against the grid the box is in ({@link measureRoom}), so a second pass over
-   * the same window computes the same numbers and the loop stops on the first
-   * repeat.
-   */
-  private refit(): void {
-    this.measureRoom()
-    this.writeTurnBox()
   }
 
   /**
@@ -3810,215 +2686,7 @@ export class MatrixPanel {
     // makes, measured against the picture instead of the window, because a
     // media query cannot see how many cells the reader has opened.
     this.keySlot.classList.toggle('is-crowded', plot.width > 0 && plot.width < KEY_MIN_PLOT)
-    this.placeGrips()
-  }
-
-  /**
-   * Lay the size handles along the edges of the picture.
-   *
-   * Placed from the measured rectangles on every frame, exactly as the key is, so
-   * they follow a pan and a zoom with nothing to keep in step.
-   *
-   * The **plot** frame for a square map, on all four edges: the plot is what a
-   * reader sees as the map — the canvas around it is the gutter its axis labels
-   * live in — and the box being dragged is the canvas, so a handle on the frame
-   * is the honest place to take hold of it.
-   *
-   * The band keeps the rectangle each of its own handles was always on. Its far
-   * edge follows the **data**, because a band is as wide as its block while the
-   * plot is as wide as the panel, and a bar across the plot would run out past
-   * the picture at every zoom that does not fill it. Its two ends follow the
-   * *plot*'s height for the opposite reason: a band fills its box vertically by
-   * construction, so a handle that stopped at the last column would sit in the
-   * middle of the picture pointing at nothing.
-   */
-  private placeGrips(): void {
-    const turned = this.turned
-    const plot = this.heatmap.plotRect
-    const data = this.heatmap.dataRect
-    // `down` is the mirrored half of a comparison, where separation grows towards
-    // the bottom of the picture and the far edge is the bottom one. The other
-    // horizontal edge is the diagonal the band stands on, and is not a handle.
-    //
-    // A **mirrored pair** has no idle edge at all: the diagonal is in the middle
-    // of the picture, both horizontal edges are far edges, and each of them sets
-    // the same one number — how tall the box is — from its own side.
-    const idle: PlotEdge | null =
-      turned === null || turned.fold !== undefined
-        ? null
-        : turned.direction === 'up'
-          ? 'bottom'
-          : 'top'
-    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
-      this.grips[edge].classList.toggle('hidden', edge === idle)
-    }
-    this.labelGrips(turned === null ? 'square' : 'band')
-
-    for (const edge of ['left', 'right'] as const) {
-      const grip = this.grips[edge]
-      grip.style.top = `${Math.round(plot.y)}px`
-      grip.style.height = `${Math.round(plot.height)}px`
-      grip.style.left = `${Math.round(edge === 'left' ? plot.x : plot.x + plot.width)}px`
-    }
-    for (const edge of ['top', 'bottom'] as const) {
-      if (edge === idle) continue
-      const grip = this.grips[edge]
-      // The band's far edge sits on the data; a square map's edges are the frame.
-      const box = turned === null ? plot : data
-      grip.style.top = `${Math.round(edge === 'top' ? box.y : box.y + box.height)}px`
-      grip.style.left = `${Math.round(box.x)}px`
-      grip.style.width = `${Math.round(box.width)}px`
-    }
-  }
-
-  /**
-   * What the handles say they do, which is not the same thing in the two
-   * presentations.
-   *
-   * Written when the presentation changes rather than on every frame: a title is
-   * a DOM write, and {@link placeGrips} runs before every draw.
-   */
-  private labelGrips(mode: 'square' | 'band'): void {
-    if (mode === this.gripMode) return
-    this.gripMode = mode
-    const same = 'Double-click for as much room as there is.'
-    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
-      this.grips[edge].title =
-        mode === 'square'
-          ? `Drag to set how big this map is drawn — every edge sets the same size, because a ` +
-            `square block has no shape to choose. ${same}`
-          : edgeAxis(edge) === 'y'
-            ? `Drag to set how tall this band is drawn. The distance from the diagonal it ` +
-              `reaches follows from the zoom — the box keeps its shape and the picture fills ` +
-              `it. ${same}`
-            : `Drag to set how wide this band is drawn. Both ends move, so the box stays ` +
-              `centred, and the tracks under it follow. ${same}`
-    }
-  }
-
-  /**
-   * A drag on a handle sets how big the picture is drawn.
-   *
-   * Pixels, straight through: a handle is on the edge of a box measured in them,
-   * so the edge goes exactly where the hand puts it. What each of the four edges
-   * *means* is read at the moment of the drag rather than wired once, because the
-   * same edge belongs to two pictures — the left edge of a band is one end of its
-   * width, and the left edge of a square map is one side of its size — and a
-   * panel changes between them under the reader's hand.
-   *
-   * The **band** keeps the numbers it always had (`ui/turnBox.ts`): its far
-   * horizontal edge is the depth, its two ends are the width, and the width moves
-   * at twice the hand because the box is centred — the edge under the pointer has
-   * to stay under it, so the far end goes out by the same amount.
-   *
-   * A **square map** has one number and every edge sets it (`ui/mapSize.ts`). The
-   * two ends move it at twice the hand, for the same centring reason. The two
-   * horizontal edges move it at once: the picture hangs from the stack above it,
-   * so its top is where the panel starts and a taller box grows downward. The top
-   * handle therefore reads as *out is bigger* rather than as an edge that follows
-   * the pointer — which is what an edge handle means anyway, and the alternative
-   * is a picture that floats in the middle of a reserved column with its tracks
-   * detached from it.
-   *
-   * Keyboard too, because this is the only way to reach the number without a
-   * pointer and a `role="separator"` that answers no keys is a control that says
-   * it is one.
-   */
-  private watchGrips(): void {
-    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
-      const axis = edgeAxis(edge)
-      // Out of the box: left and up are negative on screen, right and down are
-      // positive, and "out" is whichever of them leaves the picture's middle.
-      const away = edge === 'left' || edge === 'top' ? -1 : 1
-      this.dragEdge(this.grips[edge], {
-        axis,
-        away: () => away,
-        held: () =>
-          this.turned === null
-            ? this.mapSize()
-            : axis === 'x'
-              ? this.turnBox().width
-              : this.turnBox().height,
-        // Both ends of a centred box move; one horizontal edge moves alone.
-        gain: axis === 'x' ? 2 : 1,
-        set: (value) => {
-          if (this.turned === null) setMapSize(value)
-          else if (axis === 'x') this.setTurnBox({ width: value })
-          else this.setTurnBox({ height: value })
-        },
-        reset: () => {
-          if (this.turned === null) setMapSize(null)
-          else if (axis === 'x') this.setTurnBox({ width: null })
-          else this.setTurnBox({ height: null })
-        },
-      })
-    }
-  }
-
-  /**
-   * One edge of the box, as something a hand or a keyboard can move.
-   *
-   * The four handles differ in three numbers and nothing else — which axis they
-   * travel on, which way out of the box is, and how much the box grows per pixel
-   * travelled — so they are one gesture parameterised rather than four listeners
-   * that have to be kept saying the same thing.
-   */
-  private dragEdge(
-    grip: HTMLElement,
-    rule: {
-      axis: 'x' | 'y'
-      away: () => number
-      held: () => number
-      gain: number
-      set(value: number): void
-      reset(): void
-    },
-  ): void {
-    let from: { at: number; size: number } | null = null
-    const onDown = (event: PointerEvent): void => {
-      // No guard on the presentation any more: both of them have a size for this
-      // handle to move, and the one edge that has none — the diagonal a band
-      // stands on — is hidden rather than inert ({@link placeGrips}).
-      if (event.button !== 0) return
-      event.preventDefault()
-      event.stopPropagation()
-      from = { at: rule.axis === 'x' ? event.clientX : event.clientY, size: rule.held() }
-      grip.setPointerCapture(event.pointerId)
-      grip.classList.add('is-dragging')
-    }
-    const onMove = (event: PointerEvent): void => {
-      if (from === null) return
-      const now = rule.axis === 'x' ? event.clientX : event.clientY
-      rule.set(from.size + (now - from.at) * rule.away() * rule.gain)
-    }
-    const onUp = (event: PointerEvent): void => {
-      if (from === null) return
-      from = null
-      grip.releasePointerCapture(event.pointerId)
-      grip.classList.remove('is-dragging')
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      const size = rule.held()
-      // A tenth of the box per press, a half with Shift — the step the map's own
-      // arrow keys pan by, so one hand learns one rule.
-      const step = Math.max(1, Math.round(size * (event.shiftKey ? 0.5 : 0.1)))
-      const grow = rule.axis === 'x' ? 'ArrowRight' : 'ArrowUp'
-      const shrink = rule.axis === 'x' ? 'ArrowLeft' : 'ArrowDown'
-      if (event.key === grow) rule.set(size + step)
-      else if (event.key === shrink) rule.set(size - step)
-      else if (event.key === 'Home' || event.key === '0') rule.reset()
-      else return
-      event.preventDefault()
-    }
-
-    grip.addEventListener('pointerdown', onDown)
-    grip.addEventListener('pointermove', onMove)
-    grip.addEventListener('pointerup', onUp)
-    grip.addEventListener('pointercancel', onUp)
-    grip.addEventListener('keydown', onKey)
-    // A double-click puts the default back, which is the way out of an edge
-    // dragged somewhere useless.
-    grip.addEventListener('dblclick', () => rule.reset())
+    this.box.placeGrips()
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -4028,186 +2696,16 @@ export class MatrixPanel {
   }
 
   /**
-   * The figure's box, measured once for every drawing of it — the PNG, the PDF
-   * and the deck's cell of it — so no two of them can disagree about where
-   * anything goes.
-   *
-   * The lanes are part of the figure, so they are part of its box. A track
-   * exported without them is a picture of a claim with its evidence cropped
-   * off. The two that come *before* the map also move it: everything else on
-   * the page is placed against `origin` rather than against the page. No column
-   * for a legend: the key is drawn *in* the map's corner, exactly where it is
-   * on screen, so an exported figure is the same picture at a different
-   * resolution rather than a rearrangement of it.
-   *
-   * The caption is measured here because it decides how tall the figure is — a
-   * long provenance line on a narrow figure wraps rather than running off the
-   * edge — against the *drawn* frame rather than the page: the plot is inset by
-   * however much its labels need, and by whatever stack stands to its left, and
-   * a caption flush with the page's edge hangs off the left of the picture it
-   * belongs to. None at all where the Export card's *caption* is off: the figure
-   * then ends at the foot of its lowest lane.
-   */
-  private figureFrame(now: Date, measure: CanvasRenderingContext2D): FigureFrame {
-    const plot = this.heatmap.cssSize
-    const stacks = this.laneStacks()
-    const origin = { x: stacks.left, y: stacks.top }
-    const width = stacks.left + plot.width + stacks.right
-    const body = stacks.top + plot.height + stacks.bottom
-    const left = origin.x + this.heatmap.dataRect.x
-    const caption = this.figureCaption(now)
-    const lines = getExportPrefs().caption ? captionLines(measure, caption, Math.max(120, width - left)) : []
-    return { origin, width, body, height: body + captionHeightOf(lines), left, caption, lines }
-  }
-
-  /**
-   * The figure, drawn from the context's own origin at `scale` device pixels
-   * per CSS pixel: the plot, the lanes round it, the key in its corner and the
-   * caption under it. Everything but the page under it, which the two
-   * destinations lay differently — see {@link exportCanvas} and
-   * {@link drawVector}.
-   *
-   * Every part is *redrawn* at the scale rather than blown up from the screen's
-   * canvases, so a 300 dpi figure has 300 dpi track names; and every part sets
-   * an absolute transform from the origin, which is what lets a vector page
-   * place the whole figure anywhere on itself (`VectorPage.setOrigin`).
-   */
-  private paintFigure(ctx: CanvasRenderingContext2D, scale: number, frame: FigureFrame): void {
-    // The plot draws from `origin` and clears its own box as it goes, so it
-    // goes before anything that could share that box.
-    this.heatmap.renderTo(ctx, scale, frame.origin)
-    // Placed exactly as the grid places them — around the plot, on all four
-    // sides.
-    this.lanes.renderInto(ctx, this.figureGeometry(), scale, frame.origin)
-
-    this.renderKeys(ctx, scale, frame.origin)
-
-    // The caption is *below* the figure, which is where a caption goes.
-    if (frame.lines.length > 0) {
-      const palette = readCanvasPalette(this.canvas)
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      ctx.textBaseline = 'alphabetic'
-      ctx.textAlign = 'left'
-      let y = frame.body + scaleLength(CAPTION_TOP)
-      for (const line of frame.lines) {
-        const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
-        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
-        ctx.fillStyle = palette.labelColor
-        // Baseline a little above the line's foot, so the two lines read as one
-        // block rather than as two evenly spaced rows.
-        ctx.fillText(line.text, frame.left, y + height - 4)
-        y += height
-      }
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-  }
-
-  /**
-   * The figure as one canvas: the plot with its lanes, key and caption, on an
-   * opaque page background, at `dpi` dots per inch.
-   *
-   * Composed from the live views rather than copied off the screen — each
-   * redraws itself into this canvas at the export scale, so the labels, the
-   * hairlines and the tick marks are drawn at that resolution instead of being
-   * enlarged. What is *framed* is whatever is framed on screen, pan and zoom
-   * included.
+   * The figure as one canvas, at `dpi` dots per inch, framed as the screen is
+   * ({@link MapFigure.exportCanvas}).
    */
   exportCanvas(dpi: number, now = new Date()): HTMLCanvasElement {
-    const scale = scaleForDpi(dpi)
-    const out = document.createElement('canvas')
-    const ctx = out.getContext('2d')
-    if (ctx === null) throw new Error('Could not acquire a 2d context for the export canvas.')
-
-    // Measured before the canvas is sized: setting `width`/`height` resets the
-    // context, so nothing is drawn until after.
-    const frame = this.figureFrame(now, ctx)
-    const { width, height } = frame
-
-    // Pre-flight, because the failure mode is silent: past a browser's canvas
-    // cap, setting `width`/`height` leaves a blank canvas rather than throwing,
-    // so the export lands as a white rectangle with no explanation. Asked once
-    // the caption is measured, because the caption is part of the height, and
-    // a figure that fits without it can fail with it.
-    const fits = largestDpiThatFits(width, height)
-    if (fits !== null && fits < dpi) {
-      throw new Error(
-        `${dpi} dpi would need a ${Math.round(width * scale)}×${Math.round(height * scale)} px ` +
-          `canvas, which is past what a browser will draw. ${fits} dpi is the largest that fits ` +
-          'this figure.',
-      )
-    }
-
-    out.width = Math.max(1, Math.round(width * scale))
-    out.height = Math.max(1, Math.round(height * scale))
-
-    this.paintFigure(ctx, scale, frame)
-
-    // Opaque, and in the theme on screen. A transparent PNG of a white-on-white
-    // contact map is a blank rectangle in every viewer that composites onto
-    // black, and the labels are drawn in the page's own text colour. Painted
-    // *behind* what is already there — the plot cleared its own box — and
-    // `#ffffff` first, so an unreadable custom property leaves a white page
-    // rather than a black one.
-    ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = '#ffffff'
-    ctx.fillStyle = readPageBackground()
-    ctx.fillRect(0, 0, out.width, out.height)
-    ctx.globalCompositeOperation = 'source-over'
-    return out
+    return this.figure.exportCanvas(dpi, now)
   }
 
-  /**
-   * The figure as one cell of the deck's (§16.5): the canvas above for its
-   * PNG, at the deck's resolution, and the vector drawing below for its PDF —
-   * the matrix the one image, everything round it paths and text — from one
-   * measurement of its box.
-   */
+  /** The figure as one cell of the deck's (§16.5): {@link MapFigure.deckFigure}. */
   deckFigure(now: Date): CellFigure {
-    const measure = document.createElement('canvas').getContext('2d')
-    if (measure === null) throw new Error('Could not measure the caption.')
-    const frame = this.figureFrame(now, measure)
-    return {
-      width: frame.width,
-      height: frame.height,
-      raster: (dpi) => this.exportCanvas(dpi, now),
-      vector: (ctx) => this.drawVector(ctx, frame),
-    }
-  }
-
-  /**
-   * The figure onto a vector page, from the context's origin: the page under
-   * it first — a PDF is drawn in order and has no `destination-over` — then
-   * the figure at 1:1.
-   */
-  private drawVector(ctx: CanvasRenderingContext2D, frame: FigureFrame): void {
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.fillStyle = readPageBackground()
-    ctx.fillRect(0, 0, frame.width, frame.height)
-    this.paintFigure(ctx, 1, frame)
-  }
-
-  /**
-   * The same figure as a vector page: the matrix as an image, everything else
-   * as paths and text.
-   *
-   * The honest hybrid, and the reason the browser's page and this one are the
-   * same class. A contact matrix *is* a raster — twelve thousand bins are
-   * pixels, and writing them as a million rectangles would be a larger, slower
-   * file of the same picture — but the axes, the tick labels, the boundary
-   * marks, the tracks beside it, the legend and the caption are none of them
-   * pixels, and a reader who wants to restyle a figure wants exactly those.
-   *
-   * Drawn at 1:1 rather than at a DPI, because a vector page has no resolution.
-   * The image inside it does, and it is the screen's — which is the resolution
-   * the matrix actually has, since a bin is a bin however large the page is.
-   */
-  private async vectorFigure(now: Date): Promise<Blob> {
-    const measure = document.createElement('canvas').getContext('2d')
-    if (measure === null) throw new Error('Could not measure the caption.')
-    const frame = this.figureFrame(now, measure)
-    const page = new VectorPage(frame.width, frame.height)
-    this.drawVector(page.ctx, frame)
-    return page.toBlob({ title: frame.caption.title, created: now })
+    return this.figure.deckFigure(now)
   }
 
   /**
@@ -4472,34 +2970,6 @@ export class MatrixPanel {
     }
   }
 
-  /** Save the figure. The status line under the row reports what happened. */
-  private async save(format: ExportFormat): Promise<void> {
-    const now = new Date()
-    // The stamp is in the name because two exports of the same view are the
-    // same filename otherwise, and the second one silently becomes
-    // `figure (1).png` in a downloads folder nobody can later put in order. The
-    // resolution is in a PNG's name and not a PDF's: a vector page has none.
-    const dpi = format === 'png' ? `-${this.exportDpi}dpi` : ''
-    const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}${dpi}.${format}`
-    // Where it goes first, while the press is still the reader's (`ui/export.ts`).
-    const target = await chooseSaveTarget(name, format === 'png' ? 'image/png' : 'application/pdf')
-    if (target === null) return
-    this.exportStatus.textContent = `saving ${target.name}…`
-    try {
-      const blob =
-        format === 'png'
-          ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
-          : await this.vectorFigure(now)
-      await target.write(blob)
-      this.exportStatus.textContent = `${target.name} · ${fmt.bytes(blob.size)}`
-    } catch (err) {
-      // Nothing here is worth an error screen: the view is intact and the user
-      // can try a smaller size. Say what failed and stay put.
-      this.exportStatus.textContent =
-        err instanceof Error ? `export failed: ${err.message}` : 'export failed'
-    }
-  }
-
   /**
    * Everything drawn on the data: the overlays placed on this map, then the
    * hand-drawn marks over them.
@@ -4560,77 +3030,7 @@ export class MatrixPanel {
     )
     drawManualLines(ctx, frame, this.locusAxes, context.manual.lines)
     drawArrowheads(ctx, frame, this.locusAxes, context.manual.arrowheads, palette.labelHaloColor)
-    this.paintLaneGuide(ctx, frame)
-  }
-
-  /**
-   * The lane hairline, continued across the map.
-   *
-   * One line, not a crosshair. A pointer on the bottom stack is naming a
-   * *column* and has said nothing about which row, so a horizontal line through
-   * it would be an answer to a question nobody asked — and two lines crossing at
-   * an arbitrary point read as a cell being pointed at, which is exactly what is
-   * not happening.
-   *
-   * Turned, that one line becomes a **V** standing on the axis under the
-   * pointer, and it is the same statement rather than a second one: the reader
-   * is naming one place on the genome, and the contacts that place is in are not
-   * a column of a turned picture but the two 45° rays leaving it
-   * (`render/rotate.ts`). A vertical line there would cross the band through
-   * contacts between two *other* places, none of which is the one being pointed
-   * at except where the V's own apex is.
-   *
-   * The coordinate needs no conversion: the lane canvases share the map
-   * canvas's grid cell on the axis they run along, so a pixel `x` on the bottom
-   * stack is the same `x` here. Clipped to the data rather than the plot, so it
-   * stops where the matrix does instead of running out over empty margin.
-   */
-  private paintLaneGuide(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
-    const guide = this.laneHover
-    // Under the crosshair preference, as the lane's own hairline is: the two
-    // are one line, the hand's place on a track carried across the map, and a
-    // reader who turned the crosshair off should not find half of it still on.
-    if (guide === null || !getPlotOptions().crosshair) return
-    const { data, dpr } = frame
-    const at = (Math.round(guide.along * dpr - 0.5) + 0.5) / dpr
-    if (guide.edge === 'bottom') {
-      if (at < data.x || at > data.x + data.width) return
-    } else if (at < data.y || at > data.y + data.height) return
-
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(data.x, data.y, data.width, data.height)
-    ctx.clip()
-    ctx.strokeStyle = CROSSHAIR_COLOR
-    ctx.lineWidth = Math.max(1 / dpr, 0.75)
-    ctx.globalAlpha = 0.8
-    ctx.beginPath()
-    const turned = this.turned
-    if (turned !== null && laneIsHorizontal(guide.edge)) {
-      // The V on the diagonal under the pointer, one per band of a mirrored
-      // pair: the place being pointed at is on the genome rather than in a file,
-      // and it anchors contacts in both maps (`placeRays`). The same V a line
-      // the reader drew there becomes (`drawManualLines`).
-      const col = frame.colScale.toUnit(guide.along - frame.plot.x)
-      for (const ray of placeRays(turned, col)) {
-        ctx.moveTo(
-          frame.plot.x + frame.colScale.toPixel(ray.from.col),
-          frame.plot.y + frame.rowScale.toPixel(ray.from.row),
-        )
-        ctx.lineTo(
-          frame.plot.x + frame.colScale.toPixel(ray.to.col),
-          frame.plot.y + frame.rowScale.toPixel(ray.to.row),
-        )
-      }
-    } else if (laneIsHorizontal(guide.edge)) {
-      ctx.moveTo(at, data.y)
-      ctx.lineTo(at, data.y + data.height)
-    } else {
-      ctx.moveTo(data.x, at)
-      ctx.lineTo(data.x + data.width, at)
-    }
-    ctx.stroke()
-    ctx.restore()
+    this.laneGestures.paintLaneGuide(ctx, frame)
   }
 
   /**
@@ -4965,24 +3365,6 @@ export class MatrixPanel {
     })
   }
 
-  /**
-   * The same gesture, made on a lane stack rather than on the map.
-   *
-   * One conversion for both surfaces ({@link HeatmapView.bandAt}), because §8.4
-   * glues their pixels together along the shared axis and two conversions would
-   * be two chances to disagree about which stretch was named. Which axis is not
-   * read from the hand here — the stack decides it, since a lane along the
-   * columns can only ever name columns.
-   */
-  private bandOnLane(edge: LaneEdge, from: number, to: number): void {
-    const axis = laneIsHorizontal(edge) ? 'cols' : 'rows'
-    // Before the report, which disarms.
-    const zooming = !isArmed()
-    const span = this.heatmap.bandAt(axis, from, to)
-    if (span !== null) this.bandDragged(axis, span)
-    if (zooming) this.heatmap.zoomToBand(axis, from, to)
-  }
-
   /** A band of one axis of the block on screen, as a locus, or `null`. */
   private bandLocus(which: 'rows' | 'cols', span: [number, number]): PickedLocus | null {
     const axis = which === 'rows' ? this.ownAxes.rows : this.ownAxes.cols
@@ -5058,744 +3440,17 @@ export class MatrixPanel {
           ? null
           : anchorColumns(this.turned, this.echo.row, this.echo.col),
       laneEcho: this.laneEcho,
-      guide: this.laneHover,
-      border: this.laneBorder,
+      guide: this.laneGestures.laneHover,
+      border: this.laneGestures.laneBorder,
       handles: true,
-      grip: this.laneHandle,
-      scaling: this.laneScaling,
+      grip: this.laneGestures.laneHandle,
+      scaling: this.laneGestures.laneScaling,
       palette: {
         guide: palette.labelColor,
         halo: palette.labelHaloColor,
         crosshair: CROSSHAIR_COLOR,
       },
     }
-  }
-
-  /**
-   * The same frame, with the pointer taken out of it — what a figure is drawn
-   * from.
-   *
-   * The handles are controls: a column of them down the margin is furniture a
-   * reader of the figure has no use for, and so is a gesture in progress. Both
-   * are addressed to somebody with a map in front of them, and a saved figure is
-   * exactly the reader who has not. Everything else here is the picture and
-   * stays.
-   */
-  private figureGeometry(): LaneGeometry {
-    const live = this.laneGeometry()
-    return {
-      ...live,
-      handles: false,
-      grip: null,
-      scaling: null,
-    }
-  }
-
-  /**
-   * How much room each stack needs, for a figure that has to make room for it.
-   *
-   * Two of the four move the map rather than merely extending the page, which
-   * is why this is one call and not four: everything a figure draws is placed
-   * against the plot's own corner, and above the map and to its left that
-   * corner is not the canvas's.
-   */
-  private laneStacks(): Record<LaneEdge, number> {
-    return {
-      top: this.lanes.thicknessOf('top'),
-      right: this.lanes.thicknessOf('right'),
-      bottom: this.lanes.thicknessOf('bottom'),
-      left: this.lanes.thicknessOf('left'),
-    }
-  }
-
-  /**
-   * Follow the pointer over one lane stack.
-   *
-   * The lanes get their own listeners rather than sharing the heatmap's, because
-   * they are separate canvases and a pointer over one is not over the other.
-   * What they share is the tooltip, which is why the coordinates are converted
-   * to the grid's — the tooltip is parented there and knows nothing about which
-   * canvas asked for it.
-   */
-  /**
-   * Dragging a lane: its handle moves it, its border resizes it, its body pans.
-   *
-   * All three already existed in the side panel — a grip, a height box — and all
-   * three are being asked for *here* because here is where the tracks are being
-   * looked at. A reader comparing two profiles moves them next to each other and
-   * makes the interesting one taller, and having to cross the window to a list
-   * to do either is the reason the card grew a handle in the first place.
-   *
-   * Pointer capture, and the same reason the panel columns take it: a drag that
-   * leaves a 44-pixel strip — which every resize does — must not be dropped on
-   * the map underneath, where it would become a pan.
-   */
-  private dragLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
-    const lanes = this.lanes
-    const store = this.laneStore
-    const horizontal = laneIsHorizontal(edge)
-    /** Which way a pointer displacement on this canvas moves *outward*. */
-    const outward = lanes.outwardOf(edge)
-
-    /**
-     * Three gestures on one surface, told apart by *where* the press lands.
-     *
-     * The **handle** moves the track: up and down its own stack to reorder, out
-     * onto a rectangle in the map to change which edge it is drawn on — or off
-     * this map altogether, onto another's rectangles, a `+` or a cell of the
-     * deck (`ui/laneCarry.ts`), which moves it there. The
-     * **border** resizes, because that is the only thing a border can be dragged
-     * for. Everything else is a **pan**, which is what dragging a track beside a
-     * map has always meant.
-     *
-     * The body used to reorder as well, by reading the direction of the first
-     * movement — along the axis a pan, across it a reorder. It does not any
-     * more, and the handle is why. Two meanings for one surface is a rule the
-     * reader has to know before their first drag does what they meant, and it
-     * was paid for on every pan that wandered a few pixels off the horizontal:
-     * the track jumped a slot in the stack, because a gesture that has to be
-     * performed *carefully* had been asked for. With a surface of its own for
-     * moving, the body can go back to meaning one thing.
-     */
-    let drag:
-      | {
-          id: string
-          kind: 'size' | 'pan' | 'grip' | 'press' | 'scale' | 'zoom'
-          from: number
-          along: number
-          size: number
-          /** Where the press landed, so an undecided drag can catch up. */
-          from0: number
-          along0: number
-          /** For a scaling drag: the across-offset inside the lane it began at. */
-          within: number
-          /** Every track in the lane, which for an overlay group is all of them. */
-          members: AnnotationEntry[]
-          /** For a handle drag: the edge under the pointer, if it is on one. */
-          to: LaneEdge | null
-          /** The slot last dropped into, so a reorder fires once per crossing. */
-          over: number
-          /** For a handle drag: the lane in the hand, as other surfaces see it. */
-          carry: LaneCarry | null
-          /** …and the place off this map it would land on, if it is over one. */
-          landing: LaneLanding | null
-        }
-      | null = null
-
-    const start = (
-      id: string,
-      kind: 'size' | 'grip' | 'press' | 'zoom',
-      event: PointerEvent,
-      size: number,
-      within = 0,
-      members: AnnotationEntry[] = [],
-    ): void => {
-      const across = horizontal ? event.clientY : event.clientX
-      const along = horizontal ? event.clientX : event.clientY
-      drag = {
-        id,
-        kind,
-        from: across,
-        along,
-        size,
-        from0: across,
-        along0: along,
-        within,
-        members,
-        to: null,
-        over: -1,
-        carry: null,
-        landing: null,
-      }
-      canvas.setPointerCapture(event.pointerId)
-      event.preventDefault()
-    }
-
-    const onDown = (event: PointerEvent): void => {
-      if (event.button !== 0 || this.picking !== null) return
-      const box = canvas.getBoundingClientRect()
-      const x = event.clientX - box.left
-      const y = event.clientY - box.top
-      // Shift first, before any of the three targets below. The same gesture the
-      // map has and the 1D browser has, offered on the strip beside them: a
-      // reader who can see the peak they want to zoom to should be able to drag
-      // across it where they are looking, rather than move to the map and find
-      // the same stretch again. Deliberate enough — a held modifier — that it
-      // can outrank a caret and a handle without ever being hit by accident.
-      // …and unmodified while a form is waiting to be pointed at, for the reason
-      // the map itself gives: *Pick on map* is already a mode, and asking for a
-      // modifier on top of one is asking twice. `bandOnLane` reports without
-      // zooming while it is armed.
-      if (event.shiftKey || isArmed()) {
-        start('', 'zoom', event, 0)
-        return
-      }
-      // A limit under a track's name is a text box that happens to be painted.
-      // Checked before the pointer is captured, so the press never becomes the
-      // start of a pan the reader did not ask for.
-      const limit = lanes.limitAt(edge, x, y)
-      if (limit !== null && this.laneEditor !== null) {
-        event.preventDefault()
-        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
-        return
-      }
-      // The handle next: it sits inside the lane's own rectangle, so the lane
-      // hit below would otherwise take the press and read a direction out of it.
-      const handle = lanes.gripAt(edge, x, y, this.laneGeometry())
-      if (handle !== null) {
-        start(handle.entry.id, 'grip', event, handle.entry.style.size)
-        canvas.classList.add('grabbing')
-        this.laneGripping = true
-        // In the hand, as every other map and the deck see it: they light the
-        // places it can go (§16.9, `ui/laneCarry.ts`).
-        const carry: LaneCarry = {
-          ids: lanes.membersOf(edge, handle.entry.id).map((member) => member.id),
-          from: this.mapId,
-          edge,
-        }
-        if (drag !== null) drag.carry = carry
-        startCarry(carry)
-        this.tooltip.classList.add('hidden')
-        // The rectangle comes up with the gesture, because it is where the
-        // gesture can end: a drag whose target only appears once you are on it
-        // is a drag nobody makes twice.
-        //
-        // Every rectangle *but this edge's own*. A track dragged out of the
-        // bottom stack cannot be moved to the bottom — it is already there — so
-        // offering it that target is offering a gesture with no outcome, and a
-        // lit rectangle that does nothing when you let go reads as the drag
-        // having failed.
-        this.edgeZones.get(edge)?.classList.add('away')
-        this.faceDrop?.classList.add('away')
-        this.grid.classList.add('is-dropping')
-        return
-      }
-      // …and the name last of the three, for the reason the limit is first: it
-      // is text on a canvas that a reader changes. After the handle, because the
-      // two touch at the near end of a lane and the handle is the smaller target
-      // — a caret opening where a reorder was meant is the worse miss.
-      const named = lanes.nameAt(edge, x, y)
-      if (named !== null && this.laneEditor !== null) {
-        event.preventDefault()
-        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop })
-        return
-      }
-      const hit = lanes.laneAt(edge, x, y)
-      if (hit === null) return
-      // A press in the body is not yet a gesture: which way it first travels
-      // says whether it is the pan a lane has always been or a drag on that
-      // lane's ceiling. The border needs no such reading — a border can be
-      // dragged for exactly one thing.
-      const within = lanes.withinLane(edge, hit.entry.id, x, y)
-      start(
-        hit.entry.id,
-        hit.onBorder ? 'size' : 'press',
-        event,
-        hit.entry.style.size,
-        within,
-        hit.members.filter((member) => hasAMovableAxis(member.kind)),
-      )
-      if (!hit.onBorder) canvas.classList.add('grabbing')
-    }
-
-    const onMove = (event: PointerEvent): void => {
-      const box = canvas.getBoundingClientRect()
-      if (drag === null) {
-        // Not dragging, and the cursor stays the pointer everywhere it is still
-        // pointing *at* a base pair: it is the same shape over the map, over the
-        // lanes and over the 1D browser, and a hand appearing on the way from
-        // one to the other would say they are different surfaces, which is the
-        // one thing they are not. It changes only where the thing under it is
-        // not a coordinate — a handle to take hold of, a number to type into, a
-        // border to drag — and each of those says which by its own shape,
-        // alongside the accent rule drawn for it.
-        const x = event.clientX - box.left
-        const y = event.clientY - box.top
-        const hit = lanes.laneAt(edge, x, y)
-        canvas.style.cursor = ''
-        const border = hit?.onBorder === true ? hit.entry.id : null
-        // Over a limit the pointer *is* the affordance, because "this text is a
-        // text box" is a claim only a caret makes. Tested before the handle, in
-        // the order the press tests them: the two can come within a couple of
-        // pixels of each other on a short lane, and a cursor promising one while
-        // the press does the other is worse than either.
-        const onRange = lanes.limitAt(edge, x, y) !== null
-        // The handle is the one thing on these canvases the arrowhead cannot
-        // speak for: it is not pointing at a base pair, it is something to take
-        // hold of, and the open hand is what says so.
-        const onHandle = !onRange && lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
-        canvas.classList.toggle('is-grab', onHandle)
-        // The far border, where a drag resizes the lane. The same double arrow
-        // the map's own box handles carry, on the axis this border moves on:
-        // there is a rule drawn under the pointer already, and a rule with no
-        // cursor to go with it is a mark the reader has to guess is a control.
-        canvas.classList.toggle('is-resize-across', border !== null && horizontal)
-        canvas.classList.toggle('is-resize-along', border !== null && !horizontal)
-        // The name is a caret too, and last in the same order the press reads.
-        const onLabel = !onRange && !onHandle && lanes.nameAt(edge, x, y) !== null
-        canvas.classList.toggle('is-text', onRange || onLabel)
-        const handle = hit === null ? null : hit.entry.id
-        if (border !== this.laneBorder || handle !== this.laneHandle) {
-          this.laneBorder = border
-          this.laneHandle = handle
-          this.schedule()
-        }
-        return
-      }
-      const now = horizontal ? event.clientY : event.clientX
-      const alongNow = horizontal ? event.clientX : event.clientY
-
-      if (drag.kind === 'zoom') {
-        // Drawn on the *map*, because that is what the band is about: the stack
-        // has no marquee, and one drawn only inside the lane would say the band
-        // stops where the track does.
-        const origin = horizontal ? box.left : box.top
-        this.heatmap.showBandPreview(
-          horizontal ? 'cols' : 'rows',
-          drag.along0 - origin,
-          alongNow - origin,
-        )
-        return
-      }
-
-      if (drag.kind === 'press') {
-        const across = now - drag.from0
-        const along = alongNow - drag.along0
-        if (Math.abs(across) + Math.abs(along) < DRAG_SLACK) return
-        // Across the lane rather than along it, which is the one direction a
-        // drag on a track beside the map had no meaning in: a pan only ever
-        // forwards the shared axis, so a perpendicular drag moved nothing at
-        // all. Read once, at the slack, so a pan that wanders a few pixels off
-        // its axis stays the pan it started as.
-        drag.kind =
-          Math.abs(across) > Math.abs(along) && drag.members.length > 0 ? 'scale' : 'pan'
-        // `drag.along` is still where the press landed, so the pan below applies
-        // the whole travel in this one event: the gesture catches up rather than
-        // starting three pixels late, which on a canvas glued to the map is the
-        // difference a reader would feel.
-        if (drag.kind === 'scale') {
-          this.laneScaling = { id: drag.id, factor: 1 }
-          canvas.classList.remove('grabbing')
-        }
-      }
-
-      if (drag.kind === 'scale') {
-        const frame = lanes.frameFor(edge, drag.id, this.laneGeometry())
-        if (frame === null) return
-        this.laneScaling = {
-          id: drag.id,
-          factor: ceilingFactor(
-            frame,
-            drag.within,
-            // In the lane's own across coordinates, which run outward from the
-            // map — so on a stack above or to the left of it the pointer's
-            // displacement is the *negative* of the travel. `ceilingFactor` asks
-            // the frame which way a larger value is drawn, and it can only be
-            // asked in the units it answers in.
-            drag.within + outward * (now - drag.from0),
-            drag.members[0]?.style.flip === true,
-          ),
-        }
-        this.schedule()
-        return
-      }
-
-      if (drag.kind === 'grip') {
-        // Over one of the rectangles, the drag is about which edge this track is
-        // drawn on and the release decides it. The rectangles are inside the
-        // map, so this can never be true while the pointer is over a stack —
-        // which is what makes the two halves of the gesture tell themselves
-        // apart without a rule about direction.
-        const over = this.edgeUnder(event.clientX, event.clientY)
-        drag.to = over
-        for (const [name, zone] of this.edgeZones) zone.classList.toggle('over', name === over)
-        // Off this map: another map's edge, a cell of the deck, a `+` — the
-        // places the others offer (§16.9). Asked only where this map's own
-        // rectangles did not answer.
-        const away =
-          over === null && drag.carry !== null
-            ? landingAt(event.clientX, event.clientY, drag.carry, this.laneSurface)
-            : null
-        if (away !== drag.landing) {
-          drag.landing?.light(false)
-          away?.light(true)
-          drag.landing = away
-        }
-        if (over !== null || away !== null) return
-        // Otherwise it is a reorder, and only while the pointer is actually
-        // beside the stack: past either end there is no slot being pointed at,
-        // and answering anyway would fling the track to the top of the order on
-        // the way out to a rectangle.
-        const x = event.clientX - box.left
-        const y = event.clientY - box.top
-        const across = horizontal ? y : x
-        const span = horizontal ? canvas.clientHeight : canvas.clientWidth
-        if (across < 0 || across > span) return
-        const to = lanes.slotIndexAt(edge, x, y)
-        // Once per slot *crossed*, not once per pointer move. Without it an
-        // overlay group thrashes: moving its host past its own members only
-        // re-elects a host, the two orders draw identically, and the move fires
-        // again on every event — each one a `sessionStorage` write.
-        if (to === drag.over) return
-        drag.over = to
-        lanes.moveToSlot(edge, drag.id, to)
-        return
-      }
-
-      if (drag.kind === 'pan') {
-        const delta = alongNow - drag.along
-        drag.along = alongNow
-        if (delta === 0) return
-        // `panBy` takes a *canvas* displacement, which is what this is: the lane
-        // and the map share their pixels on this axis by construction (§8.4).
-        if (horizontal) this.heatmap.panBy(delta, 0)
-        else this.heatmap.panBy(0, delta)
-        return
-      }
-
-      // Thickness grows *away* from the map on every edge, so the delta is the
-      // pointer's displacement in the outward direction — which above the map
-      // and to its left is the canvas direction reversed.
-      // Every track in the lane, because an overlay group shares one strip:
-      // resizing the host alone would leave its members claiming a height the
-      // stack no longer gives them.
-      const next = laneSize(drag.size + outward * (now - drag.from))
-      for (const member of lanes.membersOf(edge, drag.id)) {
-        store.restyle(member.id, { size: next })
-      }
-    }
-
-    const onUp = (event: PointerEvent): void => {
-      if (drag === null) return
-      if (drag.kind === 'zoom') {
-        this.heatmap.clearBandPreview()
-        const rect = canvas.getBoundingClientRect()
-        const origin = horizontal ? rect.left : rect.top
-        const alongNow = horizontal ? event.clientX : event.clientY
-        this.bandOnLane(edge, drag.along0 - origin, alongNow - origin)
-        drag = null
-        canvas.style.cursor = ''
-        canvas.classList.remove('grabbing')
-        canvas.releasePointerCapture(event.pointerId)
-        return
-      }
-      // A press that never became a gesture is a click, and a click on a lane
-      // means one of two things depending on what is under it. On a *feature* it
-      // means "what is this" — answered by the card, the same card the 1D
-      // browser opens for the same gesture on the same gene. On the lane itself
-      // it means "this track", the most direct way a reader has of saying so:
-      // it opens that track's settings in the card that holds them, rather than
-      // leaving them to match a name against a list in a column scrolled
-      // somewhere else.
-      if (drag.kind === 'press') {
-        const box = canvas.getBoundingClientRect()
-        const hit = lanes.featureAt(edge, event.clientX - box.left, event.clientY - box.top)
-        // No `onGoTo` here, and that is deliberate: the 1D browser's zoom sets a
-        // locus on one axis, and this view's navigation is a region on two. A
-        // button that framed the gene on one of them would leave the other
-        // wherever it was, which is not what "zoom to it" would promise.
-        if (hit !== null) this.openFeature(hit)
-        else revealTrack(drag.id)
-      }
-      if (drag.kind === 'scale') this.commitLaneScaling(edge, drag.members)
-      // A handle let go over a rectangle draws the track on that edge instead.
-      // A *move* and not a copy — the other edge is cleared — because that is
-      // what dragging a thing from one place to another means; `location` in the
-      // row's settings is the same field, for the reader who wants both.
-      if (drag.kind === 'grip' && drag.to !== null) {
-        const target = drag.to
-        // Every member, because an overlay group is one lane on screen and would
-        // otherwise be split across two edges by a single drag.
-        for (const member of lanes.membersOf(edge, drag.id)) {
-          // **On this panel's own map.** The gesture was made on one picture and
-          // it is about that picture: `place` writes the *track's* default and
-          // the lead's lane with it, so a drag on a companion moved the track
-          // out from under the first map and left the one the hand was over
-          // exactly as it was (`annotations/store.ts`'s `placeAt`). And **this
-          // edge** to that one: a track also drawn on a third side keeps it.
-          store.moveEdge(member.id, this.mapId, edge, target)
-        }
-      }
-      // Let go off this map, on a place another offered: the lane goes there
-      // and leaves this map (§16.9).
-      if (drag.kind === 'grip' && drag.to === null && drag.landing !== null && drag.carry !== null) {
-        drag.landing.light(false)
-        drag.landing.take(drag.carry)
-      }
-      if (drag.kind === 'grip') {
-        drag.landing?.light(false)
-        this.grid.classList.remove('is-dropping')
-        for (const zone of this.edgeZones.values()) zone.classList.remove('over', 'away')
-        this.faceDrop?.classList.remove('away')
-        this.laneGripping = false
-        if (drag.carry !== null) endCarry()
-      }
-      drag = null
-      canvas.style.cursor = ''
-      canvas.classList.remove('grabbing')
-      canvas.releasePointerCapture(event.pointerId)
-    }
-
-    const onMenu = (event: MouseEvent): void => {
-      const box = canvas.getBoundingClientRect()
-      const x = event.clientX - box.left
-      const y = event.clientY - box.top
-      const hit = lanes.laneAt(edge, x, y)
-      if (hit === null) return
-      event.preventDefault()
-      // The feature under the pointer, which a map can open and not frame: its
-      // view is a region on two axes (see the press above).
-      const found = lanes.featureAt(edge, x, y)
-      const feature =
-        found === null
-          ? null
-          : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
-      // The lane under the pointer, alone, as this stack draws it (§7.2).
-      const copy = (): void =>
-        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.laneGeometry(), readPageBackground()))
-      openLaneMenu(
-        event.clientX,
-        event.clientY,
-        hit.entry,
-        store,
-        edge,
-        this.mapId,
-        feature,
-        copy,
-        marksMenu(this.options.annotations?.manual, lanes.marksAt(edge, x, y, this.laneGeometry(), MARK_REACH)),
-      )
-    }
-
-    canvas.addEventListener('pointerdown', onDown)
-    canvas.addEventListener('pointermove', onMove)
-    // A cancel means the gesture was taken *away*, not that it finished. Treated
-    // as a release it commits the one decision a drag holds back until then —
-    // which edge the track is drawn on — so a drag the system interrupts over a
-    // lit rectangle would move the track there anyway.
-    const onCancel = (event: PointerEvent): void => {
-      if (drag === null) return
-      drag.to = null
-      drag.landing?.light(false)
-      drag.landing = null
-      onUp(event)
-    }
-    canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onCancel)
-    canvas.addEventListener('contextmenu', onMenu)
-    this.laneListeners.push(() => {
-      canvas.removeEventListener('pointerdown', onDown)
-      canvas.removeEventListener('pointermove', onMove)
-      canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onCancel)
-      canvas.removeEventListener('contextmenu', onMenu)
-    })
-  }
-
-  /**
-   * A lane carried from another map, let go on this map's `edge` (§16.9): drawn
-   * here on that edge, and taken off the map it came from — a move, as a drag
-   * between two places is. Every track of an overlay group, which travels as
-   * the one lane it is on screen.
-   */
-  private takeLane(carry: LaneCarry, edge: LaneEdge): void {
-    for (const id of carry.ids) {
-      // Off the edge it left **first**. Where that map keeps the track on
-      // another side, what is left there may turn to grow away from it, and a
-      // lane here that had not yet been given a turn of its own would turn
-      // with it — a lane put under this map, drawn upside down.
-      if (carry.from !== this.mapId) this.laneStore.unplaceEdge(id, carry.from, carry.edge)
-      // Beside whatever edges it already has here: a track already under this
-      // map, carried onto its left, is on both.
-      const held = this.laneStore.laneFor(id, this.mapId)?.placement
-      this.laneStore.placeAt(id, this.mapId, { ...(held ?? {}), [edge]: true })
-    }
-  }
-
-  /**
-   * Which edge rectangle a point on the page is inside, if either.
-   *
-   * By arithmetic rather than by `dragover`, because the gesture that asks is a
-   * pointer drag with the pointer captured on a lane canvas: every event goes to
-   * that canvas, whatever it is over, which is exactly what stops the map
-   * underneath reading the drag as a pan.
-   */
-  private edgeUnder(x: number, y: number): LaneEdge | null {
-    for (const [edge, zone] of this.edgeZones) {
-      // A rectangle the gesture is not being offered is not a target either;
-      // one place decides that, so what lights up and what lands cannot differ.
-      if (zone.classList.contains('away')) continue
-      const box = zone.getBoundingClientRect()
-      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return edge
-    }
-    return null
-  }
-
-  private watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
-    const lanes = this.lanes
-    const onMove = (event: MouseEvent): void => {
-      // A track being carried to an edge is not a position being pointed at.
-      if (this.laneGripping) {
-        this.tooltip.classList.add('hidden')
-        return
-      }
-      const box = canvas.getBoundingClientRect()
-      const x = event.clientX - box.left
-      const y = event.clientY - box.top
-
-      // The hairline first, and through a repaint rather than a second canvas:
-      // it crosses the lane stack and the map, and both are redrawn from this
-      // one number on the next frame.
-      const along = laneIsHorizontal(edge) ? x : y
-      const before = this.laneHover
-      if (before === null || before.edge !== edge || before.along !== along) {
-        this.laneHover = { edge, along }
-        this.schedule()
-        this.reportLaneHover()
-      }
-
-      const readout = lanes.readout(edge, x, y, this.laneGeometry())
-      if (readout === null) {
-        this.tooltip.classList.add('hidden')
-        return
-      }
-      this.tip.matrix.classList.add('hidden')
-      this.tip.lane.classList.remove('hidden')
-      // The position, and only the position. Naming the hovered lane here as
-      // well was saying what the pointer already says: the tooltip is beside the
-      // lane it is about, and the row for that lane is marked below.
-      this.tip.laneTitle.textContent = readout.position
-      this.tip.laneLines.replaceChildren(
-        ...readout.rows.map((row) =>
-          el(
-            'div',
-            { class: row.here ? 'cell-tip-line cell-tip-here' : 'cell-tip-line' },
-            el('span', { class: 'cell-tip-chip', style: { background: row.colour } }),
-            // In the track's own colour, which is the legend the picture already
-            // uses — the lane is drawn in it and so is its name on the lane.
-            el('span', {
-              class: 'cell-tip-key',
-              text: `${row.label}:`,
-              style: { color: row.colour },
-            }),
-            el('span', { class: 'cell-tip-val', text: row.value }),
-          ),
-        ),
-        ...readout.detail.map((line) => el('div', { class: 'cell-tip-line', text: line })),
-      )
-      // The one gate for the card on this surface. Everything above it still runs
-    // — the readout the status line shows is the same measurement — so turning
-    // the card off costs a hover nothing and gives back the few hundred square
-    // pixels it was covering.
-    if (!getPlotOptions().tooltip) {
-      this.tooltip.classList.add('hidden')
-      return
-    }
-    this.tooltip.classList.remove('hidden')
-      this.placeTooltip(canvas.offsetLeft + x, canvas.offsetTop + y)
-    }
-    const onLeave = (): void => {
-      this.tooltip.classList.add('hidden')
-      canvas.classList.remove('is-grab')
-      canvas.classList.remove('is-resize-across')
-      canvas.classList.remove('is-resize-along')
-      if (this.laneBorder !== null || this.laneHandle !== null) {
-        this.laneBorder = null
-        this.laneHandle = null
-        this.schedule()
-      }
-      if (this.laneHover !== null) {
-        this.laneHover = null
-        this.schedule()
-        // The move off the edge is what takes the other panels' marks away with
-        // the pointer, exactly as {@link describe} reports the move off the map.
-        this.reportLaneHover()
-      }
-    }
-    canvas.addEventListener('mousemove', onMove)
-    canvas.addEventListener('mouseleave', onLeave)
-    this.laneListeners.push(() => {
-      canvas.removeEventListener('mousemove', onMove)
-      canvas.removeEventListener('mouseleave', onLeave)
-    })
-    this.driveFromLane(edge, canvas)
-    this.dragLane(edge, canvas)
-  }
-
-  /**
-   * Let a lane stack pan and zoom the map.
-   *
-   * A lane is a picture of the same window the map shows, drawn through the same
-   * scales — so dragging one and dragging the map are the same gesture on the
-   * same data, and a track you could read but not move was an odd exception a
-   * reader has to discover. Dragging a bottom lane sideways scrolls the columns;
-   * dragging a right lane up and down scrolls the rows.
-   *
-   * Only along the shared axis. A bottom lane says nothing about rows, so a
-   * vertical drag on one has no meaning to forward — and forwarding it anyway
-   * would move the map in a direction the pointer never travelled over anything
-   * that represents it.
-   *
-   * The **zoom is not** restricted that way, because the map's zoom is one
-   * scalar for both axes: a wheel over a lane zooms exactly as a wheel over the
-   * map does, holding the position under the pointer fixed on the shared axis
-   * and the middle of the data on the other. Anchoring the other axis anywhere
-   * else would be inventing a row the reader never pointed at.
-   */
-  private driveFromLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
-    /** The perpendicular anchor: the centre of the data actually on screen. */
-    const middle = (): { x: number; y: number } => {
-      const data = this.heatmap.dataRect
-      return { x: data.x + data.width / 2, y: data.y + data.height / 2 }
-    }
-
-    const onWheel = (event: WheelEvent): void => {
-      const box = canvas.getBoundingClientRect()
-      const x = event.clientX - box.left
-      const y = event.clientY - box.top
-      // ⌘-scroll over a lane raises or lowers *that lane's* ceiling — the
-      // adjustment a reader of a coverage track makes constantly, and the one
-      // gesture the 1D browser had that the map's own lanes did not. Never Ctrl:
-      // a trackpad pinch arrives as a wheel with `ctrlKey` set, so taking it here
-      // would swallow every pinch and run away with a ceiling instead of zooming.
-      const lanes = this.lanes
-      const store = this.laneStore
-      if (CEILING_MODIFIER(event)) {
-        const hit = lanes.laneAt(edge, x, y)
-        if (hit === null) return
-        event.preventDefault()
-        // From the range *resolved on screen*, group included, so the first notch
-        // on an autoscaled track starts from the axis the reader is looking at
-        // rather than from a stored `[0, 1]` nobody chose.
-        const extent = lanes.extentOf(edge, hit.entry.id)
-        const factor = event.deltaY < 0 ? 1 / CEILING_STEP : CEILING_STEP
-        for (const member of hit.members) {
-          if (!hasAMovableAxis(member.kind)) continue
-          const next = nudgedLimits(member.style.limits, extent, factor)
-          if (next !== null) store.restyle(member.id, { limits: next })
-        }
-        return
-      }
-      // The same two rules the map's own wheel handler follows: a sideways
-      // scroll slides along the picture, and the zoom factor is exponential in
-      // the delta so a trackpad's many small events and a wheel's few large ones
-      // compose to the same total zoom. A stack is *on* the map's axis, so a
-      // gesture over one has to mean what it means over the other — the map
-      // moving under the pointer while the profile above it did not would read
-      // as the two coming apart.
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        event.preventDefault()
-        this.heatmap.slideSideways(event.deltaX)
-        return
-      }
-      event.preventDefault()
-      const at = middle()
-      if (laneIsHorizontal(edge)) at.x = x
-      else at.y = y
-      this.heatmap.zoomAt(at.x, at.y, Math.exp(-event.deltaY * 0.002))
-    }
-
-    canvas.addEventListener('wheel', onWheel, { passive: false })
-    this.laneListeners.push(() => canvas.removeEventListener('wheel', onWheel))
   }
 
   /**
@@ -5816,7 +3471,7 @@ export class MatrixPanel {
     // moving from balanced counts to raw ones is re-read on the identical grid,
     // so every other part of the key matches and the previous quantity's
     // correlation would be drawn under the new one's caption.
-    this.blockGeneration++
+    this.derivation.newBlock()
     this.lastTitle = title
     // Blanked rather than left to the next frame: the outgoing block's window
     // under the incoming block's bin count is a line describing two pictures.
@@ -5868,7 +3523,7 @@ export class MatrixPanel {
     // is the path a turn arrives by: pressing the toggle re-runs the derivation
     // from the top, and a band drawn to a room measured before the last column
     // was folded is a band in the wrong window. One style read per block.
-    this.refit()
+    this.box.refit()
     // No separators under a turn: `isTurnable` has already refused any block
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
@@ -6000,7 +3655,7 @@ export class MatrixPanel {
     this.heatmap.setSpanGestures(turned !== null)
     this.heatmap.setDiagonalSlide(slidesAlongDiagonal(data, turned))
     this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
-    this.refit()
+    this.box.refit()
     this.heatmap.regrid(
       dense,
       { rows: [rows[0], rows[1]], cols: [cols[0], cols[1]] },
@@ -6424,90 +4079,10 @@ export class MatrixPanel {
     presentationMoved: boolean
     turned: RotatedBlock | null
   } {
-    // Every derivation is applied to each file *separately* and before the two
-    // are put together, because each is a statement about one library: file 2's
-    // coverage bias is file 2's, and a baseline measured across a ratio is a
-    // baseline of nothing. `runs` is the same for both by construction — the
-    // compare gate refused any second file whose sequences differ.
-    const runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] } = {
-      rows: data.rowGroups,
-      cols: data.colGroups,
-    }
-    const wantsCorrelation = this.options.derive?.correlate === true
-    // Asked before the derivation rather than after, because the answer decides
-    // what the derivation *is*: a refused correlation is not a correlation drawn
-    // badly, it is O/E with a sentence attached.
-    const refusal = wantsCorrelation ? this.correlationRefusal(data, second) : null
-    const correlating = wantsCorrelation && refusal === null
-
-    const derivation: Derivation = {
-      normalise: this.options.derive?.normalise,
-      // A correlation *of* observed-over-expected, always. The distance decay is
-      // the largest thing in a contact map by far, so every pair of rows in a
-      // raw or balanced square correlates near 1 and the picture is a uniform
-      // wash — the correlation is only a compartment object once the decay has
-      // been divided out (§18.8). Carried by the score rather than asked for
-      // separately (`ui/scores.ts`), and the caption names both steps.
-      //
-      // On `wantsCorrelation` and not on `correlating`, so a *refused* one still
-      // draws the O/E underneath it. That is the nearest true picture to what
-      // was asked for, and dropping back to plain counts would change the map
-      // twice — once for the refusal and once for a baseline nobody withdrew.
-      expected: wantsCorrelation || this.options.derive?.expected === true,
-      // Last word, and `deriveBlock` gives it one: a reader who left the toggle
-      // on and then asked to see the baseline gets the baseline, not a field of
-      // ones. The toggle is greyed to say so rather than silently ignored.
-      baseline: this.options.derive?.baseline === true,
-      // Applied inside `deriveBlock`, which is what puts it on *each file* and
-      // ahead of `combine` — the whole reason a ratio can be smoothed at all
-      // (`render/smooth.ts`).
-      smooth: this.options.derive?.smooth ?? '0',
-    }
-    // `options.binsize` is the block's own — the read's bin size times its
-    // pooling, set from the block before it is derived (`setResolution`).
-    const arms = armsFor(data, armsInForce(this.options.derive), this.options.binsize)
-    if (arms !== undefined) derivation.arms = arms
-    const aligned = second !== undefined && alignable(data, second) ? second : undefined
-    // A compared pair is never deferred: two blocks would need two jobs, and a
-    // half-finished pair would put a smoothed map over an unsmoothed one and call
-    // the result a ratio. Both are computed inline instead.
-    if (this.options.derive?.smoothBlock !== undefined && aligned === undefined) {
-      derivation.deferSmoothing = true
-    }
-    const smoothKey = this.smoothingKey(data, derivation)
-    if (this.smoothed !== null && this.smoothed.key !== smoothKey) this.smoothed = null
-    if (this.smoothed?.key === smoothKey) derivation.smoothed = this.smoothed.field
-
-    // Where a correlation is to be drawn it derives what it needs, and a held one
-    // needs nothing — see `correlated`.
-    const derived = correlating ? this.correlated(data, derivation, runs) : deriveBlock(data, derivation, runs)
-    // Wanted and not held: start one, and draw the unsmoothed field meanwhile.
-    // Exactly the correlation's arrangement — the operand is a real picture of
-    // the same region, and the caption does not claim it is the smoothed one.
-    if (derived.pending !== undefined) this.startSmoothing(smoothKey, derived.pending)
-    else if (this.smoothing !== null && this.smoothing.key !== smoothKey) this.forgetSmoothing()
-    // The correlation replaces the whole field, which is why it is applied here
-    // rather than inside `deriveBlock`: every step in there is synchronous and
-    // this one is not, so the panel is the only place that can hold the answer
-    // between the request and the frame that draws it.
-    const mine = correlating
-      ? derived
-      : refusal === null
-        ? derived
-        : // Said in the caption, which is the only place that survives an export.
-          // A correlation the reader picked and did not get has to be visible on
-          // the figure: the O/E under it is a real picture and looks like one, so
-          // nothing else on screen would betray that it is not what was asked for.
-          { ...derived, scope: `correlation not drawn — ${refusal}` }
-    if (!correlating && this.correlating !== null) this.forgetCorrelation()
+    // Each file's values first, with any job they wait on started on the way
+    // (`ui/MapDerivation.ts`). What follows puts them together and turns them.
+    const { mine, theirs, aligned } = this.derivation.derive(data, second)
     this.derived = mine
-    const theirs =
-      aligned === undefined
-        ? undefined
-        : // Its own derivation object: a window sized on the lead's cells says
-          // nothing about this file's, and `smoothed` left in place would put the
-          // lead's values into the companion's half of the ratio.
-          deriveBlock(aligned, { ...derivation, smoothed: undefined }, runs)
 
     const op = this.options.compare?.op ?? 'split'
     this.second = aligned === undefined ? null : { data: aligned }
@@ -6666,91 +4241,6 @@ export class MatrixPanel {
   }
 
   /**
-   * The box a turned map is drawn in, in CSS pixels.
-   *
-   * The reader's, where they have said (`ui/turnBox.ts`), and otherwise a
-   * default expressed against the width — a third of it, which is the shape of
-   * the figures this is a viewer for. A rule and not a number, which is why what
-   * the store holds on an untouched axis is `null`: "as wide as there is room
-   * for" cannot be written down as a width, since the room changes with the
-   * window and the number would not.
-   *
-   * Clamped on the way **out** rather than only where the reader drags. What is
-   * stored is one box for the session and the panels drawing from it need not
-   * have the same room — a deck of four is four narrower panels — so a box the
-   * reader shaped beside one map has to be readable as "and as much of that as
-   * fits" beside the next. Which is also what makes the size survive a window
-   * resize: it is remembered whole and drawn to fit.
-   */
-  private turnBox(): { width: number; height: number } {
-    return fitTurnBox(getTurnBox(), this.turnRoom())
-  }
-
-  /**
-   * How much room there is to draw the box in, in CSS pixels.
-   *
-   * Measured against the **panel**, and never against the grid the box is in.
-   * The grid is sized by its contents, so a box narrowed by a drag narrows the
-   * grid with it — and a ceiling read from there is a ceiling that follows the
-   * box down. That is what made the ends of the band a one-way control: every
-   * drag inwards lowered the limit to wherever the edge had just got to, so the
-   * width could be given away and never taken back.
-   *
-   * Both numbers are the room a *map* has, which is not the room the panel has:
-   * a stack of tracks beside or under the picture is drawn out of the same
-   * budget, and a box sized to the whole of it would push its own tracks off the
-   * edge. What is left after them is the difference between the grid and the
-   * map's own box, which is a fact about the tracks and does not move when the
-   * box does.
-   *
-   * The height is the one a square map would have claimed — `--map-budget`, read
-   * back off the grid's `min-height`, which §17.2 already reserves so that
-   * turning the map does not resize the panel. Growing past it would push the
-   * page down, and the panel would grow again on the next drag: a ceiling that
-   * rises as you press on it is not a ceiling.
-   */
-  private turnRoom(): { width: number; height: number } {
-    return this.room ?? this.measureRoom()
-  }
-
-  /**
-   * Measure it, and keep the answer.
-   *
-   * Cached because {@link turnBox} is read on every frame — the depth the band
-   * is cut to is a function of the box and the zoom — and this is four layout
-   * reads and a `getComputedStyle`, which is a synchronous relayout of the
-   * document per frame of every pan. Refreshed where the room can actually have
-   * changed, which is a resize of the panel, and it is the resize observer that
-   * says so.
-   */
-  private measureRoom(): { width: number; height: number } {
-    const body = this.grid.parentElement
-    // The stacks themselves, rather than whatever is left of the grid once the
-    // map is taken out of it: the grid is held open at the height a square map
-    // would have claimed, so "the grid less the map" is mostly *slack*, and a
-    // ceiling computed from it would shrink by exactly as much as the box grew.
-    // Nothing to subtract on the vertical, where `--map-budget` has already
-    // taken the stacks out of the window for itself — subtracting them again is
-    // how a map with ten tracks under it got a ceiling below its own floor, and
-    // every drag of the top edge collapsed the band to the minimum.
-    const beside =
-      this.lanes.canvasFor('left').clientWidth + this.lanes.canvasFor('right').clientWidth
-    const width = (body?.clientWidth ?? this.hostSize.width) - beside
-    // The wrap's `max-height` rather than the custom property it is written
-    // from: a custom property comes back as the `clamp()` that was written,
-    // unresolved, and the number wanted here is the one the browser worked out
-    // from it. It is the height a square map would have claimed, which is the
-    // point past which a band has stopped being one.
-    const budget = Number.parseFloat(getComputedStyle(this.wrap).maxHeight)
-    const height = Number.isFinite(budget) ? budget : this.hostSize.height
-    this.room = {
-      width: Math.max(MIN_TURN_WIDTH, Math.round(width)),
-      height: Math.max(MIN_TURN_HEIGHT, Math.round(height)),
-    }
-    return this.room
-  }
-
-  /**
    * How far from the diagonal the turned band reaches, in **bins**.
    *
    * A function of the box and the zoom rather than a number the reader sets, and
@@ -6848,7 +4338,7 @@ export class MatrixPanel {
   private plotRows(): number {
     const zoom = this.heatmap.zoomLevel
     const margin = this.heatmap.margin
-    const height = Math.max(1, this.turnBox().height - margin.top - margin.bottom)
+    const height = Math.max(1, this.box.turnBox().height - margin.top - margin.bottom)
     return zoom > 0 ? Math.ceil(height / zoom) : 1
   }
 
@@ -6964,92 +4454,6 @@ export class MatrixPanel {
     }
     this.lanes.setAxes(this.locusAxes)
   }
-
-  /**
-   * Write the box onto the grid, and put the handles where its edges are.
-   *
-   * The size lives in CSS custom properties rather than in inline widths so that
-   * the map, the lane stacks under it and the centring are one layout decided in
-   * one place — the stacks take their width from the map's canvas, so a box that
-   * narrowed only the map would leave the tracks pointing at the wrong base
-   * pairs (`ui/AnnotationLanes.ts`).
-   */
-  private writeTurnBox(): void {
-    const turned = this.turned !== null
-    this.grid.classList.toggle('is-turned', turned)
-    if (!turned) {
-      this.grid.style.removeProperty('--turn-width')
-      this.grid.style.removeProperty('--turn-height')
-      // A square map's side, on the same terms: one number, written where the
-      // stylesheet's own default sits so that the default is what an unset size
-      // falls back to (`--map-size` defaults to `--map-budget` in `styles.css`).
-      // Written on every refit rather than only on a drag, because "as much as
-      // there is" is a rule and the room moves under it.
-      this.grid.style.setProperty('--map-size', `${Math.round(this.mapSize())}px`)
-      return
-    }
-    this.grid.style.removeProperty('--map-size')
-    const box = this.turnBox()
-    this.grid.style.setProperty('--turn-width', `${Math.round(box.width)}px`)
-    this.grid.style.setProperty('--turn-height', `${Math.round(box.height)}px`)
-  }
-
-  /**
-   * The side a square map is drawn at, in CSS pixels.
-   *
-   * {@link turnBox}'s counterpart, and clamped on the way out for the same
-   * reasons: what is stored is one number for the session, the panels drawing
-   * from it need not have the same room, and "as much as there is" is a rule that
-   * has to be re-read whenever the room changes rather than a width remembered
-   * from another window.
-   */
-  private mapSize(): number {
-    return fitMapSize(getMapSize(), this.turnRoom())
-  }
-
-  /**
-   * Resize the box, in CSS pixels. `null` on either axis puts the default back.
-   *
-   * Written to the store rather than to a field here, so it outlives this panel:
-   * a change of resolution or of chromosome destroys the panel and builds
-   * another, and a box held on the instance is one the reader loses the first
-   * time they go and look at something in it (`ui/turnBox.ts`).
-   *
-   * Clamped against the panel rather than against the block — the box is a fact
-   * about the figure, so what bounds it is how much room there is to draw in —
-   * and against *this* panel's room, which is the one the hand is in. Reading it
-   * back clamps again, for the panels the hand is not in.
-   */
-  private setTurnBox(next: { width?: number | null; height?: number | null }): void {
-    const room = this.turnRoom()
-    const fit = (value: number, low: number, high: number): number =>
-      Math.max(low, Math.min(high, Math.round(value)))
-    const asked: Partial<TurnBox> = {}
-    if (next.width !== undefined) {
-      asked.width = next.width === null ? null : fit(next.width, MIN_TURN_WIDTH, room.width)
-    }
-    if (next.height !== undefined) {
-      asked.height = next.height === null ? null : fit(next.height, MIN_TURN_HEIGHT, room.height)
-    }
-    rememberTurnBox(asked)
-  }
-
-  /**
-   * Draw the box at whatever size it now is.
-   *
-   * The subscription's half of the resize, and every panel runs it — the one the
-   * hand is in and the others of a deck, which is what keeps a deck of bands one
-   * shape (§17.3). Both presentations arrive here: a square map has a size to be
-   * drawn at too, and the panel the hand is *not* in has to follow it.
-   */
-  private applyTurnBox(): void {
-    this.writeTurnBox()
-    // The canvas has a new CSS size, and nothing else will tell the view: the
-    // resize observer watches the *grid*, whose own size need not have changed.
-    this.heatmap.resize()
-    this.schedule()
-  }
-
 
   /**
    * How many legends there are, and how much room they need.
@@ -7373,10 +4777,11 @@ export class MatrixPanel {
 
   setBusy(busy: boolean, message = 'loading…'): void {
     // A correlation outlives the read that started it — see
-    // {@link correlationNote} — so a clear arriving from `setData` puts the
-    // longer wait back rather than taking the veil away.
-    if (!busy && this.correlationNote !== null) {
-      this.overlay.textContent = this.correlationNote
+    // {@link MapDerivation.correlationWait} — so a clear arriving from
+    // `setData` puts the longer wait back rather than taking the veil away.
+    const correlationNote = this.derivation.correlationWait
+    if (!busy && correlationNote !== null) {
+      this.overlay.textContent = correlationNote
       this.overlay.classList.remove('hidden')
       return
     }
@@ -7891,7 +5296,7 @@ export class MatrixPanel {
   setLaneHoverListener(
     listener: ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void) | null,
   ): void {
-    this.laneHoverListener = listener
+    this.laneGestures.laneHoverListener = listener
   }
 
   /**
@@ -7913,30 +5318,6 @@ export class MatrixPanel {
     const diagonal = this.data !== null && isTurnable(this.data)
     this.heatmap.setLaneEcho(at === null || !diagonal ? null : at.unit)
     this.schedule()
-  }
-
-  /** Hand the current lane hover to whoever is listening, in matrix units. */
-  private reportLaneHover(): void {
-    const guide = this.laneHover
-    if (guide === null) {
-      this.laneHoverListener?.(null)
-      setHoverPlace(null)
-      return
-    }
-    // The same conversion {@link paintLaneGuide} makes, and for the same reason
-    // it needs none of its own: §8.4 glues the lane canvases to the map's along
-    // the axis they share, so a pixel on the stack is a pixel on the plot.
-    const plot = this.heatmap.plotRect
-    const horizontal = laneIsHorizontal(guide.edge)
-    const unit = horizontal
-      ? this.heatmap.scaleX.toUnit(guide.along - plot.x)
-      : this.heatmap.scaleY.toUnit(guide.along - plot.y)
-    this.laneHoverListener?.({ axis: horizontal ? 'cols' : 'rows', unit })
-    // One place, for a structure cell (§25): a pointer on a track names a
-    // locus and not a contact, so one locus is what goes out.
-    const axis = horizontal ? this.locusAxes.cols : this.locusAxes.rows
-    const locus = axis?.unitToLocus(unit) ?? null
-    setHoverPlace(locus === null ? null : { loci: [locus], source: HOVER_SOURCE_MAP })
   }
 
   /**
@@ -8931,268 +6312,8 @@ export class MatrixPanel {
     // and through the square block so a turned map names the contact it is
     // over rather than a band row and a half-bin.
     if (moved) setHoverPlace(this.hoverPlaceFor(cell, at?.span === true))
-
-    if (cell === null || this.data === null) {
-      setReadout('')
-      this.tooltip.classList.add('hidden')
-      return
-    }
-    this.tip.matrix.classList.remove('hidden')
-    this.tip.lane.classList.add('hidden')
-    const data = this.data
-    // A pointer over a turned map is over a band row and a half-bin column, and
-    // neither is a coordinate of the block the readout describes. Mapped back
-    // first, so everything below — the two names, the positions, the distance,
-    // the counts — is the same code reading the same square block it always did.
-    const square = this.squareCell(cell)
-    const rowGroup = groupAt(data.rowGroups, square.row)
-    const colGroup = groupAt(data.colGroups, square.col)
-    // Positions are measured in absolute bin space, so each axis needs the bin
-    // its own block starts at — they differ on a rectangular two-contig block.
-    const rowStart = data.rowExtent[0]
-    const colStart = data.colExtent[0]
-    // Through an edit, each place with the original beside it (§27.7): where
-    // the base was in the file, and whether the piece reads it backwards.
-    const edited = this.options.annotations?.edited?.() ?? null
-    const beside = (group: AxisGroup | undefined, offset: number, blockStart: number): string => {
-      if (edited === null || group === undefined || data.level !== 'bin' || (group.merged?.length ?? 0) > 1) return ''
-      const at = originalOf(edited, group.label, bpWithin(group, offset, blockStart, this.options.binsize))
-      if (at === null) return ''
-      return at === 'gap' ? ' · in a gap' : ` ← ${formatPosition(at.sequence, at.bp)}${at.strand === -1 ? ', turned' : ''}`
-    }
-    const rowLabel = describeAxis(rowGroup, square.row, data.level, this.options.binsize, rowStart) + beside(rowGroup, square.row, rowStart)
-    const colLabel = describeAxis(colGroup, square.col, data.level, this.options.binsize, colStart) + beside(colGroup, square.col, colStart)
-
-    // A turned map with a span modifier held is a reader about to name a stretch
-    // of the genome, and the whole of what they are pointing at is *where along
-    // the bottom* the pointer is. The pair of loci and the distance between them
-    // answer the question the pointer was asking a moment ago — they are a fact
-    // about the cell under it, and the cell is not what the next drag will
-    // select. The crosshair already says so, standing up as one vertical line
-    // where the readout went on describing a contact ({@link spanGuide}).
-    if (at?.span === true && this.turned !== null) {
-      this.describeAlong(square, data, at)
-      return
-    }
-    // `cell.value` is what was *drawn*, which below the diagonal of a compared
-    // map is the second file's count, and under a ratio neither file's. So the
-    // numbers here come from the blocks themselves: each file's own count at
-    // this cell.
-    const compare = this.options.compare
-    const slot = square.row * data.ncols + square.col
-    const mine = this.second === null ? cell.value : data.values[slot]
-    const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
-    const counts =
-      this.second === null || compare === undefined
-        ? `${this.scoreWord()} ${count}`
-        : `${compare.labels[0]} ${count} · ${compare.labels[1]} ${
-            Number.isNaN(this.second.data.values[slot])
-              ? 'NaN (unbalanced)'
-              : fmt.num(this.second.data.values[slot])
-          }`
-    // A derived cell is two questions, and answering only the second is what
-    // makes a ratio map unreadable: "1.8× expected" is the reading, and "37
-    // contacts" is what tells you whether to believe it. A departure computed
-    // from three counts against a baseline of two is noise, and only the raw
-    // numbers beside it say so.
-    //
-    // **Transposed in the mirrored band**, because that is the band's own file:
-    // the drawn square holds the first file above the matrix diagonal and the
-    // second below it, and a pointer under the shared axis is on the second.
-    // Read the untransposed cell there and a reader hovering the lower band is
-    // told the upper one's O/E, which is a real number from a real cell and not
-    // the cell they are pointing at.
-    const lower = this.turned !== null && bandAt(this.turned, cell.row) === 1
-    const reading = lower
-      ? this.derivedReading(square.col, square.row)
-      : this.derivedReading(square.row, square.col)
-    // The genome each end belongs to, read before the distance because the
-    // distance needs them: two MAGs may each have a `contig_1`, and on a
-    // coarsened axis the name is most of what is left to tell them apart.
-    const rowGenome = groupAt(data.rowGenomes, square.row)?.label
-    const colGenome = groupAt(data.colGenomes, square.col)?.label
-    const distance = separationOf(
-      { group: rowGroup, offset: square.row, blockStart: rowStart, genome: rowGenome },
-      { group: colGroup, offset: square.col, blockStart: colStart, genome: colGenome },
-      data.level,
-      this.options.binsize,
-    )
-
-    // On a turned map the separation *is* the y axis, so it leads: the reader's
-    // eye is already on a height and the number under it is what they are asking
-    // to have confirmed.
-    // ` · ` between the parts, which is the separator the 1D browser's readout
-    // uses in the same slot of the same status bar. Three spaces looked like a
-    // separator on a wide window and like nothing at all on a narrow one, where
-    // `115.0 kb apart balanced 0.000417` ran together as one phrase. The
-    // `  ×  ` inside the pair stays: that one names a pair rather than joining
-    // two facts.
-    const parts = [
-      this.turned === null ? `${rowLabel}  ×  ${colLabel}` : rowLabel,
-      ...(distance === null ? [] : [`${fmt.bp(distance)} apart`]),
-      ...(reading === null ? [] : [reading]),
-      counts,
-    ]
-    setReadout(parts.join(' · '))
-
-    // The names in full, unabbreviated, and each name written *once*: the axis
-    // labels are elided when the blocks are narrow, so the tooltip is often the
-    // only place the pair is spelled out — but on the diagonal of a contig map
-    // the old layout printed `NODE_8524_len_441121` four times, and the number
-    // the pointer is actually asking about was the last thing on the card.
-    const sameBlock = rowGroup !== undefined && colGroup !== undefined && rowGroup.label === colGroup.label
-    // `square`, like everything above: a turned cell's own row is a *separation*
-    // and its column is a half-bin, so read through the block's own arithmetic
-    // they name a position half way along the picture and a distance up it. The
-    // two names and the "apart" line were mapped back and these two were not,
-    // which is why the card could show the right sequence, the right separation
-    // and a pair of coordinates belonging to neither.
-    const rowPos = positionIn(rowGroup, square.row, data.level, this.options.binsize, rowStart)
-    const colPos = positionIn(colGroup, square.col, data.level, this.options.binsize, colStart)
-
-    // Written in place rather than rebuilt. `replaceChildren` with five fresh
-    // elements ran on every pointer move — 4-6 allocations and as many
-    // detachments per event, on the highest-frequency path in the app — to
-    // produce a card whose *shape* almost never changes. Only the text does.
-    const tip = this.tip
-    tip.rowName.textContent = sameBlock ? rowGroup.label : (rowGroup?.label ?? '—')
-    tip.times.classList.toggle('hidden', sameBlock)
-    tip.colName.classList.toggle('hidden', sameBlock)
-    if (!sameBlock) tip.colName.textContent = colGroup?.label ?? '—'
-    const hasPos = rowPos !== null && colPos !== null
-    tip.pos.classList.toggle('hidden', !hasPos)
-    if (hasPos) tip.pos.textContent = `${rowPos}  ×  ${colPos}`
-
-    // The genome line, on the same "written once when it is one name" rule as
-    // the contigs above it. Absent entirely where the reader sent no genomes —
-    // a plain cooler, or any view that already is one genome. Read above, where
-    // the separation needed them.
-    const hasGenome = rowGenome !== undefined || colGenome !== undefined
-    tip.genomes.classList.toggle('hidden', !hasGenome)
-    if (hasGenome) {
-      const oneGenome = rowGenome === colGenome
-      tip.rowGenome.textContent = rowGenome ?? '—'
-      tip.genomeTimes.classList.toggle('hidden', oneGenome)
-      tip.colGenome.classList.toggle('hidden', oneGenome)
-      if (!oneGenome) tip.colGenome.textContent = colGenome ?? '—'
-    }
-
-    tip.distance.classList.toggle('hidden', distance === null)
-    if (distance !== null) tip.distance.textContent = `${fmt.bp(distance)} apart`
-
-    // With two files open the count line carries both — the whole question a
-    // compared map is asked at every position is how the two differ *here*, and
-    // answering it with only the visible half would mean reading the picture
-    // twice, once on each side of the diagonal, to compare one locus.
-    tip.count.classList.remove('hidden')
-    tip.count.textContent = counts
-    this.showTip(at)
-  }
-
-  /**
-   * The readout for a pointer naming a **place** rather than a cell.
-   *
-   * One coordinate, because that is the whole of what the gesture is about: a
-   * span drag on a turned map names a stretch of the genome, and where the
-   * pointer is along the bottom is the only thing about it that is being chosen.
-   * The midpoint of the cell's two ends *is* that position — a turned column
-   * stands over the middle of the pair it draws (`render/rotate.ts`) — so this
-   * is the same number the ruler under the pointer is printing, and the same one
-   * the guide is standing on.
-   *
-   * No distance and no count. Both are facts about the cell, both were on the
-   * card a moment ago, and leaving them there while the crosshair has already
-   * become a single vertical line is the card describing a different gesture
-   * from the one the hand is making.
-   */
-  private describeAlong(
-    square: { row: number; col: number },
-    data: MatrixResult,
-    at?: { x: number; y: number },
-  ): void {
-    const along = alongAxis(square)
-    // The group is asked for at a whole cell — a midpoint may land half way
-    // between two — while the *position* is measured at the midpoint itself.
-    const group = groupAt(data.rowGroups, Math.floor(along))
-    const start = data.rowExtent[0]
-    const genome = groupAt(data.rowGenomes, Math.floor(along))?.label
-    setReadout(describeAxis(group, along, data.level, this.options.binsize, start))
-
-    const tip = this.tip
-    tip.rowName.textContent = group?.label ?? '—'
-    tip.times.classList.add('hidden')
-    tip.colName.classList.add('hidden')
-    const pos = positionIn(group, along, data.level, this.options.binsize, start)
-    tip.pos.classList.toggle('hidden', pos === null)
-    if (pos !== null) tip.pos.textContent = pos
-    tip.genomes.classList.toggle('hidden', genome === undefined)
-    if (genome !== undefined) {
-      tip.rowGenome.textContent = genome
-      tip.genomeTimes.classList.add('hidden')
-      tip.colGenome.classList.add('hidden')
-    }
-    tip.distance.classList.add('hidden')
-    tip.count.classList.add('hidden')
-    this.showTip(at)
-  }
-
-  /**
-   * Put the card up where the pointer is, or leave it down.
-   *
-   * The one gate for the card on this surface, and it is deliberately the last
-   * thing rather than the first: everything above it still runs, because the
-   * readout on the status line is the same measurement, so turning the card off
-   * costs a hover nothing and gives back the few hundred square pixels it was
-   * covering.
-   */
-  private showTip(at?: { x: number; y: number }): void {
-    if (!getPlotOptions().tooltip) {
-      this.tooltip.classList.add('hidden')
-      return
-    }
-    this.tooltip.classList.remove('hidden')
-    if (at !== undefined) this.placeTooltip(at.x, at.y)
-  }
-
-  /**
-   * Keep the tooltip inside the panel.
-   *
-   * Offset from the pointer so it never sits under it, and flipped to the other
-   * side near an edge — a tooltip clipped by the panel border is worse than no
-   * tooltip, because it looks like the value is missing.
-   *
-   * Both measurements it needs are *cached*, and that is the whole point. The
-   * old version read `offsetWidth`/`offsetHeight` immediately after writing the
-   * card's contents, which forces the browser to lay out the document
-   * synchronously — twice per pointer move, at whatever rate the device reports
-   * them. The host's size now comes from the `ResizeObserver` that already
-   * watches it, and the tooltip's own size is re-measured at most once per
-   * frame, inside a `requestAnimationFrame` where layout is already clean.
-   */
-  private placeTooltip(x: number, y: number): void {
-    this.tipAt = { x, y }
-    this.positionTooltip()
-    if (this.tipFrame !== 0) return
-    this.tipFrame = requestAnimationFrame(() => {
-      this.tipFrame = 0
-      const width = this.tooltip.offsetWidth
-      const height = this.tooltip.offsetHeight
-      if (width === this.tipSize.width && height === this.tipSize.height) return
-      this.tipSize = { width, height }
-      this.positionTooltip()
-    })
-  }
-
-  /** Write the transform from the cached geometry. No reads, no layout. */
-  private positionTooltip(): void {
-    const at = this.tipAt
-    if (at === null) return
-    const pad = 14
-    const { width, height } = this.tipSize
-    const host = this.hostSize
-    const left = at.x + pad + width > host.width ? at.x - pad - width : at.x + pad
-    const top = at.y + pad + height > host.height ? at.y - pad - height : at.y + pad
-    this.tooltip.style.transform = `translate(${Math.max(0, left)}px, ${Math.max(0, top)}px)`
+    // …and what it is over, in words: on the status line and on the card.
+    this.readout.describe(cell, at)
   }
 }
 
@@ -9211,535 +6332,6 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
     a.colormap === b.colormap &&
     a.balanced === b.balanced
   )
-}
-
-/** Which group covers a block-local offset. Absent list, absent answer. */
-/**
- * Which edge of its box a turned block is pinned to — see the caller for why it
- * is pinned at all.
- *
- * `middle` for a square map, which is centred like any picture, and for a
- * **mirrored pair**, whose diagonal is the line down the middle of it rather
- * than either edge. `end` and `start` are the one-band cases, standing on
- * whichever edge their own diagonal is.
- *
- * Exported for the test: the whole of the bug it fixes is invisible until a
- * band is deeper than its box, which is two zooms away from any state a test
- * can set up directly.
- */
-export function anchorFor(turned: RotatedBlock | null): VerticalAnchor {
-  if (turned === null || turned.fold !== undefined) return 'middle'
-  return turned.direction === 'down' ? 'start' : 'end'
-}
-
-/**
- * Where a cell of a turned map stands on the genomic axis, in cells of the
- * square block it was turned out of.
- *
- * The **midpoint** of the pair it is a contact between, which is what a turned
- * column is: the rotation puts the cell for `(i, j)` over `(i + j) / 2` and its
- * height carries the rest (`render/rotate.ts`). Half-integers are the ordinary
- * case rather than an edge one — a column is half a bin — and are passed on
- * rather than rounded, since the arithmetic below them is linear and the reader
- * is being told a position, not a bin.
- */
-export function alongAxis(square: { row: number; col: number }): number {
-  return (square.row + square.col) / 2
-}
-
-export function groupAt(
-  groups: AxisGroup[] | undefined,
-  offset: number,
-): AxisGroup | undefined {
-  if (groups === undefined) return undefined
-  let lo = 0
-  let hi = groups.length - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const group = groups[mid]
-    if (offset < group.start) hi = mid - 1
-    else if (offset >= group.end) lo = mid + 1
-    else return group
-  }
-  return undefined
-}
-
-/**
- * Base pairs from the start of the **contig** to the start of a cell.
- *
- * `group.start` is block-local, so `(offset - group.start) * binsize` measures
- * from the left edge of the picture rather than from the contig — the same
- * number only when the block begins on a contig boundary. A region view of
- * `contig:139005-199005` begins at bin 139, and the readout used to call that
- * cell 0 bp when it is 139 kb into the contig. `unitStart` is where the contig
- * itself begins, so the absolute bin `blockStart + offset` resolves correctly
- * (§3.3 arithmetic throughout; `/bins` is never consulted).
- */
-/**
- * A cell window on one axis, as absolute bins of the file.
- *
- * Outward on both ends, and **clamped to the block**, because a window naming
- * bins the block does not hold is not a window — at fit zoom the plot is wider
- * than the picture and the raw cell window runs off both sides into the margins.
- *
- * Leaving it unclamped, briefly, was a bug with real teeth: a *fitted* view then
- * reported a window wider than its own block, the ladder read that as "the
- * reader has gone outside what they have", and every view that opened fitted
- * immediately asked for a widening read of its own whole domain. On a small file
- * that is a wasted read nobody notices. On a 660 MB mouse cooler it is minutes
- * of scanning, with the map frozen for the duration, before the reader has
- * touched anything.
- *
- * The signal it was standing in for — *the reader wants to go past this block* —
- * is `BlockLadder.atEdge`'s to give, and it gives it from the block and the
- * ceiling rather than from a window that has been allowed to lie.
- *
- * `binsPerCell` may be fractional — a turned column is half a bin — which is why
- * the rounding is done after the multiply rather than on the cell index.
- */
-export function binsOf(
-  window: readonly [number, number],
-  extent: Extent,
-  binsPerCell: number,
-): Extent {
-  const lo = extent[0] + Math.floor(window[0] * binsPerCell)
-  const hi = extent[0] + Math.ceil(window[1] * binsPerCell)
-  return [
-    Math.max(extent[0], Math.min(lo, extent[1])),
-    Math.min(extent[1], Math.max(hi, extent[0])),
-  ]
-}
-
-/**
- * Two loci, as a cell interval on a given axis — the second half of a regrid.
- *
- * `null` where the axis cannot answer: no locus at all, a contig it does not
- * cover, or an interval that came back inverted. Every one of those is a reason
- * to leave the picture alone rather than to place it approximately, because a
- * map drawn over the wrong stretch of genome looks exactly like a map drawn over
- * the right one.
- *
- * Clamped to the block, since the incoming window is padded beyond the view and
- * its edges can fall outside a block that stopped at a sequence end.
- *
- * **Every landing of each end, not the first**, and that is what makes a
- * circular slide work at all. A block read across a sequence's own junction
- * carries that sequence *twice* — the tail of it, then the head (SPECS §8.15) —
- * so a window running from 2.95 Mb to 50 kb is a perfectly ordinary window whose
- * two ends are on different stretches of the same name. Resolved by name alone,
- * the second end came back on the first stretch, landed before the first end,
- * and the regrid was refused: the ladder had read the block the reader was
- * sliding towards and the panel declined to install it, leaving them against a
- * wall with the way past it already in memory.
- *
- * The pair chosen is the **narrowest ordered one**, which on every axis that
- * carries a contig once is the only one there is.
- */
-export function spanOnAxis(
-  axis: LocusAxis | null,
-  want: { from: { contig: string; bp: number }; to: { contig: string; bp: number } } | null,
-  cells: number,
-): readonly [number, number] | null {
-  if (axis === null || want === null) return null
-  // `locusToUnits` answers only where the position genuinely falls on a stretch,
-  // which is what a mark wants and is one case short of what this wants: a
-  // *padded* window runs past the end of the sequence on purpose, and the old
-  // behaviour — extrapolate off the one stretch, then clamp to the block — is
-  // right for it. So the strict answer first, and the extrapolation as the
-  // fallback where there is no stretch to land on.
-  const landings = (contig: string, bp: number): number[] => {
-    const inside = axis.locusToUnits(contig, bp)
-    if (inside.length > 0) return inside
-    const outside = axis.locusToUnit(contig, bp)
-    return outside === null ? [] : [outside]
-  }
-  const lows = landings(want.from.contig, want.from.bp)
-  const highs = landings(want.to.contig, want.to.bp)
-  if (lows.length === 0 || highs.length === 0) return null
-  let best: readonly [number, number] | null = null
-  for (const lo of lows) {
-    for (const hi of highs) {
-      const from = Math.max(0, Math.min(lo, cells))
-      const to = Math.min(cells, Math.max(hi, from))
-      if (!(to > from)) continue
-      if (best === null || to - from < best[1] - best[0]) best = [from, to]
-    }
-  }
-  return best
-}
-
-export function bpWithin(
-  group: AxisGroup,
-  offset: number,
-  blockStart: number,
-  binsize: number,
-): number {
-  const first = group.unitStart ?? blockStart + group.start
-  return (blockStart + offset - first) * binsize
-}
-
-/**
- * What one axis measures in base pairs, or `null` when it measures nothing a
- * position could be expressed in.
- *
- * Both refusals are the ones `_bin_axis` makes in `ops/show.py`. Above bin
- * level a cell *is* a contig or a genome, so a position inside one would be an
- * invention. Across more than one contig there is no single coordinate system:
- * the ticks are the contig names there, and they already are.
- *
- * The line itself is {@link bpWithin} at offset 0, from the same `unitStart`,
- * so a tick and the readout under the pointer cannot disagree.
- *
- * @param fraction How much of a bin one **cell** spans — a half under a turn,
- * where the rotated lattice counts in half bins (`render/rotate.ts`), and one
- * everywhere else. It scales the ruler's step and nothing else: where the block
- * *starts* is a distance from the contig's first bin, measured in whole bins by
- * everything that reads it, and folding the cell size into that offset put the
- * turned map's ruler half of the way into the block behind the picture on it.
- */
-export function axisCoordsFor(
-  groups: AxisGroup[],
-  extent: readonly [number, number],
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-  fraction = 1,
-): AxisCoords | null {
-  if (level !== 'bin' || groups.length !== 1 || !(binsize > 0)) return null
-  const group = groups[0]
-  const first = group.unitStart ?? extent[0] + group.start
-  return { bpPerCell: binsize * fraction, bpAtOrigin: (extent[0] - first) * binsize }
-}
-
-/**
- * A ruler per sequence, for an axis that has no single one.
- *
- * {@link axisCoordsFor}'s complement, and its refusals inverted: it answers for
- * an axis of *one* contig at bin level, this answers for an axis of several,
- * and above bin level neither answers at all — a cell there *is* a contig or a
- * genome, and a position inside one would be an invention.
- *
- * Each stretch's line is stated in the **block's** coordinate frame, which is
- * `axisCoordsFor`'s own arithmetic applied per group: `bpAtOrigin` is what this
- * contig's ruler would read at cell zero of the block, negative for every
- * contig but the first, so a tick's `unit` needs no offsetting to be a matrix
- * coordinate like any other.
- *
- * A cell that several short sequences share is skipped, on {@link describeAxis}'s
- * rule: the pixel is all of them, and a coordinate inside one of them names a
- * place the picture does not show.
- *
- * And nothing at all past {@link MAX_RULED_SPANS}. A metagenome's axis is
- * thousands of contigs, each a pixel or less: there is no room for a position on
- * any of them, the names are already elided for the same reason, and building
- * the list would cost more than the ruler it cannot draw.
- */
-export function axisSpansFor(
-  groups: AxisGroup[],
-  extent: readonly [number, number],
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-): AxisSpan[] {
-  if (level !== 'bin' || !(binsize > 0)) return []
-  if (groups.length < 2 || groups.length > MAX_RULED_SPANS) return []
-  const out: AxisSpan[] = []
-  for (const group of groups) {
-    if ((group.merged?.length ?? 1) > 1) continue
-    if (!(group.end > group.start)) continue
-    const first = group.unitStart ?? extent[0] + group.start
-    out.push({
-      from: group.start,
-      to: group.end,
-      coords: { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize },
-    })
-  }
-  return out
-}
-
-/**
- * How many sequences an axis may carry and still be ruled one at a time.
- *
- * A genome's worth, generously: sixteen chromosomes, or a few hundred scaffolds.
- * Past that the stretches are narrower than a label and the answer is the same
- * one the block names give — none — so the list is not built at all.
- */
-const MAX_RULED_SPANS = 512
-
-/**
- * One side of the hover readout. At bin level the position inside the contig is
- * exact arithmetic from the bin size (§3.3) — `/bins` is never consulted.
- */
-function describeAxis(
-  group: AxisGroup | undefined,
-  offset: number,
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-  blockStart: number,
-): string {
-  if (group === undefined) return '—'
-  // A cell that several small sequences share has no position inside any one of
-  // them, so it is named by what it holds rather than by a coordinate. Saying
-  // `Contig_184898:0 bp` there names one of two sequences and invents a
-  // coordinate for it; the pixel is both, and the readout says so.
-  if (group.merged !== undefined && group.merged.length > 1) {
-    const [first, ...rest] = group.merged
-    return rest.length === 1
-      ? `${first.label} + ${rest[0].label}`
-      : `${first.label} + ${fmt.int(rest.length)} more`
-  }
-  if (level !== 'bin') return group.label
-  // `formatPosition`, so the bin under the pointer is named the way every
-  // other coordinate on screen is: 1-based, grouped (§26.1). It used to print
-  // the 0-based bin start, so hovering a cell said `1,162,000` while dragging
-  // from the same pixel said `1,162,001` and the browser cell agreed with the
-  // drag — the app off by a base on the one number a reader writes down.
-  return formatPosition(group.label, bpWithin(group, offset, blockStart, binsize))
-}
-
-/**
- * One axis of the cell under the pointer, as {@link separationOf} needs it.
- *
- * The block's own origin is in it because a *coarsened* axis is measured in
- * cells while its extent is measured in bins, and the only arithmetic that gets
- * both right is {@link bpWithin}'s — which needs the origin. Subtracting the two
- * absolute indices instead is exact on a dense block and wrong by the pooling
- * factor on every other, which is how the line went quiet on the views that are
- * always pooled: anything larger than the picture.
- */
-export interface AxisSide {
-  group: AxisGroup | undefined
-  /** Block-local offset of the cell on this axis — `cell.row` or `cell.col`. */
-  offset: number
-  /** Where the block starts on this axis — `rowExtent[0]` or `colExtent[0]`. */
-  blockStart: number
-  /** The genome this sequence belongs to, where the axis names one. */
-  genome?: string | undefined
-}
-
-/**
- * How far apart the two ends of a cell are along the sequence, in base pairs.
- *
- * The genomic distance is what a cis contact *means* — a Hi-C map is read by
- * how the signal falls off with separation, and without this the tooltip makes
- * you subtract two coordinates to get it. `null` where the question has no
- * answer, and each of those is a refusal rather than a gap:
- *
- * - **above bin level**, where a cell is a whole contig or genome and its two
- *   ends have no positions to subtract;
- * - **across two sequences**, where the contact is trans and a distance along
- *   the sequence does not exist — not a large one, none;
- * - **on a cell several sequences share**, which has no position in any one of
- *   them; the readout says so in words there and must not say it in numbers
- *   here;
- * - **on the diagonal**, where it is zero and saying so is noise on the line
- *   that matters least.
- *
- * The two positions come from {@link bpWithin}, the same function the tooltip's
- * own coordinates come from, so the difference on screen and the difference
- * quoted here cannot disagree — and both are right whether the block is the
- * file's own grid or a coarsened one.
- */
-export function separationOf(
-  row: AxisSide,
-  col: AxisSide,
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-): number | null {
-  if (level !== 'bin' || !(binsize > 0)) return null
-  const { group: rowGroup } = row
-  const { group: colGroup } = col
-  if (rowGroup === undefined || colGroup === undefined) return null
-  if ((rowGroup.merged?.length ?? 1) > 1 || (colGroup.merged?.length ?? 1) > 1) return null
-  if (!sameSequence(row, col)) return null
-  const apart = Math.abs(
-    bpWithin(rowGroup, row.offset, row.blockStart, binsize) -
-      bpWithin(colGroup, col.offset, col.blockStart, binsize),
-  )
-  return apart === 0 ? null : apart
-}
-
-/**
- * Whether two axis runs are the same sequence.
- *
- * `unitBin` first, because it is the only member that is an *identity*: the
- * absolute bin the sequence itself begins at, the same number on both axes
- * however each axis's block opens. It tells two windows of one contig apart
- * from two contigs without trusting a string, which matters on a metagenome
- * where two MAGs may each have a `contig_1`.
- *
- * `unitStart` is an arithmetic *origin* and only coincides with the identity on
- * a dense block: a coarsened axis is anchored to the contig, so its origin
- * depends on where that axis's own window starts, and `contig × the same contig`
- * over two different windows gets two different numbers for one sequence. It is
- * kept as the second test for a block that carries no identity — an older
- * worker answering a newer page.
- *
- * The name, the length and the genome together are the last resort, and as
- * close to identity as a run with neither number can get.
- */
-function sameSequence(row: AxisSide, col: AxisSide): boolean {
-  const a = row.group
-  const b = col.group
-  if (a === undefined || b === undefined) return false
-  if (a.unitBin !== undefined && b.unitBin !== undefined) return a.unitBin === b.unitBin
-  if (a.unitStart !== undefined && b.unitStart !== undefined) return a.unitStart === b.unitStart
-  return a.label === b.label && a.unitLength === b.unitLength && row.genome === col.genome
-}
-
-/**
- * The offset inside a block, without its name — the tooltip's second line.
- *
- * `null` above bin level, where a cell *is* the block and a position inside it
- * would be an invention.
- */
-function positionIn(
-  group: AxisGroup | undefined,
-  offset: number,
-  level: 'bin' | 'contig' | 'genome',
-  binsize: number,
-  blockStart: number,
-): string | null {
-  if (group === undefined || level !== 'bin') return null
-  // The bin's first base, 1-based, as {@link formatPosition} writes it — the
-  // contig is on the line above, so the number goes on its own, through the
-  // helper that writes it without the name.
-  return baseLabel(bpWithin(group, offset, blockStart, binsize))
-}
-
-/**
- * The colours the canvas borrows from the stylesheet.
- *
- * Only three: the labels, their halo, and the plot frame. The separator and
- * crosshair colours are `ops/show.py`'s and stay fixed, so a screenshot from
- * the browser and a figure from the CLI remain the same image.
- *
- * Read off `from` — a node inside the centre column — and *not* off the document
- * element. The centre column re-declares the light palette regardless of theme
- * (see `.content` in the stylesheet), because a contact map is a figure and its
- * colormaps are built for ink on white. Reading from the root instead gave a
- * dark-theme plot a black label halo on a white matrix, and exported it that
- * way. The fallbacks are the light values for the same reason: a canvas asked
- * before it is in the document has no computed custom properties, and the right
- * answer for it is the palette it is going to be mounted into.
- */
-export function readCanvasPalette(from: Element): {
-  labelColor: string
-  labelHaloColor: string
-  plotBorderColor: string
-  /** A wash for alternating blocks — the browser's sequence bands. */
-  bandColor: string
-} {
-  const style = getComputedStyle(from)
-  const pick = (name: string, fallback: string): string => {
-    const value = style.getPropertyValue(name).trim()
-    return value === '' ? fallback : value
-  }
-  return {
-    labelColor: pick('--text-dim', '#5b6169'),
-    labelHaloColor: pick('--bg', '#ffffff'),
-    plotBorderColor: pick('--border-strong', '#b9bec5'),
-    bandColor: pick('--bg-sunken', '#f6f7f8'),
-  }
-}
-
-/**
- * Body text for what is written onto a figure.
- *
- * From the plot's own box, not the page's: it is drawn onto the figure, which
- * is light, so page text in a dark theme would have written it in pale grey on
- * white.
- */
-function readPageText(from: Element): string {
-  const value = getComputedStyle(from).getPropertyValue('--text').trim()
-  return value === '' ? '#16181d' : value
-}
-
-/**
- * Caption geometry, in CSS pixels.
- *
- * Quiet on purpose: the caption says what the figure is and where it came from,
- * and it is read once, after the picture. At fifteen pixels and semibold in the
- * page's own ink the region was the largest type on the page — larger than the
- * axis it names — so the eye went to the words under the map before the map.
- * Now it is set just under the axis labels and in their grey, the subject a
- * little heavier than the provenance under it; still read without leaning in.
- */
-const CAPTION_TOP = 10
-const CAPTION_TITLE_LINE = 15
-const CAPTION_DETAIL_LINE = 13
-const CAPTION_TITLE_FONT = '600 11px system-ui, sans-serif'
-const CAPTION_DETAIL_FONT = '10px system-ui, sans-serif'
-
-/** One drawn caption line; `strong` is the subject, the rest is provenance. */
-/**
- * A figure's box and what is written under it, measured once for the PNG, the
- * PDF and the deck's cell alike — see `MatrixPanel.figureFrame`.
- */
-interface FigureFrame {
-  /** Where the plot's own top-left goes: past the lane stacks above and to its left. */
-  origin: { x: number; y: number }
-  width: number
-  /** The plot and its lanes, without the caption. */
-  body: number
-  /** The whole figure, caption included. */
-  height: number
-  /** Where the caption's lines start: under the data, not under the page's edge. */
-  left: number
-  caption: { title: string; detail: string }
-  lines: CaptionLine[]
-}
-
-interface CaptionLine {
-  text: string
-  strong: boolean
-}
-
-/** Total height of a caption block, in CSS pixels. */
-function captionHeightOf(lines: CaptionLine[]): number {
-  if (lines.length === 0) return 0
-  return (
-    scaleLength(CAPTION_TOP) +
-    lines.reduce(
-      (sum, line) => sum + scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE),
-      0,
-    )
-  )
-}
-
-/**
- * The caption as drawn lines, wrapped to the figure's width.
- *
- * The detail line is a middot-separated list, so it breaks at those separators
- * and nowhere else — a provenance line broken mid-filename reads as two files.
- * The subject line is one name and is left to overflow rather than be cut: a
- * truncated genome name is worse than a wide figure.
- */
-function captionLines(
-  ctx: CanvasRenderingContext2D,
-  caption: { title: string; detail: string },
-  width: number,
-): CaptionLine[] {
-  const lines: CaptionLine[] = []
-  if (caption.title !== '') lines.push({ text: caption.title, strong: true })
-  if (caption.detail === '') return lines
-
-  ctx.font = scaleFont(CAPTION_DETAIL_FONT)
-  const fits = (text: string): boolean => ctx.measureText(text).width <= width
-  if (fits(caption.detail)) {
-    lines.push({ text: caption.detail, strong: false })
-    return lines
-  }
-  let line = ''
-  for (const part of caption.detail.split(' · ')) {
-    const candidate = line === '' ? part : `${line} · ${part}`
-    if (line !== '' && !fits(candidate)) {
-      lines.push({ text: line, strong: false })
-      line = part
-    } else {
-      line = candidate
-    }
-  }
-  if (line !== '') lines.push({ text: line, strong: false })
-  return lines
 }
 
 /** The width below which the plot takes the whole column; `styles.css` agrees. */
@@ -9790,637 +6382,4 @@ function watchTheme(onChange: () => void): () => void {
     observer?.disconnect()
     media?.removeEventListener?.('change', listener)
   }
-}
-
-/**
- * Separator positions: the first row/column of every group after the first.
- *
- * The genome runs become the drawn boundaries only where the reader says so
- * (`genomeBoundaries`): the whole-metagenome overview, and a selection of
- * several genomes, which are the two pictures whose subject *is* genomes.
- * Elsewhere they are a fact the tooltip reports and not a line — a whole-genome
- * view of a metacool is still read contig by contig, and so is a handful of
- * ticked contigs, and moving those separators out to the genomes would coarsen
- * a picture nobody asked to have coarsened.
- */
-/**
- * Whether a sideways scroll over a block slides along its diagonal while the
- * view is held on it (see `HeatmapView.setDiagonalSlide` and the diagonal
- * lock): wherever the block is **cis** and square, not turned into a band whose
- * diagonal already runs across the screen.
- *
- * Cis is two things, and both slide. The diagonal is in the picture where the
- * rows and the columns share a stretch of bins. And a block of **two stretches
- * of one sequence** — `chrI:1-100,000 × chrI:400,001-500,000`, what an
- * Option-drag off the diagonal opens — has its diagonal off the picture but is
- * read the same way, by separation: moving rows and columns together keeps
- * every band parallel to the diagonal, one distance apart, where it is under
- * the pointer, where a slide of the columns alone carried the reader across
- * separations they had not asked to leave. It used to take the columns alone,
- * as a trans block does.
- *
- * Trans stays as it was — two sequences, two genomes, where there is no
- * separation to keep — and so does every picture above bin level, whose cells
- * are whole sequences or genomes and slide along the diagonal exactly where
- * their axes share cells.
- */
-export function slidesAlongDiagonal(
-  data: Pick<MatrixResult, 'rowExtent' | 'colExtent' | 'level' | 'rowGroups' | 'colGroups'> &
-    Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
-  turned: RotatedBlock | null,
-): boolean {
-  if (turned !== null) return false
-  const [r0, r1] = data.rowExtent
-  const [c0, c1] = data.colExtent
-  if (Math.max(r0, c0) < Math.min(r1, c1)) return true
-  return data.level === 'bin' && oneSequence(data)
-}
-
-/**
- * Whether every run on both axes of a block is one and the same sequence.
- *
- * By {@link sameSequence}, the test the readout's distance already makes —
- * `unitBin` first, the identity that tells two windows of one contig from two
- * contigs that share a name in two MAGs — so the slide and the separation the
- * tooltip prints cannot disagree about whether a block is cis. A run holding
- * several small sequences is none of them.
- */
-function oneSequence(
-  data: Pick<MatrixResult, 'rowGroups' | 'colGroups'> & Partial<Pick<MatrixResult, 'rowGenomes' | 'colGenomes'>>,
-): boolean {
-  const sides = [
-    ...data.rowGroups.map((group) => ({ group, genomes: data.rowGenomes })),
-    ...data.colGroups.map((group) => ({ group, genomes: data.colGenomes })),
-  ].map(({ group, genomes }): AxisSide => ({
-    group,
-    offset: group.start,
-    blockStart: 0,
-    genome: groupAt(genomes, group.start)?.label,
-  }))
-  const first = sides[0]
-  if (first === undefined || data.rowGroups.length === 0 || data.colGroups.length === 0) return false
-  return sides.every((side) => (side.group?.merged?.length ?? 1) <= 1 && sameSequence(first, side))
-}
-
-export function separatorsFor(data: MatrixResult): SeparatorSet {
-  const toSeparators = (groups: AxisGroup[]): Separator[] =>
-    groups.map((group) => ({ at: group.start, label: group.label }))
-
-  // A whole-metagenome view — or a map of several ticked MAGs — is a picture of
-  // *genomes*. Where the reader marks its genome runs as the boundaries, those
-  // are the only ones drawn: 20,000 contig hairlines over 4,000 genome blocks
-  // is a grey wash, and it hides the block structure the view exists to show.
-  // They go in both sets so the axis is also *labelled* by genome — the fine
-  // set is what `labelBlocks` reads — while the heavier stroke, drawn at the
-  // same coordinates, is what the eye lands on.
-  const draw = data.genomeBoundaries === true
-  const rowUnits = (draw ? data.rowGenomes : undefined) ?? data.rowGroups
-  const colUnits = (draw ? data.colGenomes : undefined) ?? data.colGroups
-  const set: SeparatorSet = {
-    rows: toSeparators(rowUnits),
-    cols: toSeparators(colUnits),
-  }
-  // The *same array*, not a second copy of it. Where the genome runs are the
-  // boundaries they are both sets, and the renderer skips the fine pass when it
-  // recognises the identity — otherwise it stroked several thousand hairlines
-  // and then stroked the heavier line over exactly the same coordinates.
-  if (draw && data.rowGenomes !== undefined) set.groupRows = set.rows
-  if (draw && data.colGenomes !== undefined) set.groupCols = set.cols
-  return set
-}
-
-/**
- * Whether a box straddles the diagonal, in cells.
- *
- * Compared in cells rather than in base pairs because that is where the
- * question is exact, and with a bin of slack at each end because the marquee is
- * square in *pixels*: the two axes convert those pixels through their own
- * scales, and a plot whose gutters differ by a pixel turns a square on the
- * diagonal into ranges that differ by one cell. A whole bin of tolerance is
- * still far tighter than any box a hand can draw off the diagonal.
- */
-export function onDiagonal(box: SelectionBox): boolean {
-  return Math.abs(box.rows[0] - box.cols[0]) <= 1 && Math.abs(box.rows[1] - box.cols[1]) <= 1
-}
-
-/**
- * A dragged band of one axis, as a locus on the sequence it began in.
- *
- * **Clamped to that sequence, and that is the whole of this function.** A drag
- * is free to run across several — on a whole-metagenome view a cell is a contig
- * or two, so a band of five crosses four boundaries — and the reading used to
- * take the *name* from where the hand went down and the *end* from where it
- * came up, which is one contig's name against another contig's coordinate. On
- * the mock community that produced `NODE_…:1-260,000` for a 200 kb sequence,
- * and the range parser refused it: `Genomic region out of bounds`. The 4C
- * task's anchor, unusable from the picture it was picked on, and a clipboard
- * copy of the same gesture that pasted back as an error.
- *
- * The anchor is where the hand went down — the same rule a marquee follows, for
- * the same reason (`axisSelection`) — and what it names is however much of that
- * sequence the gesture covered. The end never passes the sequence's length,
- * because a contig's last bin is partial in general and a whole-contig drag
- * would otherwise name a coordinate a bin beyond the end of it.
- *
- * Exported for the test that pins those two clamps, beside the three selection
- * helpers below it and for the same reason: the panel needs a canvas and the
- * arithmetic does not.
- */
-export function bandRegion(axis: LocusAxis, span: [number, number]): PickedLocus | null {
-  const segment = axis.segmentAt(span[0])
-  if (segment === null) return null
-  // The band's far edge: a cell on from where the hand went down at the least,
-  // and never past the stretch it went down in.
-  const far = Math.min(Math.max(span[0] + 1, span[1]), segment.unitEnd)
-  // Low and high, whichever way the stretch reads — a piece of an edited
-  // sequence turned round names its stretch from its right edge (§27.2).
-  const a = bpAt(segment, span[0])
-  const b = bpAt(segment, far)
-  const [low, high] = stretchOf(segment)
-  return {
-    contig: segment.contig,
-    start: Math.max(low, Math.round(Math.min(a, b))),
-    end: Math.min(high, Math.round(Math.max(a, b))),
-  }
-}
-
-/**
- * One axis of a selection as a region string, in the grammar the region box
- * takes.
- *
- * Rounded to whole base pairs and written without separators, so it is both a
- * legal range (§5.4) and something that can be pasted back. Above bin level
- * there is no range to write and the block's own name is the answer.
- */
-export function axisRegion(axis: SelectedAxis): string {
-  if (axis.range === undefined) return axis.label
-  const [start, end] = axis.range
-  return `${axis.label}:${Math.round(start)}-${Math.round(end)}`
-}
-
-/**
- * The window one axis currently shows, in the grammar the region box takes.
- *
- * `formatLocus` rather than a fourth hand-rolled `contig:start-end`: what the
- * line shows has to be what the box would accept, or copying a coordinate out of
- * the subtitle and into the box moves the picture by a base.
- *
- * A whole-genome axis is several sequences at once and naming sixteen of them is
- * a paragraph, so past two they are counted instead — the same choice
- * `BrowserView.zoomPhrase` makes with "4 of 16 sequences", and for the same
- * reason: the line has to stay a line.
- */
-export function windowPhrase(windows: readonly LocusWindow[]): string {
-  if (windows.length === 0) return ''
-  const span = windows.reduce((total, window) => total + (window.end - window.start), 0)
-  const where =
-    windows.length === 1
-      ? formatLocus(windows[0])
-      : windows.length === 2
-        ? `${formatLocus(windows[0])} + ${formatLocus(windows[1])}`
-        : `${fmt.int(windows.length)} sequences`
-  return `${where} · ${fmt.bp(span)}`
-}
-
-/**
- * Both axes of what is on screen, said once when they agree.
- *
- * On the diagonal the two windows are one window, and printing it twice says the
- * picture is of two things when it is of one. Off it — a genome pair, a
- * `contig × contig` block, a region against a second region — they are genuinely
- * different and both are named.
- */
-export function framedPhrase(
-  rows: readonly LocusWindow[],
-  cols: readonly LocusWindow[],
-): string {
-  const rowText = windowPhrase(rows)
-  const colText = windowPhrase(cols)
-  if (rowText === '') return colText
-  if (colText === '' || rowText === colText) return rowText
-  return `${rowText} × ${colText}`
-}
-
-/**
- * One axis of a dragged box, as the three numbers written *beside* it.
- *
- * Not {@link axisRegion}, and the difference is the audience: that one is a
- * region string, half-open and separator-free because it is pasted back into a
- * box; this one is read, so both ends are 1-based positions and the width is in
- * the reader's units. The wording is the 1D browser's marquee, word for word —
- * one gesture described in two dialects is two gestures as far as anybody can
- * tell.
- *
- * Above bin level there is no range and the block's own name is the answer.
- */
-export function spanText(axis: SelectedAxis): { start: string; end: string; span: string } {
-  if (axis.range === undefined) return { start: axis.label, end: axis.label, span: '' }
-  const [start, end] = axis.range
-  // The first base and the last, each through the one helper that writes a
-  // base (§26.1): the last of a half-open range is the one before its end.
-  return {
-    start: formatPosition(axis.label, Math.round(start)),
-    end: formatPosition(axis.label, Math.round(end) - 1),
-    span: fmt.bp(end - start),
-  }
-}
-
-/**
- * What to say when the picture is coarser than the data.
- *
- * A block wider than {@link RASTER_MAX_DIM} is drawn through a pooled raster:
- * one pixel per `stride x stride` block of cells, carrying the strongest value
- * under it. That is the right trade — a 12,975-bin genome at one pixel per bin
- * is 585 MB of RGBA for an image no screen can show, and the *maximum* is what
- * keeps a sparse map's bright cell from being averaged into its empty
- * neighbours — but until now nothing said it was happening. The summary claimed
- * "12,975 x 12,975 cells rendered", the crosshair then reported four different
- * coordinates and four different values inside one visible square, and there
- * was no way to tell which of the two was lying.
- *
- * Two things a reader needs and cannot deduce: that the picture is pooled, and
- * what that means for zooming into it.
- *
- * The second half used to be flat — *zooming does not sharpen it, so the answer
- * is to open a smaller block* — and for a long time that was the truth. It is
- * now a question about a setting: with refinement on (`ui/refine.ts`) a settled
- * zoom reads the window again at a finer grid and the picture does sharpen, down
- * to the file's own bins; with it off, the old sentence holds exactly. So the
- * note says which, rather than asserting one of them at a reader who is looking
- * at the other.
- *
- * `null` when every cell has its own pixel, which is every region and nearly
- * every MAG.
- */
-export function poolingNote(
-  nrows: number,
-  ncols: number,
-  refining = refineEnabled(),
-): { phrase: string } | null {
-  const strideY = rasterStride(nrows)
-  const strideX = rasterStride(ncols)
-  if (strideX === 1 && strideY === 1) return null
-  return {
-    phrase: `aggregated ${strideX} × ${strideY} bins to a pixel${
-      refining ? ' · zoom in to sharpen' : ' · open a smaller block to sharpen'
-    }`,
-  }
-}
-
-/**
- * What one cell of the picture is worth, in the reader's units.
- *
- * The grid a block is read on is rarely the file's own — anything larger than a
- * picture is summed into coarser cells on the way through — and "30 bins each"
- * asks the reader to do the multiplication. The resolution is the number they
- * would quote in a methods section, so it is the number said here, and the bin
- * count is left to the summary that already gives it.
- *
- * There are two ways for a cell to stop being a bin, and neither has a width to
- * quote. Above one sequence per cell the sequences in it have different lengths
- * and the cell is their sum. Above bin *level* a cell is a whole sequence by
- * construction, and `1 contig per cell` is not news — the axis already says so.
- * Both come back empty and the caller says nothing rather than something false.
- */
-export function resolutionNote(
-  binsize: number,
-  result: {
-    binsPerCell?: number
-    contigsPerCell?: number
-    level?: MatrixResult['level']
-    /**
-     * The bin size of the map that actually answered, where a read came from a
-     * sibling rung (`worker/protocol.ts`). It wins over the caller's, which is
-     * the *open* map's — a caller passing its own would caption a block read at
-     * 2 kb with the 1 kb the session was opened at, and this is the one number
-     * on the line that changes what the picture means.
-     */
-    binsize?: number
-  },
-  noun = 'sequence',
-): string {
-  binsize = result.binsize ?? binsize
-  if ((result.level ?? 'bin') !== 'bin') {
-    const per = result.contigsPerCell ?? 1
-    return per > 1 ? `${fmt.int(per)} ${noun}s per cell, summed` : ''
-  }
-  // A cell is a capacity of bins, so it has a width even where several small
-  // sequences share it — the cell spans that many base pairs of sequence, in
-  // more than one piece. Which sequences those are is the readout's to say, and
-  // the list beside the map's; it is not a second resolution.
-  return `effective resolution: ${resolutionLabel(binsize * (result.binsPerCell ?? 1))}`
-}
-
-/**
- * The line under a map: how large the picture is, and what one cell of it is
- * worth.
- *
- * Two facts and no third, in one place, because four views draw this line and
- * four wordings of one fact is how they drift. Which sequences are on the axes
- * is the title's job; whether the values are balanced is the colourbar's, which
- * is titled in the units it is drawn in and sits beside the numbers it applies
- * to.
- *
- * **The count is the cells, and they are called bins.** That is the honest
- * pairing: a cell of the picture *is* a bin of the effective resolution, so
- * `4,046 × 4,046 bins` at `3.0 kb` multiplies out to the 12.1 Mb that is on
- * screen. Counting the file's own bins instead would put `5,769 bins` beside
- * `200 bp` for a 577 kb chromosome, and the two numbers on one line would
- * describe something twice its size. Above one sequence per cell there is no bin
- * to speak of and they are cells again.
- */
-export function blockSummary(
-  binsize: number,
-  result: MatrixResult,
-  noun = 'sequence',
-): Array<string | HTMLElement> {
-  // What the cells *are*. At bin level they are bins of the effective
-  // resolution, which is the pairing that multiplies out to what is on screen.
-  // Above it they are the unit the axis is already drawn in, and a roll-up that
-  // had to merge them is cells.
-  const unit =
-    result.level === 'bin'
-      ? 'bins'
-      : (result.contigsPerCell ?? 1) > 1
-      ? 'cells'
-      : `${noun}s`
-  const resolution = resolutionNote(binsize, result, noun)
-  const parts: Array<string | HTMLElement> = [
-    `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit}`,
-  ]
-  if (resolution !== '') {
-    parts.push(' · ')
-    // Bold because it is the one number here that changes what the picture
-    // *means*: the same map at 200 bp and at 3 kb are different figures, and a
-    // reader scanning the line is looking for that.
-    parts.push(el('strong', { text: resolution }))
-  }
-  return parts
-}
-
-/** Adapt a worker result to the renderer's {@link DenseMatrix}. */
-export function toDense(data: MatrixResult): DenseMatrix {
-  return {
-    nrows: data.nrows,
-    ncols: data.ncols,
-    values: data.values,
-    rowExtent: data.rowExtent,
-    colExtent: data.colExtent,
-  }
-}
-
-
-/**
- * A feature a lane's menu was opened on, and what may be done with it from there.
- *
- * Built by the surface that owns the pointer, because it is the one that knows
- * what *opening* and *framing* a feature mean on it: the 1D browser frames one
- * on its single axis, and a map has no such gesture — its view is a region on
- * two axes, and framing the gene on one would leave the other wherever it was.
- */
-export interface LaneMenuFeature {
-  /** What the feature is called, or its accession where it has no name. */
-  name: string
-  /** Where it is, as the locus box writes a window, so it can be pasted into one. */
-  locus: string
-  /** Open its card — what a click on it does. */
-  open: () => void
-  /** Frame it, on a surface with one axis to frame it on. */
-  zoom?: () => void
-}
-
-/**
- * What a lane's menu says about the feature at an index of a set.
- *
- * The name a reader searches for — the symbol, else the accession, else the
- * place itself — and the window `formatLocus` writes, which is what the locus
- * box accepts back.
- */
-export function laneMenuFeature(
-  set: FeatureSet,
-  index: number,
-  actions: { open: () => void; zoom?: () => void },
-): LaneMenuFeature {
-  const locus = formatLocus({
-    contig: set.contigs[set.contig[index]] ?? '',
-    start: set.start[index],
-    end: set.end[index],
-  })
-  const name = set.name[index] !== '' ? set.name[index] : set.id[index] !== '' ? set.id[index] : locus
-  return { name, locus, ...actions }
-}
-
-/** The first letter up, for a menu row built from a word the card writes lower-case. */
-function capitalised(word: string): string {
-  return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1)
-}
-
-/**
- * Put text on the clipboard, or — where the browser will not allow it, as in an
- * insecure context — hand it to the reader to copy by hand: a menu row that
- * silently did nothing would be a row that lied.
- */
-function copyOrShow(text: string): void {
-  void copyTextToClipboard(text).catch(() => {
-    window.prompt('This browser would not copy it. Here it is to copy by hand:', text)
-  })
-}
-
-/** What each edge is called, wherever one has to be named to a reader. */
-const EDGE_WORDS: Record<LaneEdge, string> = {
-  top: 'above the map',
-  right: 'beside the map',
-  bottom: 'below the map',
-  left: 'left of the map',
-}
-
-/**
- * The right-click menu on a lane: its colour, its axis, and where it is drawn.
- *
- * The things the side panel offers for a track that a reader beside the map
- * actually reaches for, brought to where the track is. Colour opens the
- * browser's own picker — the same control the card uses, so the two cannot drift
- * — and the range is offered as the choices worth having rather than as two
- * boxes: auto, and the round steps around what is on screen. A number box in a
- * context menu is a form in a menu.
- *
- * The location block and the flip are here because a lane is where a reader is
- * looking when they want them: which edge a track is drawn on and which way its
- * signal grows are both decisions about the *picture*, and sending someone to a
- * list in the sidebar to make one is sending them away from the thing they are
- * deciding about.
- */
-export function openLaneMenu(
-  x: number,
-  y: number,
-  entry: AnnotationEntry,
-  store: AnnotationStore,
-  /**
-   * The stack the menu was opened from — what "towards the map" is measured
-   * against, and what the location block moves the lane *off*.
-   *
-   * `null` on a surface with no map to have edges: the 1D browser draws every
-   * lane the same way up and its placement means nothing until the reader goes
-   * back to a map, so offering four edges there would be offering a control
-   * with no visible effect.
-   */
-  edge: LaneEdge | null,
-  /**
-   * Which map the stack belongs to, so the location block moves *that* map's
-   * lane. The lead when nothing says otherwise, which is every surface with no
-   * deck behind it — see `annotations/store.ts`'s `placeAt`.
-   */
-  map: MapId = LEAD_MAP,
-  /** The feature under the pointer, where there is one (§8.16). */
-  feature: LaneMenuFeature | null = null,
-  /**
-   * *Copy this* (§7.2): this lane's track alone onto the clipboard, as the
-   * surface it was opened on draws it. Absent where the surface cannot draw
-   * one lane by itself.
-   */
-  copy: (() => void) | null = null,
-  /**
-   * The *Marks* group (`ui/marksMenu.ts`): the reader's marks drawn across
-   * this lane, under the pointer and all of them. Last, after the track's own
-   * rows, since the menu was opened on a track — and there, rather than
-   * nowhere, since a mark's rule runs through every lane it crosses.
-   */
-  marks: readonly MenuItem[] = [],
-): void {
-  const limits = entry.style.limits
-  const items: MenuItem[] = []
-  // The thing under the pointer first, and the track it is on after it: a menu
-  // opened on a gene is most often about the gene.
-  if (feature !== null) {
-    items.push(
-      { label: feature.name },
-      { label: 'About it…', run: feature.open },
-      ...(feature.zoom === undefined
-        ? []
-        : [{ label: 'Zoom to it', hint: feature.locus, run: feature.zoom }]),
-      { label: 'Copy its name', hint: feature.name, run: () => copyOrShow(feature.name) },
-      { label: 'Copy its position', hint: feature.locus, run: () => copyOrShow(feature.locus) },
-    )
-  }
-  items.push(
-    { label: entry.label },
-    ...(copy === null
-      ? []
-      : [
-          {
-            label: 'Copy this',
-            hint: 'PNG',
-            title:
-              'The track as it is drawn here — the track alone, with no name, range, handle or ' +
-              'pointer — onto the clipboard as a PNG, at the screen’s resolution',
-            run: copy,
-          },
-        ]),
-    {
-      label: 'Colour…',
-      hint: entry.style.colour,
-      // The same control the lane's own chip is and the side panel's swatch is,
-      // through one builder, so the three cannot come to disagree about what a
-      // colour is. Built here rather than up front because a menu that is opened
-      // and dismissed should leave nothing behind, and taken away again on the
-      // commit *or* on the window coming back, which is what a cancelled picker
-      // looks like from this side.
-      run: () => {
-        const swatch = colourInput(entry, store, { class: 'hidden-input' })
-        const done = (): void => swatch.remove()
-        swatch.addEventListener('change', done, { once: true })
-        window.addEventListener('focus', done, { once: true })
-        document.body.appendChild(swatch)
-        swatch.click()
-      },
-    },
-  )
-
-  // How the rows are spent, and whether a feature points the way it runs
-  // (§8.16) — the two things a reader changes about a gene track while looking
-  // at it, and both as a tick on the one in force rather than as a toggle that
-  // names the state it would leave.
-  if (hasFeatureRows(entry.kind)) {
-    const features = featuresOf(entry.style, entry.kind)
-    items.push(
-      { label: 'Rows' },
-      ...FEATURE_DISPLAYS.map((display) => ({
-        label: capitalised(FEATURE_DISPLAY_WORDS[display].label),
-        title: FEATURE_DISPLAY_WORDS[display].hint,
-        checked: features.display === display,
-        run: () => patchFeatures(store, entry, { display }),
-      })),
-    )
-    // On every lane that has rows, a call set's included, as the card offers it
-    // (`laneSettings.arrowsToggle`): the switch changes nothing on a feature
-    // the file gives no strand, and the menu leaving it off one kind of lane
-    // the card kept it on was two answers to one question.
-    items.push({
-      label: 'Point the way each runs',
-      checked: features.arrows,
-      run: () => patchFeatures(store, entry, { arrows: !features.arrows }),
-    })
-  }
-
-  if (hasAMovableAxis(entry.kind)) {
-    items.push(
-      { label: 'Range' },
-      {
-        label: 'Auto',
-        hint: 'this view',
-        disabled: limits.auto,
-        run: () => store.restyle(entry.id, { limits: { ...limits, auto: true } }),
-      },
-      // Not a step, and not a control: the two ways the range is moved *on the
-      // lane itself*, said once where a reader who opened this menu looking for
-      // them will find them. Both are gestures with nothing on screen to
-      // announce them, which is exactly what a menu is for.
-      { label: `${CEILING_LABEL} on the lane moves the ceiling; click a limit to type one` },
-      ...[1, 5, 10, 50, 100].map((max) => ({
-        label: `0 – ${max}`,
-        disabled: !limits.auto && limits.min === 0 && limits.max === max,
-        run: () => store.restyle(entry.id, { limits: { auto: false, min: 0, max } }),
-      })),
-    )
-  }
-
-  // Where the lane goes, as words. The same field the row's `location` control
-  // writes and the same call the drag onto a rectangle makes, so a lane moved
-  // three different ways is moved once — including the axis turning to keep
-  // facing the map, which is `place`'s and not any caller's.
-  if (edge !== null) {
-    items.push(
-      { label: 'Draw it' },
-      ...LANE_EDGES.map((side) => ({
-        label: EDGE_WORDS[side],
-        disabled:
-          entry.placement[side] && LANE_EDGES.filter((each) => entry.placement[each]).length === 1,
-        run: () => store.placeAt(entry.id, map, placementOn(side)),
-      })),
-    )
-  }
-
-  if (drawsAProfile(entry.kind)) {
-    // Which way the signal currently grows, which is the edge's own reading
-    // turned round by the flip — not the flip on its own. A lane above the map
-    // and one below it with the same `flip` grow in opposite directions
-    // relative to the picture, and "flip" is not a word about a picture.
-    const towards = laneGrowsInward(edge ?? 'bottom') !== entry.style.flip
-    items.push({
-      label: towards ? 'Grow away from the map' : 'Grow towards the map',
-      hint: towards ? 'now towards' : 'now away',
-      run: () => store.restyle(entry.id, { flip: !entry.style.flip }),
-    })
-  }
-
-  items.push(
-    { label: 'This track' },
-    {
-      label: entry.visible ? 'Hide' : 'Show',
-      run: () => store.update(entry.id, { visible: !entry.visible }),
-    },
-    { label: 'Remove', run: (): void => store.remove(entry.id) },
-    ...marks,
-  )
-  openMenu(x, y, items)
 }

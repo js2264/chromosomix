@@ -616,6 +616,15 @@ needs the base path to stay correct.
 Routing is likewise safe. All view state lives in the URL *hash* (`state/ViewState.ts`), so there
 are no deep paths for Pages to 404 on and no SPA-fallback `404.html` is needed.
 
+### The page carries its own Content-Security-Policy
+
+For the same reason — Pages sends no header a site chooses — the policy is a `<meta>` that the build
+writes into `index.html` (`scripts/csp.mjs`, SPECS §11), and so is the archived copy's and the
+package's. A host that *can* send headers should not add a second `Content-Security-Policy` beside
+it: the browser enforces both, the stricter wins clause by clause, and a header copied from the
+desktop build would bring `frame-ancestors 'none'` with it and blank every embed. To watch the policy
+hold on a build, `npx vite build && node scripts/ui-csp.mjs site`.
+
 ## After the first deploy
 
 - **Add the Pages origin to the bucket's CORS `AllowedOrigins`** — `https://<owner>.github.io`, or the

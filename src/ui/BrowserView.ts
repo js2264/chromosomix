@@ -249,7 +249,9 @@ import {
   SELECTION_PAD,
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
-import { laneMenuFeature, openLaneMenu, readCanvasPalette, type DeckExport } from './MatrixPanel'
+import { laneMenuFeature, openLaneMenu } from './laneMenu'
+import { readCanvasPalette } from './canvasPalette'
+import type { DeckExport } from './MatrixPanel'
 import { marksMenu } from './marksMenu'
 import { openMenu } from './Menu'
 import { endCarry, landingAt, startCarry, type LaneCarry, type LaneLanding } from './laneCarry'
@@ -568,7 +570,7 @@ export class BrowserView {
    * known the instant it moves, the size only after the card has been laid out.
    * Placing on the first and correcting on the second is what lets the box be
    * *flipped* away from an edge without reading layout on every pointer move —
-   * the same arrangement `MatrixPanel.placeTooltip` uses, for the same reason.
+   * the same arrangement `MapReadout.placeTooltip` uses, for the same reason.
    */
   private tipAt: { x: number; y: number } | null = null
   private tipSize = { width: 0, height: 0 }
@@ -1218,7 +1220,7 @@ export class BrowserView {
    * the same question. There is one box here and it is both things: `chrIV`,
    * `chrIV:1,000-2,000` and `GAL4` are three spellings of *where do I want to
    * be*, and the text decides which. It answered to `l` as well until `l` was
-   * found to be the labels overlay too — see `Session.commands`.
+   * found to be the labels overlay too — see `SessionCommands`.
    */
   focusSearch(): void {
     this.locusInput.focus()

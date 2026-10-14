@@ -70,7 +70,7 @@ import type { LocusAxis, LocusSegment } from '../render/locus'
 import { Scale } from '../render/scale'
 import { el } from './dom'
 import { cardTitle } from './icons'
-import { readCanvasPalette } from './MatrixPanel'
+import { readCanvasPalette } from './canvasPalette'
 import { scaleFont, scaleLength, subscribeTextScale } from './textScale'
 
 /** Movement below this many pixels is a click rather than a drag. */

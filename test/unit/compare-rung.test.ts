@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { compareRung, withoutSecond, type CompareCarry } from '../../src/app/Session'
+import { compareRung, withoutSecond, type CompareCarry } from '../../src/app/SessionCompare'
 import { serialiseViewState } from '../../src/state/ViewState'
 import type { ViewState } from '../../src/types'
 

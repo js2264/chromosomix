@@ -113,7 +113,7 @@ import {
 import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { STRUCTURE_DRAG_TYPE, button, dragHasStructure, el, fmt, trimNumber } from '../ui/dom'
 import { cardTitle, icon, iconButton } from '../ui/icons'
-import { readCanvasPalette } from '../ui/MatrixPanel'
+import { readCanvasPalette } from '../ui/canvasPalette'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
 import { cellHeightOf, heightBar } from './cellHeight'
@@ -444,7 +444,7 @@ export class StructurePanel implements DeckCell {
    * The card is rebuilt from the row's style whenever anything changes, so a
    * resolution kept in the row's own select would go back to its default the
    * next time a slider moved. The Export card's pair are the same two fields
-   * for the same reason (`ui/MatrixPanel.ts`).
+   * for the same reason (`ui/MapFigure.ts`).
    */
   private exportDpi = 300
   private exportFormat: ExportFormat = 'png'

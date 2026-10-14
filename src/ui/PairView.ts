@@ -20,11 +20,13 @@ import type { ReaderClient } from '../worker/client'
 import { button, el, field, titleWhenCut } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
-import { MatrixPanel, axisRegion, blockSummary,
+import { MatrixPanel,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
+import { axisRegion } from './mapSelection'
+import { blockSummary } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { typedLocusToRegion } from '../genome/assembly'

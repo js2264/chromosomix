@@ -16,6 +16,7 @@ npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
 node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png, a table's scatter with its least-squares line at 14b
+node scripts/ui-csp.mjs site gallery-csp      # not on the dev server: a *build* (`npx vite build`) under its Content-Security-Policy, served as Pages serves it — the yeast map, P(s) and cis/trans with every chart's tooltip hovered, the 1D browser from a workspace on a second origin; fails on any refusal, in the page or a worker, but its three controls, and on a map or a lane left without its data. `standalone` instead drives `dist-standalone/` from file:// (`npm run build:standalone`): site-map … site-browser, standalone-map … standalone-browser
 node scripts/ui-tour.mjs tour                # the furniture: the landing page in both themes, every dialog, the drawers, the five columns, the deck, the 1D browser, a metagenome's tables, an error page, the embed, a laptop and a narrow window: 01-landing … 73-narrow-landing
 node scripts/ui-audit.mjs                    # no pictures: measures the tour's surfaces for clipped text, overlaps, ragged right edges, captions under the contrast floor and §26.4 punctuation, and prints the findings
 node scripts/ui-methods.mjs gallery          # Model from the map under each Method: m1 … m4

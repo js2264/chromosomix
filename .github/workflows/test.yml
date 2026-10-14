@@ -10,14 +10,25 @@ name: Tests
 # against) is committed. So:
 #
 #   - `test:nofixtures` runs everywhere, on every push. It is the half a
-#     contributor can verify without a Python environment.
-#   - the full suite runs when metacooler can be installed, which is where the
-#     golden comparison — the thing that actually proves this reader agrees with
-#     Python — happens.
+#     contributor can verify without a Python environment. The published demo
+#     maps join it (`npm run fixtures:demo`, copied from `demo/` here), so the
+#     reader is compared with `cooler` on files metacooler really wrote on every
+#     push, not only when the second job can build fixtures.
+#   - the second job builds every oracle a runner can build. Its public half
+#     needs no credential: the demo maps fetched from the lab's bucket and their
+#     oracles rebuilt with the public `cooler` package, and the fixtures `cooler`
+#     and `g3dtools` alone can write. Its private half is the full suite over
+#     `make_fixtures.py`'s output, which needs metacooler — not on PyPI, and a
+#     private repository, so it is checked out with the METACOOLER_REPO_TOKEN
+#     secret (a fine-grained token with read access to js2264/metacooler's
+#     contents) and skipped, with a warning saying so, where that is not set.
 #
-# The second job is allowed to report "skipped" rather than to fail the build if
-# metacooler is not installable from this runner, because a red badge that means
-# "we could not get the fixtures" trains people to ignore the badge.
+# Every step that installs, fetches or generates is allowed to fail without
+# failing the build, and the job says plainly in its summary what did not run,
+# because a red badge that means "we could not get the fixtures" trains people
+# to ignore the badge. That used to mean the job was green while it compared
+# nothing: `pip install metacooler` failed on every run. The test steps
+# themselves are never allowed to fail quietly.
 
 on:
   push:
@@ -45,6 +56,11 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      # Copied from `demo/` in this checkout, verified against the size and MD5
+      # the golden was built from; the bucket is the fallback should `demo/`
+      # ever leave the repository.
+      - name: Put the demo maps in place
+        run: npm run fixtures:demo
       - name: Tests that need no fixtures
         run: npm run test:nofixtures
       - name: Build
@@ -63,8 +79,11 @@ jobs:
         run: npm run build:desktop
 
   goldens:
-    name: golden oracles (needs metacooler)
+    name: golden oracles (cooler, the demo bucket and, with a token, metacooler)
     runs-on: ubuntu-latest
+    env:
+      # `secrets` cannot be read in an `if:`, so its presence travels in env.
+      HAS_METACOOLER_TOKEN: ${{ secrets.METACOOLER_REPO_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,24 +95,117 @@ jobs:
           python-version: '3.12'
       - run: npm ci
 
-      # Not fatal: this job proves the JS agrees with Python when Python is
-      # available, and says so plainly when it is not.
+      # ---------------------------------------------------------------------
+      # The public half: no credential, every run.
+      # ---------------------------------------------------------------------
+
+      - name: Install cooler and g3dtools
+        id: cooler
+        continue-on-error: true
+        run: python -m pip install cooler g3dtools
+
+      # From the bucket and not from `demo/`, so a map that changed or vanished
+      # there is found here rather than by a reader of the published store.
+      - name: Fetch the demo maps from the public bucket
+        id: demo
+        continue-on-error: true
+        run: npm run fixtures:demo -- --from s3
+
+      # The committed demo goldens are rebuilt by the public package and must
+      # come out byte for byte the same: a cooler release that reads these maps
+      # differently is a finding, not something to absorb silently.
+      - name: Rebuild the demo oracles with cooler
+        id: demo-golden
+        if: steps.cooler.outcome == 'success' && steps.demo.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm run fixtures:demo-golden -- --maps test/fixtures/demo
+          git diff --exit-code -- test/golden/demo
+
+      - name: The demo maps against their oracles
+        if: steps.demo.outcome == 'success'
+        run: npx vitest run test/unit/demo-maps.test.ts
+
+      - name: Build the fixtures cooler and g3dtools can write
+        id: public-fixtures
+        if: steps.cooler.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm run fixtures:scool
+          npm run fixtures:hicpro
+          npm run fixtures:pairs
+          npm run fixtures:g3d
+
+      # ---------------------------------------------------------------------
+      # The private half: metacooler's own repository, with a read token.
+      # ---------------------------------------------------------------------
+
+      - name: Check out metacooler
+        id: metacooler
+        if: env.HAS_METACOOLER_TOKEN == 'true'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: js2264/metacooler
+          ref: devel
+          path: metacooler
+          token: ${{ secrets.METACOOLER_REPO_TOKEN }}
+
       - name: Install metacooler
         id: python
+        if: steps.metacooler.outcome == 'success'
         continue-on-error: true
-        run: python -m pip install metacooler cooler
+        run: python -m pip install ./metacooler cooler
 
       - name: Generate fixtures
         id: fixtures
         if: steps.python.outcome == 'success'
         continue-on-error: true
+        env:
+          METACOOLER_TEST_DATA: ${{ github.workspace }}/metacooler/tests/data
         run: npm run fixtures
 
       - name: Full suite, against the Python oracles
         if: steps.fixtures.outcome == 'success'
         run: npm test
 
-      - name: Report a skip rather than a pass
-        if: steps.fixtures.outcome != 'success'
+      # Without metacooler the full suite cannot run, but the suites the public
+      # fixtures feed can — each of them skips by name in the always-on job.
+      - name: The suites the public fixtures feed
+        if: steps.fixtures.outcome != 'success' && steps.public-fixtures.outcome == 'success'
+        run: >-
+          npx vitest run
+          test/unit/scool.test.ts test/unit/hicpro.test.ts
+          test/unit/pairs-cload-oracle.test.ts test/unit/pairs-mcool-roundtrip.test.ts
+          test/unit/g3d-binary-oracle.test.ts test/unit/g3d-binary-worker.test.ts
+          test/unit/msgpack.test.ts test/dom/error-view.test.ts
+
+      - name: Report what ran and what did not
+        if: always()
+        env:
+          COOLER: ${{ steps.cooler.outcome }}
+          DEMO: ${{ steps.demo.outcome }}
+          DEMO_GOLDEN: ${{ steps.demo-golden.outcome }}
+          PUBLIC_FIXTURES: ${{ steps.public-fixtures.outcome }}
+          METACOOLER: ${{ steps.metacooler.outcome }}
+          FIXTURES: ${{ steps.fixtures.outcome }}
         run: |
-          echo "::warning title=Goldens not verified::metacooler could not be installed or the fixtures could not be generated, so the golden comparison did not run. The fixture-free half of the suite still ran in the 'check' job."
+          {
+            echo "| oracle | outcome |"
+            echo "|---|---|"
+            echo "| cooler + g3dtools installed | ${COOLER} |"
+            echo "| demo maps fetched from the bucket | ${DEMO} |"
+            echo "| demo oracles rebuilt identically | ${DEMO_GOLDEN} |"
+            echo "| fixtures built by cooler / g3dtools | ${PUBLIC_FIXTURES} |"
+            echo "| metacooler checked out (METACOOLER_REPO_TOKEN) | ${METACOOLER:-skipped} |"
+            echo "| metacooler fixtures, full suite | ${FIXTURES:-skipped} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FIXTURES" != "success" ]; then
+            echo "::warning title=Full suite not run::metacooler's fixtures were not built (set the METACOOLER_REPO_TOKEN secret to a token that can read js2264/metacooler), so the twelve reader suites over them and the metacool request budgets did not run. The demo maps and the public fixtures still did, where their own steps say so."
+          fi
+          if [ "$DEMO" != "success" ]; then
+            echo "::warning title=Demo maps not fetched::the demo maps could not be fetched from the public bucket, so the reader was not compared with cooler on them in this job."
+          fi
+          if [ "$DEMO_GOLDEN" != "success" ] && [ "$DEMO" = "success" ] && [ "$COOLER" = "success" ]; then
+            echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
+          fi

@@ -169,6 +169,15 @@ describe('a navigate from the host page', () => {
     expect(mergeState(AT_VIEW, { smooth: 3 })?.smooth).toBe('3')
   })
 
+  it('drops a value the address bar cannot carry, rather than throwing on it', () => {
+    // A lone surrogate survives a structured clone and is refused by the URI
+    // encoder: it used to throw out of the message handler, unanswered. Read as
+    // a link, the locus the host sent is unreadable and goes, as an unreadable
+    // `locus=` in a link does; the rest of the patch arrives.
+    const { locus: _replaced, ...rest } = AT_VIEW
+    expect(mergeState(AT_VIEW, { locus: '\uD800', region: 'IV' })).toEqual({ ...rest, region: 'IV' })
+  })
+
   it('carries a boolean through as the hash spells it', () => {
     expect(mergeState(AT_VIEW, { balance: true })?.balance).toBe(true)
     expect(mergeState(AT_VIEW, { balance: false })?.balance).toBe(false)
