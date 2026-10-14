@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 106,
+      "commit": "e86a5da",
+      "title": "Serve the site from chromosomix.app, and keep every archived build working there",
+      "branch": "ccr-770b1c94-chromosomix-app",
+      "date": "2026-10-14T16:09:26Z"
+    },
+    {
       "number": 105,
       "commit": "350b701",
       "title": "Act on the code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits",
