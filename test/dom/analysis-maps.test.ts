@@ -387,6 +387,7 @@ describe('the combined figure', () => {
     )
     expect(buttons).toContain('PNG')
     expect(buttons).toContain('PDF')
+    expect(buttons).toContain('Copy')
     // And a TSV, whose head is every map's provenance rather than one framing
     // for numbers that came from three files.
     expect(buttons).toContain('TSV')

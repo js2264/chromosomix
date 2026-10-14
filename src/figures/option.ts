@@ -534,7 +534,11 @@ function lineSeries(entry: Entry, style: FigureStyle, fillOpacity: number): Char
     smooth: style.smooth,
     symbol: 'none',
     lineStyle: { width: style.lineWidth, color: entry.colour },
-    ...(area ? { areaStyle: { color: entry.colour, opacity: fillOpacity, origin: 'start' } } : {}),
+    ...(area ? { // To zero, not to the bottom of the axis: a profile that dips below zero
+    // is shaded down to zero and no further, so above and below read as two
+    // sides of one line. Where zero is off the axis — every log axis, a window
+    // that leaves it out — the fill stops at the edge nearest it.
+    areaStyle: { color: entry.colour, opacity: fillOpacity, origin: 'auto' } } : {}),
     // A gap is a gap: a bin with no value is not a line through zero.
     connectNulls: false,
     // Largest-triangle-three-buckets: a million-point profile is drawn as the

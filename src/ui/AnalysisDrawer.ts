@@ -109,8 +109,9 @@ import { durationText, stopPromise } from './AnalysisPanelCard'
 import { runClock } from '../units'
 import { profileCurve, profileFigure, type PlotFigure } from './analysisPlots'
 import { button, el, fmt } from './dom'
-import { canvasToPng, chooseSaveTarget, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
+import { canvasToPng, chooseSaveTarget, copyPngToClipboard, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
 import { icon, iconButton } from './icons'
+import { messageToast } from './toast'
 import { ParamForm } from './ParamForm'
 import { resizeHandle } from './resizeHandle'
 import { VectorPage } from './vector'
@@ -409,6 +410,20 @@ function figureBox(host: HTMLElement): { width: number; height: number } {
     width: Math.max(1, Math.round(rect.width)),
     height: Math.max(1, Math.round(rect.height)),
   }
+}
+
+/** A figure redrawn at {@link FIGURE_EXPORT_DPI}: the PNG's picture, for a file or the clipboard. */
+function rasterOf(figure: PlotFigure): HTMLCanvasElement {
+  const box = figureBox(figure.el)
+  const scale = scaleForDpi(FIGURE_EXPORT_DPI)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(box.width * scale))
+  canvas.height = Math.max(1, Math.round(box.height * scale))
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) throw new Error('The browser would not give this page a canvas.')
+  ctx.setTransform(scale, 0, 0, scale, 0, 0)
+  figure.draw(ctx, box)
+  return canvas
 }
 
 /**
@@ -1279,6 +1294,7 @@ export class AnalysisDrawer {
       ],
       onPng: (figure) => void this.savePngPlain(figure, output.label),
       onPdf: (figure) => void this.savePdfPlain(figure, output.label),
+      onCopy: (figure) => this.copyPng(figure, output.label),
     })
     this.figures.push(block)
     return block.el
@@ -1479,6 +1495,7 @@ export class AnalysisDrawer {
       ],
       onPng: (figure) => void this.savePng(figure, output, provenance),
       onPdf: (figure) => void this.savePdf(figure, output, provenance),
+      onCopy: (figure) => this.copyPng(figure, output.label),
     })
     this.figures.push(block)
     return block.el
@@ -1689,20 +1706,33 @@ export class AnalysisDrawer {
    * label and the timestamp, which is what a reader assembling a figure needs
    * from a filename anyway.
    */
+  /**
+   * The PNG's picture onto the clipboard. Synchronous up to the clipboard's own
+   * call, which a browser takes only inside the press that asked for it — the
+   * redraw is synchronous, and the encoding is a promise the clipboard waits on.
+   */
+  private copyPng(figure: PlotFigure, label: string): void {
+    let canvas: HTMLCanvasElement
+    try {
+      canvas = rasterOf(figure)
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : String(err))
+      return
+    }
+    copyPngToClipboard(canvasToPng(canvas)).then(
+      () => {
+        this.setStatus('')
+        messageToast(`Copied ${label} · ${canvas.width} × ${canvas.height} px`)
+      },
+      (err: unknown) => this.setStatus(`${label} could not be copied: ${err instanceof Error ? err.message : String(err)}`),
+    )
+  }
+
   private async savePngPlain(figure: PlotFigure, label: string): Promise<void> {
     const target = await chooseSaveTarget(`${plainName(label)}-${fileStamp(new Date())}.png`, 'image/png')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(box.width * scale))
-      canvas.height = Math.max(1, Math.round(box.height * scale))
-      const ctx = canvas.getContext('2d')
-      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      figure.draw(ctx, box)
-      await target.write(await canvasToPng(canvas))
+      await target.write(await canvasToPng(rasterOf(figure)))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
@@ -1733,16 +1763,7 @@ export class AnalysisDrawer {
     const target = await chooseSaveTarget(exportName(output, provenance, fileStamp(new Date()), 'png'), 'image/png')
     if (target === null) return
     try {
-      const box = figureBox(figure.el)
-      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(box.width * scale))
-      canvas.height = Math.max(1, Math.round(box.height * scale))
-      const ctx = canvas.getContext('2d')
-      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      figure.draw(ctx, box)
-      await target.write(await canvasToPng(canvas))
+      await target.write(await canvasToPng(rasterOf(figure)))
       this.setStatus('')
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))

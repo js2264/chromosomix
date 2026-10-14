@@ -225,6 +225,16 @@ describe('optionOf', () => {
     expect(smooth['smooth']).toBe(true)
   })
 
+  it('fills an area down to zero, not to the bottom of the axis', () => {
+    // ECharts' `auto`: to zero where the axis holds it, else the edge nearest it.
+    const { option } = build(curve(), (style) => (style.mark = 'area'))
+    for (const entry of seriesOf(option)) {
+      expect((entry['areaStyle'] as Record<string, unknown>)['origin']).toBe('auto')
+    }
+    const filled = build(curve(), (style) => (style.fillArea = true))
+    expect((seriesOf(filled.option)[0]['areaStyle'] as Record<string, unknown>)['origin']).toBe('auto')
+  })
+
   it('draws a band as a silent stacked pair under its own line', () => {
     const banded = curve()
     banded.series[0].low = new Float64Array([3, 4, 5])

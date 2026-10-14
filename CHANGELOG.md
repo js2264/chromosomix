@@ -14,6 +14,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Copy beside PNG and PDF on every task's figure (§18.13).** It puts the figure's PNG — the same
+  300 dpi redraw the PNG button saves — on the clipboard, to paste into a slide or a message without
+  a file in between, and says in the corner what was copied and at what size.
 - **The lab's store opens the Chromosomix paper, five tabs, a panel each (§24.2, §24.3).** *The
   Chromosomix paper* replaces *Chromosomix, Fig. 1* under Papers. Fig. 1c is 4DN's mouse ES-cell
   Hi-C at five scales side by side, each map at its own rung and on its own window — the genome at
@@ -2174,6 +2177,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An area is shaded down to zero, not to the bottom of the axis (§18.13).** The mark *area*, and
+  *fill under* on a line, filled every series down to the axis's lowest edge, so a profile dipping
+  below zero was shaded from its peaks to the bottom of the picture and the parts below zero were
+  lost in the fill. It now stops at zero, shading up to it where the line is below; on a log axis,
+  which has no zero, it still fills to the axis's edge.
+- **One end of a figure's window typed takes effect on its own (§18.13).** On an axis still fitting
+  the data, `x from` or `to` waited for the other end, so a number typed into either sat in its box
+  while the picture stayed on the whole of the data — and so did the second, since the window was
+  still empty when it was typed. The end not typed is now the data's own on that side.
 - **A tab with maps beside two or more 3D models keeps its maps when it is restored (§25.3).** The
   watch that opens a cell for every model that arrives began at the store's first change, which in a
   restore is the first row back, so every model after it opened a cell; publishing those cells wrote
