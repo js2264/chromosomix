@@ -1,6 +1,13 @@
 {
-  "latest": "4173f32",
+  "latest": "5bbff1e",
   "versions": [
+    {
+      "commit": "5bbff1e",
+      "version": "0.13.0",
+      "date": "2026-10-14T16:28:16+02:00",
+      "subject": "Fix figure window input and area fill behavior (#104)",
+      "tag": ""
+    },
     {
       "commit": "4173f32",
       "version": "0.13.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "1c3600b",
-      "version": "0.13.0",
-      "date": "2026-09-28T09:19:51+02:00",
-      "subject": "Open every map of a multi-file drop in its cell (§16.11) (#77)",
-      "tag": ""
-    },
-    {
       "commit": "7a6fea2",
       "version": "0.13.0",
       "date": "2026-09-20T22:39:26+02:00",
@@ -219,13 +219,6 @@
       "title": "Act on the code review: CI oracles, security, CLI, capped readers, render cancellation, PDF paths, and the Session and MatrixPanel splits",
       "branch": "ccr-770b1c94-w40j41",
       "date": "2026-10-13T16:17:01Z"
-    },
-    {
-      "number": 104,
-      "commit": "b6d3815",
-      "title": "Fix figure window input and area fill behavior",
-      "branch": "js/lucid-fermi-g1kmeu",
-      "date": "2026-10-13T16:07:40Z"
     }
   ]
 }
