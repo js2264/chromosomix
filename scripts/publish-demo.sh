@@ -28,10 +28,10 @@ REGION="${DEMO_REGION:-eu-west-3}"
 # CORS policy, spliced into `apply_cors` as the body of a JSON array. The dev
 # server is in the list because a private bucket that can only be browsed from
 # the published site cannot be debugged from a checkout.
-DEFAULT_APP_ORIGINS='"https://js2264.github.io", "https://jserizay.com", "http://localhost:5173"'
+DEFAULT_APP_ORIGINS='"https://chromosomix.app", "https://js2264.github.io", "https://jserizay.com", "http://localhost:5173"'
 APP_ORIGINS="${DEMO_APP_ORIGINS:-$DEFAULT_APP_ORIGINS}"
 # The one the verify step preflights with; must be among APP_ORIGINS.
-CHECK_ORIGIN="${DEMO_CHECK_ORIGIN:-https://js2264.github.io}"
+CHECK_ORIGIN="${DEMO_CHECK_ORIGIN:-https://chromosomix.app}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/demo"
@@ -235,7 +235,7 @@ if grep -qi '^content-encoding:' <<<"$headers"; then
   exit 1
 fi
 
-ranged="$(curl -sSI -H 'Range: bytes=0-1023' -H 'Origin: https://js2264.github.io' "$URL")"
+ranged="$(curl -sSI -H 'Range: bytes=0-1023' -H "Origin: $CHECK_ORIGIN" "$URL")"
 # `^HTTP/.* 206` rather than the reason phrase: over HTTP/2 curl prints
 # `HTTP/2 206` with no `Partial Content` after it, and a check keyed to the
 # phrase fails against a bucket that is behaving perfectly.

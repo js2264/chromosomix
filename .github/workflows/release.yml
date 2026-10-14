@@ -383,7 +383,7 @@ jobs:
           need the hosted app, because a page opened from a disk has no origin
           it is allowed to fetch from.
 
-          The web app at https://js2264.github.io/chromosomix/ is the same
+          The web app at https://chromosomix.app/ is the same
           viewer and needs no installation.
           NOTE
 

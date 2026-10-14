@@ -6,7 +6,7 @@ Notable changes to the viewer, newest first. The format follows
 contract** rather than a code API: a major bump is a `.metacool` the previous version could open and
 this one cannot, or a `#`-hash link that no longer resolves to the same view.
 
-The deployed site at <https://js2264.github.io/chromosomix/> is built from `main` on every push, so
+The deployed site at <https://chromosomix.app/> is built from `main` on every push, so
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
@@ -962,6 +962,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a sequence of its own, last, as the file reads it, selected and framed to be moved into place.
 
 ### Changed
+
+- **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
+  deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
+  the README, the package's `homepage` — which the desktop and single-file builds read the generated
+  stores from — the docs and the publishing scripts name it, and `scripts/publish-demo.sh` adds it to
+  the origins the bucket allows to make signed requests. `docs/deploy.md` lists the four settings
+  outside the repository the move needs — DNS, the Pages custom domain and its certificate, the
+  Google and Dropbox registrations, the bucket's CORS — and the two things it cannot carry: a
+  browser's storage, which stays with the old address, and an installed copy, whose service worker
+  keeps serving its last build there.
 
 - **The DNA Bacterial Zoo is a dev feature (§24.3, §29).** It is published with the multi-genome
   format, when the metacooler project is: with the switch in *About* off, *Connect to a data store*
@@ -2176,6 +2186,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **An archived build survives the site moving (§21).** Every build on the archive branch carries
+  the base it was built for in each asset URL, so the day the site's base changes every one of them,
+  the releases included, would be a blank page at its new address. The deploy now rewrites each
+  archived build and preview whose base is not the site's, once (`scripts/archive-rebase.mjs`, its
+  rules held by `test/unit/archive-base.test.ts`); on every other deploy it finds nothing to do.
+  Run against the thirty builds and one preview on the branch today, it moved all of them to `/`, and
+  each opened there with no failed request.
 
 - **An area is shaded down to zero, not to the bottom of the axis (§18.13).** The mark *area*, and
   *fill under* on a line, filled every series down to the axis's lowest edge, so a profile dipping

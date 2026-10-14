@@ -208,7 +208,7 @@ while IFS="$(printf '\t')" read -r path want; do
   fi
 done < "$EXPECTED"
 
-ranged="$(curl -sSI -H 'Range: bytes=0-1023' -H 'Origin: https://js2264.github.io' \
+ranged="$(curl -sSI -H 'Range: bytes=0-1023' -H 'Origin: https://chromosomix.app' \
   "$BASE/yeast/GSE151553_A364_merged.mcool")"
 if ! grep -qiE '^HTTP/[0-9.]+ 206' <<<"$ranged"; then
   echo "FAIL: ranges ignored on the micro-C map (expected 206)" >&2; bad=1

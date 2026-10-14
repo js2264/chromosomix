@@ -53,11 +53,11 @@ server-side processing or data upload.
 
 ### Use it from a web browser
 
-Go to [`js2264.github.io/chromosomix`](https://js2264.github.io/chromosomix/) to open the viewer in a web browser. The app runs entirely in the browser, with no server-side processing or data upload.
+Go to [`chromosomix.app`](https://chromosomix.app/) to open the viewer in a web browser. The app runs entirely in the browser, with no server-side processing or data upload.
 
 ### Install as a PWA (Progressive Web App)
 
-Go to [`js2264.github.io/chromosomix`](https://js2264.github.io/chromosomix/) and: 
+Go to [`chromosomix.app`](https://chromosomix.app/) and: 
 
 - On **Chrome** or **Edge**: click on the **Install** in the URL bar (far right button). 
 - On **Safari**: click on **Share → Add to Dock**.
@@ -101,7 +101,7 @@ A minimal version of the viewer can be added to any HTML page as an `<iframe>`. 
 
 ```html
 <iframe
-  src="https://js2264.github.io/chromosomix/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+  src="https://chromosomix.app/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
   width="100%"
   height="640"
   loading="lazy"
@@ -115,7 +115,7 @@ Paste it into a page and it works (not rendered here though because GitHub does 
 The text below is a live version of the above `<iframe>` (it will not work on GitHub, but it would work on any HTML page):
 
 <iframe
-  src="https://js2264.github.io/chromosomix/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+  src="https://chromosomix.app/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
   width="100%"
   height="640"
 ></iframe>

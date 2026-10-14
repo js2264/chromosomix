@@ -13,7 +13,7 @@
     "genome-browser",
     "viewer"
   ],
-  "homepage": "https://js2264.github.io/chromosomix/",
+  "homepage": "https://chromosomix.app/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/js2264/chromosomix.git"

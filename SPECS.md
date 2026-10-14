@@ -9352,7 +9352,11 @@ and each is load-bearing:
 - **Every push is archived at `…/v/<commit>/`** (docs/deploy.md) — the last twenty of them, and
   every release for ever, by its tag at `…/v/<tag>/` as well — so an embed can name an immutable
   build and go on rendering the same picture in five years. A figure in a paper should be pinned to
-  a release; the root is for a page that wants the newest.
+  a release; the root is for a page that wants the newest. **The promise outlives the site's
+  address.** An archived build is built once, for the address the site had, with that base in every
+  asset URL; when the base changes — the site's own domain, `chromosomix.app`, puts it at the root —
+  the deploy rewrites each archived build and preview for the new base, once
+  (`scripts/archive-rebase.mjs`), and `…/v/<commit>/` goes on opening the same build there.
 
 The data host needs no new CORS entry per embedding site: a frame's requests carry the **frame's**
 origin, which is the viewer's, so §11's hosting requirements are exactly as they were.

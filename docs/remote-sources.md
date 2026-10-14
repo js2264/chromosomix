@@ -493,9 +493,9 @@ Headers, with an origin so the CORS answer is the browser's:
 
 ```bash
 U=https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/00034edc-e0dc-45b1-b2a1-7db3a13ef869/4DNFIOKRZ21H.mcool
-curl -sSI -H 'Origin: https://js2264.github.io' "$U"
-curl -sS -o /dev/null -D - -H 'Range: bytes=0-1023' -H 'Origin: https://js2264.github.io' "$U"
-curl -sS -o /dev/null -D - -X OPTIONS -H 'Origin: https://js2264.github.io' \
+curl -sSI -H 'Origin: https://chromosomix.app' "$U"
+curl -sS -o /dev/null -D - -H 'Range: bytes=0-1023' -H 'Origin: https://chromosomix.app' "$U"
+curl -sS -o /dev/null -D - -X OPTIONS -H 'Origin: https://chromosomix.app' \
   -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: range' "$U"
 ```
 
