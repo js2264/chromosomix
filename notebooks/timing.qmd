@@ -33,7 +33,8 @@ command list. Then, in the same environment and on a machine left otherwise idle
 QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
 ```
 
-A second render reads the table rather than timing again (`REDO`), unless the command list has changed.
+A second render reads the table rather than timing again (`REDO`), unless the command list, the number
+of runs or the `chromosomix` build has changed.
 
 ```{python}
 from pathlib import Path
@@ -179,12 +180,13 @@ def benchmark():
 
 
 def current():
-    """Whether the table on disk times every command listed, each the same number of times."""
+    """Whether the table on disk times every command listed, each RUNS times, with the chromosomix listed."""
     if REDO or not TIMINGS.exists():
         return False
     held = pd.read_csv(TIMINGS, sep='\t', keep_default_na=False)
-    runs = held.groupby('command')['run'].nunique()
-    return set(held['command']) == {job['name'] for job in JOBS} and (runs == RUNS).all()
+    runs = held.groupby('order')['run'].nunique()
+    return (len(runs) == len(JOBS) and set(held['command']) == {job['name'] for job in JOBS}
+            and (runs == RUNS).all() and set(held['chromosomix']) == {LISTED['chromosomix']})
 
 
 if not current():
@@ -277,7 +279,8 @@ for k, (_, members) in enumerate(per.groupby('analysis', sort=False)):
         ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
 for yi, (_, row) in zip(y, per.iterrows()):
     colour = APP_COLOUR if row['tool'] == 'chromosomix' else REF
-    runs_ = times[times['command'] == row['command']]['cpu_s']
+    # By its place in the list: an analysis may give its chromosomix command and its reference one name.
+    runs_ = times[times['order'] == row['order']]['cpu_s']
     ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
     ax.plot([row['cpu']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
 labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row['variant']})" if row['variant'] else '')
