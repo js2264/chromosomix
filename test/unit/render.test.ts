@@ -26,7 +26,7 @@ import {
   isColormap,
   isDivergingColormap,
 } from '@/render/colormaps'
-import { formatCount, keyContent, keyTitle } from '@/render/legend'
+import { KEY_METRICS, formatCount, keyContent, keyTitle } from '@/render/legend'
 import { rasterize, separatorBlocks } from '@/render/heatmap'
 import {
   Scale,
@@ -505,6 +505,24 @@ describe('the key in the corner of a map', () => {
     )
     expect([key.loLabel, key.hiLabel]).toEqual(['-1', '1'])
     expect(key.loColor).not.toBe(key.hiColor)
+  })
+
+  /**
+   * The ramp between the two numbers, sampled from the ends: a default map runs
+   * white, yellow, red, black, and two squares said only which two of the four
+   * the ends are.
+   */
+  it('samples the ramp from one end to the other, one stop per pixel of the bar', () => {
+    const key = keyContent(
+      { vmin: 0, vmax: 8, transform: 'log1p', colormap: 'default' },
+      'Count (log1p)',
+      (v) => String(v),
+    )
+    expect(key.ramp).toHaveLength(KEY_METRICS.ramp)
+    expect(key.ramp[0]).toBe(key.loColor)
+    expect(key.ramp.at(-1)).toBe(key.hiColor)
+    // More than two colours in it: the middle is not either end.
+    expect(new Set(key.ramp).size).toBeGreaterThan(8)
   })
 
   /** `NaN` is how a `ColorScale` asks for the default; it must not be printed. */

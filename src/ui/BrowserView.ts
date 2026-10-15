@@ -227,7 +227,6 @@ import {
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
-  readPageBackground,
   scaleForDpi,
   type ExportFormat,
 } from './export'
@@ -250,7 +249,7 @@ import {
 } from '../render/heatmap'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { laneMenuFeature, openLaneMenu } from './laneMenu'
-import { readCanvasPalette } from './canvasPalette'
+import { FIGURE_BACKGROUND, readCanvasPalette } from './canvasPalette'
 import type { DeckExport } from './MatrixPanel'
 import { marksMenu } from './marksMenu'
 import { openMenu } from './Menu'
@@ -3008,7 +3007,7 @@ export class BrowserView {
     this.paintLane(ctx, lane, this.groupRanges(), readCanvasPalette(this.canvas), true)
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = readPageBackground()
+    ctx.fillStyle = FIGURE_BACKGROUND
     ctx.fillRect(0, 0, out.width, out.height)
     ctx.globalCompositeOperation = 'source-over'
     return out

@@ -153,7 +153,7 @@ import {
   spanOnAxis,
   toDense,
 } from './blockAxes'
-import { readCanvasPalette, readPageText } from './canvasPalette'
+import { FIGURE_BACKGROUND, readCanvasPalette, readPageText } from './canvasPalette'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
@@ -191,7 +191,6 @@ import {
   captionStamp,
   copyPicture,
   copyTextToClipboard,
-  readPageBackground,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
 import { marksMenu } from './marksMenu'
@@ -3156,7 +3155,7 @@ export class MatrixPanel {
           title:
             'The map as it is drawn here — the cells alone, with no axis, key, frame or pointer — ' +
             'onto the clipboard as a PNG, at the screen’s resolution',
-          run: () => copyPicture('map', this.heatmap.dataImage(readPageBackground())),
+          run: () => copyPicture('map', this.heatmap.dataImage(FIGURE_BACKGROUND)),
         },
       ]
       const context = this.options.annotations
@@ -4622,7 +4621,7 @@ export class MatrixPanel {
     const style = {
       font: 'system-ui, sans-serif',
       textColor: readPageText(this.canvas),
-      background: readPageBackground(),
+      background: FIGURE_BACKGROUND,
       borderColor: palette.labelColor,
     }
     const right = origin.x + plot.x + plot.width - KEY_INSET

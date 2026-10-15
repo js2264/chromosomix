@@ -32,7 +32,8 @@ import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import type { AnnotationLanes, LaneEdge, LaneGeometry } from './AnnotationLanes'
 import { filesFrom } from './chooseFiles'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasOverlay, dragHasTrack, dropEffectFor, el } from './dom'
-import { copyPicture, readPageBackground } from './export'
+import { FIGURE_BACKGROUND } from './canvasPalette'
+import { copyPicture } from './export'
 import { openFeatureDialog } from './FeatureDialog'
 import { dragHasFileRow } from './fileDrag'
 import { HOVER_SOURCE_MAP, setHoverPlace } from './hoverLocus'
@@ -1164,7 +1165,7 @@ export class LaneGestures {
           : laneMenuFeature(found.set, found.index, { open: () => this.openFeature(found) })
       // The lane under the pointer, alone, as this stack draws it (§7.2).
       const copy = (): void =>
-        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.host.laneGeometry(), readPageBackground()))
+        copyPicture('track', lanes.laneImage(edge, hit.entry.id, this.host.laneGeometry(), FIGURE_BACKGROUND))
       openLaneMenu(
         event.clientX,
         event.clientY,

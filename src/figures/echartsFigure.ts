@@ -28,6 +28,7 @@
 
 import type { ECharts } from 'echarts/core'
 
+import { figurePaper } from '../ui/canvasPalette'
 import { el } from '../ui/dom'
 import { plotTheme, type PlotFigure } from '../ui/analysisPlots'
 import { subscribeTextScale } from '../ui/textScale'
@@ -179,10 +180,10 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
    * `width`/`height` because an export is drawn at the page's size, not the
    * screen's.
    */
-  const build = (box: { width: number; height: number }): ChartOption =>
+  const build = (box: { width: number; height: number }, on: HTMLElement = host): ChartOption =>
     options.spec.kind === 'matrix'
-      ? matrixOptionOf(options.spec.output, style, themeOf(host), box)
-      : optionOf(options.spec, style, themeOf(host))
+      ? matrixOptionOf(options.spec.output, style, themeOf(on), box)
+      : optionOf(options.spec, style, themeOf(on))
 
   /** How tall the picture is: the box's height, or one chosen from the width. */
   const tall = (): number => (fill ? host.clientHeight : chartHeight(width))
@@ -379,7 +380,8 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
         height: box.height,
       })
       try {
-        off.setOption(paperOption(build(box)), true)
+        // On paper, whatever the theme where the chart is mounted (§7.2).
+        off.setOption(paperOption(build(box, figurePaper())), true)
         paintSvgString(off.renderToSVGString(), ctx, box)
       } finally {
         off.dispose()

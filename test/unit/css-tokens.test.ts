@@ -67,15 +67,16 @@ const SET_FROM_SCRIPT = [
 ] as const
 
 /**
- * The light palette's selector, which four elements share.
+ * The light palette's selector, which the elements that stay light share.
  *
  * `.content` is in it only *while it holds a picture*: the pin is what keeps a
  * contact map light whatever the theme, and it used to cover every view mounted
  * in the centre column — the landing page, the tables, the gate — which left a
- * dark-mode reader a white sheet inside a dark frame.
+ * dark-mode reader a white sheet inside a dark frame. `.figure-paper` is the
+ * hidden node every export reads its ink from (§7.2).
  */
 const LIGHT =
-  ":root,\n:root[data-theme='light'],\n.content:has(.heatmap-wrap, .browser-stage, .deck-grid),\n.analysis-figure,\n.figure-chart"
+  ":root,\n:root[data-theme='light'],\n.content:has(.heatmap-wrap, .browser-stage, .deck-grid),\n.analysis-figure,\n.figure-chart,\n.figure-paper"
 
 /** Every `--name` the sheet defines, anywhere in it. */
 function defined(): Set<string> {

@@ -40,6 +40,7 @@ import {
   isColormap,
 } from '../render/colormaps'
 import { cellText } from '../figures/tableFigure'
+import { figurePaper } from './canvasPalette'
 import { el, fmt, trimNumber } from './dom'
 import { axisNumber, resolutionLabel } from '../units'
 import { scaleFont, subscribeTextScale } from './textScale'
@@ -1802,7 +1803,8 @@ function canvasFigure<T>(
   return {
     el: host,
     draw(ctx: CanvasRenderingContext2D, box: { width: number; height: number }): void {
-      paint(ctx, box, plotTheme(host))
+      // On paper, whatever the theme where the figure is mounted (§7.2).
+      paint(ctx, box, plotTheme(figurePaper()))
     },
     setFill(on: boolean): void {
       if (fill === on) return

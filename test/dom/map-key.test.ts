@@ -142,6 +142,7 @@ const CONTENT = {
   hiLabel: '16',
   loColor: '#000',
   hiColor: '#fff',
+  ramp: ['#000', '#888', '#fff'],
 }
 
 describe('the key in the corner of the map', () => {
@@ -154,6 +155,18 @@ describe('the key in the corner of the map', () => {
     expect(key.el.querySelector('.map-key-note')?.classList.contains('hidden')).toBe(false)
     expect(key.el.querySelector('.is-lo')?.textContent).toBe('0.125')
     expect(key.el.querySelector('.is-hi')?.textContent).toBe('16')
+  })
+
+  it('draws the ramp between the two numbers, through every stop', () => {
+    const key = new MapKey()
+    document.body.appendChild(key.el)
+    key.set(CONTENT)
+    const row = [...(key.el.querySelector('.map-key-row')?.children ?? [])].map((node) => node.className)
+    expect(row).toEqual(['map-key-value is-lo', 'map-key-ramp', 'map-key-value is-hi'])
+    const ramp = key.el.querySelector<HTMLElement>('.map-key-ramp')
+    expect(ramp?.getAttribute('style')).toContain('linear-gradient')
+    expect(ramp?.style.background.replace(/\s+/g, '')).toContain('rgb(136,136,136)')
+    expect(key.el.querySelector('.map-key-swatch')).toBeNull()
   })
 
   it('hides the second line rather than keeping a blank one', () => {

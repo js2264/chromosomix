@@ -30,6 +30,7 @@ import {
 import { formatLocus, formatPosition } from '../genome/assembly'
 import { fmt } from '../units'
 import { MIN_FIGURE_WIDTH, plotTheme, watchTheme, type PlotFigure, type PlotTheme } from './analysisPlots'
+import { figurePaper } from './canvasPalette'
 import { el } from './dom'
 import { subscribeTextScale } from './textScale'
 
@@ -529,8 +530,9 @@ export function dotplotFigure(streaks: DotplotStreaks): PlotFigure {
   return {
     el: host,
     draw(ctx: CanvasRenderingContext2D, box: { width: number; height: number }): void {
-      // What an export draws is the window on screen, without the pointer's light.
-      drawDotplot(ctx, picture, box, plotTheme(host), view)
+      // What an export draws is the window on screen, without the pointer's
+      // light, on paper whatever the theme where it is mounted (§7.2).
+      drawDotplot(ctx, picture, box, plotTheme(figurePaper()), view)
     },
     setFill(on: boolean): void {
       if (fill === on) return

@@ -1896,7 +1896,12 @@ URL carries `vmin` and `vmax` independently, in transformed units, and their abs
 The key in the map's top-right corner prints the same two numbers, the boxes' own, under the score's
 name with the transform on it, and each is a button: pressed, it takes a typed bound in place, and
 emptied it hands that bound back to auto. A change of transform hands both back, since a bound is a
-number in the old transform's units.
+number in the old transform's units. **Between the two numbers is the ramp they run between**, short
+— 48 by 10 pixels — and drawn through the colormap's own colours: on screen a gradient, in a figure
+one band a pixel, since a PDF page here has no linear gradient. For a while it was two squares, the
+ramp's ends, on the argument that the colours between them were the picture's to show rather than
+the legend's; on a ramp that is not a line they are not — the default runs white, yellow, red, black,
+and which of the four a cell halfway up is was the one thing two squares could not say.
 
 **Both unit systems on that row are named**, because both are on screen at once: the boxes are in
 transformed units, so the row is labelled `clip (log10)` from the transform in force, and the line
@@ -2050,6 +2055,17 @@ looked at, not whether the reader likes shading). The app opens on its own overl
 renderer's, which are `metacooler show`'s: the crosshair and `outline` on, the dividers and the
 block labels off (`ui/plotOptions.ts`).
 
+**Everything that leaves the app is on white, in either theme.** A map's PNG and PDF, a deck's, the
+1D browser's, a task's figure, a model's and every *Copy this* are laid on white and written in the
+light palette's ink, whatever the reader is looking at the app in: the dark theme is a way of
+looking at the app, not at the figure. The centre column already wears the light palette in either
+theme; what did not was the ground, which was the page's own colour read off the root — so in the
+dark theme a map's PNG came out on near-black under ink chosen for white, its exported key a dark
+box of near-black text — and a task's figure enlarged into the stage dialog, which follows the theme,
+and exported from there. The ground is one white (`FIGURE_BACKGROUND`), and a figure is redrawn for
+its export from a hidden node pinned to the light palette (`figurePaper`) rather than from wherever
+it is mounted.
+
 **The figure saves as PNG at a chosen DPI, or as PDF.** It is re-rendered through the same drawing
 code rather than screen-grabbed — the PNG at that resolution — so the labels and hairlines are drawn
 rather than enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one
@@ -2122,8 +2138,8 @@ pointer; the **lane** alone, the strip of its stack or of the browser it is draw
 or range, no handle, no name column, no hairline and no mark carried off the map — a gene's name
 under its body is the track's own and stays, as the overlays switch has it; the **model** as the
 renderer draws it, its names on it as the overlays have them, with no centre of rotation, key,
-buttons or frame. The page's colour goes under the ink, so a cell or a stretch the data leaves clear
-pastes as the page rather than as a hole. The Export card's copy is a *figure* — labelled,
+buttons or frame. White goes under the ink, so a cell or a stretch the data leaves clear pastes as
+paper rather than as a hole — white in the dark theme too, as every export is. The Export card's copy is a *figure* — labelled,
 captioned, at the card's resolution — and this is the object, for a reader assembling a figure of
 their own in another program. Each is drawn by the same pass the screen is, stopped before
 everything round the data, rather than cut out of the screen's canvas, which carries all of that
@@ -6020,8 +6036,8 @@ paths and text; the tracks, the browser as lead and a model paths and text throu
 composition lays both out (`panels/deckFigure.ts`) — every cell the size of the largest, the same
 air between — so the two files cannot disagree about where a cell stands; the PNG rasterises each
 cell and places it, the page places each cell's own drawing. The deck adds nothing of its own but the
-page under them: each cell carries its own caption, key and frame, as on screen, and an empty cell
-stays empty. The PDF used to be the PNG on a page, so six panels' axes and track names left as
+page under them, which is white in either theme (§7.2): each cell carries its own caption, key and
+frame, as on screen, and an empty cell stays empty. The PDF used to be the PNG on a page, so six panels' axes and track names left as
 pixels in the one file meant to be a drawing. A PDF's file name carries no resolution; a PNG's
 does.
 

@@ -1,5 +1,6 @@
 /**
- * The key in the corner of a map, as DOM: a title, two swatches, two numbers.
+ * The key in the corner of a map, as DOM: a title, two numbers and the ramp
+ * between them.
  *
  * DOM and not a canvas, and the two numbers are why. A colourbar's ticks are a
  * picture of a scale; these are the *bounds the reader set*, and a reader who
@@ -32,8 +33,7 @@ export class MapKey {
   private readonly noteEl = el('span', { class: 'map-key-note' })
   private readonly loEl: HTMLElement
   private readonly hiEl: HTMLElement
-  private readonly loSwatch = el('span', { class: 'map-key-swatch' })
-  private readonly hiSwatch = el('span', { class: 'map-key-swatch' })
+  private readonly rampEl = el('span', { class: 'map-key-ramp', attrs: { 'aria-hidden': 'true' } })
   private content: KeyContent | null = null
 
   constructor(private readonly props: MapKeyProps = {}) {
@@ -48,7 +48,7 @@ export class MapKey {
         'div',
         { class: 'map-key-row' },
         this.loEl,
-        el('span', { class: 'map-key-ramp' }, this.loSwatch, this.hiSwatch),
+        this.rampEl,
         this.hiEl,
       ),
     )
@@ -64,8 +64,8 @@ export class MapKey {
     // Hidden rather than emptied, so the key does not keep a blank line's worth
     // of height on a block that has no resolution to report.
     this.noteEl.classList.toggle('hidden', note === '')
-    this.loSwatch.style.background = content.loColor
-    this.hiSwatch.style.background = content.hiColor
+    const stops = content.ramp.length > 1 ? content.ramp : [content.loColor, content.hiColor]
+    this.rampEl.style.background = `linear-gradient(to right, ${stops.join(', ')})`
     // Not while a caret is in it: the panel repaints on every frame of a drag
     // over the map, and rewriting the box under a reader mid-number is the one
     // way an editable legend is worse than a printed one.

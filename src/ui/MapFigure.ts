@@ -19,7 +19,7 @@
 import type { CellFigure } from '../panels/deckFigure'
 import type { HeatmapView } from '../render/heatmap'
 import type { AnnotationLanes, LaneEdge, LaneGeometry } from './AnnotationLanes'
-import { readCanvasPalette } from './canvasPalette'
+import { FIGURE_BACKGROUND, readCanvasPalette } from './canvasPalette'
 import { KEYS, withKey } from './commands'
 import { el, fmt } from './dom'
 import {
@@ -32,7 +32,6 @@ import {
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
-  readPageBackground,
   scaleForDpi,
 } from './export'
 import { captionField, getExportPrefs } from './exportPrefs'
@@ -352,15 +351,13 @@ export class MapFigure {
 
     this.paintFigure(ctx, scale, frame)
 
-    // Opaque, and in the theme on screen. A transparent PNG of a white-on-white
-    // contact map is a blank rectangle in every viewer that composites onto
-    // black, and the labels are drawn in the page's own text colour. Painted
-    // *behind* what is already there — the plot cleared its own box — and
-    // `#ffffff` first, so an unreadable custom property leaves a white page
-    // rather than a black one.
+    // Opaque, and white whatever the theme on screen (§7.2). A transparent PNG
+    // of a white-on-white contact map is a blank rectangle in every viewer
+    // that composites onto black, and the ink is the light palette's — the
+    // centre column wears it in either theme. Painted *behind* what is
+    // already there, since the plot cleared its own box.
     ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = '#ffffff'
-    ctx.fillStyle = readPageBackground()
+    ctx.fillStyle = FIGURE_BACKGROUND
     ctx.fillRect(0, 0, out.width, out.height)
     ctx.globalCompositeOperation = 'source-over'
     return out
@@ -391,7 +388,7 @@ export class MapFigure {
    */
   private drawVector(ctx: CanvasRenderingContext2D, frame: FigureFrame): void {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.fillStyle = readPageBackground()
+    ctx.fillStyle = FIGURE_BACKGROUND
     ctx.fillRect(0, 0, frame.width, frame.height)
     this.paintFigure(ctx, 1, frame)
   }

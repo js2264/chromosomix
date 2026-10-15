@@ -17,7 +17,9 @@
  * explicit choice; `.content` and `.analysis-figure` are the two boxes that
  * stay light while the furniture around them goes dark, each for a reason
  * stated where it is defined — a centre column is a figure, and so is a plot
- * that will be exported as one.
+ * that will be exported as one. `.figure-paper` is no box at all: one hidden
+ * node every export reads its ink from (`ui/canvasPalette.ts`), so a figure
+ * leaves the app on white whichever theme it was looked at in.
  *
  * One selector list rather than four copies, because it was four copies and
  * that already cost something: `--tab-rest` was added to the two `:root`
@@ -38,7 +40,8 @@
 :root[data-theme='light'],
 .content:has(.heatmap-wrap, .browser-stage, .deck-grid),
 .analysis-figure,
-.figure-chart {
+.figure-chart,
+.figure-paper {
   --bg: #ffffff;
   --bg-sunken: #f5f6f8;
   --bg-raised: #ffffff;
@@ -230,6 +233,16 @@
   --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 1px rgb(0 0 0 / 28%);
   --shadow-2: 0 8px 22px -10px rgb(0 0 0 / 66%), 0 2px 6px -3px rgb(0 0 0 / 44%);
   --shadow-up: 0 -8px 22px -10px rgb(0 0 0 / 66%), 0 -2px 6px -3px rgb(0 0 0 / 44%);
+}
+
+/* The paper an export reads its colours from, and never seen. */
+.figure-paper {
+  position: fixed;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 * {
@@ -4251,21 +4264,15 @@ canvas.is-frozen {
   font-family: var(--mono);
 }
 
-/* Two squares, which is the whole ramp a two-number key needs: the gradient
-   between them was never information a reader takes out of the legend rather
-   than out of the picture. Set apart rather than butted together — touching,
-   the pair reads as one two-toned block and the eye has to find the seam before
-   it can tell which end is which. */
+/* The ramp, short and between the two numbers it runs from and to: the two
+   squares it was for a while said which colour each end is and nothing about
+   the four a default map passes through on the way. `KEY_METRICS` in
+   `render/legend.ts` holds the same 48 × 10, which the export draws. */
 .map-key-ramp {
-  display: flex;
-  gap: 3px;
-  flex: 0 0 auto;
-}
-
-.map-key-swatch {
   display: block;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 10px;
   border: 1px solid var(--border);
 }
 

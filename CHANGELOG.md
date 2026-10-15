@@ -994,6 +994,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The key has its ramp back, short, between its two numbers (§7.1).** `-4.18 ▬ -1.05`: a bar 48
+  pixels long drawn through the colormap, as a gradient on screen and band by band in a PNG and a
+  PDF, where the key had two squares for the ramp's two ends. On the default ramp, which runs white,
+  yellow, red and black, the two ends could not say which of the four a cell halfway up is.
+
 - **The lines between chromosomes are a little heavier (§7.1).** The dividers (`d`) were drawn at
   `metacooler show`'s 0.5 and 1 or one device pixel, whichever was larger — half a pixel on a 2×
   screen, a hairline in a 300 dpi PNG and, inconsistently, a whole one in the PDF. They are now 1.5
@@ -2274,6 +2279,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Every export is on white in the dark theme too (§7.2, §16.5).** A map's PNG and PDF, a deck's,
+  a copied map, lane or track, and the box behind an exported key were laid on the page's own colour,
+  so in the dark theme they came out on near-black under ink chosen for white; and a task's figure
+  enlarged into the stage dialog, which follows the theme, exported dark from there. Every picture
+  that leaves the app is now laid on white and redrawn in the light palette's ink, wherever the figure
+  was mounted when the button was pressed.
 
 - **Split after a ratio is drawn on the counts' own scale again (§7.5).** A ratio takes the
   transform, the ramp and the clip — `log2` and the diverging ramp — and was to give them back when

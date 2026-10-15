@@ -76,9 +76,9 @@ import {
   copyPngToClipboard,
   chooseSaveTarget,
   fileStamp,
-  readPageBackground,
   type ExportFormat,
 } from '../ui/export'
+import { FIGURE_BACKGROUND } from '../ui/canvasPalette'
 import { KEYS, withKey } from '../ui/commands'
 import { cardTitle, icon, iconButton, setPressed } from '../ui/icons'
 import type { PickedFile } from '../browse/folder'
@@ -3950,12 +3950,12 @@ export class PanelDeck {
     if (target === null) return
     const figures = this.deckFigures(now)
     if (format === 'pdf') {
-      const page = vectorDeck(figures, this.columnsNow(), readPageBackground())
+      const page = vectorDeck(figures, this.columnsNow(), FIGURE_BACKGROUND)
       const blob = await page.toBlob({ title: 'deck', created: now })
       await target.write(blob)
       return
     }
-    const out = rasterDeck(figures, this.columnsNow(), readPageBackground(), dpi)
+    const out = rasterDeck(figures, this.columnsNow(), FIGURE_BACKGROUND, dpi)
     if (out === null) return
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (blob === null) return
@@ -4227,7 +4227,7 @@ export class PanelDeck {
    * a PDF pasted into a slide arrives as a file attachment instead of a picture.
    */
   async copyDeck(dpi = DECK_EXPORT_DPI): Promise<void> {
-    const out = rasterDeck(this.deckFigures(new Date()), this.columnsNow(), readPageBackground(), dpi)
+    const out = rasterDeck(this.deckFigures(new Date()), this.columnsNow(), FIGURE_BACKGROUND, dpi)
     if (out === null) return
     try {
       await copyPngToClipboard(canvasToPng(out))
