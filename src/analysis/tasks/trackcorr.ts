@@ -90,11 +90,17 @@ function estimate(_context: AnalysisContext, params: Params): CostEstimate {
       refusal: 'Choose at least two tracks to correlate.',
     }
   }
+  // **Every track read whole, at its own resolution**, because a window's value
+  // is the mean over the bases it covers and a zoom level's records are means
+  // over spans of their own (`run/trackcorr.ts`). What that costs depends on the
+  // files rather than on the windows, so it is said rather than counted.
   return {
-    class: 'bounded',
+    class: 'scan',
     requests: null,
     bytes: null,
-    note: `No matrix reads: ${tracks} tracks sampled in the annotations worker, one batch each.`,
+    note:
+      `No matrix reads: ${tracks} tracks, each read at its own resolution a megabase at a time, ` +
+      (params.over === 'features' ? 'over every feature' : 'for the exact mean of every window'),
   }
 }
 
@@ -104,7 +110,9 @@ export const TRACK_CORRELATION_TASK: AnalysisTask = {
   blurb: 'How much every pair of loaded tracks agrees.',
   group: '1d',
   venue: 'annotations',
-  version: 1,
+  // 2: a window's value is the exact mean over the bases it covers, where it was
+  // a zoom level's records weighted by their whole width.
+  version: 2,
   // No map required, for the reason `overlap.ts` gives.
   availability: (context) => {
     const tracks = context.entries.filter((entry) => entry.kind === 'track').length

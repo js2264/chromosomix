@@ -94,6 +94,23 @@ export function minDiagOf(params: Params): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : MIN_DIAG_DEFAULT
 }
 
+/**
+ * The nearest a loop may be to the diagonal and still be piled up, in bins, when
+ * nobody has said: coolpuppy's `mindist='auto'`, which is twice the flank and two
+ * bins. That is exactly the separation at which a window stops reaching the two
+ * diagonals {@link MIN_DIAG_DEFAULT} leaves out, so at both defaults no window
+ * of a loop set has a gap cut in it.
+ */
+export function autoMinDist(params: Params): number {
+  return 2 * windowBins(params) + 2
+}
+
+/** The nearest loop piled up, in bins: as typed, or {@link autoMinDist}. */
+export function minDistOf(params: Params): number {
+  const value = params.minDist
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : autoMinDist(params)
+}
+
 /** The flank a scaled window carries each side, as a fraction of its body. */
 export function flankFractionOf(params: Params): number {
   const value = typeof params.flankFraction === 'number' ? params.flankFraction : 0.5
@@ -463,6 +480,28 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
+  // **The nearest loop, coolpuppy's `mindist`**, and its default is coolpuppy's:
+  // twice the half-width and two, so it follows the half-width until somebody
+  // types a number (`NumberParam.seed`), and a shell, which has no form, leaves
+  // it to the runner to work out the same way. A loop set only, and the fixed
+  // mode only: *every pair* has a separation range of its own just below, and a
+  // scaled window is a fraction of its separation, which never reaches the
+  // diagonal. Measured between the two anchors' centres, in base pairs against
+  // this many bins of the file, which is how coolpuppy measures it.
+  {
+    kind: 'number',
+    key: 'minDist',
+    label: 'nearest loop',
+    hint: 'Loops nearer the diagonal are left out; twice the half-width and two by default, as in coolpuppy.',
+    default: 2 * 21 + 2,
+    seed: (_context, params) => autoMinDist(params),
+    seedNote: 'twice --window, and 2',
+    min: 0,
+    integer: true,
+    unit: 'bins',
+    when: (params) => usesPairSet(params) && !isScaled(params) && params.norm !== 'chromosight',
+    section: 'Separation',
+  },
   // **The range two features may be apart is a range of bin offsets**, which is
   // what the pileup itself is a picture of: a pair's separation is `col − row`,
   // the split-by-separation bands are bin offsets, and the near-diagonal a pair
@@ -785,7 +824,9 @@ export const APA_TASK: AnalysisTask = {
   blurb: 'Pile up the matrix at a set of loops or features, against a control.',
   group: '2d',
   venue: 'analysis',
-  version: 2,
+  // 3: windows cut as coolpuppy cuts them, observed / expected divided window by
+  // window over the sequence's own expected, and the nearest loop (§18.8).
+  version: 3,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as
   // needing it. `requires` is static and the runner resolves it before every
   // run, so declaring it would compute a whole-file P(s) on every APA — while

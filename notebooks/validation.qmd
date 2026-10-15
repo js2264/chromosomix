@@ -1,6 +1,6 @@
 ---
 title: "chromosomix against reference implementations"
-subtitle: "Seventeen analyses on public data, each run by chromosomix and by the package it reproduces"
+subtitle: "Eighteen analyses on public data, each run by chromosomix and by the package it reproduces"
 format:
   html:
     toc: true
@@ -39,6 +39,7 @@ as it ran, from `notebooks/work/validation/`, and written to `commands.json` the
 | 15 | Interval overlap | ATAC-seq peaks and promoters, chr19 | bedtools `jaccard`, `intersect`, `shuffle` |
 | 16 | Base composition | mm10, 10 kb | `bioframe.frac_gc`, Biopython `GC_skew` |
 | 17 | Motif search | mm10, chr19 | `seqkit locate` |
+| 18 | Track correlation | six yeast tracks, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
 
 **To render.** `npm run build:cli` at the repository root builds this checkout's `chromosomix`.
 yapc needs an environment of its own (numpy < 1.24; the recipe is in the yapc section of
@@ -86,6 +87,7 @@ BOOSTHIC_DIR = Path(BOOSTHIC_DIR) if Path(BOOSTHIC_DIR).is_absolute() else (REPO
 ```
 
 ```{python}
+import hashlib
 import html
 import json
 import re
@@ -122,14 +124,16 @@ def tool(name):
 
 
 CHROMOSIGHT, COMPUTEMATRIX, PLOTPROFILE = tool('chromosight'), tool('computeMatrix'), tool('plotProfile')
+MULTIBIGWIGSUMMARY, PLOTCORRELATION = tool('multiBigwigSummary'), tool('plotCorrelation')
 BEDTOOLS, SEQKIT = tool('bedtools'), tool('seqkit')
 #: What a reference's command runs with besides this process's environment.
 YAPC_ENV = {'PATH': f'{YAPC_PYTHON.parent}{os.pathsep}{os.environ["PATH"]}'}
 BOOSTHIC_ENV = {'BOOSTHIC_DIR': str(BOOSTHIC_DIR)}
 
 
-def fetch(url, name=None):
-    """A public file, fetched once into work/validation/data."""
+def fetch(url, name=None, md5=None):
+    """A public file, fetched once into work/validation/data, and held to `md5` where there is one: a
+    file of that name from anywhere else is refused rather than compared."""
     path = DATA / (name or urllib.parse.unquote(url.rsplit('/', 1)[-1]))
     if not path.exists():
         print('fetching', url)
@@ -137,6 +141,14 @@ def fetch(url, name=None):
         with urllib.request.urlopen(url) as response, open(part, 'wb') as out:
             shutil.copyfileobj(response, out, 1 << 22)
         part.rename(path)
+    if md5 is not None:
+        digest = hashlib.md5()
+        with open(path, 'rb') as handle:
+            for block in iter(lambda: handle.read(1 << 22), b''):
+                digest.update(block)
+        if digest.hexdigest() != md5:
+            raise ValueError(f'{path} is not {url}: its MD5 is {digest.hexdigest()}, not {md5}. '
+                             'Delete it, and it is fetched again.')
     return path
 
 
@@ -154,7 +166,8 @@ def arg(value):
 def typed(argv):
     """A command as a reader would type it: each tool by its installed name."""
     names = {PYTHON: 'python', str(YAPC_PYTHON): 'yapc-env/bin/python', CHROMOSIGHT: 'chromosight',
-             COMPUTEMATRIX: 'computeMatrix', PLOTPROFILE: 'plotProfile', SEQKIT: 'seqkit'}
+             COMPUTEMATRIX: 'computeMatrix', PLOTPROFILE: 'plotProfile', SEQKIT: 'seqkit',
+             MULTIBIGWIGSUMMARY: 'multiBigwigSummary', PLOTCORRELATION: 'plotCorrelation'}
     if argv[:2] == ['node', str(CLI)]:
         argv = ['chromosomix', *argv[2:]]
     return shlex.join([names.get(a, a) for a in argv])
@@ -164,6 +177,8 @@ def typed(argv):
 APP, REFS, NOTES = {}, {}, {}
 #: Where a reference writes, in its command; it may be the start of a longer argument.
 OUT = '<out>'
+#: What each reference last ran, by name: its command and its scripts' content.
+STAMPS = WORK / '.stamps'
 
 
 def mr(task, *args, out, name, analysis, label='', group=None, bench=True):
@@ -219,11 +234,22 @@ def reference(name, analysis, tool_, argv, out, made=None, env=None, label='', g
                       argv=argv, out=out, env=env, bench=bench, threads=threads, shown=typed(real),
                       scripts=[a for a in argv if a.endswith('.py')])
     print('$', typed(real))
-    if REDO or not Path(made or out).exists():
+    # Run again when the command or a script it runs has changed since it ran, which its stamp says;
+    # a result from before there were stamps is kept unless one of its scripts is newer than it.
+    target, ran = Path(made or out), STAMPS / f'{name}.command'
+    scripts = [(WORK / s).resolve() for s in REFS[name]['scripts']]
+    stamp = f"{typed(real)}\n# scripts {hashlib.sha256(b''.join(s.read_bytes() for s in scripts)).hexdigest()[:16]}\n"
+    if ran.exists():
+        stale = ran.read_text() != stamp
+    else:
+        stale = target.exists() and any(s.stat().st_mtime > target.stat().st_mtime for s in scripts)
+    if REDO or stale or not target.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         run = subprocess.run(real, capture_output=True, text=True, cwd=WORK, env=environment(env))
         if run.returncode:
             raise RuntimeError(run.stderr[-4000:])
+    STAMPS.mkdir(parents=True, exist_ok=True)
+    ran.write_text(stamp)
     return out
 
 
@@ -337,16 +363,19 @@ def record(task, data, reference_, agreement_, verdict, apps, refs):
 Every file is public, read by its accession and fetched from the URL listed. 4DN files come from the
 4DN Data Portal's open-data bucket on AWS; the mm10 sequence, used to phase compartments by GC
 content and read for composition and motifs, and the RefSeq genes, for the metaplot's TSS and the
-promoters, are UCSC's as distributed by Illumina iGenomes.
+promoters, are UCSC's as distributed by Illumina iGenomes. The yeast Micro-C map is GEO's
+GSE151553 as the lab keeps it in its public `rsglab-data` bucket on AWS, where its MD5 is checked
+against the bucket's own, and so are the yeast tracks the track correlation reads.
 
 ```{python}
 FOURDN = 'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput'
 IGENOMES = 'https://ngi-igenomes.s3.amazonaws.com/igenomes/Mus_musculus/UCSC/mm10'
+RSGLAB = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo'
 DATASETS = [
     dict(data='Mouse Hi-C (mm10)', accession='4DNFIOZ1TRUS', source='4DN',
          url=f'{FOURDN}/727b405d-c9f5-4b13-ae58-1dbf29d19a8f/4DNFIOZ1TRUS.mcool'),
-    dict(data='Yeast Micro-C, G2/M (Costantino et al. 2020)', accession='GSE151553', source='GEO',
-         url='https://ftp.ncbi.nlm.nih.gov/geo/series/GSE151nnn/GSE151553/suppl/GSE151553_A364_merged.mcool'),
+    dict(data='Yeast Micro-C, G2/M (Costantino et al. 2020)', accession='GSE151553', source='GEO, rsglab-data copy',
+         url=f'{RSGLAB}/store/GSE151553_A364_merged.mcool', md5='319a04a8d7e41d9eb88e2378ea3ea373'),
     dict(data='Chicken Hi-C (galGal5)', accession='4DNFIH8L6WON', source='4DN',
          url=f'{FOURDN}/4e321fa9-1abe-48e6-9920-bcf88ee3b8ce/4DNFIH8L6WON.mcool'),
     dict(data='Chicken Hi-C (galGal5)', accession='4DNFITBCUX56', source='4DN',
@@ -361,8 +390,17 @@ DATASETS = [
          url=f'{IGENOMES}/Sequence/WholeGenomeFasta/genome.fa'),
     dict(data='Mouse RefSeq genes (Illumina iGenomes copy)', accession='refGene', source='UCSC mm10',
          name='mm10.genes.gtf', url=f'{IGENOMES}/Annotation/Genes/genes.gtf'),
+    *[dict(data=f'Yeast {what} (the lab’s demo set)', accession=f'Yeast_{key}', source='rsglab-data',
+           url=f'{RSGLAB}/yeast/{name}', md5=md5)
+      for key, what, name, md5 in (
+          ('ATAC', 'ATAC-seq', 'Yeast_ATAC.bw', '6c38d218b47bf8e8114f2040d833eef4'),
+          ('Pol2', 'Pol II ChIP-seq over input', 'Yeast_ChIP_Pol2-vs-input.bw', 'd2a52faa8977fcc90e1936a890fac259'),
+          ('MNase', 'MNase-seq', 'Yeast_MNase.bw', 'aec50292e928826b8fdb6290027057a8'),
+          ('RNA_fwd', 'RNA-seq, forward strand', 'Yeast_RNA_fwd.bw', '9c144ba54a4a41b5471c2002e3cc0328'),
+          ('RNA_rev', 'RNA-seq, reverse strand', 'Yeast_RNA_rev.bw', 'ea05680a7310f82965233668b3716577'),
+          ('Shotgun', 'shotgun DNA-seq coverage', 'Yeast_Shotgun.bw', '57b21d59525bce7c9ede1b4c451189d9'))],
 ]
-PATHS = {d['accession']: fetch(d['url'], d.get('name')) for d in DATASETS}
+PATHS = {d['accession']: fetch(d['url'], d.get('name'), d.get('md5')) for d in DATASETS}
 MOUSE, YEAST, MM10, GENES = PATHS['4DNFIOZ1TRUS'], PATHS['GSE151553'], PATHS['mm10'], PATHS['refGene']
 CHICKEN = [PATHS[a] for a in ('4DNFIH8L6WON', '4DNFITBCUX56', '4DNFIIML46E5')]
 ATAC = [PATHS[a] for a in ('4DNFIIY4QW2D', '4DNFITBRHVZE')]
@@ -401,7 +439,7 @@ APP_VERSION = f"{json.loads((REPO / 'package.json').read_text())['version']} at 
 YAPC, IDR, YAPC_NUMPY = yapc_versions()
 VERSIONS = {name: version(name) for name in (
     'cooler', 'cooltools', 'bioframe', 'chromosight', 'hicrep', 'domaincaller', 'pastis', 'coolpuppy',
-    'deeptools', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
+    'deeptools', 'pyBigWig', 'biopython', 'pyfaidx', 'numpy', 'scipy', 'pandas')}
 PROGRAMS = {'bedtools': program_version([BEDTOOLS, '--version']),
             'seqkit': program_version([SEQKIT, 'version']),
             'Boost-HiC (GitHub)': commit(BOOSTHIC_DIR)}
@@ -1468,14 +1506,17 @@ The mean window about a set of loops. The loops are chromosight's own calls on t
 (`chromosight detect`, its loop preset), given to both tools as one BEDPE; each window runs 5 bins
 either side of a loop, ±50 kb. Both cut a window as coolpuppy does by default: from the upper triangle
 only — a window that crosses the diagonal holds the same contacts twice there, once above it and once
-mirrored below — with the main diagonal and the one beside it left out (`min_diag=2`). coolpuppy's
-default also drops every loop nearer than twice the flank (`mindist`), which is where the windows that
-reach the diagonal are; the app piles up every loop, so coolpuppy is run with `mindist=0`.
+mirrored below — with the main diagonal and the one beside it left out (`min_diag=2`); and both
+leave out every loop nearer the diagonal than twice the flank and two bins (`mindist='auto'`, the
+app's *nearest loop*), which is where a window would start to reach those two diagonals. Both run at
+those defaults, and then again with every loop (`mindist=0`, `--minDist 0`): those are the windows
+that reach the diagonal.
 
-Four pileups are compared cell for cell, gap for gap: raw; over the expected, each window divided
+Six pileups are compared cell for cell, gap for gap: raw and over the expected — each window divided
 cell by cell by its chromosome's expected at that cell's own diagonal before the mean, the expected
-being cooltools' `expected_cis` from § 4, which coolpuppy reads as `balanced.avg`; and the same two on
-the diagonal, at every loop anchor. Then the app's default normalisation: each pileup over the pileup
+being cooltools' `expected_cis` from § 4, which coolpuppy reads as `balanced.avg` — at the defaults
+and with every loop; and the same two on the diagonal, at every loop anchor. Then the app's default
+normalisation: each pileup over the pileup
 of controls, five per loop, shifted along the diagonal by 50 to 500 bins either way — against
 coolpuppy's own shifted controls over the same range. Both draw their controls at random, so each is
 run with five seeds.
@@ -1483,7 +1524,8 @@ run with five seeds.
 | | chromosomix | coolpuppy |
 |---|---|---|
 | window | `--window 5` (bins either side) | `flank=50_000` |
-| near the diagonal | nothing: `--minDiag` is 2 by default | nothing: `min_diag` is 2 by default; `mindist=0` |
+| near the diagonal | nothing: `--minDiag` is 2, and `--minDist` twice `--window` and 2, by default | nothing: `min_diag` is 2, and `mindist` `'auto'`, by default |
+| every loop | `--minDist 0` | `mindist=0` |
 | raw | `--norm none` | `ooe=False` |
 | over the expected | `--norm oe` | `expected_df=` § 4's table, `ooe=True` |
 | on the diagonal | `--anchors features --features anchors.bed` | `features_format='bed'`, `local=True` |
@@ -1504,8 +1546,9 @@ called[['chrom1', 'start1', 'end1', 'chrom2', 'start2', 'end2']].to_csv(LOOPS, s
 ends = [called[[f'chrom{k}', f'start{k}', f'end{k}']].set_axis(['chrom', 'start', 'end'], axis=1) for k in (1, 2)]
 anchors = pd.concat(ends).drop_duplicates().sort_values(['chrom', 'start'])
 anchors.to_csv(ANCHORS, sep='\t', header=False, index=False)
-# A window reaches the first two diagonals where its loop is nearer than twice the flank and two; the
-# lower-left corner, nearest the diagonal, then comes only from the loops whose windows do not.
+# A window reaches the first two diagonals where its loop is nearer than twice the flank and two, which
+# is also where both tools' default floor is; with every loop, the lower-left corner, nearest the
+# diagonal, comes only from the loops whose windows do not.
 reaching = int((apart < 2 * FLANK + 2).sum())
 cornered = int((apart - 2 * FLANK >= 2).sum())
 PILEUP = script('coolpuppy_pileup')
@@ -1514,6 +1557,9 @@ EXPECTED_MOUSE = PS / 'mouse-cooltools.tsv'
 CUTS = {
     'raw': ('raw', ['--pairs', LOOPS, '--norm', 'none'], [LOOPS]),
     'oe': ('over the expected', ['--pairs', LOOPS, '--norm', 'oe'], [LOOPS, '--expected', EXPECTED_MOUSE]),
+    'raw-every': ('raw, every loop', ['--pairs', LOOPS, '--norm', 'none', '--minDist', 0], [LOOPS, '--mindist', 0]),
+    'oe-every': ('over the expected, every loop', ['--pairs', LOOPS, '--norm', 'oe', '--minDist', 0],
+                 [LOOPS, '--expected', EXPECTED_MOUSE, '--mindist', 0]),
     'local': ('on the diagonal, raw', ['--anchors', 'features', '--features', ANCHORS, '--norm', 'none'],
               [ANCHORS, '--local']),
     'local-oe': ('on the diagonal, over the expected',
@@ -1578,9 +1624,9 @@ gap_cross, gap_ref, gap_app = (np.median(g) for g in (gaps(controls_app, control
 by_chance = stats.binom.sf(int((welch < 0.01).sum()) - 1, welch.size, 0.01) > 0.05
 centre = FLANK
 measures({
-    'loops called; windows reaching the first two diagonals; anchors on the diagonal':
+    'loops called; nearer than the default floor (windows reaching the first two diagonals); anchors':
         f"{len(called):,}; {reaching:,}; {len(anchors):,}",
-    'loops the lower-left corner cell is a mean of, in both tools': f'{cornered:,}',
+    'with every loop, the loops the lower-left corner cell is a mean of, in both tools': f'{cornered:,}',
     **{f'{CUTS[k][0]}: max relative difference; cells left as gaps, chromosomix / coolpuppy':
        f'{cut_rel[k].max():.1e}; {int(np.isnan(cut_app[k]).sum())} / {int(np.isnan(cut_ref[k]).sum())}'
        for k in CUTS},
@@ -1598,7 +1644,7 @@ measures({
 
 ```{python}
 #| label: fig-apa
-#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the four pileups against coolpuppy's; c, over shifted controls, the centre and P2LL of each tool's five seeds."
+#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it with `--minDist 0`; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the six pileups against coolpuppy's; c, over shifted controls at the defaults, the centre and P2LL of each tool's five seeds."
 TEXT['apa_loops'] = f'{len(called):,}'
 TEXT['apa_reaching'] = f'{reaching:,}'
 TEXT['apa_anchors'] = f'{len(anchors):,}'
@@ -1617,7 +1663,7 @@ TEXT['apa_chance'] = (f'about as many as chance gives ({0.01 * welch.size:.1f} e
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1, 1, 1.1])
 grey = plt.get_cmap('RdBu_r').copy()
 grey.set_bad(MISSING)
-bar = square(axes[0], cut_app['oe'], 'a  every loop, over the expected', cmap=grey, norm=LogNorm(1 / 3, 3),
+bar = square(axes[0], cut_app['oe-every'], 'a  every loop, over the expected', cmap=grey, norm=LogNorm(1 / 3, 3),
              label='observed / expected')
 bar.set_ticks([1 / 3, 1 / 2, 1, 2, 3], labels=['⅓', '½', '1', '2', '3'])
 bar.minorticks_off()
@@ -1626,8 +1672,9 @@ for k, key in enumerate(CUTS):
     values = np.maximum(cut_rel[key], 1e-9)
     ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0)
 ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|',
-       title='b  every cell, four pileups')
-ax.set_xticks(range(len(CUTS)), ['raw', 'over\nexpected', 'diagonal,\nraw', 'diagonal,\nover exp.'])
+       title='b  every cell, six pileups')
+ax.set_xticks(range(len(CUTS)), ['raw', 'over\nexpected', 'raw,\nevery', 'over exp.,\nevery',
+                                  'diagonal,\nraw', 'diagonal,\nover exp.'])
 ax = axes[2]
 for k, (name, stack, colour) in enumerate((('chromosomix', controls_app, APP_COLOUR), ('coolpuppy', controls_ref, REF))):
     ax.scatter(np.full(len(stack), 0 + (k - 0.5) * 0.25), stack[:, centre, centre], s=30, color=colour, label=name, zorder=3)
@@ -1638,12 +1685,14 @@ ax.legend(loc='upper right')
 plt.show()
 ```
 
-Raw, over the expected, and on the diagonal both ways, the two tools draw `{python} TEXT['apa_gaps']`
-and every other cell within `{python} TEXT['apa_rel']` (float32, six digits written): every one of the
-`{python} TEXT['apa_loops']` loops, `{python} TEXT['apa_reaching']` of them near enough that their
-windows reach the diagonal, and every one of their `{python} TEXT['apa_anchors']` anchors. Near the
-diagonal a cell is the mean of the loops whose windows have it above the diagonal: the lower-left
-corner, of `{python} TEXT['apa_cornered']` of them, in both.
+Raw and over the expected, at the defaults and with every loop, and on the diagonal both ways, the
+two tools draw `{python} TEXT['apa_gaps']` and every other cell within `{python} TEXT['apa_rel']`
+(float32, six digits written). At the defaults both leave out the same
+`{python} TEXT['apa_reaching']` of the `{python} TEXT['apa_loops']` loops, those near enough that
+their windows would reach the diagonal; with every loop, a cell near the diagonal is the mean of the
+loops whose windows have it above the diagonal — the lower-left corner, of
+`{python} TEXT['apa_cornered']` of them, in both — and on the diagonal every one of the
+`{python} TEXT['apa_anchors']` anchors is piled up.
 
 Over shifted controls, a run of each tool and a run of the other differ, in a typical pair, by up to
 `{python} TEXT['apa_cross']` in a cell; two runs of coolpuppy by up to `{python} TEXT['apa_self']`, and
@@ -1652,7 +1701,8 @@ differ at `{python} TEXT['apa_welch']` cells at p < 0.01, `{python} TEXT['apa_ch
 
 ```{python}
 record('Aggregate peak analysis', f"mouse Hi-C, 10 kb, {TEXT['apa_loops']} loops", f"coolpuppy {VERSIONS['coolpuppy']}",
-       f"raw, over the expected and on the diagonal: {TEXT['apa_gaps']}, every other cell within "
+       f"raw and over the expected, at the defaults and with every loop, and on the diagonal: "
+       f"{TEXT['apa_gaps']}, every other cell within "
        f"{TEXT['apa_rel']}; over controls, two runs of the two tools differ as two of coolpuppy do "
        f"({TEXT['apa_cross']} against {TEXT['apa_self']}), and no more cells than chance gives "
        f"({TEXT['apa_welch']} at p < 0.01)",
@@ -2162,6 +2212,155 @@ The two find the same `{python} TEXT['motif_sites']` sites, each on the same str
 record('Motif search', 'mm10 chr19, two motifs, both strands', f"seqkit {PROGRAMS['seqkit']}",
        f"the same {TEXT['motif_sites']} sites", 'Identical' if MOTIF_OK else 'Differs',
        apps=[f'motif-{p}' for p in MOTIFS], refs=[f'seqkit-{p}' for p in MOTIFS])
+```
+
+## 18 · Track correlation (deepTools)
+
+How much every pair of six yeast tracks agrees — ATAC-seq, Pol II ChIP-seq over input, MNase-seq,
+RNA-seq on each strand and shotgun coverage, the lab's demo set, all on one assembly — over whole
+windows of 100 bp, 1 kb and 10 kb, by Pearson's r and by Spearman's ρ. A window's value is the mean
+over the bases a track has a value for, and each pair is correlated over the windows where both have
+one. The reference for exactly that is pyBigWig's own exact mean, `stats(..., exact=True)`,
+correlated by SciPy (`notebooks/scripts/pybigwig_correlation.py`). Beside it is deepTools as it is
+usually run, `multiBigwigSummary bins` then `plotCorrelation`, which differs in two ways that are
+measured below: its window means are pyBigWig's default, read from a zoom level wherever the file
+has one fine enough, and it drops a window from every pair as soon as any one track lacks it.
+
+| | chromosomix | pyBigWig and SciPy | deepTools |
+|---|---|---|---|
+| windows | `--binsize B`, whole windows | whole windows of B | `multiBigwigSummary bins --binSize B` |
+| a window's value | the mean over the bases with a value | `stats(..., exact=True)` | `stats(...)`, from a zoom level where one is fine enough |
+| a missing window | left out of that pair | left out of that pair | left out of every pair |
+| correlation | `--method pearson`, `spearman` | `scipy.stats.pearsonr`, `spearmanr` | `plotCorrelation -c pearson`, `spearman` |
+
+```{python}
+TC = WORK / 'trackcorr'
+YEAST_TRACKS = [PATHS[f'Yeast_{key}'] for key in ('ATAC', 'Pol2', 'MNase', 'RNA_fwd', 'RNA_rev', 'Shotgun')]
+TRACK_NAMES = [path.name for path in YEAST_TRACKS]
+SIZES, METHODS = (100, 1_000, 10_000), ('pearson', 'spearman')
+CORR = script('pybigwig_correlation')
+for size in SIZES:
+    # Both methods of each tool in one group: chromosomix answers one per run, deepTools both from
+    # one summary of the windows.
+    group = f'{size:,} bp windows'
+    for method in METHODS:
+        mr('trackcorr', '--tracks', ','.join(rel(path) for path in YEAST_TRACKS), '--binsize', size,
+           '--method', method, out=TC / f'app-{size}-{method}', name=f'trackcorr-{size}-{method}',
+           analysis='Track correlation', label=f'{size:,} bp, {method}', group=group)
+        reference(f'pybigwig-correlation-{size}-{method}', 'Track correlation', 'pyBigWig, SciPy',
+                  [PYTHON, CORR, OUT, size, method, *YEAST_TRACKS], out=TC / f'exact-{size}-{method}.tsv',
+                  label=f'{size:,} bp, {method}', group='exact means', bench=False)
+    reference(f'multibigwigsummary-{size}', 'Track correlation', 'deepTools',
+              [MULTIBIGWIGSUMMARY, 'bins', '-b', *YEAST_TRACKS, '--binSize', size, '-p', THREADS,
+               '-o', OUT + '.npz', '--outRawCounts', OUT + '.tab'],
+              out=TC / f'deeptools-{size}', made=TC / f'deeptools-{size}.npz', label=f'{size:,} bp, the windows',
+              group=group, threads=THREADS)
+    for method in METHODS:
+        reference(f'plotcorrelation-{size}-{method}', 'Track correlation', 'deepTools',
+                  [PLOTCORRELATION, '-in', TC / f'deeptools-{size}.npz', '-c', method, '-p', 'heatmap',
+                   '-o', OUT + '.png', '--outFileCorMatrix', OUT + '.tab'],
+                  out=TC / f'deeptools-{size}-{method}', made=TC / f'deeptools-{size}-{method}.tab',
+                  label=f'{size:,} bp, {method}', group=group)
+
+
+def square_of(path):
+    """A correlation matrix, its tracks put in one order whatever order the file wrote them in."""
+    frame = pd.read_csv(path, sep='\t', comment='#', index_col=0)
+    frame.index = [str(name).strip("'") for name in frame.index]
+    frame.columns = [str(name).strip("'") for name in frame.columns]
+    return frame.loc[TRACK_NAMES, TRACK_NAMES].to_numpy(float)
+
+
+def exact_windows(size):
+    """Every track's exact mean over each whole window, by pyBigWig itself: one column a track."""
+    def compute():
+        handles = [pyBigWig.open(str(path)) for path in YEAST_TRACKS]
+        chroms = handles[0].chroms()
+        return np.stack([np.concatenate([np.array(h.stats(c, 0, (n := chroms[c] // size) * size, nBins=n, exact=True),
+                                                  dtype=float) for c in chroms if chroms[c] // size > 0])
+                         for h in handles], axis=1)
+    return cached(TC / f'exact-windows-{size}.npy', compute)
+
+
+def correlated(columns, method, together=False):
+    """Every pair's coefficient: over the pair's own windows, or over the windows every track has."""
+    measure = stats.pearsonr if method == 'pearson' else stats.spearmanr
+    rows = np.isfinite(columns).all(axis=1) if together else None
+    out = []
+    for a, b in combinations(range(columns.shape[1]), 2):
+        keep = rows if together else np.isfinite(columns[:, a]) & np.isfinite(columns[:, b])
+        out.append(measure(columns[keep, a], columns[keep, b])[0])
+    return np.array(out)
+
+
+UPPER = np.triu_indices(len(TRACK_NAMES), 1)
+tc_rows, tc = [], {}
+for size in SIZES:
+    exact_cols = exact_windows(size)
+    raw = pd.read_csv(TC / f'deeptools-{size}.tab', sep='\t')
+    raw.columns = [str(c).strip("#'") for c in raw.columns]
+    deep_cols = raw.loc[(raw['end'] - raw['start']) == size, TRACK_NAMES].to_numpy(float)
+    for method in METHODS:
+        app = square_of(one(TC / f'app-{size}-{method}', '*.trackcorr.tsv'))[UPPER]
+        exact = square_of(TC / f'exact-{size}-{method}.tsv')[UPPER]
+        deep = square_of(TC / f'deeptools-{size}-{method}.tab')[UPPER]
+        tc[size, method] = dict(app=app, exact=exact, deep=deep)
+        tc_rows.append({'windows': f'{size:,} bp', 'method': method, 'pairs': len(app),
+                        'chromosomix vs exact, max |Δ|': np.abs(app - exact).max(),
+                        'deepTools vs exact, max |Δ|': np.abs(deep - exact).max(),
+                        '…its window means alone': np.abs(correlated(deep_cols, method) - exact).max(),
+                        '…its missing-window rule alone': np.abs(correlated(exact_cols, method, together=True) - exact).max()})
+TC_TABLE = pd.DataFrame(tc_rows)
+show(TC_TABLE, **{c: '{:.1e}' for c in TC_TABLE.columns if 'Δ' in c or '…' in c})
+```
+
+```{python}
+#| label: fig-trackcorr
+#| fig-cap: "Six yeast tracks, correlated. a, Spearman's ρ over 100 bp windows, as chromosomix draws it; b, every coefficient of both methods at all three window sizes against the exact reference — chromosomix in blue, deepTools in orange."
+TEXT['tc_n'] = f"{sum(len(v['app']) for v in tc.values())}"
+TEXT['tc_app'] = f"{TC_TABLE['chromosomix vs exact, max |Δ|'].max():.1e}"
+TEXT['tc_deep'] = f"{TC_TABLE['deepTools vs exact, max |Δ|'].max():.3f}"
+TEXT['tc_means'] = f"{TC_TABLE['…its window means alone'].max():.3f}"
+TEXT['tc_rule'] = f"{TC_TABLE['…its missing-window rule alone'].max():.3f}"
+TC_EXACT = TC_TABLE['chromosomix vs exact, max |Δ|'].max() < 1e-5
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), layout='constrained', width_ratios=[1.05, 1])
+ax = axes[0]
+heat = square_of(one(TC / 'app-100-spearman', '*.trackcorr.tsv'))
+image = ax.imshow(heat, cmap='RdBu_r', vmin=-1, vmax=1)
+short = [name.removeprefix('Yeast_').removesuffix('.bw').replace('ChIP_Pol2-vs-input', 'Pol II') for name in TRACK_NAMES]
+ax.set_xticks(range(len(short)), short, rotation=45, ha='right')
+ax.set_yticks(range(len(short)), short)
+ax.grid(False)
+ax.set_title('a  Spearman ρ, 100 bp windows')
+plt.colorbar(image, ax=ax, shrink=0.8, label='ρ')
+ax = axes[1]
+exact_all = np.concatenate([v['exact'] for v in tc.values()])
+ax.scatter(exact_all, np.concatenate([v['deep'] for v in tc.values()]), s=16, color=REF, label='deepTools', zorder=2)
+ax.scatter(exact_all, np.concatenate([v['app'] for v in tc.values()]), s=10, color=APP_COLOUR, label='chromosomix', zorder=3)
+identity(ax, exact_all.min(), exact_all.max())
+ax.set(xlabel='exact window means, pyBigWig and SciPy', ylabel='the tool’s coefficient',
+       title='b  every pair, both methods, three window sizes')
+ax.legend(loc='upper left')
+plt.show()
+```
+
+All `{python} TEXT['tc_n']` coefficients from chromosomix agree with the exact reference within
+`{python} TEXT['tc_app']`, the six digits it writes. deepTools' differ by up to
+`{python} TEXT['tc_deep']`: taken alone, its window means — read from zoom levels — move a coefficient
+by up to `{python} TEXT['tc_means']`, and its rule of leaving a window out of every pair when any
+track lacks it by up to `{python} TEXT['tc_rule']`.
+
+```{python}
+record('Track correlation', 'yeast tracks, six, 100 bp to 10 kb windows',
+       f"pyBigWig {VERSIONS['pyBigWig']} and SciPy {VERSIONS['scipy']}; deepTools {VERSIONS['deeptools']}",
+       f"{TEXT['tc_n']} coefficients within {TEXT['tc_app']} of the exact means; deepTools within "
+       f"{TEXT['tc_deep']}, from its zoom-level means and its rule for a missing window",
+       'Identical to the exact means' if TC_EXACT else 'Differs from the exact means',
+       apps=[f'trackcorr-{size}-{method}' for size in SIZES for method in METHODS],
+       refs=[*[f'pybigwig-correlation-{size}-{method}' for size in SIZES for method in METHODS],
+             *[f'multibigwigsummary-{size}' for size in SIZES],
+             *[f'plotcorrelation-{size}-{method}' for size in SIZES for method in METHODS]])
 ```
 
 ## Summary

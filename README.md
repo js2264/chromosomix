@@ -291,6 +291,7 @@ chromosomix tasks
 ##       --minShiftScale (default 1)  smallest shift
 ##       --maxShiftScale (default 3)  largest shift
 ##       --seed (default 1)  seed
+##       --minDist (default twice --window, and 2)  nearest loop
 ##       --minSep (default 2)  nearest two features may be
 ##       --maxSep (default 200)  furthest two features may be
 ##       --byDistance (default 0)  split by separation into

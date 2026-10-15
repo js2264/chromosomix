@@ -972,18 +972,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **The validation notebook holds nine more analyses to their references, and its timings are a
+- **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal, as coolpuppy
+  does by default (§18.8).** *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`:
+  a loop whose two anchors' centres are nearer than that many bins is not piled up, and until a number
+  is typed it is twice the half-width and two — coolpuppy's `mindist='auto'` — following the
+  half-width as it changes. That is the separation at which a window stops reaching the two diagonals
+  left out, so at the defaults no loop window has a gap cut in it. The run says how many loops it left
+  out and how near they were, and 0 piles up every one, which is what it did before. On the yeast
+  demo's 1,506 loops at the default ±21 kb window that is 959 of them, the median loop being 33 kb;
+  over the demo map's first 200 loops it keeps the same 142 windows as coolpuppy, cell for cell.
+
+- **The validation notebook holds ten more analyses to their references, and its timings are a
   notebook of their own (§18.10).** `notebooks/validation.qmd` adds coverage and virtual 4C against
-  cooltools, pileups — raw, over the expected and over distance-matched controls, off the diagonal and
-  on it — against coolpuppy, the pileup's chromosight score against `chromosight quantify`, Boost-HiC
-  against its own Python, the metaplot against deepTools, interval overlap and its shuffled null
-  against bedtools, base composition against bioframe and Biopython, and the motif search against
-  seqkit, on 4DN's mouse Hi-C and ATAC-seq and UCSC's mm10 and RefSeq genes. Where the reference
-  draws at random, the two are compared as distributions, against the reference's own spread from
-  seed to seed. It writes every command to `notebooks/work/validation/commands.json`, and the new
-  `notebooks/timing.qmd` runs each again, round robin, writing every run — CPU and wall-clock seconds,
-  peak memory, the machine and the versions — to one tidy table,
-  `notebooks/work/validation/timings.tsv`, from which its tables and figures are drawn.
+  cooltools, pileups — raw, over the expected and over distance-matched controls, off the diagonal
+  and on it — against coolpuppy, the pileup's chromosight score against `chromosight quantify`,
+  Boost-HiC against its own Python, the metaplot against deepTools, interval overlap and its
+  shuffled null against bedtools, base composition against bioframe and Biopython, the motif search
+  against seqkit, and the track correlation against pyBigWig's exact window means and against
+  deepTools, on 4DN's mouse Hi-C and ATAC-seq, UCSC's mm10 and RefSeq genes, and GEO's yeast Micro-C
+  and the lab's yeast tracks as its public `rsglab-data` bucket keeps them, each checked against its
+  MD5. Where the reference draws at random, the two are compared as distributions, against the
+  reference's own spread from seed to seed. It writes every command to
+  `notebooks/work/validation/commands.json`, and the new `notebooks/timing.qmd` runs each again,
+  round robin, writing every run — CPU and wall-clock seconds, peak memory, the machine and the
+  versions — to one tidy table, `notebooks/work/validation/timings.tsv`, from which its tables and
+  figures are drawn.
 
 - **The site moves to its own domain, <https://chromosomix.app/>.** `public/CNAME` names it, so the
   deploy builds for the root and a pull request's preview is announced at `chromosomix.app/pr/<n>/`;
@@ -2208,6 +2221,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Track correlation's windows are their exact means, and a mammalian genome at 100 bp fits in
+  memory (§18.8).** A window's value was taken from whatever zoom level its size selected for
+  drawing, and each record weighted by its whole width rather than by how much of the window it
+  covers: a 17 kb record laid whole over a 10 kb window. On 4DN's two mouse ATAC-seq replicates at
+  10 kb that gave r = 0.808 where the windows' own means give 0.884. Every track is now read at its
+  own resolution, a megabase at a time, and each record weighted by its overlap — pyBigWig's
+  `stats(…, exact=True)` — so the two replicates read 0.884, and six yeast tracks agree with
+  pyBigWig's exact means and SciPy to 5 × 10⁻⁷ at 100 bp, 1 kb and 10 kb, by both methods. A window
+  was also an object each and a sequence one request: a single 61 Mb chromosome at 100 bp was
+  killed for memory, and the whole mouse genome at 100 bp now takes three minutes and 2.3 GB.
 
 - **An aggregate peak analysis is now coolpuppy's pileup wherever a window reaches the diagonal,
   and its observed / expected normalisation is coolpuppy's (§18.8).** A loop window that crossed the

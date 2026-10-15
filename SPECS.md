@@ -8188,13 +8188,19 @@ neither. Observed/expected divides **each window, cell by cell, by its own seque
 that cell's own diagonal**, then averages the ratios: coolpuppy's `ooe`, with cooltools'
 `balanced.avg` — the mean of each diagonal over the whole sequence — read as a band as deep as the
 farthest window reaches. That is the pileup's normalisation and nothing else's: the map's own O/E
-(§7.5) divides by the curve it always has. It used to divide the finished pileup by an expected
-looked up at each cell's distance from the *pileup's* centre, which is a cell's diagonal only for a
-window on the diagonal, and to take that expected from the windows' own cells, which over a loop set
-are the places the set picked, enriched by construction. On a mouse loop set whose centre coolpuppy
-puts at 2.9 that said 0.2; read whole, the raw pileup of the same set was up to ten per cent from
-coolpuppy's in the cells nearest the diagonal, and more at coolpuppy's default `min_diag`. Cut this
-way, every cell agrees to 5e-6, gap for gap (§18.10).
+(§7.5) divides by the curve it always has. **A loop set leaves out the loops nearest the diagonal**,
+as coolpuppy does by default: every loop whose two anchors' centres are nearer than *nearest loop*
+bins of the file, which is twice the half-width and two until somebody types a number — coolpuppy's
+`mindist='auto'`, measured as it measures it, in base pairs between the centres — and is the
+separation at which a window stops reaching the two diagonals left out, so at both defaults no loop
+window has a gap cut in it. The run says how many it left out and how near they were, and 0 piles up
+every loop; *every pair* of a feature set keeps its own separation range instead. It used to divide
+the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
+which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
+windows' own cells, which over a loop set are the places the set picked, enriched by construction.
+On a mouse loop set whose centre coolpuppy puts at 2.9 that said 0.2; read whole, the raw pileup of
+the same set was up to ten per cent from coolpuppy's in the cells nearest the diagonal, and more at
+coolpuppy's default `min_diag`. Cut this way, every cell agrees to 5e-6, gap for gap (§18.10).
 
 **Tracks aggregate along the pileup's two edges.** Any number of bigWigs or synthetic tracks may be
 chosen, each averaged over the **same windows** the pileup is taken from — the real ones, never the
@@ -8254,7 +8260,9 @@ scaled pileup is fed by windows at a dozen different separations — that is wha
 has no one diagonal offset for a P(s) to be looked up at, and dividing by one anyway was a plausible
 picture of nothing. The distance-matched control is the answer there and is drawn at the same
 separations by construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
-and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
+and no minimum coverage a window must reach — the one floor being a loop set's nearest loop, which is
+about where a loop is rather than a sample of the set, is coolpuppy's, and is said in the run's notes.
+Both existed and both were quietly a change of subject —
 a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
 the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator
 counts per cell, so a half-empty window contributes what it has and nothing more. The chromosight
@@ -8269,7 +8277,13 @@ set is detrended against a curve fitted to short ranges; and **every anchor come
 not, because quantification answers about the positions it was given. It reports the same score
 spectrum the detector does, over the same templates.
 *Track correlation* across any set of tracks, over fixed windows (100 bp by default) or over a
-feature set's intervals, by Spearman's rank correlation by default or by Pearson's.
+feature set's intervals, by Spearman's rank correlation by default or by Pearson's. A window's value
+is the **exact mean over the bases a track has a value for**, each record weighted by how much of the
+window it covers — pyBigWig's `stats(…, exact=True)` — so every track is read at its own resolution,
+never from a zoom level, a megabase at a time: a zoom record is a mean over a span of its own, and one
+17 kb record weighted whole into a 10 kb window took a mouse genome's correlation from 0.88 to 0.81.
+Windows are whole windows, kept as a tiling per sequence rather than as an object each, and a window
+one track lacks is left out of that pair alone.
 *Fraction of signal in features* — ChIP-seq's FRiP, over whatever is loaded: of everything a track
 carries, the share of it inside a chosen interval set, against the share of the assembly that set
 covers. The ratio of the two is the column to read, and it is the reason the covered fraction is
@@ -8616,7 +8630,8 @@ definition and a test that fails on a difference that is correct. `direct` asks 
 computes what it says; `reference` asks whether what it says is the quantity the field means by that
 name. Four of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
 the diagonal being counted once here and twice there, APA against coolpuppy — raw, over the expected
-and on the diagonal, the windows that cross the diagonal included, through the task's own runner — and
+and on the diagonal, at coolpuppy's own floor on how near a loop may be and with every loop, the
+windows that cross the diagonal included, through the task's own runner — and
 **insulation against `cooltools.insulation`**, bin for bin: the score, the
 cells each diamond counted and the boundary strength, at three windows, with the calls at the threshold.
 It was once only correlated — the diamond here was a sum, half a bin along, over the contig's mean —
@@ -8706,25 +8721,28 @@ takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported bes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
 **And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs seventeen analyses twice over public data, each file named by its accession (4DN, GEO,
-and UCSC's mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through
-`chromosomix`, once through the package each reproduces, called as it is meant to be called and never
+Quarto, runs eighteen analyses twice over public data, each file named by its accession (4DN; GEO's
+yeast Micro-C and the lab's yeast tracks, from its public bucket, each held to its MD5; and UCSC's
+mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through `chromosomix`,
+once through the package each reproduces, called as it is meant to be called and never
 re-implemented — and lines the two up bin by bin or call by call: insulation, compartments, P(s),
 coverage and virtual 4C against cooltools; the directionality index against `domaincaller`; peak
 calling with IDR on two replicates against yapc 0.1; loops against chromosight 1.6.3, and the
 pileup's chromosight score against `chromosight quantify`; pileups — raw, over the expected and over
-distance-matched controls, off the diagonal and on it — against coolpuppy; reproducibility against `hicrep` 0.2.6; the 3D model against pastis;
-Boost-HiC against its own Python, through `chromosomix boost` (§6.5); the metaplot against deepTools;
-interval overlap and its shuffled null against bedtools; base composition against bioframe and
-Biopython; and the motif search against seqkit. Where a reference draws at random — a pileup's
-controls, an overlap's shuffles, IDR's ties — two distributions are compared, the reference's own
-spread from seed to seed the yardstick. It writes every command it ran to
+distance-matched controls, off the diagonal and on it — against coolpuppy; reproducibility against
+`hicrep` 0.2.6; the 3D model against pastis; Boost-HiC against its own Python, through `chromosomix
+boost` (§6.5); the metaplot against deepTools; interval overlap and its shuffled null against
+bedtools; base composition against bioframe and Biopython; the motif search against seqkit; and the
+track correlation against pyBigWig's exact window means with SciPy, and against deepTools, whose
+zoom-level means and rule for a missing window are measured apart. Where a reference draws at random
+— a pileup's controls, an overlap's shuffles, IDR's ties — two distributions are compared, the
+reference's own spread from seed to seed the yardstick. It writes every command it ran to
 `notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs each of them again, five
 times round robin, each a fresh process: every run is one line of the tidy table
-`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the machine
-and every version — and each `chromosomix` command's speed is a fold over the reference commands it is
-paired with. They are documents, not tests: they need the data (about 6 GB), the reference packages
-and yapc's own environment, and nothing in the suite runs them.
+`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the
+machine and every version — and each `chromosomix` command's speed is a fold over the reference
+commands it is paired with. They are documents, not tests: they need the data (about 6 GB), the
+reference packages and yapc's own environment, and nothing in the suite runs them.
 
 ### 18.11 A set of scales is one picture
 

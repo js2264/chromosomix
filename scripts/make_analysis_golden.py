@@ -1036,11 +1036,12 @@ def apa_diagonal_golden(chroms: list[str], flank_bins: int, limit: int) -> dict:
     by default: each window cut from the upper triangle with the first two
     diagonals left out (``min_diag=2``), observed / expected dividing every
     window by cooltools' ``balanced.avg`` before the mean (``ooe=True``), and a
-    pileup on the diagonal coolpuppy's ``local`` one. ``mindist=0`` is the one
-    default changed, because coolpuppy's own drops every loop nearer than twice
-    the flank — the loops this golden is for. The JS side runs the task's own
-    runner over the same file, so what is compared is the app's pileup and not
-    a transcription of it.
+    pileup on the diagonal coolpuppy's ``local`` one. Off the diagonal each is
+    run twice: at coolpuppy's own ``mindist='auto'``, which drops every loop
+    nearer than twice the flank and two bins, and with ``mindist=0``, which keeps
+    them — the loops whose windows reach the diagonal, which is what this golden
+    is for. The JS side runs the task's own runner over the same file, so what
+    is compared is the app's pileup and not a transcription of it.
     """
     import cooler
 
@@ -1089,6 +1090,10 @@ def apa_diagonal_golden(chroms: list[str], flank_bins: int, limit: int) -> dict:
         )
         flank = flank_bins * binsize
         runs = {
+            "raw_default": dict(features=frame, features_format="bedpe", ooe=False),
+            "oe_default": dict(
+                features=frame, features_format="bedpe", expected_df=expected, ooe=True
+            ),
             "raw": dict(features=frame, features_format="bedpe", ooe=False, mindist=0),
             "raw_min_diag_0": dict(
                 features=frame, features_format="bedpe", ooe=False, mindist=0, min_diag=0

@@ -1,14 +1,16 @@
 /**
  * An aggregate peak analysis where its windows meet the diagonal (§18.8), on the yeast demo.
  *
- * The form with its *diagonals left out*; the demo's loops piled up raw — many of them near
- * enough that their windows reach the diagonal, so the lower-left corner is a mean of fewer
- * loops — and over the expected, with the price line saying it reads a band per sequence; then
- * the ATAC peaks on the diagonal, where the first two diagonals are gaps, and with none left out,
- * where the window is whole. Prints each figure's heading and its numbers as it goes, so a run
- * that did not happen is a line in the log.
+ * The form with its *diagonals left out* and, under Separation, its *nearest loop*; the demo's
+ * loops piled up raw at the defaults — which leave out the loops nearer than twice the half-width
+ * and two, as coolpuppy does, and say so in a note — and then every loop, many of them near
+ * enough that their windows reach the diagonal, so the lower-left corner is a mean of fewer;
+ * over the expected, with the price line saying it reads a band per sequence; then the ATAC
+ * peaks on the diagonal, where the first two diagonals are gaps, and with none left out, where
+ * the window is whole. Prints each figure's heading, its numbers and the run's notes as it goes,
+ * so a run that did not happen is a line in the log.
  *
- *   node scripts/ui-apa-diagonal.mjs gallery     # writes gallery/ad01 … ad07
+ *   node scripts/ui-apa-diagonal.mjs gallery     # writes gallery/ad01 … ad07, ad01b, ad02a, ad02b
  */
 
 import { execSync } from 'node:child_process'
@@ -101,6 +103,8 @@ const run = async (label) => {
   await pileup.evaluate((node) => node.scrollIntoView({ block: 'start' }))
   await sleep(900)
   console.log(label, '→', (await pileup.innerText()).replace(/\s+/g, ' ').slice(0, 220))
+  const notes = page.locator('.analysis-notes:not(.hidden)')
+  if (await notes.count()) console.log('  notes:', (await notes.first().innerText()).replace(/\s+/g, ' '))
 }
 const price = async () => {
   const line = page.locator('.analysis-cost, .cost-line, .estimate').first()
@@ -132,8 +136,29 @@ try {
   await pick('pairs', 'loops')
   await pick('normalisation', 'none')
   await shot('ad01-form')
-  await run('loops, raw')
+  // The Separation card, where the nearest loop is, following the half-width.
+  const nearest = field('nearest loop')
+  if (await nearest.count()) {
+    await nearest.evaluate((node) => node.scrollIntoView({ block: 'center' }))
+    await sleep(600)
+    console.log('nearest loop shows', await nearest.locator('input').first().inputValue())
+    await shot('ad01b-nearest-loop')
+  }
+  await run('loops, raw, at the defaults')
   await shot('ad02-loops-raw')
+  // The note that says which loops were left out, and how to have them all.
+  const said = page.locator('.analysis-notes:not(.hidden)').first()
+  if (await said.count()) {
+    await said.evaluate((node) => node.scrollIntoView({ block: 'center' }))
+    await sleep(600)
+    await shot('ad02a-note')
+  }
+  // Every loop: the windows that reach the diagonal, and gaps cut in them.
+  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await type('nearest loop', 0)
+  await run('loops, raw, every loop')
+  await shot('ad02b-loops-every')
+  await type('nearest loop', 44)
 
   // Over the expected: the price line first, then the run.
   await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))

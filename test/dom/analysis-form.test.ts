@@ -506,7 +506,7 @@ describe('the units a form asks in', () => {
   it('asks every distance it converted in bins, and says so beside the box', () => {
     const wanted: Record<string, string[]> = {
       scalogram: ['reach'],
-      apa: ['window', 'minShift', 'maxShift', 'minSep', 'maxSep'],
+      apa: ['window', 'minDist', 'minShift', 'maxShift', 'minSep', 'maxSep'],
       chromosight: ['minDist', 'maxDist', 'minSeparation'],
       hicrep: ['maxDistance', 'smooth'],
       insulation: ['window', 'spacing'],

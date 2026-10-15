@@ -1001,7 +1001,7 @@ export class ParamForm {
     // An unanswered seeded number shows what it stands for on this context —
     // the open map's resolution, say — and follows it until the reader types.
     const held = (): number =>
-      numberOr(this.params[spec.key], spec.seed?.(this.context) ?? spec.default)
+      numberOr(this.params[spec.key], spec.seed?.(this.context, this.params) ?? spec.default)
     const show = (value: number): void => {
       box.value = String(value)
       if (slider !== null) slider.value = String(value)

@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest'
 import { runApa } from '@/analysis/run/apa'
 import type { JobContext } from '@/analysis/job'
 import { APA_TASK, MIN_DIAG_DEFAULT } from '@/analysis/tasks/apa'
+import { resolveSeeds } from '@/analysis/types'
 import type { AnalysisContext, AnalysisFraming, MatrixOutput, Params } from '@/analysis/types'
 import type { FeatureSet, PairSet } from '@/annotations/types'
 
@@ -60,7 +61,11 @@ function contact(i: number, j: number): number {
   return Math.fround(decay * texture * dot)
 }
 
-function job(params: Params, inputs: { pairs?: PairSet; features?: FeatureSet }): JobContext {
+function job(
+  params: Params,
+  inputs: { pairs?: PairSet; features?: FeatureSet },
+  notes: string[] = [],
+): JobContext {
   const mc = {
     nBins: NBINS,
     binsize: BINSIZE,
@@ -92,24 +97,32 @@ function job(params: Params, inputs: { pairs?: PairSet; features?: FeatureSet })
     throwIfCancelled: () => {},
     breathe: async () => {},
     progress: () => {},
-    note: () => {},
+    note: (text: string) => {
+      notes.push(text)
+    },
     toBp: (bins: number) => bins * BINSIZE,
     toBins: (bp: number) => Math.max(1, Math.round(bp / BINSIZE)),
   }
 }
 
-/** A loop set, one bin per anchor. */
-function loops(pairs: Array<[number, number]>): PairSet {
+/** A loop set, one bin per anchor — or, given base pairs, anchors anywhere. */
+function loops(pairs: Array<[number, number]>, spans?: Array<[number, number, number, number]>): PairSet {
   const n = pairs.length
+  const at = spans ?? pairs.map(([a, b]): [number, number, number, number] => [
+    a * BINSIZE,
+    (a + 1) * BINSIZE,
+    b * BINSIZE,
+    (b + 1) * BINSIZE,
+  ])
   return {
     contigs: ['I'],
     length: n,
     contig1: new Int32Array(n),
-    start1: Int32Array.from(pairs.map(([a]) => a * BINSIZE)),
-    end1: Int32Array.from(pairs.map(([a]) => (a + 1) * BINSIZE)),
+    start1: Int32Array.from(at.map((span) => span[0])),
+    end1: Int32Array.from(at.map((span) => span[1])),
     contig2: new Int32Array(n),
-    start2: Int32Array.from(pairs.map(([, b]) => b * BINSIZE)),
-    end2: Int32Array.from(pairs.map(([, b]) => (b + 1) * BINSIZE)),
+    start2: Int32Array.from(at.map((span) => span[2])),
+    end2: Int32Array.from(at.map((span) => span[3])),
     score: new Float32Array(n).fill(Number.NaN),
     name: pairs.map((_, i) => `l${i}`),
     detail: pairs.map(() => ''),
@@ -210,8 +223,12 @@ function expectSame(actual: ArrayLike<number>, wanted: ArrayLike<number>): void 
   }
 }
 
-async function pileup(params: Params, inputs: { pairs?: PairSet; features?: FeatureSet }): Promise<MatrixOutput> {
-  const outputs = await runApa(job({ mode: 'fixed', window: HALF, balance: false, ...params }, inputs))
+async function pileup(
+  params: Params,
+  inputs: { pairs?: PairSet; features?: FeatureSet },
+  notes: string[] = [],
+): Promise<MatrixOutput> {
+  const outputs = await runApa(job({ mode: 'fixed', window: HALF, balance: false, ...params }, inputs, notes))
   const matrix = outputs.find((out): out is MatrixOutput => out.kind === 'matrix')
   if (matrix === undefined) throw new Error('no matrix output')
   return matrix
@@ -227,7 +244,12 @@ const LOOPS: Array<[number, number]> = [
   [400, 412],
   [146, 160],
 ]
-const LOOP_SET = { anchors: 'pairs', pairs: 'loops' }
+/**
+ * Every loop, the nearest included: coolpuppy run with `mindist=0`. The default
+ * floor — `mindist='auto'` — has tests of its own at the end, and with it in
+ * force the loop three bins out would not be piled up at all.
+ */
+const LOOP_SET = { anchors: 'pairs', pairs: 'loops', minDist: 0 }
 
 describe('a window off the diagonal', () => {
   it('takes nothing from below the diagonal, and leaves out the first two diagonals', async () => {
@@ -346,5 +368,60 @@ describe('the distance-matched control', () => {
         expect(Number.isFinite(matrix.values[r * SIDE + c]), `cell (${r}, ${c})`).toBe(diagonal >= 2)
       }
     }
+  })
+})
+
+describe('the nearest loop', () => {
+  const AUTO = { anchors: 'pairs', pairs: 'loops' }
+
+  it('is coolpuppy’s mindist by default: twice the half-width and two', async () => {
+    // The loop three bins out is nearer than 2 × 5 + 2 = 12 and is left out;
+    // the one twelve bins out is kept, as coolpuppy keeps a loop at the floor.
+    const notes: string[] = []
+    const matrix = await pileup({ ...AUTO, norm: 'none' }, { pairs: loops(LOOPS) }, notes)
+    const kept = LOOPS.filter(([a, b]) => b - a >= 2 * HALF + 2)
+    expect(kept).toHaveLength(3)
+    expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
+    expect(matrix.stats?.[0]?.value).toBe(3)
+    expect(notes.join(' ')).toMatch(/1 of 4 loops are nearer the diagonal than 12 bins/)
+    expect(notes.join(' ')).toMatch(/coolpuppy’s default/)
+  })
+
+  it('is measured between the anchors’ centres, in base pairs, as coolpuppy measures it', async () => {
+    // Bins 100 and 112, twelve apart, so a floor on bins would keep this loop.
+    // Its centres are 100,950 and 112,050 — 11,100 bp, under 12,000 — so
+    // coolpuppy leaves it out, and so does this.
+    const notes: string[] = []
+    const outputs = await runApa(
+      job(
+        { ...AUTO, mode: 'fixed', window: HALF, balance: false, norm: 'none' },
+        { pairs: loops([[100, 112]], [[100_900, 101_000, 112_000, 112_100]]) },
+        notes,
+      ),
+    )
+    expect(outputs.some((out) => out.kind === 'matrix')).toBe(false)
+    expect(notes.join(' ')).toMatch(/Every loop of this set is nearer the diagonal than 12 bins/)
+  })
+
+  it('is what was typed where something was', async () => {
+    const matrix = await pileup({ ...AUTO, norm: 'none', minDist: 15 }, { pairs: loops(LOOPS) })
+    const kept = LOOPS.filter(([a, b]) => b - a >= 15)
+    expect(matrix.stats?.[0]?.value).toBe(kept.length)
+    expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
+  })
+
+  it('follows the half-width until it is typed, in the form and in the run’s record', () => {
+    const spec = APA_TASK.params.find((param) => param.key === 'minDist')
+    expect(spec?.kind).toBe('number')
+    const context = {} as AnalysisContext
+    expect(resolveSeeds(APA_TASK.params, context, { window: 7 }).minDist).toBe(16)
+    expect(resolveSeeds(APA_TASK.params, context, { window: 21 }).minDist).toBe(44)
+    expect(resolveSeeds(APA_TASK.params, context, { window: 7, minDist: 3 }).minDist).toBe(3)
+  })
+
+  it('leaves a pileup on the diagonal alone, which has no loops to be near', async () => {
+    const notes: string[] = []
+    await pileup({ anchors: 'features', features: 'features', norm: 'none' }, { features: features([100]) }, notes)
+    expect(notes.join(' ')).not.toMatch(/nearer the diagonal/)
   })
 })

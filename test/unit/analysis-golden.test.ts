@@ -842,7 +842,7 @@ interface ApaDiagonalGolden {
     tolerance: number
     anchors: Array<{ chrom: string; start: number; end: number }>
   } & Record<
-    'raw' | 'raw_min_diag_0' | 'oe' | 'local_raw' | 'local_oe',
+    'raw_default' | 'oe_default' | 'raw' | 'raw_min_diag_0' | 'oe' | 'local_raw' | 'local_oe',
     { n: number; pileup: GoldenNumbers }
   >
 }
@@ -933,16 +933,33 @@ suite('APA reaching the diagonal, through the runner, against coolpuppy', () => 
     expect(g.min_diag).toBe(MIN_DIAG_DEFAULT)
   })
 
-  it('piles up every loop as coolpuppy does at its defaults, gap for gap', async () => {
+  it('leaves out the loops coolpuppy leaves out at its defaults, and piles up the same rest', async () => {
+    // `mindist='auto'`: twice the flank and two bins, measured between centres.
     const g = golden!
-    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'none' }, loops(g))
+    for (const [norm, which] of [
+      ['none', 'raw_default'],
+      ['oe', 'oe_default'],
+    ] as const) {
+      const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm }, loops(g))
+      expect(matrix.stats?.[0]?.value, which).toBe(g.reference[which].n)
+      expectSeries(matrix.values, numbers(g.reference[which].pileup), g.reference.tolerance, which)
+    }
+    expect(g.reference.raw_default.n).toBeLessThan(g.reference.raw.n)
+  })
+
+  it('piles up every loop as coolpuppy does with mindist 0, gap for gap', async () => {
+    const g = golden!
+    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'none', minDist: 0 }, loops(g))
     expect(matrix.stats?.[0]?.value).toBe(g.reference.raw.n)
     expectSeries(matrix.values, numbers(g.reference.raw.pileup), g.reference.tolerance, 'raw')
   })
 
   it('takes nothing from below the diagonal with no diagonal left out, as coolpuppy', async () => {
     const g = golden!
-    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'none', minDiag: 0 }, loops(g))
+    const matrix = await run(
+      { anchors: 'pairs', pairs: 'loops', norm: 'none', minDiag: 0, minDist: 0 },
+      loops(g),
+    )
     expectSeries(
       matrix.values,
       numbers(g.reference.raw_min_diag_0.pileup),
@@ -953,7 +970,7 @@ suite('APA reaching the diagonal, through the runner, against coolpuppy', () => 
 
   it('divides every window by its sequence’s expected, as coolpuppy’s ooe does', async () => {
     const g = golden!
-    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'oe' }, loops(g))
+    const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm: 'oe', minDist: 0 }, loops(g))
     expect(matrix.stats?.[0]?.value).toBe(g.reference.oe.n)
     expectSeries(matrix.values, numbers(g.reference.oe.pileup), g.reference.tolerance, 'oe')
   })

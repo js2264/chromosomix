@@ -172,8 +172,18 @@ export interface NumberParam extends ParamBase {
    * form shows what `null` stands for, and a run is handed the number itself
    * ({@link resolveSeeds}), so its record says what was read. {@link default} is
    * what a caller with no context — a shell — falls back on.
+   *
+   * The form's other answers come too, for a default that moves with one of
+   * them rather than with the file: the nearest loop an APA piles up is twice
+   * its half-width and two, so it follows the half-width until it is typed.
    */
-  seed?(context: AnalysisContext): number
+  seed?(context: AnalysisContext, params: Params): number
+  /**
+   * What `chromosomix tasks` prints for a {@link seed}ed default that a number
+   * cannot say — *twice --window, and 2* — where {@link default} would print the
+   * one value it takes at the other parameters' defaults.
+   */
+  seedNote?: string
 }
 
 /**
@@ -549,7 +559,7 @@ export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisConte
     if (spec.kind !== 'number' || spec.seed === undefined) continue
     const held = out[spec.key]
     if (typeof held === 'number' && Number.isFinite(held)) continue
-    out[spec.key] = spec.seed(context)
+    out[spec.key] = spec.seed(context, params)
   }
   return out
 }

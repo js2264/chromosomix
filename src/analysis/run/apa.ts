@@ -83,8 +83,10 @@ import {
   flankFractionOf,
   isChromosight,
   isDomainPileup,
+  autoMinDist,
   isScaled,
   minDiagOf,
+  minDistOf,
   onDiagonal,
   poolsAnchors,
   usesPairSet,
@@ -219,6 +221,15 @@ export const runApa: TaskRunner = async (job) => {
     )
   }
 
+  // **The one floor a loop set has, and it is coolpuppy's**: a loop nearer the
+  // diagonal than the nearest loop (`minDist`) is left out, and by default that
+  // is twice the half-width and two bins — coolpuppy's `mindist='auto'` — which
+  // is where a window stops reaching the diagonals it would have gaps cut in. It
+  // is a floor on *where* a loop is, not a sample of the set, and it is said:
+  // how many, how near, and how to have them all.
+  const piled = usingPairs && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
+  if (piled.length === 0) return []
+
   // Every anchor of every group. There used to be a cap here, and it was not a
   // budget so much as a silent change of subject: a pileup of the first five
   // thousand anchors is a pileup of whichever ones sorted first, under a caption
@@ -231,8 +242,8 @@ export const runApa: TaskRunner = async (job) => {
   const bins = distanceBins(job.params)
   const kept =
     bins > 1
-      ? bySeparation(anchors, bins)
-      : groupAnchors(job, anchors, onDiagonal(job.params) ? (features as FeatureSet) : null)
+      ? bySeparation(piled, bins)
+      : groupAnchors(job, piled, onDiagonal(job.params) ? (features as FeatureSet) : null)
   const groupNames = bins > 1 ? separationNames(kept, (span) => job.toBp(span)) : null
 
   // The grid's own division into flank, body, flank — one layout for the whole
@@ -680,6 +691,12 @@ interface Anchor {
   /** Bins the feature spans, for the scaled mode. */
   span: number
   /**
+   * For a loaded pair, how far apart its two anchors' centres are, in base
+   * pairs: what coolpuppy measures its `mindist` on, and so what the nearest
+   * loop is held to here. Absent for anything else.
+   */
+  centreDistance?: number
+  /**
    * The rows and columns a *scaled* window's body covers, half-open, in bins.
    *
    * The feature's own bins on both axes for an on-diagonal anchor — which is
@@ -716,10 +733,39 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
       label: set.name[i] === '' ? formatPosition(set.contigs[set.contig1[i]], set.start1[i]) : set.name[i],
       rank: set.score[i],
       span: col - row,
+      centreDistance: Math.abs((set.start2[i] + set.end2[i]) / 2 - (set.start1[i] + set.end1[i]) / 2),
       rows: { from: row, to: row + 1 },
       cols: { from: col, to: col + 1 },
     })
   }
+  return out
+}
+
+/**
+ * The loops no nearer the diagonal than the nearest loop, and a note for the rest.
+ *
+ * coolpuppy's `mindist`, measured as coolpuppy measures it — between the two
+ * anchors' centres, in base pairs, a loop exactly at the floor kept — so that a
+ * BEDPE whose anchors are not bin-aligned is cut at the same loop in both. The
+ * floor is asked in bins, as every matrix parameter is (§18.2), and is base
+ * pairs here at this file's resolution.
+ */
+function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
+  const nearest = minDistOf(job.params)
+  const floor = nearest * job.mc.binsize
+  const out = anchors.filter((anchor) => (anchor.centreDistance ?? Number.POSITIVE_INFINITY) >= floor)
+  const left = anchors.length - out.length
+  if (left === 0) return out
+  const how =
+    `nearer the diagonal than ${nearest.toLocaleString()} bins, ${shortBp(floor)}` +
+    (nearest === autoMinDist(job.params) ? ' — twice the half-width and two, coolpuppy’s default —' : '')
+  job.note(
+    out.length === 0
+      ? `Every loop of this set is ${how} so there is nothing to pile up. Set the nearest loop lower, ` +
+          'or to 0 for every one.'
+      : `${left.toLocaleString()} of ${anchors.length.toLocaleString()} loops are ${how} and are left ` +
+          'out. Set the nearest loop to 0 to pile up every one.',
+  )
   return out
 }
 
