@@ -30,7 +30,6 @@ concurrency:
 env:
   ARCHIVE_BRANCH: pages-archive
   STORES_BRANCH: stores
-  NOTEBOOKS_BRANCH: notebooks
 
 jobs:
   build:
@@ -151,22 +150,6 @@ jobs:
             echo "No $STORES_BRANCH branch yet — the picker will say so until the Stores workflow has run."
           fi
 
-      # The rendered notebooks, which notebooks.yml keeps on a branch of their
-      # own on the same terms as the stores: the evaluation and the timings
-      # (SPECS §18.10), each a self-contained page with its files beside it.
-      # Absent until that workflow has published once.
-      - name: Fetch the rendered notebooks
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          if git ls-remote --exit-code --heads "$remote" "$NOTEBOOKS_BRANCH" >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch "$NOTEBOOKS_BRANCH" "$remote" rendered
-          else
-            echo "No $NOTEBOOKS_BRANCH branch yet — /evaluation/ and /timings/ appear once the Notebooks workflow has run."
-          fi
-
       # Previews belong to open pull requests, and preview.yml removes one when
       # its pull request closes. That removal is *event-shaped* and can be lost:
       # merging a pull request fires `pull_request: closed` and `push` to main
@@ -243,10 +226,6 @@ jobs:
       # be a third place to keep them in step with. `archive/` is deliberately
       # not copied: those are the dated copies, which the branch keeps and the
       # site has no reason to serve.
-      #
-      # `evaluation/` and `timings/` are the rendered notebooks, copied whole
-      # from their branch, each directory named rather than globbed so that the
-      # branch can never put anything else at the site's root.
       - name: Assemble the site
         run: |
           set -euo pipefail
@@ -259,14 +238,7 @@ jobs:
             if [ -d stores/sessions ]; then cp -R stores/sessions dist/stores/sessions; fi
             echo "Copied $(find dist/stores -name '*.json' | wc -l) store and session files."
           fi
-          for page in evaluation timings; do
-            if [ -f "rendered/$page/index.html" ]; then cp -R "rendered/$page" "dist/$page"; fi
-          done
-          parts=(dist dist/v)
-          for part in dist/pr dist/stores dist/evaluation dist/timings; do
-            if [ -d "$part" ]; then parts+=("$part"); fi
-          done
-          du -sh "${parts[@]}"
+          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr ) $( [ -d dist/stores ] && echo dist/stores )
 
       - uses: actions/upload-pages-artifact@v3
         with:

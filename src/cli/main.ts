@@ -2556,9 +2556,9 @@ async function circularCommand(args: Args, downloads: Downloads): Promise<number
  * to hold a port to its upstream. So this hands Boost-HiC the square an
  * oversample hands it — the sequence's stored counts through `cisSquare` and
  * `boostSteps` — and writes what `main.py` writes, `boostedmat`: the boosted
- * map over the bins its outlier filter kept, in SCN units. `notebooks/
- * validation.qmd` holds that to Boost-HiC's Python cell for cell, over whole
- * chromosomes, where the golden holds a hundred bins.
+ * map over the bins its outlier filter kept, in SCN units: the map to hold the
+ * port to Boost-HiC's Python by, cell for cell over whole chromosomes, where the
+ * golden holds a hundred bins.
  *
  * One square per sequence, rows and columns named by each kept bin's start;
  * the bins the filter took out are the ones not named. A sequence past

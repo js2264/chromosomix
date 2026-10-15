@@ -1778,9 +1778,8 @@ Boost-HiC each sequence's stored counts — the square an oversample hands it (`
 writes what `main.py` writes, `boostedmat`: the boosted map over the bins the outlier filter kept, in
 SCN units, one square TSV a sequence, its rows and columns named by each kept bin's start
 (`--sequences` names some, `--alpha` another exponent). Nothing on screen shows that map, and a draw
-from it is a poor way to hold a port to its upstream; with it, `notebooks/validation.qmd` holds the
-port to Boost-HiC's own Python cell for cell over whole chromosomes, where the golden holds a hundred
-bins (§18.10). A sequence past the limit below is refused by name, as an oversample refuses it, and the
+from it is a poor way to hold a port to its upstream; this is the map to hold it by, cell for cell
+over whole chromosomes, where the golden holds a hundred bins (§18.10). A sequence past the limit below is refused by name, as an oversample refuses it, and the
 others are still written.
 
 Floyd–Warshall is cubic in a sequence's bins. It runs as a WebAssembly SIMD kernel
@@ -8846,43 +8845,16 @@ place, and on the demo pair — ATAC against a Pol II ChIP, which drives the EM 
 takes the same coordinate-ascent fallback, with SciPy's bounded Brent ported beside it, and passes
 the same 1,615 to 1,630 peaks at the six thresholds.
 
-**And beside the goldens, two notebooks at full size.** `notebooks/validation.qmd`, rendered with
-Quarto, runs eighteen analyses twice over public data, each file named by its accession (4DN; GEO's
-yeast Micro-C and the lab's yeast tracks, from its public bucket, each held to its MD5; and UCSC's
-mm10 sequence and RefSeq genes as Illumina iGenomes distributes them) — once through `chromosomix`,
-once through the package each reproduces, called as it is meant to be called and never
-re-implemented — and lines the two up bin by bin or call by call: insulation, compartments, P(s),
-coverage and virtual 4C against cooltools; the directionality index against `domaincaller`; peak
-calling with IDR on two replicates against yapc 0.1; loops against chromosight 1.6.3, and the
-pileup's chromosight score against `chromosight quantify`; pileups — raw, over the expected and over
-distance-matched controls, off the diagonal and on it — against coolpuppy; reproducibility against
-`hicrep` 0.2.6; the 3D model against pastis; Boost-HiC against its own Python, through `chromosomix
-boost` (§6.5); the metaplot against deepTools; interval overlap and its shuffled null against
-bedtools; base composition against bioframe and Biopython; the motif search against seqkit; and the
-track correlation against pyBigWig's exact window means with SciPy, and against deepTools, whose
-zoom-level means and rule for a missing window are measured apart. Where a reference draws at random
-— a pileup's controls, an overlap's shuffles, IDR's ties — two distributions are compared, the
-reference's own spread from seed to seed the yardstick. It writes every command it ran to
-`notebooks/work/validation/commands.json`, and `notebooks/timing.qmd` runs each of them again, five
-times round robin, each a fresh process: every run is one line of the tidy table
-`notebooks/work/validation/timings.tsv` — CPU and wall-clock seconds and peak memory, with the
-machine and every version — and each `chromosomix` command's speed is a fold over the reference
-commands it is paired with. They are documents, not tests: they need the data (about 6 GB), the
-reference packages and yapc's own environment, and nothing in the suite runs them.
-
-**They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
-fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
-yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
-Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
-`<site>/evaluation/` and `<site>/timings/`, each a self-contained page with its tables beside it
-(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release
-keeps its own copies as assets. It runs when a release is published and on demand. Each page opens
-on a block saying when it was rendered, from which version, commit and release, by which run or by
-hand, and on what machine, and closes on how long it took; the two link to each other there and on
-a reader's disk alike. The pages are no build of the app, so the service worker leaves those two
-addresses to the network, as it does `v/` and `pr/`, and the app, from this version on, finding
-itself at either unregisters its worker and reloads once (`recoverPinnedNavigation`), as at `v/`;
-a worker from before answers there with its own app until its reader takes the update it offers.
+**And beside the goldens, a notebook at full size.** `notebooks/validation.qmd`, rendered with
+Quarto, runs eight analyses twice over public data, each file named by its accession (4DN, GEO) —
+once through `chromosomix`, once through the package each reproduces, called as it is meant to be
+called and never re-implemented — and lines the two up bin by bin or call by call: insulation,
+compartments and P(s) against cooltools, the directionality index against `domaincaller`, peak
+calling with IDR on two replicates against yapc 0.1, loops against chromosight 1.6.3,
+reproducibility against `hicrep` 0.2.6, and the 3D model against pastis; and it times every command,
+giving each `chromosomix` command's speed as a fold over its reference. It is a document, not a
+test: it needs the data (about 6 GB), the reference packages and yapc's own environment, and nothing
+in the suite runs it.
 
 ### 18.11 A set of scales is one picture
 

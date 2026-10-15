@@ -53,15 +53,8 @@ const PRECACHED = new Set(PRECACHE)
  */
 const SCOPE_DIR = new URL('./', self.location.href).pathname
 // …and the same for pull-request previews under `pr/<number>/`, which are the
-// same kind of copy at a different address (docs/deploy.md), and for the
-// rendered notebooks under `evaluation/` and `timings/` (notebooks.yml), which
-// are pages of their own and no build at all. Each is passed through with and
-// without its trailing slash: Pages answers `…/evaluation` with a redirect to
-// `…/evaluation/`, and answering the first with the shell would never let the
-// redirect be seen.
-const PINNED_PREFIXES = ['v/', 'pr/', 'evaluation/', 'timings/'].map((dir) => `${SCOPE_DIR}${dir}`)
-const passedThrough = (pathname) =>
-  PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix) || pathname === prefix.slice(0, -1))
+// same kind of copy at a different address (docs/deploy.md).
+const PINNED_PREFIXES = [`${SCOPE_DIR}v/`, `${SCOPE_DIR}pr/`]
 
 /**
  * Fill the cache, then wait.
@@ -116,12 +109,13 @@ self.addEventListener('fetch', (event) => {
 
   // A reload, or a link into the app: answer with the cached shell, and fall
   // back to the network on a cold cache. Every view lives in the URL *hash*, so
-  // one entry serves every link the app publishes — with two exceptions, a link
-  // to an archived build and a link to a rendered notebook. Each is a different
-  // document under the same scope and has to come from the network, or the
-  // reader gets this build wearing that page's address.
+  // one entry serves every link the app publishes — with one exception, which
+  // is a link to an archived build. That is a different document under the same
+  // scope and it has to come from the network, or the reader gets this build
+  // wearing that build's address.
   if (request.mode === 'navigate') {
-    if (passedThrough(new URL(request.url).pathname)) return
+    const pathname = new URL(request.url).pathname
+    if (PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return
     event.respondWith(
       caches.match(PRECACHE[0]).then((cached) => cached ?? fetch(request)),
     )
