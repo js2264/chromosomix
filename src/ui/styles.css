@@ -4307,6 +4307,15 @@ p {
   touch-action: none;
 }
 
+/* The crosshair's layer: one radial line over the picture, redrawn as the
+   hand moves without redrawing the picture under it. */
+.circle-guide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
 /* The gestures nothing on the picture announces, under the key on hover, as
    the square says under its key how to zoom into a region. */
 .circle-hint {

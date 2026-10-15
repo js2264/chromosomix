@@ -28,7 +28,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   named at twelve o'clock and dragged in or out to reorder them, and the Tracks card and every map's
   lanes follow. Chords are raw contacts for now, the strongest 3,000 kept and the `chords` row
   thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
-  `node scripts/ui-circle.mjs` drives it on the mock community.
+  The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
+  card's `labels` (off by default, as for the square), with the square's rule — every name up to
+  fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the
+  circle takes instead; `legend` is its key, `crosshair` a radial line through every ring at the
+  pointer and `tooltip` its card; the Tracks card's track text, fill, outline, floor, opacity, text
+  size, height, stretch and shrink act on the rings; and a track group shares one range across its
+  rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
+  mock community.
 
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab

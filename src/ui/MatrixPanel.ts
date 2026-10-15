@@ -44,7 +44,7 @@ import { cardTitle, icon, iconButton } from './icons'
 import { CircleView, type CirclePresentation } from './CircleView'
 import { circleCuts, circleUnitsOf } from '../render/circle'
 import { CHORD_LIMITS, chordLimit, setChordLimit, subscribeChordLimit } from './circlePrefs'
-import { LANE_EDGES, hasAMovableAxis, overlayShapeOf } from '../annotations/types'
+import { LANE_EDGES, hasAMovableAxis, overlayShapeOf, type AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import {
@@ -204,6 +204,7 @@ import type { CellFigure } from '../panels/deckFigure'
 import { setReadout } from './readout'
 import { HOVER_SOURCE_MAP, setHoverPlace, type HoverPlace } from './hoverLocus'
 import {
+  CIRCLE_OPTIONS,
   MATRIX_OPTIONS,
   PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
@@ -1153,6 +1154,11 @@ export class MatrixPanel {
   /** The `sections` row and its select: offered where the block can be cut two ways. */
   private sectionsRow: HTMLElement | null = null
   private sectionsSelect: HTMLSelectElement | null = null
+  /**
+   * Told when the picture turns round or square: the Tracks card's height reads
+   * the rings while the circle is drawn and the lanes while it is not.
+   */
+  private readonly pictureWatchers = new Set<() => void>()
   /** The diagonal lock's toggle, greyed where there is no diagonal to hold the view on. */
   private diagonalButton: HTMLElement | null = null
   /** Whether there is a diagonal to go to: one in the block, and no turn. */
@@ -1714,8 +1720,15 @@ export class MatrixPanel {
           ? []
           : [
               trackHeightField((px) => this.setTrackHeight(px), {
-                lanes: () => LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge)),
-                subscribe: (onChange) => this.laneStore.subscribe(onChange),
+                lanes: () => this.sizedLanes(),
+                subscribe: (onChange) => {
+                  const off = this.laneStore.subscribe(onChange)
+                  this.pictureWatchers.add(onChange)
+                  return () => {
+                    off()
+                    this.pictureWatchers.delete(onChange)
+                  }
+                },
               }),
             ]),
         // The four that draw on the matrix used to sit under these, in the same
@@ -2120,10 +2133,19 @@ export class MatrixPanel {
       'div',
       { class: 'field field-block' },
       el('span', { class: 'field-label', text: 'overlays' }),
-      el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
+      el(
+        'div',
+        { class: 'plot-icon-row' },
+        ...MATRIX_OPTIONS.map((key) => {
+          const toggle = optionToggle(key)
+          // Drawn round, the names, the key, the guide line and the card are
+          // the circle's too (§7.6); dividers, breaks and ticks are marks on
+          // the square's cells and edges, and step aside while it is drawn.
+          if (this.options.round !== undefined && !CIRCLE_OPTIONS.includes(key)) toggle.classList.add('square-only')
+          return toggle
+        }),
+      ),
     )
-    // Marks drawn over the square's cells; the circle has none to draw them on.
-    this.squareOnly.push(overlaysRow)
     controls.push(overlaysRow)
     for (const row of this.squareOnly) row.classList.add('square-only')
     for (const row of this.circleOnly) row.classList.add('circle-only')
@@ -2511,6 +2533,13 @@ export class MatrixPanel {
   }
 
   fitTracks(): void {
+    // Drawn round, the rings are the lanes, and the room to fill is the depth
+    // between the sections and the chords (§7.6) — the grid is put away.
+    if (this.circleActive()) {
+      const size = this.circleView?.fillingRingSize() ?? null
+      if (size !== null) this.setTrackHeight(size)
+      return
+    }
     const box = this.grid.getBoundingClientRect()
     // Per axis rather than per edge: the stacks above and below the map take
     // from one height between them, and a half each would let four lanes take
@@ -2541,16 +2570,25 @@ export class MatrixPanel {
    * two different heights is the corner disagreeing with itself.
    */
   shrinkTracks(): void {
-    const size = smallestLaneSize(LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge)))
+    const size = smallestLaneSize(this.sizedLanes())
     if (size === null) return
     this.setTrackHeight(size)
   }
 
   /** Give every lane on every edge one height, chosen rather than computed. */
   setTrackHeight(px: number): void {
-    for (const edge of LANE_EDGES) {
-      setTrackHeight(this.laneStore, this.lanes.lanesOn(edge), px)
-    }
+    setTrackHeight(this.laneStore, this.sizedLanes(), px)
+  }
+
+  /**
+   * The lanes the Tracks card's heights act on: the square's, on every edge —
+   * or, drawn round, the rings (§7.6), which hold every track the map draws,
+   * a bigWig on a genome × genome block among them, where the square has no
+   * lane to put it in.
+   */
+  private sizedLanes(): Array<{ members: readonly AnnotationEntry[] }> {
+    if (this.circleActive() && this.circleView !== null) return this.circleView.ringLanes()
+    return LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge))
   }
 
   /**
@@ -5009,6 +5047,7 @@ export class MatrixPanel {
         map: this.mapId,
         ...(annotations?.client === undefined ? {} : { client: annotations.client }),
         ...(annotations?.metadata === undefined ? {} : { metadata: annotations.metadata }),
+        ...(annotations?.groups === undefined ? {} : { groups: annotations.groups }),
         presentation: () => this.options.round,
         keyTitle: () => this.circleKeyTitle(),
       })
@@ -5020,7 +5059,9 @@ export class MatrixPanel {
       view.setScale({ transform: this.transform, colormap: this.colormap, limit: chordLimit() })
     }
     const active = asked && drawable && view !== null
+    const was = this.el.classList.contains('is-circle')
     this.el.classList.toggle('is-circle', active)
+    if (was !== active) for (const watch of this.pictureWatchers) watch()
     this.controlsEl.classList.toggle('is-circle', active)
     this.paintCircle(presentation, data === null || drawable)
     if (active) view.schedule()
@@ -5137,6 +5178,11 @@ export class MatrixPanel {
     }
     if (this.options.balance === true) parts.push('balanced')
     parts.push(this.transform === 'none' ? 'linear' : this.transform)
+    // The two ends of the ramp, as the key states them and as the square's
+    // caption states its colours: with the key turned off they are the figure's
+    // only statement of what the chords' colours mean.
+    const range = this.circleView?.chordRange() ?? null
+    if (range !== null) parts.push(`chords ${formatCount(range.lo)} to ${formatCount(range.hi)}`)
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
   }

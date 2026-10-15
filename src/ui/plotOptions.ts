@@ -124,6 +124,19 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
 export const STRUCTURE_OPTIONS: readonly PlotOptionKey[] = ['legend', 'crosshair', 'tooltip']
 
 /**
+ * What the **map drawn round** reads (§7.6), of the Map card's row.
+ *
+ * The names round the outside are the blocks' names the gutters carry, so
+ * `labels` is theirs; the key beside the circle is `legend`'s; the crosshair is
+ * a radial line through every ring at the pointer's angle, the circle's guide
+ * line; and the card is the card. Dividers, breaks and ticks are marks on the
+ * square's edges and cells, which the circle has none of — so while it is drawn
+ * those three step aside rather than sit lit over a picture they do nothing
+ * to. The Tracks card's four all apply to the rings, and stay as they are.
+ */
+export const CIRCLE_OPTIONS: readonly PlotOptionKey[] = ['labels', 'legend', 'crosshair', 'tooltip']
+
+/**
  * What a Tracks card offers when a **Map card is above it**.
  *
  * Beside a map the two shared preferences appeared in both rows of one column,

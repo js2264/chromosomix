@@ -21,6 +21,7 @@ import {
   circleUnitsOf,
   fitText,
   hitCircle,
+  namePolicy,
   insideRibbon,
   layoutChords,
   litChords,
@@ -40,8 +41,12 @@ import {
   featureArcs,
   sequenceAt,
   sequenceIndex,
+  paintRing,
+  type RingInk,
+  type RingPaint,
 } from '../../src/render/circleRings'
 import type { FeatureSet, TrackSampleSet } from '../../src/annotations/types'
+import { ringBlockOrder } from '../../src/ui/ringOrder'
 
 /** A square block from a full symmetric matrix written row by row. */
 function block(
@@ -393,8 +398,34 @@ describe('the layout', () => {
     expect(first.outer).toBeLessThan(second.inner)
     expect(second.outer).toBeLessThan(geometry.sections.inner)
     expect(geometry.sections.outer).toBeLessThan(geometry.labelAt)
-    // In proportion to the lanes' heights.
-    expect((first.outer - first.inner) / (second.outer - second.inner)).toBeCloseTo(56 / 20, 1)
+    // As thick as its lane is tall where they fit, and never past a sixth of
+    // the radius.
+    expect(second.outer - second.inner).toBeCloseTo(20, 6)
+    expect(first.outer - first.inner).toBeCloseTo(Math.min(56, geometry.outer * 0.16), 6)
+  })
+
+  it('shares out the room in proportion to the lanes where they do not fit', () => {
+    const geometry = circleGeometry(model, {
+      width: 300,
+      height: 300,
+      rings: [
+        { id: 'first', size: 90 },
+        { id: 'second', size: 30 },
+        { id: 'third', size: 30 },
+      ],
+      measure,
+      fontPx: 11,
+    })
+    // Every lane's height times the share of it the room allows, held between
+    // six pixels and a sixth of the radius.
+    const scale = geometry.ringRoom / 150
+    expect(scale).toBeLessThan(1)
+    ;[90, 30, 30].forEach((size, k) => {
+      const ring = geometry.rings[k]
+      expect(ring.outer - ring.inner).toBeCloseTo(Math.min(Math.max(size * scale, 6), geometry.outer * 0.16), 6)
+    })
+    const total = geometry.rings.reduce((sum, ring) => sum + (ring.outer - ring.inner), 0)
+    expect(total).toBeLessThanOrEqual(geometry.ringRoom + 1e-9)
   })
 
   it('seats every chord’s two ends inside the sections it joins, weakest drawn first', () => {
@@ -499,27 +530,33 @@ describe('the names round the outside', () => {
   })
 
   it('names a lit section and its partners, but never one over another', () => {
-    // A hundred sections too narrow to be named at rest; the fiftieth's two
-    // strongest partners are its neighbours, and its third is across the circle.
-    const n = 100
+    // Forty sections, all named by the rule but only the first one long enough
+    // to carry its name at rest: the room kept for it is what a hover writes
+    // in. The twentieth's two strongest partners are its neighbours, and its
+    // third is across the circle.
+    const n = 40
     const rows = Array.from({ length: n }, () => new Array<number>(n).fill(0))
     const link = (i: number, j: number, weight: number): void => {
       rows[i][j] = weight
       rows[j][i] = weight
     }
-    link(50, 49, 100)
-    link(50, 51, 90)
-    link(50, 80, 80)
+    link(20, 19, 100)
+    link(20, 21, 90)
+    link(20, 30, 80)
     const groups = Array.from({ length: n }, (_, index) => ({ label: `s${index}`, start: index, end: index + 1 }))
-    const model = circleModelOf(block(rows, groups, { level: 'genome' })) as CircleModel
+    const model = circleModelOf(block(rows, groups, { level: 'genome' }), {
+      genomeLength: (name) => (name === 's0' ? 100_000 : 1_000),
+    }) as CircleModel
     const geometry = circleGeometry(model, { width: 400, height: 400, rings: [], measure, fontPx: 11 })
+    expect(geometry.names).toBe(true)
+    expect([...geometry.labelled].filter((named) => named === 1)).toHaveLength(1)
     const chords = layoutChords(model, geometry, { limit: Infinity, transform: 'none', colormap: 'default' })
     const { ctx, written } = recorder()
     paintLabels(ctx, {
       model,
       geometry,
       palette: LIGHT_CIRCLE_PALETTE,
-      focus: { unit: 50, slot: -1, group: -1 },
+      focus: { unit: 20, slot: -1, group: -1 },
       chords,
       colormap: 'default',
       transform: 'none',
@@ -527,8 +564,91 @@ describe('the names round the outside', () => {
       boldFont: '600 11px sans-serif',
     })
     const names = written.filter((entry) => entry.text.startsWith('s'))
-    expect(names.map((entry) => entry.text)).toEqual(['s50', 's80'])
+    expect(names.map((entry) => entry.text)).toEqual(['s20', 's30', 's0'])
     expect(names[0].font).toBe('600 11px sans-serif')
+  })
+
+  it('names every section of a small circle, the long contigs of a large one, and no genome past fifty', () => {
+    const sections = (n: number, level: MatrixResult['level'], length: (index: number) => number): CircleModel => {
+      const rows = Array.from({ length: n }, () => new Array<number>(n).fill(1))
+      const groups = Array.from({ length: n }, (_, index) => ({
+        label: `u${index}`,
+        start: index,
+        end: index + 1,
+        unitLength: length(index),
+      }))
+      return circleModelOf(block(rows, groups, { level }), {
+        genomeLength: (name) => length(Number(name.slice(1))),
+      }) as CircleModel
+    }
+    expect(namePolicy(sections(48, 'genome', () => 4e6))).toBe('all')
+    expect(namePolicy(sections(51, 'genome', () => 4e6))).toBe('none')
+    // One genome's contigs, past fifty: the long ones.
+    const contigs = sections(208, 'bin', (index) => (index < 10 ? 120_000 : 8_000))
+    expect(namePolicy(contigs)).toBe('long')
+    const geometry = circleGeometry(contigs, { width: 900, height: 900, rings: [], measure, fontPx: 11 })
+    for (let u = 0; u < 208; u++) if (geometry.labelled[u] === 1) expect(contigs.units[u].bp).toBeGreaterThanOrEqual(50_000)
+    expect([...geometry.labelled].some((named) => named === 1)).toBe(true)
+  })
+
+  it('keeps no room for names a circle of thousands of genomes cannot give, nor with the labels off', () => {
+    const n = 2000
+    const rows = Array.from({ length: n }, () => new Float32Array(n).fill(1))
+    const groups = Array.from({ length: n }, (_, index) => ({ label: `metator_${index}`, start: index, end: index + 1 }))
+    const many = circleModelOf(
+      {
+        nrows: n,
+        ncols: n,
+        values: Float32Array.from(rows.flatMap((row) => [...row])),
+        rowExtent: [0, n],
+        colExtent: [0, n],
+        rowGroups: groups,
+        colGroups: groups,
+        level: 'genome',
+      },
+      // One genome a hundred times the others: large enough to carry a name,
+      // and still not named.
+      { genomeLength: (name) => (name === 'metator_0' ? 4e8 : 4e6) },
+      1,
+      50,
+    ) as CircleModel
+    const crowded = circleGeometry(many, { width: 800, height: 800, rings: [], measure, fontPx: 11 })
+    expect(crowded.names).toBe(false)
+    expect(crowded.labelAt).toBe(crowded.outer)
+    expect([...crowded.labelled].every((named) => named === 0)).toBe(true)
+    // The mock community's forty-eight, with the labels overlay off.
+    const few = circleModelOf(
+      block(
+        [
+          [1, 1],
+          [1, 1],
+        ],
+        [
+          { label: 'A', start: 0, end: 1 },
+          { label: 'B', start: 1, end: 2 },
+        ],
+        { level: 'genome' },
+      ),
+    ) as CircleModel
+    const on = circleGeometry(few, { width: 400, height: 400, rings: [], measure, fontPx: 11 })
+    const off = circleGeometry(few, { width: 400, height: 400, rings: [], measure, fontPx: 11, names: false })
+    expect(on.names).toBe(true)
+    expect(off.names).toBe(false)
+    expect(off.sections.outer).toBeGreaterThan(on.sections.outer)
+    // And with no room, not even a hover writes a name.
+    const { ctx, written } = recorder()
+    paintLabels(ctx, {
+      model: few,
+      geometry: off,
+      palette: LIGHT_CIRCLE_PALETTE,
+      focus: { unit: 0, slot: -1, group: -1 },
+      chords: layoutChords(few, off, { limit: Infinity, transform: 'none', colormap: 'default' }),
+      colormap: 'default',
+      transform: 'none',
+      font: '11px sans-serif',
+      boldFont: '600 11px sans-serif',
+    })
+    expect(written.filter((entry) => /^[AB]$/.test(entry.text))).toEqual([])
   })
 
   it('keeps a lit genome’s name over a partner beside it', () => {
@@ -747,5 +867,89 @@ describe('the rings', () => {
     expect(bpAtAngle(geometry, model, 1, arc.a0)).toBeCloseTo(250)
     expect(sequenceAt(model, 0, 700)).toEqual({ name: 'a2', position: 100, length: 400 })
     expect(binAt(bins, 1, arc.a0 + 2 * Math.PI)).toBe(6)
+  })
+
+  /** A context that records every fill and stroke and the style it was made in. */
+  function inked(): { ctx: CanvasRenderingContext2D; marks: Array<{ op: 'fill' | 'stroke'; style: string; width: number }> } {
+    const marks: Array<{ op: 'fill' | 'stroke'; style: string; width: number }> = []
+    const state: Record<string, unknown> = { fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1 }
+    const ctx = new Proxy(state, {
+      get: (target, key: string) => {
+        if (key in target) return target[key]
+        if (key === 'fill') return () => marks.push({ op: 'fill', style: String(target.fillStyle), width: 0 })
+        if (key === 'stroke') {
+          return () => marks.push({ op: 'stroke', style: String(target.strokeStyle), width: Number(target.lineWidth) })
+        }
+        return () => {}
+      },
+      set: (target, key: string, value) => {
+        target[key] = value
+        return true
+      },
+    })
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, marks }
+  }
+  const area = (mode: 'area' | 'bar'): RingPaint => ({
+    id: 'r',
+    label: 'r',
+    colour: '#d55e00',
+    opacity: 1,
+    content: {
+      kind: 'values',
+      values: { kind: 'quantitative', values: Float32Array.from([1, 2, 3, 2, 1, 1, 2, 3, 2, 1]), extent: { min: 1, max: 3 } },
+      limits: { min: 0, max: 3 },
+      mode,
+      colormap: 'default',
+      flip: false,
+    },
+  })
+  const ink = (patch: Partial<RingInk>): RingInk => ({ guide: '#222', fills: true, outline: true, baseline: true, ...patch })
+  const band = geometry.rings[0]
+
+  it('fills an area ring and outlines its profile in the plot’s ink, as a lane does', () => {
+    const { ctx, marks } = inked()
+    paintRing(ctx, area('area'), band, geometry, bins, '#eee', ink({ baseline: false }))
+    const fills = marks.filter((mark) => mark.op === 'fill' && mark.style === '#d55e00')
+    const strokes = marks.filter((mark) => mark.op === 'stroke')
+    // A fill and an outline a section.
+    expect(fills).toHaveLength(2)
+    expect(strokes.map((mark) => [mark.style, mark.width])).toEqual([
+      ['#222', 0.75],
+      ['#222', 0.75],
+    ])
+  })
+
+  it('leaves the line alone with fills off, in its own colour with the outline off', () => {
+    const { ctx, marks } = inked()
+    paintRing(ctx, area('area'), band, geometry, bins, '#eee', ink({ fills: false, outline: false, baseline: false }))
+    expect(marks.filter((mark) => mark.op === 'fill' && mark.style === '#d55e00')).toHaveLength(0)
+    expect(marks.filter((mark) => mark.op === 'stroke').map((mark) => mark.style)).toEqual(['#d55e00', '#d55e00'])
+  })
+
+  it('outlines bars along their tops, a line a section, and draws the floor under them', () => {
+    const { ctx, marks } = inked()
+    paintRing(ctx, area('bar'), band, geometry, bins, null, ink({}))
+    // Bars stay filled whatever `fills` says; no wash where none is asked for.
+    expect(marks.filter((mark) => mark.op === 'fill')).toHaveLength(10)
+    const strokes = marks.filter((mark) => mark.op === 'stroke')
+    // Two tops and one floor — not a box round every bar.
+    expect(strokes).toHaveLength(3)
+    const { ctx: bare, marks: none } = inked()
+    paintRing(bare, area('bar'), band, geometry, bins, null, ink({ outline: false, baseline: false }))
+    expect(none.filter((mark) => mark.op === 'stroke')).toHaveLength(0)
+  })
+})
+
+describe('a ring moved', () => {
+  it('moves its tracks as one block, after the other ring going out and before it going in', () => {
+    // The overlay group g is a and c; b and d are rings of their own, x is a
+    // track drawn on no map.
+    const order = ['a', 'b', 'x', 'c', 'd']
+    expect(ringBlockOrder(order, ['a', 'c'], ['d'], true)).toEqual(['b', 'x', 'd', 'a', 'c'])
+    expect(ringBlockOrder(order, ['d'], ['a', 'c'], false)).toEqual(['d', 'a', 'b', 'x', 'c'])
+    expect(ringBlockOrder(order, ['b'], ['d'], true)).toEqual(['a', 'x', 'c', 'd', 'b'])
+    // Nothing to move, or nowhere to move it: as it was.
+    expect(ringBlockOrder(order, ['q'], ['d'], true)).toEqual(order)
+    expect(ringBlockOrder(order, ['a'], ['q'], true)).toEqual(order)
   })
 })

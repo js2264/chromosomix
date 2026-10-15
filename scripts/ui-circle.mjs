@@ -1,24 +1,26 @@
 /**
  * The circle of a metagenome (§7.6, dev), in headless Chromium on the mock
  * community demo: the Genomes table's `circle →` and the gate it lands on, the
- * 48 genomes drawn round with their chords, a genome hovered with its partners
- * lit and weighed, a chord hovered, the chords thinned from the Map card, two
- * tracks dropped on the Tracks card as rings — a bedGraph of Hi-C hits per kb
- * (log10) and a BED of the long contigs, both written here from the file's own
- * contig table — four metadata columns added as four more, a ring hovered, held
- * and dragged to another place with the Metadata card following, the contig ×
- * contig circle grouped by genome, the five sub-bins of one recursive bin ticked
- * and opened as a circle — cut into its genomes, then into their contigs with a
- * genome's band hovered — an arc clicked open into its genome's contigs drawn
- * round, a chord clicked open into its pair (where the toggle says why there is
- * no circle), the figure saved as a PNG and as a PDF and each written out, the
- * dark theme, the palette's command, and the dev features off. Prints what it found
- * at each step — the geometry the canvas publishes, the tooltips, the order of
- * the rings and of the Tracks card — so a picture that did not change is a line
- * in the log as well.
+ * 48 genomes drawn round with the names off — the demo's `labels`, as the
+ * square's — and then on from the Map card, a genome hovered with its partners
+ * lit and weighed, a chord hovered, the chords thinned, three tracks dropped on
+ * the Tracks card as rings — two bedGraphs, Hi-C hits and restriction sites per
+ * kb (log10), and a BED of the long contigs, all written here from the file's
+ * own contig table — four metadata columns added as four more, a ring hovered
+ * with the crosshair's radial line through every ring, held and dragged to
+ * another place with the Metadata card following, the two bedGraphs grouped from
+ * the batch box and overlaid into one ring from the Groups card, then the
+ * Aesthetics column's switches one at a time — track text, track fill and the
+ * legend off, and stretch — the contig × contig circle under its genome band,
+ * five ticked sub-bins cut into genomes and then contigs with a band hovered, a
+ * band and a chord clicked open, the figure saved as a PNG and a PDF and each
+ * written out, the dark theme, the palette's command and the dev features off.
+ * Prints what it found at each step — the geometry the canvas publishes, the
+ * tooltips, the toggles offered and lit, the rings' order and thickness — so a
+ * picture that did not change is a line in the log as well.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci22, ci-figure.png, ci-figure.pdf, ci-figure-page.png
+ *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci28, ci-figure.png, ci-figure.pdf, ci-figure-page.png
  */
 
 import { execFileSync } from 'node:child_process'
@@ -31,20 +33,24 @@ const OUT = process.argv[2] ?? 'gallery'
 const DEMO = 'demo/metagenomics/mock-community'
 mkdirSync(OUT, { recursive: true })
 
-// Two tracks along the community's contigs, from the file's own contig table:
-// the Hi-C hits each contig holds per kb — on a log scale, since a contig of a
-// few hundred bases can hold thousands per kb — and the contigs of 100 kb or more.
+// Three tracks along the community's contigs, from the file's own contig table:
+// the Hi-C hits and the restriction sites each contig holds per kb — on a log
+// scale, since a contig of a few hundred bases can hold thousands of hits per
+// kb — and the contigs of 100 kb or more.
 await h5wasm.ready
 const h5 = new h5wasm.File(`${DEMO}/Mock_microbial_community.metacool`, 'r')
 const contigNames = h5.get('contigs/name').value
 const contigLengths = h5.get('contigs/length').value
 const contigHits = h5.get('contigs/Hit').value
+const contigSites = h5.get('contigs/Restriction_site').value
 h5.close()
 let bedGraph = 'track type=bedGraph name="Hi-C hits per kb (log10)"\n'
+let sites = 'track type=bedGraph name="restriction sites per kb (log10)"\n'
 let bed = ''
 for (let i = 0; i < contigNames.length; i++) {
   const length = Number(contigLengths[i])
   bedGraph += `${contigNames[i]}\t0\t${length}\t${Math.log10(1 + (Number(contigHits[i]) / length) * 1000).toFixed(3)}\n`
+  sites += `${contigNames[i]}\t0\t${length}\t${Math.log10(1 + (Number(contigSites[i]) / length) * 1000).toFixed(3)}\n`
   if (length >= 100_000) bed += `${contigNames[i]}\t0\t${length}\t${contigNames[i]}\n`
 }
 
@@ -101,6 +107,22 @@ async function settledCircle(timeout = 60_000) {
     last = now
   }
   return last
+}
+
+/**
+ * Wait for the circle to differ from `before`, then for it to hold still: a
+ * step that changes the picture is read after the change, not before it — two
+ * polls of the old geometry match as well as two of the new.
+ */
+async function changedCircle(before, timeout = 10_000) {
+  const was = JSON.stringify(before)
+  const until = Date.now() + timeout
+  while (Date.now() < until) {
+    const now = await geo()
+    if (now !== null && JSON.stringify(now) !== was) break
+    await sleep(100)
+  }
+  return settledCircle()
 }
 
 /**
@@ -169,6 +191,30 @@ async function keep(count, name) {
 
 const exportCard = () => page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Export$/ }) }).first()
 
+/** Press the visible toggle whose tooltip starts with `title`; says whether there was one. */
+async function press(title) {
+  const pressed = await page.evaluate((t) => {
+    const button = [...document.querySelectorAll('.controls-card button')].find(
+      (node) => node.getBoundingClientRect().width > 0 && node.title.startsWith(t),
+    )
+    if (button === undefined) return false
+    button.click()
+    return true
+  }, title)
+  await sleep(600)
+  return pressed
+}
+
+/** The overlay toggles each visible Map and Tracks card offers, and which are lit. */
+const overlays = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.controls-card .plot-icon-row button')]
+      .filter((node) => node.getBoundingClientRect().width > 0 && node.hasAttribute('aria-pressed') && / — /.test(node.title))
+      .map((node) => `${node.title.split(' — ')[0]} ${node.getAttribute('aria-pressed') === 'true' ? 'on' : 'off'}`)
+      .join(' · '),
+  )
+const thickness = (G) => G.rings.map((ring) => `${ring.name} ${Math.round(ring.outer - ring.inner)}px`).join(' | ')
+
 // ---------------------------------------------------------------------------
 // The door: the Genomes table's last button, and the gate it opens on.
 // ---------------------------------------------------------------------------
@@ -189,10 +235,17 @@ console.log('hash:', decodeURIComponent(await page.evaluate(() => location.hash)
 await shot('ci02-gate')
 await compute()
 let G = await settledCircle(90_000)
-console.log('genome level:', describe(G))
-console.log('key and hint:', await page.evaluate(() => document.querySelector('.circle-hint')?.textContent ?? null))
+console.log('genome level:', describe(G), `· names ${G.names ? 'kept' : 'none'}`)
+console.log('Map card overlays while drawn round:', await overlays())
 await away()
 await shot('ci03-circle')
+
+// The names: the Map card's `labels`, off in this demo as it is for the square.
+console.log('labels pressed:', await press('labels —'))
+G = await settledCircle()
+console.log('labels on:', `names ${G.names ? 'kept' : 'none'} · sections at ${G.sections[1]}px of ${Math.round(G.width / 2)}`)
+await away()
+await shot('ci04-labels-on')
 
 // A genome hovered: its partners lit and counted, the rest set back.
 const RICH = 'metator_00002_00003'
@@ -200,14 +253,14 @@ let at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`hovered ${RICH}:`, await tip())
-await shot('ci04-hover-genome')
+await shot('ci05-hover-genome')
 
 // The strongest chord hovered: its two ends lit, the rest dimmed.
 const strongest = G.strongest[0]
 await page.mouse.move(G.left + strongest.x, G.top + strongest.y)
 await sleep(500)
 console.log(`hovered the strongest chord, ${strongest.a} × ${strongest.b}:`, await tip())
-await shot('ci05-hover-chord')
+await shot('ci06-hover-chord')
 
 // Thinned from the Map card: the strongest 50.
 await away()
@@ -215,7 +268,7 @@ const chords = page.locator('.controls-card.is-circle select').filter({ has: pag
 await chords.selectOption({ label: 'strongest 50' })
 G = await settledCircle()
 console.log('strongest 50:', describe(G))
-await shot('ci06-strongest-50')
+await shot('ci07-strongest-50')
 await chords.selectOption({ label: 'all' })
 G = await settledCircle()
 
@@ -237,13 +290,14 @@ await page.evaluate(
   },
   [
     { name: 'hits_per_kb_log10.bedgraph', text: bedGraph },
+    { name: 'sites_per_kb_log10.bedgraph', text: sites },
     { name: 'long_contigs.bed', text: bed },
   ],
 )
 await sleep(3000)
 G = await settledCircle()
-console.log('two tracks dropped:', describe(G), '·', await where())
-await shot('ci07-track-rings')
+console.log('three tracks dropped:', describe(G), '·', await where())
+await shot('ci08-track-rings')
 
 // The Metadata card, folded until it is asked for, opened as a reader would.
 await page.evaluate(() => {
@@ -266,11 +320,11 @@ for (const value of ['genomes/parent', 'genomes/Completeness', 'contigs/GC_conte
 }
 G = await settledCircle()
 console.log('with metadata:', describe(G))
-await shot('ci08-metadata-rings')
+await shot('ci09-metadata-rings')
 await columnOpen('2', '.ann-drop', false)
 G = await settledCircle()
 await away()
-await shot('ci09-rings')
+await shot('ci10-rings')
 
 // A ring hovered: its name, the place and the value there.
 const gc = G.rings.find((ring) => ring.id.includes('GC_content')) ?? G.rings[0]
@@ -278,7 +332,19 @@ at = point(G, (gc.inner + gc.outer) / 2, 0.35)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('ring hovered:', await tip())
-await shot('ci10-ring-hover')
+console.log(
+  'the crosshair:',
+  await page.evaluate(() => {
+    const guide = document.querySelector('.circle-guide')
+    const ctx = guide?.getContext('2d')
+    if (!guide || !ctx) return 'no layer'
+    const data = ctx.getImageData(0, 0, guide.width, guide.height).data
+    let inked = 0
+    for (let k = 3; k < data.length; k += 4) if (data[k] > 0) inked++
+    return `${inked} pixels drawn on its layer`
+  }),
+)
+await shot('ci11-crosshair')
 
 // The outermost ring held and carried in, past two others, then let go.
 const order = (G) => G.rings.map((ring) => ring.name).join(' | ')
@@ -294,7 +360,7 @@ for (let k = 1; k <= 16; k++) {
   await sleep(35)
 }
 await sleep(400)
-await shot('ci11-ring-held')
+await shot('ci12-ring-held')
 await page.mouse.up()
 G = await settledCircle()
 console.log('rings after: ', order(G))
@@ -307,8 +373,93 @@ console.log(
 // The Metadata card's rows, which moved with the ring.
 await page.locator('.metadata-card').first().scrollIntoViewIfNeeded().catch(() => {})
 await away()
-await shot('ci12-ring-dropped')
+await shot('ci13-ring-dropped')
+
+// The two bedGraphs ticked, grouped from the batch box, and overlaid into one
+// ring from the Groups card — as they would be into one lane beside the map.
+for (const name of ['hits_per_kb_log10', 'sites_per_kb_log10']) {
+  const ticked = await page.evaluate((label) => {
+    const rows = [...document.querySelectorAll('.annotation-card:not(.metadata-card) .ann-row')]
+    const row = rows.find((node) => {
+      const field = node.querySelector('.ann-name')
+      return (field?.value ?? field?.textContent?.trim()) === label
+    })
+    const tick = row?.querySelector('.ann-tick')
+    if (!(tick instanceof HTMLElement)) return false
+    tick.click()
+    return true
+  }, name)
+  console.log(`  ticked ${name}:`, ticked)
+  await sleep(400)
+}
+page.once('dialog', (dialog) => void dialog.accept('per kb'))
+await page
+  .locator('.ann-batch .field')
+  .filter({ has: page.locator('.field-label', { hasText: /^group$/ }) })
+  .first()
+  .locator('select')
+  .selectOption(' new')
+await sleep(800)
 await columnOpen('2', '.ann-drop', false)
+const groupsCard = page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Groups$/ }) }).first()
+await groupsCard.scrollIntoViewIfNeeded().catch(() => {})
+console.log('overlaid:', await press('A lane each. Press to draw all of these into one lane'))
+G = await settledCircle()
+console.log('one ring for the group:', describe(G))
+const both = G.rings.find((ring) => ring.name === 'per kb') ?? G.rings[0]
+at = point(G, (both.inner + both.outer) / 2, 0.35)
+await page.mouse.move(at.x, at.y)
+await sleep(500)
+console.log('the group ring hovered:', await tip())
+await shot('ci14-group-overlay')
+await away()
+
+// The Tracks card's switches, one at a time, each put back after its picture.
+const tracksCard = page.locator('.controls-card').filter({ has: page.locator('.controls-title', { hasText: /^Tracks$/ }) }).first()
+await tracksCard.scrollIntoViewIfNeeded().catch(() => {})
+console.log('Tracks card overlays:', await overlays())
+console.log('track text off:', await press('track text —'))
+await away()
+await shot('ci15-track-text-off')
+await press('track text —')
+console.log('track fill off:', await press('track fill —'))
+await away()
+await shot('ci16-track-fill-off')
+await press('track fill —')
+
+// The legend off: no key on the circle or in its figure, and the hint in the
+// corner the key stood in.
+await exportCard().scrollIntoViewIfNeeded().catch(() => {})
+console.log('legend off:', await press('legend —'))
+G = await settledCircle()
+at = sectionOf(G, RICH)
+await page.mouse.move(G.left + G.width - 40, G.top + 40)
+await sleep(600)
+console.log('hint with no key:', await page.evaluate(() => document.querySelector('.circle-hint')?.textContent ?? null))
+await shot('ci17-legend-off')
+await away()
+await press('legend —')
+
+// Stretch, which beside a map fills the lanes' room: here the rings' depth —
+// with the names off, as the demo has them, so there is depth to fill.
+console.log('labels off again:', await press('labels —'))
+const unstretched = await settledCircle()
+console.log('rings before the stretch:', thickness(unstretched))
+console.log('stretch:', await press('Stretch every track'))
+G = await changedCircle(unstretched)
+console.log('rings after the stretch: ', thickness(G))
+await away()
+await shot('ci18-stretched')
+
+// The names back on, and the text size, which every name and the key are
+// written in.
+await press('labels —')
+const named = (await settledCircle()).fontPx
+await press('Larger text on the pictures')
+const larger = (await settledCircle()).fontPx
+await press('Smaller text on the pictures')
+G = await settledCircle()
+console.log(`names written at ${named}px, at ${larger}px a text size up, and at ${G.fontPx}px back down`)
 
 // ---------------------------------------------------------------------------
 // The contig × contig circle, grouped by genome under a band.
@@ -319,14 +470,14 @@ await level.selectOption({ label: 'contig × contig' })
 await sleep(1500)
 await compute()
 G = await settledCircle(120_000)
-console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome`)
+console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome · names ${G.names ? 'kept' : 'none'}`)
 await away()
-await shot('ci13-contig-level')
+await shot('ci19-contig-level')
 at = sectionOf(G, G.units[Math.floor(G.units.length * 0.12)].name)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('contig hovered:', await tip())
-await shot('ci14-contig-hover')
+await shot('ci20-contig-hover')
 
 // ---------------------------------------------------------------------------
 // A subset: the five sub-bins of one recursive bin, ticked and opened — cut
@@ -350,14 +501,14 @@ G = await settledCircle(90_000)
 const selection = await where()
 console.log('selection:', describe(G), '·', selection)
 await away()
-await shot('ci15-selection')
+await shot('ci21-selection')
 
 const sections = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="contigs"]') }).first()
 await sections.selectOption('contigs')
 G = await settledCircle()
 console.log('cut into contigs:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome ·`, await where())
 await away()
-await shot('ci16-selection-contigs')
+await shot('ci22-selection-contigs')
 
 // A genome's band hovered: the chords that leave it, and nothing else.
 const BAND = 'metator_00002_00003'
@@ -366,7 +517,7 @@ at = point(G, (G.band[0] + G.band[1]) / 2, group.mid)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`band of ${group.name} hovered:`, await tip())
-await shot('ci17-band-hover')
+await shot('ci23-band-hover')
 
 // ---------------------------------------------------------------------------
 // Clicks that open: a band into its genome, a chord into its pair.
@@ -377,7 +528,7 @@ await sleep(2500)
 G = await settledCircle(90_000)
 console.log(`clicked the band of ${group.name}:`, (await page.locator('.breadcrumb').innerText()).replace(/\s+/g, ' '), '·', describe(G))
 await away()
-await shot('ci18-genome-opened')
+await shot('ci24-genome-opened')
 
 await page.evaluate((hash) => { location.hash = `${location.hash.match(/uri=[^&]*/)[0]}&${hash.replace(/^#/, '').replace(/&sections=contigs/, '')}` }, selection)
 await sleep(2500)
@@ -395,7 +546,7 @@ console.log(
     return button === undefined ? 'none' : { disabled: button.disabled, pressed: button.getAttribute('aria-pressed'), title: button.title }
   }),
 )
-await shot('ci19-chord-opened')
+await shot('ci25-chord-opened')
 
 // ---------------------------------------------------------------------------
 // The figure, saved: a PNG and a PDF of the whole metagenome's circle.
@@ -441,7 +592,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
-await shot('ci20-dark')
+await shot('ci26-dark')
 await away()
 await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
 await page.keyboard.press('t')
@@ -455,7 +606,7 @@ await sleep(400)
 await page.keyboard.type('circle')
 await sleep(600)
 console.log('palette:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 5)))
-await shot('ci21-palette')
+await shot('ci27-palette')
 await page.keyboard.press('Escape')
 await sleep(300)
 
@@ -473,6 +624,6 @@ console.log(
     said: (document.querySelector('.error, .error-page, .gate, main')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
   })),
 )
-await shot('ci22-dev-off')
+await shot('ci28-dev-off')
 
 await g.close()

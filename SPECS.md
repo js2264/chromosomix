@@ -2718,7 +2718,12 @@ the same cells, read once, at the grid the square holds — so turning it on rea
 off is immediate, and the square and the circle never disagree about what the block says.
 **Built**: `render/circle.ts` (the sections, the chords, the geometry, the hit test),
 `render/circleRings.ts` (the rings), `ui/CircleView.ts` (the canvas, the hover, the clicks, the
-drag), and the toggle and rows on the Map card.
+drag), and the toggle and rows on the Map card. **Drawn here, not by a circos library**: the ones
+there are (circos.js, BioCircos, d3's chord layout) draw SVG — a node a ribbon at 3,000 chords and a
+node a bin at 4,096 sections — which the figure's vector page (§16.5) does not take, and the parts
+that make this the map's circle rather than a chart of it — the block's own cells, the hit test, the
+rings from the lanes' store and their drag, the Aesthetics column's switches — would each have been
+written round one.
 
 **Only on a metagenome, and only on a square block.** Offered on a file with a genome layer, in every
 view whose block has one axis on both sides: the whole metagenome at its three levels (§7.3), a
@@ -2731,8 +2736,11 @@ reason, as it is on a block of fewer than two sections.
 the refit, lit while the circle is drawn (§26.3) — and while it is lit the card says only what the
 circle answers to: the transform and the colours stay, because they colour the chords, and two rows
 of the circle's own appear, `sections` and `chords`, while the square's — its other picture toggles,
-the score, the despeckle, the clip, the comparison, the level and the overlays — step aside and come
-back as they were. The Genomes table's *circle →*, last in its row (§5.1), opens the ticked genomes
+the score, the despeckle, the clip, the comparison and the level — step aside and come back as they
+were. Its `overlays` row stays, with the four the circle reads (`CIRCLE_OPTIONS`): `labels` names the
+sections, `legend` is the key, `crosshair` the guide line through the rings and `tooltip` the card;
+`dividers`, `breaks` and `ticks` are marks on the square's cells and edges, and step aside with it.
+The Tracks card's switches all act on the rings, below. The Genomes table's *circle →*, last in its row (§5.1), opens the ticked genomes
 drawn round, or every genome where none is ticked: the whole metagenome at `genome × genome`, behind
 the same gate as *whole metagenome →* (§7.3), one ticked genome as its contigs, several as one map.
 The palette's *Circle* is the toggle's press, with its state on the row. All three write one key,
@@ -2751,11 +2759,22 @@ under its genome's band, which is how a reader asks which contigs of one genome 
 `sections=contigs`, absent for genomes, derived and a reading as `circle` is; every other block has
 one cut, and the row is hidden there. An arc is as long as its section in base pairs — read from the
 file's genome and contig tables where the block does not carry them — with a small gap between two
-sections and a wider opening at twelve o'clock, which is where the rings are named. Sections are
-named radially, turned over on the left half so none is upside down, and only where an arc holds a
-line of text; a name longer than the room keeps both its ends and loses its middle, since the end of
-`metator_00002_00004` is what tells it from its siblings. Over contig sections the genome band
-carries the names and the contigs are drawn unnamed until one is lit.
+sections and a wider opening at twelve o'clock, which is where the rings are named.
+
+**The names are the square's labels** (`namePolicy`). They follow the Map card's `labels` overlay —
+block names, the square's in its gutters — so they are **off** where that is, which is its default
+and the mock community's, and a reader who turns them on for the square has them on round the circle
+too; off, the room they took is the circle's. On, the square's rule, with no zoom to bring more out:
+every name where there are no more than fifty to give (`MAX_CATEGORICAL_TICKS`); past fifty, a
+circle of contigs — one genome's, ticked ones — names those of 50 kb or more (`LABEL_MIN_SPAN_BP`),
+the few a reader looks for, and **a circle of genomes names none**. A thousand MAGs round a circle are
+read by its shape, a name every few degrees is a smear and the largest few are noise; the tooltip
+says which is under the pointer. Over contig sections the genome band carries the names, counted as
+genomes, and a contig is named only once it is lit. Room is kept only for names written at rest, so
+where none are the circle is that much larger and no name is written even on hover. A name is
+radial, turned over on the left half so none is upside down, written only where its arc holds a line
+of text, and one longer than the room keeps both its ends and loses its middle, since the end of
+`metator_00002_00004` is what tells it from its siblings.
 
 **A chord is the sum of the block's cells between two sections**, over its upper triangle — a cell
 inside one section adds to that section's contacts with itself, a filtered `NaN` adds nothing — so
@@ -2783,7 +2802,8 @@ its middle.
 chords are drawn of how many there are. It stands beside the circle where the column is wide enough
 and in its corner where it is not, and under it, on hover, the gestures nothing on the picture
 announces: *Click an arc or a chord to open it*, or, with rings, *Click to open; drag a ring to move
-it*.
+it*. The `legend` overlay turns it off, on screen and in the figure, as it does the square's; the
+hint then stands in the corner, and the caption still states the ramp's two ends.
 
 **Hovering** a section lights it in the accent, tints its partners by their contacts with it, names
 them and writes each partner's contacts where its chord lands — at most twelve, and only those with a
@@ -2795,7 +2815,12 @@ length, its contacts within itself and with the others, with that share, and its
 partners. A genome's band, over contig sections, lights the chords that **leave** the genome and
 names the contigs outside it they reach. A chord lights its two ends and says how many contacts it
 carries and what share each end's contacts with the others that is. A ring says its name, the place —
-the genome, the contig and the position — and its value there.
+the genome, the contig and the position — and its value there; a ring of several tracks, each
+track's name beside its value. With the `crosshair` on, the pointer over the rings or the sections
+draws the square's guide line the circle's way: a radial hairline through every ring at its angle,
+in the crosshair's blue, on a layer of its own so following the hand redraws one line and not the
+picture. Over the chord disc there is none, since a chord under the hand is lit whole. The `tooltip`
+overlay turns the card off.
 
 **A click opens what it is**, as an axis label and a cell of the square do: a genome's arc its map
 (drawn round, the setting being a reading), a contig's arc its window, a genome's band that genome, a
@@ -2806,19 +2831,38 @@ ring is the start of a drag, and opens nothing.
 alignment's coverage) in its lane's mode, heatmap, line, points, bar or area; features (BED, GTF,
 variants, a karyotype, bar charts) as wedges; a metadata column or a set of classes as one value per
 stretch of each section's contigs — in the store's order, the first nearest the chords, each as thick
-beside the others as its lane is tall beside theirs, on a faint band of its own, named at twelve
-o'clock in a size its thickness can hold. Drawn along what each section is made of, which is contigs: a genome's arc is its contigs laid
+as its lane is tall where they all fit between the sections and a chord disc kept to a third of the
+radius, in proportion where they do not, and never past a sixth of the radius; on a faint band of
+its own, named at twelve o'clock in a size its thickness can hold.
+
+**The Tracks card's switches are the rings'**, as they are every lane's (`RingInk`): `track text`
+writes the rings' names, and off leaves the ink alone; `track fill` fills an area ring under its
+line, and off leaves the line; `track outline` draws an area's or a line's profile, and the tops of a
+bar ring's bars, as a dark hairline — a rule along the top, a step a bin, since a box round each of a
+thousand bars a pixel wide is the ring drawn black — and round every feature; `track floor` rules
+each ring's floor under every section. A signed track has its zero ruled, as in its lane. `opacity`
+fades every ring; *autoscale* puts every ring back on its own range; and while the circle is drawn
+`track height`, *stretch* and *shrink* act on the rings — which hold every track the map draws, a
+bigWig on a `genome × genome` block among them, where the square has no lane — *stretch* making them
+one thickness that fills their room. The text size is the names', the rings' and the key's.
+
+**Groups are the lanes' groups** (§8.8): a group's tracks share one range over every ring that holds
+one of them, unless it is set to scale each on its own, and a group drawn **in one lane** is drawn in
+one ring — its tracks over one another, translucent as in their lane, the ring named by the group and
+its tooltip naming each track beside its value. Drawn along what each section is made of, which is contigs: a genome's arc is its contigs laid
 end to end, so a contig's GC is a ring along its genome's arc on a `genome × genome` circle the square
 beside it could not draw a lane of. The Metadata card therefore offers, while the circle is drawn,
 what the rings can show — the genomes' and the contigs' columns, and not a bin's — whatever the
 square's level. **One order everywhere**: a ring pressed and dragged in or out past the others is
 outlined in the accent while it is held, and let go it moves its row in the store
 (`AnnotationStore.moveTo`), so the Tracks card, the Metadata card and the lanes beside every map take
-the same order; Escape puts it back where it was.
+the same order — an overlay group's tracks moved as one block (`ringBlockOrder`), or it would re-form
+round whichever of them came first; Escape puts it back where it was.
 
 **Saved as the square is**: PNG, PDF and copy from the Export card (§16.5), pinned to the light
 palette, the circle and its key cropped to what they cover, under the same caption — the view, the
-file, the sections, the chords drawn and the transform. The PDF is paths and text, no image. On
+file, the sections, the chords drawn, the transform and the chords' two ends, as the square's caption
+states its colours'. The PDF is paths and text, no image. On
 screen in the dark theme the picture stays paper, as the square does. A companion map of a deck
 (§16) is not drawn round.
 
@@ -3394,7 +3438,9 @@ them all to the shortest; and *track height*, a typed box between two one-pixel 
 there used to be three that disagreed. On both surfaces the box reads the lanes on screen, blank
 where they disagree, follows them when stretch, shrink, a group or a dragged border moves them, and
 a step from blank starts at their middle height; the browser's was built without its lanes and
-showed the last number it had applied.
+showed the last number it had applied. **The map drawn round** (§7.6) is a third reader of all of
+it: its rings are `planStack`'s slots against `resolveGroupExtents`'s ranges, and while it is drawn
+the bulk controls and the box act on the rings rather than on the square's put-away lanes.
 
 **A lane's limits are the colour clip's control** (§7.1, `ui/ClipRange.ts`'s idiom): two number
 boxes, the `⇅` mark every autoscale in the app wears — unavailable while there is nothing to go back

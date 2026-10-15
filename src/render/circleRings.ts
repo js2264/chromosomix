@@ -369,6 +369,25 @@ export interface RingPaint {
 }
 
 /**
+ * The Tracks card's four marks, as a ring draws them (§7.6) — the same
+ * preferences every lane beside the map reads (`ui/plotOptions.ts`), so a
+ * reader who turns a fill off beside the square finds it off round the circle.
+ */
+export interface RingInk {
+  /** The plot's ink, which outlines, floors and zero lines are drawn in. */
+  guide: string
+  /** The area under a line filled. Bars are the mark itself and stay filled. */
+  fills: boolean
+  /** A dark hairline along a profile's edge, and round every bar and feature. */
+  outline: boolean
+  /** A rule along each ring's floor, under every section. */
+  baseline: boolean
+}
+
+/** The lanes' own hairline, which an outline and a floor are drawn at. */
+const HAIRLINE = 0.75
+
+/**
  * A ring: its band, then its values.
  *
  * The band is the lane's background — a wash over each section's arc, so a ring
@@ -384,22 +403,43 @@ export function paintRing(
   band: { inner: number; outer: number },
   geometry: CircleGeometry,
   bins: CircleBins,
-  wash: string,
+  wash: string | null,
+  ink: RingInk,
   dim = false,
 ): void {
   const { cx, cy } = geometry
   const n = geometry.arcs.length / 2
-  ctx.globalAlpha = 1
-  ctx.fillStyle = wash
-  for (let u = 0; u < n; u++) {
-    ctx.beginPath()
-    annulusPath(ctx, cx, cy, band.inner, band.outer, geometry.arcs[2 * u], geometry.arcs[2 * u + 1])
-    ctx.fill()
+  // The band once, under the first of the tracks a ring holds; an overlaid
+  // track is drawn over the others with none of its own.
+  if (wash !== null) {
+    ctx.globalAlpha = 1
+    ctx.fillStyle = wash
+    for (let u = 0; u < n; u++) {
+      ctx.beginPath()
+      annulusPath(ctx, cx, cy, band.inner, band.outer, geometry.arcs[2 * u], geometry.arcs[2 * u + 1])
+      ctx.fill()
+    }
   }
   const alpha = Math.max(0.05, Math.min(1, ring.opacity)) * (dim ? 0.3 : 1)
   ctx.globalAlpha = alpha
   const content = ring.content
   const thick = band.outer - band.inner
+  // A rule round the circle at one radius, under each section and not across
+  // the gaps between them, in the plot's ink: a ring's floor and its zero line.
+  const rule = (r: number, opacity: number, width: number): void => {
+    ctx.save()
+    ctx.globalAlpha = opacity * (dim ? 0.3 : 1)
+    ctx.strokeStyle = ink.guide
+    ctx.lineWidth = width
+    ctx.beginPath()
+    for (let u = 0; u < n; u++) {
+      const a0 = geometry.arcs[2 * u]
+      ctx.moveTo(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r)
+      arcCurve(ctx, cx, cy, r, a0, geometry.arcs[2 * u + 1])
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
   if (content.kind === 'values') {
     const { values, limits, mode, flip } = content
     const span = limits.max - limits.min
@@ -408,6 +448,13 @@ export function paintRing(
     // Where zero is on this axis, for a bar that grows from it.
     const zero = norm(Math.max(limits.min, Math.min(limits.max, 0)))
     const radiusOf = (t: number): number => (flip ? band.outer - t * thick : band.inner + t * thick)
+    // The lane's line: dark and a hairline where it is an outline, the track's
+    // own colour where it is not.
+    const stroke = (): void => {
+      ctx.strokeStyle = ink.outline ? ink.guide : ring.colour
+      ctx.lineWidth = ink.outline ? HAIRLINE : mode === 'line' ? 1.25 : 1
+      ctx.lineJoin = 'round'
+    }
     if (mode === 'heatmap') {
       for (let bin = 0; bin < bins.count; bin++) {
         const value = values.values[bin]
@@ -418,9 +465,7 @@ export function paintRing(
         ctx.fill()
       }
     } else if (mode === 'line') {
-      ctx.strokeStyle = ring.colour
-      ctx.lineWidth = 1.25
-      ctx.lineJoin = 'round'
+      stroke()
       forEachRun(bins, values.values, (from, to) => {
         ctx.beginPath()
         for (let bin = from; bin < to; bin++) {
@@ -457,23 +502,60 @@ export function paintRing(
         wedge(ctx, cx, cy, Math.min(r0, r1), Math.max(r0, r1), bins.a0[bin], bins.a1[bin])
         ctx.fill()
       }
+      // The outline along the bars' tops, a step a bin: the rule along the top
+      // of a track is what the preference asks for, and a box round each of a
+      // thousand bars a pixel wide is the ring drawn black.
+      if (ink.outline) {
+        stroke()
+        forEachRun(bins, values.values, (from, to) => {
+          ctx.beginPath()
+          for (let bin = from; bin < to; bin++) {
+            const r = radiusOf(norm(values.values[bin]))
+            const x0 = cx + Math.cos(bins.a0[bin]) * r
+            const y0 = cy + Math.sin(bins.a0[bin]) * r
+            if (bin === from) ctx.moveTo(x0, y0)
+            else ctx.lineTo(x0, y0)
+            ctx.lineTo(cx + Math.cos(bins.a1[bin]) * r, cy + Math.sin(bins.a1[bin]) * r)
+          }
+          ctx.stroke()
+        })
+      }
     } else {
-      // `area`, and a `ribbon` drawn alone, which is an area.
-      ctx.fillStyle = ring.colour
-      forEachRun(bins, values.values, (from, to) => {
-        ctx.beginPath()
-        const base = radiusOf(zero)
-        ctx.moveTo(cx + Math.cos(bins.a0[from]) * base, cy + Math.sin(bins.a0[from]) * base)
+      // `area`, and a `ribbon` drawn alone, which is an area: the fill under
+      // the profile where fills are on, and the profile itself over it.
+      const base = radiusOf(zero)
+      const profile = (from: number, to: number): void => {
         for (let bin = from; bin < to; bin++) {
           const r = radiusOf(norm(values.values[bin]))
           ctx.lineTo(cx + Math.cos(bins.a0[bin]) * r, cy + Math.sin(bins.a0[bin]) * r)
           ctx.lineTo(cx + Math.cos(bins.a1[bin]) * r, cy + Math.sin(bins.a1[bin]) * r)
         }
-        ctx.lineTo(cx + Math.cos(bins.a1[to - 1]) * base, cy + Math.sin(bins.a1[to - 1]) * base)
-        arcCurve(ctx, cx, cy, base, bins.a1[to - 1], bins.a0[from])
-        ctx.closePath()
-        ctx.fill()
+      }
+      if (ink.fills) {
+        ctx.fillStyle = ring.colour
+        forEachRun(bins, values.values, (from, to) => {
+          ctx.beginPath()
+          ctx.moveTo(cx + Math.cos(bins.a0[from]) * base, cy + Math.sin(bins.a0[from]) * base)
+          profile(from, to)
+          ctx.lineTo(cx + Math.cos(bins.a1[to - 1]) * base, cy + Math.sin(bins.a1[to - 1]) * base)
+          arcCurve(ctx, cx, cy, base, bins.a1[to - 1], bins.a0[from])
+          ctx.closePath()
+          ctx.fill()
+        })
+      }
+      stroke()
+      forEachRun(bins, values.values, (from, to) => {
+        ctx.beginPath()
+        const r = radiusOf(norm(values.values[from]))
+        ctx.moveTo(cx + Math.cos(bins.a0[from]) * r, cy + Math.sin(bins.a0[from]) * r)
+        profile(from, to)
+        ctx.stroke()
       })
+    }
+    // Where a signed track reads zero, and the floor the values stand on.
+    if (mode !== 'heatmap') {
+      if (limits.min < 0 && limits.max > 0) rule(radiusOf(zero), 0.45, 0.5)
+      if (ink.baseline) rule(radiusOf(0), 0.75, HAIRLINE)
     }
   } else if (content.kind === 'classes') {
     const { codes } = content.classes
@@ -502,6 +584,11 @@ export function paintRing(
       ctx.beginPath()
       wedge(ctx, cx, cy, band.inner + inset, band.outer - inset, arc.a0, a1)
       ctx.fill()
+      if (ink.outline) {
+        ctx.strokeStyle = ink.guide
+        ctx.lineWidth = HAIRLINE
+        ctx.stroke()
+      }
     }
   }
   ctx.globalAlpha = 1

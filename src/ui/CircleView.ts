@@ -17,14 +17,21 @@
  */
 
 import { el } from './dom'
-import { getPlotOptions } from './plotOptions'
-import { scaleFont } from './textScale'
+import { getPlotOptions, subscribePlotOptions } from './plotOptions'
+import { scaleFont, subscribeTextScale } from './textScale'
 import { fmt } from '../units'
 import { formatPosition } from '../genome/assembly'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import type { AnnotationStore } from '../annotations/store'
 import type { MapId } from '../annotations/placement'
+import {
+  OVERLAY_DIM,
+  extentFor,
+  planStack,
+  resolveGroupExtents,
+  type GroupSettings,
+} from '../annotations/groups'
 import { colormapOf, type AnnotationEntry, type AnnotationKind } from '../annotations/types'
 import type { MetaBlock } from '../annotations/metadata'
 import { LocusAxis, type LocusSegment } from '../render/locus'
@@ -74,10 +81,13 @@ import {
   type CircleBins,
   type FeatureArc,
   type RingContent,
+  type RingInk,
   type RingPaint,
   type SequenceIndex,
 } from '../render/circleRings'
 import type { MetaSource } from './AnnotationLanes'
+import { ringBlockOrder } from './ringOrder'
+import { CROSSHAIR_COLOR } from '../render/heatmap'
 
 /**
  * The circle, as the session hands it to a view: whether it is asked for, and
@@ -119,6 +129,8 @@ export interface CircleViewOptions {
   map: MapId
   client?: AnnotationClient
   metadata?: MetaSource
+  /** How each group of tracks is drawn and scaled — the lanes' answer, for the rings. */
+  groups?: GroupSettings
   /** The session's presentation as it stands now; see {@link CirclePresentation}. */
   presentation(): CirclePresentation | undefined
   /** What the key calls the chords' numbers — the map key's own title. */
@@ -147,6 +159,24 @@ const FEATURE_KINDS: ReadonlySet<AnnotationKind> = new Set<AnnotationKind>([
 /** Whether a row can be a ring at all. */
 export function drawsAsRing(entry: AnnotationEntry): boolean {
   return SIGNAL_KINDS.has(entry.kind) || META_KINDS.has(entry.kind) || FEATURE_KINDS.has(entry.kind)
+}
+
+/**
+ * One ring's tracks, as one lane's: a track, or an overlay group's tracks
+ * drawn into the band of the first of them (`planStack`, the lanes' own plan).
+ */
+interface RingSlot {
+  host: AnnotationEntry
+  overlaid: AnnotationEntry[]
+}
+
+/** A ring as drawn: its slot's tracks, each with its numbers and its look resolved. */
+interface RingDrawn {
+  /** The first track's id, which the ring is held and moved by. */
+  id: string
+  /** What is written at twelve o'clock: the track's name, or an overlay group's. */
+  label: string
+  members: RingPaint[]
 }
 
 /** The label font, and its bold for the lit section. */
@@ -188,6 +218,8 @@ interface HeldRing {
 export class CircleView {
   readonly el: HTMLElement
   private readonly canvas: HTMLCanvasElement
+  /** The crosshair's own layer over the picture; see {@link drawGuide}. */
+  private readonly guide: HTMLCanvasElement
   private readonly tip: HTMLElement
   private readonly hint: HTMLElement
   private readonly samples: SampleCache | null
@@ -201,7 +233,7 @@ export class CircleView {
   private bins: CircleBins | null = null
   private index: SequenceIndex | null = null
   private axis: LocusAxis | null = null
-  private rings: RingPaint[] = []
+  private rings: RingDrawn[] = []
   private readonly held = new Map<string, HeldRing>()
   private focus: CircleFocus = NO_FOCUS
   private drag: RingDrag | null = null
@@ -220,10 +252,24 @@ export class CircleView {
     // Under the picture's corner, as the map's reframe hint is: the two
     // gestures nothing on screen announces.
     this.hint = el('div', { class: 'circle-hint', attrs: { 'aria-hidden': 'true' }, text: HINT })
-    this.el = el('div', { class: 'circle-wrap' }, this.canvas, this.hint, this.tip)
+    this.guide = el('canvas', { class: 'circle-guide', attrs: { 'aria-hidden': 'true' } })
+    this.el = el('div', { class: 'circle-wrap' }, this.canvas, this.guide, this.hint, this.tip)
     this.samples =
       options.client === undefined ? null : new SampleCache(options.client, () => this.schedule())
     this.unsubscribe.push(options.store.subscribe(() => this.schedule()))
+    // The overlays and the text size are the reader's, shared with every
+    // picture on screen (`ui/plotOptions.ts`, `ui/textScale.ts`); the groups are
+    // the file's, shared with every lane. Each change is the next frame's to
+    // draw — the names, the key and the font are in its layout's key.
+    this.unsubscribe.push(
+      subscribePlotOptions(() => {
+        this.drawGuide(null)
+        if (!getPlotOptions().tooltip) this.tip.classList.add('hidden')
+        this.schedule()
+      }),
+      subscribeTextScale(() => this.schedule()),
+    )
+    if (options.groups !== undefined) this.unsubscribe.push(options.groups.subscribe(() => this.schedule()))
     this.watchPointer()
     this.observer =
       typeof ResizeObserver === 'undefined'
@@ -270,6 +316,41 @@ export class CircleView {
   /** Whether the block in hand can be drawn round at all. */
   get drawable(): boolean {
     return this.model !== null
+  }
+
+  /**
+   * The rings as the lanes they are — each one's tracks — for the Tracks card's
+   * heights while the circle is drawn: they are every track the map draws, a
+   * bigWig on a genome × genome block among them, where the square has no lane.
+   */
+  ringLanes(): Array<{ members: AnnotationEntry[] }> {
+    return this.ringSlots().map((slot) => ({ members: [slot.host, ...slot.overlaid] }))
+  }
+
+  /**
+   * The one height that has every ring fill the room the rings share — what
+   * the Tracks card's *stretch* sets while the circle is drawn — or `null`
+   * before there is a layout or a ring.
+   */
+  fillingRingSize(): number | null {
+    const geometry = this.geometry
+    const count = geometry?.rings.length ?? 0
+    if (geometry === null || count === 0) return null
+    return Math.max(6, Math.floor(Math.min(geometry.ringRoom / count, geometry.outer * 0.16)))
+  }
+
+  /**
+   * The two ends of the chords' ramp, in the map's own units — what the key
+   * writes under its ramp, and the caption writes whether the key is drawn or
+   * not. `null` before the chords are laid out.
+   */
+  chordRange(): { lo: number; hi: number } | null {
+    const chords = this.chords
+    if (chords === null || chords.drawn === 0) return null
+    return {
+      lo: inverseTransform(chords.range.lo, this.scale.transform),
+      hi: inverseTransform(chords.range.hi, this.scale.transform),
+    }
   }
 
   /** How many chords the picture draws now, for a caption. */
@@ -343,13 +424,25 @@ export class CircleView {
     this.held.clear()
   }
 
-  /** The rows drawn as rings, in the order they are drawn — a drag's while one is held. */
-  private ringEntries(): AnnotationEntry[] {
+  /**
+   * The rings in the order they are drawn — a drag's while one is held — as
+   * the lanes' slots: a track a ring, except that an overlay group's tracks
+   * share the first one's ring, as they share its lane beside the map.
+   */
+  private ringSlots(): RingSlot[] {
     const rows = this.options.store.drawnAnywhereOn(this.options.map).filter(drawsAsRing)
+    const groups = this.options.groups
+    const slots: RingSlot[] = planStack(rows, {
+      groupOf: (entry) => entry.style.group,
+      modeOf: (group) => groups?.modeOf(group) ?? 'stacked',
+      sizeOf: (entry) => entry.style.size,
+      gap: 0,
+      minimum: 1,
+    }).map((slot) => ({ host: slot.host, overlaid: slot.overlaid }))
     const drag = this.drag
-    if (drag === null || !drag.moved) return rows
-    const byId = new Map(rows.map((row) => [row.id, row]))
-    return drag.order.map((id) => byId.get(id)).filter((row): row is AnnotationEntry => row !== undefined)
+    if (drag === null || !drag.moved) return slots
+    const byId = new Map(slots.map((slot) => [slot.host.id, slot]))
+    return drag.order.map((id) => byId.get(id)).filter((slot): slot is RingSlot => slot !== undefined)
   }
 
   private measure(): void {
@@ -359,10 +452,12 @@ export class CircleView {
     if (width === this.size.width && height === this.size.height) return
     this.size = { width, height }
     const dpr = window.devicePixelRatio || 1
-    this.canvas.width = Math.max(1, Math.round(width * dpr))
-    this.canvas.height = Math.max(1, Math.round(height * dpr))
-    this.canvas.style.width = `${width}px`
-    this.canvas.style.height = `${height}px`
+    for (const canvas of [this.canvas, this.guide]) {
+      canvas.width = Math.max(1, Math.round(width * dpr))
+      canvas.height = Math.max(1, Math.round(height * dpr))
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
+    }
     this.geometry = null
   }
 
@@ -375,7 +470,8 @@ export class CircleView {
     this.refreshSequences()
     const model = this.model
     if (model === null || width <= 0 || height <= 0) return false
-    const entries = this.ringEntries()
+    const slots = this.ringSlots()
+    const names = getPlotOptions().labels
     const font = scaleFont(LABEL_FONT)
     // The key stands beside the circle where the column is wide enough, and in
     // the corner where it is not — and then the circle leaves the corner clear.
@@ -396,17 +492,20 @@ export class CircleView {
         ? undefined
         : { width: box.width + 2 * KEY_INSET, height: box.height + 2 * KEY_INSET }
     const key =
-      `${width}x${height}|${font}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
-      entries.map((entry) => `${entry.id}:${entry.style.size}`).join(',')
-    if (this.keyAt !== null && box !== null) this.placeHint(this.keyAt.x, this.keyAt.y + box.height, entries.length > 0)
+      `${width}x${height}|${font}|${names}|${corner?.width ?? 0}x${corner?.height ?? 0}|` +
+      slots.map((slot) => `${slot.host.id}:${slot.host.style.size}`).join(',')
+    // Under the key, or in its corner where there is no key to stand under.
+    if (this.keyAt !== null && box !== null) this.placeHint(this.keyAt.x, this.keyAt.y + box.height, slots.length > 0)
+    else this.placeHint(width - KEY_INSET, KEY_INSET - 6, slots.length > 0, true)
     if (this.geometry === null || key !== this.layoutKey) {
       measure.font = font
       this.geometry = circleGeometry(model, {
         width,
         height,
-        rings: entries.map((entry) => ({ id: entry.id, size: entry.style.size })),
+        rings: slots.map((slot) => ({ id: slot.host.id, size: slot.host.style.size })),
         measure: (text) => measure.measureText(text).width,
         fontPx: fontPixels(font),
+        names,
         ...(corner === undefined ? {} : { corner }),
       })
       this.layoutKey = key
@@ -427,15 +526,46 @@ export class CircleView {
       this.axis ??= circleAxis(model)
     }
     this.chords ??= layoutChords(model, this.geometry, this.scale)
-    this.rings = entries.map((entry) => this.ringOf(entry))
+    this.rings = this.ringsOf(slots)
     return true
   }
 
-  /** One row as a ring: its numbers binned, kept until they change. */
-  private ringOf(entry: AnnotationEntry): RingPaint {
-    const base = { id: entry.id, label: entry.label, colour: entry.style.colour, opacity: entry.style.opacity }
-    const content = this.contentOf(entry)
-    return { ...base, content }
+  /**
+   * The rings' tracks with their numbers binned and their axes resolved — a
+   * group's over every ring that holds one of its tracks, as a group's lanes
+   * share one beside the map (`resolveGroupExtents`), unless the group is set
+   * to scale each of its tracks on its own.
+   */
+  private ringsOf(slots: readonly RingSlot[]): RingDrawn[] {
+    const built = slots.map((slot) => ({
+      slot,
+      members: [slot.host, ...slot.overlaid].map((entry) => ({ entry, content: this.contentOf(entry) })),
+    }))
+    const groups = resolveGroupExtents(
+      built.flatMap(({ members }) => members).map(({ entry, content }) => ({
+        group: entry.style.group,
+        extent: content.kind === 'values' ? content.values.extent : null,
+      })),
+      (group) => this.options.groups?.scalingOf(group) ?? 'shared',
+    )
+    return built.map(({ slot, members }) => ({
+      id: slot.host.id,
+      // An overlay group's ring is named by the group, as the reader named
+      // it; the tooltip names each of its tracks beside its value.
+      label: slot.overlaid.length > 0 && slot.host.style.group !== '' ? slot.host.style.group : slot.host.label,
+      members: members.map(({ entry, content }) => ({
+        id: entry.id,
+        label: entry.label,
+        colour: entry.style.colour,
+        // Overlaid tracks are translucent by necessity, as in their lane: two
+        // opaque areas in one band hide each other.
+        opacity: members.length > 1 ? entry.style.opacity * OVERLAY_DIM : entry.style.opacity,
+        content:
+          content.kind === 'values'
+            ? this.valuesContent(entry, content.values, undefined, extentFor(entry, content.values.extent, groups))
+            : content,
+      })),
+    }))
   }
 
   private contentOf(entry: AnnotationEntry): RingContent {
@@ -511,9 +641,14 @@ export class CircleView {
     return { kind: 'empty', note: '' }
   }
 
-  /** A row's numbers with its limits and look resolved. */
-  private valuesContent(entry: AnnotationEntry, values: BinnedValues, note?: string): RingContent {
-    const limits = resolveLimits(entry.style.limits, values.extent)
+  /** A row's numbers with its limits and look resolved, against its own extent or its group's. */
+  private valuesContent(
+    entry: AnnotationEntry,
+    values: BinnedValues,
+    note?: string,
+    extent: BinnedValues['extent'] = values.extent,
+  ): RingContent {
+    const limits = resolveLimits(entry.style.limits, extent)
     if (values.extent === null && note !== undefined && note !== '') return { kind: 'empty', note }
     return {
       kind: 'values',
@@ -552,7 +687,7 @@ export class CircleView {
     const model = this.model
     if (geometry === null || model === null) return
     const round = (value: number): number => Math.round(value * 10) / 10
-    const names = new Map(this.ringEntries().map((entry) => [entry.id, entry.label]))
+    const names = new Map(this.rings.map((ring) => [ring.id, ring.label]))
     const groupArcs = geometry.groupArcs
     // The three strongest chords drawn, each with the middle of its ribbon —
     // halfway along the curve through the bend — which is where it is aimed at.
@@ -587,6 +722,8 @@ export class CircleView {
             })),
       chord: round(geometry.chord),
       labelAt: round(geometry.labelAt),
+      names: geometry.names,
+      fontPx: geometry.fontPx,
       rings: geometry.rings.map((ring) => ({
         id: ring.id,
         name: names.get(ring.id) ?? ring.id,
@@ -635,10 +772,21 @@ export class CircleView {
     if (model === null || geometry === null || chords === null || bins === null) return
     const focus = live ? this.focus : NO_FOCUS
     const lit = focus.unit >= 0 || focus.slot >= 0 || focus.group >= 0
+    const options = getPlotOptions()
+    const ink: RingInk = {
+      guide: palette.text,
+      fills: options.fills,
+      outline: options.outline,
+      baseline: options.baseline,
+    }
     this.rings.forEach((ring, k) => {
       const band = geometry.rings[k]
       if (band === undefined) return
-      paintRing(ctx, ring, band, geometry, bins, palette.wash, lit && !this.isHeld(ring.id))
+      const dim = lit && !this.isHeld(ring.id)
+      // The band's wash under the first track, and an overlaid track over it.
+      ring.members.forEach((member, m) => {
+        paintRing(ctx, member, band, geometry, bins, m === 0 ? palette.wash : null, ink, dim)
+      })
     })
     paintChords(ctx, { model, geometry, chords, colormap: this.scale.colormap, focus })
     const sections = {
@@ -661,11 +809,17 @@ export class CircleView {
    * The hint under the key, saying the gestures this picture has: rings only
    * where there are rings to drag.
    */
-  private placeHint(left: number, top: number, rings: boolean): void {
-    this.hint.style.transform = `translate(${Math.round(left)}px, ${Math.round(top + 6)}px)`
-    // Under the key and no wider than the room it leaves to the right edge: the
-    // sentence is longer than the key above it, and wraps rather than runs off.
-    this.hint.style.maxWidth = `${Math.max(0, Math.floor(this.size.width - left - KEY_INSET))}px`
+  private placeHint(left: number, top: number, rings: boolean, fromRight = false): void {
+    // Under the key, its left edge on the key's and no wider than the room to
+    // the right edge — the sentence is longer than the key, and wraps rather
+    // than runs off. With no key, its right edge on the corner's.
+    this.hint.style.transform = fromRight
+      ? `translate(${Math.round(left)}px, ${Math.round(top + 6)}px) translateX(-100%)`
+      : `translate(${Math.round(left)}px, ${Math.round(top + 6)}px)`
+    this.hint.style.maxWidth = fromRight
+      ? `${Math.max(0, Math.min(240, Math.floor(left - KEY_INSET)))}px`
+      : `${Math.max(0, Math.floor(this.size.width - left - KEY_INSET))}px`
+    this.hint.style.textAlign = fromRight ? 'right' : ''
     const text = rings ? HINT_WITH_RINGS : HINT
     if (this.hint.textContent !== text) this.hint.textContent = text
   }
@@ -682,7 +836,9 @@ export class CircleView {
    * written there labels its ring without a key to match it against.
    */
   private paintRingNames(ctx: CanvasRenderingContext2D, geometry: CircleGeometry, palette: CirclePalette): void {
-    if (this.rings.length === 0) return
+    // The Tracks card's `track text`, which is every track's name wherever it
+    // is drawn: off, the rings are ink alone.
+    if (this.rings.length === 0 || !getPlotOptions().text) return
     ctx.save()
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -780,7 +936,9 @@ export class CircleView {
   } | null {
     const model = this.model
     const drawn = this.chordsDrawn()
-    if (model === null || drawn === 0) return null
+    // The Map card's `legend`, which is the square's key: off, the circle has
+    // none, on screen or in a figure, and the corner it kept is the circle's.
+    if (model === null || drawn === 0 || !getPlotOptions().legend) return null
     const titleFont = scaleFont(KEY_TITLE_FONT)
     const font = scaleFont(KEY_FONT)
     const title = this.options.keyTitle()
@@ -852,6 +1010,37 @@ export class CircleView {
     }
   }
 
+  /**
+   * The crosshair, the circle's way: a radial line through every ring and
+   * section at the pointer's angle — the square's guide line through the lanes,
+   * bent round (§7.6). Over the chord disc there is none, since a chord under
+   * the hand is lit whole. On a canvas of its own over the picture, so
+   * following the hand costs one line and not a frame of rings and chords.
+   */
+  private drawGuide(at: { x: number; y: number } | null): void {
+    const canvas = this.guide
+    const ctx = canvas.getContext('2d')
+    if (ctx === null) return
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const geometry = this.geometry
+    if (at === null || geometry === null || this.drag !== null || !getPlotOptions().crosshair) return
+    const dx = at.x - geometry.cx
+    const dy = at.y - geometry.cy
+    const r = Math.hypot(dx, dy)
+    if (r < geometry.chord || r > geometry.outer) return
+    const angle = Math.atan2(dy, dx)
+    const reach = geometry.band?.outer ?? geometry.sections.outer
+    const dpr = canvas.width / Math.max(1, this.size.width)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.strokeStyle = CROSSHAIR_COLOR
+    ctx.lineWidth = Math.max(1 / dpr, 0.75)
+    ctx.beginPath()
+    ctx.moveTo(geometry.cx + Math.cos(angle) * geometry.chord, geometry.cy + Math.sin(angle) * geometry.chord)
+    ctx.lineTo(geometry.cx + Math.cos(angle) * reach, geometry.cy + Math.sin(angle) * reach)
+    ctx.stroke()
+  }
+
   // -------------------------------------------------------------------------
   // The pointer
   // -------------------------------------------------------------------------
@@ -876,6 +1065,7 @@ export class CircleView {
     })
     canvas.addEventListener('pointerleave', () => {
       if (this.drag !== null) return
+      this.drawGuide(null)
       this.setFocus(NO_FOCUS)
       this.tip.classList.add('hidden')
       canvas.style.cursor = ''
@@ -922,6 +1112,7 @@ export class CircleView {
   }
 
   private hover(at: { x: number; y: number }): void {
+    this.drawGuide(at)
     const hit = this.hitAt(at)
     this.canvas.style.cursor =
       hit === null ? '' : hit.kind === 'ring' ? 'grab' : 'pointer'
@@ -969,7 +1160,8 @@ export class CircleView {
   // -------------------------------------------------------------------------
 
   private beginDrag(pending: { id: string; pointer: number; x: number; y: number }, event: PointerEvent): void {
-    const order = this.ringEntries().map((entry) => entry.id)
+    const order = this.ringSlots().map((slot) => slot.host.id)
+    this.drawGuide(null)
     this.drag = { id: pending.id, pointer: pending.pointer, order: [...order], from: order, moved: true, start: pending }
     this.pending = null
     this.canvas.setPointerCapture(event.pointerId)
@@ -1015,12 +1207,31 @@ export class CircleView {
       const to = drag.order.indexOf(drag.id)
       const displaced = drag.from[to]
       if (displaced !== undefined && displaced !== drag.id) {
-        const store = this.options.store
-        const target = store.entries.findIndex((entry) => entry.id === displaced)
-        if (target >= 0) store.moveTo(drag.id, target)
+        this.moveRing(drag.id, displaced, to > drag.from.indexOf(drag.id))
       }
     }
     this.schedule()
+  }
+
+  /**
+   * One ring's tracks to another's place in the store, as a block
+   * (`ringBlockOrder`): an overlay group moves whole and keeps its order.
+   */
+  private moveRing(id: string, displaced: string, outwards: boolean): void {
+    const store = this.options.store
+    const slots = this.ringSlots()
+    const mine = slots.find((slot) => slot.host.id === id)
+    const theirs = slots.find((slot) => slot.host.id === displaced)
+    if (mine === undefined || theirs === undefined) return
+    const desired = ringBlockOrder(
+      store.entries.map((entry) => entry.id),
+      [mine.host, ...mine.overlaid].map((entry) => entry.id),
+      [theirs.host, ...theirs.overlaid].map((entry) => entry.id),
+      outwards,
+    )
+    desired.forEach((entry, k) => {
+      if (store.entries[k]?.id !== entry) store.moveTo(entry, k)
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -1085,7 +1296,9 @@ export class CircleView {
       const geometry = this.geometry
       const bins = this.bins
       if (ring === undefined || geometry === null || bins === null) return
-      lines.push({ text: ring.label, strong: true })
+      // One track: its name over the place and its value. Several in one
+      // ring: the place, then each track's name beside its value.
+      if (ring.members.length === 1) lines.push({ text: ring.label, strong: true })
       const unit = model.units[hit.unit]
       const bp = Math.floor(bpAtAngle(geometry, model, hit.unit, hit.angle))
       const place = sequenceAt(model, hit.unit, bp)
@@ -1097,7 +1310,13 @@ export class CircleView {
               ? `${unit.label} · ${formatPosition(place.name, place.position)}`
               : formatPosition(place.name, place.position),
       })
-      lines.push({ text: ringValue(ring.content, bins, hit.unit, hit.angle) })
+      if (ring.members.length === 1) {
+        lines.push({ text: ringValue(ring.members[0].content, bins, hit.unit, hit.angle) })
+      } else {
+        for (const member of ring.members) {
+          lines.push({ text: `${member.label} · ${ringValue(member.content, bins, hit.unit, hit.angle)}` })
+        }
+      }
     }
     this.tip.replaceChildren(
       ...lines.map((line, k) =>

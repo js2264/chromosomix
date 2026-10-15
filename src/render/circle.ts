@@ -27,6 +27,7 @@
 
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import type { Transform } from '../types'
+import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { colormapCss } from './colormaps'
 import { formatCount } from './legend'
 import { transformValue } from './scale'
@@ -470,6 +471,12 @@ export interface CircleGeometry {
   sections: { inner: number; outer: number }
   /** In draw order, from the chords outwards: the first track is nearest the chords. */
   rings: Array<{ id: string; inner: number; outer: number }>
+  /**
+   * The depth the rings share, between the sections and a chord disc kept to a
+   * third of the radius, their gaps taken out: what a ring as thick as its lane
+   * is tall is fitted into, and what *stretch* fills.
+   */
+  ringRoom: number
   /** The disc the chords are drawn in. */
   chord: number
   /** `[start, end]` angle of each section, canvas radians (0 is three o'clock, clockwise). */
@@ -478,7 +485,14 @@ export interface CircleGeometry {
   groupArcs: Float64Array | null
   /** The angle left open at twelve o'clock, where the rings are named. */
   topGap: number
-  /** Which sections are labelled — those whose arc holds a line of text. */
+  /**
+   * Whether the picture keeps room for names at all. Where it does not — the
+   * names turned off, or none a name can be given at rest ({@link namePolicy}) —
+   * the circle takes that room, and no name is written even on hover: the
+   * tooltip says what is under the pointer.
+   */
+  names: boolean
+  /** Which sections are labelled at rest: named by the policy, and an arc that holds a line. */
   labelled: Uint8Array
   /** Which genome-band groups are labelled. */
   groupLabelled: Uint8Array | null
@@ -499,6 +513,33 @@ export interface CircleLayoutOptions {
   fontPx: number
   /** A box in the top-right corner the circle must leave clear — the key. */
   corner?: { width: number; height: number }
+  /**
+   * Whether sections are named at all: the Map card's `labels` overlay, which
+   * names the square's blocks in its gutters. Absent is on.
+   */
+  names?: boolean
+}
+
+/** Which names a circle writes at rest; see {@link namePolicy}. */
+export type CircleNames = 'all' | 'long' | 'none'
+
+/**
+ * Which of a circle's names are written at rest: the square's rule for its
+ * gutters (`HeatmapView.labelPolicy`), with no zoom to bring more of them out.
+ *
+ * Every name where there are no more than {@link MAX_CATEGORICAL_TICKS} to
+ * give. Past that, a circle of contigs — one genome's, or ticked ones — names
+ * those of {@link LABEL_MIN_SPAN_BP} or more, the few a reader is looking for;
+ * and a circle of genomes names none. A thousand MAGs round a circle are read
+ * by its shape, and a name every few degrees, or the names of the largest few,
+ * are noise over the rings — which genome is under the pointer is the
+ * tooltip's to say. Where a band names the genomes over contig sections, the
+ * genomes are what is counted, and a contig is named only once it is lit.
+ */
+export function namePolicy(model: CircleModel): CircleNames {
+  const count = model.groups?.length ?? model.units.length
+  if (count <= MAX_CATEGORICAL_TICKS) return 'all'
+  return model.groups === null && model.kind === 'contig' ? 'long' : 'none'
 }
 
 /**
@@ -566,16 +607,18 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
   const labelCap = outer * 0.4
   const labels = groups === null ? model.units.map((unit) => unit.label) : groups.map((group) => group.name)
   const labelArcs = groupArcs ?? arcs
+  const policy: CircleNames = options.names === false ? 'none' : namePolicy(model)
+  const named = (index: number): boolean =>
+    policy === 'all' || (policy === 'long' && model.units[index].bp >= LABEL_MIN_SPAN_BP)
   const fits = (at: number, index: number): boolean =>
-    (labelArcs[2 * index + 1] - labelArcs[2 * index]) * at >= fontPx * 1.15
+    named(index) && (labelArcs[2 * index + 1] - labelArcs[2 * index]) * at >= fontPx * 1.15
+  // Room only for names that are written at rest. A circle with none — the
+  // overlay off, a thousand genomes — keeps none, and is that much larger.
   let labelWidth = 0
   const guessAt = outer - labelCap
   labels.forEach((label, index) => {
     if (fits(guessAt, index)) labelWidth = Math.max(labelWidth, options.measure(label))
   })
-  // Where no arc holds a name at rest — a hundred contigs of one size — a name
-  // is still written on hover, and needs the room inside the picture as much.
-  if (labelWidth === 0) for (const label of labels) labelWidth = Math.max(labelWidth, options.measure(label))
   labelWidth = Math.min(labelCap, labelWidth)
   const labelAt = outer - (labelWidth > 0 ? labelWidth + 6 : 0)
 
@@ -586,13 +629,15 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
   const sections = { outer: sectionsOuter, inner: sectionsOuter - sectionWidth }
 
   // The rings share what is left between the sections and a chord disc kept to
-  // at least a third of the radius, each in proportion to its lane's height.
+  // at least a third of the radius: each as thick as its lane is tall, where
+  // they all fit, and in proportion to it where they do not.
   const ringGap = 4
   const rings: CircleGeometry['rings'] = []
+  const ringRoom = Math.max(0, sections.inner - 6 - outer * 0.34 - ringGap * options.rings.length)
   if (options.rings.length > 0) {
-    const room = Math.max(0, sections.inner - 6 - outer * 0.34 - ringGap * options.rings.length)
+    const room = ringRoom
     const asked = options.rings.reduce((sum, ring) => sum + Math.max(1, ring.size), 0)
-    const scale = Math.min(0.28 * (outer / 100), room / Math.max(1, asked))
+    const scale = Math.min(1, room / Math.max(1, asked))
     let at = sections.inner - 6
     // Drawn from the sections inwards, so the *last* ring of the order is the
     // outermost: the first track is nearest the chords, as a lane's first track
@@ -624,10 +669,12 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
     band,
     sections,
     rings,
+    ringRoom,
     chord,
     arcs,
     groupArcs,
     topGap,
+    names: labelWidth > 0,
     labelled,
     groupLabelled,
     fontPx,
@@ -1252,8 +1299,9 @@ export function paintLabels(
     taken.push(angle)
     return true
   }
+  // No room kept, no names — not even on hover (see `CircleGeometry.names`).
   const name = (angle: number, text: string, colour: string, font: string): void => {
-    if (place(angle)) drawLabel(angle, text, colour, font)
+    if (geometry.names && place(angle)) drawLabel(angle, text, colour, font)
   }
 
   // What is lit first: a section by its own name — a group's lit contigs are
