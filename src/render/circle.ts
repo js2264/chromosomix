@@ -518,6 +518,12 @@ export interface CircleLayoutOptions {
    * names the square's blocks in its gutters. Absent is on.
    */
   names?: boolean
+  /**
+   * A zoom (§7.6): the same circle laid out about a middle of its own, its
+   * names starting `rim` from it, with the room past them the fitted picture
+   * kept for its names. The box's size and the key's corner then say nothing.
+   */
+  zoom?: { cx: number; cy: number; rim: number; labelRoom: number }
 }
 
 /** Which names a circle writes at rest; see {@link namePolicy}. */
@@ -554,16 +560,20 @@ export function namePolicy(model: CircleModel): CircleNames {
  */
 export function circleGeometry(model: CircleModel, options: CircleLayoutOptions): CircleGeometry {
   const size = Math.max(0, Math.min(options.width, options.height))
-  const cx = options.width / 2
-  const cy = options.height / 2
+  const zoom = options.zoom
+  const cx = zoom?.cx ?? options.width / 2
+  const cy = zoom?.cy ?? options.height / 2
   // Clear of the key in the top-right corner, where the square keeps its own:
   // the circle shrinks until its outermost name misses the key's box.
-  const corner = options.corner
+  const corner = zoom === undefined ? options.corner : undefined
   const clearOfKey =
     corner === undefined
       ? Number.POSITIVE_INFINITY
       : Math.hypot(cx - (options.width - corner.width), cy - corner.height) - 4
-  const outer = Math.max(24, Math.min(size / 2 - 6, clearOfKey))
+  const outer =
+    zoom !== undefined
+      ? Math.max(24, zoom.rim + zoom.labelRoom)
+      : Math.max(24, Math.min(size / 2 - 6, clearOfKey))
   const fontPx = options.fontPx
   const n = model.units.length
 
@@ -616,11 +626,18 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
   // overlay off, a thousand genomes — keeps none, and is that much larger.
   let labelWidth = 0
   const guessAt = outer - labelCap
-  labels.forEach((label, index) => {
-    if (fits(guessAt, index)) labelWidth = Math.max(labelWidth, options.measure(label))
-  })
+  // Not zoomed in on, whose room is the fitted picture's: a zoom names the
+  // sections in view, and measuring every name a magnified circle could hold
+  // was the cost of every frame of the zoom.
+  if (zoom === undefined) {
+    labels.forEach((label, index) => {
+      if (fits(guessAt, index)) labelWidth = Math.max(labelWidth, options.measure(label))
+    })
+  }
   labelWidth = Math.min(labelCap, labelWidth)
-  const labelAt = outer - (labelWidth > 0 ? labelWidth + 6 : 0)
+  // Zoomed, the room the picture kept for its names at rest, whatever is named
+  // now: a name coming into view must not move the rim under the pointer.
+  const labelAt = zoom !== undefined ? outer - zoom.labelRoom : outer - (labelWidth > 0 ? labelWidth + 6 : 0)
 
   const sectionWidth = clamp(outer * 0.045, 7, 16)
   const bandWidth = groups === null ? 0 : clamp(outer * 0.03, 5, 10)
@@ -674,7 +691,7 @@ export function circleGeometry(model: CircleModel, options: CircleLayoutOptions)
     arcs,
     groupArcs,
     topGap,
-    names: labelWidth > 0,
+    names: zoom !== undefined ? zoom.labelRoom > 0 : labelWidth > 0,
     labelled,
     groupLabelled,
     fontPx,
@@ -918,7 +935,11 @@ export function arcCurve(
 ): void {
   const sweep = a1 - a0
   if (sweep === 0) return
-  const steps = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-9))
+  // A quarter turn a cubic, which is off by 0.03% of the radius at its worst —
+  // nothing on a picture, and sixteen pixels on a circle zoomed to sixty
+  // thousand. Shorter pieces past that, each off by a quarter of a pixel at most.
+  const longest = (Math.PI / 2) * Math.min(1, (0.25 / (2.7e-4 * Math.max(1, r))) ** (1 / 6))
+  const steps = Math.max(1, Math.ceil(Math.abs(sweep) / longest - 1e-9))
   const piece = sweep / steps
   const reach = (4 / 3) * Math.tan(piece / 4) * r
   for (let i = 0; i < steps; i++) {
@@ -1330,12 +1351,14 @@ export function paintLabels(
       if (litGroups.has(g) || geometry.groupLabelled?.[g] !== 1) return
       name(groupAngle(g), group.name, emphasis.active ? palette.dim : palette.text, paint.font)
     })
-  } else {
-    // Sections are named where there is no band and their arcs hold a line.
-    for (let i = 0; i < model.units.length; i++) {
-      if (geometry.labelled[i] !== 1 || emphasis.lit.has(i) || emphasis.partners.has(i)) continue
-      name(midAngle(geometry, i), model.units[i].label, emphasis.active ? palette.dim : palette.text, paint.font)
-    }
+  }
+  // Sections are named where their arcs hold a line: on a circle with no band,
+  // and under one where a zoom has brought few enough into view
+  // (`namesInView`) — there in the dim ink, beside their genome's name.
+  for (let i = 0; i < model.units.length; i++) {
+    if (geometry.labelled[i] !== 1 || emphasis.lit.has(i) || emphasis.partners.has(i)) continue
+    const ink = emphasis.active || model.groups !== null ? palette.dim : palette.text
+    name(midAngle(geometry, i), model.units[i].label, ink, paint.font)
   }
 
   // Each strong partner's contacts with the lit section, where its chord lands:
@@ -1469,6 +1492,10 @@ export function hitCircle(
   }
   if (r >= geometry.sections.inner - 1) {
     if (r > geometry.labelAt && model.groups !== null) {
+      // Over the names: a contig's own where a zoom has named it, its genome's
+      // otherwise.
+      const unit = unitAtAngle(geometry, angle)
+      if (unit >= 0 && geometry.labelled[unit] === 1) return { kind: 'section', unit }
       const group = groupAtAngle(geometry, model, angle)
       return group < 0 ? null : { kind: 'group', group }
     }
@@ -1546,4 +1573,207 @@ export function insideRibbon(
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside
   }
   return inside
+}
+
+// ---------------------------------------------------------------------------
+// Zoom
+// ---------------------------------------------------------------------------
+
+/** The most a circle is magnified: the radius its names start at, this many times the fitted circle's. */
+export const CIRCLE_MAX_ZOOM = 200
+
+/**
+ * The radii a circle's layers start and end at, from the middle out to where
+ * the names start: the stops {@link carryRadius} carries a point between, as a
+ * zoom changes how far apart they are. The names' room is the same width at
+ * every zoom, so past the last stop a point keeps its distance.
+ */
+export function radialStops(geometry: CircleGeometry): number[] {
+  const stops = [0, geometry.chord]
+  for (const ring of geometry.rings) stops.push(ring.inner, ring.outer)
+  stops.push(geometry.sections.inner, geometry.sections.outer)
+  if (geometry.band !== null) stops.push(geometry.band.inner, geometry.band.outer)
+  stops.push(geometry.labelAt)
+  return stops
+}
+
+/**
+ * Where a point `r` from the middle of one layout of a circle lands in another
+ * layout of it: the same place in the same layer — a ring's middle stays its
+ * middle however much thicker a zoom has made it, a place in the chord disc
+ * the same share of its radius — and past the last stop the same distance
+ * past it. What keeps whatever is under the pointer under it through a zoom.
+ */
+export function carryRadius(from: readonly number[], to: readonly number[], r: number): number {
+  const n = Math.min(from.length, to.length)
+  if (n === 0) return r
+  for (let k = 1; k < n; k++) {
+    if (r <= from[k]) {
+      const span = from[k] - from[k - 1]
+      const t = span > 0 ? (r - from[k - 1]) / span : 0
+      return to[k - 1] + t * (to[k] - to[k - 1])
+    }
+  }
+  return to[n - 1] + (r - from[n - 1])
+}
+
+/** An angle in the circle's own turn, `[TOP, TOP + 2π)`: twelve o'clock, clockwise. */
+export function inTurn(angle: number): number {
+  let a = angle
+  while (a < TOP) a += TAU
+  while (a >= TOP + TAU) a -= TAU
+  return a
+}
+
+/**
+ * The angles at which a circle of radius `r` about (`cx`, `cy`) lies inside a
+ * box — the stretch of a ring a zoomed picture shows — as intervals of the
+ * circle's turn, in order. Empty where none of it is in the box; the whole turn
+ * where all of it is.
+ *
+ * Exact rather than sampled: the circle crosses each of the box's four edge
+ * lines at most twice, and between two crossings it is wholly in or wholly out.
+ */
+export function visibleArcs(
+  cx: number,
+  cy: number,
+  r: number,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): Array<[number, number]> {
+  const inside = (a: number): boolean => {
+    const x = cx + Math.cos(a) * r
+    const y = cy + Math.sin(a) * r
+    return x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1
+  }
+  if (!(r > 0)) return inside(TOP) ? [[TOP, TOP + TAU]] : []
+  const cuts: number[] = []
+  for (const x of [box.x0, box.x1]) {
+    const d = (x - cx) / r
+    if (Math.abs(d) <= 1) {
+      const a = Math.acos(d)
+      cuts.push(inTurn(a), inTurn(-a))
+    }
+  }
+  for (const y of [box.y0, box.y1]) {
+    const d = (y - cy) / r
+    if (Math.abs(d) <= 1) {
+      const a = Math.asin(d)
+      cuts.push(inTurn(a), inTurn(Math.PI - a))
+    }
+  }
+  if (cuts.length === 0) return inside(TOP) ? [[TOP, TOP + TAU]] : []
+  cuts.sort((x, y) => x - y)
+  const stops = [TOP, ...cuts, TOP + TAU]
+  const out: Array<[number, number]> = []
+  for (let k = 0; k + 1 < stops.length; k++) {
+    const a0 = stops[k]
+    const a1 = stops[k + 1]
+    if (!(a1 > a0) || !inside((a0 + a1) / 2)) continue
+    const last = out[out.length - 1]
+    if (last !== undefined && a0 - last[1] < 1e-12) last[1] = a1
+    else out.push([a0, a1])
+  }
+  return out
+}
+
+/** The union of two lists of intervals, each in order — a ring's and the sections' windows. */
+export function unionArcs(
+  a: ReadonlyArray<readonly [number, number]>,
+  b: ReadonlyArray<readonly [number, number]>,
+): Array<[number, number]> {
+  const all = [...a, ...b].map(([x, y]) => [x, y] as [number, number]).sort((x, y) => x[0] - y[0])
+  const out: Array<[number, number]> = []
+  for (const [x, y] of all) {
+    const last = out[out.length - 1]
+    if (last !== undefined && x <= last[1]) last[1] = Math.max(last[1], y)
+    else out.push([x, y])
+  }
+  return out
+}
+
+/**
+ * The angles of a laid-out circle a box shows: where any of its rings, its
+ * sections, its band or its names are inside the box — each band's two edges
+ * and its middle, between which a box larger than any band cannot fall.
+ */
+export function anglesInView(
+  geometry: CircleGeometry,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): Array<[number, number]> {
+  const radii = [geometry.labelAt, geometry.outer]
+  const bands = [geometry.sections, ...geometry.rings, ...(geometry.band === null ? [] : [geometry.band])]
+  for (const band of bands) radii.push(band.inner, (band.inner + band.outer) / 2, band.outer)
+  let windows: Array<[number, number]> = []
+  for (const r of radii) windows = unionArcs(windows, visibleArcs(geometry.cx, geometry.cy, r, box))
+  return windows
+}
+
+/** Which sections have any of their arc in the windows, 1 for each that does. */
+export function unitsInView(geometry: CircleGeometry, windows: ReadonlyArray<readonly [number, number]>): Uint8Array {
+  const n = geometry.arcs.length / 2
+  const seen = new Uint8Array(n)
+  for (let u = 0; u < n; u++) {
+    const a0 = geometry.arcs[2 * u]
+    const a1 = geometry.arcs[2 * u + 1]
+    for (const [w0, w1] of windows) {
+      if (a0 <= w1 && a1 >= w0) {
+        seen[u] = 1
+        break
+      }
+    }
+  }
+  return seen
+}
+
+/**
+ * Which names a zoomed picture writes: the square's rule (`namePolicy`) over
+ * the sections in view, as the square's labels count the blocks in view — so a
+ * zoom into twenty of four thousand contigs names them, and a zoom into forty
+ * of a thousand genomes names those forty — and only where a name's arc holds a
+ * line of text at the zoom. Under a band, its genomes in view as at rest, and
+ * their contigs too once no more than fifty of them are. `on` is the Map
+ * card's `labels`.
+ */
+export function namesInView(
+  model: CircleModel,
+  geometry: CircleGeometry,
+  visible: Uint8Array,
+  on: boolean,
+): { labelled: Uint8Array; groupLabelled: Uint8Array | null; names: boolean } {
+  const n = model.units.length
+  const labelled = new Uint8Array(n)
+  const groups = model.groups
+  const groupArcs = geometry.groupArcs
+  let groupLabelled: Uint8Array | null = groups === null ? null : new Uint8Array(groups.length)
+  if (!on) return { labelled, groupLabelled, names: false }
+  const holds = (a0: number, a1: number): boolean => (a1 - a0) * geometry.labelAt >= geometry.fontPx * 1.15
+  let count = 0
+  for (let u = 0; u < n; u++) count += visible[u]
+  if (groups !== null && groupArcs !== null && groupLabelled !== null) {
+    const seen = groups.map((group) => {
+      for (let u = group.from; u < group.to; u++) if (visible[u] === 1) return true
+      return false
+    })
+    const genomes = seen.filter(Boolean).length <= MAX_CATEGORICAL_TICKS
+    const contigs = count <= MAX_CATEGORICAL_TICKS
+    if (!genomes && !contigs) return { labelled, groupLabelled, names: false }
+    if (genomes) {
+      groups.forEach((_, g) => {
+        if (seen[g] && holds(groupArcs[2 * g], groupArcs[2 * g + 1])) groupLabelled![g] = 1
+      })
+    }
+    if (contigs) {
+      for (let u = 0; u < n; u++) if (visible[u] === 1 && holds(geometry.arcs[2 * u], geometry.arcs[2 * u + 1])) labelled[u] = 1
+    }
+    return { labelled, groupLabelled, names: true }
+  }
+  const policy: CircleNames = count <= MAX_CATEGORICAL_TICKS ? 'all' : model.kind === 'contig' ? 'long' : 'none'
+  if (policy === 'none') return { labelled, groupLabelled, names: false }
+  for (let u = 0; u < n; u++) {
+    if (visible[u] !== 1) continue
+    if (policy === 'long' && model.units[u].bp < LABEL_MIN_SPAN_BP) continue
+    if (holds(geometry.arcs[2 * u], geometry.arcs[2 * u + 1])) labelled[u] = 1
+  }
+  groupLabelled = null
+  return { labelled, groupLabelled, names: true }
 }

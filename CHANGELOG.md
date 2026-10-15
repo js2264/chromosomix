@@ -25,9 +25,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (`sections=contigs`), into their contigs. A hovered genome lights its partners, tinted and counted
   by their contacts; a chord says what it carries and each end's share; an arc opens its genome or
   contig, a chord the pair. The rings — bigWigs, bedGraphs, BEDs, genome and contig metadata — are
-  named at twelve o'clock and dragged in or out to reorder them, and the Tracks card and every map's
-  lanes follow. Chords are raw contacts for now, the strongest 3,000 kept and the `chords` row
-  thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
+  named at twelve o'clock and dragged in or out by their names to reorder them, and the Tracks card
+  and every map's lanes follow. Chords are raw contacts for now, the strongest 3,000 kept and the
+  `chords` row thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
+  **It zooms as the map does**: the wheel or a pinch about the pointer, up to 200 times, a drag to
+  pan, a sideways or ⌘ scroll to slide, the arrows and Page Up and Page Down, and a double click,
+  Home, the refit or `0` back to the whole circle. A zoom keeps what is under the pointer there, keeps
+  the rings as thick as their lanes, names the genomes or contigs it brings into view — forty of a
+  thousand genomes, the contigs of one genome — and reads the rings again at the screen's resolution
+  for the stretch in view once the view holds still; a zoomed figure is the view, its caption saying
+  how many sections are in it at what zoom.
   The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
   card's `labels` (off by default, as for the square), with the square's rule — every name up to
   fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the

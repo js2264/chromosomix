@@ -40,6 +40,14 @@ export interface CircleBins {
   a1: Float64Array
   /** The first bin of each section, and one past its last: `first[u] .. first[u + 1]`. */
   first: Int32Array
+  /**
+   * Which bins a zoomed picture shows ({@link windowBins}), 1 for each; absent
+   * where it shows them all. A bin out of view is the whole stretch of its
+   * section out there, kept so the section's bins still run from its start to
+   * its end, and is drawn as nothing: as one straight piece it would cut
+   * across the circle.
+   */
+  shown?: Uint8Array
 }
 
 /**
@@ -104,6 +112,79 @@ export function circleBins(model: CircleModel, geometry: CircleGeometry, count: 
     }
   }
   return { count: sum, unit, from, to, a0, a1, first }
+}
+
+/**
+ * Bins for a zoomed picture: as fine as the screen across what is in view —
+ * `perRadian` bins to the radian there, and no more than `cap` across it, give
+ * or take the one each stretch of it rounds up to — and one bin for
+ * each stretch of a section out of view, so every section still has its bins,
+ * in order, from its start to its end. A bin is still a stretch of base pairs,
+ * its share of its section by angle.
+ */
+export function windowBins(
+  model: CircleModel,
+  geometry: CircleGeometry,
+  windows: ReadonlyArray<readonly [number, number]>,
+  perRadian: number,
+  cap = 16384,
+): CircleBins {
+  const n = model.units.length
+  // Each section's pieces, in order: [start, end, visible].
+  const pieces: Array<Array<[number, number, boolean]>> = []
+  let visibleSpan = 0
+  for (let u = 0; u < n; u++) {
+    const start = geometry.arcs[2 * u]
+    const end = geometry.arcs[2 * u + 1]
+    const mine: Array<[number, number, boolean]> = []
+    let at = start
+    for (const [w0, w1] of windows) {
+      const a = Math.max(start, w0)
+      const b = Math.min(end, w1)
+      if (!(b > a)) continue
+      if (a > at) mine.push([at, a, false])
+      mine.push([a, b, true])
+      visibleSpan += b - a
+      at = b
+    }
+    if (end > at || mine.length === 0) mine.push([at, end, false])
+    pieces.push(mine)
+  }
+  const per = visibleSpan * perRadian > cap ? cap / visibleSpan : perRadian
+  const counts = pieces.map((mine) =>
+    mine.map(([a, b, visible]) => (visible ? Math.max(1, Math.ceil((b - a) * per)) : 1)),
+  )
+  const first = new Int32Array(n + 1)
+  for (let u = 0; u < n; u++) first[u + 1] = first[u] + counts[u].reduce((sum, count) => sum + count, 0)
+  const total = first[n]
+  const unit = new Int32Array(total)
+  const from = new Float64Array(total)
+  const to = new Float64Array(total)
+  const a0 = new Float64Array(total)
+  const a1 = new Float64Array(total)
+  const shown = new Uint8Array(total)
+  for (let u = 0; u < n; u++) {
+    const bp = Math.max(1, model.units[u].bp)
+    const start = geometry.arcs[2 * u]
+    const span = geometry.arcs[2 * u + 1] - start
+    const bpOf = (angle: number): number => (span > 0 ? (bp * (angle - start)) / span : 0)
+    let at = first[u]
+    pieces[u].forEach(([a, b, visible], p) => {
+      const count = counts[u][p]
+      for (let k = 0; k < count; k++) {
+        const x = a + ((b - a) * k) / count
+        const y = a + ((b - a) * (k + 1)) / count
+        unit[at] = u
+        a0[at] = x
+        a1[at] = y
+        from[at] = bpOf(x)
+        to[at] = bpOf(y)
+        shown[at] = visible ? 1 : 0
+        at++
+      }
+    })
+  }
+  return { count: total, unit, from, to, a0, a1, first, shown }
 }
 
 /** The angle a base pair of a section is drawn at. */
@@ -423,6 +504,10 @@ export function paintRing(
   const alpha = Math.max(0.05, Math.min(1, ring.opacity)) * (dim ? 0.3 : 1)
   ctx.globalAlpha = alpha
   const content = ring.content
+  // A zoom's bins out of view are drawn as nothing (`CircleBins.shown`).
+  const shown = bins.shown
+  const drawn = (bin: number, value: number): boolean =>
+    Number.isFinite(value) && (shown === undefined || shown[bin] === 1)
   const thick = band.outer - band.inner
   // A rule round the circle at one radius, under each section and not across
   // the gaps between them, in the plot's ink: a ring's floor and its zero line.
@@ -458,7 +543,7 @@ export function paintRing(
     if (mode === 'heatmap') {
       for (let bin = 0; bin < bins.count; bin++) {
         const value = values.values[bin]
-        if (!Number.isFinite(value)) continue
+        if (!drawn(bin, value)) continue
         ctx.fillStyle = colormapCss(content.colormap, norm(value))
         ctx.beginPath()
         wedge(ctx, cx, cy, band.inner, band.outer, bins.a0[bin], bins.a1[bin])
@@ -482,7 +567,7 @@ export function paintRing(
       ctx.fillStyle = ring.colour
       for (let bin = 0; bin < bins.count; bin++) {
         const value = values.values[bin]
-        if (!Number.isFinite(value)) continue
+        if (!drawn(bin, value)) continue
         const r = radiusOf(norm(value))
         const a = (bins.a0[bin] + bins.a1[bin]) / 2
         ctx.beginPath()
@@ -493,7 +578,7 @@ export function paintRing(
       ctx.fillStyle = ring.colour
       for (let bin = 0; bin < bins.count; bin++) {
         const value = values.values[bin]
-        if (!Number.isFinite(value)) continue
+        if (!drawn(bin, value)) continue
         const t = norm(value)
         const r0 = radiusOf(Math.min(zero, t))
         const r1 = radiusOf(Math.max(zero, t))
@@ -561,11 +646,12 @@ export function paintRing(
     const { codes } = content.classes
     // One shape per run of a category inside a section, rather than one per
     // bin: the same picture, a tenth of the paths in the figure.
+    const codeAt = (bin: number): number => (shown === undefined || shown[bin] === 1 ? codes[bin] : -1)
     let bin = 0
     while (bin < bins.count) {
-      const code = codes[bin]
+      const code = codeAt(bin)
       let end = bin + 1
-      while (end < bins.count && codes[end] === code && bins.unit[end] === bins.unit[bin]) end++
+      while (end < bins.count && codeAt(end) === code && bins.unit[end] === bins.unit[bin]) end++
       if (code >= 0) {
         ctx.fillStyle = categoryColour(code)
         ctx.beginPath()
@@ -610,7 +696,9 @@ function wedge(
   a0: number,
   a1: number,
 ): void {
-  if (a1 - a0 > 0.05) {
+  // Straight while the chord strays under a quarter of a pixel from the arc:
+  // a degree on a picture, and a hundredth of one on a circle zoomed in on.
+  if (a1 - a0 > Math.min(0.05, 2 * Math.sqrt(0.5 / Math.max(1, outer)))) {
     annulusPath(ctx, cx, cy, inner, outer, a0, a1)
     return
   }
@@ -621,16 +709,18 @@ function wedge(
   ctx.closePath()
 }
 
-/** Runs of consecutive bins with a value, inside one section each. */
+/** Runs of consecutive bins with a value, inside one section each, and in view. */
 function forEachRun(bins: CircleBins, values: Float32Array, visit: (from: number, to: number) => void): void {
+  const shown = bins.shown
+  const drawn = (bin: number): boolean => Number.isFinite(values[bin]) && (shown === undefined || shown[bin] === 1)
   let bin = 0
   while (bin < bins.count) {
-    if (!Number.isFinite(values[bin])) {
+    if (!drawn(bin)) {
       bin++
       continue
     }
     let end = bin + 1
-    while (end < bins.count && Number.isFinite(values[end]) && bins.unit[end] === bins.unit[bin]) end++
+    while (end < bins.count && drawn(end) && bins.unit[end] === bins.unit[bin]) end++
     visit(bin, end)
     bin = end
   }

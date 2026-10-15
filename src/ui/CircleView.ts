@@ -32,7 +32,7 @@ import {
   resolveGroupExtents,
   type GroupSettings,
 } from '../annotations/groups'
-import { colormapOf, type AnnotationEntry, type AnnotationKind } from '../annotations/types'
+import { colormapOf, type AnnotationEntry, type AnnotationKind, type TrackSampleSet } from '../annotations/types'
 import type { MetaBlock } from '../annotations/metadata'
 import { LocusAxis, type LocusSegment } from '../render/locus'
 import { resolveLimits } from '../render/tracks'
@@ -42,9 +42,17 @@ import type { MatrixResult } from '../worker/protocol'
 import type { Transform } from '../types'
 import {
   CHORD_CAP,
+  CIRCLE_MAX_ZOOM,
   LIGHT_CIRCLE_PALETTE,
   NO_FOCUS,
   TOP,
+  anglesInView,
+  arcCurve,
+  carryRadius,
+  inTurn,
+  namesInView,
+  radialStops,
+  unitsInView,
   chordBend,
   chordColour,
   circleGeometry,
@@ -61,6 +69,7 @@ import {
   type CircleFocus,
   type CircleGeometry,
   type CircleHit,
+  type CircleLayoutOptions,
   type CircleModel,
   type CirclePalette,
   type CircleResolver,
@@ -76,6 +85,7 @@ import {
   paintRing,
   sequenceAt,
   sequenceIndex,
+  windowBins,
   type BinnedClasses,
   type BinnedValues,
   type CircleBins,
@@ -176,7 +186,22 @@ interface RingDrawn {
   id: string
   /** What is written at twelve o'clock: the track's name, or an overlay group's. */
   label: string
-  members: RingPaint[]
+  /** Each track, with the bins its numbers are in: the whole circle's, or the zoom's. */
+  members: Array<RingPaint & { bins: CircleBins }>
+}
+
+/**
+ * A zoomed picture's own bins and numbers (`windowBins`): as fine as the screen
+ * across what is in view, computed once the view holds still and drawn for as
+ * long as what is in view is inside what they cover.
+ */
+interface Detail {
+  /** The view they were cut for; another view is redrawn from the whole circle's until they are cut again. */
+  key: string
+  windows: Array<[number, number]>
+  bins: CircleBins
+  /** Each track's numbers in those bins, kept with what they were binned from. */
+  contents: Map<string, { from: readonly unknown[]; content: RingContent }>
 }
 
 /** The label font, and its bold for the lit section. */
@@ -186,17 +211,55 @@ const RING_NAME_FONT = '10px system-ui, sans-serif'
 const KEY_TITLE_FONT = '600 11px system-ui, sans-serif'
 const KEY_FONT = '10px system-ui, sans-serif'
 
-/** What the picture answers to, under its key on hover (§26.4: one sentence). */
-const HINT = 'Click an arc or a chord to open it'
-const HINT_WITH_RINGS = 'Click to open; drag a ring to move it'
+/**
+ * What the picture answers to, under its key on hover (§26.4): how to zoom
+ * and, zoomed, how to move about and back; then what a click and a ring do.
+ * The ring's line names its grip as it is drawn — the name, or with the names
+ * off the ring's end at twelve o'clock.
+ */
+function hintLines(zoomed: boolean, rings: boolean, named: boolean): string[] {
+  return [
+    zoomed ? 'Drag to pan; double-click to fit' : 'Scroll to zoom',
+    !rings
+      ? 'Click an arc or a chord to open it'
+      : named
+        ? 'Click to open; drag a ring by its name to move it'
+        : 'Click to open; drag a ring at the top to move it',
+  ]
+}
+
+/** A second press this soon after the first is a double one — the map's window. */
+const DOUBLE_CLICK_MS = 250
+/** One PageUp or PageDown, as on the map. */
+const KEY_ZOOM = 1.25
+/** How much a wheel's delta zooms: exponential, so a trackpad's many and a mouse's few agree. */
+const WHEEL_RATE = 0.002
+/** How long the view holds still before a zoom's own bins are cut. */
+const SETTLE_MS = 150
+/** Pixels to a bin, along the rings, in a zoomed picture's own bins. */
+const BIN_PX = 1.5
+/** How far past each edge of the box, in boxes, a zoomed picture's own bins reach. */
+const DETAIL_PAD = 0.5
+/** The most stretches of the axis a zoomed picture reads a signal over, a request each. */
+const DETAIL_STRETCHES = 4
 
 /** The key's distance from the picture's corner, its ramp's height, and its gap beside the circle. */
 const KEY_INSET = 10
 const KEY_BAR = 8
 const KEY_GAP = 16
 
-/** Pixels the pointer travels before a press on a ring becomes a drag. */
+/** Pixels the pointer travels before a press becomes a drag: a ring carried, or the view panned. */
 const DRAG_SLOP = 5
+
+/** A press that has not yet become a click or a pan. */
+interface Press {
+  pointer: number
+  x: number
+  y: number
+  /** The view's offset when the press began, which a pan moves from and Escape goes back to. */
+  offset: { x: number; y: number }
+  panning: boolean
+}
 
 interface RingDrag {
   id: string
@@ -238,6 +301,41 @@ export class CircleView {
   private focus: CircleFocus = NO_FOCUS
   private drag: RingDrag | null = null
   private pending: { id: string; x: number; y: number; pointer: number } | null = null
+  /**
+   * The zoom (§7.6): how many times the picture's radius the circle is drawn
+   * at, and where its middle is, from the middle of the box. 1 and nowhere is
+   * the circle fitted to the box.
+   */
+  private zoom = 1
+  private offset = { x: 0, y: 0 }
+  /** The circle fitted to the box, which a zoom is laid out against. */
+  private fitGeometry: CircleGeometry | null = null
+  /** What the fitted circle was laid out from, which a zoom lays the same circle out from. */
+  private layoutInputs: Omit<CircleLayoutOptions, 'corner' | 'zoom'> & { names: boolean } | null = null
+  /** The view the picture's geometry is of: the layout, the zoom and the offset. */
+  private viewKey = ''
+  /** The angles of the rings in a zoomed view, in the circle's turn; `null` fitted. */
+  private viewWindows: Array<[number, number]> | null = null
+  private press: Press | null = null
+  /** Every pointer down on the picture, for a pinch. */
+  private readonly pointers = new Map<number, { x: number; y: number }>()
+  private pinch: { distance: number; x: number; y: number } | null = null
+  /** A click waiting out the double-click window, which a second press calls off. */
+  private clickTimer: ReturnType<typeof setTimeout> | null = null
+  /** Where and when the last click was let go, which a second within the window doubles. */
+  private lastClick: { x: number; y: number; time: number } | null = null
+  /**
+   * Where the pointer was when the view moved under it: the card and the
+   * crosshair are asked again of the next frame, which is the first drawn at
+   * the new view.
+   */
+  private rehover: { x: number; y: number } | null = null
+  private settleTimer: ReturnType<typeof setTimeout> | null = null
+  private detail: Detail | null = null
+  /** Where each ring's name is written, which is its grip. */
+  private nameBoxes: Array<{ id: string; x0: number; y0: number; x1: number; y1: number }> = []
+  /** The ring whose grip the pointer is over, drawn lit. */
+  private gripHover: string | null = null
   private size = { width: 0, height: 0 }
   private frame = 0
   private layoutKey = ''
@@ -247,11 +345,13 @@ export class CircleView {
   private readonly unsubscribe: Array<() => void> = []
 
   constructor(private readonly options: CircleViewOptions) {
-    this.canvas = el('canvas', { class: 'circle-canvas' })
+    // Focusable, for the map's keys: the arrows pan, Page Up and Page Down
+    // zoom, Home fits.
+    this.canvas = el('canvas', { class: 'circle-canvas', attrs: { tabindex: '0' } })
     this.tip = el('div', { class: 'cell-tip circle-tip hidden' })
-    // Under the picture's corner, as the map's reframe hint is: the two
-    // gestures nothing on screen announces.
-    this.hint = el('div', { class: 'circle-hint', attrs: { 'aria-hidden': 'true' }, text: HINT })
+    // Under the picture's corner, as the map's reframe hint is: the gestures
+    // nothing on screen announces ({@link hintLines}).
+    this.hint = el('div', { class: 'circle-hint', attrs: { 'aria-hidden': 'true' } })
     this.guide = el('canvas', { class: 'circle-guide', attrs: { 'aria-hidden': 'true' } })
     this.el = el('div', { class: 'circle-wrap' }, this.canvas, this.guide, this.hint, this.tip)
     this.samples =
@@ -333,7 +433,9 @@ export class CircleView {
    * before there is a layout or a ring.
    */
   fillingRingSize(): number | null {
-    const geometry = this.geometry
+    // The fitted circle's room, whatever the zoom: a lane's height is the same
+    // at every zoom, as it is beside a square zoomed in on.
+    const geometry = this.fitGeometry
     const count = geometry?.rings.length ?? 0
     if (geometry === null || count === 0) return null
     return Math.max(6, Math.floor(Math.min(geometry.ringRoom / count, geometry.outer * 0.16)))
@@ -364,6 +466,9 @@ export class CircleView {
   destroy(): void {
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     this.frame = 0
+    this.cancelClick()
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer)
+    this.settleTimer = null
     this.observer?.disconnect()
     this.samples?.destroy()
     for (const off of this.unsubscribe) off()
@@ -385,17 +490,24 @@ export class CircleView {
 
   private rebuild(): void {
     const block = this.block
+    const before = this.model
     this.model =
       block === null
         ? null
         : circleModelOf(block, this.options.presentation()?.resolver ?? {}, this.bpPerCell, CHORD_CAP, this.cut)
     this.geometry = null
+    this.fitGeometry = null
     this.chords = null
     this.bins = null
     this.index = null
     this.axis = null
     this.held.clear()
+    this.detail = null
     this.focus = NO_FOCUS
+    // The same sections read again — another balance, another transform —
+    // are the same circle, and keep the zoom the reader is in; other sections
+    // are another circle, drawn whole.
+    if (before === null || this.model === null || !sameSections(before, this.model)) this.resetZoom()
     this.schedule()
   }
 
@@ -417,11 +529,13 @@ export class CircleView {
     if (fresh.units.every((unit, u) => unit.sequences.length === model.units[u]?.sequences.length)) return
     this.model = fresh
     this.geometry = null
+    this.fitGeometry = null
     this.chords = null
     this.bins = null
     this.index = null
     this.axis = null
     this.held.clear()
+    this.detail = null
   }
 
   /**
@@ -497,37 +611,234 @@ export class CircleView {
     // Under the key, or in its corner where there is no key to stand under.
     if (this.keyAt !== null && box !== null) this.placeHint(this.keyAt.x, this.keyAt.y + box.height, slots.length > 0)
     else this.placeHint(width - KEY_INSET, KEY_INSET - 6, slots.length > 0, true)
-    if (this.geometry === null || key !== this.layoutKey) {
+    if (this.fitGeometry === null || key !== this.layoutKey) {
       measure.font = font
-      this.geometry = circleGeometry(model, {
+      this.layoutInputs = {
         width,
         height,
         rings: slots.map((slot) => ({ id: slot.host.id, size: slot.host.style.size })),
         measure: (text) => measure.measureText(text).width,
         fontPx: fontPixels(font),
         names,
+      }
+      this.fitGeometry = circleGeometry(model, {
+        ...this.layoutInputs,
         ...(corner === undefined ? {} : { corner }),
       })
       this.layoutKey = key
-      this.chords = null
+      this.geometry = null
+      // A zoom's own bins are angles of the layout they were cut in, and a new
+      // layout can move every arc — a first ring widens the gap at twelve.
+      // Dropped, they are cut again once the view holds still.
+      this.detail = null
       // The bins follow the circle's own size, not the rings': a ring is a
       // band of the same angles whatever its radius.
-      const outer = this.geometry.sections.inner
-      const count = Math.max(360, Math.min(4096, Math.round(2 * Math.PI * outer)))
+      const fit = this.fitGeometry
+      const count = Math.max(360, Math.min(4096, Math.round(2 * Math.PI * fit.sections.inner)))
       if (this.bins === null || this.bins.count < count * 0.8 || this.bins.count > count * 1.25) {
-        this.bins = circleBins(model, this.geometry, count)
+        this.bins = circleBins(model, fit, count)
         this.held.clear()
       } else {
         // Same count, new angles: the binning is in base pairs and stands; only
         // where each bin is drawn moves with the layout.
-        this.bins = circleBins(model, this.geometry, this.bins.count)
+        this.bins = circleBins(model, fit, this.bins.count)
       }
       this.index ??= sequenceIndex(model)
       this.axis ??= circleAxis(model)
     }
+    // The picture: the fitted circle, or the zoom's (§7.6).
+    const view = `${key}|${this.zoom}|${this.offset.x}|${this.offset.y}`
+    if (this.geometry === null || view !== this.viewKey) {
+      const zoomed = this.layoutAt(this.zoom, this.offset)
+      this.geometry = zoomed?.geometry ?? this.fitGeometry
+      this.viewWindows = zoomed?.windows ?? null
+      this.viewKey = view
+      this.chords = null
+    }
     this.chords ??= layoutChords(model, this.geometry, this.scale)
+    // A zoomed view that moved without a gesture — the box resized, a ring
+    // added — has its own bins cut again once it holds still, as a gesture's has.
+    if (
+      this.zoom > 1 &&
+      this.settleTimer === null &&
+      (this.viewWindows?.length ?? 0) > 0 &&
+      !this.detailCovers()
+    ) {
+      this.settleTimer = setTimeout(() => this.cutDetail(), SETTLE_MS)
+    }
     this.rings = this.ringsOf(slots)
     return true
+  }
+
+  /**
+   * The circle laid out at a zoom, its middle `offset` from the box's — the
+   * sections at `zoom` times the fitted radius, each ring as thick as its lane
+   * is tall where the room allows — with the names of what is in view
+   * (`namesInView`), and the angles of the rings in view. `null` at 1, which
+   * is the fitted circle itself.
+   */
+  private layoutAt(
+    zoom: number,
+    offset: { x: number; y: number },
+  ): { geometry: CircleGeometry; windows: Array<[number, number]> } | null {
+    const model = this.model
+    const fit = this.fitGeometry
+    const inputs = this.layoutInputs
+    if (zoom <= 1 || model === null || fit === null || inputs === null) return null
+    const { width, height } = inputs
+    const room = fit.outer - fit.labelAt
+    const laid = circleGeometry(model, {
+      ...inputs,
+      zoom: { cx: width / 2 + offset.x, cy: height / 2 + offset.y, rim: fit.labelAt * zoom, labelRoom: room },
+    })
+    const windows = anglesInView(laid, { x0: 0, y0: 0, x1: width, y1: height })
+    const named = namesInView(model, laid, unitsInView(laid, windows), inputs.names)
+    return {
+      geometry: {
+        ...laid,
+        labelled: named.labelled,
+        groupLabelled: named.groupLabelled,
+        names: named.names,
+        // A circle that kept no room for names at rest — a thousand genomes,
+        // none of them named — writes the ones a zoom brings into view past
+        // its rim, where the zoom has made the room: as long as a name could
+        // have been at rest, and the rim does not move for them.
+        outer: room > 0 || !named.names ? laid.outer : laid.labelAt + Math.max(24, fit.outer * 0.4),
+      },
+      windows,
+    }
+  }
+
+  /** Whether the picture is zoomed in on: what a double click, Home and the refit put back. */
+  get zoomed(): boolean {
+    return this.zoom > 1
+  }
+
+  /**
+   * How far the picture is zoomed in, and how many of its sections are in
+   * view — what a figure of a zoomed view says of itself in its caption;
+   * `null` while the whole circle is drawn.
+   */
+  zoomInView(): { zoom: number; sections: number } | null {
+    const geometry = this.geometry
+    const windows = this.viewWindows
+    if (this.zoom <= 1 || geometry === null || windows === null) return null
+    const seen = unitsInView(geometry, windows)
+    return { zoom: this.zoom, sections: seen.reduce((sum, on) => sum + on, 0) }
+  }
+
+  /** Back to the whole circle, fitted to the box. */
+  resetZoom(): void {
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer)
+    this.settleTimer = null
+    this.detail = null
+    if (this.zoom === 1 && this.offset.x === 0 && this.offset.y === 0) return
+    this.zoom = 1
+    this.offset = { x: 0, y: 0 }
+    this.schedule()
+  }
+
+  /**
+   * Zoom by `factor` about a point of the box, keeping what is under it there:
+   * the same angle, and the same place in the same layer ({@link carryRadius}).
+   * From 1 to {@link CIRCLE_MAX_ZOOM}; at 1 the circle is fitted again.
+   */
+  private zoomAt(x: number, y: number, factor: number): void {
+    const fit = this.fitGeometry
+    if (fit === null || !(factor > 0)) return
+    // The view as it stands, not as last drawn: a trackpad sends several steps
+    // a frame, and each is anchored in the view the one before it left.
+    const from = this.layoutAt(this.zoom, this.offset)?.geometry ?? fit
+    const zoom = Math.max(1, Math.min(CIRCLE_MAX_ZOOM, this.zoom * factor))
+    if (zoom === this.zoom) return
+    if (zoom <= 1) {
+      this.resetZoom()
+      return
+    }
+    // The radii depend on the zoom alone, so the layout at the new zoom about
+    // any middle says where each layer will be.
+    const to = this.layoutAt(zoom, this.offset)?.geometry
+    if (to === undefined) return
+    const dx = x - from.cx
+    const dy = y - from.cy
+    const angle = Math.atan2(dy, dx)
+    const carried = carryRadius(radialStops(from), radialStops(to), Math.hypot(dx, dy))
+    const { width, height } = this.size
+    this.zoom = zoom
+    this.setOffset({
+      x: x - Math.cos(angle) * carried - width / 2,
+      y: y - Math.sin(angle) * carried - height / 2,
+    })
+  }
+
+  /** Slide the zoomed picture by this many pixels; a fitted circle does not move. */
+  private panBy(dx: number, dy: number): void {
+    if (this.zoom <= 1) return
+    this.setOffset({ x: this.offset.x + dx, y: this.offset.y + dy })
+  }
+
+  /**
+   * Put the circle's middle `offset` from the box's, held where the box's
+   * middle is still on the circle — and nearer the fit the nearer the zoom is
+   * to 1, so a zoom out comes back to the fitted circle rather than to a
+   * corner of it.
+   */
+  private setOffset(offset: { x: number; y: number }): void {
+    const fit = this.fitGeometry
+    if (fit === null) return
+    const reach = fit.labelAt * this.zoom * Math.min(1, (this.zoom - 1) / 0.25)
+    const d = Math.hypot(offset.x, offset.y)
+    this.offset = d <= reach || d === 0 ? offset : { x: (offset.x * reach) / d, y: (offset.y * reach) / d }
+    this.viewChanged()
+  }
+
+  /** The view moved: draw it, and cut its own bins once it holds still. */
+  private viewChanged(): void {
+    this.schedule()
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer)
+    this.settleTimer = this.zoom > 1 ? setTimeout(() => this.cutDetail(), SETTLE_MS) : null
+    if (this.zoom <= 1) this.detail = null
+  }
+
+  /**
+   * A zoomed picture's own bins, as fine as the screen across the rings in
+   * view ({@link Detail}); their numbers are read as they are drawn.
+   */
+  private cutDetail(): void {
+    this.settleTimer = null
+    const model = this.model
+    const geometry = this.geometry
+    const { width, height } = this.size
+    if (this.zoom <= 1 || model === null || geometry === null || (this.viewWindows?.length ?? 0) === 0) {
+      this.detail = null
+      return
+    }
+    // Half a box past each edge, as a lane's read is padded past its window:
+    // a pan inside that is drawn as finely as the view it began from.
+    const windows = anglesInView(geometry, {
+      x0: -width * DETAIL_PAD,
+      y0: -height * DETAIL_PAD,
+      x1: width * (1 + DETAIL_PAD),
+      y1: height * (1 + DETAIL_PAD),
+    })
+    const bins = windowBins(model, geometry, windows, geometry.sections.inner / BIN_PX)
+    this.detail = { key: this.viewKey, windows, bins, contents: new Map() }
+    this.schedule()
+  }
+
+  /**
+   * Whether the zoom's own bins cover the picture on screen: those of this
+   * view, or of one the view has moved within — a zoom further in, a pan that
+   * stays inside — whose bins are still where they were, only fewer to the
+   * pixel. Otherwise the rings are drawn from the whole circle's until the view
+   * holds still.
+   */
+  private detailCovers(): boolean {
+    const detail = this.detail
+    const windows = this.viewWindows
+    if (detail === null || this.zoom <= 1 || windows === null) return false
+    if (detail.key === this.viewKey) return true
+    return windows.every(([a, b]) => detail.windows.some(([c, d]) => c <= a + 1e-9 && b <= d + 1e-9))
   }
 
   /**
@@ -537,9 +848,18 @@ export class CircleView {
    * to scale each of its tracks on its own.
    */
   private ringsOf(slots: readonly RingSlot[]): RingDrawn[] {
+    const whole = this.bins
+    if (whole === null) return []
+    const detail = this.detailCovers() ? this.detail : null
     const built = slots.map((slot) => ({
       slot,
-      members: [slot.host, ...slot.overlaid].map((entry) => ({ entry, content: this.contentOf(entry) })),
+      members: [slot.host, ...slot.overlaid].map((entry) => {
+        // The zoom's own numbers where it has them, the whole circle's until then.
+        const fine = detail === null ? null : this.detailContentOf(entry, detail)
+        return fine !== null && detail !== null
+          ? { entry, content: fine, bins: detail.bins }
+          : { entry, content: this.contentOf(entry), bins: whole }
+      }),
     }))
     const groups = resolveGroupExtents(
       built.flatMap(({ members }) => members).map(({ entry, content }) => ({
@@ -553,10 +873,11 @@ export class CircleView {
       // An overlay group's ring is named by the group, as the reader named
       // it; the tooltip names each of its tracks beside its value.
       label: slot.overlaid.length > 0 && slot.host.style.group !== '' ? slot.host.style.group : slot.host.label,
-      members: members.map(({ entry, content }) => ({
+      members: members.map(({ entry, content, bins }) => ({
         id: entry.id,
         label: entry.label,
         colour: entry.style.colour,
+        bins,
         // Overlaid tracks are translucent by necessity, as in their lane: two
         // opaque areas in one band hide each other.
         opacity: members.length > 1 ? entry.style.opacity * OVERLAY_DIM : entry.style.opacity,
@@ -568,11 +889,116 @@ export class CircleView {
     }))
   }
 
+  /**
+   * A track's numbers in a zoom's own bins, kept with them: a signal read
+   * again for the stretch of the circle the bins cover at the screen's
+   * resolution — a request of its own beside the whole circle's, so neither
+   * evicts the other, and one a stretch where the view shows several: either
+   * side of twelve o'clock is either end of the circle's axis — and a column
+   * of the file put in the finer bins. `null` while a read is on its way, and
+   * for a feature, whose arcs need no bins.
+   */
+  private detailContentOf(entry: AnnotationEntry, detail: Detail): RingContent | null {
+    const model = this.model
+    const index = this.index
+    if (model === null || index === null) return null
+    const held = detail.contents.get(entry.id)
+    const keep = (from: readonly unknown[], content: RingContent): RingContent | null => {
+      if (content.kind === 'empty') return null
+      detail.contents.set(entry.id, { from, content })
+      return content
+    }
+    if (SIGNAL_KINDS.has(entry.kind)) {
+      const axis = this.axis
+      const stretches = this.detailStretches(detail)
+      if (axis === null || this.samples === null || stretches.length === 0) return null
+      const sets: TrackSampleSet[] = []
+      for (const [k, stretch] of stretches.entries()) {
+        const samples = this.samples.samplesFor({
+          entry: entry.id,
+          scope: `circle-detail-${k}`,
+          axis,
+          domain: stretch.domain,
+          pixels: stretch.pixels,
+          ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
+          ...(entry.style.reads === undefined ? {} : { reads: entry.style.reads }),
+        })
+        // What is held may be another view's, until this one's lands.
+        if (samples === null || !samplesCover(samples, axis, stretch.domain)) return null
+        sets.push(samples)
+      }
+      if (held !== undefined && sameList(held.from, sets)) return held.content
+      const samples = joinSamples(sets)
+      return keep(sets, this.valuesContent(entry, binSamples(samples, detail.bins, index), samples.note))
+    }
+    if (META_KINDS.has(entry.kind)) {
+      const metadata = this.options.metadata
+      if (metadata === undefined) return null
+      const revision = [metadata.revision()]
+      if (held !== undefined && sameList(held.from, revision)) return held.content
+      const cells = metadata.cellsFor(entry, sequenceBlock(model))
+      if (cells === null) return null
+      const binned = binCells(cells, model, detail.bins)
+      return keep(
+        revision,
+        binned.kind === 'qualitative'
+          ? { kind: 'classes', classes: binned as BinnedClasses }
+          : this.valuesContent(entry, binned as BinnedValues),
+      )
+    }
+    return null
+  }
+
+  /**
+   * The stretches of the circle's axis — its sequences end to end, in circle
+   * order — that a zoom's bins in view cover, each with how many bins it
+   * spans: one, or more where the view straddles twelve o'clock or shows two
+   * sides of the circle. None where they would be more than half the axis,
+   * which the whole circle's numbers draw nearly as finely.
+   */
+  private detailStretches(detail: Detail): Array<{ domain: [number, number]; pixels: number }> {
+    const model = this.model
+    if (model === null) return []
+    const starts: number[] = []
+    let at = 0
+    for (const unit of model.units) {
+      starts.push(at)
+      for (const sequence of unit.sequences) at += Math.max(0, sequence.length)
+    }
+    const total = at
+    const bins = detail.bins
+    const out: Array<{ domain: [number, number]; pixels: number }> = []
+    for (const [w0, w1] of detail.windows) {
+      let lo = Number.POSITIVE_INFINITY
+      let hi = Number.NEGATIVE_INFINITY
+      let pixels = 0
+      for (let bin = 0; bin < bins.count; bin++) {
+        if (!(bins.a0[bin] < w1 && bins.a1[bin] > w0)) continue
+        const u = bins.unit[bin]
+        lo = Math.min(lo, starts[u] + bins.from[bin])
+        hi = Math.max(hi, starts[u] + bins.to[bin])
+        pixels++
+      }
+      if (!(hi > lo)) continue
+      const last = out[out.length - 1]
+      if (last !== undefined && lo <= last.domain[1]) {
+        last.domain[1] = Math.max(last.domain[1], hi)
+        last.pixels += pixels
+      } else {
+        out.push({ domain: [lo, hi], pixels })
+      }
+    }
+    const span = out.reduce((sum, stretch) => sum + stretch.domain[1] - stretch.domain[0], 0)
+    return out.length > DETAIL_STRETCHES || span > total / 2 ? [] : out
+  }
+
   private contentOf(entry: AnnotationEntry): RingContent {
     const model = this.model
     const bins = this.bins
     const index = this.index
-    const geometry = this.geometry
+    // The fitted circle's: a zoom moves the radii and not the angles, so the
+    // whole circle's bins and a feature's arc are the same under any zoom.
+    const geometry = this.fitGeometry
     if (model === null || bins === null || index === null || geometry === null) {
       return { kind: 'empty', note: '' }
     }
@@ -675,6 +1101,9 @@ export class CircleView {
     if (!this.prepare(ctx, width, height)) return
     this.paint(ctx, readCirclePalette(this.canvas), true)
     this.describeGeometry()
+    const at = this.rehover
+    this.rehover = null
+    if (at !== null && this.drag === null && this.press?.panning !== true) this.hover(at)
   }
 
   /**
@@ -708,7 +1137,21 @@ export class CircleView {
         })
       }
     }
+    const detail = this.detailCovers() ? this.detail : null
     this.canvas.dataset.geometry = JSON.stringify({
+      zoom: Math.round(this.zoom * 1000) / 1000,
+      offset: { x: round(this.offset.x), y: round(this.offset.y) },
+      // The angles in view, zoomed, and the zoom's own bins where they are drawn.
+      windows: this.viewWindows?.map(([a, b]) => [Math.round(a * 1e4) / 1e4, Math.round(b * 1e4) / 1e4]) ?? null,
+      detail: detail === null ? null : { bins: detail.bins.count, tracks: detail.contents.size },
+      outer: round(geometry.outer),
+      topGap: Math.round(geometry.topGap * 1e4) / 1e4,
+      grips: this.nameBoxes.map((box) => ({
+        id: box.id,
+        x: round((box.x0 + box.x1) / 2),
+        y: round((box.y0 + box.y1) / 2),
+      })),
+      labelled: geometry.labelled.reduce((sum, on) => sum + on, 0),
       cx: round(geometry.cx),
       cy: round(geometry.cy),
       sections: [round(geometry.sections.inner), round(geometry.sections.outer)],
@@ -783,9 +1226,10 @@ export class CircleView {
       const band = geometry.rings[k]
       if (band === undefined) return
       const dim = lit && !this.isHeld(ring.id)
-      // The band's wash under the first track, and an overlaid track over it.
+      // The band's wash under the first track, and an overlaid track over it,
+      // each in its own bins: the whole circle's, or a zoom's own.
       ring.members.forEach((member, m) => {
-        paintRing(ctx, member, band, geometry, bins, m === 0 ? palette.wash : null, ink, dim)
+        paintRing(ctx, member, band, geometry, member.bins, m === 0 ? palette.wash : null, ink, dim)
       })
     })
     paintChords(ctx, { model, geometry, chords, colormap: this.scale.colormap, focus })
@@ -800,14 +1244,15 @@ export class CircleView {
     }
     paintSections(ctx, sections)
     paintLabels(ctx, { ...sections, font: scaleFont(LABEL_FONT), boldFont: scaleFont(LABEL_BOLD) })
-    this.paintRingNames(ctx, geometry, palette)
+    if (live && this.drag === null && this.gripHover !== null) this.paintGrip(ctx, geometry, palette)
+    this.paintRingNames(ctx, geometry, palette, live)
     this.paintKey(ctx, chords, palette)
     if (live && this.drag?.moved === true) this.paintHeld(ctx, geometry, palette)
   }
 
   /**
    * The hint under the key, saying the gestures this picture has: rings only
-   * where there are rings to drag.
+   * where there are rings to drag, and their grip as it is drawn.
    */
   private placeHint(left: number, top: number, rings: boolean, fromRight = false): void {
     // Under the key, its left edge on the key's and no wider than the room to
@@ -820,8 +1265,12 @@ export class CircleView {
       ? `${Math.max(0, Math.min(240, Math.floor(left - KEY_INSET)))}px`
       : `${Math.max(0, Math.floor(this.size.width - left - KEY_INSET))}px`
     this.hint.style.textAlign = fromRight ? 'right' : ''
-    const text = rings ? HINT_WITH_RINGS : HINT
-    if (this.hint.textContent !== text) this.hint.textContent = text
+    const lines = hintLines(this.zoom > 1, rings, getPlotOptions().text)
+    const text = lines.join('\n')
+    if (this.hint.dataset.text !== text) {
+      this.hint.dataset.text = text
+      this.hint.replaceChildren(...lines.map((line) => el('div', { text: line })))
+    }
   }
 
   private isHeld(id: string): boolean {
@@ -833,9 +1282,18 @@ export class CircleView {
    *
    * That is the one place round the circle that is nobody's: the gap the
    * sections leave open at the top runs in through every ring, and a name
-   * written there labels its ring without a key to match it against.
+   * written there labels its ring without a key to match it against — and is
+   * the ring's handle, as a lane's name is its own (§7.6): the rest of the
+   * picture is for panning. Where each is written is kept, on screen, for
+   * {@link gripAt}.
    */
-  private paintRingNames(ctx: CanvasRenderingContext2D, geometry: CircleGeometry, palette: CirclePalette): void {
+  private paintRingNames(
+    ctx: CanvasRenderingContext2D,
+    geometry: CircleGeometry,
+    palette: CirclePalette,
+    live: boolean,
+  ): void {
+    if (live) this.nameBoxes = []
     // The Tracks card's `track text`, which is every track's name wherever it
     // is drawn: off, the rings are ink alone.
     if (this.rings.length === 0 || !getPlotOptions().text) return
@@ -851,16 +1309,43 @@ export class CircleView {
       if (band === undefined) return
       const px = Math.min(wanted, band.outer - band.inner + 3)
       if (px < 7) return
-      ctx.font = `${this.isHeld(ring.id) ? '600 ' : ''}${px.toFixed(1)}px system-ui, sans-serif`
+      const held = this.isHeld(ring.id)
+      const lit = live && !held && this.drag === null && this.gripHover === ring.id
+      ctx.font = `${held || lit ? '600 ' : ''}${px.toFixed(1)}px system-ui, sans-serif`
       const r = (band.inner + band.outer) / 2
       const x = geometry.cx + Math.cos(TOP) * r
       const y = geometry.cy + Math.sin(TOP) * r
       ctx.lineWidth = 3
       ctx.strokeStyle = palette.halo
       ctx.strokeText(ring.label, x, y)
-      ctx.fillStyle = this.isHeld(ring.id) ? palette.accent : palette.dim
+      ctx.fillStyle = held ? palette.accent : lit ? palette.text : palette.dim
       ctx.fillText(ring.label, x, y)
+      if (live) {
+        const half = ctx.measureText(ring.label).width / 2 + 3
+        this.nameBoxes.push({ id: ring.id, x0: x - half, y0: y - px / 2 - 2, x1: x + half, y1: y + px / 2 + 2 })
+      }
     })
+    ctx.restore()
+  }
+
+  /**
+   * The ring whose handle the pointer is over, edged faintly in the accent the
+   * held ring is edged in: this is the one a drag would carry.
+   */
+  private paintGrip(ctx: CanvasRenderingContext2D, geometry: CircleGeometry, palette: CirclePalette): void {
+    const at = this.rings.findIndex((ring) => ring.id === this.gripHover)
+    const band = geometry.rings[at]
+    if (band === undefined) return
+    ctx.save()
+    ctx.strokeStyle = palette.accent
+    ctx.globalAlpha = 0.45
+    ctx.lineWidth = 1
+    for (const r of [band.inner - 1.5, band.outer + 1.5]) {
+      ctx.beginPath()
+      ctx.moveTo(geometry.cx + Math.cos(TOP) * r, geometry.cy + Math.sin(TOP) * r)
+      arcCurve(ctx, geometry.cx, geometry.cy, r, TOP, TOP + Math.PI * 2)
+      ctx.stroke()
+    }
     ctx.restore()
   }
 
@@ -874,7 +1359,8 @@ export class CircleView {
     ctx.lineWidth = 1.5
     for (const r of [band.inner - 1.5, band.outer + 1.5]) {
       ctx.beginPath()
-      ctx.arc(geometry.cx, geometry.cy, r, 0, Math.PI * 2)
+      ctx.moveTo(geometry.cx + Math.cos(TOP) * r, geometry.cy + Math.sin(TOP) * r)
+      arcCurve(ctx, geometry.cx, geometry.cy, r, TOP, TOP + Math.PI * 2)
       ctx.stroke()
     }
     ctx.restore()
@@ -887,12 +1373,26 @@ export class CircleView {
    */
   private paintKey(ctx: CanvasRenderingContext2D, chords: ChordLayout, palette: CirclePalette): void {
     const key = this.keyLayout(ctx)
-    if (key === null) return
-    ctx.save()
     const at = this.keyAt
-    if (at === null) return
+    if (key === null || at === null) return
+    ctx.save()
     const x = at.x
     let y = at.y
+    if (this.zoom > 1) {
+      // Zoomed, the circle runs under the key: a card beneath it, so the ramp
+      // and its numbers are read against the page and not against the chords.
+      const pad = 6
+      ctx.globalAlpha = 0.92
+      ctx.fillStyle = palette.halo
+      ctx.beginPath()
+      roundedBox(ctx, x - pad, y - pad, key.width + 2 * pad, key.height + 2 * pad, 4)
+      ctx.fill()
+      ctx.globalAlpha = 0.3
+      ctx.strokeStyle = palette.dim
+      ctx.lineWidth = 0.75
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillStyle = palette.text
@@ -978,6 +1478,23 @@ export class CircleView {
     const { width, height } = this.size
     const geometry = this.geometry
     if (this.model === null || geometry === null || width <= 0 || height <= 0) return null
+    if (this.zoom > 1) {
+      // Zoomed, the figure is the view: the box, and as much of the circle as
+      // is in it, cut at its edges as the screen cuts it.
+      return {
+        width,
+        height,
+        paint: (ctx, scale) => {
+          ctx.save()
+          ctx.setTransform(scale, 0, 0, scale, 0, 0)
+          ctx.beginPath()
+          ctx.rect(0, 0, width, height)
+          ctx.clip()
+          if (this.prepare(ctx, width, height)) this.paint(ctx, readCirclePalette(this.canvas), false)
+          ctx.restore()
+        },
+      }
+    }
     // Cropped to the circle and its key: the column's width is the screen's
     // business, and a figure of a circle in a strip of paper is not a figure.
     const measure = this.canvas.getContext('2d')
@@ -1045,63 +1562,297 @@ export class CircleView {
   // The pointer
   // -------------------------------------------------------------------------
 
+  /**
+   * The map's gestures, bent round (§7.6): the wheel zooms about the pointer
+   * and a pinch about the fingers; zoomed, a drag pans, a sideways scroll or ⌘
+   * with the wheel slides, and a double click fits the circle again; the keys
+   * are the map's. A ring is carried by its handle — its name, or with the
+   * names off its stretch of the gap at twelve o'clock — as a lane is by its
+   * own, so the rest of the picture is free for the pan. A press that did not
+   * travel is a click, held back for the double click's window as the map's
+   * is, so the second click of a fit does not land after the first has opened
+   * something.
+   */
   private watchPointer(): void {
     const canvas = this.canvas
-    const local = (event: PointerEvent): { x: number; y: number } => {
+    const local = (event: MouseEvent): { x: number; y: number } => {
       const box = canvas.getBoundingClientRect()
       return { x: event.clientX - box.left, y: event.clientY - box.top }
     }
+    canvas.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      const at = local(event)
+      this.pointers.set(event.pointerId, at)
+      // Every press is followed to its release, wherever the hand goes: a
+      // release missed outside the picture would leave a pointer down here,
+      // and the next press would be the second finger of a pinch.
+      canvas.setPointerCapture(event.pointerId)
+      // The keys are the picture's once it is pressed, as the map's are.
+      canvas.focus({ preventScroll: true })
+      if (this.pointers.size === 2) {
+        // A second finger: a pinch, which calls off what the first began.
+        this.pending = null
+        this.press = null
+        if (this.drag !== null) this.endDrag(false)
+        this.cancelClick()
+        this.pinch = this.pinchNow()
+        return
+      }
+      if (this.pointers.size > 2) return
+      const grip = this.gripAt(at)
+      if (grip !== null) {
+        this.pending = { id: grip, x: at.x, y: at.y, pointer: event.pointerId }
+        return
+      }
+      this.press = { pointer: event.pointerId, x: at.x, y: at.y, offset: { ...this.offset }, panning: false }
+    })
     canvas.addEventListener('pointermove', (event) => {
       const at = local(event)
-      if (this.pending !== null && this.drag === null) {
-        const moved = Math.hypot(at.x - this.pending.x, at.y - this.pending.y)
-        if (moved >= DRAG_SLOP) this.beginDrag(this.pending, event)
+      if (this.pointers.has(event.pointerId)) this.pointers.set(event.pointerId, at)
+      if (this.pinch !== null) {
+        this.movePinch()
+        return
+      }
+      const pending = this.pending
+      if (pending !== null && this.drag === null && pending.pointer === event.pointerId) {
+        if (Math.hypot(at.x - pending.x, at.y - pending.y) >= DRAG_SLOP) this.beginDrag(pending, event)
       }
       if (this.drag !== null) {
         this.moveDrag(at)
         return
       }
+      const press = this.press
+      if (press !== null && press.pointer === event.pointerId) {
+        if (!press.panning && this.zoom > 1 && Math.hypot(at.x - press.x, at.y - press.y) >= DRAG_SLOP) {
+          this.beginPan(press, event)
+        }
+        if (press.panning) {
+          this.setOffset({ x: press.offset.x + at.x - press.x, y: press.offset.y + at.y - press.y })
+          return
+        }
+      }
       this.hover(at)
     })
     canvas.addEventListener('pointerleave', () => {
-      if (this.drag !== null) return
+      if (this.drag !== null || this.press?.panning === true || this.pinch !== null) return
       this.drawGuide(null)
       this.setFocus(NO_FOCUS)
+      this.setGripHover(null)
       this.tip.classList.add('hidden')
       canvas.style.cursor = ''
     })
-    canvas.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return
-      const at = local(event)
-      const hit = this.hitAt(at)
-      if (hit?.kind === 'ring') {
-        const ring = this.rings[hit.ring]
-        if (ring !== undefined) this.pending = { id: ring.id, x: at.x, y: at.y, pointer: event.pointerId }
-      }
-    })
     canvas.addEventListener('pointerup', (event) => {
-      const drag = this.drag
-      this.pending = null
-      if (drag !== null) {
-        this.endDrag(true)
-        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      const at = local(event)
+      const down = this.pointers.delete(event.pointerId)
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      if (this.pinch !== null) {
+        // The first finger up ends the pinch, and the other's lift is no click.
+        this.pinch = null
         return
       }
-      if (event.button !== 0) return
-      this.click(this.hitAt(local(event)))
+      const pending = this.pending
+      this.pending = null
+      if (this.drag !== null) {
+        this.endDrag(true)
+        return
+      }
+      const press = this.press
+      this.press = null
+      if (press?.panning === true) {
+        this.endPan(at)
+        return
+      }
+      if (!down || (press === null && pending === null)) return
+      this.released(at)
     })
-    canvas.addEventListener('pointercancel', () => {
+    const abandon = (event: PointerEvent): void => {
+      if (!this.pointers.delete(event.pointerId)) return
+      this.pinch = null
       this.pending = null
       if (this.drag !== null) this.endDrag(false)
-    })
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && this.drag !== null) {
+      if (this.press?.panning === true) canvas.style.cursor = ''
+      this.press = null
+    }
+    canvas.addEventListener('pointercancel', abandon)
+    // A capture taken away mid-gesture — the picture taken off the page — ends
+    // it where it stands; after a release the pointer is already gone.
+    canvas.addEventListener('lostpointercapture', abandon)
+    canvas.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault()
+        const at = local(event)
+        // Sideways, the picture slides, as a trackpad's two fingers slide the
+        // map; and with ⌘ held, up and down slide too. Never with Ctrl, which
+        // is a trackpad's pinch: that zooms.
+        if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || (event.metaKey && !event.ctrlKey)) {
+          this.panBy(-event.deltaX, -event.deltaY)
+          this.rehover = at
+          return
+        }
+        // Exponential in the delta, so a trackpad's many small steps and a
+        // wheel's few large ones come to the same zoom; a wheel that counts in
+        // lines, a notch's worth a line.
+        this.zoomAt(at.x, at.y, Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : WHEEL_RATE)))
+        this.rehover = at
+      },
+      { passive: false },
+    )
+    canvas.addEventListener('keydown', (event) => this.onKey(event))
+    const onEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      if (this.drag !== null) {
         event.preventDefault()
         this.endDrag(false)
+      } else if (this.press?.panning === true) {
+        // The pan goes back to where it began, as a drag of a ring does.
+        event.preventDefault()
+        const press = this.press
+        this.press = null
+        this.setOffset(press.offset)
+        canvas.style.cursor = ''
       }
     }
-    window.addEventListener('keydown', onKey)
-    this.unsubscribe.push(() => window.removeEventListener('keydown', onKey))
+    window.addEventListener('keydown', onEscape)
+    this.unsubscribe.push(() => window.removeEventListener('keydown', onEscape))
+  }
+
+  /**
+   * The map's keys (§7.2), on the circle: the arrows pan a tenth of the box
+   * (a half with Shift), Page Up and Page Down zoom about its middle by a
+   * wheel notch's worth, Home fits. Not `0`, which fits from anywhere in the
+   * window through the panel, nor `+` and `−`, which are the map's resolution.
+   */
+  private onKey(event: KeyboardEvent): void {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    const { width, height } = this.size
+    const step = event.shiftKey ? 0.5 : 0.1
+    switch (event.key) {
+      case 'ArrowLeft':
+        this.panBy(width * step, 0)
+        break
+      case 'ArrowRight':
+        this.panBy(-width * step, 0)
+        break
+      case 'ArrowUp':
+        this.panBy(0, height * step)
+        break
+      case 'ArrowDown':
+        this.panBy(0, -height * step)
+        break
+      case 'PageUp':
+        this.zoomAt(width / 2, height / 2, KEY_ZOOM)
+        break
+      case 'PageDown':
+        this.zoomAt(width / 2, height / 2, 1 / KEY_ZOOM)
+        break
+      case 'Home':
+        this.resetZoom()
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+  }
+
+  /**
+   * A press let go where it began: a second one inside the double click's
+   * window fits the circle and calls off the first; a first is a click once
+   * the window has passed.
+   */
+  private released(at: { x: number; y: number }): void {
+    const last = this.lastClick
+    const now = performance.now()
+    if (
+      last !== null &&
+      this.clickTimer !== null &&
+      now - last.time <= DOUBLE_CLICK_MS &&
+      Math.hypot(at.x - last.x, at.y - last.y) <= DRAG_SLOP * 2
+    ) {
+      this.cancelClick()
+      this.lastClick = null
+      this.resetZoom()
+      this.rehover = at
+      this.schedule()
+      return
+    }
+    this.cancelClick()
+    this.lastClick = { x: at.x, y: at.y, time: now }
+    const hit = this.hitAt(at)
+    const model = this.model
+    // A hit is indices into this model, and a click is heard a moment later:
+    // a circle rebuilt in between is not the one that was clicked.
+    this.clickTimer = setTimeout(() => {
+      this.clickTimer = null
+      if (this.model === model) this.click(hit)
+    }, DOUBLE_CLICK_MS)
+  }
+
+  private cancelClick(): void {
+    if (this.clickTimer !== null) clearTimeout(this.clickTimer)
+    this.clickTimer = null
+  }
+
+  /** A press that has travelled, on a zoomed picture: the picture follows the hand. */
+  private beginPan(press: Press, event: PointerEvent): void {
+    press.panning = true
+    this.cancelClick()
+    this.canvas.setPointerCapture(event.pointerId)
+    this.canvas.style.cursor = 'grabbing'
+    this.tip.classList.add('hidden')
+    this.drawGuide(null)
+    this.setFocus(NO_FOCUS)
+    this.setGripHover(null)
+  }
+
+  private endPan(at: { x: number; y: number }): void {
+    this.canvas.style.cursor = ''
+    this.rehover = at
+    this.schedule()
+  }
+
+  /** Where two fingers are: how far apart, and their middle. */
+  private pinchNow(): { distance: number; x: number; y: number } | null {
+    const [a, b] = [...this.pointers.values()]
+    if (a === undefined || b === undefined) return null
+    return { distance: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  }
+
+  /** Two fingers moved: the circle zooms about their middle as they spread, and follows it. */
+  private movePinch(): void {
+    const from = this.pinch
+    const to = this.pinchNow()
+    if (from === null || to === null) return
+    if (from.distance > 0 && to.distance > 0) this.zoomAt(from.x, from.y, to.distance / from.distance)
+    this.panBy(to.x - from.x, to.y - from.y)
+    this.pinch = to
+  }
+
+  /**
+   * The ring whose handle is under the point, or `null`: its name where the
+   * names are written, and its stretch of the gap at twelve o'clock, which is
+   * where the name would be — so a ring with the names off is held there.
+   */
+  private gripAt(at: { x: number; y: number }): string | null {
+    const geometry = this.geometry
+    if (geometry === null || this.rings.length === 0) return null
+    for (const box of this.nameBoxes) {
+      if (at.x >= box.x0 && at.x <= box.x1 && at.y >= box.y0 && at.y <= box.y1) return box.id
+    }
+    const dx = at.x - geometry.cx
+    const dy = at.y - geometry.cy
+    const r = Math.hypot(dx, dy)
+    // How far round from twelve o'clock, either way.
+    const off = Math.abs(inTurn(Math.atan2(dy, dx) + Math.PI) - TOP - Math.PI)
+    if (off > geometry.topGap / 2) return null
+    const k = geometry.rings.findIndex((band) => r >= band.inner - 2 && r <= band.outer + 2)
+    return k < 0 ? null : (this.rings[k]?.id ?? null)
+  }
+
+  private setGripHover(id: string | null): void {
+    if (id === this.gripHover) return
+    this.gripHover = id
+    this.schedule()
   }
 
   private hitAt(at: { x: number; y: number }): CircleHit | null {
@@ -1112,10 +1863,14 @@ export class CircleView {
   }
 
   private hover(at: { x: number; y: number }): void {
-    this.drawGuide(at)
     const hit = this.hitAt(at)
+    const grip = this.gripAt(at)
+    // No crosshair over a ring's handle: the gap it is in has no data to line
+    // up, and the line would run through the names the hand is reaching for.
+    this.drawGuide(grip === null ? at : null)
+    this.setGripHover(grip)
     this.canvas.style.cursor =
-      hit === null ? '' : hit.kind === 'ring' ? 'grab' : 'pointer'
+      grip !== null ? 'grab' : hit === null || hit.kind === 'ring' ? '' : 'pointer'
     this.setFocus(
       hit === null
         ? NO_FOCUS
@@ -1294,8 +2049,7 @@ export class CircleView {
     } else if (hit.kind === 'ring') {
       const ring = this.rings[hit.ring]
       const geometry = this.geometry
-      const bins = this.bins
-      if (ring === undefined || geometry === null || bins === null) return
+      if (ring === undefined || geometry === null) return
       // One track: its name over the place and its value. Several in one
       // ring: the place, then each track's name beside its value.
       if (ring.members.length === 1) lines.push({ text: ring.label, strong: true })
@@ -1311,10 +2065,11 @@ export class CircleView {
               : formatPosition(place.name, place.position),
       })
       if (ring.members.length === 1) {
-        lines.push({ text: ringValue(ring.members[0].content, bins, hit.unit, hit.angle) })
+        const member = ring.members[0]
+        lines.push({ text: ringValue(member.content, member.bins, hit.unit, hit.angle) })
       } else {
         for (const member of ring.members) {
-          lines.push({ text: `${member.label} · ${ringValue(member.content, bins, hit.unit, hit.angle)}` })
+          lines.push({ text: `${member.label} · ${ringValue(member.content, member.bins, hit.unit, hit.angle)}` })
         }
       }
     }
@@ -1359,6 +2114,19 @@ function ringValue(content: RingContent, bins: CircleBins, unit: number, angle: 
 }
 
 /**
+ * Whether a sample set holds every base of a stretch of the axis: the cache
+ * hands back what it last held while a new window is on its way, and numbers
+ * of another stretch binned into these bins would draw gaps where they are not.
+ */
+function samplesCover(samples: TrackSampleSet, axis: LocusAxis, domain: readonly [number, number]): boolean {
+  return axis.windows(domain).every((window) =>
+    samples.regions.some(
+      (region) => region.contig === window.contig && region.start <= window.start && region.end >= window.end,
+    ),
+  )
+}
+
+/**
  * The circle's sequences as one axis, end to end, a base pair a unit — what
  * the sample cache asks the worker for, one region a sequence.
  */
@@ -1396,6 +2164,55 @@ function sequenceBlock(model: CircleModel): MetaBlock {
     }
   }
   return { level: 'contig', runs, cells: runs.length, blockStart: 0, binsPerCell: 1 }
+}
+
+/** Several reads of one track as one set, for one binning: their regions together. */
+function joinSamples(sets: readonly TrackSampleSet[]): TrackSampleSet {
+  if (sets.length === 1) return sets[0]
+  let extent: TrackSampleSet['extent'] = null
+  for (const set of sets) {
+    if (set.extent === null) continue
+    extent =
+      extent === null
+        ? { ...set.extent }
+        : { min: Math.min(extent.min, set.extent.min), max: Math.max(extent.max, set.extent.max) }
+  }
+  const note = sets.find((set) => set.note !== undefined && set.note !== '')?.note
+  return {
+    basesPerPixel: Math.min(...sets.map((set) => set.basesPerPixel)),
+    regions: sets.flatMap((set) => set.regions),
+    extent,
+    ...(note === undefined ? {} : { note }),
+    ...(sets[0].mods === undefined ? {} : { mods: sets[0].mods }),
+  }
+}
+
+/** A box with its corners rounded, as a path: quadratics, which a vector page draws as they are. */
+function roundedBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+/** Whether two lists hold the same things, in the same order. */
+function sameList(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((item, k) => item === b[k])
+}
+
+/** Whether two circles are of the same sections, in the same order and of the same lengths. */
+function sameSections(a: CircleModel, b: CircleModel): boolean {
+  return (
+    a.kind === b.kind &&
+    a.units.length === b.units.length &&
+    a.units.every((unit, u) => unit.name === b.units[u].name && unit.bp === b.units[u].bp)
+  )
 }
 
 function sameKey(a: unknown, b: { set: unknown; geometry: unknown }): boolean {

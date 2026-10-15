@@ -4095,8 +4095,8 @@ p {
 
 /* No focus ring on the pictures, written out so a UA default cannot put one back.
 
-   All three take focus so they can receive keys — the map and the browser pan,
-   a table scrolls — and for a while they drew a 2px accent ring on their own
+   All four take focus so they can receive keys — the map, its circle and the
+   browser pan, a table scrolls — and for a while they drew a 2px accent ring on their own
    edge pixels when they had it. It did not stay a keyboard reader's cue:
    `:focus-visible` also matches a focus the app hands over after a typed locus
    and Enter, so the ring appeared around the map and the browser after the
@@ -4104,6 +4104,7 @@ p {
    part of the figure. The picture has a frame of its own already. */
 .heatmap-canvas:focus-visible,
 .browser-canvas:focus-visible,
+.circle-canvas:focus-visible,
 .tviewport:focus-visible {
   outline: none;
 }
@@ -4302,8 +4303,8 @@ p {
   display: block;
   width: 100%;
   height: 100%;
-  /* A press on a ring is the start of a drag, which the browser must not take
-     for a scroll. */
+  /* A press is the start of a pan, a pinch or a ring carried, none of which
+     the browser may take for a scroll of the page. */
   touch-action: none;
 }
 
@@ -4317,11 +4318,18 @@ p {
 }
 
 /* The gestures nothing on the picture announces, under the key on hover, as
-   the square says under its key how to zoom into a region. */
+   the square says under its key how to zoom into a region. On a card of the
+   page's colour, as the key is drawn on one once the circle is zoomed and runs
+   under them both; its padding taken back by the margin, so the words stand
+   where they would without it. */
 .circle-hint {
   position: absolute;
   left: 0;
   top: 0;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   font-size: var(--step--2);
   line-height: 1.25;
   color: var(--text);

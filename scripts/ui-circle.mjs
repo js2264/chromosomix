@@ -15,12 +15,16 @@
  * five ticked sub-bins cut into genomes and then contigs with a band hovered, a
  * band and a chord clicked open, the figure saved as a PNG and a PDF and each
  * written out, the dark theme, the palette's command and the dev features off.
+ * And the zoom: the wheel over a genome with its neighbours named, a ring
+ * hovered there, a drag that pans, the keys, the rings' names at twelve o'clock
+ * with one carried by its name, a double click back; the contigs of one genome
+ * zoomed into and named; the figure of a zoomed view.
  * Prints what it found at each step — the geometry the canvas publishes, the
  * tooltips, the toggles offered and lit, the rings' order and thickness — so a
  * picture that did not change is a line in the log as well.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci28, ci-figure.png, ci-figure.pdf, ci-figure-page.png
+ *   node scripts/ui-circle.mjs [out-dir]     # ci01 … ci35, ci-figure.png, ci-figure.pdf, ci-figure-page.png, ci-figure-zoomed.png
  */
 
 import { execFileSync } from 'node:child_process'
@@ -346,13 +350,17 @@ console.log(
 )
 await shot('ci11-crosshair')
 
-// The outermost ring held and carried in, past two others, then let go.
+// The outermost ring held by its name at twelve o'clock — its handle, as a
+// lane's name is (the rest of the picture pans) — and carried in, past two
+// others, then let go.
 const order = (G) => G.rings.map((ring) => ring.name).join(' | ')
 console.log('rings before:', order(G))
 const outer = G.rings[G.rings.length - 1]
 const target = G.rings[Math.max(0, G.rings.length - 4)]
-const from = point(G, (outer.inner + outer.outer) / 2, 0.95)
-const to = point(G, (target.inner + target.outer) / 2 - 1, 0.95)
+const handle = G.grips.find((grip) => grip.id === outer.id)
+console.log('the outer ring held by', handle === undefined ? 'its stretch of the gap at twelve' : 'its name')
+const from = handle === undefined ? point(G, (outer.inner + outer.outer) / 2, -Math.PI / 2) : { x: G.left + handle.x, y: G.top + handle.y }
+const to = point(G, (target.inner + target.outer) / 2 - 1, -Math.PI / 2)
 await page.mouse.move(from.x, from.y)
 await page.mouse.down()
 for (let k = 1; k <= 16; k++) {
@@ -435,7 +443,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(G.left + G.width - 40, G.top + 40)
 await sleep(600)
-console.log('hint with no key:', await page.evaluate(() => document.querySelector('.circle-hint')?.textContent ?? null))
+console.log('hint with no key:', await page.evaluate(() => document.querySelector('.circle-hint')?.innerText.replace(/\n+/g, ' / ') ?? null))
 await shot('ci17-legend-off')
 await away()
 await press('legend —')
@@ -462,6 +470,124 @@ G = await settledCircle()
 console.log(`names written at ${named}px, at ${larger}px a text size up, and at ${G.fontPx}px back down`)
 
 // ---------------------------------------------------------------------------
+// The zoom (§7.6): the wheel over a genome, its neighbours named, a ring
+// hovered, the rings read again for the zoom's own bins, a drag that pans, the
+// keys, the rings' names at twelve o'clock with one carried by its name, and a
+// double click back to the whole circle.
+// ---------------------------------------------------------------------------
+
+const zoomState = (G) =>
+  `zoom ×${G.zoom} · ${G.labelled} named · ` +
+  (G.detail === null
+    ? 'drawn in the whole circle’s bins'
+    : `${G.detail.bins.toLocaleString('en-US')} bins of its own, ${G.detail.tracks} tracks read for them`)
+/** Turn the wheel over a point, a notch at a time; up is in. */
+async function wheel(at, notches) {
+  await page.mouse.move(at.x, at.y)
+  for (let k = 0; k < Math.abs(notches); k++) {
+    await page.mouse.wheel(0, notches > 0 ? -120 : 120)
+    await sleep(40)
+  }
+}
+/**
+ * A zoomed circle once its bins are cut and every track with numbers is read
+ * for them — the signals' reads land after the view holds still — or as it is,
+ * past the wait.
+ */
+async function finer(timeout = 30_000) {
+  const until = Date.now() + timeout
+  let G = await settledCircle()
+  let last = -1
+  while (Date.now() < until && G.zoom > 1 && (G.detail === null || G.detail.tracks !== last)) {
+    last = G.detail?.tracks ?? -1
+    await sleep(800)
+    G = await geo()
+  }
+  return settledCircle()
+}
+const hintText = () => page.evaluate(() => document.querySelector('.circle-hint')?.innerText.replace(/\n+/g, ' / ') ?? null)
+
+G = await settledCircle()
+at = sectionOf(G, RICH)
+await page.mouse.move(at.x, at.y)
+await sleep(300)
+console.log('the hint at rest:', await hintText())
+await wheel(at, 9)
+G = await finer()
+console.log(`the wheel over ${RICH}:`, zoomState(G))
+console.log('the hint zoomed:', await hintText())
+console.log('under the pointer:', await tip())
+await shot('ci19-zoomed')
+
+// A ring under the pointer, at the zoom: its value, and the crosshair.
+const zoomAngle = Math.atan2(at.y - (G.top + G.cy), at.x - (G.left + G.cx))
+const gcZoomed = G.rings.find((ring) => ring.id.includes('GC_content')) ?? G.rings[0]
+const onRing = point(G, (gcZoomed.inner + gcZoomed.outer) / 2, zoomAngle + 0.004)
+await page.mouse.move(onRing.x, onRing.y)
+await sleep(500)
+console.log('a ring hovered, zoomed:', await tip())
+await shot('ci20-zoomed-ring')
+
+// A drag across the picture pans it.
+const panFrom = { x: G.left + G.width * 0.35, y: G.top + G.height * 0.5 }
+const before = { ...G.offset }
+await page.mouse.move(panFrom.x, panFrom.y)
+await page.mouse.down()
+for (let k = 1; k <= 14; k++) {
+  await page.mouse.move(panFrom.x + 18 * k, panFrom.y - 9 * k)
+  await sleep(25)
+}
+await page.mouse.up()
+G = await finer()
+console.log(`a drag of 252 × −126 px: the middle from ${before.x}, ${before.y} to ${G.offset.x}, ${G.offset.y} · ${zoomState(G)}`)
+await away()
+await shot('ci21-panned')
+
+// The keys, on the picture the press gave the focus to.
+for (const key of ['PageUp', 'PageUp', 'ArrowLeft', 'Shift+ArrowUp', 'PageDown', 'Home']) {
+  await page.keyboard.press(key)
+  G = await settledCircle()
+  console.log(`  ${key}: zoom ×${G.zoom}, middle at ${G.offset.x}, ${G.offset.y}`)
+}
+
+// Twelve o'clock, zoomed: the rings' names, the one under the pointer lit, and
+// a ring carried by its name to another place.
+const topRing = G.rings[Math.floor(G.rings.length / 2)]
+await wheel(point(G, (topRing.inner + topRing.outer) / 2, -Math.PI / 2), 6)
+G = await finer()
+console.log('zoomed at twelve:', zoomState(G), '·', G.grips.length, 'names to hold a ring by')
+const lifted = G.rings[G.rings.length - 2]
+const liftedGrip = G.grips.find((grip) => grip.id === lifted.id)
+if (liftedGrip !== undefined) {
+  await page.mouse.move(G.left + liftedGrip.x, G.top + liftedGrip.y)
+  await sleep(400)
+  console.log(`over the name of ${lifted.name}: cursor`, await page.evaluate(() => document.querySelector('.circle-canvas:hover')?.style.cursor ?? null))
+  await shot('ci22-zoomed-top')
+  const dropAt = G.rings[1]
+  const start = { x: G.left + liftedGrip.x, y: G.top + liftedGrip.y }
+  const end = point(G, (dropAt.inner + dropAt.outer) / 2, -Math.PI / 2)
+  await page.mouse.down()
+  for (let k = 1; k <= 16; k++) {
+    await page.mouse.move(start.x + ((end.x - start.x) * k) / 16, start.y + ((end.y - start.y) * k) / 16)
+    await sleep(35)
+  }
+  await sleep(300)
+  await shot('ci23-zoomed-ring-held')
+  await page.mouse.up()
+  G = await settledCircle()
+  console.log('rings after, zoomed:', order(G))
+} else {
+  console.log(`no name drawn for ${lifted.name}`)
+}
+
+// A double click: the whole circle again.
+await page.mouse.dblclick(G.left + G.width * 0.3, G.top + G.height * 0.6)
+G = await settledCircle()
+console.log('a double click:', zoomState(G), '·', describe(G))
+await away()
+await shot('ci24-fitted-again')
+
+// ---------------------------------------------------------------------------
 // The contig × contig circle, grouped by genome under a band.
 // ---------------------------------------------------------------------------
 
@@ -472,12 +598,25 @@ await compute()
 G = await settledCircle(120_000)
 console.log('contig level:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome · names ${G.names ? 'kept' : 'none'}`)
 await away()
-await shot('ci19-contig-level')
+await shot('ci25-contig-level')
 at = sectionOf(G, G.units[Math.floor(G.units.length * 0.12)].name)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log('contig hovered:', await tip())
-await shot('ci20-contig-hover')
+await shot('ci26-contig-hover')
+
+// Zoomed into one genome's contigs: few enough in view to be named, under
+// their genome's name, and a named contig opened by its name.
+const bandOf = G.groups.find((entry) => entry.name === RICH) ?? G.groups[0]
+await wheel(point(G, (G.band[0] + G.band[1]) / 2, bandOf.mid), 22)
+G = await settledCircle()
+console.log(`the contigs of ${bandOf.name}, zoomed:`, zoomState(G))
+await away()
+await shot('ci27-contig-zoom')
+// Back from the Map card's refit, which undoes the circle's zoom as it does the square's.
+console.log('the refit pressed:', await press('Undo every pan and zoom'))
+G = await settledCircle()
+console.log('  ', zoomState(G))
 
 // ---------------------------------------------------------------------------
 // A subset: the five sub-bins of one recursive bin, ticked and opened — cut
@@ -501,14 +640,14 @@ G = await settledCircle(90_000)
 const selection = await where()
 console.log('selection:', describe(G), '·', selection)
 await away()
-await shot('ci21-selection')
+await shot('ci28-selection')
 
 const sections = page.locator('.controls-card.is-circle select').filter({ has: page.locator('option[value="contigs"]') }).first()
 await sections.selectOption('contigs')
 G = await settledCircle()
 console.log('cut into contigs:', describe(G), `· ${G.withinGenome} of the chords drawn within one genome ·`, await where())
 await away()
-await shot('ci22-selection-contigs')
+await shot('ci29-selection-contigs')
 
 // A genome's band hovered: the chords that leave it, and nothing else.
 const BAND = 'metator_00002_00003'
@@ -517,7 +656,7 @@ at = point(G, (G.band[0] + G.band[1]) / 2, group.mid)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
 console.log(`band of ${group.name} hovered:`, await tip())
-await shot('ci23-band-hover')
+await shot('ci30-band-hover')
 
 // ---------------------------------------------------------------------------
 // Clicks that open: a band into its genome, a chord into its pair.
@@ -528,7 +667,7 @@ await sleep(2500)
 G = await settledCircle(90_000)
 console.log(`clicked the band of ${group.name}:`, (await page.locator('.breadcrumb').innerText()).replace(/\s+/g, ' '), '·', describe(G))
 await away()
-await shot('ci24-genome-opened')
+await shot('ci31-genome-opened')
 
 await page.evaluate((hash) => { location.hash = `${location.hash.match(/uri=[^&]*/)[0]}&${hash.replace(/^#/, '').replace(/&sections=contigs/, '')}` }, selection)
 await sleep(2500)
@@ -546,7 +685,7 @@ console.log(
     return button === undefined ? 'none' : { disabled: button.disabled, pressed: button.getAttribute('aria-pressed'), title: button.title }
   }),
 )
-await shot('ci25-chord-opened')
+await shot('ci32-chord-opened')
 
 // ---------------------------------------------------------------------------
 // The figure, saved: a PNG and a PDF of the whole metagenome's circle.
@@ -580,6 +719,18 @@ if (pdf !== null) {
   }
 }
 
+// Zoomed, the figure is the view: the box and what of the circle is in it.
+G = await settledCircle()
+await wheel(sectionOf(G, RICH), 7)
+G = await finer()
+console.log('zoomed for the figure:', zoomState(G))
+await card.locator('.select-format').selectOption('png')
+await sleep(300)
+await card.locator('.export-acts button').first().click()
+const zoomedPng = await keep(3, 'ci-figure-zoomed.png')
+if (zoomedPng !== null) console.log('zoomed figure:', execFileSync('file', [zoomedPng]).toString().trim())
+await press('Undo every pan and zoom')
+
 // ---------------------------------------------------------------------------
 // The dark theme, the palette's command, and the dev features off.
 // ---------------------------------------------------------------------------
@@ -592,7 +743,7 @@ G = await settledCircle()
 at = sectionOf(G, RICH)
 await page.mouse.move(at.x, at.y)
 await sleep(500)
-await shot('ci26-dark')
+await shot('ci33-dark')
 await away()
 await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined))
 await page.keyboard.press('t')
@@ -606,7 +757,7 @@ await sleep(400)
 await page.keyboard.type('circle')
 await sleep(600)
 console.log('palette:', await page.evaluate(() => [...document.querySelectorAll('.palette-row')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 5)))
-await shot('ci27-palette')
+await shot('ci34-palette')
 await page.keyboard.press('Escape')
 await sleep(300)
 
@@ -624,6 +775,6 @@ console.log(
     said: (document.querySelector('.error, .error-page, .gate, main')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
   })),
 )
-await shot('ci28-dev-off')
+await shot('ci35-dev-off')
 
 await g.close()

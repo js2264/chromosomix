@@ -1898,15 +1898,14 @@ export class MatrixPanel {
     // The refit, first: it is the only one of these that is an *action*, and
     // the one that says what the other three are a picture of. Unlit, as the
     // recentre-on-diagonal beside it is, because there is no state to read off
-    // either of them.
-    picture.push(
-      iconButton(
-        'maximize',
-        withKey('Undo every pan and zoom — a double click on the plot does too', KEYS.fit),
-        () => this.fit(),
-        { class: 'btn btn-icon', size: 15 },
-      ),
+    // either of them. It stays while the circle is drawn, which zooms too.
+    const refit = iconButton(
+      'maximize',
+      withKey('Undo every pan and zoom — a double click on the plot does too', KEYS.fit),
+      () => this.fit(),
+      { class: 'btn btn-icon', size: 15 },
     )
+    picture.push(refit)
 
     // The circle, beside the refit (§7.6): the other picture of a metagenome,
     // and so the one toggle in this row that stays when it is drawn — every
@@ -2075,7 +2074,9 @@ export class MatrixPanel {
       this.paintArms(derive.arms)
     }
 
-    for (const control of picture) if (control !== this.circleButton) this.squareOnly.push(control)
+    for (const control of picture) {
+      if (control !== this.circleButton && control !== refit) this.squareOnly.push(control)
+    }
     if (picture.length > 0) {
       controls.unshift(
         el(
@@ -2966,10 +2967,12 @@ export class MatrixPanel {
     this.box.placeGrips()
   }
 
-  /** Refit the block to the canvas, undoing every pan and zoom. */
+  /** Refit the block to the canvas, undoing every pan and zoom — the circle's, while it is drawn. */
   fit(): void {
-    // A circle has no pan or zoom to undo.
-    if (this.circleActive()) return
+    if (this.circleActive()) {
+      this.circleView?.resetZoom()
+      return
+    }
     this.heatmap.fit()
     this.schedule()
   }
@@ -5156,8 +5159,9 @@ export class MatrixPanel {
 
   /**
    * The circle's caption: the square's subject, and the facts a figure of a
-   * circle needs to carry — how many sections of what, how many chords of how
-   * many pairs, and the transform the chords are coloured through.
+   * circle needs to carry — how many sections of what, and of a zoomed view
+   * how many are in it at what zoom, how many chords of how many pairs, and
+   * the transform the chords are coloured through.
    */
   private circleCaption(now: Date): { title: string; detail: string } {
     const title = this.figureCaption(now).title
@@ -5168,7 +5172,16 @@ export class MatrixPanel {
     if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
     const model = this.circleView?.circle ?? null
     if (model !== null) {
-      parts.push(`${fmt.int(model.units.length)} ${model.kind === 'genome' ? 'genomes' : 'contigs'}`)
+      // A zoomed figure is a detail of the circle, and says how much of it.
+      const noun = model.kind === 'genome' ? 'genomes' : 'contigs'
+      const view = this.circleView?.zoomInView() ?? null
+      parts.push(
+        view === null
+          ? `${fmt.int(model.units.length)} ${noun}`
+          : `${fmt.int(model.units.length)} ${noun}, ${fmt.int(view.sections)} in view at ×${
+              view.zoom < 10 ? view.zoom.toFixed(1) : fmt.int(Math.round(view.zoom))
+            }`,
+      )
       const drawn = this.circleView?.chordsDrawn() ?? 0
       parts.push(
         drawn >= model.pairs

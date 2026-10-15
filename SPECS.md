@@ -2718,7 +2718,7 @@ the same cells, read once, at the grid the square holds — so turning it on rea
 off is immediate, and the square and the circle never disagree about what the block says.
 **Built**: `render/circle.ts` (the sections, the chords, the geometry, the hit test),
 `render/circleRings.ts` (the rings), `ui/CircleView.ts` (the canvas, the hover, the clicks, the
-drag), and the toggle and rows on the Map card. **Drawn here, not by a circos library**: the ones
+zoom, the drag), and the toggle and rows on the Map card. **Drawn here, not by a circos library**: the ones
 there are (circos.js, BioCircos, d3's chord layout) draw SVG — a node a ribbon at 3,000 chords and a
 node a bin at 4,096 sections — which the figure's vector page (§16.5) does not take, and the parts
 that make this the map's circle rather than a chart of it — the block's own cells, the hit test, the
@@ -2764,14 +2764,17 @@ sections and a wider opening at twelve o'clock, which is where the rings are nam
 **The names are the square's labels** (`namePolicy`). They follow the Map card's `labels` overlay —
 block names, the square's in its gutters — so they are **off** where that is, which is its default
 and the mock community's, and a reader who turns them on for the square has them on round the circle
-too; off, the room they took is the circle's. On, the square's rule, with no zoom to bring more out:
-every name where there are no more than fifty to give (`MAX_CATEGORICAL_TICKS`); past fifty, a
-circle of contigs — one genome's, ticked ones — names those of 50 kb or more (`LABEL_MIN_SPAN_BP`),
+too; off, the room they took is the circle's. On, the square's rule, counted over what is in view as
+the square counts its blocks in view — the whole circle at rest, and zoomed what the zoom shows
+(below): every name where there are no more than fifty to give (`MAX_CATEGORICAL_TICKS`); past fifty,
+a circle of contigs — one genome's, ticked ones — names those of 50 kb or more (`LABEL_MIN_SPAN_BP`),
 the few a reader looks for, and **a circle of genomes names none**. A thousand MAGs round a circle are
 read by its shape, a name every few degrees is a smear and the largest few are noise; the tooltip
-says which is under the pointer. Over contig sections the genome band carries the names, counted as
-genomes, and a contig is named only once it is lit. Room is kept only for names written at rest, so
-where none are the circle is that much larger and no name is written even on hover. A name is
+says which is under the pointer, and a zoom into forty of them names those forty. Over contig sections
+the genome band carries the names, counted as genomes, and a contig is named once it is lit, or once a
+zoom shows no more than fifty — in the dim ink, beside its genome's name, and under the pointer the
+contig rather than its genome. Room is kept only for names written at rest, so where none are the
+circle is that much larger and no name is written even on hover until a zoom brings names out. A name is
 radial, turned over on the left half so none is upside down, written only where its arc holds a line
 of text, and one longer than the room keeps both its ends and loses its middle, since the end of
 `metator_00002_00004` is what tells it from its siblings.
@@ -2801,9 +2804,11 @@ its middle.
 `/pixels` column by its name — over the ramp from its floor to its strongest, in counts, and how many
 chords are drawn of how many there are. It stands beside the circle where the column is wide enough
 and in its corner where it is not, and under it, on hover, the gestures nothing on the picture
-announces: *Click an arc or a chord to open it*, or, with rings, *Click to open; drag a ring to move
-it*. The `legend` overlay turns it off, on screen and in the figure, as it does the square's; the
-hint then stands in the corner, and the caption still states the ramp's two ends.
+announces, in two lines: *Scroll to zoom* — zoomed, *Drag to pan; double-click to fit* — and *Click an
+arc or a chord to open it*, or, with rings, *Click to open; drag a ring by its name to move it* (with
+the names off, *at the top*). The `legend` overlay turns it off, on screen and in the figure, as it
+does the square's; the hint then stands in the corner, and the caption still states the ramp's two
+ends.
 
 **Hovering** a section lights it in the accent, tints its partners by their contacts with it, names
 them and writes each partner's contacts where its chord lands — at most twelve, and only those with a
@@ -2824,8 +2829,32 @@ overlay turns the card off.
 
 **A click opens what it is**, as an axis label and a cell of the square do: a genome's arc its map
 (drawn round, the setting being a reading), a contig's arc its window, a genome's band that genome, a
-chord between two genomes the pair view and a chord between two contigs the two windows. A press on a
-ring is the start of a drag, and opens nothing.
+chord between two genomes the pair view and a chord between two contigs the two windows. A click is
+held back for the double click's window, as the square's is, so the second click of a fit does not
+land after the first has opened something. A press that travels opens nothing: on a ring's name it
+carries the ring (below), and elsewhere on a zoomed picture it pans.
+
+**It zooms as the square does** (§7.2). The wheel and a pinch zoom about the pointer, up to 200 times
+(`CIRCLE_MAX_ZOOM`), and zoomed, a drag pans, a sideways scroll or ⌘ with the wheel slides, and a
+double click, Home, the Map card's refit and `0` from anywhere fit the whole circle again; the arrows
+pan a tenth of the picture (a half with Shift) and Page Up and Page Down zoom about its middle, on a
+picture a press has given the focus. **What is under the pointer stays under it**: the angles are
+magnified and every layer is carried to the same place in itself (`carryRadius`) — the rings keep
+their lanes' thickness at any zoom, as a lane beside a zoomed square keeps its height, while the
+sections, their gaps and the chord disc grow — and the circle's middle is held where the picture's
+middle stays on the circle, nearer the fit the nearer the zoom is to one, so a zoom out comes back to
+the whole circle and not to a corner of it. Zoomed, **the names are those of the sections in view**,
+by the rule above (`namesInView`), in the room the fitted circle kept for them — a name coming into
+view does not move the rim under the pointer — or, where it kept none, past the rim. The angles in
+view are exact (`visibleArcs`, `anglesInView`). **The rings are read again for the zoom**: while the
+view moves they are drawn from the whole circle's bins, and once it holds still for 150 ms in bins of
+their own, a pixel and a half wide across the picture and half a picture past each edge
+(`windowBins`, one bin for each stretch out of view, which is drawn as nothing) — a signal read for
+that stretch of the axis at that resolution, beside the whole circle's read so neither evicts the
+other, a read a stretch where the view straddles twelve o'clock or shows two sides of the circle, and
+a column put in the finer bins. Zoomed, the circle runs under the key, which stands on a card of the
+page's colour, as the hint does. A new block of the same sections — another balance, another
+transform — keeps the zoom; other sections are another circle, drawn whole.
 
 **The rings are the tracks the map draws** — a signal (bigWig, bedGraph, a sequence's GC, an
 alignment's coverage) in its lane's mode, heatmap, line, points, bar or area; features (BED, GTF,
@@ -2853,16 +2882,21 @@ its tooltip naming each track beside its value. Drawn along what each section is
 end to end, so a contig's GC is a ring along its genome's arc on a `genome × genome` circle the square
 beside it could not draw a lane of. The Metadata card therefore offers, while the circle is drawn,
 what the rings can show — the genomes' and the contigs' columns, and not a bin's — whatever the
-square's level. **One order everywhere**: a ring pressed and dragged in or out past the others is
-outlined in the accent while it is held, and let go it moves its row in the store
+square's level. **One order everywhere**: a ring is held by its name at twelve o'clock — its handle,
+as a lane's name is its own, the rest of the picture being for the pan; with the names off, by its
+stretch of the gap there — lit with its edges faintly outlined under the pointer, and dragged in or
+out past the others it is outlined in the accent while it is held, and let go it moves its row in the
+store
 (`AnnotationStore.moveTo`), so the Tracks card, the Metadata card and the lanes beside every map take
 the same order — an overlay group's tracks moved as one block (`ringBlockOrder`), or it would re-form
 round whichever of them came first; Escape puts it back where it was.
 
 **Saved as the square is**: PNG, PDF and copy from the Export card (§16.5), pinned to the light
-palette, the circle and its key cropped to what they cover, under the same caption — the view, the
-file, the sections, the chords drawn, the transform and the chords' two ends, as the square's caption
-states its colours'. The PDF is paths and text, no image. On
+palette, the circle and its key cropped to what they cover — zoomed, the view, cut at its edges as
+the screen cuts it — under the same caption: the view, the file, the sections (of a zoomed view, how
+many are in it at what zoom, *48 genomes, 6 in view at ×5.4*), the chords drawn, the transform and
+the chords' two ends, as the square's caption states its colours'. The PDF is paths and text, no
+image. On
 screen in the dark theme the picture stays paper, as the square does. A companion map of a deck
 (§16) is not drawn round.
 
