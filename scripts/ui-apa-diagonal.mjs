@@ -1,16 +1,17 @@
 /**
- * An aggregate peak analysis where its windows meet the diagonal (§18.8), on the yeast demo.
+ * An aggregate peak analysis's form and its runs (§18.2, §18.8), on the yeast demo.
  *
- * The form with its *diagonals left out* and, under Separation, its *nearest loop*; the demo's
- * loops piled up raw at the defaults — which leave out the loops nearer than twice the half-width
- * and two, as coolpuppy does, and say so in a note — and then every loop, many of them near
- * enough that their windows reach the diagonal, so the lower-left corner is a mean of fewer;
- * over the expected, with the price line saying it reads a band per sequence; then the ATAC
- * peaks on the diagonal, where the first two diagonals are gaps, and with none left out, where
- * the window is whole. Prints each figure's heading, its numbers and the run's notes as it goes,
- * so a run that did not happen is a line in the log.
+ * The form as it opens — observed / expected, two diagonals left out, the nearest loop at five bins,
+ * a track ticked, and no Control or Ranking card, since neither applies to a loop set over
+ * the expected — and the run it makes; the nearest loop at coolpuppy's own floor, with the note that
+ * says how many loops that leaves out; the Control card coming back for the distance-matched
+ * control; every loop piled up raw, many near enough that their windows reach the diagonal; the
+ * Ranking card coming back for a feature set; the ATAC peaks on the diagonal with the first two
+ * diagonals as gaps and then whole; and every track unticked, which stays unticked through a run.
+ * Prints each figure's heading, its numbers and the run's notes as it goes, so a run that did not
+ * happen is a line in the log.
  *
- *   node scripts/ui-apa-diagonal.mjs gallery     # writes gallery/ad01 … ad07, ad01b, ad02a, ad02b
+ *   node scripts/ui-apa-diagonal.mjs gallery     # writes gallery/ad01 … ad09
  */
 
 import { execSync } from 'node:child_process'
@@ -110,6 +111,50 @@ const price = async () => {
   const line = page.locator('.analysis-cost, .cost-line, .estimate').first()
   if (await line.count()) console.log('price:', (await line.innerText()).replace(/\s+/g, ' '))
 }
+/** The form back at its top. */
+const top = async () => {
+  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await sleep(400)
+}
+/** A field brought to the middle of the screen. */
+const into = async (label) => {
+  const one = field(label)
+  if ((await one.count()) === 0) return console.log('no field', label)
+  await one.evaluate((node) => node.scrollIntoView({ block: 'center' }))
+  await sleep(600)
+}
+/** Each track aggregate's box, ticked or not. */
+const ticks = async () =>
+  field('track aggregates')
+    .locator('.param-check')
+    .evaluateAll((rows) => rows.map((row) => `${row.textContent}: ${row.querySelector('input')?.checked ? 'ticked' : 'unticked'}`))
+/** What the defaults read, and which cards are drawn. */
+const say = async () => {
+  const chosen = async (label) => {
+    const select = field(label).locator('select').first()
+    return (await select.count()) === 0
+      ? '(not shown)'
+      : select.evaluate((node) => node.options[node.selectedIndex]?.textContent ?? '')
+  }
+  const typed = async (label) => {
+    const input = field(label).locator('input').first()
+    return (await input.count()) === 0 ? '(not shown)' : input.inputValue()
+  }
+  console.log(
+    'form:',
+    JSON.stringify({
+      anchors: await chosen('anchors'),
+      normalisation: await chosen('normalisation'),
+      'diagonals left out': await typed('diagonals left out'),
+      'nearest loop': await typed('nearest loop'),
+      tracks: await ticks(),
+    }),
+  )
+  const cards = await page
+    .locator('.analysis-form .param-group:not(.hidden)')
+    .evaluateAll((all) => all.map((one) => one.querySelector('.controls-title')?.textContent ?? '(untitled)'))
+  console.log('cards:', cards.join(' | '))
+}
 
 try {
   await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.chromosomix.json`)
@@ -131,67 +176,67 @@ try {
   await task.click()
   await sleep(1500)
 
-  // The loops, off the diagonal, raw.
-  await pick('anchors', 'loop set')
-  await pick('pairs', 'loops')
-  await pick('normalisation', 'none')
+  // The form as it opens: what each default reads, and which cards are drawn.
+  await say()
+  await price()
   await shot('ad01-form')
-  // The Separation card, where the nearest loop is, following the half-width.
-  const nearest = field('nearest loop')
-  if (await nearest.count()) {
-    await nearest.evaluate((node) => node.scrollIntoView({ block: 'center' }))
-    await sleep(600)
-    console.log('nearest loop shows', await nearest.locator('input').first().inputValue())
-    await shot('ad01b-nearest-loop')
-  }
-  await run('loops, raw, at the defaults')
-  await shot('ad02-loops-raw')
-  // The note that says which loops were left out, and how to have them all.
+  // The Separation card, where the nearest loop is.
+  await into('nearest loop')
+  await shot('ad01b-nearest-loop')
+  await run('loops, at the defaults')
+  await shot('ad02-loops-defaults')
+
+  // coolpuppy's own floor, twice the half-width and two: the note says what it left out.
+  await top()
+  await type('nearest loop', 44)
+  await run('loops, nearest loop at coolpuppy’s floor')
   const said = page.locator('.analysis-notes:not(.hidden)').first()
   if (await said.count()) {
     await said.evaluate((node) => node.scrollIntoView({ block: 'center' }))
     await sleep(600)
-    await shot('ad02a-note')
   }
-  // Every loop: the windows that reach the diagonal, and gaps cut in them.
-  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await shot('ad03-coolpuppy-floor-note')
+
+  // The distance-matched control brings its card back.
+  await top()
+  await pick('normalisation', 'distance-matched')
+  await say()
+  await into('controls per pair')
+  await shot('ad04-form-matched')
+
+  // Every loop, raw: the windows that reach the diagonal, and gaps cut in them.
+  await top()
+  await pick('normalisation', 'none')
   await type('nearest loop', 0)
   await run('loops, raw, every loop')
-  await shot('ad02b-loops-every')
-  await type('nearest loop', 44)
+  await shot('ad05-loops-every-raw')
 
-  // Over the expected: the price line first, then the run.
-  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
-  await pick('normalisation', 'observed')
-  await sleep(800)
-  await price()
-  await shot('ad03-form-oe')
-  await run('loops, over the expected')
-  await shot('ad04-loops-oe')
-  const oe = page
-    .locator('.figure-block:not([data-before])')
-    .filter({ has: page.locator('.analysis-figure-head', { hasText: /^APA/ }) })
-    .first()
-  if (await oe.count()) {
-    await oe.locator('.figure-enlarge').first().click()
-    await page.waitForSelector('.modal-stage .figure-chart', { timeout: 20000 }).catch(() => {})
-    await sleep(2000)
-    await shot('ad05-loops-oe-dialog')
-    await page.keyboard.press('Escape')
-    await sleep(800)
-  }
-
-  // On the diagonal, at the ATAC peaks: the first two diagonals left out, then none.
-  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  // A feature set brings the Ranking card back; on the diagonal, two diagonals left out, then none.
+  await top()
   await pick('anchors', 'feature set')
   await pick('features', 'ATAC peaks')
-  await pick('normalisation', 'none')
+  await say()
+  await into('rank by')
+  await shot('ad06-form-features')
   await run('peaks on the diagonal, two diagonals left out')
-  await shot('ad06-diagonal')
-  await page.locator('.analysis-form').first().evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await shot('ad07-diagonal')
+  await top()
   await type('diagonals left out', 0)
   await run('peaks on the diagonal, none left out')
-  await shot('ad07-diagonal-whole')
+  await shot('ad08-diagonal-whole')
+
+  // Every track unticked, and a run: the list stays empty.
+  await top()
+  const boxes = field('track aggregates').locator('input[type=checkbox]')
+  for (let i = 0; i < (await boxes.count()); i++) {
+    if (await boxes.nth(i).isChecked()) await boxes.nth(i).uncheck()
+  }
+  await sleep(600)
+  console.log('tracks before the run:', await ticks())
+  await run('peaks on the diagonal, no track')
+  console.log('tracks after the run:', await ticks())
+  await into('track aggregates')
+  await shot('ad09-tracks-unticked-after-run')
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 800))
   await shot('ad99-failure')

@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest'
 
 import { runApa } from '@/analysis/run/apa'
 import type { JobContext } from '@/analysis/job'
-import { APA_TASK, MIN_DIAG_DEFAULT } from '@/analysis/tasks/apa'
-import { resolveSeeds } from '@/analysis/types'
+import { APA_TASK, MIN_DIAG_DEFAULT, MIN_DIST_DEFAULT, autoMinDist } from '@/analysis/tasks/apa'
+import { defaultParams } from '@/analysis/types'
 import type { AnalysisContext, AnalysisFraming, MatrixOutput, Params } from '@/analysis/types'
 import type { FeatureSet, PairSet } from '@/annotations/types'
 
@@ -246,8 +246,8 @@ const LOOPS: Array<[number, number]> = [
 ]
 /**
  * Every loop, the nearest included: coolpuppy run with `mindist=0`. The default
- * floor — `mindist='auto'` — has tests of its own at the end, and with it in
- * force the loop three bins out would not be piled up at all.
+ * floor, five bins, has tests of its own at the end, and with it in force the
+ * loop three bins out would not be piled up at all.
  */
 const LOOP_SET = { anchors: 'pairs', pairs: 'loops', minDist: 0 }
 
@@ -374,33 +374,32 @@ describe('the distance-matched control', () => {
 describe('the nearest loop', () => {
   const AUTO = { anchors: 'pairs', pairs: 'loops' }
 
-  it('is coolpuppy’s mindist by default: twice the half-width and two', async () => {
-    // The loop three bins out is nearer than 2 × 5 + 2 = 12 and is left out;
-    // the one twelve bins out is kept, as coolpuppy keeps a loop at the floor.
+  it('is five bins by default, and the run says how many loops it left out', async () => {
+    // The loop three bins out is nearer than five and is left out; the rest are kept.
     const notes: string[] = []
     const matrix = await pileup({ ...AUTO, norm: 'none' }, { pairs: loops(LOOPS) }, notes)
-    const kept = LOOPS.filter(([a, b]) => b - a >= 2 * HALF + 2)
+    const kept = LOOPS.filter(([a, b]) => b - a >= MIN_DIST_DEFAULT)
     expect(kept).toHaveLength(3)
     expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
     expect(matrix.stats?.[0]?.value).toBe(3)
-    expect(notes.join(' ')).toMatch(/1 of 4 loops are nearer the diagonal than 12 bins/)
-    expect(notes.join(' ')).toMatch(/coolpuppy’s default/)
+    expect(notes.join(' ')).toMatch(/1 of 4 loops are nearer the diagonal than 5 bins \(5\.0 kb\)/)
+    expect(notes.join(' ')).not.toMatch(/coolpuppy’s default/)
   })
 
   it('is measured between the anchors’ centres, in base pairs, as coolpuppy measures it', async () => {
-    // Bins 100 and 112, twelve apart, so a floor on bins would keep this loop.
-    // Its centres are 100,950 and 112,050 — 11,100 bp, under 12,000 — so
-    // coolpuppy leaves it out, and so does this.
+    // Bins 100 and 105, five apart, so a floor on bins would keep this loop.
+    // Its centres are 100,950 and 105,050 — 4,100 bp, under 5,000 — so
+    // coolpuppy leaves it out at this floor, and so does this.
     const notes: string[] = []
     const outputs = await runApa(
       job(
         { ...AUTO, mode: 'fixed', window: HALF, balance: false, norm: 'none' },
-        { pairs: loops([[100, 112]], [[100_900, 101_000, 112_000, 112_100]]) },
+        { pairs: loops([[100, 105]], [[100_900, 101_000, 105_000, 105_100]]) },
         notes,
       ),
     )
     expect(outputs.some((out) => out.kind === 'matrix')).toBe(false)
-    expect(notes.join(' ')).toMatch(/Every loop of this set is nearer the diagonal than 12 bins/)
+    expect(notes.join(' ')).toMatch(/Every loop of this set is nearer the diagonal than 5 bins/)
   })
 
   it('is what was typed where something was', async () => {
@@ -410,18 +409,31 @@ describe('the nearest loop', () => {
     expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
   })
 
-  it('follows the half-width until it is typed, in the form and in the run’s record', () => {
-    const spec = APA_TASK.params.find((param) => param.key === 'minDist')
-    expect(spec?.kind).toBe('number')
-    const context = {} as AnalysisContext
-    expect(resolveSeeds(APA_TASK.params, context, { window: 7 }).minDist).toBe(16)
-    expect(resolveSeeds(APA_TASK.params, context, { window: 21 }).minDist).toBe(44)
-    expect(resolveSeeds(APA_TASK.params, context, { window: 7, minDist: 3 }).minDist).toBe(3)
+  it('says so when what was typed is coolpuppy’s own, twice the half-width and two', async () => {
+    const notes: string[] = []
+    const minDist = autoMinDist({ mode: 'fixed', window: HALF })
+    expect(minDist).toBe(2 * HALF + 2)
+    const matrix = await pileup({ ...AUTO, norm: 'none', minDist }, { pairs: loops(LOOPS) }, notes)
+    const kept = LOOPS.filter(([a, b]) => b - a >= minDist)
+    expect(matrix.stats?.[0]?.value).toBe(kept.length)
+    expectSame(matrix.values, coolpup(kept, { minDiag: 2 }))
+    expect(notes.join(' ')).toMatch(/nearer the diagonal than 12 bins \(12 kb\), coolpuppy’s default,/)
   })
 
   it('leaves a pileup on the diagonal alone, which has no loops to be near', async () => {
     const notes: string[] = []
     await pileup({ anchors: 'features', features: 'features', norm: 'none' }, { features: features([100]) }, notes)
     expect(notes.join(' ')).not.toMatch(/nearer the diagonal/)
+  })
+})
+
+describe('the defaults', () => {
+  it('are observed / expected, two diagonals left out and the nearest loop five bins out', () => {
+    const params = defaultParams(APA_TASK.params)
+    expect(params.norm).toBe('oe')
+    expect(params.minDiag).toBe(MIN_DIAG_DEFAULT)
+    expect(MIN_DIAG_DEFAULT).toBe(2)
+    expect(params.minDist).toBe(MIN_DIST_DEFAULT)
+    expect(MIN_DIST_DEFAULT).toBe(5)
   })
 })

@@ -96,19 +96,25 @@ export function minDiagOf(params: Params): number {
 
 /**
  * The nearest a loop may be to the diagonal and still be piled up, in bins, when
- * nobody has said: coolpuppy's `mindist='auto'`, which is twice the flank and two
- * bins. That is exactly the separation at which a window stops reaching the two
- * diagonals {@link MIN_DIAG_DEFAULT} leaves out, so at both defaults no window
- * of a loop set has a gap cut in it.
+ * nobody has said. Five: a loop nearer than that is mostly the diagonal's own
+ * contacts. coolpuppy's default is further out ({@link autoMinDist}), and the
+ * evaluation, which holds the two to each other, passes that one (§18.10).
+ */
+export const MIN_DIST_DEFAULT = 5
+
+/**
+ * coolpuppy's `mindist='auto'`, in bins: twice the flank and two, the separation
+ * at which a window stops reaching the two diagonals {@link MIN_DIAG_DEFAULT}
+ * leaves out — so at that floor no window of a loop set has a gap cut in it.
  */
 export function autoMinDist(params: Params): number {
   return 2 * windowBins(params) + 2
 }
 
-/** The nearest loop piled up, in bins: as typed, or {@link autoMinDist}. */
+/** The nearest loop piled up, in bins: as typed, or {@link MIN_DIST_DEFAULT}. */
 export function minDistOf(params: Params): number {
   const value = params.minDist
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : autoMinDist(params)
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : MIN_DIST_DEFAULT
 }
 
 /** The flank a scaled window carries each side, as a fraction of its body. */
@@ -174,6 +180,11 @@ function hasTracks(params: Params): boolean {
   const value = params.tracks
   if (Array.isArray(value)) return value.length > 0
   return typeof value === 'string' && value !== ''
+}
+
+/** Whether a feature set is ranked by one of its columns — the Ranking card's question. */
+function ranked(params: Params): boolean {
+  return params.anchors === 'features' && typeof params.rankBy === 'string' && params.rankBy !== ''
 }
 
 /** Whether the input is a loaded pair set, rather than a feature set. */
@@ -363,7 +374,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'choice',
     key: 'norm',
     label: 'normalisation',
-    default: 'matched',
+    default: 'oe',
     options: [
       {
         value: 'matched',
@@ -480,22 +491,18 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
-  // **The nearest loop, coolpuppy's `mindist`**, and its default is coolpuppy's:
-  // twice the half-width and two, so it follows the half-width until somebody
-  // types a number (`NumberParam.seed`), and a shell, which has no form, leaves
-  // it to the runner to work out the same way. A loop set only, and the fixed
-  // mode only: *every pair* has a separation range of its own just below, and a
-  // scaled window is a fraction of its separation, which never reaches the
-  // diagonal. Measured between the two anchors' centres, in base pairs against
-  // this many bins of the file, which is how coolpuppy measures it.
+  // **The nearest loop, coolpuppy's `mindist`**, five bins by default
+  // ({@link MIN_DIST_DEFAULT}). A loop set only, and the fixed mode only: *every
+  // pair* has a separation range of its own just below, and a scaled window is a
+  // fraction of its separation, which never reaches the diagonal. Measured
+  // between the two anchors' centres, in base pairs against this many bins of
+  // the file, which is how coolpuppy measures it.
   {
     kind: 'number',
     key: 'minDist',
     label: 'nearest loop',
-    hint: 'Loops nearer the diagonal are left out; twice the half-width and two by default, as in coolpuppy.',
-    default: 2 * 21 + 2,
-    seed: (_context, params) => autoMinDist(params),
-    seedNote: 'twice --window, and 2',
+    hint: 'Loops nearer the diagonal than this are left out. coolpuppy’s own default is twice the half-width and two.',
+    default: MIN_DIST_DEFAULT,
     min: 0,
     integer: true,
     unit: 'bins',
@@ -566,8 +573,7 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'subset',
     label: 'then',
     default: 'all',
-    when: (params) =>
-      params.anchors === 'features' && typeof params.rankBy === 'string' && params.rankBy !== '',
+    when: ranked,
     options: [
       { value: 'all', label: 'one pileup' },
       { value: 'top', label: 'top N' },
@@ -582,7 +588,7 @@ const PARAMS: readonly ParamSpec[] = [
     default: 500,
     min: 1,
     integer: true,
-    when: (params) => params.subset === 'top',
+    when: (params) => ranked(params) && params.subset === 'top',
     section: 'Ranking',
   },
   {
@@ -594,7 +600,7 @@ const PARAMS: readonly ParamSpec[] = [
     max: 6,
     integer: true,
     slider: true,
-    when: (params) => params.subset === 'groups',
+    when: (params) => ranked(params) && params.subset === 'groups',
     section: 'Ranking',
   },
   {
@@ -602,6 +608,10 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'tracks',
     label: 'track aggregates',
     multiple: true,
+    // Optional, because a pileup with no profile on its edges is a pileup: the
+    // reader who unticks every track has answered, and a required list would
+    // tick the starred one back on the next run.
+    optional: true,
     hint:
       'Each is averaged over the same windows the pileup is taken from and drawn along its two ' +
       'edges — the aggregate signal above and beside the aggregate map.',

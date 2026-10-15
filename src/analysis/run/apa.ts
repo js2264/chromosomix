@@ -757,8 +757,8 @@ function nearEnough(job: JobContext, anchors: Anchor[]): Anchor[] {
   const left = anchors.length - out.length
   if (left === 0) return out
   const how =
-    `nearer the diagonal than ${nearest.toLocaleString()} bins, ${shortBp(floor)}` +
-    (nearest === autoMinDist(job.params) ? ' — twice the half-width and two, coolpuppy’s default —' : '')
+    `nearer the diagonal than ${nearest.toLocaleString()} bins (${shortBp(floor)})` +
+    (nearest === autoMinDist(job.params) ? ', coolpuppy’s default,' : '')
   job.note(
     out.length === 0
       ? `Every loop of this set is ${how} so there is nothing to pile up. Set the nearest loop lower, ` +

@@ -7022,7 +7022,10 @@ the two loci an *Origin and terminus* run leaves behind phased every compartment
 chosen; it is never assumed. And an optional input that is a guess however it is filled — the track
 compartments are phased by, the coverage an origin call breaks a tie with — **starts on none**: the first
 bigWig loaded is a ChIP track as often as it is anything, and a ratio from the wrong one looks like any
-other.
+other. A list of several that may be empty — APA's track aggregates — opens on the star like the rest,
+and **every box unticked is an answer the form keeps**, as *None* is on a list of sequences: a required
+list is ticked back to the star, because nothing ticked there is a Run that cannot happen, and the two
+used to be one rule, so the drawer's round trip around a run ticked the reader's unticked track back on.
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
@@ -7095,7 +7098,11 @@ share a row: a single on/off button is not a group, and the full-width shape is 
 genuinely one — a checklist, a number with a slider beside it, four marks in a row — whose hint then
 goes *under* the group rather than beside the word above it. A hint never repeats what the control's
 own label, options or state already say: a column of tick boxes that opens with every box ticked does
-not need a line saying that every sequence is read unless you say otherwise.
+not need a line saying that every sequence is read unless you say otherwise. **A card none of whose
+controls the other answers leave is not drawn**, heading and all: APA's Control card belongs to the
+distance-matched control and is gone under observed / expected, and its Ranking card belongs to a
+feature set and is gone for a loop set. A heading over nothing is a question the form has decided not
+to ask, still taking a line to say so.
 
 **A file a task reads and does not open is dropped on the form.** One parameter is a file rather than a
 number or something loaded: P(s)'s `.pairs`, whose records are read for the four orientations and whose
@@ -8274,7 +8281,7 @@ mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
 off-diagonal from **every pair of one feature set** inside a separation range;
-normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
+normalised by **observed/expected by default**, by distance-matched controls, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
 
@@ -8315,12 +8322,14 @@ that cell's own diagonal**, then averages the ratios: coolpuppy's `ooe`, with co
 `balanced.avg` — the mean of each diagonal over the whole sequence — read as a band as deep as the
 farthest window reaches. That is the pileup's normalisation and nothing else's: the map's own O/E
 (§7.5) divides by the curve it always has. **A loop set leaves out the loops nearest the diagonal**,
-as coolpuppy does by default: every loop whose two anchors' centres are nearer than *nearest loop*
-bins of the file, which is twice the half-width and two until somebody types a number — coolpuppy's
-`mindist='auto'`, measured as it measures it, in base pairs between the centres — and is the
-separation at which a window stops reaching the two diagonals left out, so at both defaults no loop
-window has a gap cut in it. The run says how many it left out and how near they were, and 0 piles up
-every loop; *every pair* of a feature set keeps its own separation range instead. It used to divide
+as coolpuppy does: every loop whose two anchors' centres are nearer than *nearest loop* bins of the
+file, **five by default**, measured as coolpuppy measures it, in base pairs between the centres.
+coolpuppy's own default, `mindist='auto'`, is further out — twice the half-width and two, the
+separation at which a window stops reaching the two diagonals left out, so that at that floor no loop
+window has a gap cut in it — and leaves out 959 of the yeast demo's 1,506 loops at 1 kb; the run says
+so when it is the number typed, and the evaluation types it to hold the two to each other (§18.10). The
+run says how many loops it left out and how near they were, and 0 piles up every loop; *every pair*
+of a feature set keeps its own separation range instead. It used to divide
 the finished pileup by an expected looked up at each cell's distance from the *pileup's* centre,
 which is a cell's diagonal only for a window on the diagonal, and to take that expected from the
 windows' own cells, which over a loop set are the places the set picked, enriched by construction.
@@ -8329,9 +8338,11 @@ the same set was up to ten per cent from coolpuppy's in the cells nearest the di
 coolpuppy's default `min_diag`. Cut this way, every cell agrees to 5e-6, gap for gap (§18.10).
 
 **Tracks aggregate along the pileup's two edges.** Any number of bigWigs or synthetic tracks may be
-chosen, each averaged over the **same windows** the pileup is taken from — the real ones, never the
-shifted controls, which are the denominator of the picture rather than the picture — and drawn as a
-profile above it and beside it (under every normalisation but chromosight's, which answers with its
+chosen, the starred one to begin with, and **none is an answer the form keeps**: every box unticked
+stays unticked through the next run, where it used to tick the starred track back on. Each is averaged
+over the **same windows** the pileup is taken from — the real ones, never the shifted controls,
+which are the denominator of the picture rather than the picture — and drawn as a profile above it
+and beside it (under every normalisation but chromosight's, which answers with its
 own outputs). That is the figure most papers using an APA actually print: the
 aggregate contact map with the aggregate signal on its edges, which turns *these places touch* into
 *these places touch, and this is what is bound where they do*. Until this a reader had to run the 1D

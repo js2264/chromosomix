@@ -1099,3 +1099,91 @@ describe('an anchor picked off the map', () => {
     expect(latest().anchor).toBe('IV')
   })
 })
+
+/**
+ * APA's cards (§18.8). A card none of whose controls the settings leave is not
+ * drawn — the distance-matched control's card under observed / expected, which
+ * is the default; the Ranking card for anything but a feature set — and a track
+ * list the reader emptied stays empty however often the form is handed its
+ * context again, which is what the drawer does around a run.
+ */
+describe('APA’s cards', () => {
+  function track(id: string): AnnotationEntry {
+    return {
+      id,
+      card: 'linear',
+      kind: 'track',
+      label: id,
+      source: { kind: 'remote', url: `https://example.invalid/${id}`, name: id },
+      status: 'ready',
+      visible: true,
+      placement: { top: false, right: false, bottom: true, left: false },
+      style: defaultStyle('track', '#0072b2'),
+    }
+  }
+
+  /** The headings of the cards on screen, the untitled first one as `''`. */
+  function cards(view: ParamForm): string[] {
+    return all(view.el, '.param-group')
+      .filter((card) => !card.classList.contains('hidden'))
+      .map((card) => card.querySelector('.controls-title')?.textContent ?? '')
+  }
+
+  it('draws no Control card under observed / expected, and draws it for the distance-matched control', () => {
+    const view = form(APA_TASK)
+    expect(view.value.norm).toBe('oe')
+    expect(cards(view)).not.toContain('Control')
+    view.setValue({ ...view.value, norm: 'matched' })
+    expect(cards(view)).toContain('Control')
+    view.setValue({ ...view.value, norm: 'none' })
+    expect(cards(view)).not.toContain('Control')
+  })
+
+  it('draws the Ranking card for a feature set alone, whatever was ranked before', () => {
+    const view = form(APA_TASK)
+    expect(view.value.anchors).toBe('pairs')
+    expect(cards(view)).not.toContain('Ranking')
+    view.setValue({ ...view.value, anchors: 'features' })
+    expect(cards(view)).toContain('Ranking')
+    // Top N, chosen on a ranked feature set, does not follow the reader back to the loops.
+    view.setValue({ ...view.value, anchors: 'pairs', rankBy: 'score', subset: 'top' })
+    expect(cards(view)).not.toContain('Ranking')
+    expect(labels(view)).not.toContain('N')
+  })
+
+  /** The tracks ticked on screen, by label. */
+  function ticked(view: ParamForm): string[] {
+    return all(view.el, '.param-check')
+      .filter((row) => row.querySelector<HTMLInputElement>('input')?.checked === true)
+      .map((row) => row.textContent ?? '')
+  }
+
+  it('opens on the starred track, and keeps the list the reader emptied however often the context comes back', () => {
+    const ctx = { ...context(), entries: [track('atac.bw'), { ...track('pol2.bw'), primary: true }] }
+    const { view, latest } = watchedForm(APA_TASK, ctx)
+    expect(view.value.tracks).toEqual(['pol2.bw'])
+    expect(ticked(view)).toEqual(['pol2.bw'])
+    // Every box unticked, as a reader does it, then the drawer's round trip around a run.
+    const box = all(view.el, '.param-check').find((row) => row.textContent === 'pol2.bw')
+    const input = box?.querySelector<HTMLInputElement>('input')
+    if (input === null || input === undefined) throw new Error('no box for pol2.bw')
+    input.checked = false
+    input.dispatchEvent(new Event('change'))
+    expect(latest().tracks).toEqual([])
+    view.setContext(ctx)
+    view.setContext({ ...ctx })
+    expect(view.value.tracks).toEqual([])
+    expect(ticked(view)).toEqual([])
+    expect(latest().tracks).toEqual([])
+  })
+
+  it('ticks a track loaded after the form opened on none, and never one in place of a track that went', () => {
+    const { view } = watchedForm(APA_TASK)
+    expect(view.value.tracks).toBeNull()
+    const ctx = { ...context(), entries: [track('atac.bw'), track('pol2.bw')] }
+    view.setContext(ctx)
+    expect(view.value.tracks).toEqual(['atac.bw'])
+    view.setContext({ ...ctx, entries: [track('pol2.bw')] })
+    expect(view.value.tracks).toEqual([])
+  })
+})
