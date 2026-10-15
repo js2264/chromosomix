@@ -12,7 +12,11 @@
  * `putImageData` and `createImageData` are not among them, which is why a matrix
  * here is a grid of filled rectangles rather than a raster — the opposite of the
  * choice `render/heatmap.ts` makes, and right for the opposite reason: a pileup
- * is tens of cells on a side, and tens of cells are paths.
+ * is tens of cells on a side, and tens of cells are paths. The one exception is
+ * a **list**, the metaplot's per-feature heatmap: thousands of rows read as a
+ * density, which is a picture and not a grid, so it is coloured on a canvas of
+ * its own and placed with `drawImage` — a member the page does have, and one it
+ * writes as a single image the viewer interpolates (see `drawListImage`).
  *
  * The three drawing functions are pure: a context, an output, a box and a
  * palette in, marks out. Nothing here owns a canvas, reads the clock or knows
@@ -1030,9 +1034,12 @@ export function matrixCells(
   output: Pick<MatrixOutput, 'ncols' | 'nrows' | 'aspect' | 'large'>,
 ): { width: number; height: number } {
   if (output.aspect === 'fill') {
+    // The whole box, unsnapped: a list is drawn as one image (see
+    // {@link drawListImage}), so there are no neighbouring rectangles to seam,
+    // and a box that whole cells left a strip of white beside is just filled.
     return {
-      width: cellSide(availableWidth, output.ncols),
-      height: cellSide(availableHeight, output.nrows),
+      width: availableWidth / Math.max(1, output.ncols),
+      height: availableHeight / Math.max(1, output.nrows),
     }
   }
   if (output.large === true) {
@@ -1373,6 +1380,76 @@ function drawSegments(
 }
 
 /**
+ * The most rows a list's image keeps: past this, neighbouring rows are averaged
+ * into one, which is what a picture this tall does on screen and in a PNG at
+ * 300 dpi anyway — four thousand features in four hundred pixels are ten to a
+ * pixel whatever draws them.
+ */
+const LIST_IMAGE_ROWS = 2048
+
+/**
+ * A list's cells as one image — the metaplot's per-feature heatmap (§18.8) —
+ * drawn into the plot, or `false` where there is no canvas to build it on and
+ * the caller draws rectangles as before.
+ *
+ * Its rows are a list, not a coordinate, so what a reader reads off it is a
+ * density — where the signal sits across thousands of features — and a grid of
+ * squares with a seam at every edge, each one a target for the pointer, was
+ * the wrong picture of that: a grid where a heatmap was wanted. So it is
+ * coloured once, row by row, averaging neighbours where there are more rows than
+ * the image keeps, and drawn with smoothing at high quality — on screen a
+ * bilinear stretch of eighty bins across the plot, and on a PDF page an image
+ * the viewer interpolates (`ui/vector.ts`). An empty cell is clear, so the
+ * paper shows through it.
+ */
+function drawListImage(
+  ctx: CanvasRenderingContext2D,
+  output: MatrixOutput,
+  plot: Rect,
+  range: { vmin: number; vmax: number },
+): boolean {
+  if (typeof document === 'undefined') return false
+  const rows = Math.min(output.nrows, LIST_IMAGE_ROWS)
+  const scratch = document.createElement('canvas')
+  scratch.width = output.ncols
+  scratch.height = rows
+  const draw = scratch.getContext('2d')
+  if (draw === null) return false
+  const image = draw.createImageData(output.ncols, rows)
+  const lut = applyColormap(isColormap(output.colormap) ? output.colormap : DEFAULT_COLORMAP)
+  const scale = 1 / (range.vmax - range.vmin)
+  for (let row = 0; row < rows; row++) {
+    // The features this image row stands for: one each while they fit.
+    const from = Math.floor((row * output.nrows) / rows)
+    const to = Math.max(from + 1, Math.floor(((row + 1) * output.nrows) / rows))
+    for (let col = 0; col < output.ncols; col++) {
+      let sum = 0
+      let n = 0
+      for (let r = from; r < to; r++) {
+        const value = output.values[r * output.ncols + col]
+        if (!Number.isFinite(value)) continue
+        sum += value
+        n++
+      }
+      const at = (row * output.ncols + col) * 4
+      const index = n === 0 ? -1 : colormapIndex((sum / n - range.vmin) * scale)
+      if (index < 0) continue
+      image.data[at] = lut[index * 4]
+      image.data[at + 1] = lut[index * 4 + 1]
+      image.data[at + 2] = lut[index * 4 + 2]
+      image.data[at + 3] = 255
+    }
+  }
+  draw.putImageData(image, 0, 0)
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(scratch, 0, 0, output.ncols, rows, plot.x, plot.y, plot.width, plot.height)
+  ctx.restore()
+  return true
+}
+
+/**
  * Draw a matrix output into `box`, from its own origin.
  *
  * Cells are filled rectangles rather than a raster, and that is forced rather
@@ -1476,6 +1553,10 @@ export function drawMatrix(
   }
 
   const scale = 1 / (range.vmax - range.vmin)
+  // A list — the metaplot's per-feature heatmap — is a picture, not a grid of
+  // squares: one image, smoothed where it is drawn larger than it is, with no
+  // frame round it. A grid's frame and its cells are what a list does not need.
+  const listed = output.aspect === 'fill' && drawListImage(ctx, output, plot, range)
   // A large picture's cells are a fraction of a pixel wider than whole: each
   // one's edges rounded, so neighbours meet without a seam of half-painted
   // pixels between them. Whole cells round to themselves.
@@ -1483,7 +1564,7 @@ export function drawMatrix(
   const edgeX = (col: number): number => (snap ? Math.round(plot.x + col * cellW) : plot.x + col * cellW)
   const edgeY = (row: number): number => (snap ? Math.round(plot.y + row * cellH) : plot.y + row * cellH)
   let painted = -1
-  for (let row = 0; row < output.nrows; row++) {
+  for (let row = 0; row < (listed ? 0 : output.nrows); row++) {
     const y0 = edgeY(row)
     const h = snap ? edgeY(row + 1) - y0 : cellH
     for (let col = 0; col < output.ncols; col++) {
@@ -1502,9 +1583,11 @@ export function drawMatrix(
     }
   }
 
-  ctx.strokeStyle = theme.grid
-  ctx.lineWidth = FRAME_WIDTH
-  ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
+  if (!listed) {
+    ctx.strokeStyle = theme.grid
+    ctx.lineWidth = FRAME_WIDTH
+    ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
+  }
   drawSegments(ctx, output, plot, { cellW, cellH, gap, line }, names, theme)
 
   // The marginals, against the two edges they run along, and the one line of key

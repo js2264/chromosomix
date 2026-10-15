@@ -9119,7 +9119,16 @@ one opposite it, so the aspect of such a picture must not be decided by how wide
 dragged. The exception is a picture whose rows are a **list** — the metaplot's per-feature heatmap,
 three thousand features down against distance across — which has no diagonal, nothing to compare
 across one, and which square cells turn into a ribbon a fifth of the card wide. It takes the whole
-width, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+box, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+**And it is one picture, not a grid of squares.** Its rows are features read as a density — where the
+signal sits across thousands of them — and drawn as a chart's rectangles, one per cell, below twenty
+thousand cells, it was a grid with a seam at every edge, a border lit on the cell under the pointer
+and a card naming it, none of which a reader of a metaplot asks for. So a list is never charted: the
+painter colours it once, onto a canvas of its own, averaging neighbouring rows where there are more
+than two thousand, and places that image across the plot with smoothing at high quality — a bilinear
+stretch on screen and in the PNG, and in the PDF one image marked `/Interpolate true`, which every
+viewer smooths. No frame is drawn round it and nothing answers the pointer over it, so the figure's
+settings offer no switch for a readout it does not have.
 **A picture read like a map** — a dot plot's two assemblies end to end (§28), `MatrixOutput.large` —
 is square and as large as the drawer lets it be, its cells a fraction of a pixel wider than whole where
 that is what fills it, each cell's edges on whole pixels; and it is always painted, however few its

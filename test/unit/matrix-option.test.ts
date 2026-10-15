@@ -89,6 +89,14 @@ describe('which matrices the chart draws', () => {
     expect(drawnAsChart(matrix({ nrows: 1, ncols: MATRIX_CHART_CELLS }))).toBe(true)
   })
 
+  it('leaves a list to the painter, however few its cells — one picture, not a grid to point at', () => {
+    // The metaplot's per-feature heatmap: its rows are features read as a
+    // density, so a rect per cell with a seam, a hover border and a tooltip made
+    // a grid of squares of it (§18.8).
+    expect(drawnAsChart(matrix({ nrows: 40, ncols: 8, aspect: 'fill' }))).toBe(false)
+    expect(drawnAsChart(matrix({ nrows: 40, ncols: 8 }))).toBe(true)
+  })
+
   it('leaves a picture read like a map to the painter, however few its cells', () => {
     // A dot plot's axes are its sequences end to end, which the painter marks
     // and a category axis cannot (§28).

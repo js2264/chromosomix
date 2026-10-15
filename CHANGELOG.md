@@ -1015,6 +1015,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The metaplot's per-feature heatmap is one smooth picture (§18.13).** It was a chart of one
+  rectangle per cell below twenty thousand cells — seams between them, a border lit under the
+  pointer, a card naming the cell — and a grid of filled rectangles above. It is now coloured once and
+  drawn as one image across the whole box, neighbouring rows averaged where there are more than two
+  thousand, smoothed as it is stretched, with no frame and nothing answering the pointer; its PDF holds
+  it as one image the viewer interpolates, and its settings offer no tooltip switch.
+
 - **The key has its ramp back, short, between its two numbers (§7.1).** `-4.18 ▬ -1.05`: a bar 48
   pixels long drawn through the colormap, as a gradient on screen and band by band in a PNG and a
   PDF, where the key had two squares for the ramp's two ends. On the default ramp, which runs white,

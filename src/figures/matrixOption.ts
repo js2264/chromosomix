@@ -73,10 +73,15 @@ export const MATRIX_CHART_CELLS = 20_000
  * Whether this matrix is one the chart draws. Never a picture read like a map
  * (`MatrixOutput.large`), however few its cells: a dot plot's axes are its
  * sequences end to end, which the painter marks and a category axis cannot.
+ * Never a **list** either (`aspect: 'fill'`), the metaplot's per-feature
+ * heatmap: its rows are features, read as a density rather than one by one, so
+ * a rectangle per cell to point at — a seam at every edge, a border on the one
+ * under the pointer, a tooltip naming it — made a grid of squares of what is
+ * one picture, which the painter draws as one image (§18.8).
  */
 export function drawnAsChart(output: MatrixOutput): boolean {
   const cells = output.nrows * output.ncols
-  return cells > 0 && cells <= MATRIX_CHART_CELLS && output.large !== true
+  return cells > 0 && cells <= MATRIX_CHART_CELLS && output.large !== true && output.aspect !== 'fill'
 }
 
 /** How many stops the ramp is sampled at for `visualMap`. */

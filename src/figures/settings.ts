@@ -32,6 +32,7 @@ import { button, el, trimNumber } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { settingsField } from '../ui/laneSettings'
 import { COLORMAP_NAMES } from '../render/colormaps'
+import { drawnAsChart } from './matrixOption'
 import { seriesColour, type FigureTheme } from './option'
 import { histogram } from './stats'
 import {
@@ -90,9 +91,12 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
           ? // A dot plot's figure is its streaks, red and blue whatever a
             // colormap says (§28.2): a Colour card beside it changed nothing on
             // screen, and the rebuild its every pick asked for threw the zoom away.
+            // A matrix the painter draws — a list's heatmap, a picture past
+            // the chart's ceiling — has no readout under the pointer, so it
+            // is offered no switch for one (§8.5).
             props.spec.output.streaks !== undefined
-            ? [textCard(style, set)]
-            : [colourCard(style, set), textCard(style, set)]
+            ? [textCard(style, set, drawnAsChart(props.spec.output))]
+            : [colourCard(style, set), textCard(style, set, drawnAsChart(props.spec.output))]
           : [rowsCard(props.spec, style, set), ...scatterAxes(props.spec, style, set), textCard(style, set)]
 
     host.replaceChildren(
@@ -459,7 +463,7 @@ function seriesCard(
 
 const PLACES: readonly LegendPlace[] = ['right', 'top', 'bottom', 'none']
 
-function textCard(style: FigureStyle, set: Apply): HTMLElement {
+function textCard(style: FigureStyle, set: Apply, readout = true): HTMLElement {
   return group(
     'text',
     settingsField(
@@ -471,7 +475,9 @@ function textCard(style: FigureStyle, set: Apply): HTMLElement {
       numberBox(style.fontSize, (value) => set({ fontSize: value ?? 11 }), 'In CSS pixels, for every word on the figure', 1),
     ),
     settingsField('legend', choice(PLACES, style.legend, (legend) => set({ legend }))),
-    toggle('tooltip', style.tooltip, (tooltip) => set({ tooltip }), 'The readout that follows the pointer'),
+    ...(readout
+      ? [toggle('tooltip', style.tooltip, (tooltip) => set({ tooltip }), 'The readout that follows the pointer')]
+      : []),
   )
 }
 

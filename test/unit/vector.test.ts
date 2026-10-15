@@ -215,6 +215,23 @@ describe('VectorPage', () => {
     expect(text).toContain('/MediaBox [0 0 144 72]')
   })
 
+  // A list's heatmap asks for smoothing at high quality, which is what puts
+  // `/Interpolate true` on its image; drawing state on a canvas, so saved and
+  // restored with the rest, and every other image is left to the viewer.
+  it('keeps the smoothing a figure asks for as drawing state', () => {
+    const page = new VectorPage(100, 50)
+    expect(page.ctx.imageSmoothingEnabled).toBe(true)
+    expect(page.ctx.imageSmoothingQuality).toBe('low')
+    page.ctx.save()
+    page.ctx.imageSmoothingQuality = 'high'
+    page.ctx.imageSmoothingEnabled = false
+    expect(page.ctx.imageSmoothingQuality).toBe('high')
+    expect(page.ctx.imageSmoothingEnabled).toBe(false)
+    page.ctx.restore()
+    expect(page.ctx.imageSmoothingQuality).toBe('low')
+    expect(page.ctx.imageSmoothingEnabled).toBe(true)
+  })
+
   it('carries no image: the marks are paths', async () => {
     const page = new VectorPage(100, 50)
     page.ctx.fillRect(0, 0, 10, 10)
