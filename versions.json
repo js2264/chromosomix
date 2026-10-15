@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 108,
-      "commit": "7ac4bdb",
+      "commit": "c9a7736",
       "title": "APA as coolpuppy computes it, exact track-correlation windows, and chromosomix boost",
       "branch": "ccr-bbb73609-u7oxgq",
-      "date": "2026-10-15T20:43:03Z"
+      "date": "2026-10-15T20:46:04Z"
     },
     {
       "number": 107,
