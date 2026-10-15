@@ -222,10 +222,10 @@
     },
     {
       "number": 108,
-      "commit": "c9a7736",
-      "title": "APA as coolpuppy computes it, exact track-correlation windows, and chromosomix boost",
+      "commit": "1378f17",
+      "title": "APA as coolpuppy computes it, with O/E and a five-bin nearest loop by default; exact track-correlation windows; chromosomix boost",
       "branch": "ccr-bbb73609-u7oxgq",
-      "date": "2026-10-15T20:46:04Z"
+      "date": "2026-10-15T22:03:26Z"
     },
     {
       "number": 107,
