@@ -214,6 +214,13 @@
   ],
   "pulls": [
     {
+      "number": 108,
+      "commit": "cf59f7f",
+      "title": "Validate APA against coolpuppy with diagonal handling",
+      "branch": "ccr-bbb73609-u7oxgq",
+      "date": "2026-10-15T13:53:22Z"
+    },
+    {
       "number": 107,
       "commit": "ea17a91",
       "title": "Add circular visualization of metagenome contact maps (§7.6)",
