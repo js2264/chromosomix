@@ -49,6 +49,7 @@ import { trimNumber } from '../ui/dom'
 import type { MatrixOutput } from '../analysis/types'
 import type { ChartOption, FigureTheme } from './option'
 import type { FigureStyle } from './style'
+import { escapeHtml } from './tooltip'
 
 /**
  * The most cells a matrix may have and still be drawn as a chart.
@@ -547,6 +548,10 @@ export function matrixOptionOf(
             itemHeight: Math.max(2, Math.round(size * 0.22)),
             itemGap: Math.round(size),
             textStyle: { color: theme.muted, fontSize: size, fontFamily: theme.fontFamily },
+            // Text rather than markup, unlike the tooltip below: a legend is
+            // drawn as an SVG `<text>` whose content is set as text, so a track
+            // name reaches the page inert — and escaping it here would print
+            // its entities.
             formatter: (name: string): string => {
               const scale = scales.get(name)
               return scale === undefined || !(scale.lo <= scale.hi)
@@ -630,6 +635,13 @@ export function matrixOptionOf(
  * whole answer to *which pair is this*; on a pileup they are offsets from the
  * anchor. Where there are none, the cell's own index, which is still better than
  * nothing — a reader counting rows can check it.
+ *
+ * **Markup, so every part of it is escaped.** The library writes this string
+ * with `innerHTML`, and the labels are the file's own sequence and track names:
+ * interpolated as they came, a sequence named `<img src=x onerror=…>` ran its
+ * script on hover. `escapeHtml` is the one escape, for the reason
+ * `figures/tooltip.ts` gives; the two tags are this function's own and carry no
+ * `style=`, which the site's policy would refuse (§11).
  */
 export function cellTooltip(
   output: MatrixOutput,
@@ -646,6 +658,6 @@ export function cellTooltip(
     const shown = Math.abs(value) >= 1e-3 && Math.abs(value) < 1e6
       ? value.toFixed(3)
       : value.toExponential(2)
-    return `${yName} · ${xName}<br/><b>${shown}</b>`
+    return `${escapeHtml(yName)} · ${escapeHtml(xName)}<br/><b>${escapeHtml(shown)}</b>`
   }
 }

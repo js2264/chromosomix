@@ -55,8 +55,10 @@
 
 import { ViewerError } from '../errors'
 import { landingRung } from '../metacooler/detect'
+import { declaredSpan, inflateCapped, inflationCap } from '../sources/untrusted'
 import type { ByteSource, Extent } from '../types'
 import {
+  HIC,
   normKey,
   readFooter,
   readHeader,
@@ -67,6 +69,7 @@ import {
   type NormVectorKey,
 } from './format'
 import {
+  HIC_BLOCK_INFLATION,
   RECORD_HEAD_BYTES,
   blockNumbersFor,
   blockRuns,
@@ -78,7 +81,14 @@ import {
   type ZoomData,
 } from './blocks'
 
-/** Bytes of decompressed block retained. One order under the source's own LRU. */
+/**
+ * Bytes of decompressed block retained. One order under the source's own LRU.
+ *
+ * A block larger than the whole budget is handed back and not kept: holding it
+ * would mean evicting everything else to make room for one block, and it used
+ * to mean worse — the eviction skipped the block just stored, so one oversize
+ * block stayed in the cache, over budget, until the next was decoded.
+ */
 const BLOCK_CACHE_BYTES = 48 << 20
 
 /**
@@ -392,10 +402,37 @@ export class HicFile {
         this.binSize,
         this.beyondHead ? 0 : RECORD_HEAD_BYTES,
       )
-      zoom = found.zoom
+      zoom = this.fitted(key, found.zoom)
       if (found.beyondHead) this.beyondHead = true
     }
     this.zooms.set(key, zoom)
+    return zoom
+  }
+
+  /**
+   * A pair's block index, refused if its blocks claim more bytes than the file.
+   *
+   * Each block's own place is checked when it is read ({@link blocks}); this is
+   * the check on all of them together, once, when the index is first in hand.
+   * A writer puts a resolution's blocks one after another, so between them they
+   * hold less than the file — and an index whose blocks each sit inside the
+   * file but overlap, every one naming the same megabytes, would read the file
+   * once per block on a walk across the pair.
+   */
+  private fitted(key: string, zoom: ZoomData | null): ZoomData | null {
+    if (zoom === null) return null
+    let total = 0
+    for (const ref of zoom.blocks.values()) total += Math.max(0, ref.size)
+    if (!(total <= this.source.size)) {
+      throw new ViewerError(
+        'format',
+        `The ${this.binSize} bp blocks of this .hic's ${key} matrix claim ` +
+          `${total.toLocaleString('en-US')} bytes between them, more than the whole file's ` +
+          `${this.source.size.toLocaleString('en-US')}. The file is corrupt, or not the format ` +
+          'its first bytes claim.',
+        { key, binSize: this.binSize, bytes: total, size: this.source.size },
+      )
+    }
     return zoom
   }
 
@@ -421,8 +458,9 @@ export class HicFile {
     )
       .then((found) => {
         if (found.beyondHead) this.beyondHead = true
-        this.zooms.set(key, found.zoom)
-        return found.zoom
+        const zoom = this.fitted(key, found.zoom)
+        this.zooms.set(key, zoom)
+        return zoom
       })
       .finally(() => this.zoomsInFlight.delete(key))
     this.zoomsInFlight.set(key, reading)
@@ -619,6 +657,11 @@ export class HicFile {
    * reads of the stretches they sit in end to end (`blockRuns`) — on a coarse
    * rung, one block of about a kilobyte per pair, which a chunk would have
    * rounded out to a megabyte.
+   *
+   * Every block's place is checked before a byte of it is fetched: a size in
+   * the index that runs past the end of the file reads the rest of the file,
+   * and a walk does that once per block, so the check is what keeps a corrupt
+   * index from reading a file many times over (§10).
    */
   private async blocks(zoom: ZoomData, numbers: readonly number[], sparse: boolean): Promise<BlockRecords[]> {
     const got = new Map<number, BlockRecords>()
@@ -627,8 +670,18 @@ export class HicFile {
       const ref = zoom.blocks.get(number)
       if (ref === undefined || ref.size <= 0) continue
       const held = this.held(ref)
-      if (held !== undefined) got.set(number, held)
-      else missing.push(ref)
+      if (held !== undefined) {
+        got.set(number, held)
+        continue
+      }
+      declaredSpan(ref.position, ref.size, {
+        format: HIC,
+        field: `block ${ref.number} of the ${this.binSize} bp matrix`,
+        size: this.source.size,
+        // Compressed, a block is never larger than it inflates to.
+        ceiling: HIC_BLOCK_INFLATION.ceiling,
+      })
+      missing.push(ref)
     }
     const source = this.source
     const exact = sparse ? source.readExact : undefined
@@ -665,9 +718,25 @@ export class HicFile {
     return held
   }
 
-  /** Decompress one block's bytes and keep the result. */
+  /**
+   * Decompress one block's bytes and keep the result.
+   *
+   * zlib-inflated, `'deflate'` and not `'deflate-raw'`: Juicer writes through
+   * `java.util.zip.Deflater` at its defaults, which emits the two-byte zlib
+   * header, and asking for raw produces a decode error on the first block rather
+   * than a wrong number later. Through `sources/untrusted.ts`, whose cap is
+   * {@link HIC_BLOCK_INFLATION}'s proportion of what went in, so a block of a
+   * megabyte cannot become the gigabyte deflate allows on its way to being
+   * refused.
+   */
   private async decode(ref: BlockRef, compressed: Uint8Array): Promise<BlockRecords> {
-    const records = decodeBlock(await inflate(compressed), this.header.version)
+    const inflated = await inflateCapped(compressed, {
+      format: HIC,
+      field: `block ${ref.number} of the ${this.binSize} bp matrix`,
+      encoding: 'deflate',
+      maxBytes: inflationCap(compressed.byteLength, HIC_BLOCK_INFLATION),
+    })
+    const records = decodeBlock(inflated, this.header.version)
     this.remember(this.blockKey(ref), records)
     return records
   }
@@ -678,11 +747,13 @@ export class HicFile {
 
   private remember(key: string, records: BlockRecords): void {
     const bytes = records.x.byteLength + records.y.byteLength + records.value.byteLength
+    if (bytes > BLOCK_CACHE_BYTES) return
     this.blockCache.set(key, records)
     this.blockCacheBytes += bytes
+    // Oldest first, and never the block just stored, which is the newest and
+    // fits the budget alone — so the loop always stops before reaching it.
     for (const held of this.blockCache.keys()) {
       if (this.blockCacheBytes <= BLOCK_CACHE_BYTES) break
-      if (held === key) continue
       const evicted = this.blockCache.get(held)
       if (evicted !== undefined) {
         this.blockCacheBytes -=
@@ -698,29 +769,4 @@ export class HicFile {
     this.normCache.clear()
     this.blockCacheBytes = 0
   }
-}
-
-/**
- * zlib-inflate one block, through the platform's own decompressor.
- *
- * `DecompressionStream` costs no bundle and is present in every worker this app
- * runs in and in the Node the CLI runs on, which is the same argument
- * `annotations/parse.ts` makes for un-gzipping there. `'deflate'` and not
- * `'deflate-raw'`: Juicer writes through `java.util.zip.Deflater` at its
- * defaults, which emits the two-byte zlib header, and asking for raw produces a
- * decode error on the first block rather than a wrong number later.
- */
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new ViewerError(
-      'unsupported',
-      'Reading a .hic needs DecompressionStream, which this runtime does not have. ' +
-        'Every browser since 2023 has it; a very old one does not.',
-      {},
-    )
-  }
-  const stream = new Blob([bytes as BlobPart])
-    .stream()
-    .pipeThrough(new DecompressionStream('deflate'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
 }

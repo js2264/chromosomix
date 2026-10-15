@@ -191,6 +191,59 @@ describe('chartFigure', () => {
   })
 
   /**
+   * A box plot, as the renderer really draws one.
+   *
+   * `zrender` draws each box as one path — the box, both whiskers, their caps
+   * and the median — filled in the series' colour and then stroked in the ink.
+   * The page let go of a path at its first paint, so the stroke reached the
+   * PDF with nothing in front of it, and every exported box plot was a row of
+   * tinted rectangles with no outline, whisker or median.
+   */
+  it('strokes a box plot’s box, whiskers and median along the path it fills', async () => {
+    const built = spec()
+    const style = defaultStyle(built)
+    style.mark = 'box'
+    const figure = chartFigure({ spec: built, style })
+    document.body.append(figure.el)
+    Object.defineProperty(figure.el, 'clientWidth', { value: 640, configurable: true })
+    Object.defineProperty(figure.el, 'clientHeight', { value: 400, configurable: true })
+    await figure.ready
+
+    const page = new VectorPage(640, 400)
+    figure.draw(page.ctx, { width: 640, height: 400 })
+    const content = await contentOf(await pdfOf(page, 'box'))
+    // Each painting operator, with the path in front of it and the colour it
+    // paints in.
+    const paints: Array<{ op: string; path: string[]; colour: string }> = []
+    let path: string[] = []
+    let fill = ''
+    let stroke = ''
+    for (const line of content.split('\n')) {
+      if (line.endsWith(' rg')) fill = line.slice(0, -3)
+      else if (line.endsWith(' RG')) stroke = line.slice(0, -3)
+      else if (/ [mlc]$| re$|^h$/.test(line)) path.push(line)
+      else if (/^(?:f\*?|S|W\*? n)$/.test(line)) {
+        paints.push({ op: line, path, colour: line === 'S' ? stroke : fill })
+        path = []
+      }
+    }
+    // Nothing on the figure is painted with no path to paint.
+    expect(paints.filter((paint) => paint.path.length === 0)).toEqual([])
+    for (const colour of ['#0072B2', '#D55E00']) {
+      const [r, g, b] = pdfColour(colour)
+      const at = paints.findIndex(
+        (paint) => paint.op === 'f' && paint.colour === `${trim(r)} ${trim(g)} ${trim(b)}`,
+      )
+      expect(at, colour).toBeGreaterThanOrEqual(0)
+      const box = paints[at].path
+      expect(box.filter((segment) => segment.endsWith(' m')), colour).toHaveLength(6)
+      expect(paints[at + 1].op, colour).toBe('S')
+      expect(paints[at + 1].path, colour).toEqual(box)
+    }
+    figure.destroy()
+  })
+
+  /**
    * The other thing a pure test of the option cannot see.
    *
    * A bar chart of a list makes three claims that only a render settles: that

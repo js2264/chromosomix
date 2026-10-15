@@ -54,6 +54,7 @@ import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
 import { canonicalUrl } from '../sources/rewrite'
+import { viewStateOf } from './ViewState'
 import type { ViewState } from '../types'
 import {
   MAP_NAMES_SCOPE,
@@ -433,7 +434,7 @@ function compareOf(uri: string | null | undefined): { compare?: string } {
  * Untrusted like every other field read here, and with one consequence worth
  * naming: a member that survives this is only *well-formed*, not *current*. An
  * index pointing past the end of the deck it arrives beside is caught where the
- * two lists meet (`Session.rememberedCompanions`), because only there is it
+ * two lists meet (`SessionDeck.rememberedCompanions`), because only there is it
  * knowable which of them is the newer.
  */
 function localsOf(value: unknown): DeckLocal[] {
@@ -838,6 +839,18 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     }
   }
 
+  // **What is being looked at is read as a link is**, by §5.5's own reader
+  // (`viewStateOf`), and never believed. This is every road a tab arrives by —
+  // a dropped workspace, a `#session=` link, a `?config=` session, the durable
+  // record — and the object was cast here once its `uri` checked out: a file
+  // naming `view: 'banana'` left the tab on "Opening…" for good, and a
+  // transform this build has no name for threw a `RangeError` from the
+  // renderer. What the reader cannot read it drops, as it does for a link, and
+  // a state it can read — every one this app writes — comes back unchanged.
+  // `null` only where the `uri` itself does not survive the read.
+  const view = viewStateOf(state)
+  if (view === null) return { reason: 'not-a-workspace' }
+
   const list = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
   const record = (value: unknown): GroupModes =>
     typeof value === 'object' && value !== null ? (value as GroupModes) : {}
@@ -867,7 +880,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     ...sourceOf(row['source']),
     ...nameOf(typeof row['name'] === 'string' ? row['name'] : undefined),
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
-    state: state as ViewState,
+    state: view,
     tracks: list<StoredEntry>(row['tracks']),
     manual: list<ManualMark>(row['manual']),
     // Absent from every config written before §8.10, and read as no saved places
@@ -1063,7 +1076,7 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
   // lives in `panels/deck.ts`, and its comment says what a second copy costs: a
   // config that resolves to a *different number of maps* than were written, with
   // no error anywhere. Two normalisations come with the reuse and are both
-  // already applied downstream by `Session.syncDeck`: empty segments are
+  // already applied downstream by `SessionDeck.sync`: empty segments are
   // dropped, and the list is capped at `MAX_PANELS - 1`.
   const maps =
     config.state.maps === undefined

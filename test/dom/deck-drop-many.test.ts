@@ -72,7 +72,8 @@ const host: SessionHost = {
 /** The private doors a dropped companion comes in through. */
 interface Innards {
   file: unknown
-  deck: PanelDeck | null
+  /** The session's deck (`SessionDeck`), and the panels it has built, if any. */
+  deck: { grid: PanelDeck | null }
   addCompanion(file: File): void
   render(state: ViewState | null): Promise<void>
   syncDeck(state: ViewState): Promise<void>
@@ -113,7 +114,7 @@ describe('dropping several coolers', () => {
     // Every add was a render, and none of them has reached the deck yet.
     expect(renders).toHaveLength(7)
     await Promise.all(renders)
-    const deck = inside.deck
+    const deck = inside.deck.grid
     if (deck === null) throw new Error('no deck')
     expect(deck.companionMaps().map((map) => map.label)).toEqual([
       'rep2.cool',
@@ -137,6 +138,6 @@ describe('dropping several coolers', () => {
     await Promise.all(renders)
     session.store.set({ uri: 'rep1.cool', view: 'region', region: 'I', maps: '~' } as ViewState)
     await Promise.all(renders)
-    expect(inside.deck?.companionMaps().map((map) => map.label)).toEqual(['rep2.cool'])
+    expect(inside.deck.grid?.companionMaps().map((map) => map.label)).toEqual(['rep2.cool'])
   })
 })

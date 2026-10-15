@@ -45,6 +45,7 @@
  * matching them to the map's is done downstream, once, for every format.
  */
 
+import { declaredCount, declaredSpan, inflateCapped, inflationCap, type InflationPolicy } from '../sources/untrusted'
 import { FeatureBuilder, type StructureSchema } from './featureset'
 import { G3D_FIELD_HAPLOTYPE } from './g3d'
 import { decodeMsgpack } from './msgpack'
@@ -52,6 +53,21 @@ import { DETAIL_SEP, type FeatureSet } from './types'
 
 /** How many bytes the writer reserves for the header, whatever the header needs. */
 export const G3D_HEADER_LENGTH = 64000
+
+/** The format as a refusal names it. */
+const G3D = 'binary g3d'
+
+/**
+ * How far one resolution's block may inflate: 64 times its compressed size,
+ * never under 64 MiB nor over 1 GiB (`sources/untrusted.ts`).
+ *
+ * A block is MessagePack of bead starts and coordinates, some thirty bytes a
+ * bead, and zlib shrinks it two or three times at most, because most of it is
+ * float mantissa — so sixty-four is far past any real block's ratio. The floor
+ * holds two million beads whatever they compress to; the ceiling thirty
+ * million, where a bead a kilobase of a diploid human genome is six.
+ */
+const G3D_INFLATION: InflationPolicy = { ratio: 64, floor: 64 << 20, ceiling: 1 << 30 }
 
 /** How this module asks for bytes; the same shape `twobit.ts` takes, for the same reason. */
 export type ReadRange = (length: number, position: number) => Promise<Uint8Array>
@@ -67,6 +83,8 @@ export interface G3dHeader {
   categories: string[]
   /** Where each resolution's compressed block lies, keyed by the resolution. */
   offsets: Map<number, { offset: number; size: number }>
+  /** The file's length, where the reader knew it — what a block's place is checked against. */
+  fileSize?: number
 }
 
 /**
@@ -114,7 +132,11 @@ export function isG3dBinary(head: Uint8Array): boolean {
  *
  * Every field the reader will lean on is checked here rather than where it is
  * used, so a file that is not what it claims fails once, in one sentence,
- * before any block is fetched.
+ * before any block is fetched. That includes each block's offset and size, as
+ * far as they can be judged from the header: a place in a file and no larger
+ * than a block could inflate to (§10). Whether the block is inside *this*
+ * file is asked when it is read, against `size` — a header read from a file's
+ * front need not be the whole of it.
  */
 export async function readG3dHeader(read: ReadRange, size?: number): Promise<G3dHeader> {
   const length = size === undefined ? G3D_HEADER_LENGTH : Math.min(G3D_HEADER_LENGTH, size)
@@ -149,6 +171,9 @@ export async function readG3dHeader(read: ReadRange, size?: number): Promise<G3d
     const offset = entry.get('offset')
     const blockSize = entry.get('size')
     if (typeof offset !== 'number' || typeof blockSize !== 'number') continue
+    const field = `${resolution} bp block`
+    declaredCount(offset, { format: G3D, field: `offset of the ${field}`, ceiling: Number.MAX_SAFE_INTEGER })
+    declaredCount(blockSize, { format: G3D, field: `size of the ${field}`, ceiling: G3D_INFLATION.ceiling })
     offsets.set(resolution, { offset, size: blockSize })
   }
   for (const resolution of resolutions) {
@@ -163,6 +188,7 @@ export async function readG3dHeader(read: ReadRange, size?: number): Promise<G3d
     resolutions,
     categories,
     offsets,
+    ...(size === undefined ? {} : { fileSize: size }),
   }
 }
 
@@ -192,6 +218,11 @@ export async function readG3dModel(
       `This g3d has no model at ${resolution} bp; it has ${header.resolutions.join(', ')}.`,
     )
   }
+  // A block past the end of the file is a read of the rest of it to find that
+  // out, so it is refused before the read is made (§10).
+  if (header.fileSize !== undefined) {
+    declaredSpan(block.offset, block.size, { format: G3D, field: `${resolution} bp block`, size: header.fileSize })
+  }
   const compressed = await read(block.size, block.offset)
   if (compressed.length !== block.size) {
     throw new Error(
@@ -199,7 +230,7 @@ export async function readG3dModel(
         `promised ${block.size}.`,
     )
   }
-  const { value } = decodeMsgpack(await inflate(compressed))
+  const { value } = decodeMsgpack(await inflate(compressed, resolution))
   if (!(value instanceof Map)) throw new Error(`The ${resolution} bp block of this g3d is not a map.`)
   const haplotypes = [...header.categories]
   const phased = haplotypes.length > 1
@@ -258,19 +289,17 @@ export function g3dBinaryNote(header: G3dHeader): string {
  * costs no bundle and every worker and every Node this runs on has it.
  * `'deflate'` and not `'deflate-raw'`, because `zlib.compress` in Python writes
  * the two-byte zlib header and the Adler-32 trailer, and asking for raw fails on
- * the first byte rather than producing a wrong bead later.
+ * the first byte rather than producing a wrong bead later. Capped at
+ * {@link G3D_INFLATION}'s proportion of what went in, so a block of a megabyte
+ * cannot become the gigabyte deflate allows on its way to a refusal.
  */
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Error(
-      'Reading a binary g3d needs DecompressionStream, which this runtime does not have. ' +
-        'Every browser since 2023 has it; a very old one does not.',
-    )
-  }
-  const stream = new Blob([bytes as BlobPart])
-    .stream()
-    .pipeThrough(new DecompressionStream('deflate'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+async function inflate(bytes: Uint8Array, resolution: number): Promise<Uint8Array> {
+  return inflateCapped(bytes, {
+    format: G3D,
+    field: `${resolution} bp block`,
+    encoding: 'deflate',
+    maxBytes: inflationCap(bytes.byteLength, G3D_INFLATION),
+  })
 }
 
 /** An array of numbers from the decoded file, or an error naming what was not one. */

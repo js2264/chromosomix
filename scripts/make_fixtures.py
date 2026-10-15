@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 """Build the chromosomix test fixtures.
 
-Run with the interpreter that has metacooler installed::
+Run with the interpreter that has metacooler installed, pointed at a metacooler
+checkout's test data::
 
-    /pasteur/helix/users/jaseriza/repos/metacooler/.venv/bin/python \
-        scripts/make_fixtures.py --force
+    pip install ../metacooler cooler
+    python scripts/make_fixtures.py --data ../metacooler/tests/data --force
+
+``--data`` may be left out: it falls back to ``$METACOOLER_TEST_DATA``, then to
+a metacooler checkout beside this one (``../metacooler/tests/data``), which is
+the layout both a contributor's machine and the CI job that builds the goldens
+(.github/workflows/test.yml) have.  It used to default to one cluster path that
+only its author could reach, which is why that job never once built a fixture.
 
 Every ``.metacool`` / ``.mmetacool`` here is produced by the public
 ``metacooler`` CLI, and every ``.cool`` / ``.mcool`` by the public ``cooler``
@@ -46,7 +53,23 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO / "test" / "fixtures"
-DEFAULT_DATA = Path("/pasteur/helix/users/jaseriza/repos/metacooler/tests/data")
+SIBLING_DATA = REPO.parent / "metacooler" / "tests" / "data"
+
+
+def default_data() -> Path | None:
+    """Where the metacooler test data is when ``--data`` is not given.
+
+    The environment first, because CI checks metacooler out wherever the runner
+    puts it; then a checkout beside this repository. ``None`` rather than a
+    guess, so the refusal in ``main`` can say what to do instead of failing deep
+    inside the first CLI call on a path that was never there.
+    """
+    named = os.environ.get("METACOOLER_TEST_DATA")
+    if named:
+        return Path(named)
+    if SIBLING_DATA.is_dir():
+        return SIBLING_DATA
+    return None
 
 log = logging.getLogger("make_fixtures")
 
@@ -495,7 +518,13 @@ def build(out: Path, data: Path) -> list[dict]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
+    parser.add_argument(
+        "--data",
+        type=Path,
+        default=None,
+        help="metacooler's tests/data directory "
+        "(default: $METACOOLER_TEST_DATA, then ../metacooler/tests/data)",
+    )
     parser.add_argument(
         "--force",
         action="store_true",
@@ -513,8 +542,17 @@ def main(argv: list[str] | None = None) -> int:
     # already checked for a non-zero exit.
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
 
+    data = args.data if args.data is not None else default_data()
+    if data is None or not data.is_dir():
+        raise SystemExit(
+            "metacooler's test data was not found"
+            + (f" at {data}" if data is not None else "")
+            + ": pass --data, set METACOOLER_TEST_DATA, or clone "
+            "https://github.com/js2264/metacooler beside this repository"
+        )
+
     args.out.mkdir(parents=True, exist_ok=True)
-    descriptors = build(args.out, args.data)
+    descriptors = build(args.out, data)
 
     import cooler
 

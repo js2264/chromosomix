@@ -908,7 +908,7 @@ def chr19(source, target):
 
 for source, target in zip(ATAC, REPS):
     chr19(source, target)
-mr('peaks', '--signal', REPS[0], '--replicate', REPS[1], '--perPeak', 'true', '--width', 150, '--times', 3,
+mr('peaks', '--signal', REPS[0], '--replicate', REPS[1], '--perPeak', '--width', 150, '--times', 3,
    '--minWidth', 75, '--truncate', 100000, '--idr', 0.05, out=YP / 'app', name='peaks',
    analysis='Peak calling (yapc, IDR)')
 YAPC_SCRIPT = script('yapc_idr')
@@ -1318,15 +1318,15 @@ app's, and that is what is compared, raw and balanced.
 
 | | chromosomix | cooltools |
 |---|---|---|
-| counts | raw (`--balance false`, the default), and `--balance true` | `clr_weight_name=None`, and `'weight'` |
+| counts | raw, the default, and `--balance` | `clr_weight_name=None`, and `'weight'` |
 | diagonals | every one | `ignore_diags=0` |
-| outputs | `--cis true --trans true --fraction true`, with total | cis and total |
+| outputs | `--cis --trans --fraction`, with total | cis and total |
 
 ```{python}
 COV = WORK / 'coverage'
-WANTED = ['--cis', 'true', '--trans', 'true', '--fraction', 'true']
+WANTED = ['--cis', '--trans', '--fraction']
 mr('coverage', MOUSE_10K, *WANTED, out=COV / 'raw', name='coverage-raw', analysis='Coverage', label='raw')
-mr('coverage', MOUSE_10K, *WANTED, '--balance', 'true', out=COV / 'balanced', name='coverage-balanced',
+mr('coverage', MOUSE_10K, *WANTED, '--balance', out=COV / 'balanced', name='coverage-balanced',
    analysis='Coverage', label='balanced')
 for kind, extra in (('raw', []), ('balanced', ['weight'])):
     reference(f'cooltools-coverage-{kind}', 'Coverage', 'cooltools',
@@ -1435,14 +1435,14 @@ record('Coverage', 'mouse Hi-C, 10 kb, raw and balanced', f"cooltools {VERSIONS[
 A viewpoint's row of the balanced map, over the whole genome. cooltools' `virtual4c` takes the stored
 pixels between the viewpoint and each chromosome and averages them bin by bin; for a viewpoint one bin
 wide that is the row itself, with no value where the map stores no contact, nor on the viewpoint. The
-app sums the viewpoint's rows and writes 0 where nothing is stored; `--cis false` reads every
+app sums the viewpoint's rows and writes 0 where nothing is stored; `--no-cis` reads every
 chromosome. The viewpoints are the 10 kb bins holding the 5′-most TSS of three genes of pluripotency,
 *Sox2*, *Nanog* and *Pou5f1*.
 
 | | chromosomix | cooltools |
 |---|---|---|
 | viewpoint | `--anchor`, one bin | `viewpoint`, one bin |
-| scope | `--cis false`: the whole genome | the whole genome |
+| scope | `--no-cis`: the whole genome | the whole genome |
 | counts | balanced (the file's weights) | `clr_weight_name='weight'` |
 
 ```{python}
@@ -1459,7 +1459,7 @@ def promoter_bin(gene, binsize=10_000):
 
 VIEWPOINTS = {gene: promoter_bin(gene) for gene in ('Sox2', 'Nanog', 'Pou5f1')}
 for gene, (chrom, start, end) in VIEWPOINTS.items():
-    mr('fourc', MOUSE_10K, '--anchor', f'{chrom}:{start + 1:,}-{end:,}', '--cis', 'false', out=V4C / gene,
+    mr('fourc', MOUSE_10K, '--anchor', f'{chrom}:{start + 1:,}-{end:,}', '--no-cis', out=V4C / gene,
        name=f'fourc-{gene}', analysis='Virtual 4C', label=gene)
     reference(f'cooltools-virtual4c-{gene}', 'Virtual 4C', 'cooltools',
               [PYTHON, script('cooltools_virtual4c'), MOUSE_10K, f'{chrom}:{start}-{end}', OUT, THREADS],
@@ -2010,7 +2010,7 @@ random draws, so the two nulls are compared as distributions.
 | | chromosomix | bedtools |
 |---|---|---|
 | observed | `overlap --a peaks --b promoters` | `jaccard`; `intersect -u`, both ways |
-| null | `--shuffle true --iterations 1000` | `shuffle -chrom -seed 1…1000`, then the same |
+| null | `--shuffle --iterations 1000` | `shuffle -chrom -seed 1…1000`, then the same |
 | lengths | mm10's, from `--sequence` | mm10's, as a genome file |
 
 ```{python}
@@ -2025,7 +2025,7 @@ promoters[promoters['chrom'] == 'chr19'].sort_values(['start', 'end'])[BED6].to_
 pd.read_csv(f'{MM10}.fai', sep='\t', header=None, usecols=[0, 1]).to_csv(GENOME, sep='\t', header=False, index=False)
 ITERATIONS = 1000
 mr('overlap', '--sequence', MM10, '--features', PEAKS_BED, '--features', PROMOTERS, '--a', PEAKS_BED,
-   '--b', PROMOTERS, '--shuffle', 'true', '--iterations', ITERATIONS, '--seed', 1, out=OV / 'app', name='overlap',
+   '--b', PROMOTERS, '--shuffle', '--iterations', ITERATIONS, '--seed', 1, out=OV / 'app', name='overlap',
    analysis='Interval overlap')
 reference('bedtools-overlap', 'Interval overlap', 'bedtools',
           [PYTHON, script('bedtools_overlap'), PEAKS_BED, PROMOTERS, GENOME, ITERATIONS, OUT],

@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { framedPhrase, windowPhrase } from '@/ui/MatrixPanel'
+import { framedPhrase, windowPhrase } from '@/ui/mapSummary'
 import { locusAxisFrom, type AxisRun } from '@/render/locus'
 import { parseLocus } from '@/genome/assembly'
 

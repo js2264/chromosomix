@@ -28,6 +28,9 @@ export interface HoverPlace {
   source: string
 }
 
+/** What a contact map calls itself when it publishes the place under its pointer. */
+export const HOVER_SOURCE_MAP = 'map'
+
 let current: HoverPlace | null = null
 const listeners = new Set<(place: HoverPlace | null) => void>()
 

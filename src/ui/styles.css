@@ -3786,7 +3786,7 @@ p {
 
    The ceiling is a `max-height` on the wrap instead, and it is the same number:
    a band taller than the height a square map would have claimed has stopped
-   being a band, and it is also the number `MatrixPanel.measureRoom` reads back
+   being a band, and it is also the number `MapBox.measureRoom` reads back
    to bound the handle — which is why it is a *length* on an element rather than
    the custom property it is written from. A custom property comes back from
    `getComputedStyle` as the `clamp()` that was written, unresolved. */
@@ -3818,7 +3818,7 @@ p {
      the handles existed — laid out exactly as it was. */
   width: var(--map-size, var(--map-budget));
   /* The ceiling both presentations are bounded by, and the number
-     `MatrixPanel.measureRoom` reads back to bound the handles: a *length* on an
+     `MapBox.measureRoom` reads back to bound the handles: a *length* on an
      element, because a custom property comes back from `getComputedStyle` as the
      unresolved `clamp()` it was written from. The panel clamps `--map-size` to it,
      so this never fights the aspect ratio above. */
@@ -11658,6 +11658,37 @@ span.deck-name {
   border: 1px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 2px;
+}
+
+/* What a chart's tooltip says (`figures/tooltip.ts`). The library places the
+   box and paints it through the CSSOM; what is inside is our markup, and it is
+   styled here rather than by `style=` attributes, because the site's policy
+   refuses those (§11) — the library's own markup carried nothing else, and on
+   a page that enforces the policy it arrived as bare text with its swatches
+   gone. The type size and the ink are inherited from the box, which takes them
+   from the figure's own text size. */
+.figure-tip-head {
+  margin-bottom: 0.3em;
+}
+
+.figure-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  line-height: 1.5;
+}
+
+.figure-tip-swatch {
+  flex: none;
+  width: 0.75em;
+  height: 0.75em;
+}
+
+.figure-tip-value {
+  margin-left: auto;
+  padding-left: 1.5em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* In the dialog the chart takes the room it is given rather than choosing a

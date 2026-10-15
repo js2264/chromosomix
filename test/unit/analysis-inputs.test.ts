@@ -6,7 +6,7 @@
  * *No loop set was chosen*, over a Pairs dropdown that had been empty since
  * before the file existed. `AnalysisWorkspace` subscribed to the runner and to
  * nothing else, and the only thing that pushed a fresh `AnalysisContext` into
- * the form was `Session.syncAnalysis`, which runs after a *view* mounts.
+ * the form was `SessionAnalysis.sync`, which runs after a *view* mounts.
  * Dropping a file mounts no view.
  *
  * The subscription is guarded rather than unconditional, because the store fires

@@ -13,11 +13,13 @@ import { typedLocusToRegion } from '../genome/assembly'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, titleWhenCut } from './dom'
-import { MatrixPanel, axisRegion, blockSummary, poolingNote,
+import { MatrixPanel,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
  type FigureSubject} from './MatrixPanel'
+import { axisRegion } from './mapSelection'
+import { blockSummary, poolingNote } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { SearchBox, locusPlaceholder } from './SearchBox'

@@ -53,10 +53,11 @@
  * clamps what needs clamping and drops what it does not recognise. So a patch is
  * merged, **serialised, and parsed back** through `state/ViewState.ts`. Nothing
  * here decides what a legal view state is; `parseViewState` does, as it does for
- * a pasted link and a restored tab. One parser, three roads.
+ * a pasted link, a restored tab, and — through `viewStateOf`, which this shares
+ * with them — a workspace file and a share link. One parser, every road.
  */
 
-import { parseViewState, serialiseViewState } from '../state/ViewState'
+import { serialiseViewState, viewStateOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { COMMIT, VERSION } from '../version'
 
@@ -101,12 +102,12 @@ export interface MessageSource {
 /**
  * Lay a patch over a view state, then read the result as if it were a link.
  *
- * The cast is the one liberty taken, and it is bounded by the two lines above
- * it: only string, number and boolean values survive the merge, and
- * `serialiseViewState` reads none but the keys it knows — so what reaches
- * `parseViewState` is a hash body of exactly the shape the address bar produces,
- * whatever the host sent. An array, an object or a function in the patch is not
- * a view-state value and is dropped rather than stringified into one.
+ * Only string, number and boolean values are laid over, so an array, an object
+ * or a function in the patch leaves the key as it was rather than being
+ * stringified into a value — and the merged state is then read by
+ * `viewStateOf`, the one reader every view state from outside goes through (a
+ * workspace file's and a share link's too), which reads it as the hash body the
+ * address bar would have carried, whatever the host sent.
  *
  * `null` **removes** a key, which is the only way a host can say "no locus" —
  * `undefined` does not survive `postMessage`'s structured clone, so it cannot be
@@ -124,7 +125,7 @@ export function mergeState(
       merged[key] = value
     }
   }
-  return parseViewState(serialiseViewState(merged as unknown as ViewState))
+  return viewStateOf(merged)
 }
 
 /** `true` for a message shaped like one of ours, whoever sent it. */

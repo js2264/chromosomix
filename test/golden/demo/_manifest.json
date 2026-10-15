@@ -1,0 +1,39 @@
+{
+ "bucket": "https://rsglab-data.s3.eu-west-3.amazonaws.com/",
+ "cooler_version": "0.10.4",
+ "generator": "scripts/make_demo_golden.py",
+ "maps": [
+  {
+   "bytes": 14497503,
+   "file": "Mock_microbial_community.metacool",
+   "golden": "Mock_microbial_community_metacool.json",
+   "md5": "6532ac85ad13ad6b9b6ca507320ebd5f",
+   "path": "demo/metagenomics/mock-community/Mock_microbial_community.metacool",
+   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/metagenomics/mock-community/Mock_microbial_community.metacool"
+  },
+  {
+   "bytes": 34620120,
+   "file": "Mock_microbial_community.mmetacool",
+   "golden": "Mock_microbial_community_mmetacool.json",
+   "md5": "59d1a598f2bedf205909e978aeec8a3f",
+   "path": "demo/metagenomics/mock-community/Mock_microbial_community.mmetacool",
+   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/metagenomics/mock-community/Mock_microbial_community.mmetacool"
+  },
+  {
+   "bytes": 18985732,
+   "file": "Yeast_microC_G2M_1kb.cool",
+   "golden": "Yeast_microC_G2M_1kb_cool.json",
+   "md5": "63319f9677ec2a49201fefcb042baf45",
+   "path": "demo/yeast/Yeast_microC_G2M_1kb.cool",
+   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool"
+  },
+  {
+   "bytes": 45619825,
+   "file": "Ecoli.mcool",
+   "golden": "Ecoli_mcool.json",
+   "md5": "16b54d938829caa845f3a0b9f0db7017",
+   "path": "demo/ecoli/Ecoli.mcool",
+   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/ecoli/Ecoli.mcool"
+  }
+ ]
+}

@@ -327,6 +327,13 @@ interface Diffs {
  *    by default, so this is absent more often than not.
  * 3. **A reference we already hold** — residues of a FASTA open in the same
  *    worker. Costs nothing extra and works over an assembly nobody published.
+ *
+ * Each walks an aligned op only as far as the read has bases for it, and the
+ * third only where the reference is held: an op's length is twenty-eight bits
+ * of the file, and walking it whole, base by base, was hours of one corrupt
+ * record (§10). A real read's aligned bases are all its own, so nothing a real
+ * read says is lost — and a read stored without its bases (`*`) no longer has
+ * the bytes after them compared as though they were.
  */
 function mismatches(
   bytes: Uint8Array,
@@ -344,7 +351,8 @@ function mismatches(
       const op = packed & 0xf
       const length = packed >>> 4
       if (op === 8) {
-        for (let k = 0; k < length; k++) {
+        const span = Math.min(length, cursor.seqLength - queryPos)
+        for (let k = 0; k < span; k++) {
           out.pos.push(refPos + k)
           out.base.push(baseAt(bytes, cursor.seqAt, queryPos + k))
         }
@@ -368,13 +376,15 @@ function mismatches(
   if (reference !== undefined) {
     let refPos = cursor.pos
     let queryPos = 0
+    const referenceEnd = reference.start + reference.bases.length
     for (const packed of ops) {
       const op = packed & 0xf
       const length = packed >>> 4
       if (consumesReference(op) && consumesQuery(op)) {
-        for (let k = 0; k < length; k++) {
+        const from = Math.max(0, reference.start - refPos)
+        const to = Math.min(length, referenceEnd - refPos, cursor.seqLength - queryPos)
+        for (let k = from; k < to; k++) {
           const at = refPos + k - reference.start
-          if (at < 0 || at >= reference.bases.length) continue
           const want = BASE_CODE[reference.bases[at]]
           const have = baseAt(bytes, cursor.seqAt, queryPos + k)
           // Only a definite disagreement between two known bases. An `N` on
@@ -438,7 +448,9 @@ function fromMd(
     const op = packed & 0xf
     const length = packed >>> 4
     if (consumesReference(op) && consumesQuery(op)) {
-      for (let k = 0; k < length; k++) {
+      // As far as the read has bases: see {@link mismatches}.
+      const span = Math.min(length, cursor.seqLength - queryPos)
+      for (let k = 0; k < span; k++) {
         refOf.push(refPos + k)
         queryOf.push(queryPos + k)
       }

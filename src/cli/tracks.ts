@@ -36,10 +36,14 @@
  * {@link trackFor} falls back the way `readerFor` does for a reference — by base
  * name, then to the only track loaded, there being nothing else it could have
  * meant.
+ *
+ * A track named by an **address** is filed under the address and read from the
+ * copy `cli/remote.ts` fetched, so the key, the name a figure calls it by and
+ * the framing a run with no map records are the reader's words, and only the
+ * bytes come from the temporary directory.
  */
 
 import { open, readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
 
 import { BigWig } from '@gmod/bbi'
 import { LocalFile } from 'generic-filehandle2'
@@ -61,6 +65,7 @@ import { bbiMagic } from '../annotations/worker/protocol'
 import type { Contig } from '../genome/assembly'
 import { contigIndexOf } from '../genome/naming'
 import { heldReference, type Reference } from './reference'
+import { fileNameOf } from './remote'
 
 /** One loaded track, sampled the way the annotations worker samples it. */
 export interface LoadedTrack {
@@ -82,24 +87,31 @@ export interface LoadedTrack {
  * first data rows for a bedGraph or a wig. A file that is none of those is
  * refused by name, before any map is opened, since a track that cannot be read
  * is a fault in the command line and not in the two hundredth file.
+ *
+ * `localOf` answers where an address's bytes were fetched to, and `undefined`
+ * for a path, which is read where it lies.
  */
-export async function loadTracks(paths: readonly string[]): Promise<Map<string, LoadedTrack>> {
+export async function loadTracks(
+  paths: readonly string[],
+  localOf: (path: string) => Promise<string | undefined> = async () => undefined,
+): Promise<Map<string, LoadedTrack>> {
   const held = new Map<string, LoadedTrack>()
   for (const path of paths) {
     if (held.has(path)) continue
-    held.set(path, await loadTrack(path))
+    held.set(path, await loadTrack(path, (await localOf(path)) ?? path))
   }
   return held
 }
 
-async function loadTrack(path: string): Promise<LoadedTrack> {
-  const name = basename(path)
+/** One track: filed and named by `path`, as it was typed, and read from `at`. */
+async function loadTrack(path: string, at: string): Promise<LoadedTrack> {
+  const name = fileNameOf(path)
   // The four bytes that settle the reader, and only those. A bigWig and a
   // `.2bit` are read by range from here on, and reading one whole to look at
   // its magic cost a second a gigabyte before the run began — and refused any
   // file past 2 GiB, which is `readFile`'s ceiling.
-  const magic = await headOf(path, 4)
-  if (bbiMagic(magic) === 'bigwig') return openBigWig(path, name)
+  const magic = await headOf(at, 4)
+  if (bbiMagic(magic) === 'bigwig') return openBigWig(path, name, at)
   if (bbiMagic(magic) === 'bigbed') {
     throw new Error(
       `${name} is a bigBed, which is a feature set and not a signal: name it with --features.`,
@@ -109,8 +121,8 @@ async function loadTrack(path: string): Promise<LoadedTrack> {
   // settles it — and never read whole: a `.2bit` of a human genome is 800 MB on
   // disk and 3.1 GB unpacked, so the CLI reads it by range just as the browser
   // does (§8.21).
-  if (looksLikeTwoBit(magic)) return twoBitTrack(path, name)
-  const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(path)))
+  if (looksLikeTwoBit(magic)) return twoBitTrack(path, name, at)
+  const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(at)))
   if (looksLikeFasta(bytes)) return gcTrack(path, name, heldReference(parseFasta(bytes)))
   const text = await decodeAnnotationText(bytes)
   // Asked before `sniffSignal` for the reason it is asked before it everywhere:
@@ -147,8 +159,8 @@ async function headOf(path: string, length: number): Promise<Uint8Array> {
 // bigWig
 // ---------------------------------------------------------------------------
 
-async function openBigWig(path: string, name: string): Promise<LoadedTrack> {
-  const bigwig = new BigWig({ filehandle: new LocalFile(path) })
+async function openBigWig(path: string, name: string, at: string): Promise<LoadedTrack> {
+  const bigwig = new BigWig({ filehandle: new LocalFile(at) })
   const header = await bigwig.getHeader()
   const contigs: Contig[] = Object.values(header.refsByNumber)
     .sort((a, b) => a.id - b.id)
@@ -326,9 +338,9 @@ export function gcTrack(path: string, name: string, store: Reference): LoadedTra
  * one pass, so there is no second question about a window to answer from a
  * cache — and a cache sized for a genome-wide run is the memory this avoids.
  */
-async function twoBitTrack(path: string, name: string): Promise<LoadedTrack> {
-  const handle = new LocalFile(path)
-  const file = await openTwoBit((length, position) => handle.read(length, position))
+async function twoBitTrack(path: string, name: string, at: string): Promise<LoadedTrack> {
+  const handle = new LocalFile(at)
+  const file = await openTwoBit((length, position) => handle.read(length, position), (await handle.stat()).size)
   const recordOf = (contig: string): TwoBitRecord | undefined => {
     const direct = file.records.get(contig)
     if (direct !== undefined) return direct
@@ -404,7 +416,7 @@ export function trackFor(
 ): LoadedTrack | undefined {
   return (
     held.get(entry) ??
-    [...held.values()].find((track) => track.name === basename(entry)) ??
+    [...held.values()].find((track) => track.name === fileNameOf(entry)) ??
     (held.size === 1 ? [...held.values()][0] : undefined)
   )
 }

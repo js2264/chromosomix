@@ -309,6 +309,44 @@ export function parseViewState(hash: string): ViewState | null {
   return state
 }
 
+/**
+ * A view state out of an object that came from outside, read as a link is.
+ *
+ * Every road but the address bar hands the app an *object* rather than a hash:
+ * a workspace file, a share link's `#session=`, a published `?config=`, the
+ * durable record a closed browser left, a patch from an embedding page. Each is
+ * laid out here as the hash body it would have been and parsed back, so there
+ * is one definition of a legal view state and every road takes it — a `view`
+ * this build does not have lands on the file's own table, a transform it cannot
+ * draw is dropped, a clip that is not a number is dropped. A workspace's state
+ * used to be cast instead, and one naming `view: 'banana'` left its tab on
+ * "Opening…" for good while an unknown transform threw a `RangeError` from the
+ * renderer (`render/scale.ts`).
+ *
+ * Only the keys this build carries, and only strings, numbers and booleans
+ * among them: an array or an object where a value goes would be stringified by
+ * the serialiser into a legal-looking `1,2` or `[object Object]`, and a string
+ * holding a lone surrogate — which JSON can spell and the URI encoder throws
+ * on — would end the read rather than one key of it. Each is dropped on its
+ * own, as the parser drops what it cannot read.
+ *
+ * `null` where no `uri` survives, which is the parser's answer too.
+ */
+export function viewStateOf(value: unknown): ViewState | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const held = value as Record<string, unknown>
+  const kept: Record<string, string | number | boolean> = {}
+  for (const key of KEY_ORDER) {
+    const one = held[key]
+    if (typeof one === 'number' || typeof one === 'boolean') kept[key] = one
+    else if (typeof one === 'string' && !LONE_SURROGATE.test(one)) kept[key] = one
+  }
+  return parseViewState(serialiseViewState(kept as unknown as ViewState))
+}
+
+/** Half of a surrogate pair standing alone, which `encodeURIComponent` refuses. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+
 function isViewKind(value: string | undefined): value is ViewKind {
   return value !== undefined && (VIEW_KINDS as string[]).includes(value)
 }

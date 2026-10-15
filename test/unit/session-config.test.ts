@@ -12,8 +12,13 @@
  * share link carries one of and what the durable record keeps per tab.
  */
 
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
+import { parseWorkspaceFile } from '@/state/workspace'
 import {
   CONFIG_VERSION,
   applyConfig,
@@ -816,6 +821,97 @@ describe('resolveConfig', () => {
     const config = resolveConfig(relative as NonNullable<typeof relative>, base)
     expect(config.tracks).toHaveLength(2)
     expect(config.tracks[1].source).toEqual({ kind: 'local', name: 'dropped.bw' })
+  })
+})
+
+/**
+ * What a tab is looking at, read by §5.5's own reader rather than believed.
+ *
+ * Every road a tab arrives by comes through `readTab` — a dropped workspace, a
+ * `#session=` link, a `?config=` session, the durable record — and its state was
+ * cast once the `uri` checked out. A file naming `view: 'banana'` then left its
+ * tab on "Opening…" for good, and a transform this build has no name for threw
+ * a `RangeError` from the renderer. The other half is the one that must not
+ * move: every state this app has ever written comes back exactly as written.
+ */
+describe('the state a tab carries', () => {
+  it('reads a hostile one as a link would be read', () => {
+    const hostile = { uri: 'https://example.org/yeast.cool', view: 'banana', transform: 'banana', vmax: 'abc', oe: 'yes' }
+    const read = parseTab(JSON.parse(JSON.stringify({ state: hostile })))
+    expect(read?.state).toStrictEqual({ uri: 'https://example.org/yeast.cool', view: 'genomes', oe: false })
+  })
+
+  it('lands a tab that names no view on the table, rather than on nothing', () => {
+    const read = parseTab({ state: { uri: 'https://example.org/yeast.cool', region: 'IV' } })
+    expect(read?.state).toStrictEqual({ uri: 'https://example.org/yeast.cool', view: 'genomes', region: 'IV' })
+  })
+
+  it('keeps a hostile tab’s state out of everything downstream of the read', () => {
+    // Through the whole road a published session takes: the file, then the
+    // resolution against its URL, which spreads the state it is handed.
+    const file = JSON.stringify({
+      kind: 'chromosomix.workspace',
+      version: 1,
+      active: 0,
+      tabs: [{ state: { uri: 'yeast.cool', view: 'banana', transform: 'banana', vmin: { $gt: 1 } } }],
+    })
+    const read = parseWorkspaceFile(file)
+    if (isRefusal(read)) throw new Error('refused')
+    const resolved = resolveConfig(read.tabs[0], 'https://data.example/demo/yeast/session.chromosomix.json')
+    expect(resolved.state).toStrictEqual({ uri: 'https://data.example/demo/yeast/yeast.cool', view: 'genomes' })
+  })
+
+  it('refuses a tab whose file does not survive the read', () => {
+    // A lone surrogate, which JSON can spell and a link cannot carry: the read
+    // drops the key, and a tab looking at no file is not a tab.
+    expect(readTab({ state: { uri: '\uD800', view: 'region' } })).toEqual({ reason: 'not-a-workspace' })
+  })
+
+  it('reads a tab as the first published workspaces wrote it, unchanged', () => {
+    // The yeast micro-C tab as `demo/yeast/Yeast_microC.metacooler.json` held it
+    // in August 2026, under the format's previous name: a tab never named
+    // itself, so the file's rename left the tab as it was.
+    const old = {
+      version: 1,
+      createdAt: '2026-08-06T00:00:00.000Z',
+      state: {
+        uri: 'Yeast_microC_G2M_1kb.cool',
+        view: 'region',
+        region: 'IV:1000000-1400000',
+        level: 'bin',
+        balance: true,
+        transform: 'log10',
+        colormap: 'default',
+      },
+      tracks: [],
+    }
+    expect(parseTab(JSON.parse(JSON.stringify(old)))?.state).toStrictEqual(old.state)
+  })
+
+  it('restores every published demo workspace exactly as it is written', () => {
+    // The sessions the landing page and the stores open: every tab's state comes
+    // back key for key, so a published figure is the figure it was.
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) walk(path)
+        else if (entry.name.endsWith('.chromosomix.json')) files.push(path)
+      }
+    }
+    walk(fileURLToPath(new URL('../../demo/', import.meta.url)))
+    expect(files.length).toBeGreaterThanOrEqual(10)
+
+    let tabs = 0
+    for (const path of files) {
+      const text = readFileSync(path, 'utf8')
+      const read = parseWorkspaceFile(text)
+      if (isRefusal(read)) throw new Error(`${path} was refused: ${read.reason}`)
+      const written = (JSON.parse(text) as { tabs: Array<{ state: unknown }> }).tabs
+      expect(read.tabs.map((tab) => tab.state)).toStrictEqual(written.map((tab) => tab.state))
+      tabs += read.tabs.length
+    }
+    expect(tabs).toBeGreaterThanOrEqual(19)
   })
 })
 

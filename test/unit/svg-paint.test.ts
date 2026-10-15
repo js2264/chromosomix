@@ -408,7 +408,66 @@ describe('paintSvgString', () => {
   })
 })
 
+/**
+ * A page's content stream, inflated, read the way `vector.test.ts` reads one.
+ *
+ * jsdom's `Blob` has no `stream()`, which the deflate the page writes with and
+ * the inflate here both need; the platform's has, and so does every browser.
+ */
+async function contentOfPage(page: VectorPage): Promise<string> {
+  const { Blob: PlatformBlob } = await import('node:buffer')
+  const shimmed = globalThis.Blob
+  Object.defineProperty(globalThis, 'Blob', { value: PlatformBlob, configurable: true })
+  try {
+    const bytes = new Uint8Array(await (await page.toBlob({ created: new Date(0) })).arrayBuffer())
+    const latin1 = (raw: Uint8Array): string => new TextDecoder('latin1').decode(raw)
+    const header = /4 0 obj\n<< \/Length (\d+)( \/Filter \/FlateDecode)? >>\nstream\n/.exec(latin1(bytes))
+    if (header === null) throw new Error('no content stream')
+    const at = header.index + header[0].length
+    const raw = bytes.slice(at, at + Number(header[1]))
+    if (header[2] === undefined) return latin1(raw)
+    const stream = new Blob([raw as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
+    return latin1(new Uint8Array(await new Response(stream).arrayBuffer()))
+  } finally {
+    Object.defineProperty(globalThis, 'Blob', { value: shimmed, configurable: true })
+  }
+}
+
+/** Each painting operator in a content stream, with the path in front of it. */
+function paintsOf(content: string): Array<{ op: string; path: string[] }> {
+  const paints: Array<{ op: string; path: string[] }> = []
+  let path: string[] = []
+  for (const line of content.split('\n')) {
+    if (/ [mlc]$| re$|^h$/.test(line)) path.push(line)
+    else if (/^(?:f\*?|S|W\*? n)$/.test(line)) {
+      paints.push({ op: line, path })
+      path = []
+    }
+  }
+  return paints
+}
+
 describe('the replay onto a page', () => {
+  // `zrender` draws a box plot's box, whiskers and median as one path, filled
+  // and then stroked. The page let go of a path at its first paint, so the
+  // stroke reached the PDF as a bare `S`, and every exported box plot lost its
+  // outline, its whiskers and its median.
+  it('strokes a path it has filled, with the path in front of both', async () => {
+    const page = new VectorPage(100, 100)
+    paintSvgString(
+      `<svg width="100" height="100">
+        <path d="M30 40L70 40L70 60L30 60Z M50 40L50 20M40 20L60 20M50 60L50 80M40 80L60 80M30 50L70 50"
+          fill="#ffffff" stroke="#5070dd"/>
+      </svg>`,
+      page.ctx,
+    )
+    const paints = paintsOf(await contentOfPage(page))
+    expect(paints.map((paint) => paint.op)).toEqual(['f', 'S'])
+    expect(paints[1].path).toEqual(paints[0].path)
+    // The box, both whiskers, both caps and the median: six subpaths.
+    expect(paints[1].path.filter((segment) => segment.endsWith(' m'))).toHaveLength(6)
+  })
+
   it('reaches a PDF as curves and text rather than as pixels', async () => {
     const page = new VectorPage(200, 100)
     paintSvgString(

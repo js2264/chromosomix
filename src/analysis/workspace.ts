@@ -336,11 +336,11 @@ export class AnalysisWorkspace {
     })
 
     // …and the *store*, because a task's inputs are the loaded files and nothing
-    // else told the form when one arrived. `syncAnalysis` runs after a view
-    // mounts, and dropping a BEDPE mounts no view — so a reader who opened the
-    // panel, dropped a loop table and pressed Run got "No loop set was chosen"
-    // over a dropdown that had been empty since before the file existed. Which
-    // reads as the task being broken rather than as the panel being stale.
+    // else told the form when one arrived. `SessionAnalysis.sync` runs after a
+    // view mounts, and dropping a BEDPE mounts no view — so a reader who opened
+    // the panel, dropped a loop table and pressed Run got "No loop set was
+    // chosen" over a dropdown that had been empty since before the file existed.
+    // Which reads as the task being broken rather than as the panel being stale.
     //
     // Guarded by a signature rather than refreshed on every change: the store
     // fires on each tick of a colour drag, and `setContext` refills every
@@ -857,7 +857,7 @@ export class AnalysisWorkspace {
    * How many bins that grid has — the length of a vector laid out over it.
    *
    * **Not `context.nBins`, and the difference is the whole of a bug.** A matrix
-   * bin count is what a *map* has, and `Session.analysisContext` reports zero
+   * bin count is what a *map* has, and `SessionAnalysis.context` reports zero
    * for a session that has none: a 1D browser session (§5.8) is given a real bin
    * grid — a browsing resolution and a `startBin` per sequence, so a per-bin
    * result computed from a track or a sequence is a lane there like anywhere

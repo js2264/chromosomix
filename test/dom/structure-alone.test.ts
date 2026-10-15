@@ -60,7 +60,8 @@ interface Innards {
   session: Session
   assembly: Assembly | null
   annotations: { store: AnnotationStore } | null
-  deck: PanelDeck | null
+  /** The session's deck (`SessionDeck`), and the panels it has built, if any. */
+  deck: { grid: PanelDeck | null }
   structureAlone: boolean
   setUpBrowserAnnotations(assembly: Assembly): void
   mountBrowser(state: { uri: string; view: string }): void
@@ -111,35 +112,35 @@ function opened(options: { alone: boolean; track?: boolean }) {
 describe('a structure file opened on its own', () => {
   it('is drawn in its own cell, with the empty tracks it opened hidden', () => {
     const { inside, model } = opened({ alone: true })
-    const deck = inside.deck
+    const deck = inside.deck.grid
     expect(deck).not.toBeNull()
     expect(deck?.shownStructures()).toEqual([model])
     expect(deck?.leadShown).toBe(false)
     // The deck frames the browser, parked behind the model, and its bar offers
     // it back under what it is rather than under the model's own file name.
     expect(inside.session.contentEl.querySelector('.deck-panel.is-lead.is-parked .browser-canvas')).not.toBeNull()
-    expect(inside.deck?.el.querySelector('.deck-show-lead')?.textContent).toBe('show the 1D browser')
+    expect(inside.deck.grid?.el.querySelector('.deck-show-lead')?.textContent).toBe('show the 1D browser')
     expect(inside.session.store.state?.maps).toBe('3d')
   })
 
   it('keeps the tracks on screen where something is drawn on them', () => {
     const { inside, model } = opened({ alone: true, track: true })
-    expect(inside.deck?.shownStructures()).toEqual([model])
-    expect(inside.deck?.leadShown).toBe(true)
+    expect(inside.deck.grid?.shownStructures()).toEqual([model])
+    expect(inside.deck.grid?.leadShown).toBe(true)
   })
 
   it('does nothing where the file was not alone, or the session is coming back', () => {
     // A restore names its own deck in the link; a structure among other files
     // is opened by the road every dropped structure takes.
     const { inside } = opened({ alone: false })
-    expect(inside.deck).toBeNull()
+    expect(inside.deck.grid).toBeNull()
   })
 
   it('does it once: a later mount of the same browser leaves the reader’s arrangement alone', () => {
     const { inside } = opened({ alone: true })
-    inside.deck?.showLead()
+    inside.deck.grid?.showLead()
     inside.mountBrowser({ uri: 'yeast.bed3d', view: 'browser' })
-    expect(inside.deck?.leadShown).toBe(true)
+    expect(inside.deck.grid?.leadShown).toBe(true)
   })
 })
 
@@ -172,7 +173,7 @@ describe('a session coming back with its models', () => {
     inside.assembly = assembly
     inside.setUpBrowserAnnotations(assembly)
     expect(inside.annotations?.store.entries.filter((entry) => entry.kind === 'structure')).toHaveLength(2)
-    expect(inside.deck).toBeNull()
+    expect(inside.deck.grid).toBeNull()
     expect(session.store.state?.maps).toBe('tracks')
   })
 })

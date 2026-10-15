@@ -15,7 +15,7 @@ import type { TrackSampleSet } from '../../src/annotations/types'
 import type { LaneFrame } from '../../src/render/lane'
 import { LocusAxis, bpAt, unitAt, unitSpan, type LocusSegment } from '../../src/render/locus'
 import { profileOf } from '../../src/render/tracks'
-import { bandRegion } from '../../src/ui/MatrixPanel'
+import { bandRegion } from '../../src/ui/mapSelection'
 
 const I = 100_000
 

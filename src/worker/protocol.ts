@@ -537,7 +537,7 @@ export interface AxisGroup {
    * axis run is asked, "is the other axis the same sequence as this one".
    * `contig × the same contig` over two different windows gets two different
    * origins and one `unitBin`, and the genomic distance across such a cell is
-   * exactly what needs to tell them apart (`MatrixPanel.separationOf`).
+   * exactly what needs to tell them apart (`ui/blockAxes.separationOf`).
    *
    * A number rather than the name because a metagenome may hold two `contig_1`s
    * in two MAGs. Absent above bin level, where a cell is a whole sequence.

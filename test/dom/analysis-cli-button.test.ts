@@ -294,7 +294,7 @@ describe('the button', () => {
    * about. The status line counts them rather than repeating them, which is
    * what stops the drawer becoming a second place they can go stale.
    */
-  it('carries what a shell cannot be told on the clipboard, and counts it', async () => {
+  it('carries a caveat on the clipboard, and counts it', async () => {
     const view = open(
       insulation,
       result('insulation', { window: 10 }, { uri: 'https://example.org/yeast.mcool' }),

@@ -56,7 +56,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{}"
+   "value": "{\"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 39320, \"inter_contig_intra_genome\": 30179, \"inter_contig_intra_genome_fraction\": 0.60358, \"inter_genome\": 9141, \"inter_genome_fraction\": 0.18282, \"intra_contig\": 10680, \"intra_contig_long\": 1338, \"intra_contig_long_fraction\": 0.02676, \"intra_contig_short\": 9342, \"intra_contig_short_fraction\": 0.18684, \"intra_genome\": 40859, \"intra_genome_fraction\": 0.81718, \"n_contacts\": 50000, \"n_pairs_discarded\": 0, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.7864, \"version\": 1}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -582,6 +582,31 @@
     "dtype": "|S12",
     "kind": "S",
     "length": 11
+   },
+   "qc_inter_contig_intra_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_inter_genome": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_long": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_contig_short": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "qc_intra_genome_ratio": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 11
    }
   },
   "indexes": {
@@ -671,13 +696,23 @@
    "name",
    "length",
    "n_contigs",
-   "n_bins"
+   "n_bins",
+   "qc_intra_contig_short",
+   "qc_intra_contig_long",
+   "qc_inter_contig_intra_genome",
+   "qc_inter_genome",
+   "qc_intra_genome_ratio"
   ],
   "dtypes": {
    "length": "<i8",
    "n_bins": "<i8",
    "n_contigs": "<i4",
-   "name": "|S12"
+   "name": "|S12",
+   "qc_inter_contig_intra_genome": "<i8",
+   "qc_inter_genome": "<i8",
+   "qc_intra_contig_long": "<i8",
+   "qc_intra_contig_short": "<i8",
+   "qc_intra_genome_ratio": "<f8"
   },
   "length": 11,
   "rows": [
@@ -685,67 +720,122 @@
     "length": 42000,
     "n_bins": 42,
     "n_contigs": 5,
-    "name": "__unbinned__"
+    "name": "__unbinned__",
+    "qc_inter_contig_intra_genome": 3097,
+    "qc_inter_genome": 1991,
+    "qc_intra_contig_long": 1,
+    "qc_intra_contig_short": 752,
+    "qc_intra_genome_ratio": 0.6591337099811676
    },
    {
     "length": 60000,
     "n_bins": 60,
     "n_contigs": 3,
-    "name": "MAG_01"
+    "name": "MAG_01",
+    "qc_inter_contig_intra_genome": 2353,
+    "qc_inter_genome": 1269,
+    "qc_intra_contig_long": 293,
+    "qc_intra_contig_short": 911,
+    "qc_intra_genome_ratio": 0.7370493162038956
    },
    {
     "length": 124000,
     "n_bins": 124,
     "n_contigs": 4,
-    "name": "MAG_02"
+    "name": "MAG_02",
+    "qc_inter_contig_intra_genome": 2718,
+    "qc_inter_genome": 1682,
+    "qc_intra_contig_long": 292,
+    "qc_intra_contig_short": 632,
+    "qc_intra_genome_ratio": 0.6840721262208865
    },
    {
     "length": 80000,
     "n_bins": 80,
     "n_contigs": 5,
-    "name": "MAG_03"
+    "name": "MAG_03",
+    "qc_inter_contig_intra_genome": 2990,
+    "qc_inter_genome": 2014,
+    "qc_intra_contig_long": 115,
+    "qc_intra_contig_short": 633,
+    "qc_intra_genome_ratio": 0.6498609179415855
    },
    {
     "length": 24000,
     "n_bins": 24,
     "n_contigs": 3,
-    "name": "MAG_04"
+    "name": "MAG_04",
+    "qc_inter_contig_intra_genome": 2501,
+    "qc_inter_genome": 1314,
+    "qc_intra_contig_long": 87,
+    "qc_intra_contig_short": 1178,
+    "qc_intra_genome_ratio": 0.7413385826771653
    },
    {
     "length": 41000,
     "n_bins": 41,
     "n_contigs": 4,
-    "name": "MAG_05"
+    "name": "MAG_05",
+    "qc_inter_contig_intra_genome": 2927,
+    "qc_inter_genome": 1720,
+    "qc_intra_contig_long": 61,
+    "qc_intra_contig_short": 859,
+    "qc_intra_genome_ratio": 0.6910364648823424
    },
    {
     "length": 83000,
     "n_bins": 83,
     "n_contigs": 5,
-    "name": "MAG_06"
+    "name": "MAG_06",
+    "qc_inter_contig_intra_genome": 2964,
+    "qc_inter_genome": 1973,
+    "qc_intra_contig_long": 115,
+    "qc_intra_contig_short": 648,
+    "qc_intra_genome_ratio": 0.653859649122807
    },
    {
     "length": 30000,
     "n_bins": 30,
     "n_contigs": 3,
-    "name": "MAG_07"
+    "name": "MAG_07",
+    "qc_inter_contig_intra_genome": 2420,
+    "qc_inter_genome": 1330,
+    "qc_intra_contig_long": 56,
+    "qc_intra_contig_short": 1113,
+    "qc_intra_genome_ratio": 0.7296198414311852
    },
    {
     "length": 49000,
     "n_bins": 49,
     "n_contigs": 4,
-    "name": "MAG_08"
+    "name": "MAG_08",
+    "qc_inter_contig_intra_genome": 2800,
+    "qc_inter_genome": 1596,
+    "qc_intra_contig_long": 61,
+    "qc_intra_contig_short": 843,
+    "qc_intra_genome_ratio": 0.6988679245283019
    },
    {
     "length": 103000,
     "n_bins": 103,
     "n_contigs": 5,
-    "name": "MAG_09"
+    "name": "MAG_09",
+    "qc_inter_contig_intra_genome": 2992,
+    "qc_inter_genome": 2092,
+    "qc_intra_contig_long": 178,
+    "qc_intra_contig_short": 595,
+    "qc_intra_genome_ratio": 0.6428205565989414
    },
    {
     "length": 25000,
     "n_bins": 25,
     "n_contigs": 3,
-    "name": "MAG_10"
+    "name": "MAG_10",
+    "qc_inter_contig_intra_genome": 2417,
+    "qc_inter_genome": 1301,
+    "qc_intra_contig_long": 79,
+    "qc_intra_contig_short": 1178,
+    "qc_intra_genome_ratio": 0.7384924623115577
    }
   ]
  },
@@ -13476,7 +13566,30 @@
    ]
   }
  ],
- "metadata": {},
+ "metadata": {
+  "qc": {
+   "binsize": 1000,
+   "distance_threshold": 10000,
+   "inter_contig": 39320,
+   "inter_contig_intra_genome": 30179,
+   "inter_contig_intra_genome_fraction": 0.60358,
+   "inter_genome": 9141,
+   "inter_genome_fraction": 0.18282,
+   "intra_contig": 10680,
+   "intra_contig_long": 1338,
+   "intra_contig_long_fraction": 0.02676,
+   "intra_contig_short": 9342,
+   "intra_contig_short_fraction": 0.18684,
+   "intra_genome": 40859,
+   "intra_genome_fraction": 0.81718,
+   "n_contacts": 50000,
+   "n_pairs_discarded": 0,
+   "n_pairs_read": 50000,
+   "source": "pairs",
+   "trans_contig_ratio": 0.7864,
+   "version": 1
+  }
+ },
  "metadata_volatile_keys": [
   "commands"
  ],
