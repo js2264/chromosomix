@@ -14,6 +14,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome's map drawn as a circle (§7.6, a dev feature).** Each genome an arc as long as it
+  is, the contacts between two genomes a chord as wide as they are, the tracks the map draws as rings
+  inside — the map's own block drawn round, so nothing more is read and the square comes back at
+  once. Turned on by the orbit toggle on the Map card, by *circle →* at the end of the Genomes
+  table's row (the ticked genomes, or every one), or by *Circle* in the palette; `circle=true` in the
+  link, kept as the reader navigates, so a genome clicked on the circle opens its contigs drawn round.
+  The whole metagenome is genomes at `genome × genome` and contigs under each genome's band at
+  `contig × contig`; ticked genomes are cut into genomes or, from the card's `sections` row
+  (`sections=contigs`), into their contigs. A hovered genome lights its partners, tinted and counted
+  by their contacts; a chord says what it carries and each end's share; an arc opens its genome or
+  contig, a chord the pair. The rings — bigWigs, bedGraphs, BEDs, genome and contig metadata — are
+  named at twelve o'clock and dragged in or out to reorder them, and the Tracks card and every map's
+  lanes follow. Chords are raw contacts for now, the strongest 3,000 kept and the `chords` row
+  thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
+  `node scripts/ui-circle.mjs` drives it on the mock community.
+
 - **Tab goes on to the next field of its kind (§26.8).** In any field edited in place, Tab now takes
   what was typed, as Enter does, and puts the caret in the next field of the same kind — Shift+Tab
   the one before — and past the last lets it go: a track's name to the next track's, down the

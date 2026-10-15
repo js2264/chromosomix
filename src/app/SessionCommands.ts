@@ -81,6 +81,7 @@ export class SessionCommands {
     const stepNoun = state?.view === 'genome' ? 'genome' : 'sequence'
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
+    const drawnRound = this.session.current?.panel?.circleLit ?? null
     if (this.session.assembly !== null) {
       return [
         {
@@ -358,6 +359,24 @@ export class SessionCommands {
         enabled: this.session.current?.panel?.canCentreOnDiagonal === true || diagonalLocked(),
         run: () => void toggleDiagonalLock(),
       },
+      // The circle (§7.6), titled by its noun and wearing its state. Listed
+      // wherever the dev features are on and greyed where the map cannot be
+      // drawn round, as the palette greys rather than changes shape.
+      ...(devFeature('circle')
+        ? [
+            {
+              id: 'map-circle',
+              group: 'View' as const,
+              title: 'Circle',
+              hint:
+                'The map drawn round — each genome an arc, chords as wide as their contacts, the ' +
+                'tracks as rings — the orbit toggle on the Map card.',
+              ...(drawnRound === null ? {} : { state: chip(drawnRound) }),
+              enabled: this.session.current?.panel?.canToggleCircle === true,
+              run: () => this.session.current?.panel?.toggleCircle(),
+            },
+          ]
+        : []),
       {
         id: 'map-fit',
         group: 'View',

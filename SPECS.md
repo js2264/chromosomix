@@ -824,7 +824,9 @@ each on the diagonal, every pair's block off it (§5.3, §7.3). One ticked row i
 and two are named as a pair, because a name says what is about to open where a count does not.
 Beside them, *whole metagenome →* (`w`) opens the whole file at once (§7.3), and a locus box goes
 straight to a window without opening the genome around it first — a genome's name, a contig, or a
-contig with coordinates, read 1-based and inclusive (§26.1).
+contig with coordinates, read 1-based and inclusive (§26.1). Last in the row, *circle →* opens the
+ticked genomes drawn round, or every genome where none is ticked (§7.6, a dev feature): its tooltip
+says which of the two a press will draw, so it is never greyed.
 
 The four columns the format guarantees are labelled in the application's own words — `name`,
 `length`, `contigs`, `bins` — with the file's identifier in the header's tooltip. Only those four:
@@ -2706,6 +2708,119 @@ being looked at* rather than how it is shaded, so §5.5's rule applies: a recipi
 sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
 key would send a recipient a picture whose single-cell features had been averaged away with nothing
 on screen saying so.
+
+### 7.6 The map drawn round — a metagenome as a circle
+
+A dev feature (§29.3). A metagenome's map can be drawn **round**: each section of its axis an arc of a
+circle as long as the section is, the contacts between two sections a chord as wide as they are, and
+the tracks the map draws beside itself as rings. It is **the map's own block drawn another way** —
+the same cells, read once, at the grid the square holds — so turning it on reads nothing, turning it
+off is immediate, and the square and the circle never disagree about what the block says.
+**Built**: `render/circle.ts` (the sections, the chords, the geometry, the hit test),
+`render/circleRings.ts` (the rings), `ui/CircleView.ts` (the canvas, the hover, the clicks, the
+drag), and the toggle and rows on the Map card.
+
+**Only on a metagenome, and only on a square block.** Offered on a file with a genome layer, in every
+view whose block has one axis on both sides: the whole metagenome at its three levels (§7.3), a
+selection of ticked genomes or contigs (§5.3), and one genome (§5.2). A pair of genomes is a
+rectangle with no diagonal to fold round, and a circle drawn of it would invent the half it never
+read; a window of one sequence has nothing to join. On those two the toggle is greyed with that
+reason, as it is on a block of fewer than two sections.
+
+**Three doors, one setting.** The Map card's *picture* row carries the toggle — the orbit mark, after
+the refit, lit while the circle is drawn (§26.3) — and while it is lit the card says only what the
+circle answers to: the transform and the colours stay, because they colour the chords, and two rows
+of the circle's own appear, `sections` and `chords`, while the square's — its other picture toggles,
+the score, the despeckle, the clip, the comparison, the level and the overlays — step aside and come
+back as they were. The Genomes table's *circle →*, last in its row (§5.1), opens the ticked genomes
+drawn round, or every genome where none is ticked: the whole metagenome at `genome × genome`, behind
+the same gate as *whole metagenome →* (§7.3), one ticked genome as its contigs, several as one map.
+The palette's *Circle* is the toggle's press, with its state on the row. All three write one key,
+`circle=true`, absent for the square, on the turn's rule (§17): a **derived** key, so a change
+repaints from the block in memory — on the gated whole metagenome a re-read would put the picture
+back behind its button — and a **reading**, kept across a navigation, so a click on a genome of the
+circle lands on that genome's contigs drawn round.
+
+**The sections are what the axis is divided by**, the rule the square's separators and labels follow:
+a `genome × genome` block is genomes; a `contig × contig` block is contigs, grouped under a band that
+names each genome; a bin-level block divided by genome — the whole metagenome read by bin, several
+ticked genomes — is its genomes, each the contigs inside its run; any other bin-level block — one
+genome, ticked contigs — is contigs. **The block divided by genome can be cut either way**: its
+`sections` row offers *genomes* and *contigs*, the second drawing every contig of the ticked genomes
+under its genome's band, which is how a reader asks which contigs of one genome touch another. Written
+`sections=contigs`, absent for genomes, derived and a reading as `circle` is; every other block has
+one cut, and the row is hidden there. An arc is as long as its section in base pairs — read from the
+file's genome and contig tables where the block does not carry them — with a small gap between two
+sections and a wider opening at twelve o'clock, which is where the rings are named. Sections are
+named radially, turned over on the left half so none is upside down, and only where an arc holds a
+line of text; a name longer than the room keeps both its ends and loses its middle, since the end of
+`metator_00002_00004` is what tells it from its siblings. Over contig sections the genome band
+carries the names and the contigs are drawn unnamed until one is lit.
+
+**A chord is the sum of the block's cells between two sections**, over its upper triangle — a cell
+inside one section adds to that section's contacts with itself, a filtered `NaN` adds nothing — so
+the chord between two genomes is every contact the map holds between them: the stored counts, or the
+balanced matrix where the map reads one. A reading the square computes from the block (an O/E, a
+correlation) is the square's alone, and the chords stay contacts. **Raw contacts are the weight for
+now**: a pairwise score normalised for coverage and length, computed by the app, is the obvious next
+reading and would come in as a choice beside them. The strongest **3,000** pairs are kept
+(`CHORD_CAP`) — a circle of 48 genomes has 1,128 pairs and draws all of them, the contig level of a
+whole metagenome has hundreds of thousands — and the `chords` row thins the picture further to the
+strongest 1,000, 200 or 50: a preference kept in this browser (`ui/circlePrefs.ts`), since how dense a
+reader likes a picture is how they read, not what they look at. **Width and colour follow the Map
+card's transform and ramp.** Past a hundred chords the ramp starts at the median one, or higher where
+half would still be more than 500 ribbons in ink: every pair of genomes shares a few contacts — cells
+that shared a tube — and a genome's contigs share contacts nearly pair by pair, so a ramp from the
+weakest spends its colours on that background and fills the disc. The rest are drawn as the faint
+texture they are, weakest first and the strongest last, on top. A chord's ends are laid side by side
+along its arcs, ordered by where the partner sits, so the ribbons fan out instead of crossing at
+their feet; where an arc is too short to hold them they share it, and no chord is narrower than a
+hairline. A chord between neighbours bends under the rim and one across the circle passes through
+its middle.
+
+**The key** is the square's: the map key's title — *Contacts (log1p)*, *Balanced contacts*, another
+`/pixels` column by its name — over the ramp from its floor to its strongest, in counts, and how many
+chords are drawn of how many there are. It stands beside the circle where the column is wide enough
+and in its corner where it is not, and under it, on hover, the gestures nothing on the picture
+announces: *Click an arc or a chord to open it*, or, with rings, *Click to open; drag a ring to move
+it*.
+
+**Hovering** a section lights it in the accent, tints its partners by their contacts with it, names
+them and writes each partner's contacts where its chord lands — at most twelve, and only those with a
+tenth of the strongest partner's contacts or more — and lets every other chord fall back to a breath
+of ink. No name is drawn over another: the lit section is named first, its partners from the
+strongest, then the rest, so on a circle of contigs, where a contig's partners are mostly the contigs
+beside it, the strongest is named and the tooltip lists the others. The tooltip gives the section's
+length, its contacts within itself and with the others, with that share, and its five strongest
+partners. A genome's band, over contig sections, lights the chords that **leave** the genome and
+names the contigs outside it they reach. A chord lights its two ends and says how many contacts it
+carries and what share each end's contacts with the others that is. A ring says its name, the place —
+the genome, the contig and the position — and its value there.
+
+**A click opens what it is**, as an axis label and a cell of the square do: a genome's arc its map
+(drawn round, the setting being a reading), a contig's arc its window, a genome's band that genome, a
+chord between two genomes the pair view and a chord between two contigs the two windows. A press on a
+ring is the start of a drag, and opens nothing.
+
+**The rings are the tracks the map draws** — a signal (bigWig, bedGraph, a sequence's GC, an
+alignment's coverage) in its lane's mode, heatmap, line, points, bar or area; features (BED, GTF,
+variants, a karyotype, bar charts) as wedges; a metadata column or a set of classes as one value per
+stretch of each section's contigs — in the store's order, the first nearest the chords, each as thick
+beside the others as its lane is tall beside theirs, on a faint band of its own, named at twelve
+o'clock in a size its thickness can hold. Drawn along what each section is made of, which is contigs: a genome's arc is its contigs laid
+end to end, so a contig's GC is a ring along its genome's arc on a `genome × genome` circle the square
+beside it could not draw a lane of. The Metadata card therefore offers, while the circle is drawn,
+what the rings can show — the genomes' and the contigs' columns, and not a bin's — whatever the
+square's level. **One order everywhere**: a ring pressed and dragged in or out past the others is
+outlined in the accent while it is held, and let go it moves its row in the store
+(`AnnotationStore.moveTo`), so the Tracks card, the Metadata card and the lanes beside every map take
+the same order; Escape puts it back where it was.
+
+**Saved as the square is**: PNG, PDF and copy from the Export card (§16.5), pinned to the light
+palette, the circle and its key cropped to what they cover, under the same caption — the view, the
+file, the sections, the chords drawn and the transform. The PDF is paths and text, no image. On
+screen in the dark theme the picture stays paper, as the square does. A companion map of a deck
+(§16) is not drawn round.
 
 ---
 
@@ -13705,8 +13820,9 @@ writes none, which the note ends by saying in those words.
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
 see at all** until they turn it on. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
-**Built**: the switch, the registry (`state/devFeatures.ts`), and all three gates below — `metacool`'s,
-and `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, each gated from its first line.
+**Built**: the switch, the registry (`state/devFeatures.ts`), and all four gates below — `metacool`'s,
+`edit`'s and `dotplot`'s over as much of §27 and §28 as is built, and `circle`'s over §7.6, each gated
+from its first line.
 
 ### 29.1 One switch
 
@@ -13758,6 +13874,10 @@ What is dev, and what switched off means for each:
   storage as it was. The dot plot in the stage's corner (§27.3) is the stage's, and goes with it.
 - **`dotplot`** — the task, and with it the view on screen its figure is drawn as (§28.2); the view of
   its own in the link, once it is built (§28). Switched off, the task is not in the Analysis panel.
+- **`circle`** — the map drawn round (§7.6): the Map card's toggle and its two rows, the Genomes
+  table's *circle →*, the palette's *Circle*. Switched off, none of them is built, and a link's
+  `circle` and `sections` are kept and not applied (§29.4): the map is drawn square. Only ever offered
+  on a metagenome, so it is reached with `metacool` on as well.
 
 ### 29.4 What a dev feature left in a session
 

@@ -46,6 +46,7 @@ import { button, el, fmt, titleWhenCut } from './dom'
 import type { PanelSeed, ScaleState } from './GenomeView'
 import { MatrixPanel, type AnnotationContext, type FigureSubject} from './MatrixPanel'
 import { blockSummary } from './mapSummary'
+import type { CirclePresentation } from './CircleView'
 import { SearchBox, locusPlaceholder } from './SearchBox'
 import { typedLocusToRegion } from '../genome/assembly'
 
@@ -173,6 +174,11 @@ export interface OverviewProps {
   annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: FigureSubject
+  /**
+   * The whole metagenome drawn round (§7.6): its genomes at genome level, its
+   * contigs grouped by genome at contig level — the cells this scan summed.
+   */
+  round?: CirclePresentation
 }
 
 export class Overview {
@@ -276,6 +282,7 @@ export class Overview {
       binsize: props.binsize,
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(props.caption === undefined ? {} : { caption: props.caption }),
+      ...(props.round === undefined ? {} : { round: props.round }),
       detachedControls: true,
       hideTitle: true,
       initial: props.scale,
@@ -627,7 +634,18 @@ export function overviewTarget(cell: {
 
 /** Wrap an overview in the shape {@link MatrixPanel} draws. */
 function toMatrixResult(result: OverviewResult): MatrixResult {
-  const groups = result.labels.map((label, index) => ({ label, start: index, end: index + 1 }))
+  // A pooled slot's label is decorated (`NODE_7431 +15`), and what it starts at
+  // is carried beside it for whoever has to name the unit itself — the circle
+  // drawn of this block sizes and labels a slot by its contigs (§7.6).
+  const groups = result.labels.map((label, index) => {
+    const name = result.unitNames[index]
+    return {
+      label,
+      start: index,
+      end: index + 1,
+      ...(name === undefined || name === label ? {} : { name }),
+    }
+  })
   const genomes = runsOf(result.groups)
   return {
     nrows: result.n,

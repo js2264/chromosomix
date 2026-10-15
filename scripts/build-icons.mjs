@@ -98,6 +98,10 @@ const LUCIDE = [
   // triangle while the map is square, a square once it is turned. See
   // `ui/MatrixPanel.ts`.
   'triangle',
+  // The circle (§7.6), beside the turn: arcs round a middle and the dots they
+  // join, which is the picture it gives you — sections, and the chords between
+  // them. A plain ring would read as a radio button.
+  'orbit',
   'square',
   'eye',
   'eye-off',

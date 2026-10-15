@@ -42,6 +42,7 @@ import { typedLociToRegions } from '../genome/assembly'
 import { button, el, fmt, titleWhenCut } from './dom'
 import { resolutionLabel } from '../units'
 import type { PanelSeed, ScaleState } from './GenomeView'
+import type { CirclePresentation } from './CircleView'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -210,6 +211,8 @@ export interface WholeViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
+  /** The map drawn round (§7.6), built by the session like the turn. */
+  round?: CirclePresentation
   onScaleChange(scale: ScaleState): void
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
@@ -427,6 +430,7 @@ export class WholeView {
       onScaleChange: (scale) => props.onScaleChange(scale),
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.round === undefined ? {} : { round: props.round }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

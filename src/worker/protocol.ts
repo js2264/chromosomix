@@ -507,6 +507,15 @@ export interface AxisGroup {
    */
   merged?: Array<{ label: string; unitLength: number }>
   label: string
+  /**
+   * The plain name of the unit this run starts at, where {@link label} is
+   * decorated — a pooled slot of the whole-metagenome overview reads
+   * `NODE_7431 +15`, which is a label and not a sequence anything can open.
+   *
+   * Set only by `ui/Overview.ts`, which has both strings from the scan
+   * (`OverviewResult.unitNames`); everywhere else the label is the name.
+   */
+  name?: string
   /** First row/column of the group within the block. */
   start: number
   /** One past the last row/column of the group within the block. */

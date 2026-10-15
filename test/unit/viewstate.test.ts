@@ -16,6 +16,7 @@ import {
   matrixLevel,
   overviewLevel,
   parseViewState,
+  READING_KEYS,
   SCALE_KEYS,
   selectionOf,
   serialiseViewState,
@@ -598,6 +599,43 @@ describe('the turn in the hash', () => {
     const turned: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: true }
     const square: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
     expect(differsOnlyInPresentation(turned, square)).toBe(true)
+  })
+})
+
+/**
+ * The circle in the hash (§7.6): the turn's rule, with a cut beside it.
+ *
+ * `circle` is written only when the map is drawn round, and `sections` only
+ * when a block that can be cut two ways is cut into contigs. Both are derived —
+ * a change repaints the block in memory, so the whole metagenome does not go
+ * back behind its gate — and both are readings, carried across a navigation so
+ * a genome clicked on the circle opens drawn round.
+ */
+describe('the circle in the hash', () => {
+  const base: ViewState = { uri: 'a.metacool', view: 'overview', level: 'genome' }
+
+  it('says nothing for the square, and draws round only on a true', () => {
+    expect(serialiseViewState(base)).not.toContain('circle')
+    const round: ViewState = { ...base, circle: true }
+    expect(serialiseViewState(round)).toContain('circle=true')
+    expect(parseViewState(serialiseViewState(round))).toEqual(round)
+    expect(parseViewState('uri=a.metacool&circle=1')?.circle).toBe(true)
+    expect(parseViewState('uri=a.metacool&circle=yes')?.circle).toBe(false)
+  })
+
+  it('carries the contigs cut, and lands any other value on genomes', () => {
+    const cut: ViewState = { uri: 'a.metacool', view: 'selection', genomes: 'A,B', circle: true, sections: 'contigs' }
+    expect(serialiseViewState(cut)).toContain('sections=contigs')
+    expect(parseViewState(serialiseViewState(cut))).toEqual(cut)
+    expect(parseViewState('uri=a.metacool&sections=genomes')?.sections).toBeUndefined()
+    expect(parseViewState('uri=a.metacool&sections=bins')?.sections).toBeUndefined()
+  })
+
+  it('repaints rather than re-reads, and goes with the reader', () => {
+    expect(differsOnlyInPresentation(base, { ...base, circle: true })).toBe(true)
+    expect(differsOnlyInPresentation({ ...base, circle: true }, { ...base, circle: true, sections: 'contigs' })).toBe(true)
+    expect(READING_KEYS).toContain('circle')
+    expect(READING_KEYS).toContain('sections')
   })
 })
 

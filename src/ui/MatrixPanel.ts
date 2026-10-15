@@ -41,6 +41,9 @@ import { AnnotationStore } from '../annotations/store'
 import { everyTrackOpacityField } from './AnnotationCard'
 import { KEYS, keyLabel, optionKey, shiftKey, withKey } from './commands'
 import { cardTitle, icon, iconButton } from './icons'
+import { CircleView, type CirclePresentation } from './CircleView'
+import { circleCuts, circleUnitsOf } from '../render/circle'
+import { CHORD_LIMITS, chordLimit, setChordLimit, subscribeChordLimit } from './circlePrefs'
 import { LANE_EDGES, hasAMovableAxis, overlayShapeOf } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
@@ -268,6 +271,17 @@ const TURN_HINT =
   'to measure from.'
 
 /**
+ * The circle's toggle, in its two words (§7.6, §26.4): what it draws, and —
+ * since the control cannot show it — what it draws it from.
+ */
+const CIRCLE_HINT =
+  'Draw the map as a circle — each genome an arc as long as it is, joined by chords as wide as ' +
+  'their contacts, the tracks as rings — from the same cells, with nothing more read.'
+
+/** Why a block with fewer than two sections is not drawn round. */
+const CIRCLE_TOO_FEW = 'A circle needs two or more genomes or contigs to join.'
+
+/**
  * One stroke along the main diagonal: the line the view is put back on.
  *
  * It was `move-diagonal-2` — the same line with an arrowhead on each end — and
@@ -481,6 +495,17 @@ export interface MatrixPanelOptions {
    * grey itself.
    */
   turn?: TurnPresentation
+  /**
+   * Draw the block round (§7.6): its sections, the chords between them and the
+   * tracks as rings — a metagenome's genomes, or a genome's contigs.
+   *
+   * Present only on a file with a genome layer and with the dev features on;
+   * absent, the panel is the square it always was. Whether *this* block can be
+   * drawn round is the panel's to find out, as the turn's is, and the control is
+   * greyed with the reason where it cannot. Not `circle`, which on this panel's
+   * views is §8.15's — a sequence declared circular.
+   */
+  round?: CirclePresentation
   /**
    * The window on screen changed — a pan, a zoom, a new block.
    *
@@ -1106,6 +1131,28 @@ export class MatrixPanel {
   private turned: RotatedBlock | null = null
   /** The turn control, greyed while the block on screen has no diagonal. */
   private turnButton: HTMLElement | null = null
+  /**
+   * The block drawn round (§7.6), built the first time it is asked for and kept
+   * while the panel lives; and the toggle that asks, greyed where the block
+   * cannot be.
+   */
+  private circleView: CircleView | null = null
+  private circleButton: HTMLButtonElement | null = null
+  /** Where the circle is mounted: beside the grid, in the panel's body. */
+  private readonly circleHost: HTMLElement = el('div', { class: 'circle-host' })
+  /**
+   * The Map card's rows that are about the square and not the circle — the
+   * score, the clip, the overlays, the other picture toggles — set aside while
+   * the circle is drawn; and the one row that is only the circle's.
+   */
+  private readonly squareOnly: HTMLElement[] = []
+  private readonly circleOnly: HTMLElement[] = []
+  private unsubscribeChordLimit: () => void = () => {}
+  /** The `chords` select, kept so a change made on another circle shows here. */
+  private chordSelect: HTMLSelectElement | null = null
+  /** The `sections` row and its select: offered where the block can be cut two ways. */
+  private sectionsRow: HTMLElement | null = null
+  private sectionsSelect: HTMLSelectElement | null = null
   /** The diagonal lock's toggle, greyed where there is no diagonal to hold the view on. */
   private diagonalButton: HTMLElement | null = null
   /** Whether there is a diagonal to go to: one in the block, and no turn. */
@@ -1494,6 +1541,27 @@ export class MatrixPanel {
     // in its picture's corner instead; that menu is gone, and the Aesthetics
     // column shows the **starred** map's card (§16.5), so one card sets one map
     // and there is never a second copy of a control over one scale.
+    // Not `field()`: that wraps its control in a `<label>`, and a label around
+    // four inputs and a button focuses whichever one it feels like.
+    const clipRow = el(
+      'div',
+      {
+        class: 'field field-clip',
+        title:
+          'Where the colourmap starts and saturates. ' +
+          'Auto is 0 to the 99th percentile of the values in view.',
+      },
+      // The transform in the label, because the boxes are in transformed
+      // units while the caption under them is in the units the readout under
+      // the pointer uses: `-4.182` and `0.000066` are the same bound written
+      // two ways, and with neither of them named a reader typing a clip could
+      // not tell which to type.
+      this.clipLabel,
+      this.clip.el,
+    )
+    // The circle's ramp runs over the chords drawn, not over the square's cells
+    // — its diagonal is not on the circle — so the square's clip is the square's.
+    this.squareOnly.push(clipRow)
     const controls: HTMLElement[] = [
       field(
         'transform',
@@ -1506,24 +1574,8 @@ export class MatrixPanel {
       // one kind of choice. `colormap` survives as the technical word in SPECS
       // and in the CLI, where it is a parameter rather than a label.
       field('colours', colormapSelect, 'The ramp; a ✓ marks a colour-vision-safe one. afmhot_r is what the CLI draws.'),
-      // Not `field()`: that wraps its control in a `<label>`, and a label around
-      // four inputs and a button focuses whichever one it feels like.
-      el(
-        'div',
-        {
-          class: 'field field-clip',
-          title:
-            'Where the colourmap starts and saturates. ' +
-            'Auto is 0 to the 99th percentile of the values in view.',
-        },
-        // The transform in the label, because the boxes are in transformed
-        // units while the caption under them is in the units the readout under
-        // the pointer uses: `-4.182` and `0.000066` are the same bound written
-        // two ways, and with neither of them named a reader typing a clip could
-        // not tell which to type.
-        this.clipLabel,
-        this.clip.el,
-      ),
+      ...(options.round === undefined ? [] : [this.sectionsField(), this.chordsField()]),
+      clipRow,
     ]
 
     // Ahead of the transform in the row, because it is a question about the
@@ -1542,19 +1594,19 @@ export class MatrixPanel {
       smoothSelect.addEventListener('change', () => {
         onSmoothChange(smoothSelect.value)
       })
-      controls.unshift(
-        // One or two sentences, as a tooltip is (§26.4). What this replaces
-        // was a hundred and thirty words — why a ratio smooths both files,
-        // what an adaptive window does away from the diagonal, why it is off
-        // by default — in a `title` that shows for a few seconds and cannot be
-        // scrolled. That argument is in SPECS §7.5, where it can be read.
-        field(
-          'smooth',
-          smoothSelect,
-          'Average each cell with the cells around it before anything is compared or divided. ' +
-            'Adaptive widens the window where the counts thin out, and turns the O/E on.',
-        ),
+      // One or two sentences, as a tooltip is (§26.4). What this replaces
+      // was a hundred and thirty words — why a ratio smooths both files,
+      // what an adaptive window does away from the diagonal, why it is off
+      // by default — in a `title` that shows for a few seconds and cannot be
+      // scrolled. That argument is in SPECS §7.5, where it can be read.
+      const smoothRow = field(
+        'smooth',
+        smoothSelect,
+        'Average each cell with the cells around it before anything is compared or divided. ' +
+          'Adaptive widens the window where the counts thin out, and turns the O/E on.',
       )
+      this.squareOnly.push(smoothRow)
+      controls.unshift(smoothRow)
     }
 
     /**
@@ -1587,6 +1639,10 @@ export class MatrixPanel {
       renderKeys: (ctx, scale, origin) => this.renderKeys(ctx, scale, origin),
       caption: (now) => this.figureCaption(now),
       exportName: () => this.exportName,
+      round: () => {
+        const figure = this.circleActive() ? (this.circleView?.figure() ?? null) : null
+        return figure === null ? null : { ...figure, caption: (now: Date) => this.circleCaption(now) }
+      },
     })
     this.exportEl = this.figure.card
 
@@ -1788,6 +1844,7 @@ export class MatrixPanel {
       // First among the value fields: it is the question the other three answer
       // *about* — what the numbers are, before how they are transformed,
       // ramped and clipped.
+      this.squareOnly.push(scoreField)
       controls.unshift(scoreField)
     }
 
@@ -1801,15 +1858,15 @@ export class MatrixPanel {
       opSelect.addEventListener('change', () => {
         if (isCompareOp(opSelect.value)) compare.onOpChange(opSelect.value)
       })
-      controls.unshift(
-        field(
-          'compare',
-          opSelect,
-          `How the two files are put together. Split draws ${compare.labels[0]} above the ` +
-            `diagonal and ${compare.labels[1]} below it, each in its own counts; ratio and ` +
-            'difference draw one derived field over the whole square, centred where the two agree.',
-        ),
+      const compareRow = field(
+        'compare',
+        opSelect,
+        `How the two files are put together. Split draws ${compare.labels[0]} above the ` +
+          `diagonal and ${compare.labels[1]} below it, each in its own counts; ratio and ` +
+          'difference draw one derived field over the whole square, centred where the two agree.',
       )
+      this.squareOnly.push(compareRow)
+      controls.unshift(compareRow)
     }
 
     // The turn and the baseline: two switches, one row, and both of them
@@ -1837,6 +1894,29 @@ export class MatrixPanel {
         { class: 'btn btn-icon', size: 15 },
       ),
     )
+
+    // The circle, beside the refit (§7.6): the other picture of a metagenome,
+    // and so the one toggle in this row that stays when it is drawn — every
+    // other control here is about the square and steps aside with it. A light,
+    // as `O/E` is and the turn is not: its mark is the same either way, so the
+    // tint is what says it is on.
+    const circle = options.round
+    if (circle !== undefined && circle.onChange !== undefined) {
+      const button = iconButton(
+        'orbit',
+        CIRCLE_HINT,
+        () => {
+          // Through `this.options`, for the turn's reason: the session swaps a
+          // fresh presentation in on every render.
+          const held = this.options.round
+          held?.onChange?.(held.on !== true)
+        },
+        { class: 'btn btn-icon btn-toggle', size: 15 },
+      )
+      button.setAttribute('aria-pressed', String(circle.on === true))
+      this.circleButton = button
+      picture.push(button)
+    }
 
     // Then the refine, because it decides what the two after it are *of*: the
     // turn changes the geometry and `O/E` changes the units, and both of those
@@ -1982,6 +2062,7 @@ export class MatrixPanel {
       this.paintArms(derive.arms)
     }
 
+    for (const control of picture) if (control !== this.circleButton) this.squareOnly.push(control)
     if (picture.length > 0) {
       controls.unshift(
         el(
@@ -2005,7 +2086,11 @@ export class MatrixPanel {
         this.level = levelSelect.value as 'bin' | 'contig'
         options.onLevelChange?.(this.level)
       })
-      controls.unshift(field('level', levelSelect, 'Summed from the loaded matrix — no further reads.'))
+      const levelRow = field('level', levelSelect, 'Summed from the loaded matrix — no further reads.')
+      // A genome's circle is its contigs at either level — the same chords
+      // summed from bins or from contig cells — so the choice is the square's.
+      this.squareOnly.push(levelRow)
+      controls.unshift(levelRow)
     }
 
     // **There is no circular tickbox here any more** (§8.15). It sat in the card
@@ -2031,14 +2116,17 @@ export class MatrixPanel {
     // it on by pressing it, and lost their pan. It is in the `picture` row
     // above with the turn and the diagonal, which is where the actions that are
     // about the picture rather than about what is drawn over it now live.
-    controls.push(
-      el(
-        'div',
-        { class: 'field field-block' },
-        el('span', { class: 'field-label', text: 'overlays' }),
-        el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
-      ),
+    const overlaysRow = el(
+      'div',
+      { class: 'field field-block' },
+      el('span', { class: 'field-label', text: 'overlays' }),
+      el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
     )
+    // Marks drawn over the square's cells; the circle has none to draw them on.
+    this.squareOnly.push(overlaysRow)
+    controls.push(overlaysRow)
+    for (const row of this.squareOnly) row.classList.add('square-only')
+    for (const row of this.circleOnly) row.classList.add('circle-only')
 
     this.controlsEl = el(
       'div',
@@ -2180,7 +2268,10 @@ export class MatrixPanel {
     // strip that used to stand beside the plot took between 5.5 and 7 rem of
     // the column it was next to, which in a deck of four is four such margins
     // and maps a third narrower than the window could have drawn them.
-    const body = el('div', { class: 'panel-body' }, this.grid)
+    const body = el('div', { class: 'panel-body' }, this.grid, this.circleHost)
+    // Every circle on screen thins its chords together, as every map shares its
+    // overlays: how dense a reader likes the picture is how they read it.
+    this.unsubscribeChordLimit = subscribeChordLimit(() => this.syncCircle())
 
     // The same card the 1D browser's column has, built from the same class:
     // beside a map a group could be *made* — from the row's own select, or the
@@ -2383,6 +2474,21 @@ export class MatrixPanel {
   /** Whether {@link toggleExpected} has a toggle to press: one offered, and not greyed by a baseline. */
   get canToggleExpected(): boolean {
     return this.expectedButton !== null && !this.expectedButton.hasAttribute('disabled')
+  }
+
+  /** Whether the circle's toggle is offered here and can be pressed (§7.6). */
+  get canToggleCircle(): boolean {
+    return this.circleButton !== null && !this.circleButton.disabled
+  }
+
+  /** Whether the circle is drawn, for the palette's chip; `null` where it is not offered. */
+  get circleLit(): boolean | null {
+    return this.circleButton === null ? null : this.circleButton.getAttribute('aria-pressed') === 'true'
+  }
+
+  /** The palette's press on the circle's toggle, whatever its button would do. */
+  toggleCircle(): void {
+    if (this.canToggleCircle) this.circleButton?.click()
   }
 
   /** `e`: the O/E toggle's press (§7.5), whatever its button would do. */
@@ -2751,6 +2857,9 @@ export class MatrixPanel {
     this.unsubscribeTextScale()
     this.box.destroy()
     this.unsubscribeDiagonalLock()
+    this.unsubscribeChordLimit()
+    this.circleView?.destroy()
+    this.circleView = null
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -2821,6 +2930,8 @@ export class MatrixPanel {
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
   fit(): void {
+    // A circle has no pan or zoom to undo.
+    if (this.circleActive()) return
     this.heatmap.fit()
     this.schedule()
   }
@@ -3761,6 +3872,9 @@ export class MatrixPanel {
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
+    // The circle is the same block drawn round, so it is handed every block the
+    // square is, whether or not it is the picture on screen.
+    this.syncCircle()
     this.schedule()
   }
 
@@ -4851,6 +4965,183 @@ export class MatrixPanel {
   }
 
   /**
+   * Take the session's circle as it now stands (§7.6), and draw accordingly.
+   *
+   * `undefined` is nothing said, on {@link setTurn}'s rule. A change is a swap
+   * of what the body shows rather than a recomputation of the square: the block
+   * in hand is what the circle is drawn from, and the square stays built behind
+   * it, so turning the circle off again is immediate.
+   */
+  setCircle(circle: CirclePresentation | undefined): void {
+    if (circle === undefined) return
+    this.options.round = circle
+    this.syncCircle()
+  }
+
+  /** Whether the picture on screen is the circle. */
+  private circleActive(): boolean {
+    return this.circleView !== null && this.el.classList.contains('is-circle')
+  }
+
+  /**
+   * Draw the block round or square, as the presentation and the block say.
+   *
+   * The circle is built the first time it is asked for, and from then on is
+   * handed every block and every scale the square is, so the two never
+   * disagree about what they show. Where the block cannot be drawn round — one
+   * section, a rectangle — the square stays and the toggle says why.
+   */
+  private syncCircle(): void {
+    const presentation = this.options.round
+    const data = this.data
+    if (this.chordSelect !== null) this.chordSelect.value = String(chordLimit())
+    // The cut the block offers that the reader asked for, else its own.
+    const cuts = data === null ? [] : circleCuts(data)
+    const cut = cuts.includes(presentation?.cut ?? 'genomes') ? (presentation?.cut ?? 'genomes') : (cuts[0] ?? 'genomes')
+    this.sectionsRow?.classList.toggle('hidden', cuts.length < 2 || presentation?.onCut === undefined)
+    if (this.sectionsSelect !== null) this.sectionsSelect.value = cut
+    const asked = presentation?.on === true && presentation.refusal === undefined
+    const drawable = data !== null && circleUnitsOf(data, {}, 1, cut) !== null
+    if (asked && drawable && this.circleView === null) {
+      const annotations = this.options.annotations
+      this.circleView = new CircleView({
+        store: this.laneStore,
+        map: this.mapId,
+        ...(annotations?.client === undefined ? {} : { client: annotations.client }),
+        ...(annotations?.metadata === undefined ? {} : { metadata: annotations.metadata }),
+        presentation: () => this.options.round,
+        keyTitle: () => this.circleKeyTitle(),
+      })
+      this.circleHost.appendChild(this.circleView.el)
+    }
+    const view = this.circleView
+    if (view !== null && data !== null) {
+      view.setBlock(data, Math.max(1, this.options.binsize), cut)
+      view.setScale({ transform: this.transform, colormap: this.colormap, limit: chordLimit() })
+    }
+    const active = asked && drawable && view !== null
+    this.el.classList.toggle('is-circle', active)
+    this.controlsEl.classList.toggle('is-circle', active)
+    this.paintCircle(presentation, data === null || drawable)
+    if (active) view.schedule()
+  }
+
+  /**
+   * Light the circle's toggle, or grey it with the reason.
+   *
+   * Greyed where the session refuses this view outright — a pair, a window of
+   * one sequence — and where the block in hand has fewer than two sections; lit
+   * where it is drawn.
+   */
+  private paintCircle(presentation: CirclePresentation | undefined, drawable: boolean): void {
+    const button = this.circleButton
+    if (button === null || presentation === undefined) return
+    const refusal = presentation.refusal ?? (drawable ? null : CIRCLE_TOO_FEW)
+    button.disabled = refusal !== null
+    button.setAttribute('aria-pressed', String(presentation.on === true && refusal === null))
+    button.title = refusal ?? CIRCLE_HINT
+    button.setAttribute('aria-label', refusal ?? CIRCLE_HINT)
+  }
+
+  /**
+   * The `sections` row: a block divided by genome — the whole metagenome read
+   * by bin, the ticked genomes — drawn as its genomes or as its contigs grouped
+   * under them (§7.6). The session's, as the toggle is: a link names the cut.
+   * Hidden on every block that can only be cut one way.
+   */
+  private sectionsField(): HTMLElement {
+    const select = el(
+      'select',
+      { class: 'select' },
+      el('option', { value: 'genomes', text: 'genomes' }),
+      el('option', { value: 'contigs', text: 'contigs' }),
+    )
+    select.addEventListener('change', () => {
+      // Through `this.options`, for the toggle's reason.
+      this.options.round?.onCut?.(select.value === 'contigs' ? 'contigs' : 'genomes')
+    })
+    this.sectionsSelect = select
+    const row = field(
+      'sections',
+      select,
+      'Cut the circle into its genomes, or into their contigs grouped under each genome.',
+    )
+    row.classList.add('hidden')
+    this.sectionsRow = row
+    this.circleOnly.push(row)
+    return row
+  }
+
+  /**
+   * The `chords` row: how many of the strongest pairs the circle draws.
+   *
+   * A preference kept in this browser (`ui/circlePrefs.ts`), so every circle
+   * opens as thin as the reader last made one.
+   */
+  private chordsField(): HTMLElement {
+    const select = el('select', { class: 'select' })
+    for (const choice of CHORD_LIMITS) {
+      select.appendChild(el('option', { value: String(choice.value), text: choice.label }))
+    }
+    select.value = String(chordLimit())
+    select.addEventListener('change', () => setChordLimit(Number(select.value)))
+    this.chordSelect = select
+    const row = field(
+      'chords',
+      select,
+      'Thin the circle to the pairs with the most contacts; the key says how many are drawn of how many there are.',
+    )
+    this.circleOnly.push(row)
+    return row
+  }
+
+  /**
+   * What the circle's key calls its numbers: the block's own values, which is
+   * what a chord sums — the stored counts, or the balanced matrix where the map
+   * reads one. A reading computed here from the block (an O/E, a correlation)
+   * is the square's alone, so it never names the chords.
+   */
+  private circleKeyTitle(): string {
+    const scores = this.options.scores
+    const choice = scores?.choices.find((entry) => entry.id === scores.current)
+    const derived = choice?.correlate === true || choice?.baseline === true || choice?.normalise != null
+    const balanced = choice?.balance ?? this.options.balance === true
+    // Another `/pixels` column is named by its own name; the stored counts and
+    // the balanced matrix are contacts, as a chord's tooltip calls them.
+    const column = choice !== undefined && !derived && choice.value !== undefined && choice.value !== DEFAULT_COUNT_COLUMN
+    const words = column ? choice.label : balanced ? 'balanced contacts' : 'contacts'
+    return keyTitle([words], this.transform)
+  }
+
+  /**
+   * The circle's caption: the square's subject, and the facts a figure of a
+   * circle needs to carry — how many sections of what, how many chords of how
+   * many pairs, and the transform the chords are coloured through.
+   */
+  private circleCaption(now: Date): { title: string; detail: string } {
+    const title = this.figureCaption(now).title
+    const context = this.options.caption
+    const parts: string[] = []
+    if (context?.file !== undefined && context.file !== '') parts.push(context.file)
+    const depth = context?.depth?.() ?? null
+    if (depth !== null && depth.mode !== 'none') parts.push(depthPhrase(depth))
+    const model = this.circleView?.circle ?? null
+    if (model !== null) {
+      parts.push(`${fmt.int(model.units.length)} ${model.kind === 'genome' ? 'genomes' : 'contigs'}`)
+      const drawn = this.circleView?.chordsDrawn() ?? 0
+      parts.push(
+        drawn >= model.pairs
+          ? `${fmt.int(drawn)} chords`
+          : `the strongest ${fmt.int(drawn)} of ${fmt.int(model.pairs)} chords`,
+      )
+    }
+    if (this.options.balance === true) parts.push('balanced')
+    parts.push(this.transform === 'none' ? 'linear' : this.transform)
+    parts.push(captionStamp(now))
+    return { title, detail: parts.join(' · ') }
+  }
+
+  /**
    * Record which way this panel is turned, without redrawing.
    *
    * {@link setDerive}'s counterpart and its twin in every respect: a panel about
@@ -4895,9 +5186,13 @@ export class MatrixPanel {
     derive: DerivePresentation | undefined,
     compare?: ComparePresentation,
     turn?: TurnPresentation,
+    circle?: CirclePresentation,
   ): void {
     // The comparison first: the O/E and `arms` are painted from it.
     if (compare !== undefined) this.options.compare = compare
+    // …and the circle, whatever else is unchanged: it is drawn from the
+    // block as it stands and needs no derivation re-run to come or go.
+    this.setCircle(circle)
     const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
     const data = this.data
@@ -5195,6 +5490,8 @@ export class MatrixPanel {
     this.freshSeed = false
     this.paintClipUnits()
     this.heatmap.setScale(this.scale())
+    // The circle's chords are coloured through the same transform and ramp.
+    this.syncCircle()
     this.options.onScaleChange?.({
       transform: this.transform,
       colormap: this.colormap,
@@ -5214,6 +5511,9 @@ export class MatrixPanel {
    */
   repaint(): void {
     this.schedule()
+    // And the circle's, whose rings read the same columns and whose sections
+    // wait on the contigs table the same way (§7.6).
+    this.circleView?.schedule()
   }
 
   /**

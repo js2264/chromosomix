@@ -40,6 +40,12 @@ export const DEV_FEATURES = {
   edit: 'Editing the reference is not validated yet.',
   /** Two sequences on two axes (§28). */
   dotplot: 'The dot plot is not validated yet.',
+  /**
+   * A metagenome drawn round (§7.6): the toggle, the Genomes table's button,
+   * the command, and the key it writes in a link. Its own line rather than a
+   * clause of `metacool`'s, so the format can be published without it.
+   */
+  circle: 'The circle of genomes is not validated yet.',
 } as const
 
 export type DevFeature = keyof typeof DEV_FEATURES

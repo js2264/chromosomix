@@ -8,6 +8,7 @@
  * a view built at it; this genome's contigs are listed, and ticked, there too.
  */
 
+import type { CirclePresentation } from './CircleView'
 import type { ParsedRange, Transform } from '../types'
 import { typedLocusToRegion } from '../genome/assembly'
 import type { MatrixResult } from '../worker/protocol'
@@ -92,6 +93,8 @@ export interface GenomeViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
+  /** The map drawn round (§7.6), built by the session like the turn. */
+  round?: CirclePresentation
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
   /**
@@ -183,6 +186,7 @@ export class GenomeView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.round === undefined ? {} : { round: props.round }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

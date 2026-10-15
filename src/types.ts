@@ -589,6 +589,30 @@ export interface ViewState {
    */
   flip?: boolean
   /**
+   * Whether a metagenome's map is drawn round (§7.6): its genomes — or one
+   * genome's contigs — as arcs of a circle, the contacts between them as
+   * chords, the tracks as rings.
+   *
+   * **Absent means the square**, and only an explicit `true` is the circle —
+   * the turn's rule, for the turn's reason: it is a reading the reader asks for,
+   * and the hash of an ordinary view says nothing about it. A reading rather
+   * than a fact about the block, so it outlives a navigation as the turn does
+   * (`READING_KEYS`): a reader who opened the whole metagenome as a circle and
+   * clicks a genome lands on that genome's contigs, drawn round. Ignored by a
+   * view whose block cannot be drawn round — a pair of genomes, a window of one
+   * sequence, a file with no genome layer — quietly, without writing the
+   * refusal back. A dev feature (§29): read and drawn only with the switch on.
+   */
+  circle?: boolean
+  /**
+   * How the circle cuts a block divided by genome — the whole metagenome read
+   * by bin, several ticked genomes (§7.6): **absent is its genomes**, and
+   * `contigs` is their contigs, grouped under each genome as the contig level's
+   * circle is. Every other block is cut the one way its axis is divided, and
+   * ignores it. A reading, kept across a navigation beside `circle`.
+   */
+  sections?: 'contigs'
+  /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts
    * one. Absent means the whole genome, which is where a browser opens.

@@ -42,6 +42,7 @@ import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, titleWhenCut } from './dom'
 import type { PanelSeed, ScaleState } from './GenomeView'
+import type { CirclePresentation } from './CircleView'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -143,6 +144,8 @@ export interface RegionViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
+  /** The map drawn round (§7.6), built by the session like the turn. */
+  round?: CirclePresentation
   /**
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
@@ -537,6 +540,7 @@ export class RegionView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.round === undefined ? {} : { round: props.round }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

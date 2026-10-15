@@ -107,6 +107,9 @@ import type {
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import type { CirclePresentation } from '../ui/CircleView'
+import type { CircleResolver } from '../render/circle'
+import { circleResolverFrom } from './circleIndex'
 import { binsForLength } from '../analysis/context'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
@@ -668,6 +671,14 @@ export class Session {
    * @internal SessionRouter lets it go with the file.
    */
   wholeFile: { key: string; view: WholeFileView } | null = null
+  /** The tables a circle's sections are sized and filled from, indexed once (§7.6). */
+  private circleIndex: {
+    genomes: GenomesResult
+    contigs: ContigsResult | null
+    resolver: CircleResolver
+  } | null = null
+  /** Whether a circle has already asked for the contigs table. */
+  private circleContigsPending = false
   /** @internal SessionRouter waits out an open in flight rather than start a second. */
   opening: string | null = null
   /**
@@ -1270,6 +1281,10 @@ export class Session {
   private metadataLevel(): MetaLevel | null {
     const state = this.store.state
     if (state === null || this.current?.panel === undefined) return null
+    // The circle's rings follow each section's contigs, whatever the square
+    // beside it is read at (§7.6): a genome × genome circle draws a contig's GC
+    // along its genome's arc, and no circle draws a bin's weight.
+    if (this.current.panel.circleLit === true) return 'contig'
     switch (state.view) {
       case 'overview':
         return overviewLevel(state)
@@ -6063,6 +6078,125 @@ export class Session {
   }
 
   /**
+   * The circle (§7.6), as the view on screen is handed it — or `undefined`
+   * where it is not offered at all: a file with no genome layer, or the dev
+   * features off (§29.2).
+   *
+   * Offered on every map of a metagenome and greyed on the two that cannot be
+   * drawn round, each with its reason, on the turn's rule: a reader on a pair
+   * can see the control exists and learn what it wants of them.
+   */
+  private circleFor(state: ViewState): CirclePresentation | undefined {
+    const refusal =
+      state.view === 'pair'
+        ? 'A pair of genomes is a rectangle with no diagonal to draw round; tick both in the Genomes table to see them as a circle.'
+        : state.view === 'region'
+          ? 'A window of one sequence has nothing to join; a circle is drawn of genomes, or of a genome’s contigs.'
+          : undefined
+    return this.circlePresentation(state, refusal)
+  }
+
+  private circlePresentation(state: ViewState, refusal?: string): CirclePresentation | undefined {
+    if (!devFeature('circle')) return undefined
+    const file = this.file
+    if (file === null || !file.info.hasGenomes) return undefined
+    const uri = state.uri
+    return {
+      // Absent is the square, as for the turn: the circle is what gets written
+      // down, and only when the reader asks for it.
+      on: state.circle === true,
+      onChange: (on) => {
+        this.store.patch({ circle: on ? true : undefined })
+        this.rederive()
+        // What the Metadata card offers is what the picture on screen can draw.
+        this.metadataCard?.refresh()
+      },
+      // Its cut, where the block offers two: written down only when it is not
+      // the genomes, as the circle itself is only when it is drawn.
+      cut: state.sections === 'contigs' ? 'contigs' : 'genomes',
+      onCut: (cut) => {
+        this.store.patch({ sections: cut === 'contigs' ? 'contigs' : undefined })
+        this.rederive()
+      },
+      ...(refusal === undefined ? {} : { refusal }),
+      resolver: this.circleResolver(),
+      // A section opens what it is, as an axis label of the square does: a
+      // genome its own map — drawn round while the circle is on — and a contig
+      // its window.
+      onOpenUnit: (unit) => {
+        if (unit.kind === 'genome') {
+          this.navigate({ uri, view: 'genome', genome: unit.name })
+          return
+        }
+        this.navigate({
+          uri,
+          view: 'region',
+          region: unit.name,
+          ...(unit.genome === undefined ? {} : { genome: unit.genome }),
+        })
+      },
+      onOpenGroup: (genome) => this.navigate({ uri, view: 'genome', genome }),
+      // A chord opens the block between its two ends, as an off-diagonal cell
+      // does: the pair view of two genomes, the window pair of two contigs.
+      onOpenPair: (a, b) => {
+        if (a.kind === 'genome') {
+          this.navigate({ uri, view: 'pair', genome: a.name, genome2: b.name })
+          return
+        }
+        this.navigate({
+          uri,
+          view: 'region',
+          region: a.name,
+          region2: b.name,
+          ...(a.genome !== undefined && a.genome === b.genome ? { genome: a.genome } : {}),
+        })
+      },
+    }
+  }
+
+  /**
+   * The tables' answers about a circle's sections, asked afresh on every call.
+   *
+   * Live rather than captured: the presentation is built on a render, and the
+   * contigs table it needs may land after that render — so each question goes
+   * through to whatever the session holds now, and the first that finds the
+   * table missing asks for it.
+   */
+  private circleResolver(): CircleResolver {
+    const now = (): CircleResolver => {
+      const file = this.file
+      if (file === null) return {}
+      const held = this.circleIndex
+      if (held !== null && held.genomes === file.genomes && held.contigs === file.contigs) return held.resolver
+      if (file.contigs === null) void this.awaitCircleContigs()
+      const resolver = circleResolverFrom(file.genomes.table, file.genomes.display, file.contigs?.table ?? null)
+      this.circleIndex = { genomes: file.genomes, contigs: file.contigs, resolver }
+      return resolver
+    }
+    return {
+      genomeLength: (genome) => now().genomeLength?.(genome),
+      genomeSequences: (genome) => now().genomeSequences?.(genome) ?? null,
+      slotSequences: (first, next) => now().slotSequences?.(first, next) ?? null,
+      contigLength: (name) => now().contigLength?.(name),
+    }
+  }
+
+  /** Read the contigs table for a circle that asked before it was read, then redraw. */
+  private async awaitCircleContigs(): Promise<void> {
+    if (this.circleContigsPending) return
+    this.circleContigsPending = true
+    try {
+      await this.contigs()
+    } catch {
+      return
+    } finally {
+      this.circleContigsPending = false
+    }
+    if (this.destroyed) return
+    this.current?.panel?.repaint()
+  }
+
+  /**
    * Recompute the picture without re-reading it.
    *
    * A derivation is a transform over cells that are already on screen, so it
@@ -6083,7 +6217,12 @@ export class Session {
     // offers the baseline along its arms or takes it away (§8.15), and the
     // derivation below is of whichever score the state resolves to *now*.
     this.current?.panel?.offerScores(scoreChoices(this.scoreProps(state)), this.scoreOf(state).id)
-    this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
+    this.current?.panel?.rederive(
+      this.derivePresentation(state),
+      undefined,
+      this.turnPresentation(state),
+      this.circleFor(state),
+    )
   }
 
   /**
@@ -7082,6 +7221,23 @@ export class Session {
       onOpenSelection: (names) =>
         this.navigate({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
       onOpenWhole: () => this.navigate({ uri: state.uri, view: this.wholeFileView() }),
+      // The circle's own door (§7.6): every genome at genome level, which is the
+      // one pass a circle of genomes needs — a ticked one drawn round as its
+      // contigs, and several as one circle. The reading is written down here and
+      // kept by every navigation after, as the turn is.
+      ...(this.circlePresentation(state) === undefined
+        ? {}
+        : {
+            onOpenCircle: (names: string[]) => {
+              if (names.length === 0) {
+                this.navigate({ uri: state.uri, view: 'overview', level: 'genome', circle: true })
+              } else if (names.length === 1) {
+                this.navigate({ uri: state.uri, view: 'genome', genome: names[0], circle: true })
+              } else {
+                this.navigate({ uri: state.uri, view: 'selection', genomes: names.join(','), circle: true })
+              }
+            },
+          }),
       // Straight to the window, past the two whole-something doors beside it.
       // No `genome` on the state: the reader resolves a genome name, a contig
       // name and either with coordinates on it, so what was typed decides which
@@ -7394,6 +7550,7 @@ export class Session {
           onScoreChange: (choice) => this.setScore(choice),
           derive: this.derivePresentation(state),
           turn: this.turnPresentation(state),
+          round: this.circleFor(state),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.navigate({
@@ -7470,6 +7627,7 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       // A selection of several genomes is divided and labelled by genome, so an
       // axis label here is a MAG and the gesture on it is the one the genomes
@@ -7569,6 +7727,7 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -7608,6 +7767,7 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -7660,6 +7820,7 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -7749,6 +7910,7 @@ export class Session {
           level,
           scale: this.seedOf(state),
           genomeNames: file.displayNames,
+          round: this.circleFor(state),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
             this.navigate({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
@@ -7812,6 +7974,9 @@ export class Session {
     this.wholeFile ??= { key, view: build() }
     const { view } = this.wholeFile
     view.applyScale(this.scaleOf(state))
+    // A whole-file view is kept while the file is open, and the circle may have
+    // been turned on or off on another view since it was built (§7.6).
+    view.panel.setCircle(this.circleFor(state))
     this.showContent(view.el, {
       sideEl: view.sideEl,
       panel: view.panel,
