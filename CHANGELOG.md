@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every step back, as a list, from a chevron beside the header's back button (§5.5).** It names
+  each step behind the one on screen — the window, a block of two, the whole genome, a table — with
+  the resolution, the O/E or the comparison it set beside it and the file where that is another one,
+  and a row goes straight there, as that many presses of back would. The app keeps a record of the
+  entries it writes, which the browser does not list, in the window's own storage, so the list
+  survives a reload.
+
 - **Two windows typed in a locus box open the block between them (§5.4, §26.1).**
   `chr1:1,000-2,000 chr2:3,000-4,000`, or the same with ` x `, `|` or `×` between, opens chr1 against
   chr2 — rows, then columns — in the region view's box, the whole genome's and the Chromosomes

@@ -190,9 +190,11 @@ describe('a window mounted as an embed', () => {
       node.getAttribute('aria-label'),
     )
     expect(group[0]).toBe('Go back')
-    expect(group[1]).toBe('Go forward')
+    // Back's own list of steps, as the second half of back (§5.5).
+    expect(group[1]).toBe('Every step back, to go straight to one')
+    expect(group[2]).toBe('Go forward')
     expect(group[group.length - 1]).toBe('console')
-    expect(group.slice(2, 4).map((name) => name?.split(' ')[0])).toEqual(['Share', 'Save'])
+    expect(group.slice(3, 5).map((name) => name?.split(' ')[0])).toEqual(['Share', 'Save'])
     // And the right of the bar is about the window alone, theme first.
     const actions = Array.from(root.querySelectorAll('.head-actions [aria-label]')).map((node) =>
       node.getAttribute('aria-label'),

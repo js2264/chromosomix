@@ -543,6 +543,22 @@ p {
   border-left: 1px solid var(--border);
 }
 
+/* The list of steps back, as the second half of **back** rather than a button
+   of its own: narrow, butted against it, its left corners squared and back's
+   right ones, so the pair reads as one control with a menu — the shape every
+   browser gives its own back button's history. */
+.head-history .head-history-list {
+  padding-inline: 0.1rem;
+  margin-left: -0.25rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.head-history .btn-icon:has(+ .head-history-list) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .head-actions {
   display: flex;
   gap: 0.4rem;

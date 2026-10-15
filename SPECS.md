@@ -1012,7 +1012,23 @@ entries every navigation here writes — a crumb, a typed locus, a zoom or pan s
 stepped — and nothing that does not write one, such as a wheel or a drag on the map. Where the
 browser says whether there is anywhere to go (Chromium's Navigation API) a button greys when there
 is not; elsewhere both stay live, and a press with nowhere to go does nothing, as the browser's own
-does. After them in the same group, in this order, are the three that take the work out of the
+does.
+
+**Back has its list of steps**, a chevron butted against it as the second half of one control, the
+shape every browser gives its own back button: pressed, it lists every step behind the one on
+screen, the nearest first and twenty at most, each named as the breadcrumb or the heading would name
+it — `IV:1,000,001-1,400,000`, `I × II`, *Whole genome*, *Chromosomes* — with what the step set
+beside it, quietly: the resolution, the O/E, a comparison, and the file where it is not the one on
+screen. A row goes straight there, through the browser's own `history.go`, so the steps ahead of it
+are the browser's forward stack exactly as if back had been pressed that many times. The browser
+keeps its stack to itself — Chromium's Navigation API lists it and nothing else does — so the app
+keeps a record of every entry it writes, the hash and nothing more (`state/historyJournal.ts`), and
+each entry carries its number in that record in `history.state`, which is how a Back, a jump or a
+reload says where the record stands; the record is the window's, in `sessionStorage`, two hundred
+steps at most. An entry it did not write — an address typed into the bar — is a new step after the
+one on screen, as the browser takes it. The chevron greys while there is no step behind.
+
+After them in the same group, in this order, are the three that take the work out of the
 window: *Share this tab as a link*, *Save every tab as a file* and the console (§23). They used to
 sit on the far side of the command bar, away from the controls a reader's hand is already among; the
 far right is now only about the window itself — theme, shortcuts, source, about. Where the header
