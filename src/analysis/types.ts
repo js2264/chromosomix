@@ -172,18 +172,8 @@ export interface NumberParam extends ParamBase {
    * form shows what `null` stands for, and a run is handed the number itself
    * ({@link resolveSeeds}), so its record says what was read. {@link default} is
    * what a caller with no context — a shell — falls back on.
-   *
-   * The form's other answers come too, for a default that moves with one of
-   * them rather than with the file: the nearest loop an APA piles up is twice
-   * its half-width and two, so it follows the half-width until it is typed.
    */
-  seed?(context: AnalysisContext, params: Params): number
-  /**
-   * What `chromosomix tasks` prints for a {@link seed}ed default that a number
-   * cannot say — *twice --window, and 2* — where {@link default} would print the
-   * one value it takes at the other parameters' defaults.
-   */
-  seedNote?: string
+  seed?(context: AnalysisContext): number
 }
 
 /**
@@ -277,7 +267,11 @@ export interface EntryParam extends ParamBase {
   kind: 'featureSet' | 'pairSet' | 'track' | 'sequence'
   /** Several may be chosen; the value is then a `string[]` of entry ids. */
   multiple?: boolean
-  /** The empty choice is offered, and the value may be `null`. */
+  /**
+   * The empty choice is offered, and the value may be `null`. On a `multiple`
+   * one, every box unticked is an answer (`[]`) the form keeps, where a required
+   * list is ticked back to the star.
+   */
   optional?: boolean
   /** Label for the empty choice. Only read when `optional`. */
   noneLabel?: string
@@ -532,10 +526,14 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
       case 'pairSet':
       case 'track':
       case 'sequence':
-        // `''` is the empty choice already answered, which the form keeps.
+        // `''` is the empty choice already answered, which the form keeps; an
+        // optional list is `null` until answered, and `[]` once every box is
+        // unticked, which the form keeps too.
         out[spec.key] =
           spec.multiple === true
-            ? []
+            ? spec.optional === true
+              ? null
+              : []
             : spec.optional === true && spec.startsEmpty === true
               ? ''
               : null
@@ -559,7 +557,7 @@ export function resolveSeeds(specs: readonly ParamSpec[], context: AnalysisConte
     if (spec.kind !== 'number' || spec.seed === undefined) continue
     const held = out[spec.key]
     if (typeof held === 'number' && Number.isFinite(held)) continue
-    out[spec.key] = spec.seed(context, params)
+    out[spec.key] = spec.seed(context)
   }
   return out
 }

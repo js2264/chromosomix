@@ -972,15 +972,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal, as coolpuppy
-  does by default (§18.8).** *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`:
-  a loop whose two anchors' centres are nearer than that many bins is not piled up, and until a number
-  is typed it is twice the half-width and two — coolpuppy's `mindist='auto'` — following the
-  half-width as it changes. That is the separation at which a window stops reaching the two diagonals
-  left out, so at the defaults no loop window has a gap cut in it. The run says how many loops it left
-  out and how near they were, and 0 piles up every one, which is what it did before. On the yeast
-  demo's 1,506 loops at the default ±21 kb window that is 959 of them, the median loop being 33 kb;
-  over the demo map's first 200 loops it keeps the same 142 windows as coolpuppy, cell for cell.
+- **An aggregate peak analysis over a loop set leaves out the loops nearest the diagonal (§18.8).**
+  *Nearest loop*, a new setting under Separation, is coolpuppy's `mindist`: a loop whose two anchors'
+  centres are nearer than that many bins is not piled up. It is five bins by default, and 0 piles up
+  every loop, which is what it did before. coolpuppy's own default, `mindist='auto'`, is twice the
+  half-width and two, where a window stops reaching the two diagonals left out; typed, the run says it
+  is coolpuppy's. On the yeast demo's 1,506 loops at the default ±21 kb window, five bins leaves out
+  none and coolpuppy's floor 959. The run says how many loops it left out and how near they were; at
+  coolpuppy's floor it keeps the same 142 of the demo map's first 200 loops as coolpuppy, cell for
+  cell.
+
+- **APA opens on observed / expected, and its form shows only the cards that apply (§18.2, §18.8).**
+  The normalisation starts on observed / expected rather than on distance-matched controls. The
+  Control card, whose every setting belongs to the distance-matched control, is not drawn under any
+  other normalisation, and the Ranking card, whose settings belong to a feature set, is not drawn for
+  a loop set or every pair — where *N* and *groups* used to stay on screen for having been chosen on a
+  feature set. In every task's form, a card none of whose controls apply is not drawn.
 
 - **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
   GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
@@ -2213,6 +2220,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **APA's track aggregates stay unticked once unticked (§18.2, §18.8).** With every track unticked,
+  the next run ticked the starred one back on: the drawer hands the form its context around a run, and
+  an empty list read as one nobody had answered. A list nobody has touched still opens on the starred
+  track; one the reader emptied is kept empty.
 
 - **Track correlation's windows are their exact means, and a mammalian genome at 100 bp fits in
   memory (§18.8).** A window's value was taken from whatever zoom level its size selected for

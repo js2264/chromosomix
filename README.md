@@ -283,7 +283,7 @@ chromosomix tasks
 ##       --grid (default 51)  grid
 ##       --flankFraction (default 0.5)  flank
 ##       --minDiag (default 2)  diagonals left out
-##       --norm (default "matched")  normalisation
+##       --norm (default "oe")  normalisation
 ##       --csPattern (default "loops")  template
 ##       --controls (default 5)  controls per pair
 ##       --minShift (default 50)  smallest shift
@@ -291,7 +291,7 @@ chromosomix tasks
 ##       --minShiftScale (default 1)  smallest shift
 ##       --maxShiftScale (default 3)  largest shift
 ##       --seed (default 1)  seed
-##       --minDist (default twice --window, and 2)  nearest loop
+##       --minDist (default 5)  nearest loop
 ##       --minSep (default 2)  nearest two features may be
 ##       --maxSep (default 200)  furthest two features may be
 ##       --byDistance (default 0)  split by separation into

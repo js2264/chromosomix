@@ -49,7 +49,7 @@ import { LocalFile } from 'generic-filehandle2'
 import { PileupAccumulator, p2ll } from '@/analysis/apa'
 import type { JobContext } from '@/analysis/job'
 import { runApa } from '@/analysis/run/apa'
-import { MIN_DIAG_DEFAULT } from '@/analysis/tasks/apa'
+import { MIN_DIAG_DEFAULT, autoMinDist } from '@/analysis/tasks/apa'
 import type { MatrixOutput, Params } from '@/analysis/types'
 import {
   correlationMatrix,
@@ -934,13 +934,16 @@ suite('APA reaching the diagonal, through the runner, against coolpuppy', () => 
   })
 
   it('leaves out the loops coolpuppy leaves out at its defaults, and piles up the same rest', async () => {
-    // `mindist='auto'`: twice the flank and two bins, measured between centres.
+    // `mindist='auto'`: twice the flank and two bins, measured between centres —
+    // coolpuppy's default, typed here, since this task's own is five bins.
     const g = golden!
+    const minDist = autoMinDist({ mode: 'fixed', window: g.flank_bins })
+    expect(minDist).toBe(2 * g.flank_bins + 2)
     for (const [norm, which] of [
       ['none', 'raw_default'],
       ['oe', 'oe_default'],
     ] as const) {
-      const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm }, loops(g))
+      const matrix = await run({ anchors: 'pairs', pairs: 'loops', norm, minDist }, loops(g))
       expect(matrix.stats?.[0]?.value, which).toBe(g.reference[which].n)
       expectSeries(matrix.values, numbers(g.reference[which].pileup), g.reference.tolerance, which)
     }

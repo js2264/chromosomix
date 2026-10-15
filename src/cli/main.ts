@@ -2139,16 +2139,9 @@ function listTasks(): void {
         continue
       }
       const fallback = (param as { default?: unknown }).default
-      // A default another parameter decides is said in words, since the number
-      // it takes at the others' defaults is wrong the moment one is given.
-      const said = param.kind === 'number' && param.seedNote !== undefined ? param.seedNote : undefined
       process.stdout.write(
         `      --${param.key}` +
-          (said !== undefined
-            ? ` (default ${said})`
-            : fallback === undefined
-              ? ''
-              : ` (default ${JSON.stringify(fallback)})`) +
+          (fallback === undefined ? '' : ` (default ${JSON.stringify(fallback)})`) +
           `${param.label === undefined ? '' : `  ${param.label}`}\n`,
       )
     }

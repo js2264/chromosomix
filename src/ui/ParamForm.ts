@@ -281,12 +281,16 @@ function resolveOne(
     // output is not a gene model because it is the first interval set on the
     // list — the two loci an origin call leaves behind phased the compartments
     // by default, and said only that the phasing was ambiguous.
-    const loaded = candidates.filter(
-      (entry) => entry.source.kind !== 'computed' && entry.source.kind !== 'derived',
-    )
-    return named || held === '' ? '' : (starredId(loaded) ?? '')
+    return named || held === '' ? '' : (starredId(readerLoaded(candidates)) ?? '')
   }
   return starredId(candidates)
+}
+
+/** What the reader loaded, rather than what a task made — what an optional input is filled from. */
+function readerLoaded(candidates: readonly AnnotationEntry[]): AnnotationEntry[] {
+  return candidates.filter(
+    (entry) => entry.source.kind !== 'computed' && entry.source.kind !== 'derived',
+  )
 }
 
 /**
@@ -294,21 +298,35 @@ function resolveOne(
  *
  * Emptied by the repair — or never filled — a *required* list opens on the
  * starred entry, because a required list with nothing in it is a Run that cannot
- * happen and `defaultParams` has no way to name a file. `optional: true` is how
- * a descriptor says that an empty set is a legal answer, and there the empty set
- * is left alone.
+ * happen and `defaultParams` has no way to name a file.
+ *
+ * `optional: true` is how a descriptor says that an empty set is a legal answer,
+ * and there `null` and `[]` are two answers, as they are for a `sequences` list:
+ * **`null` is nobody has chosen yet**, and opens on the star of what the reader
+ * loaded — staying unanswered while nothing is, so a track loaded afterwards is
+ * ticked the way it would have been at opening — while **`[]` is a reader who
+ * unticked every box**, and is kept. The two used to be one value, and the drawer
+ * hands the form its context around every run, so APA's track aggregates ticked
+ * the starred track back on as Run was pressed with every box unticked.
  */
 function resolveMany(
   spec: EntryParam,
   context: AnalysisContext,
   held: ParamValue | undefined,
-): readonly string[] {
+): readonly string[] | null {
   const candidates = candidatesFor(spec, context)
   const live = new Set(candidates.map((entry) => entry.id))
   const kept = Array.isArray(held)
     ? held.filter((id): id is string => typeof id === 'string' && live.has(id))
     : []
-  if (kept.length > 0 || spec.optional === true) return kept
+  if (spec.optional === true) {
+    // A ticked entry that has gone leaves the list one shorter, never the star
+    // in its place: the reader's answer is what was ticked, as in `resolveOne`.
+    if (Array.isArray(held)) return kept
+    const star = starredId(readerLoaded(candidates))
+    return star === null ? null : [star]
+  }
+  if (kept.length > 0) return kept
   const star = starredId(candidates)
   return star === null ? [] : [star]
 }
@@ -879,6 +897,12 @@ export class ParamForm {
       control.shown = shown
       if (shown) after.set(section, control.wrapper)
     }
+    // A card none of whose controls is shown is not drawn either: a heading over
+    // nothing is a question the form has decided not to ask, still taking a line
+    // to say so — APA's Control card under observed / expected, say.
+    for (const [section, rows] of this.groups) {
+      rows.parentElement?.classList.toggle('hidden', !after.has(section))
+    }
   }
 
   /**
@@ -1001,7 +1025,7 @@ export class ParamForm {
     // An unanswered seeded number shows what it stands for on this context —
     // the open map's resolution, say — and follows it until the reader types.
     const held = (): number =>
-      numberOr(this.params[spec.key], spec.seed?.(this.context, this.params) ?? spec.default)
+      numberOr(this.params[spec.key], spec.seed?.(this.context) ?? spec.default)
     const show = (value: number): void => {
       box.value = String(value)
       if (slider !== null) slider.value = String(value)
