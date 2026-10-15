@@ -14,11 +14,28 @@ execute:
   warning: false
 ---
 
+```{python}
+#| echo: false
+#| output: asis
+# When, from what, by what and on what this page was rendered: notebooks/scripts/rendered.py.
+import sys
+from pathlib import Path
+
+_here = Path.cwd().resolve()
+sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks') / 'scripts'))
+from rendered import Render
+
+R = Render('validation')
+print(R.head(also=f"Every command below, run again and timed: {R.anchor('timing', 'the timings')}. "
+                  f"Beside this page: {R.download('commands.json')}, every command as it ran, and "
+                  f"{R.download('summary.tsv')}, every verdict."))
+```
+
 Each analysis is run on the same public file twice: by **`chromosomix`**, the command-line form of
 the app's Analysis panel (the same code), and by the **reference package** it reproduces, called as
 its authors intend. The two outputs are matched bin by bin or call by call. Every command is printed
 as it ran, from `notebooks/work/validation/`, and written to `commands.json` there, from which
-[`timing.qmd`](timing.qmd) runs each again and times it.
+`{python} R.link('timing')` runs each again and times it.
 
 | § | Analysis | Data | Reference |
 |---|---|---|---|
@@ -57,6 +74,12 @@ pip install jupyter matplotlib cooler cooltools bioframe pyfaidx pyBigWig 'panda
 git clone https://github.com/LeopoldC/Boost-HiC ../Boost-HiC
 QUARTO_PYTHON=refs/bin/python YAPC_PYTHON=yapc-env/bin/python quarto render notebooks/validation.qmd
 ```
+
+`notebooks/requirements.txt` is that environment at the versions this page was last rendered with,
+every package pinned, and `requirements-yapc.txt` yapc's. `.github/workflows/notebooks.yml` installs
+both and renders this page and the timings on every release, publishing them at
+<https://chromosomix.app/evaluation/> and <https://chromosomix.app/timings/>; the block under the
+title says which render this is.
 
 The data (6 GB) are fetched once into `notebooks/work/validation/data/`. Outputs are kept beside them,
 so a second render reads rather than recomputes (`REDO`).
@@ -1644,7 +1667,7 @@ measures({
 
 ```{python}
 #| label: fig-apa
-#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it with `--minDist 0`; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the six pileups against coolpuppy's; c, over shifted controls at the defaults, the centre and P2LL of each tool's five seeds."
+#| fig-cap: "Pileups at chromosight's loops, mouse Hi-C at 10 kb, ±50 kb. a, every loop over the expected, as chromosomix draws it with `--minDist 0`; the cells towards the lower left are means of fewer loops, those whose windows stay clear of the diagonal there; b, every cell of the six pileups against coolpuppy's, raw and over the expected (O/E); c, over shifted controls at the defaults, the centre and P2LL of each tool's five seeds."
 TEXT['apa_loops'] = f'{len(called):,}'
 TEXT['apa_reaching'] = f'{reaching:,}'
 TEXT['apa_anchors'] = f'{len(anchors):,}'
@@ -1673,8 +1696,8 @@ for k, key in enumerate(CUTS):
     ax.scatter(k + np.linspace(-0.25, 0.25, values.size), values, s=6, color=APP_COLOUR, lw=0)
 ax.set(yscale='log', ylim=(1e-9, 1e-3), ylabel='|chromosomix / coolpuppy − 1|',
        title='b  every cell, six pileups')
-ax.set_xticks(range(len(CUTS)), ['raw', 'over\nexpected', 'raw,\nevery', 'over exp.,\nevery',
-                                  'diagonal,\nraw', 'diagonal,\nover exp.'])
+ax.set_xticks(range(len(CUTS)), ['raw', 'O/E', 'raw,\nevery\nloop', 'O/E,\nevery\nloop', 'diagonal,\nraw',
+                                  'diagonal,\nO/E'], fontsize=8)
 ax = axes[2]
 for k, (name, stack, colour) in enumerate((('chromosomix', controls_app, APP_COLOUR), ('coolpuppy', controls_ref, REF))):
     ax.scatter(np.full(len(stack), 0 + (k - 0.5) * 0.25), stack[:, centre, centre], s=30, color=colour, label=name, zorder=3)
@@ -2374,6 +2397,10 @@ yapc's. The reference scripts, in `notebooks/scripts/`, are listed [below](#refe
 WIDTHS = {'§': 3, 'Analysis': 8, 'Data': 9, 'chromosomix command': 24, 'Reference': 8, 'Reference command': 24,
           'Agreement': 13, 'Verdict': 11}
 summary = pd.DataFrame(SUMMARY)[list(WIDTHS)]
+# Every verdict as a table of its own, published beside the page (.github/workflows/notebooks.yml).
+VERDICTS_TSV = WORK / 'summary.tsv'
+summary.drop(columns=['chromosomix command', 'Reference command']).replace(r'<[^>]+>', '', regex=True).to_csv(
+    VERDICTS_TSV, sep='\t', index=False)
 summary.style.hide(axis='index').set_table_styles([
     {'selector': '', 'props': [('table-layout', 'fixed'), ('width', '100%'), ('font-size', '0.85em')]},
     {'selector': 'td, th', 'props': [('vertical-align', 'top'), ('text-align', 'left')]},
@@ -2407,7 +2434,7 @@ def manifest():
 MANIFEST.write_text(json.dumps(manifest(), indent=1, ensure_ascii=False))
 listed = json.loads(MANIFEST.read_text())['commands']
 measures({'commands written for timing.qmd': f"{len(listed)} ({sum(c['bench'] for c in listed)} timed)",
-          'to': rel(MANIFEST)})
+          'to': rel(MANIFEST), 'verdicts to': rel(VERDICTS_TSV)})
 ```
 
 ```{python}
@@ -2433,7 +2460,7 @@ lies within the reference's own spread from one seed to the next. Besides those:
 The 3D model fits the contacts within chromosomes `{python} TEXT['p3_within_word']` pastis, and over
 all pairs `{python} TEXT['p3_all_word']` pastis. P(s) as a density (HiContacts' `distanceLaw`), the
 app's default, is held to HiContacts by the unit tests (`test/golden/analysis/hicontacts_ps.json`).
-Each command's time is measured by [`timing.qmd`](timing.qmd).
+Each command's time is measured by `{python} R.link('timing')`.
 
 ### Reference scripts
 
@@ -2444,4 +2471,10 @@ The scripts the references are called through, from `notebooks/scripts/`:
 for path, analysis in {p: ref['analysis'] for ref in REFS.values() for p in ref['scripts']}.items():
     file = Path(os.path.normpath(WORK / path))
     print(f'**{analysis}**, `{file.relative_to(REPO)}`\n\n```python\n{file.read_text().rstrip()}\n```\n')
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print(R.foot())
 ```

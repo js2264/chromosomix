@@ -460,6 +460,11 @@ chromosomix tasks
 ##       --flagBelow (default 0.1)  flag below this cross-block ratio
 ```
 
+Each analysis is held to the package it reproduces — cooltools, coolpuppy, chromosight, deepTools,
+bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
+release: <https://chromosomix.app/evaluation/>, and how long each command takes beside its
+reference, <https://chromosomix.app/timings/>.
+
 Every task writes its results where `--out` points. A map is read balanced wherever the file
 carries balancing weights, as the app reads it; `--no-balance` reads the raw counts. A locus —
 `--window`, or a task's own, such as 4C's `--anchor` — is written as the app writes one: 1-based

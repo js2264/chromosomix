@@ -8744,6 +8744,19 @@ machine and every version — and each `chromosomix` command's speed is a fold o
 commands it is paired with. They are documents, not tests: they need the data (about 6 GB), the
 reference packages and yapc's own environment, and nothing in the suite runs them.
 
+**They are published with every release.** `.github/workflows/notebooks.yml` installs all of it on a
+fresh runner — the reference environment pinned package by package in `notebooks/requirements.txt`,
+yapc's in `requirements-yapc.txt` with IDR and yapc built at the commits the notebook cites,
+Boost-HiC's checkout, Ubuntu's bedtools and seqkit — renders both notebooks, and publishes them at
+`<site>/evaluation/` and `<site>/timings/`, each a self-contained page with its tables beside it
+(`commands.json` and `summary.tsv`, every command and every verdict; `timings.tsv`); a release
+keeps its own copies as assets. It runs when a release is published and on demand. Each page opens
+on a block saying when it was rendered, from which version, commit and release, by which run or by
+hand, and on what machine, and closes on how long it took; the two link to each other there and on
+a reader's disk alike. The pages are no build of the app, so the service worker leaves those two
+addresses to the network, as it does `v/` and `pr/`, and an app shell an older worker served at
+either is unregistered and reloaded once (`recoverPinnedNavigation`).
+
 ### 18.11 A set of scales is one picture
 
 Some tasks produce a *set* of profiles that are one reading at several settings, and diamond

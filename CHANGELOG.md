@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The evaluation and the timings are published with every release, at
+  <https://chromosomix.app/evaluation/> and <https://chromosomix.app/timings/> (§18.10).** A new
+  workflow, `.github/workflows/notebooks.yml`, installs every reference on a fresh runner at the
+  versions the notebooks were written against — `notebooks/requirements.txt` and
+  `requirements-yapc.txt` pin them — renders both notebooks and publishes them beside the app, each
+  with its tables beside it: every command, every verdict and every timed run. It runs when a
+  release is published, attaching both pages to the release as well, and on demand, with the number
+  of timed runs and whether to publish. Each page opens on when it was rendered, from which version,
+  commit and release, by which run, on what machine, and closes on how long it took, and the two
+  link to each other. The service worker leaves both addresses to the network, as it does archived
+  builds, so a visitor who has installed the app reaches the page rather than the app.
+
 - **`chromosomix boost` writes Boost-HiC's map of each sequence (§6.5).** The map an oversample
   draws a sequence's new contacts from, which nothing showed: each sequence's stored counts, the
   square an oversample hands Boost-HiC, through the same port, written as Boost-HiC's `main.py`

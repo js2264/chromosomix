@@ -14,7 +14,23 @@ execute:
   warning: false
 ---
 
-[`validation.qmd`](validation.qmd) runs each analysis twice, through `chromosomix` and through the
+```{python}
+#| echo: false
+#| output: asis
+# When, from what, by what and on what this page was rendered: notebooks/scripts/rendered.py.
+import sys
+from pathlib import Path
+
+_here = Path.cwd().resolve()
+sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks') / 'scripts'))
+from rendered import Render
+
+R = Render('timing')
+print(R.head(also=f"The commands are {R.anchor('validation', 'the evaluation')}’s, as it ran them. "
+                  f"Beside this page: {R.download('timings.tsv')}, every timed run, one row each."))
+```
+
+`{python} R.link('validation')` runs each analysis twice, through `chromosomix` and through the
 package it reproduces, and writes every command it ran to `notebooks/work/validation/commands.json`.
 This notebook runs each of them again, exactly as written there but writing to a scratch folder, as a
 fresh process, `RUNS` times round robin (five, unless `TIMING_RUNS` in the environment says otherwise),
@@ -34,7 +50,10 @@ QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
 ```
 
 A second render reads the table rather than timing again (`REDO`), unless the command list, the number
-of runs or the `chromosomix` build has changed.
+of runs or the `chromosomix` build has changed. `.github/workflows/notebooks.yml` renders both notebooks
+on every release, on a fresh GitHub runner each time, and publishes this page at
+<https://chromosomix.app/timings/> with the table beside it; the block under the title says which
+render, and which machine, this is.
 
 ```{python}
 from pathlib import Path
@@ -314,4 +333,10 @@ ax.set(xlabel='× faster than the reference', ylim=(-0.5, len(folds) - 0.5))
 ax.grid(axis='y', visible=False)
 ax.legend(loc='lower right')
 plt.show()
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print(R.foot())
 ```
