@@ -66,7 +66,7 @@ import {
 } from '../ui/MatrixPanel'
 import { axisRegion, type SelectedRegion } from '../ui/mapSelection'
 import { zoomedRegion } from '../ui/RegionView'
-import { regionLabel } from '../genome/assembly'
+import { pairLabel, regionLabel } from '../genome/assembly'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import { parseSmooth } from '../render/smooth'
 import type { ScaleState } from '../ui/GenomeView'
@@ -1254,7 +1254,7 @@ export class MapPanel {
       return
     }
     const label =
-      own.cols === undefined ? regionLabel(own.rows) : `${regionLabel(own.rows)} × ${regionLabel(own.cols)}`
+      own.cols === undefined ? regionLabel(own.rows) : pairLabel(own.rows, own.cols)
     this.placeEl.title =
       `This map is reading ${label} for itself, at its own resolution, and not the window the ` +
       'others are showing. Draw another box on it to narrow it again.'

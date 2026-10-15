@@ -83,6 +83,7 @@ node scripts/ui-colour-picker.mjs gallery    # the colour picker (§26.6) on the
 node scripts/ui-structure-scale.mjs gallery   # a model coloured by a track (§25.5): its own ramp, white to the track's colour, the key's top end typed into and the lane following, a bottom past the top refused, autoscale again: sc01 … sc05, sc02b, sc04b
 node scripts/ui-compare-modes.mjs gallery     # two maps in one square (§5.7, §7.5, §20.5): split, ratio and split again on the cooler's own `log10` and default ramp, ratio → difference → split, the second map's eye under a ratio, a ratio from a link put back to split, then a Files row dragged onto *Load a map into the lower triangle*: cm01 … cm09
 node scripts/ui-map-look.mjs gallery          # the map's look and what leaves it (§7.1, §7.2): the key's short ramp on one map, on a split pair and on their ratio, the lines between chromosomes at 2×, then the dark theme and its exports — the map's PNG and PDF and a task's figure from the stage dialog, each on white, written under files/: lk01 … lk10
+node scripts/ui-locus-pairs.mjs gallery       # two windows typed as one (§5.4): a space, ` x ` and `|` between them in the region box, each opening IV × V, the box showing the pair and Enter on it not moving, `I x II` in the whole genome's box, a pair in the Chromosomes table's: lp01 … lp05
 ```
 
 The second script drives the part the first only passes through: the figures a task returns

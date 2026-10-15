@@ -880,6 +880,19 @@ sequence this view is of where its region has coordinates — `IV:1,000-20,000` 
 own noun where it has none — `contig:1,000-20,000` — because a coordinate suffix on a genome name is
 an error here and a name with no coordinates on it may be a genome's.
 
+**Two windows typed in one box are the block between them** — rows, then columns, the `contig ×
+contig` picture an off-diagonal click or a box drawn off the diagonal has always opened (`region` and
+`region2`). `chr1:1,000-2,000 chr2:3,000-4,000`, the same with ` x ` or `|` between, and `×`, which is
+what the title over such a block writes: `typedLociToRegions` divides them and reads each half as a
+single window is read. Everything after the first window used to be dropped without a word, because
+the tokenizer stops at the end coordinate, and on a block already open the box showed its rows alone,
+so Enter on it threw the columns away; it shows `pairLabel` of the two now, and Enter on that opens
+the block it is showing. Two bare names need a mark between them, since a space alone would split a
+name with one in it; a `|` counts only after a window with coordinates, since NCBI's older names
+carry pipes of their own; and an `x` only standing alone, since `chrX` is a name. The whole genome's
+box and the Chromosomes table's take a pair too; the 1D browser's, which has no such picture, opens
+the first window.
+
 **Beside a gene model the box takes a feature's name too** — or its accession — from the starred
 set, and a band's from any karyotype loaded (§8.22), listing up to ten matches under it as it is
 typed (`annotations/search.ts`, shared with the browser's box, §5.8). A hit is written with the
@@ -12045,7 +12058,9 @@ for a number that is printed as given, groups as en-US too, whatever the reader'
 formats a coordinate itself is a view that will drift.
 
 The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
-and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name, a band's
+and `Mb`, an en dash, and Ensembl's `..`. Two windows in one map's box are a block between them
+(§5.4), shown as `pairLabel` writes them — `IV:1,000,001-1,400,000 × V:1-200,000` — and read back by
+`typedLociToRegions`, which keeps the round trip below for the pair as for one window. A bare sequence name, a genome name, a gene name, a band's
 ISCN name (§8.22) and `*` have no coordinates and pass through untouched — as does anything the
 tokenizer refuses, so that a
 refusal is about what the reader typed rather than about what a helper made of it.

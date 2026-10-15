@@ -474,6 +474,61 @@ export function typedLocusToRegion(text: string): string {
 }
 
 /**
+ * Two windows typed as one box's worth — rows, then columns — as the two region
+ * strings a block of two windows is (§5.4); one window as one.
+ *
+ * A trans block is a picture this app has always drawn, of `region` and
+ * `region2`, reached by clicking an off-diagonal cell or drawing a box off the
+ * diagonal — and a box could not ask for it. What was typed after the first
+ * window was dropped without a word, because the tokenizer stops reading at the
+ * end coordinate: `chr1:1,000-2,000 chr2:3,000-4,000` opened chr1 alone. The two
+ * windows are now read apart when they are separated by `×` (what the title
+ * over such a block writes, so the box shows it and Enter on it moves nothing),
+ * by `|`, by an `x` standing on its own, or by a space before a second
+ * `name:` — and each through {@link typedLocusToRegion}, so each takes every
+ * spelling a single window does. Two bare names need a mark between them: a
+ * space alone would split a name with one in it.
+ */
+export function typedLociToRegions(text: string): { region: string; region2?: string } {
+  const halves = splitTypedPair(text.trim())
+  if (halves === null) return { region: typedLocusToRegion(text) }
+  return { region: typedLocusToRegion(halves[0]), region2: typedLocusToRegion(halves[1]) }
+}
+
+/**
+ * A block of two windows as a reader reads it: `IV:1,000,001-1,400,000 ×
+ * V:1-200,000`, which is also what {@link typedLociToRegions} reads back.
+ */
+export function pairLabel(region: string, region2: string): string {
+  return `${regionLabel(region)} × ${regionLabel(region2)}`
+}
+
+/** The two halves of a typed pair, or `null` for one window. */
+function splitTypedPair(typed: string): [string, string] | null {
+  const at = pairMark(typed)
+  if (at === null) return null
+  const first = typed.slice(0, at.index).trim()
+  const second = typed.slice(at.index + at.length).trim()
+  return first === '' || second === '' ? null : [first, second]
+}
+
+/** Where a typed pair divides, and how wide the divide is. */
+function pairMark(typed: string): { index: number; length: number } | null {
+  // `×`, or an `x` with a space on both sides — `chrX` is a name.
+  const cross = /\s*×\s*|\s+[xX]\s+/.exec(typed)
+  if (cross !== null) return { index: cross.index, length: cross[0].length }
+  // `|`, after a window with coordinates only: a sequence name may hold a pipe
+  // of its own — NCBI's older `gi|…|ref|…|` names do — and a bare name before
+  // one is that name.
+  const pipe = typed.indexOf('|')
+  if (pipe > 0 && typed.slice(0, pipe).includes(':')) return { index: pipe, length: 1 }
+  // A space before a second window's `name:`. Not before a number, so a window
+  // typed with a space in it, `IV:1,000 - 20,000`, stays one window.
+  const space = /\s+(?=[^\s:×|]+:)/.exec(typed)
+  return space === null ? null : { index: space.index, length: space[0].length }
+}
+
+/**
  * A base a reader typed, 1-based as they write it, as the 0-based coordinate
  * everything here speaks: `1,162,001` is `1162000`.
  *

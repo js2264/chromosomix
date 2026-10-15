@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Two windows typed in a locus box open the block between them (§5.4, §26.1).**
+  `chr1:1,000-2,000 chr2:3,000-4,000`, or the same with ` x `, `|` or `×` between, opens chr1 against
+  chr2 — rows, then columns — in the region view's box, the whole genome's and the Chromosomes
+  table's; everything after the first window used to be dropped without a word. On a block of two
+  windows the box shows both, `IV:1,000,001-1,200,000 × V:1-200,000`, where it showed the rows alone
+  and Enter on it threw the columns away.
+
 - **A row of the Files column dropped on *Load a map into the lower triangle* is the second map in
   the square (§5.7, §20.5).** The Contact maps card's slot took only a file from the desktop: a row
   dragged out of a connected folder lit it and fell in for nothing. The row's file is read at the

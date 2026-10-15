@@ -41,6 +41,7 @@ import type { AnnotationStore } from '../annotations/store'
 import {
   assemblyAxis,
   formatPosition,
+  typedLociToRegions,
   typedLocusToRegion,
   type Assembly,
 } from '../genome/assembly'
@@ -101,6 +102,12 @@ export interface SequenceBarProps {
    * converted.
    */
   onOpenRegion(region: string): void
+  /**
+   * Two windows typed as one — rows, then columns — for the block between them
+   * (§5.4), in the machine form. Absent where there is no such picture, which
+   * is the 1D browser: there a pair opens its first window, as it always did.
+   */
+  onOpenPair?(region: string, region2: string): void
   /** `*`, which is what the browser's box takes for the whole genome. */
   onOpenWhole?(): void
 }
@@ -290,6 +297,14 @@ export class SequenceBar {
     if (asked === '*') {
       this.props.onOpenWhole?.()
       return
+    }
+    const pair = this.props.onOpenPair
+    if (pair !== undefined) {
+      const typed = typedLociToRegions(asked)
+      if (typed.region2 !== undefined) {
+        pair(typed.region, typed.region2)
+        return
+      }
     }
     if (this.axis.segmentOf(asked) !== null) {
       this.props.onOpenContig(asked)

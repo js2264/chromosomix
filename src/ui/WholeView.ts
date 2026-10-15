@@ -38,7 +38,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError, isAllocationFailure } from '../errors'
-import { typedLocusToRegion } from '../genome/assembly'
+import { typedLociToRegions } from '../genome/assembly'
 import { button, el, fmt, titleWhenCut } from './dom'
 import { resolutionLabel } from '../units'
 import type { PanelSeed, ScaleState } from './GenomeView'
@@ -376,14 +376,19 @@ export class WholeView {
       }),
       go: true,
       title:
-        `Open one ${props.noun}, or a range within it` +
-        (store === undefined ? '. ' : ', or a gene from the starred model. ') +
+        `Open one ${props.noun} or a range within it` +
+        (store === undefined
+          ? ', or two with × between them for the block where they meet. '
+          : ', two with × between them for the block where they meet, or a gene from the starred model. ') +
         'The same box the / key opens.',
       // 1-based inclusive in, the machine form out (§26.1): what a reader types
       // here is what they read off the map, and the region reader behind this
       // takes cooler's half-open interval.
       onSubmit: (text) => {
-        if (text !== '') props.onOpenRegion(typedLocusToRegion(text))
+        if (text === '') return
+        // One window, or two for the block between them (§5.4).
+        const typed = typedLociToRegions(text)
+        props.onOpenRegion(typed.region, typed.region2)
       },
       // What the comment on the title bar promises: a whole-genome map of a
       // mammal is three pixels per chromosome arm, so "go to MYC" has to be

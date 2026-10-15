@@ -7237,6 +7237,9 @@ export class Session {
       // first" is exactly as expensive a detour as it is at the top level.
       onOpenRegion: (region: string) =>
         this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
+      // Two windows typed in the box are the block between them (§5.4).
+      onOpenPair: (region: string, region2: string) =>
+        this.navigate({ uri: state.uri, view: 'region', region, region2, genome: state.genome }),
       // Neither while this table is one genome's contigs: "the whole file" is
       // not the question someone reading a MAG's contigs is asking, and the map
       // of *those* contigs is the genome view one crumb up.
