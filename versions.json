@@ -215,10 +215,10 @@
   "pulls": [
     {
       "number": 108,
-      "commit": "cf59f7f",
+      "commit": "f955ba9",
       "title": "Validate APA against coolpuppy with diagonal handling",
       "branch": "ccr-bbb73609-u7oxgq",
-      "date": "2026-10-15T13:53:22Z"
+      "date": "2026-10-15T18:36:42Z"
     },
     {
       "number": 107,
