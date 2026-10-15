@@ -221,12 +221,12 @@ export const runApa: TaskRunner = async (job) => {
     )
   }
 
-  // **The one floor a loop set has, and it is coolpuppy's**: a loop nearer the
-  // diagonal than the nearest loop (`minDist`) is left out, and by default that
-  // is twice the half-width and two bins — coolpuppy's `mindist='auto'` — which
-  // is where a window stops reaching the diagonals it would have gaps cut in. It
-  // is a floor on *where* a loop is, not a sample of the set, and it is said:
-  // how many, how near, and how to have them all.
+  // **The one floor a loop set has**: a loop nearer the diagonal than the
+  // nearest loop (`minDist`, five bins unless typed) is left out. coolpuppy's
+  // `mindist='auto'` is further out — twice the half-width and two bins, where a
+  // window stops reaching the diagonals it would have gaps cut in — and is what
+  // the evaluation types. It is a floor on *where* a loop is, not a sample of the
+  // set, and it is said: how many, how near, and how to have them all.
   const piled = usingPairs && !isScaled(job.params) ? nearEnough(job, anchors) : anchors
   if (piled.length === 0) return []
 
