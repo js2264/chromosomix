@@ -1,0 +1,342 @@
+---
+title: "chromosomix against reference implementations: time"
+subtitle: "Every command of the validation, run again and timed"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: png
+    code-fold: true
+    code-summary: "Code"
+jupyter: python3
+execute:
+  warning: false
+---
+
+```{python}
+#| echo: false
+#| output: asis
+# When, from what, by what and on what this page was rendered: notebooks/scripts/rendered.py.
+import sys
+from pathlib import Path
+
+_here = Path.cwd().resolve()
+sys.path.append(str((_here if _here.name == 'notebooks' else _here / 'notebooks') / 'scripts'))
+from rendered import Render
+
+R = Render('timing')
+print(R.head(also=f"The commands are {R.anchor('validation', 'the evaluation')}’s, as it ran them. "
+                  f"Beside this page: {R.download('timings.tsv')}, every timed run, one row each."))
+```
+
+`{python} R.link('validation')` runs each analysis twice, through `chromosomix` and through the
+package it reproduces, and writes every command it ran to `notebooks/work/validation/commands.json`.
+This notebook runs each of them again, exactly as written there but writing to a scratch folder, as a
+fresh process, `RUNS` times round robin (five, unless `TIMING_RUNS` in the environment says otherwise),
+and measures what each run costs: its **CPU time**, user and system, of the process and of every
+process it started and waited for; its **wall-clock time**; and its **peak memory**, the largest
+resident set of any one of those processes.
+
+Every run is one line of **`notebooks/work/validation/timings.tsv`**, a tidy table — one row per
+command and run, one column per variable, the machine and the versions included — from which every
+table and figure below is drawn.
+
+**To render.** Render `validation.qmd` first: it fetches the data, makes every input and writes the
+command list. Then, in the same environment and on a machine left otherwise idle:
+
+```bash
+QUARTO_PYTHON=refs/bin/python quarto render notebooks/timing.qmd
+```
+
+A second render reads the table rather than timing again (`REDO`), unless the command list, the number
+of runs or the `chromosomix` build has changed. `.github/workflows/notebooks.yml` renders both notebooks
+on every release, on a fresh GitHub runner each time, and publishes this page at
+<https://chromosomix.app/timings/> with the table beside it; the block under the title says which
+render, and which machine, this is.
+
+```{python}
+from pathlib import Path
+import os
+
+#: Timed runs of each command (TIMING_RUNS overrides it for a quick look), and whether to time them again.
+RUNS = int(os.environ.get('TIMING_RUNS', 5))
+REDO = False
+
+HERE = Path.cwd().resolve()
+REPO = HERE.parent if HERE.name == 'notebooks' else HERE
+WORK = REPO / 'notebooks' / 'work' / 'validation'
+MANIFEST = WORK / 'commands.json'
+TIMINGS = WORK / 'timings.tsv'
+SCRATCH = WORK / 'timing'
+```
+
+```{python}
+import json
+import platform
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.ticker import FuncFormatter, NullLocator
+
+if not MANIFEST.exists():
+    raise FileNotFoundError(f'{MANIFEST} is not there: render validation.qmd first.')
+LISTED = json.loads(MANIFEST.read_text())
+OUT = LISTED['placeholder']
+JOBS = [job for job in LISTED['commands'] if job['bench']]
+
+APP_COLOUR, REF = '#2a78d6', '#eb6834'
+INK, INK2, GRID, SURFACE, MISSING = '#0b0b0b', '#52514e', '#e7e6e2', '#fcfcfb', '#efeeea'
+plt.rcParams.update({
+    'figure.facecolor': SURFACE, 'axes.facecolor': SURFACE, 'savefig.facecolor': SURFACE,
+    'axes.edgecolor': INK2, 'axes.labelcolor': INK, 'xtick.color': INK2, 'ytick.color': INK2,
+    'text.color': INK, 'axes.spines.top': False, 'axes.spines.right': False,
+    'axes.grid': True, 'grid.color': GRID, 'grid.linewidth': 0.6, 'axes.axisbelow': True,
+    'lines.linewidth': 2, 'font.size': 9, 'axes.titlesize': 10, 'axes.titleweight': 'bold',
+    'axes.titlelocation': 'left', 'legend.frameon': False, 'figure.dpi': 110,
+})
+
+
+def show(frame, precision=2, **formats):
+    """A table without row numbers: the columns named in `formats` their way, the others to `precision`."""
+    return frame.style.hide(axis='index').format(formats or None, precision=precision)
+
+
+def measures(values):
+    """Named numbers as a two-column table."""
+    return pd.DataFrame(list(values.items()), columns=['measure', 'value']).style.hide(axis='index')
+```
+
+## The machine
+
+```{python}
+def machine():
+    """What the times were measured on, as columns of the table."""
+    cpu = platform.processor()
+    if Path('/proc/cpuinfo').exists():
+        cpu = next((line.split(':', 1)[1].strip() for line in open('/proc/cpuinfo') if line.startswith('model name')), cpu)
+    try:
+        memory = round(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 1e9, 1)
+    except (ValueError, OSError):
+        memory = np.nan
+    node = subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip()
+    return {'processor': cpu, 'cores': os.cpu_count(), 'memory_gb': memory, 'system': platform.platform(),
+            'node': node, 'python': platform.python_version()}
+
+
+MACHINE = machine()
+measures({**MACHINE, 'commands timed': f"{len(JOBS)} of the {len(LISTED['commands'])} listed",
+          'runs of each': RUNS, 'chromosomix': LISTED['chromosomix'],
+          'processes a reference was given, where it takes them': LISTED['threads']})
+```
+
+## The runs
+
+Each command is run as `validation.qmd` printed it, from `notebooks/work/validation/`, with its output
+sent to a scratch folder that is emptied after the run: all of them once, then all of them again, so a
+slow minute of the machine falls on every command rather than on one. `chromosomix` computes on one
+thread; a reference that takes a number of processes was given the number in the `threads` column.
+
+```{python}
+def argv_for(job, scratch):
+    """The command as it ran, writing to `scratch`."""
+    if job['tool'] == 'chromosomix':
+        return job['argv'] + ['--out', os.path.relpath(scratch, WORK)]
+    target = os.path.relpath(scratch / job['out'], WORK)
+    return [a.replace(OUT, target) for a in job['argv']]
+
+
+def timed(argv, extra):
+    """One run, from work/validation/: CPU seconds of the process and every process it started and waited
+    for, wall seconds, and the largest resident set among them, in MB."""
+    env = None if extra is None else dict(os.environ, **extra)
+    with tempfile.TemporaryFile() as err:
+        start = time.perf_counter()
+        process = subprocess.Popen(argv, cwd=WORK, env=env, stdout=subprocess.DEVNULL, stderr=err)
+        _, status, usage = os.wait4(process.pid, 0)
+        wall = time.perf_counter() - start
+        process.returncode = os.waitstatus_to_exitcode(status)
+        if process.returncode:
+            err.seek(0)
+            raise RuntimeError(f'{shlex.join(argv)}\n{err.read().decode(errors="replace")[-3000:]}')
+    # ru_maxrss is in kilobytes on Linux and in bytes on macOS.
+    rss = usage.ru_maxrss / (1024 * 1024 if sys.platform == 'darwin' else 1024)
+    return {'cpu_s': usage.ru_utime + usage.ru_stime, 'user_s': usage.ru_utime, 'system_s': usage.ru_stime,
+            'wall_s': wall, 'max_rss_mb': rss}
+
+
+#: The columns of the table, in order: what was run, the run, what it cost, where.
+COLUMNS = ['section', 'analysis', 'data', 'command', 'tool', 'version', 'variant', 'group', 'threads', 'run',
+           'order', 'cpu_s', 'user_s', 'system_s', 'wall_s', 'max_rss_mb', 'started', *MACHINE, 'chromosomix',
+           'command_line']
+
+
+def benchmark():
+    rows = []
+    for run in range(1, RUNS + 1):
+        for order, job in enumerate(JOBS):
+            scratch = SCRATCH / job['name']
+            shutil.rmtree(scratch, ignore_errors=True)
+            scratch.mkdir(parents=True)
+            started = time.strftime('%Y-%m-%dT%H:%M:%S')
+            cost = timed(argv_for(job, scratch), job['env'])
+            shutil.rmtree(scratch, ignore_errors=True)
+            rows.append({'section': job['section'], 'analysis': job['analysis'], 'data': job['data'],
+                         'command': job['name'], 'tool': job['tool'], 'version': job['version'],
+                         'variant': job['variant'], 'group': job['group'], 'threads': job['threads'], 'run': run,
+                         'order': order, **cost, 'started': started, **MACHINE,
+                         'chromosomix': LISTED['chromosomix'], 'command_line': job['command']})
+        # Written after every round, so a long benchmark that is stopped keeps the rounds it finished.
+        pd.DataFrame(rows, columns=COLUMNS).to_csv(TIMINGS, sep='\t', index=False)
+    return pd.DataFrame(rows, columns=COLUMNS)
+
+
+def current():
+    """Whether the table on disk times every command listed, each RUNS times, with the chromosomix listed."""
+    if REDO or not TIMINGS.exists():
+        return False
+    held = pd.read_csv(TIMINGS, sep='\t', keep_default_na=False)
+    runs = held.groupby('order')['run'].nunique()
+    return (len(runs) == len(JOBS) and set(held['command']) == {job['name'] for job in JOBS}
+            and (runs == RUNS).all() and set(held['chromosomix']) == {LISTED['chromosomix']})
+
+
+if not current():
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    benchmark()
+times = pd.read_csv(TIMINGS, sep='\t', keep_default_na=False)
+measures({'runs in the table': f'{len(times):,}', 'columns': len(times.columns),
+          'measured': f"{times['started'].min()} to {times['started'].max()}", 'table': os.path.relpath(TIMINGS, REPO)})
+```
+
+The table's first lines:
+
+```{python}
+show(times.head(4))
+```
+
+## Each command
+
+CPU and wall-clock seconds, mean ± sd over the runs, and the peak memory of the largest run.
+
+```{python}
+#| column: page
+KEY = ['section', 'analysis', 'tool', 'variant', 'group', 'command', 'order']
+per = (times.groupby(KEY, sort=False)
+       .agg(cpu=('cpu_s', 'mean'), cpu_sd=('cpu_s', 'std'), wall=('wall_s', 'mean'), wall_sd=('wall_s', 'std'),
+            rss=('max_rss_mb', 'max'))
+       .reset_index().sort_values('order').reset_index(drop=True))
+per['CPU s'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(per['cpu'], per['cpu_sd'])]
+per['wall s'] = [f'{m:.2f} ± {s:.2f}' for m, s in zip(per['wall'], per['wall_sd'])]
+per['peak MB'] = per['rss'].round().astype(int)
+show(per[['section', 'analysis', 'tool', 'variant', 'CPU s', 'wall s', 'peak MB']], **{'peak MB': '{:,}'})
+```
+
+## Against the references
+
+For each analysis, the `chromosomix` commands against the reference commands they are paired with — the
+same variant, or the analysis's one reference — as a fold: the reference's seconds over the app's,
+summed where a side is several commands (deepTools' metaplot is `computeMatrix` and then
+`plotProfile`).
+
+```{python}
+#| column: page
+def pairs():
+    out = []
+    for (section, analysis), rows in per.groupby(['section', 'analysis'], sort=False):
+        apps, refs = rows[rows['tool'] == 'chromosomix'], rows[rows['tool'] != 'chromosomix']
+        for group, mine in apps.groupby('group', sort=False):
+            theirs = refs[refs['group'] == group]
+            if theirs.empty and refs['group'].nunique() == 1:
+                theirs = refs
+            if theirs.empty:
+                continue
+            out.append({'section': section, 'analysis': analysis, 'variant': group or '—',
+                        'reference': ', '.join(dict.fromkeys(theirs['tool'])),
+                        'chromosomix CPU s': mine['cpu'].sum(), 'reference CPU s': theirs['cpu'].sum(),
+                        'chromosomix wall s': mine['wall'].sum(), 'reference wall s': theirs['wall'].sum(),
+                        'chromosomix peak MB': mine['rss'].max(), 'reference peak MB': theirs['rss'].max()})
+    frame = pd.DataFrame(out)
+    frame['× faster, CPU'] = frame['reference CPU s'] / frame['chromosomix CPU s']
+    frame['× faster, wall'] = frame['reference wall s'] / frame['chromosomix wall s']
+    return frame
+
+
+folds = pairs()
+show(folds, **{'× faster, CPU': '{:.1f}×', '× faster, wall': '{:.1f}×', 'chromosomix peak MB': '{:,.0f}',
+               'reference peak MB': '{:,.0f}'})
+```
+
+```{python}
+fold = folds['× faster, CPU']
+TEXT = {'fold': f'{np.exp(np.log(fold).mean()):.1f}', 'n': f'{len(fold)}',
+        'range': f'{fold.min():.1f}× to {fold.max():.1f}×',
+        'slower': ', '.join(f"{a} ({v})" for a, v, f in zip(folds['analysis'], folds['variant'], fold) if f < 1) or 'none',
+        'sd': f"{(per['cpu_sd'] / per['cpu']).max():.0%}",
+        'wall': f"{np.exp(np.log(folds['× faster, wall']).mean()):.1f}"}
+```
+
+Over the `{python} TEXT['n']` pairs, `chromosomix` takes **`{python} TEXT['fold']` times less CPU** than
+the reference tools, as a geometric mean of the folds above (`{python} TEXT['range']`), and
+`{python} TEXT['wall']` times less wall-clock time. Slower than its reference: `{python} TEXT['slower']`.
+No command's CPU time spreads by more than `{python} TEXT['sd']` of its mean across runs.
+
+```{python}
+#| label: fig-time
+#| fig-cap: "CPU time of every timed command, each run a dot and the mean a bar, on a logarithmic axis; the rows of one analysis share a band."
+fig, ax = plt.subplots(figsize=(10, 0.36 * len(per) + 1.2), layout='constrained')
+y = np.arange(len(per))[::-1]
+for k, (_, members) in enumerate(per.groupby('analysis', sort=False)):
+    if k % 2:
+        ax.axhspan(y[members.index].min() - 0.5, y[members.index].max() + 0.5, color=MISSING, lw=0, zorder=0)
+for yi, (_, row) in zip(y, per.iterrows()):
+    colour = APP_COLOUR if row['tool'] == 'chromosomix' else REF
+    # By its place in the list: an analysis may give its chromosomix command and its reference one name.
+    runs_ = times[times['order'] == row['order']]['cpu_s']
+    ax.scatter(runs_, np.full(len(runs_), yi), s=14, color=colour, alpha=0.55, lw=0, zorder=3)
+    ax.plot([row['cpu']] * 2, [yi - 0.3, yi + 0.3], color=colour, lw=2.5, zorder=4)
+labels = [f"{row['section']} · {row['analysis']} · {row['tool']}" + (f" ({row['variant']})" if row['variant'] else '')
+          for _, row in per.iterrows()]
+ax.set_yticks(y, labels, fontsize=8)
+ax.set_xscale('log')
+ax.set_xlim(times['cpu_s'].min() / 1.5, times['cpu_s'].max() * 1.5)
+ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
+ax.xaxis.set_minor_locator(NullLocator())
+ax.set(xlabel='CPU time (s)', ylim=(-0.5, len(per) - 0.5))
+ax.grid(axis='y', visible=False)
+ax.scatter([], [], s=24, color=APP_COLOUR, label='chromosomix')
+ax.scatter([], [], s=24, color=REF, label='reference')
+ax.legend(loc='upper right')
+plt.show()
+```
+
+```{python}
+#| label: fig-folds
+#| fig-cap: "How many times less CPU (filled) and wall-clock time (open) chromosomix takes than its reference, pair by pair; right of the line is faster."
+fig, ax = plt.subplots(figsize=(9, 0.32 * len(folds) + 1.2), layout='constrained')
+y = np.arange(len(folds))[::-1]
+ax.scatter(folds['× faster, CPU'], y, s=36, color=APP_COLOUR, label='CPU', zorder=3)
+ax.scatter(folds['× faster, wall'], y, s=36, facecolors='none', edgecolors=APP_COLOUR, label='wall clock', zorder=3)
+ax.axvline(1, color=INK2, lw=1, ls=(0, (4, 3)))
+ax.set_yticks(y, [f"{s} · {a}" + (f' ({v})' if v != '—' else '') for s, a, v in
+                  zip(folds['section'], folds['analysis'], folds['variant'])], fontsize=8)
+ax.set_xscale('log')
+ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}×'))
+ax.set(xlabel='× faster than the reference', ylim=(-0.5, len(folds) - 0.5))
+ax.grid(axis='y', visible=False)
+ax.legend(loc='lower right')
+plt.show()
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print(R.foot())
+```

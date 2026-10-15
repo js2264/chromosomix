@@ -48,6 +48,16 @@ export const ARCHIVE_SEGMENT = 'v'
  */
 export const PULL_SEGMENT = 'pr'
 
+/**
+ * The path segments the rendered notebooks are published under, beside `v/`
+ * and `pr/`: the evaluation and the timings (`.github/workflows/notebooks.yml`,
+ * SPECS §18.10). Pages of their own rather than builds — named here so that a
+ * service worker that answered one with this app's shell can be undone
+ * (`recoverPinnedNavigation()` in `src/pwa.ts`); `src/sw.js` keeps the same
+ * list, since it imports nothing.
+ */
+export const NOTEBOOK_SEGMENTS = ['evaluation', 'timings'] as const
+
 /** The manifest's file name, at the site root. */
 export const MANIFEST_FILE = 'versions.json'
 

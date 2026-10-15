@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The evaluation and the timings are published with every release, at
+  <https://chromosomix.app/evaluation/> and <https://chromosomix.app/timings/> (§18.10).** A new
+  workflow, `.github/workflows/notebooks.yml`, installs every reference on a fresh runner at the
+  versions the notebooks were written against — `notebooks/requirements.txt` and
+  `requirements-yapc.txt` pin them — renders both notebooks and publishes them beside the app, each
+  with its tables beside it: every command, every verdict and every timed run. It runs when a
+  release is published, attaching both pages to the release as well, and on demand, with the number
+  of timed runs and whether to publish. Each page opens on when it was rendered, from which version,
+  commit and release, by which run, on what machine, and closes on how long it took, and the two
+  link to each other. The service worker leaves both addresses to the network, as it does archived
+  builds, so a visitor who has installed the app reaches the page rather than the app — once their
+  copy has taken this version's update; until then, an older worker answers there with the app.
+
 - **`chromosomix boost` writes Boost-HiC's map of each sequence (§6.5).** The map an oversample
   draws a sequence's new contacts from, which nothing showed: each sequence's stored counts, the
   square an oversample hands Boost-HiC, through the same port, written as Boost-HiC's `main.py`
@@ -981,6 +994,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   out and how near they were, and 0 piles up every one, which is what it did before. On the yeast
   demo's 1,506 loops at the default ±21 kb window that is 959 of them, the median loop being 33 kb;
   over the demo map's first 200 loops it keeps the same 142 windows as coolpuppy, cell for cell.
+
+- **The validation notebook holds ten more analyses to their references, and its timings are a
+  notebook of their own (§18.10).** `notebooks/validation.qmd` adds coverage and virtual 4C against
+  cooltools, pileups — raw, over the expected and over distance-matched controls, off the diagonal
+  and on it — against coolpuppy, the pileup's chromosight score against `chromosight quantify`,
+  Boost-HiC against its own Python, the metaplot against deepTools, interval overlap and its
+  shuffled null against bedtools, base composition against bioframe and Biopython, the motif search
+  against seqkit, and the track correlation against pyBigWig's exact window means and against
+  deepTools, on 4DN's mouse Hi-C and ATAC-seq, UCSC's mm10 and RefSeq genes, and GEO's yeast Micro-C
+  and the lab's yeast tracks as its public `rsglab-data` bucket keeps them, each checked against its
+  MD5. Where the reference draws at random, the two are compared as distributions, against the
+  reference's own spread from seed to seed. It writes every command to
+  `notebooks/work/validation/commands.json`, and the new `notebooks/timing.qmd` runs each again,
+  round robin, writing every run — CPU and wall-clock seconds, peak memory, the machine and the
+  versions — to one tidy table, `notebooks/work/validation/timings.tsv`, from which its tables and
+  figures are drawn.
 
 - **Electron 43.2.0 → 43.7.9 (§15).** Past GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj,
   GHSA-qmv3-fv6v-rmhq and GHSA-9qh4-3jw8-366w, four high advisories against the version 0.13.0
